@@ -3,7 +3,7 @@ namespace DolphinDotNet.Compiler;
 internal static class CBackend{
  public static string Emit(IEnumerable<IrMethod> source,CompilationModel model,DependencyGraph graph){
   var methods=source.ToList();var b=new StringBuilder();b.AppendLine("/* DolphinDotNet closed-world AOT output. */\n#include <stdint.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"");
-  foreach(var tn in graph.Types.OrderBy(x=>x)){if(!model.Types.TryGetValue(tn,out var t))continue;var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{t.InstanceSize}u, 0, NULL, 0, NULL, 0, 0, NULL}};");}
+  foreach(var tn in graph.Types.OrderBy(x=>x)){if(!model.Types.TryGetValue(tn,out var t))continue;var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{t.InstanceSize}u, 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL}};");}
   foreach(var m in methods)b.AppendLine($"static intptr_t {MethodSymbol(m.Key)}(DndManagedHeap*, intptr_t*);");
   foreach(var m in methods)EmitMethod(b,m,model);
   var entry=methods.FirstOrDefault(m=>m.Key.Name=="Main");
