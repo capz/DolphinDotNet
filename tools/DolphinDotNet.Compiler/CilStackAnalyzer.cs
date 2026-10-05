@@ -103,6 +103,7 @@ internal static class CilStackAnalyzer
                 if(call.PushKind is { } kind)Push(s,kind);
                 break;
             case 0x7a: Pop(s,i);break;
+            case 0xfe1a: break;
             case 0x2a:
                 if(returnsValue)Pop(s,i);
                 if(s.Count!=0)throw new InvalidDataException($"CIL return at IL_{i.Offset:x4} leaves {s.Count} value(s) on the evaluation stack.");
