@@ -57,6 +57,7 @@ jobs:
           find "$DEVKITPRO" -name 'libogc.a' -print
           test -f "$DEVKITPRO/libogc/include/gccore.h"
           test -f "$DEVKITPRO/libogc/lib/cube/libogc.a"
+          find "$DEVKITPRO" -name 'libbba.a' -o -name 'liblwip.a' -o -name 'libnetwork*.a' -print
       - name: Show toolchain
         run: |
           echo "DEVKITPRO=$DEVKITPRO"
