@@ -36,7 +36,7 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),t=>model.Types.TryGetValue(t,out var tm)&&tm.IsInterface);
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),t=>model.Types.TryGetValue(t,out var tm)&&tm.IsInterface,t=>model.Types.TryGetValue(t,out var tm)&&tm.BaseType is "System.MulticastDelegate" or "System.Delegate");
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
@@ -78,6 +78,8 @@ internal static class AotCompiler
             switch(instruction)
             {
                 case ValueIrCall call: graph.AddMethod(call.Target);graph.AddType(call.Target.TypeName);break;
+                case ValueIrFunctionPointer pointer: graph.AddMethod(pointer.Target);graph.AddType(pointer.Target.TypeName);break;
+                case ValueIrNewDelegate created: graph.AddType(created.TypeName);break;
                 case ValueIrNewObject created: graph.AddMethod(created.Constructor);graph.AddType(created.TypeName);break;
                 case ValueIrLoadField field: graph.AddType(field.TypeName);break;
                 case ValueIrStoreField field: graph.AddType(field.TypeName);break;
