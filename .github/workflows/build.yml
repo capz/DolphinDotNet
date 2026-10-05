@@ -23,6 +23,12 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Compiler integration tests
         run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
+      - name: Build AOT smoke assembly
+        run: dotnet build tests/AotSmoke/AotSmoke.csproj -c Release
+      - name: Lower AOT smoke assembly to native C
+        run: dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/AotSmoke/bin/Release/net8.0/AotSmoke.dll /tmp/aot_smoke.c
+      - name: Compile generated AOT C
+        run: cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/aot_smoke.c -o /tmp/aot_smoke.o
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
       - name: Verify generated source
