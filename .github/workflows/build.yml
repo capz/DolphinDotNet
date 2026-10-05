@@ -31,6 +31,8 @@ jobs:
         run: |
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube.c
           cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube.c -o /tmp/managed_gamecube.o
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube_value.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube_value.c -o /tmp/managed_gamecube_value.o
       - name: Compiler integration tests
         run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
       - name: Build control-flow smoke assembly
