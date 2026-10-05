@@ -18,6 +18,7 @@ typedef struct DndHeapBlock {
 } DndHeapBlock;
 
 static DndGcFrame *gc_frames;
+static bool gc_stress;
 static DndExceptionKind exception_kind;
 static const char *exception_text;
 
@@ -79,6 +80,7 @@ static DndObject *allocate_from_free(DndManagedHeap *heap, const DndType *type, 
 static DndObject *allocate(DndManagedHeap *heap, const DndType *type, size_t bytes) {
     if (!heap || !type) return NULL;
     bytes = align8(bytes < sizeof(DndObject) ? sizeof(DndObject) : bytes);
+    if (gc_stress && heap->blocks) dnd_gc_collect(heap, NULL);
     DndObject *reused = allocate_from_free(heap, type, bytes);
     if (reused) return reused;
 
@@ -231,6 +233,16 @@ bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual) {
     return false;
 }
 
+DndObject *dnd_isinst(DndObject *object, const DndType *target) {
+    return object && dnd_type_is_assignable_from(target, object->type) ? object : NULL;
+}
+
+bool dnd_require_object(const DndObject *object) {
+    if (object) return true;
+    dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Object reference is null.");
+    return false;
+}
+
 DndObject *dnd_cast(DndObject *object, const DndType *target) {
     if (!object) return NULL;
     if (dnd_type_is_assignable_from(target, object->type)) return object;
@@ -354,6 +366,8 @@ static void mark_object(DndManagedHeap *heap, DndObject *object) {
         }
     }
 }
+
+void dnd_gc_set_stress(bool enabled) { gc_stress = enabled; }
 
 void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     if (!heap) return;
