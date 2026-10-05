@@ -66,7 +66,7 @@ struct DndArray {
 
 struct DndExceptionObject {
     DndObject object;
-    DndExceptionKind kind;
+    int32_t kind;
     DndString *message;
 };
 
