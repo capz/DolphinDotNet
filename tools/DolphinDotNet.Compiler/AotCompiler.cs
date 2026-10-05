@@ -20,7 +20,9 @@ internal static class AotCompiler
             var entry=MetadataTokens.EntityHandle(cor.EntryPointTokenOrRelativeVirtualAddress);
             if(entry.Kind!=HandleKind.MethodDefinition)throw new NotSupportedException("Only MethodDef entry points are supported.");
             var def=root.Metadata.GetMethodDefinition((MethodDefinitionHandle)entry);var td=root.Metadata.GetTypeDefinition(def.GetDeclaringType());
-            var entryKey=new MethodKey(Full(root.Metadata.GetString(td.Namespace),root.Metadata.GetString(td.Name)),root.Metadata.GetString(def.Name));
+            var entryType=Full(root.Metadata.GetString(td.Namespace),root.Metadata.GetString(td.Name));
+            var entrySignature=Convert.ToHexString(root.Metadata.GetBlobBytes(def.Signature));
+            var entryKey=new MethodKey(entryType,root.Metadata.GetString(def.Name),root.Name,entrySignature);
             if(!model.Methods.TryGetValue(entryKey,out var entryMethod))throw new InvalidDataException("Entry point missing from model.");
 
             var graph=new DependencyGraph();var output=new List<IrMethod>();var valueOutput=new List<ValueIrMethod>();var queue=new Queue<MethodModel>();var queued=new HashSet<MethodKey>();
