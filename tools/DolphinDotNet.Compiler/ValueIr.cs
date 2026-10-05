@@ -35,6 +35,8 @@ internal sealed record ValueIrLoadStaticField(IrValue Result,string TypeName,str
 internal sealed record ValueIrStoreStaticField(IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrStringLength(IrValue Result,IrValue String):ValueIrInstruction;
 internal sealed record ValueIrNewArray(IrValue Result,IrValue Length,string ElementType,bool ElementsAreReferences,uint ElementSize):ValueIrInstruction;
+internal sealed record ValueIrBox(IrValue Result,IrValue Value,string TypeName):ValueIrInstruction;
+internal sealed record ValueIrUnboxAny(IrValue Result,IrValue Object,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrArrayLength(IrValue Result,IrValue Array):ValueIrInstruction;
 internal sealed record ValueIrLoadElement(IrValue Result,IrValue Array,IrValue Index,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrStoreElement(IrValue Array,IrValue Index,IrValue Value,bool Reference):ValueIrInstruction;
