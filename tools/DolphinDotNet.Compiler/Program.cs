@@ -1,5 +1,6 @@
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Reflection.Metadata.Ecma335;
 using System.Text;
 
 if (args.Length is < 1 or > 2)
@@ -54,7 +55,7 @@ internal static class Compiler
         var strings = new List<string>();
         var stringIds = new Dictionary<string, int>(StringComparer.Ordinal);
         var code = new List<byte>();
-        var il = body.GetILBytes();
+        var il = body.GetILBytes().ToArray();
         int p = 0;
 
         while (p < il.Length)
