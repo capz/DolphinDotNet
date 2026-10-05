@@ -1,50 +1,85 @@
 # DolphinDotNet
 
-DolphinDotNet is an experimental tiny managed runtime for Nintendo GameCube, built on devkitPPC/libogc.
+DolphinDotNet is an experimental tiny managed runtime and C# toolchain for Nintendo GameCube, built on devkitPPC/libogc.
 
-The first milestone is intentionally small: prove that a managed-style runtime can live comfortably inside a normal GameCube homebrew executable before attempting a larger .NET surface.
+## Current milestone: real C# input
 
-## Current MVP
+The repository now accepts an ordinary compiled .NET assembly for a deliberately small C# subset. The host-side `dndc` compiler reads PE/CLI metadata and CIL using `System.Reflection.Metadata`, translates the managed entry point to DolphinDotNet bytecode, and emits a C header embedded into the GameCube executable.
 
-- GameCube executable built with devkitPPC/libogc
-- compact object header and runtime type metadata
-- bump-allocated managed heap with deterministic reset
-- managed UTF-8 strings
-- one-dimensional managed arrays
-- tiny stack-based IL-like interpreter
-- internal calls from managed bytecode into the native GameCube host
-- sample program that prints through the runtime
-- desktop-hosted tests for the portable runtime core
-- GitHub Actions build using devkitPro
+The included sample is ordinary C#:
 
-This is **not yet a conforming .NET Standard implementation**. The target is a useful subset that can eventually consume a constrained C#/.NET assembly through AOT translation.
+```csharp
+Console.WriteLine("Hello from real C#!");
+Console.WriteLine("Running through DolphinDotNet.");
+Console.WriteLine(40 + 2);
+```
+
+The pipeline is:
+
+```
+C# -> dotnet/Roslyn -> .NET DLL -> dndc -> DND bytecode/C data
+   -> devkitPPC + libogc -> DolphinDotNet.dol
+```
+
+This is **not yet a conforming .NET Standard implementation**. It is the first vertical slice proving that normal C# compiler output can feed the GameCube runtime.
+
+## Supported CIL subset
+
+- `nop`
+- `ldstr`
+- `ldc.i4.m1`, `ldc.i4.0` ... `ldc.i4.8`, `ldc.i4.s`, `ldc.i4`
+- `add`, `sub`, `mul`, `div`
+- `pop`
+- `ret`
+- `call System.Console.WriteLine(string)`
+- `call System.Console.WriteLine(int)`
+
+Unsupported opcodes and calls fail during compilation with the CIL offset rather than silently producing a broken DOL.
+
+## Compile the C# sample
+
+Requires .NET 8:
+
+```sh
+sh scripts/compile-sample.sh
+```
+
+This builds `samples/HelloGameCube` and regenerates `generated/generated_program.h`.
 
 ## Build for GameCube
 
-Install devkitPro with the GameCube development packages and make sure `DEVKITPPC` is set, then:
+Install devkitPro with the GameCube development packages and make sure `DEVKITPPC` is set:
 
 ```sh
 make
 ```
 
-The output is `DolphinDotNet.dol` (with intermediate objects under `build/`).
+The output is `DolphinDotNet.dol`.
 
-## Runtime model
+## Runtime
 
-The runtime core is ordinary freestanding-friendly C. `source/platform_gamecube.c` is the only libogc-specific layer. Managed programs are currently represented as compact bytecode; this lets us establish object layout, calls, allocation and platform services before adding an ECMA-335 assembly reader/AOT compiler.
+The GameCube side currently provides:
 
-### Bytecode implemented
+- compact object headers/type IDs
+- 256 KiB prototype managed heap
+- managed UTF-8 strings
+- one-dimensional managed arrays
+- compact stack VM
+- native/internal-call bridge to libogc
+- GameCube console output and controller exit handling
 
-`NOP`, `LDC_I4`, `ADD`, `SUB`, `MUL`, `DIV`, `CALL_INTERNAL`, `POP`, `RET`.
+The portable runtime has desktop-hosted C tests, while CI separately compiles the real C# sample and verifies its generated source.
 
-## Roadmap
+## Next milestones
 
-1. Runtime/bootstrap (this commit)
-2. Metadata + richer primitive/object model
-3. Offline .NET assembly reader and validation
-4. IL -> PowerPC AOT compiler
-5. Minimal BCL: System.Object, String, Array, Console, Math and collections
-6. Exceptions and basic GC
-7. Grow API compatibility based on real GameCube applications
+1. Locals and arguments
+2. Conditional/unconditional branches and loops
+3. Calls between user-defined managed methods
+4. Static/instance fields and constructors
+5. Arrays and richer strings from C#
+6. Offline type layout/metadata tables
+7. Replace bytecode interpretation with PowerPC AOT
+8. Exceptions and a simple tracing/mark-sweep GC
+9. Grow a small useful BCL surface
 
-The design deliberately avoids pretending that full CoreCLR is practical on a 24 MB GameCube. The likely useful end state is a constrained AOT .NET profile with familiar C# semantics and selected .NET Standard-compatible APIs.
+See `docs/architecture.md` for the longer-term design.
