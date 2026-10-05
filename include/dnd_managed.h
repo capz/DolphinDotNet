@@ -101,6 +101,7 @@ extern const DndType DND_TYPE_OBJECT;
 extern const DndType DND_TYPE_STRING;
 extern const DndType DND_TYPE_ARRAY;
 extern const DndType DND_TYPE_DELEGATE;
+extern const DndType DND_TYPE_BOXED_INT32;
 
 void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size);
 DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type);
@@ -117,6 +118,8 @@ bool dnd_array_store_i32(DndArray *array, uint32_t index, int32_t value);
 bool dnd_array_store_ref(DndArray *array, uint32_t index, DndObject *value);
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual);
 DndObject *dnd_cast(DndObject *object, const DndType *target);
+DndObject *dnd_box_i32(DndManagedHeap *heap, int32_t value);
+int32_t dnd_unbox_i32(DndObject *object);
 DndManagedMethod dnd_virtual_resolve(const DndObject *object, uint16_t slot);
 DndManagedMethod dnd_interface_resolve(const DndObject *object, const DndType *interface_type, uint16_t slot);
 DndDelegate *dnd_delegate_new(DndManagedHeap *heap, void *target, DndDelegateFn method);
