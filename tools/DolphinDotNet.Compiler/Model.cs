@@ -4,7 +4,7 @@ namespace DolphinDotNet.Compiler;
 internal sealed record MethodKey(string TypeName,string Name,string AssemblyName="",string Signature=""){public override string ToString()=>$"{(string.IsNullOrEmpty(AssemblyName)?"":AssemblyName+"!")} {TypeName}::{Name}{(string.IsNullOrEmpty(Signature)?"":" ["+Signature+"]")}";}
 internal sealed record TypeModel(string Namespace,string Name,string FullName,string? BaseType,int InstanceSize,bool IsInterface=false,bool IsValueType=false,IReadOnlyList<string>? Interfaces=null);
 internal sealed record FieldModel(string DeclaringType,string Name,int Offset,bool IsReference,bool IsStatic=false,int Size=4);
-internal sealed record MethodModel(MethodKey Key,MethodDefinitionHandle Handle,bool IsStatic,int ParameterCount,bool ReturnsValue,string AssemblyName,bool IsVirtual=false,bool IsAbstract=false,bool IsNewSlot=false,bool DeclaringTypeIsInterface=false);
+internal sealed record MethodModel(MethodKey Key,MethodDefinitionHandle Handle,bool IsStatic,int ParameterCount,bool ReturnsValue,string AssemblyName,bool IsVirtual=false,bool IsAbstract=false,bool IsNewSlot=false,bool DeclaringTypeIsInterface=false,bool DeclaringTypeIsDelegate=false);
 internal sealed class AssemblyModel : IDisposable
 {
  public required string Name{get;init;} public required string Path{get;init;} public required FileStream Stream{get;init;} public required PEReader PE{get;init;} public required MetadataReader Metadata{get;init;}

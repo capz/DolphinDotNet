@@ -19,6 +19,7 @@ static const DndInterfaceEntry iface_map[] = { { &INTERFACE_TYPE, 1, iface_metho
 static const DndType BASE_TYPE = { "Base", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 1, base_vtable, 0, NULL };
 static const DndType DERIVED_TYPE = { "Derived", &BASE_TYPE, sizeof(DndObject), 1, (const DndType *const[]){ &INTERFACE_TYPE }, 0, NULL, 0, 1, derived_vtable, 1, iface_map };
 
+static intptr_t managed_add(intptr_t *args) { return args[0]+1; }
 static int invoked;
 static void callback(void *target, void *arg) {
     (void)target; invoked = *(int *)arg;
@@ -85,6 +86,8 @@ int main(void) {
     assert(dnd_isinst(dispatch, &BASE_TYPE) == dispatch);
     assert(dnd_cast(dispatch, &BASE_TYPE) == dispatch);
     dnd_exception_clear(); assert(!dnd_require_object(NULL)); assert(dnd_exception_kind() == DND_EXCEPTION_NULL_REFERENCE); dnd_exception_clear();
+
+    DndDelegate *managed_delegate=dnd_managed_delegate_new(&heap,NULL,managed_add,false); intptr_t managed_args[1]={10}; assert(dnd_managed_delegate_invoke(managed_delegate,managed_args,1)==11);
 
     DndObject *boxed = dnd_box_i32(&heap, 123);
     assert(boxed && dnd_unbox_i32(boxed) == 123);
