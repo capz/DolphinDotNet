@@ -51,6 +51,12 @@ internal static class ValueIrImporter
                     {
                         var v=New(CilStackKind.Unknown);instructions.Add(new ValueIrLoadArgument(v,cil.OpCode-0x02));stack.Add(v);break;
                     }
+                    case 0x25:
+                    {
+                        var value=Pop(stack,cil);stack.Add(value);stack.Add(value);break;
+                    }
+                    case 0x26:
+                        Pop(stack,cil);break;
                     case 0x58 or 0x59 or 0x5a:
                     {
                         var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(Merge(left.Kind,right.Kind));
