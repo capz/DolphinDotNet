@@ -144,7 +144,7 @@ internal static class ValueIrImporter
                     {
                         var right=Pop(stack,cil);var left=Pop(stack,cil);var target=Target(blocks,cil);var fall=Fallthrough(blocks,block,cil);
                         var shortForm=cil.OpCode<=0x37;var n=shortForm?cil.OpCode-0x2e:cil.OpCode-0x3b;
-                        var cmp=n switch{0=>ValueIrComparison.Equal,1 or 5=>ValueIrComparison.GreaterOrEqual,2 or 6=>ValueIrComparison.GreaterThan,3 or 7=>ValueIrComparison.LessOrEqual,4 or 8=>ValueIrComparison.LessThan,_=>ValueIrComparison.NotEqual};
+                        var cmp=n switch{0=>ValueIrComparison.Equal,1 or 6=>ValueIrComparison.GreaterOrEqual,2 or 7=>ValueIrComparison.GreaterThan,3 or 8=>ValueIrComparison.LessOrEqual,4 or 9=>ValueIrComparison.LessThan,5=>ValueIrComparison.NotEqual,_=>throw new InvalidDataException($"Invalid relational branch opcode 0x{cil.OpCode:x4}.")};
                         var unsigned=n>=5;
                         terminator=new ValueIrBranch(left,right,cmp,unsigned,target,fall);break;
                     }
