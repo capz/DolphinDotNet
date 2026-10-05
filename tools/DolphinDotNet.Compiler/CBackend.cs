@@ -20,6 +20,7 @@ internal static class CBackend{
    case IrConstI4 x:b.AppendLine($"    stack[sp++] = (intptr_t){x.Value};");break;
    case IrLoadString s:{var lit=Escape(s.Value);b.AppendLine($"    {{ DndString *str=dnd_string_from_utf8(heap,\"{lit}\"); gc_objects[gc_count++]=(DndObject*)str; gc_frame.count=gc_count; stack[sp++]=(intptr_t)str; }}");break;}
    case IrLoadArg x:b.AppendLine($"    stack[sp++] = args[{x.Index}];");break;
+   case IrStoreArg x:b.AppendLine($"    args[{x.Index}] = stack[--sp];");break;
    case IrLoadLocal x:b.AppendLine($"    stack[sp++] = locals[{x.Index}];");break;
    case IrStoreLocal x:b.AppendLine($"    locals[{x.Index}] = stack[--sp];");break;
    case IrDup:b.AppendLine("    stack[sp] = stack[sp-1]; sp++;");break;
