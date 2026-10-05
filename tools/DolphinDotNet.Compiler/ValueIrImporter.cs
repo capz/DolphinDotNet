@@ -97,6 +97,10 @@ internal static class ValueIrImporter
                     {
                         var array=Pop(stack,cil);var result=New(CilStackKind.NativeInt);instructions.Add(new ValueIrArrayLength(result,array));stack.Add(result);break;
                     }
+                    case 0x8f:
+                    {
+                        var index=Pop(stack,cil);var array=Pop(stack,cil);var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve array address element type at IL_{cil.Offset:x4}.");var result=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrArrayElementAddress(result,array,index,type));stack.Add(result);break;
+                    }
                     case 0x94 or 0x9a:
                     {
                         var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0x9a;var result=New(reference?CilStackKind.ObjectReference:CilStackKind.I4);
