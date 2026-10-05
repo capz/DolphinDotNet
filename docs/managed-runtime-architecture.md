@@ -56,7 +56,7 @@ The collector also has an explicit stress mode so root-map correctness can be ex
 
 ## Delegate lowering
 
-Delegate function pointers now have explicit typed IR. The AOT backend emits ABI wrappers for referenced managed methods, and delegate construction/invocation routes through the managed runtime while keeping the delegate target visible to the precise collector. This is the foundation for Action/Func and multicast semantics; multicast combination/removal remains a later layer.
+Delegate function pointers now have explicit typed IR. The AOT backend emits ABI wrappers for referenced managed methods, and delegate construction/invocation routes through the managed runtime while keeping the delegate target visible to the precise collector. Managed delegates preserve the existing runtime invocation-list support and return the last callback result. The current AOT ABI carries pointer-sized scalar arguments and results; invocation buffers are limited to 256 arguments. Full CLR multicast removal semantics and floating-point or aggregate delegate signatures remain future work.
 
 ## API compatibility tracking
 

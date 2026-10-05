@@ -9,7 +9,7 @@ extern intptr_t dnd_value_Program_SwitchCase(intptr_t);
 extern intptr_t dnd_value_Program_BranchCases(intptr_t);
 extern intptr_t dnd_value_Program_Nested(intptr_t,intptr_t);
 extern intptr_t dnd_value_Program_ShortCircuit(intptr_t,intptr_t);
-extern intptr_t dnd_value_Program_DelegateCase(void);
+extern intptr_t dnd_value_Program_ReturningDelegateCase(void);
 
 int main(void)
 {
@@ -23,6 +23,7 @@ int main(void)
     intptr_t result=dnd_value_aot_entry(&heap);
     printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld mutated=%ld switched=%ld total=%ld\n",
         (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)mutated,(long)switched,(long)result);
+    if(dnd_value_Program_ReturningDelegateCase()!=11)return 1;
     if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=196)return 1;
     return 0;
 }

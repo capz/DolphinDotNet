@@ -342,33 +342,89 @@ void dnd_delegate_invoke(DndDelegate *delegate, void *argument) {
 DndDelegate *dnd_delegate_combine(DndManagedHeap *heap, DndDelegate *first, DndDelegate *second) {
     if (!first) return second;
     if (!second) return first;
-    DndDelegate *head = dnd_delegate_new(heap, first->target, first->method); if (!head) return NULL;
-    DndDelegate *tail = head;
-    for (DndDelegate *p = first->next; p; p = p->next) { tail->next = dnd_delegate_new(heap, p->target, p->method); if (!tail->next) return NULL; tail = tail->next; }
-    tail->next = second; return head;
+    DndObject *first_root = (DndObject *)first;
+    DndObject *second_root = (DndObject *)second;
+    DndObject *head_root = NULL;
+    DndObject **slots[] = { &first_root, &second_root, &head_root };
+    DndGcFrame frame;
+    dnd_gc_frame_push(&frame, slots, 3);
+    DndDelegate *tail = NULL;
+    for (DndDelegate *current = first; current; current = current->next) {
+        DndDelegate *copy = (DndDelegate *)allocate(heap, &DND_TYPE_DELEGATE, sizeof(DndDelegate));
+        if (!copy) {
+            dnd_gc_frame_pop(&frame);
+            return NULL;
+        }
+        copy->target = current->target;
+        copy->method = current->method;
+        copy->managed_method = current->managed_method;
+        copy->managed_has_target = current->managed_has_target;
+        if (tail) tail->next = copy;
+        else head_root = (DndObject *)copy;
+        tail = copy;
+    }
+    tail->next = second;
+    dnd_gc_frame_pop(&frame);
+    return (DndDelegate *)head_root;
 }
 
 DndDelegate *dnd_delegate_remove(DndDelegate *source, DndDelegate *value) {
     if (!source || !value) return source;
     DndDelegate *previous = NULL;
-    for (DndDelegate *p = source; p; previous = p, p = p->next) if (p->target == value->target && p->method == value->method) { if (previous) previous->next = p->next; else source = p->next; break; }
+    for (DndDelegate *p = source; p; previous = p, p = p->next) if (p->target == value->target && p->method == value->method && p->managed_method == value->managed_method && p->managed_has_target == value->managed_has_target) { if (previous) previous->next = p->next; else source = p->next; break; }
     return source;
 }
 
 DndDelegate *dnd_managed_delegate_new(DndManagedHeap *heap, DndObject *target, DndManagedMethod method, bool has_target) {
-    if (!method) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Delegate method is null."); return NULL; }
+    if (!method || (has_target && !target)) {
+        dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Delegate method or instance target is null.");
+        return NULL;
+    }
+    DndObject **slots[] = { &target };
+    DndGcFrame frame;
+    dnd_gc_frame_push(&frame, slots, 1);
     DndDelegate *delegate = (DndDelegate *)allocate(heap, &DND_TYPE_DELEGATE, sizeof(DndDelegate));
-    if (!delegate) return NULL;
-    delegate->target = target; delegate->managed_method = method; delegate->managed_has_target = has_target ? 1 : 0;
+    if (delegate) {
+        delegate->target = target;
+        delegate->managed_method = method;
+        delegate->managed_has_target = has_target ? 1 : 0;
+    }
+    dnd_gc_frame_pop(&frame);
     return delegate;
 }
 
 intptr_t dnd_managed_delegate_invoke(DndDelegate *delegate, intptr_t *arguments, uint16_t argument_count) {
-    if (!delegate || !delegate->managed_method) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Managed delegate is null."); return 0; }
-    if (!delegate->managed_has_target) return delegate->managed_method(arguments);
-    intptr_t call_args[argument_count + 1u]; call_args[0] = (intptr_t)delegate->target;
-    for (uint16_t i=0;i<argument_count;i++) call_args[i+1u]=arguments[i];
-    return delegate->managed_method(call_args);
+    if (!delegate || !delegate->managed_method) {
+        dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Managed delegate is null.");
+        return 0;
+    }
+    if (argument_count > 256 || (argument_count && !arguments)) {
+        dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Invalid delegate argument buffer or count.");
+        return 0;
+    }
+    /* Keep the whole invocation list and its targets alive during managed calls. */
+    DndObject *root = (DndObject *)delegate;
+    DndObject **slots[] = { &root };
+    DndGcFrame frame;
+    dnd_gc_frame_push(&frame, slots, 1);
+    intptr_t result = 0;
+    intptr_t call_args[257];
+    for (DndDelegate *current = delegate; current; current = current->next) {
+        if (!current->managed_method) {
+            dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Cannot invoke a native callback as a managed delegate.");
+            break;
+        }
+        if (current->managed_has_target) {
+            call_args[0] = (intptr_t)current->target;
+            for (uint16_t i = 0; i < argument_count; i++) call_args[i + 1u] = arguments[i];
+            result = current->managed_method(call_args);
+        } else {
+            result = current->managed_method(arguments);
+        }
+        if (dnd_exception_kind() != DND_EXCEPTION_NONE) break;
+    }
+    dnd_gc_frame_pop(&frame);
+    return result;
 }
 
 void dnd_roots_init(DndRootSet *roots, DndObject ***storage, size_t capacity) {

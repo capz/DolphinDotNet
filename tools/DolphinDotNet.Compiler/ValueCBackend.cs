@@ -121,7 +121,12 @@ internal static class ValueCBackend
                         b.AppendLine(x.Result is { } result?$"    v{result.Id} = {invoke}; }}":$"    (void){invoke}; }}");
                         break;
                     }
-                    case ValueIrFunctionPointer x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&{WrapperSymbol(x.Target)};");break;
+                    case ValueIrFunctionPointer x:
+                        if(x.Receiver is { } receiver && model.Methods[x.Target].IsVirtual)
+                            b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_virtual_resolve((DndObject*)(intptr_t)v{receiver.Id}, {VirtualSlot(x.Target,model)}u);");
+                        else
+                            b.AppendLine($"  v{x.Result.Id} = (intptr_t)&{WrapperSymbol(x.Target)};");
+                        break;
                     case ValueIrNewDelegate x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_delegate_new(dnd_value_heap, (DndObject*)(intptr_t)v{x.Target.Id}, (DndManagedMethod)(intptr_t)v{x.Function.Id}, v{x.Target.Id} != 0);");break;
                     case ValueIrCall x:
                     {
@@ -256,7 +261,6 @@ internal static class ValueCBackend
         var slot=slots.ToList().FindIndex(x=>x.Key.Name==target.Name&&x.Key.Signature==target.Signature);
         if(slot<0)throw new NotSupportedException($"No virtual slot for {target}.");return slot;
     }
-    private static string DelegateThunkSymbol(MethodKey k)=>"dnd_delegate_thunk_"+Id(k.AssemblyName)+"_"+Id(k.TypeName)+"_"+Id(k.Name)+"_"+StableId(k.Signature);
     private static string WrapperSymbol(MethodKey k)=>"dnd_wrap_"+Id(k.AssemblyName)+"_"+Id(k.TypeName)+"_"+Id(k.Name)+"_"+StableId(k.Signature);
     private static string FieldCType(FieldModel f)=>f.Size switch{1=>"int8_t",2=>"int16_t",8=>"int64_t",_=>"int32_t"};
     private static string StaticSymbol(FieldModel f)=>"dnd_static_"+Id(f.DeclaringType)+"_"+Id(f.Name);
@@ -272,7 +276,7 @@ internal static class ValueCBackend
         IrValueKind.R4=>"float",
         IrValueKind.R8=>"double",
         IrValueKind.I8=>"int64_t",
-        IrValueKind.ObjectReference or IrValueKind.ManagedPointer or IrValueKind.NativeInt=>"intptr_t",
+        IrValueKind.Unknown or IrValueKind.ObjectReference or IrValueKind.ManagedPointer or IrValueKind.NativeInt=>"intptr_t",
         _=>"int32_t"
     };
     private static string Op(string op)=>op switch{"add"=>"+","sub"=>"-","mul"=>"*","and"=>"&","ceq"=>"==","cgt" or "cgt.un"=>">","clt" or "clt.un"=>"<",_=>throw new InvalidDataException($"Unsupported Value IR binary operation {op}.")};

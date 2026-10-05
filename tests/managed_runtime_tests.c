@@ -20,6 +20,8 @@ static const DndType BASE_TYPE = { "Base", &DND_TYPE_OBJECT, sizeof(DndObject), 
 static const DndType DERIVED_TYPE = { "Derived", &BASE_TYPE, sizeof(DndObject), 1, (const DndType *const[]){ &INTERFACE_TYPE }, 0, NULL, 0, 1, derived_vtable, 1, iface_map };
 
 static intptr_t managed_add(intptr_t *args) { return args[0]+1; }
+static intptr_t managed_double(intptr_t *args) { return args[0]*2; }
+static intptr_t managed_instance(intptr_t *args) { return ((TestNode *)args[0])->value + args[1]; }
 static int invoked;
 static void callback(void *target, void *arg) {
     (void)target; invoked = *(int *)arg;
@@ -98,6 +100,29 @@ int main(void) {
     dnd_exception_throw_object(&managed_exception); assert(dnd_exception_object()==&managed_exception); assert(dnd_exception_kind()==DND_EXCEPTION_ARGUMENT); dnd_exception_clear();
 
     DndDelegate *managed_delegate=dnd_managed_delegate_new(&heap,NULL,managed_add,false); intptr_t managed_args[1]={10}; assert(dnd_managed_delegate_invoke(managed_delegate,managed_args,1)==11);
+
+    assert(dnd_managed_delegate_invoke(managed_delegate, NULL, 1) == 0);
+    assert(dnd_exception_kind() == DND_EXCEPTION_ARGUMENT);
+    dnd_exception_clear();
+    assert(dnd_managed_delegate_invoke(managed_delegate, managed_args, 257) == 0);
+    assert(dnd_exception_kind() == DND_EXCEPTION_ARGUMENT);
+    dnd_exception_clear();
+    DndDelegate *managed_second = dnd_managed_delegate_new(&heap, NULL, managed_double, false);
+    DndDelegate *managed_multi = dnd_delegate_combine(&heap, managed_delegate, managed_second);
+    assert(managed_multi && dnd_managed_delegate_invoke(managed_multi, managed_args, 1) == 20);
+    managed_multi = dnd_delegate_remove(managed_multi, managed_second);
+    assert(dnd_managed_delegate_invoke(managed_multi, managed_args, 1) == 11);
+
+    /* Collection during delegate allocation must retain an instance target. */
+    uint8_t delegate_memory[1024];
+    DndManagedHeap delegate_heap;
+    dnd_managed_heap_init(&delegate_heap, delegate_memory, sizeof(delegate_memory));
+    TestNode *delegate_target = (TestNode *)dnd_object_new(&delegate_heap, &NODE_TYPE);
+    delegate_target->value = 32;
+    dnd_gc_set_stress(true);
+    DndDelegate *instance_delegate = dnd_managed_delegate_new(&delegate_heap, (DndObject *)delegate_target, managed_instance, true);
+    dnd_gc_set_stress(false);
+    assert(instance_delegate && dnd_managed_delegate_invoke(instance_delegate, managed_args, 1) == 42);
 
     DndObject *boxed = dnd_box_i32(&heap, 123);
     assert(boxed && dnd_unbox_i32(boxed) == 123);
