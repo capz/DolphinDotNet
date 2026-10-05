@@ -21,7 +21,6 @@ internal static class MetadataLoader
    {
     if(p.Base is { } b&&unresolved.Contains(b))continue;
     var inherited=p.Base is { } parent&&model.Types.TryGetValue(parent,out var parentType)&&!p.ValueType?parentType.InstanceSize:0;
-    if(inherited>0)foreach(var inheritedField in model.Fields.Values.Where(x=>x.DeclaringType==p.Base&&!x.IsStatic&&x.IsReference))model.Fields[(p.Full,"<base>:"+inheritedField.Name)]=new(p.Full,"<base>:"+inheritedField.Name,inheritedField.Offset,true,false,inheritedField.Size);
     var offset=inherited;var type=md.GetTypeDefinition(p.Handle);
     foreach(var fh in type.GetFields())
     {
