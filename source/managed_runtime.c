@@ -397,7 +397,7 @@ static void mark_object(DndManagedHeap *heap, DndObject *object) {
             for (uint32_t i = 0; i < array->length; i++)
                 for (uint16_t r = 0; r < array->element_type->reference_count; r++)
                     mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size +
-                        array->element_type->reference_offsets[r]));
+                        array->element_type->reference_offsets[r] - ((array->element_type->flags & DND_TYPE_FLAG_VALUE_TYPE) ? sizeof(DndObject) : 0)));
         }
     }
 }
