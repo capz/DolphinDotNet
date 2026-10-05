@@ -67,7 +67,7 @@ internal static class AotCompiler
     private static void DiscoverVirtuals(CompilationModel model,DependencyGraph graph)
     {
         foreach(var method in model.Methods.Values)
-            if(method.IsVirtual&&graph.Types.Contains(method.Key.TypeName))graph.AddMethod(method.Key);
+            if(method.IsVirtual&&graph.Types.Contains(method.Key.TypeName)&&model.Assemblies.TryGetValue(method.AssemblyName,out var assembly)&&assembly.Metadata.GetMethodDefinition(method.Handle).RelativeVirtualAddress!=0)graph.AddMethod(method.Key);
     }
 
     private static void Discover(ValueIrMethod method,CompilationModel model,DependencyGraph graph)
