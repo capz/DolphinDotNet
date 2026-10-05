@@ -38,6 +38,7 @@ internal static class IlImporter{
    case 0x42:result.Add(new IrBranch(ReadLongBranchTarget(il,ref p,off),IrBranchCondition.GreaterThan,true));break;
    case 0x43:result.Add(new IrBranch(ReadLongBranchTarget(il,ref p,off),IrBranchCondition.LessOrEqual,true));break;
    case 0x44:result.Add(new IrBranch(ReadLongBranchTarget(il,ref p,off),IrBranchCondition.LessThan,true));break;
+   case 0x45:{Need(il,p,4,off);var n=BitConverter.ToInt32(il,p);p+=4;if(n<0)throw new InvalidDataException($"Invalid switch at IL_{off:x4}.");Need(il,p,n*4,off);var baseOffset=p+n*4;var targets=new int[n];for(var si=0;si<n;si++){targets[si]=baseOffset+BitConverter.ToInt32(il,p);p+=4;}result.Add(new IrSwitch(targets));break;}
    case 0x58:result.Add(new IrAdd());break;case 0x59:result.Add(new IrSub());break;case 0x5a:result.Add(new IrMul());break;
    case 0x72:{Need(il,p,4,off);int raw=BitConverter.ToInt32(il,p);p+=4;var token=MetadataTokens.UserStringHandle(raw&0x00ffffff);result.Add(new IrLoadString(md.GetUserString(token)));break;}
    case 0x28:ImportCall(md,model,graph,result,ReadToken(il,ref p,off),false);break;case 0x6f:ImportCall(md,model,graph,result,ReadToken(il,ref p,off),true);break;
