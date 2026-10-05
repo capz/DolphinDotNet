@@ -44,7 +44,7 @@ internal static class ValueIrImporter
                 switch(cil.OpCode)
                 {
                     case 0x00: break;
-                    case 0x14: { var v=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrConstant(v,0));stack.Add(v);break; }
+
                     case >=0x16 and <=0x1e:
                     {
                         var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,cil.OpCode-0x16));stack.Add(v);break;
@@ -57,6 +57,10 @@ internal static class ValueIrImporter
                     case 0x22 or 0x23:
                     {
                         var value=(cil.Operand as CilFloat)?.Value??throw new InvalidDataException($"Missing floating operand at IL_{cil.Offset:x4}.");var v=new IrValue(nextValue++,cil.OpCode==0x22?IrValueKind.R4:IrValueKind.R8);instructions.Add(new ValueIrFloatConstant(v,value));stack.Add(v);break;
+                    }
+                    case 0x14:
+                    {
+                        var v=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrConstant(v,0));stack.Add(v);break;
                     }
                     case 0x15:
                     {
@@ -203,8 +207,8 @@ internal static class ValueIrImporter
                         for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
                         if(delegateType(target.Key.TypeName)&&target.Key.Name=="Invoke")
                         {
-                            if(target.ReturnsValue)throw new NotSupportedException("Value-returning delegates are not yet supported.");
-                            instructions.Add(new ValueIrDelegateInvoke(args[0],target.ParameterCount==1?args[1]:null));break;
+                            IrValue? delegateResult=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));delegateResult=value;stack.Add(value);}
+                            instructions.Add(new ValueIrDelegateInvoke(delegateResult,args[0],args.Skip(1).ToArray()));break;
                         }
                         IrValue? result=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));result=value;stack.Add(value);}
                         var isInterface=cil.OpCode==0x6f&&resolveTypeForMethod(target.Key.TypeName); instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual&&!isInterface,isInterface));break;

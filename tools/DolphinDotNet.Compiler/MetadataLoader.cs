@@ -28,7 +28,7 @@ internal static class MetadataLoader
      var name=md.GetString(field.Name);var embedded=EmbeddedReferences(md,field.Signature,model);model.Fields[(p.Full,name)]=new(p.Full,name,isStatic?0:offset,reference,isStatic,size,embedded);if(!isStatic)offset+=size;
     }
     model.Types[p.Full]=new(p.Ns,p.Name,p.Full,p.Base,offset,p.Interface,p.ValueType,p.Interfaces);unresolved.Remove(p.Full);progress=true;
-    foreach(var mh in type.GetMethods()){var m=md.GetMethodDefinition(mh);var key=new MethodKey(p.Full,md.GetString(m.Name),assemblyName,Convert.ToHexString(md.GetBlobBytes(m.Signature)));var sig=ReadMethodSignature(md,m.Signature);model.Methods[key]=new(key,mh,(m.Attributes&MethodAttributes.Static)!=0,sig.Parameters,sig.ReturnsValue,assemblyName,(m.Attributes&MethodAttributes.Virtual)!=0);}
+    foreach(var mh in type.GetMethods()){var m=md.GetMethodDefinition(mh);var key=new MethodKey(p.Full,md.GetString(m.Name),assemblyName,Convert.ToHexString(md.GetBlobBytes(m.Signature)));var sig=ReadMethodSignature(md,m.Signature);model.Methods[key]=new(key,mh,(m.Attributes&MethodAttributes.Static)!=0,sig.Parameters,sig.ReturnsValue,assemblyName,(m.Attributes&MethodAttributes.Virtual)!=0,(m.Attributes&MethodAttributes.Abstract)!=0,(m.Attributes&MethodAttributes.NewSlot)!=0,p.Interface,p.Base=="System.MulticastDelegate");}
    }
    if(!progress)throw new InvalidDataException("Unable to resolve type layout inheritance.");
   }

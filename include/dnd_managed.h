@@ -75,6 +75,8 @@ struct DndDelegate {
     void *target;
     DndDelegateFn method;
     DndDelegate *next;
+    DndManagedMethod managed_method;
+    uint8_t managed_has_target;
 };
 
 typedef struct {
@@ -138,6 +140,8 @@ DndDelegate *dnd_delegate_new(DndManagedHeap *heap, void *target, DndDelegateFn 
 void dnd_delegate_invoke(DndDelegate *delegate, void *argument);
 DndDelegate *dnd_delegate_combine(DndManagedHeap *heap, DndDelegate *first, DndDelegate *second);
 DndDelegate *dnd_delegate_remove(DndDelegate *source, DndDelegate *value);
+DndDelegate *dnd_managed_delegate_new(DndManagedHeap *heap, DndObject *target, DndManagedMethod method, bool has_target);
+intptr_t dnd_managed_delegate_invoke(DndDelegate *delegate, intptr_t *arguments, uint16_t argument_count);
 
 void dnd_roots_init(DndRootSet *roots, DndObject ***storage, size_t capacity);
 bool dnd_root_add(DndRootSet *roots, DndObject **slot);

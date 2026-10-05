@@ -37,7 +37,7 @@ internal sealed record ValueIrLoadValue(IrValue Result,IrValue Address,string Ty
 internal sealed record ValueIrStoreValue(IrValue Address,IrValue Value,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrConvert(IrValue Result,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrBinary(IrValue Result,string Operation,IrValue Left,IrValue Right):ValueIrInstruction;
-internal sealed record ValueIrDelegateInvoke(IrValue Delegate,IrValue? Argument):ValueIrInstruction;
+internal sealed record ValueIrDelegateInvoke(IrValue? Result,IrValue Delegate,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
 internal sealed record ValueIrFunctionPointer(IrValue Result,MethodKey Target,IrValue? Receiver):ValueIrInstruction;
 internal sealed record ValueIrNewDelegate(IrValue Result,string TypeName,IrValue Target,IrValue Function):ValueIrInstruction;
 internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments,bool Virtual=false,bool Interface=false):ValueIrInstruction;

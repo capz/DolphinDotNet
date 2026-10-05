@@ -1,6 +1,7 @@
 using System;
 
 delegate void IntSink(int value);
+delegate int IntFn(int value);
 interface IValue { int GetValue(); }
 class VirtualBase { public int BaseField=4; public virtual int GetValue()=>3; }
 class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }
@@ -28,11 +29,13 @@ public static class Program
         var byref=ByRefCase();
         var iface=InterfaceIdentityCase();
         var ifaceCall=InterfaceCallCase();
-        var delegates=DelegateCase();
+        var delegates=DelegateCase()+ReturningDelegateCase();
         return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates;
     }
 
     static int DelegateCase(){IntSink sink=Sink;sink(6);return DelegateTotal;}
+    static int ReturningDelegateCase(){var fn=new IntFn(AddOne);return fn(10);}
+    static int AddOne(int value)=>value+1;
     static void Sink(int value){DelegateTotal=DelegateTotal+value;}
 
     static int InterfaceCallCase(){IValue value=new VirtualDerived();return value.GetValue();}
