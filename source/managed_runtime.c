@@ -343,6 +343,22 @@ void dnd_delegate_invoke(DndDelegate *delegate, void *argument) {
     delegate->method(delegate->target, argument);
 }
 
+DndDelegate *dnd_managed_delegate_new(DndManagedHeap *heap, DndObject *target, DndManagedMethod method, bool has_target) {
+    if (!method) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Delegate method is null."); return NULL; }
+    DndDelegate *delegate = (DndDelegate *)allocate(heap, &DND_TYPE_DELEGATE, sizeof(DndDelegate));
+    if (!delegate) return NULL;
+    delegate->target = target; delegate->managed_method = method; delegate->managed_has_target = has_target ? 1 : 0;
+    return delegate;
+}
+
+intptr_t dnd_managed_delegate_invoke(DndDelegate *delegate, intptr_t *arguments, uint16_t argument_count) {
+    if (!delegate || !delegate->managed_method) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Managed delegate is null."); return 0; }
+    if (!delegate->managed_has_target) return delegate->managed_method(arguments);
+    intptr_t call_args[argument_count + 1u]; call_args[0] = (intptr_t)delegate->target;
+    for (uint16_t i=0;i<argument_count;i++) call_args[i+1u]=arguments[i];
+    return delegate->managed_method(call_args);
+}
+
 void dnd_roots_init(DndRootSet *roots, DndObject ***storage, size_t capacity) {
     roots->slots = storage;
     roots->count = 0;
