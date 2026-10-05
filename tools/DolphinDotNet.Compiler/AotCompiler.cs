@@ -51,6 +51,13 @@ internal static class AotCompiler
         catch { model.Dispose(); throw; }
     }
 
+    private static void AddTypeClosure(string type,CompilationModel model,DependencyGraph graph)
+    {
+        if(!model.Types.TryGetValue(type,out var tm))return;
+        if(tm.BaseType is { } parent&&model.Types.ContainsKey(parent)){graph.AddType(parent);AddTypeClosure(parent,model,graph);}
+        foreach(var iface in tm.Interfaces??Array.Empty<string>())if(model.Types.ContainsKey(iface)){graph.AddType(iface);AddTypeClosure(iface,model,graph);}
+    }
+
     private static void DiscoverTypeInitializers(CompilationModel model,DependencyGraph graph)
     {
         foreach(var method in model.Methods.Values)
@@ -65,7 +72,7 @@ internal static class AotCompiler
 
     private static void Discover(ValueIrMethod method,DependencyGraph graph)
     {
-        graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);
+        graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);AddTypeClosure(method.Key.TypeName,model,graph);
         foreach(var instruction in method.Blocks.SelectMany(b=>b.Instructions))
         {
             switch(instruction)
