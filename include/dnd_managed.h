@@ -13,12 +13,22 @@ typedef struct DndDelegate DndDelegate;
 typedef void (*DndFinalizer)(DndObject *);
 typedef void (*DndDelegateFn)(void *target, void *argument);
 
+enum {
+    DND_TYPE_FLAG_NONE = 0,
+    DND_TYPE_FLAG_ARRAY = 1u << 0,
+    DND_TYPE_FLAG_VALUE_TYPE = 1u << 1
+};
+
 struct DndType {
     const char *name;
     const DndType *base_type;
     uint32_t instance_size;
     uint16_t interface_count;
     const DndType *const *interfaces;
+    uint16_t reference_count;
+    const uint32_t *reference_offsets;
+    uint16_t flags;
+    uint16_t reserved;
 };
 
 struct DndObject {
@@ -40,6 +50,9 @@ struct DndArray {
     DndObject object;
     uint32_t length;
     uint32_t element_size;
+    const DndType *element_type;
+    uint8_t elements_are_references;
+    uint8_t reserved[3];
     uint8_t data[];
 };
 
@@ -54,6 +67,8 @@ typedef struct {
     size_t capacity;
     size_t used;
     DndObject *objects;
+    DndObject *free_list;
+    size_t collections;
 } DndManagedHeap;
 
 typedef struct {
@@ -82,6 +97,7 @@ DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text);
 DndString *dnd_string_concat(DndManagedHeap *heap, const DndString *a, const DndString *b);
 bool dnd_string_equals(const DndString *a, const DndString *b);
 DndArray *dnd_managed_array_new(DndManagedHeap *heap, uint32_t length, uint32_t element_size);
+DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length, uint32_t element_size, const DndType *element_type, bool elements_are_references);
 void *dnd_managed_array_at(DndArray *array, uint32_t index);
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual);
 DndObject *dnd_cast(DndObject *object, const DndType *target);
@@ -92,14 +108,12 @@ void dnd_roots_init(DndRootSet *roots, DndObject ***storage, size_t capacity);
 bool dnd_root_add(DndRootSet *roots, DndObject **slot);
 void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots);
 
-/* Compiler-emitted shadow-stack frames. Each frame contains managed references
- * created by the active method. */
 typedef struct DndGcFrame {
-    DndObject **objects;
+    DndObject ***slots;
     size_t count;
     struct DndGcFrame *previous;
 } DndGcFrame;
-void dnd_gc_frame_push(DndGcFrame *frame, DndObject **objects, size_t count);
+void dnd_gc_frame_push(DndGcFrame *frame, DndObject ***slots, size_t count);
 void dnd_gc_frame_pop(DndGcFrame *frame);
 
 void dnd_exception_clear(void);
