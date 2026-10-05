@@ -9,7 +9,22 @@ public static class Program
         var nested=Nested(3,8);
         var shortCircuit=ShortCircuit(4,9);
         var mutated=MutateArgument(2);
-        return loop+branches+nested+shortCircuit+mutated;
+        var switched=SwitchCase(4);
+        return loop+branches+nested+shortCircuit+mutated+switched;
+    }
+
+    static int SwitchCase(int value)
+    {
+        switch(value)
+        {
+            case 0:return 10;
+            case 1:return 20;
+            case 2:return 30;
+            case 3:return 35;
+            case 4:return 40;
+            case 5:return 50;
+            default:return 60;
+        }
     }
 
     static int MutateArgument(int value){value=value+3;return value;}
