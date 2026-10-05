@@ -5,6 +5,7 @@ internal static class Program
     private static int Main()
     {
         GameCube.WriteLine("Hello from managed C# on GameCube");
-        return GameCube.Platform.Length > 0 ? 0 : 1;
+        var buttons = GameCube.ReadButtonsDown(0);
+        return GameCube.Platform.Length > 0 ? buttons : -1;
     }
 }
