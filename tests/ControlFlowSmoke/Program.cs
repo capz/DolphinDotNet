@@ -1,7 +1,7 @@
 using System;
 
-class VirtualBase { public virtual int GetValue()=>3; }
-class VirtualDerived : VirtualBase { public override int GetValue()=>9; }
+class VirtualBase { public int BaseField=4; public virtual int GetValue()=>3; }
+class VirtualDerived : VirtualBase { public int DerivedField=5; public override int GetValue()=>9; }
 
 public static class Program
 {
@@ -21,8 +21,11 @@ public static class Program
         var boxing=BoxCase();
         var virtuals=VirtualCase();
         var types=TypeCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types;
+        var inherited=InheritedFieldCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited;
     }
+
+    static int InheritedFieldCase(){var value=new VirtualDerived();return value.BaseField+value.DerivedField;}
 
     static int TypeCase(){VirtualBase value=new VirtualDerived();var derived=value as VirtualDerived;var cast=(VirtualDerived)value;return (derived!=null?2:0)+(cast!=null?3:0);}
 
