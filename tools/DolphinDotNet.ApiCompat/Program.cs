@@ -2,11 +2,15 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 
-if(args.Length!=2){Console.Error.WriteLine("Usage: dnd-api-compat <reference-contract.dll> <implementation.dll>");return 2;}
+if(args.Length is <2 or >3){Console.Error.WriteLine("Usage: dnd-api-compat <reference-contract.dll> <implementation.dll> [characterized-api.txt]");return 2;}
 var reference=Read(args[0]);var implementation=Read(args[1]);
 var missing=reference.Except(implementation,StringComparer.Ordinal).OrderBy(x=>x,StringComparer.Ordinal).ToArray();
 foreach(var item in missing)Console.WriteLine(item);
-Console.Error.WriteLine($"Reference APIs: {reference.Count}; implemented: {reference.Count-missing.Length}; missing: {missing.Length}; coverage: {(reference.Count==0?100.0:100.0*(reference.Count-missing.Length)/reference.Count):F2}%");
+var implemented=reference.Count-missing.Length;
+var characterized=args.Length==3?File.ReadLines(args[2]).Select(x=>x.Trim()).Where(x=>x.Length>0&&!x.StartsWith("#")).ToHashSet(StringComparer.Ordinal):new HashSet<string>();
+var validated=reference.Count(characterized.Contains);
+Console.Error.WriteLine($"Reference APIs: {reference.Count}; implemented: {implemented}; missing: {missing.Length}; API coverage: {(reference.Count==0?100.0:100.0*implemented/reference.Count):F2}%");
+if(args.Length==3)Console.Error.WriteLine($"Runtime-characterized: {validated}; characterized coverage: {(reference.Count==0?100.0:100.0*validated/reference.Count):F2}%");
 return missing.Length==0?0:1;
 
 static HashSet<string> Read(string path)
