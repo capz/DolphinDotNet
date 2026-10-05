@@ -25,7 +25,7 @@ internal static class MetadataLoader
     {
      var field=md.GetFieldDefinition(fh);var isStatic=(field.Attributes&FieldAttributes.Static)!=0;var(size,reference)=FieldLayout(md,field.Signature,model);
      var align=Math.Min(Math.Max(size,1),4);if(!isStatic)offset=Align(offset,align);
-     var name=md.GetString(field.Name);model.Fields[(p.Full,name)]=new(p.Full,name,isStatic?0:offset,reference,isStatic,size);if(!isStatic)offset+=size;
+     var name=md.GetString(field.Name);var embedded=EmbeddedReferences(md,field.Signature,model);model.Fields[(p.Full,name)]=new(p.Full,name,isStatic?0:offset,reference,isStatic,size,embedded);if(!isStatic)offset+=size;
     }
     model.Types[p.Full]=new(p.Ns,p.Name,p.Full,p.Base,offset,p.Interface,p.ValueType,p.Interfaces);unresolved.Remove(p.Full);progress=true;
     foreach(var mh in type.GetMethods()){var m=md.GetMethodDefinition(mh);var key=new MethodKey(p.Full,md.GetString(m.Name),assemblyName,Convert.ToHexString(md.GetBlobBytes(m.Signature)));var sig=ReadMethodSignature(md,m.Signature);model.Methods[key]=new(key,mh,(m.Attributes&MethodAttributes.Static)!=0,sig.Parameters,sig.ReturnsValue,assemblyName,(m.Attributes&MethodAttributes.Virtual)!=0);}
@@ -52,6 +52,14 @@ internal static class MetadataLoader
   };
  }
  private static (int Size,bool Reference) ReadTypeHandleLayout(MetadataReader md,ref BlobReader r,CompilationModel model){var h=r.ReadTypeHandle();var name=ResolveTypeName(md,h);return name is not null&&model.Types.TryGetValue(name,out var t)&&t.IsValueType?(Math.Max(1,t.InstanceSize),false):(4,true);}
+ private static IReadOnlyList<int> EmbeddedReferences(MetadataReader md,BlobHandle sig,CompilationModel model)
+ {
+  var r=md.GetBlobReader(sig);r.ReadSignatureHeader();var code=r.ReadSignatureTypeCode();
+  if(code is SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array)return new[]{0};
+  if(code!=SignatureTypeCode.TypeHandle)return Array.Empty<int>();
+  var name=ResolveTypeName(md,r.ReadTypeHandle());if(name is null||!model.Types.TryGetValue(name,out var t)||!t.IsValueType)return Array.Empty<int>();
+  return model.Fields.Values.Where(f=>f.DeclaringType==name&&!f.IsStatic).SelectMany(f=>(f.EmbeddedReferenceOffsets??(f.IsReference?new[]{0}:Array.Empty<int>())).Select(o=>f.Offset+o)).ToArray();
+ }
  private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
  private static string Full(string ns,string name)=>string.IsNullOrEmpty(ns)?name:ns+"."+name;
 }
