@@ -37,13 +37,10 @@ internal static class ValueIrImporter
                     {
                         var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,cil.OpCode-0x16));stack.Add(v);break;
                     }
-                    case 0x1f:
+                    case 0x1f or 0x20:
                     {
-                        throw new InvalidDataException($"Value IR decoder requires decoded int8 operand at IL_{cil.Offset:x4}.");
-                    }
-                    case 0x20:
-                    {
-                        throw new InvalidDataException($"Value IR decoder requires decoded int32 operand at IL_{cil.Offset:x4}.");
+                        var value=(cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing integer operand at IL_{cil.Offset:x4}.");
+                        var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,value));stack.Add(v);break;
                     }
                     case 0x15:
                     {
