@@ -8,6 +8,17 @@ typedef struct { DndObject object; DndObject *child; int32_t value; } TestNode;
 static const uint32_t node_refs[] = { (uint32_t)offsetof(TestNode, child) };
 static const DndType NODE_TYPE = { "TestNode", &DND_TYPE_OBJECT, sizeof(TestNode), 0, NULL, 1, node_refs, 0, 0, NULL };
 
+static intptr_t virtual_base(intptr_t *args) { (void)args; return 10; }
+static intptr_t virtual_derived(intptr_t *args) { (void)args; return 20; }
+static intptr_t interface_method(intptr_t *args) { (void)args; return 30; }
+static const DndManagedMethod base_vtable[] = { virtual_base };
+static const DndManagedMethod derived_vtable[] = { virtual_derived };
+static const DndType INTERFACE_TYPE = { "ITest", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL };
+static const DndManagedMethod iface_methods[] = { interface_method };
+static const DndInterfaceEntry iface_map[] = { { &INTERFACE_TYPE, 1, iface_methods } };
+static const DndType BASE_TYPE = { "Base", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 1, base_vtable, 0, NULL };
+static const DndType DERIVED_TYPE = { "Derived", &BASE_TYPE, sizeof(DndObject), 1, (const DndType *const[]){ &INTERFACE_TYPE }, 0, NULL, 0, 1, derived_vtable, 1, iface_map };
+
 static int invoked;
 static void callback(void *target, void *arg) {
     (void)target; invoked = *(int *)arg;
@@ -65,7 +76,7 @@ int main(void) {
     dnd_gc_collect(&heap, &roots);
     assert(heap.used == 0);
 
-    /* Precise tracing keeps an object reachable through a managed field. */
+    DndObject *dispatch = dnd_object_new(&heap, &DERIVED_TYPE); assert(dispatch); intptr_t dispatch_args[1] = { (intptr_t)dispatch };\n    assert(dnd_virtual_resolve(dispatch, 0)(dispatch_args) == 20);\n    assert(dnd_interface_resolve(dispatch, &INTERFACE_TYPE, 0)(dispatch_args) == 30);\n    assert(dnd_type_is_assignable_from(&BASE_TYPE, dispatch->type));\n    assert(dnd_type_is_assignable_from(&INTERFACE_TYPE, dispatch->type));\n\n    /* Precise tracing keeps an object reachable through a managed field. */
     TestNode *parent = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
     TestNode *child = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
     assert(parent && child); parent->child = (DndObject *)child; child->value = 99;
