@@ -8,4 +8,8 @@ public static class GameCube
     /// <summary>Writes a line to the GameCube diagnostic overlay.</summary>
     public static void WriteLine(string text) =>
         throw new System.PlatformNotSupportedException("GameCube.WriteLine is replaced by the DolphinDotNet AOT compiler.");
+
+    /// <summary>Polls the GameCube controllers and returns the buttons newly pressed on the selected port.</summary>
+    public static int ReadButtonsDown(int port = 0) =>
+        throw new System.PlatformNotSupportedException("GameCube.ReadButtonsDown is replaced by the DolphinDotNet AOT compiler.");
 }
