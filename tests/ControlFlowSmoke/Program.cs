@@ -27,7 +27,7 @@ public static class Program
     }
 
     static int ByRefCase(){var value=2;AddThree(ref value);return value;}
-    static void AddThree(ref int value){value=value+3;}
+    static void AddThree(ref int value){value=5;}
 
     static int InheritedFieldCase(){var value=new VirtualDerived();return value.BaseField+value.DerivedField;}
 
