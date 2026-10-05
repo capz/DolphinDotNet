@@ -107,6 +107,7 @@ DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap,uint32_t length,uint3
 }
 DndArray *dnd_managed_array_new(DndManagedHeap *heap,uint32_t length,uint32_t element_size){return dnd_managed_array_new_typed(heap,length,element_size,NULL,false);}
 void *dnd_managed_array_at(DndArray *a,uint32_t index){if(!a){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return NULL;}if(index>=a->length){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array index out of range.");return NULL;}return a->data+(size_t)index*a->element_size;}
+uint32_t dnd_array_length(DndArray*a){if(!a){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return 0;}return a->length;}
 int32_t dnd_array_load_i32(DndArray*a,uint32_t index){void*p=dnd_managed_array_at(a,index);return p?*(int32_t*)p:0;}
 DndObject*dnd_array_load_ref(DndArray*a,uint32_t index){void*p=dnd_managed_array_at(a,index);return p?*(DndObject**)p:NULL;}
 bool dnd_array_store_i32(DndArray*a,uint32_t index,int32_t value){void*p=dnd_managed_array_at(a,index);if(!p)return false;*(int32_t*)p=value;return true;}
