@@ -48,12 +48,11 @@ internal static class MetadataLoader
    SignatureTypeCode.Single or SignatureTypeCode.Int32 or SignatureTypeCode.UInt32=>(4,false),
    SignatureTypeCode.IntPtr or SignatureTypeCode.UIntPtr=>(4,false),
    SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>(4,true),
-   SignatureTypeCode.TypeHandle=>{
-    var h=r.ReadTypeHandle();var name=ResolveTypeName(md,h);if(name is not null&&model.Types.TryGetValue(name,out var t)&&t.IsValueType)(Math.Max(1,t.InstanceSize),false);else(4,true);
-   },
+   SignatureTypeCode.TypeHandle=>ReadTypeHandleLayout(md,ref r,model),
    _=>(4,false)
   };
  }
+ private static (int Size,bool Reference) ReadTypeHandleLayout(MetadataReader md,ref BlobReader r,CompilationModel model){var h=r.ReadTypeHandle();var name=ResolveTypeName(md,h);return name is not null&&model.Types.TryGetValue(name,out var t)&&t.IsValueType?(Math.Max(1,t.InstanceSize),false):(4,true);}
  private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
  private static string Full(string ns,string name)=>string.IsNullOrEmpty(ns)?name:ns+"."+name;
 }
