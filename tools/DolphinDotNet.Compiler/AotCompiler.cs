@@ -33,7 +33,7 @@ internal static class AotCompiler
                 var ilBytes=body.GetILBytes()??throw new InvalidDataException($"{method.Key} has no IL body.");
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
-                _=CilStackAnalyzer.Analyze(cfg);
+                _=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
                 var ir=IlImporter.Import(assembly.PE,model,method,graph);output.Add(ir);
                 foreach(var key in graph.Methods)
                     if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable))queue.Enqueue(reachable);
@@ -42,6 +42,39 @@ internal static class AotCompiler
         }
         catch { model.Dispose(); throw; }
     }
+
+    private static CilCallStackEffect? ResolveCallEffect(MetadataReader md,CompilationModel model,CilInstruction i)
+    {
+        if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not int raw)return null;
+        var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind==HandleKind.MemberReference)
+        {
+            var member=md.GetMemberReference((MemberReferenceHandle)handle);
+            var reader=md.GetBlobReader(member.Signature);var header=reader.ReadSignatureHeader();
+            if(header.IsGeneric)reader.ReadCompressedInteger();
+            var parameters=reader.ReadCompressedInteger();var ret=reader.ReadSignatureTypeCode();
+            var hasThis=header.IsInstance&&i.OpCode!=0x73;
+            return new CilCallStackEffect(parameters+(hasThis?1:0),i.OpCode==0x73?CilStackKind.ObjectReference:ret==SignatureTypeCode.Void?null:Kind(ret));
+        }
+        if(handle.Kind==HandleKind.MethodDefinition)
+        {
+            var def=md.GetMethodDefinition((MethodDefinitionHandle)handle);var reader=md.GetBlobReader(def.Signature);var header=reader.ReadSignatureHeader();
+            if(header.IsGeneric)reader.ReadCompressedInteger();
+            var parameters=reader.ReadCompressedInteger();var ret=reader.ReadSignatureTypeCode();
+            var hasThis=(def.Attributes&System.Reflection.MethodAttributes.Static)==0&&i.OpCode!=0x73;
+            return new CilCallStackEffect(parameters+(hasThis?1:0),i.OpCode==0x73?CilStackKind.ObjectReference:ret==SignatureTypeCode.Void?null:Kind(ret));
+        }
+        return null;
+    }
+    private static CilStackKind Kind(SignatureTypeCode code)=>code switch
+    {
+        SignatureTypeCode.Int64 or SignatureTypeCode.UInt64=>CilStackKind.I8,
+        SignatureTypeCode.Single or SignatureTypeCode.Double=>CilStackKind.Float,
+        SignatureTypeCode.IntPtr or SignatureTypeCode.UIntPtr=>CilStackKind.NativeInt,
+        SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>CilStackKind.ObjectReference,
+        SignatureTypeCode.Pointer or SignatureTypeCode.ByReference=>CilStackKind.ManagedPointer,
+        _=>CilStackKind.I4
+    };
 
     private static AssemblyModel LoadAssembly(CompilationModel model,string path)
     {
