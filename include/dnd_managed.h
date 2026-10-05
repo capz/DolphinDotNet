@@ -67,6 +67,8 @@ struct DndDelegate {
     DndObject object;
     void *target;
     DndDelegateFn method;
+    DndManagedMethod managed_method;
+    uint8_t managed_has_target;
 };
 
 typedef struct {
@@ -132,6 +134,8 @@ DndManagedMethod dnd_virtual_resolve(const DndObject *object, uint16_t slot);
 DndManagedMethod dnd_interface_resolve(const DndObject *object, const DndType *interface_type, uint16_t slot);
 DndDelegate *dnd_delegate_new(DndManagedHeap *heap, void *target, DndDelegateFn method);
 void dnd_delegate_invoke(DndDelegate *delegate, void *argument);
+DndDelegate *dnd_managed_delegate_new(DndManagedHeap *heap, DndObject *target, DndManagedMethod method, bool has_target);
+intptr_t dnd_managed_delegate_invoke(DndDelegate *delegate, intptr_t *arguments, uint16_t argument_count);
 
 void dnd_roots_init(DndRootSet *roots, DndObject ***storage, size_t capacity);
 bool dnd_root_add(DndRootSet *roots, DndObject **slot);
