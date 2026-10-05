@@ -66,7 +66,7 @@ internal static class Compiler
         var strings = new List<string>();
         var stringIds = new Dictionary<string, int>(StringComparer.Ordinal);
         var code = new List<byte>();
-        var il = body.GetILBytes().ToArray();
+        var il = (body.GetILBytes() ?? throw new InvalidDataException("Method body has no IL bytes.")).ToArray();
         int p = 0;
 
         while (p < il.Length)
