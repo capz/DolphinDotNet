@@ -13,9 +13,11 @@ internal static class ValueIrImporter
         Func<CilInstruction,IntrinsicKind> intrinsic,
         Func<CilInstruction,string?> resolveString,
         Func<CilInstruction,FieldModel?> resolveField,
-        Func<CilInstruction,string?> resolveType)
+        Func<CilInstruction,string?> resolveType,
+        Func<string,bool>? isInterfaceType=null)
     {
         var nextValue=0;
+        bool resolveTypeForMethod(string name)=>isInterfaceType?.Invoke(name)??false;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
         var output=new List<ValueIrBlock>();
         var entryValues=new Dictionary<int,List<IrValue>>();
@@ -173,7 +175,7 @@ internal static class ValueIrImporter
                         var count=target.ParameterCount+(target.IsStatic?0:1);var args=new IrValue[count];
                         for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
                         IrValue? result=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));result=value;stack.Add(value);}
-                        instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual));break;
+                        var isInterface=cil.OpCode==0x6f&&resolveTypeForMethod(target.Key.TypeName); instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual&&!isInterface,isInterface));break;
                     }
                     case 0x73:
                     {
