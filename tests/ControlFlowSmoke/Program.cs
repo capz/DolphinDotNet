@@ -10,8 +10,12 @@ public static class Program
         var shortCircuit=ShortCircuit(4,9);
         var mutated=MutateArgument(2);
         var switched=SwitchCase(4);
-        return loop+branches+nested+shortCircuit+mutated+switched;
+        var overloaded=Overload(7)+Overload(5,6);
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded;
     }
+
+    static int Overload(int value)=>value;
+    static int Overload(int left,int right)=>left+right;
 
     static int SwitchCase(int value)
     {
