@@ -75,6 +75,13 @@ jobs:
           test -x "$DEVKITPPC/bin/powerpc-eabi-gcc"
           "$DEVKITPPC/bin/powerpc-eabi-gcc" --version
           test -f "$DEVKITPRO/portlibs/gamecube/lib/libopengx.a"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Generate managed GameCube AOT source
+        run: |
+          dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll generated/managed_gamecube.c
       - name: Build ELF and DOL
         run: make V=1
       - name: Verify outputs
