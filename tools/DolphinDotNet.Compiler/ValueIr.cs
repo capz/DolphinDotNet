@@ -19,6 +19,7 @@ internal readonly record struct IrValue(int Id,IrValueKind Kind)
 }
 
 internal abstract record ValueIrInstruction;
+internal sealed record ValueIrFloatConstant(IrValue Result,double Value):ValueIrInstruction;
 internal sealed record ValueIrConstant(IrValue Result,long Value):ValueIrInstruction;
 internal sealed record ValueIrLoadString(IrValue Result,string Value):ValueIrInstruction;
 internal sealed record ValueIrLoadArgument(IrValue Result,int Index):ValueIrInstruction;
