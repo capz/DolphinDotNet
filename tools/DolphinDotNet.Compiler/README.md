@@ -1,9 +1,15 @@
 # DolphinDotNet.Compiler
 
-Two compiler paths currently coexist:
+DolphinDotNet uses a closed-world AOT pipeline for GameCube builds:
 
-- default: legacy bootstrap compiler emitting DND bytecode/header output;
-- `--aot`: closed-world compiler importing reachable CIL into DND IR and emitting native C.
+```
+C# -> Roslyn CIL -> CIL decoder -> CFG/stack analysis -> typed Value IR
+   -> native C -> devkitPPC GCC -> ELF -> DOL
+```
+
+`--aot` is the production typed-IR path. `--value-aot` is retained as an explicit alias for compiler characterization, while `--legacy-aot` keeps the previous stack-oriented C backend available as a regression oracle. The original no-flag DND bytecode compiler remains a bootstrap/reference VM path.
+
+The typed path models CFG fallthrough, loops, conditional branches, switch, stack joins/phi values, mutable locals and arguments, signed/unsigned comparisons, direct managed calls, overload-aware method identity, object construction, instance fields, managed strings, and registered GameCube intrinsics. Intrinsics are centralized in `IntrinsicRegistry` rather than recognized ad hoc by the importer.
 
 Usage:
 
@@ -11,6 +17,4 @@ Usage:
 dotnet run --project tools/DolphinDotNet.Compiler -- --aot Managed.dll generated_program.c
 ```
 
-The AOT path currently imports constants, arguments, integer add/sub/mul, `newobj`, instance field load/store, direct calls, virtual calls and returns. Unsupported IL fails compilation deliberately rather than silently producing incorrect native code.
-
-The next lowering step will turn stack-oriented IR operations into typed temporaries and actual runtime ABI calls.
+C remains an implementation detail. Managed applications target DolphinDotNet managed APIs; generated C targets the runtime/platform ABI. Unsupported semantics should fail compilation rather than silently change managed behavior.
