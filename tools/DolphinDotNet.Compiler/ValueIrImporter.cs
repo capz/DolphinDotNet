@@ -82,7 +82,7 @@ internal static class ValueIrImporter
                         Pop(stack,cil);break;
                     case 0xfe01 or 0xfe02 or 0xfe03 or 0xfe04 or 0xfe05:
                     {
-                        var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(CilStackKind.I4);var op=cil.OpCode switch{0xfe01=>"ceq",0xfe02 or 0xfe03=>"cgt",_=>"clt"};
+                        var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(CilStackKind.I4);var op=cil.OpCode switch{0xfe01=>"ceq",0xfe02=>"cgt",0xfe03=>"cgt.un",0xfe04=>"clt",_=>"clt.un"};
                         instructions.Add(new ValueIrBinary(result,op,left,right));stack.Add(result);break;
                     }
                     case 0x58 or 0x59 or 0x5a:
