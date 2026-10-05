@@ -6,6 +6,8 @@ const DndType DND_TYPE_STRING = {"System.String", &DND_TYPE_OBJECT, sizeof(DndSt
 const DndType DND_TYPE_ARRAY = {"System.Array", &DND_TYPE_OBJECT, sizeof(DndArray), 0, NULL, 0, NULL, DND_TYPE_FLAG_ARRAY, 0, NULL, 0, NULL};
 static const uint32_t delegate_refs[] = {(uint32_t)offsetof(DndDelegate, target)};
 const DndType DND_TYPE_DELEGATE = {"System.Delegate", &DND_TYPE_OBJECT, sizeof(DndDelegate), 0, NULL, 1, delegate_refs, 0, 0, NULL, 0, NULL};
+typedef struct { DndObject object; int32_t value; } DndBoxedInt32;
+const DndType DND_TYPE_BOXED_INT32 = {"System.Int32", &DND_TYPE_OBJECT, sizeof(DndBoxedInt32), 0, NULL, 0, NULL, DND_TYPE_FLAG_VALUE_TYPE, 0, NULL, 0, NULL};
 
 static DndGcFrame *gc_frames;
 static DndExceptionKind exception_kind;
@@ -222,6 +224,24 @@ DndObject *dnd_cast(DndObject *object, const DndType *target) {
     if (dnd_type_is_assignable_from(target, object->type)) return object;
     dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Invalid managed cast.");
     return NULL;
+}
+
+DndObject *dnd_box_i32(DndManagedHeap *heap, int32_t value) {
+    DndBoxedInt32 *boxed = (DndBoxedInt32 *)dnd_object_new(heap, &DND_TYPE_BOXED_INT32);
+    if (boxed) boxed->value = value;
+    return (DndObject *)boxed;
+}
+
+int32_t dnd_unbox_i32(DndObject *object) {
+    if (!object) {
+        dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Cannot unbox null.");
+        return 0;
+    }
+    if (object->type != &DND_TYPE_BOXED_INT32) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Boxed value is not System.Int32.");
+        return 0;
+    }
+    return ((DndBoxedInt32 *)object)->value;
 }
 
 DndManagedMethod dnd_virtual_resolve(const DndObject *object, uint16_t slot) {
