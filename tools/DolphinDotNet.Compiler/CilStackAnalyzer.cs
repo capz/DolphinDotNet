@@ -70,6 +70,8 @@ internal static class CilStackAnalyzer
             case >=0x2e and <=0x37 or >=0x3b and <=0x44: Pop(s,i);Pop(s,i);break;
             case 0x58 or 0x59 or 0x5a or 0x5b or 0x5d or 0x5e or 0x5f or 0x60 or 0x61 or 0x62 or 0x63 or 0x64:
                 var r=Pop(s,i);var l=Pop(s,i);Push(s,l==r?l:CilStackKind.Unknown);break;
+            case >=0x67 and <=0x6e: Pop(s,i);Push(s,i.OpCode is 0x6a or 0x6e?CilStackKind.I8:i.OpCode is 0x6b or 0x6c?CilStackKind.Float:CilStackKind.I4);break;
+            case 0xd3 or 0xe0: Pop(s,i);Push(s,CilStackKind.NativeInt);break;
             case 0x72: Push(s,CilStackKind.ObjectReference); break;
             case 0x7b: Pop(s,i);Push(s,CilStackKind.Unknown);break;
             case 0x7d: Pop(s,i);Pop(s,i);break;
