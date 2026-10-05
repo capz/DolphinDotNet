@@ -38,13 +38,30 @@ internal static class AotCompiler
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
                 var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i));
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
-                var ir=IlImporter.Import(assembly.PE,model,method,graph);output.Add(ir);
+                Discover(valueIr,graph);
+                try { output.Add(IlImporter.Import(assembly.PE,model,method,new DependencyGraph())); }
+                catch(NotSupportedException) { /* Legacy backend is a regression oracle, not a production dependency. */ }
                 foreach(var key in graph.Methods)
                     if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable))queue.Enqueue(reachable);
             }
             return new AotCompilation(model,graph,output,valueOutput);
         }
         catch { model.Dispose(); throw; }
+    }
+
+    private static void Discover(ValueIrMethod method,DependencyGraph graph)
+    {
+        graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);
+        foreach(var instruction in method.Blocks.SelectMany(b=>b.Instructions))
+        {
+            switch(instruction)
+            {
+                case ValueIrCall call: graph.AddMethod(call.Target);graph.AddType(call.Target.TypeName);break;
+                case ValueIrNewObject created: graph.AddMethod(created.Constructor);graph.AddType(created.TypeName);break;
+                case ValueIrLoadField field: graph.AddType(field.TypeName);break;
+                case ValueIrStoreField field: graph.AddType(field.TypeName);break;
+            }
+        }
     }
 
     private static int ReadLocalCount(AssemblyModel assembly,MethodModel method)
