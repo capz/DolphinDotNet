@@ -13,6 +13,7 @@ internal sealed record IrCall(MethodKey Target,bool Virtual,int ArgumentCount,bo
 internal sealed record IrStringLength:IrInstruction;
 internal sealed record IrConsoleWriteLine:IrInstruction;
 internal sealed record IrReadButtonsDown:IrInstruction;
+internal sealed record IrPresentDemoFrame:IrInstruction;
 internal sealed record IrCompareGreaterThan:IrInstruction;
 internal sealed record IrCompareEqual:IrInstruction;
 internal sealed record IrLabel(int Offset):IrInstruction;
