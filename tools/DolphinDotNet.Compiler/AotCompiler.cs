@@ -84,6 +84,8 @@ internal static class AotCompiler
                 case ValueIrLoadStaticField field: graph.AddType(field.TypeName);break;
                 case ValueIrStoreStaticField field: graph.AddType(field.TypeName);break;
                 case ValueIrTypeTest test: graph.AddType(test.TypeName);break;
+                case ValueIrInitObject init: graph.AddType(init.TypeName);break;
+                case ValueIrCopyObject copy: graph.AddType(copy.TypeName);break;
                 case ValueIrNewArray array: if(!array.ElementType.StartsWith("System.",StringComparison.Ordinal))graph.AddType(array.ElementType);break;
             }
         }
