@@ -9,7 +9,7 @@ internal static class IlImporter{
   while(p<il.Length){int off=p;result.Add(new IrLabel(off));byte op=il[p++];if(op==0xfe){Need(il,p,1,off);byte ext=il[p++];switch(ext){case 0x01:result.Add(new IrCompareEqual());break;case 0x02:result.Add(new IrCompareGreaterThan());break;default:throw new NotSupportedException($"AOT importer: unsupported CIL opcode 0xfe{ext:x2} in {method.Key} at IL_{off:x4}.");}continue;}switch(op){
    case 0x00:break;case >=0x02 and <=0x05:result.Add(new IrLoadArg(op-2));break;
    case >=0x06 and <=0x09:result.Add(new IrLoadLocal(op-6));break;case >=0x0a and <=0x0d:result.Add(new IrStoreLocal(op-0x0a));break;
-   case 0x0e:Need(il,p,1,off);result.Add(new IrLoadArg(il[p++]));break;case 0x11:Need(il,p,1,off);result.Add(new IrLoadLocal(il[p++]));break;case 0x13:Need(il,p,1,off);result.Add(new IrStoreLocal(il[p++]));break;
+   case 0x0e:Need(il,p,1,off);result.Add(new IrLoadArg(il[p++]));break;case 0x10:Need(il,p,1,off);result.Add(new IrStoreArg(il[p++]));break;case 0x11:Need(il,p,1,off);result.Add(new IrLoadLocal(il[p++]));break;case 0x13:Need(il,p,1,off);result.Add(new IrStoreLocal(il[p++]));break;
    case 0x15:result.Add(new IrConstI4(-1));break;case >=0x16 and <=0x1e:result.Add(new IrConstI4(op-0x16));break;case 0x1f:Need(il,p,1,off);result.Add(new IrConstI4((sbyte)il[p++]));break;case 0x20:Need(il,p,4,off);result.Add(new IrConstI4(BitConverter.ToInt32(il,p)));p+=4;break;
    case 0x25:result.Add(new IrDup());break;case 0x26:result.Add(new IrPop());break;
    case 0x2b:result.Add(new IrBranch(ReadShortBranchTarget(il,ref p,off),IrBranchCondition.Always));break;
