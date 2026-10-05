@@ -9,6 +9,7 @@ internal sealed record IrLoadField(string TypeName,string FieldName):IrInstructi
 internal sealed record IrStoreField(string TypeName,string FieldName):IrInstruction;
 internal sealed record IrCall(MethodKey Target,bool Virtual,int ArgumentCount,bool HasThis,bool ReturnsValue):IrInstruction;
 internal sealed record IrStringLength:IrInstruction;
+internal sealed record IrCompareGreaterThan:IrInstruction;
 internal sealed record IrAdd:IrInstruction; internal sealed record IrSub:IrInstruction; internal sealed record IrMul:IrInstruction;
 internal sealed record IrDup:IrInstruction; internal sealed record IrPop:IrInstruction; internal sealed record IrReturn(bool HasValue):IrInstruction;
 internal sealed record IrMethod(MethodKey Key,List<IrInstruction> Instructions,int LocalCount,int ParameterCount,bool HasThis,bool ReturnsValue);
