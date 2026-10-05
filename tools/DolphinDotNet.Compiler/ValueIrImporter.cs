@@ -6,7 +6,8 @@ internal static class ValueIrImporter
         MethodModel method,
         IReadOnlyList<CilBasicBlock> blocks,
         CilStackAnalysis analysis,
-        int localCount)
+        int localCount,
+        Func<CilInstruction,MethodModel?> resolveCall)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -65,6 +66,14 @@ internal static class ValueIrImporter
                     {
                         var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(Merge(left.Kind,right.Kind));
                         instructions.Add(new ValueIrBinary(result,cil.OpCode==0x58?"add":cil.OpCode==0x59?"sub":"mul",left,right));stack.Add(result);break;
+                    }
+                    case 0x28 or 0x6f:
+                    {
+                        var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved managed call at IL_{cil.Offset:x4}.");
+                        var count=target.ParameterCount+(target.IsStatic?0:1);var args=new IrValue[count];
+                        for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
+                        IrValue? result=null;if(target.ReturnsValue){result=New(ResultKind(analysis,cil));stack.Add(result);}
+                        instructions.Add(new ValueIrCall(result,target.Key,args));break;
                     }
                     case 0x2b or 0x38:
                         terminator=new ValueIrJump(Target(blocks,cil));break;
