@@ -8,6 +8,14 @@ static const uint32_t delegate_refs[] = {(uint32_t)offsetof(DndDelegate, target)
 const DndType DND_TYPE_DELEGATE = {"System.Delegate", &DND_TYPE_OBJECT, sizeof(DndDelegate), 0, NULL, 1, delegate_refs, 0, 0, NULL, 0, NULL};
 typedef struct { DndObject object; int32_t value; } DndBoxedInt32;
 const DndType DND_TYPE_BOXED_INT32 = {"System.Int32", &DND_TYPE_OBJECT, sizeof(DndBoxedInt32), 0, NULL, 0, NULL, DND_TYPE_FLAG_VALUE_TYPE, 0, NULL, 0, NULL};
+#define DND_SCALAR_TYPE(symbol,name,size) const DndType symbol = {name, &DND_TYPE_OBJECT, sizeof(DndObject)+(size), 0, NULL, 0, NULL, DND_TYPE_FLAG_VALUE_TYPE, 0, NULL, 0, NULL}
+DND_SCALAR_TYPE(DND_TYPE_BOOLEAN,"System.Boolean",1);
+DND_SCALAR_TYPE(DND_TYPE_BYTE,"System.Byte",1);
+DND_SCALAR_TYPE(DND_TYPE_SBYTE,"System.SByte",1);
+DND_SCALAR_TYPE(DND_TYPE_CHAR,"System.Char",2);
+DND_SCALAR_TYPE(DND_TYPE_INT16,"System.Int16",2);
+DND_SCALAR_TYPE(DND_TYPE_UINT16,"System.UInt16",2);
+DND_SCALAR_TYPE(DND_TYPE_UINT32,"System.UInt32",4);
 
 typedef struct DndHeapBlock {
     uint32_t size;
@@ -268,6 +276,22 @@ int32_t dnd_unbox_i32(DndObject *object) {
         return 0;
     }
     return ((DndBoxedInt32 *)object)->value;
+}
+
+DndObject *dnd_box_scalar(DndManagedHeap *heap, const DndType *type, uint32_t value, uint32_t size) {
+    if (!type || size == 0 || size > 4) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Unsupported scalar box size."); return NULL; }
+    DndObject *object = allocate(heap, type, sizeof(DndObject) + size);
+    if (!object) return NULL;
+    memcpy((uint8_t *)object + sizeof(DndObject), &value, size);
+    return object;
+}
+
+uint32_t dnd_unbox_scalar(DndObject *object, const DndType *type, uint32_t size) {
+    uint32_t value = 0;
+    if (!object) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Cannot unbox null."); return 0; }
+    if (object->type != type || size == 0 || size > 4) { dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Boxed scalar type mismatch."); return 0; }
+    memcpy(&value, (uint8_t *)object + sizeof(DndObject), size);
+    return value;
 }
 
 DndManagedMethod dnd_virtual_resolve(const DndObject *object, uint16_t slot) {
