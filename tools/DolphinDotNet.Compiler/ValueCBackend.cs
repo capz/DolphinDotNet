@@ -9,6 +9,8 @@ internal static class ValueCBackend
         var compiledKeys=methods.Select(m=>m.Key).ToHashSet();
         var virtualMethods=methods.Where(m=>model.Methods.TryGetValue(m.Key,out var mm)&&mm.IsVirtual).ToArray();
         foreach(var method in virtualMethods)b.AppendLine($"static intptr_t {WrapperSymbol(method.Key)}(intptr_t *args);");
+        var interfaceTypes=graph.Types.Where(t=>model.Types.TryGetValue(t,out var tm)&&tm.IsInterface).OrderBy(x=>x).ToArray();
+        foreach(var iface in interfaceTypes)b.AppendLine($"extern const DndType dnd_type_{Id(iface)};");
         foreach(var tn in graph.Types.OrderBy(x=>x))
         {
             var slots=VirtualSlots(tn,model,compiledKeys);
@@ -22,7 +24,9 @@ internal static class ValueCBackend
             var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";
             var totalSize=TotalInstanceSize(tn,model);
             var slots=VirtualSlots(tn,model,compiledKeys);
-            b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{totalSize}u, 0, NULL, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, {slots.Count}u, {(slots.Count>0?$"dnd_vtable_{Id(tn)}":"NULL")}, 0, NULL}};");
+            var interfaces=(t.Interfaces??Array.Empty<string>()).Where(i=>graph.Types.Contains(i)&&model.Types.ContainsKey(i)).ToArray();
+            if(interfaces.Length>0)b.AppendLine($"static const DndType *const dnd_interfaces_{Id(tn)}[] = {{ {string.Join(", ",interfaces.Select(i=>$"&dnd_type_{Id(i)}"))} }};");
+            b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{totalSize}u, {interfaces.Length}u, {(interfaces.Length>0?$"dnd_interfaces_{Id(tn)}":"NULL")}, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, {slots.Count}u, {(slots.Count>0?$"dnd_vtable_{Id(tn)}":"NULL")}, 0, NULL}};");
         }
         var staticFields=model.Fields.Values.Where(f=>f.IsStatic&&graph.Types.Contains(f.DeclaringType)).OrderBy(f=>f.DeclaringType).ThenBy(f=>f.Name).ToArray();
         foreach(var field in staticFields)b.AppendLine($"static intptr_t {StaticSymbol(field)};");
