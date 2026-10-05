@@ -34,7 +34,7 @@ internal static class ValueCBackend
                     case ValueIrLoadLocal x:b.AppendLine($"  v{x.Result.Id} = l{x.Index};");break;
                     case ValueIrStoreLocal x:b.AppendLine($"  l{x.Index} = v{x.Value.Id};");break;
                     case ValueIrStoreArgument x:b.AppendLine($"  a{x.Index} = v{x.Value.Id};");break;
-                    case ValueIrBinary x:b.AppendLine($"  v{x.Result.Id} = v{x.Left.Id} {Op(x.Operation)} v{x.Right.Id};");break;
+                    case ValueIrBinary x:{var unsigned=x.Operation.EndsWith(".un",StringComparison.Ordinal);var op=Op(x.Operation);var l=unsigned?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";var r=unsigned?$"(uintptr_t)v{x.Right.Id}":$"v{x.Right.Id}";b.AppendLine($"  v{x.Result.Id} = {l} {op} {r};");break;}
                     case ValueIrCall x:{var args=string.Join(", ",x.Arguments.Select(a=>$"v{a.Id}"));b.AppendLine(x.Result is { } r?$"  v{r.Id} = {Symbol(x.Target)}({args});":$"  (void){Symbol(x.Target)}({args});");break;}
                     case ValueIrPhi: break; // Assigned on predecessor edges.
                 }
@@ -76,7 +76,7 @@ internal static class ValueCBackend
         IrValueKind.ObjectReference or IrValueKind.ManagedPointer or IrValueKind.NativeInt=>"intptr_t",
         _=>"int32_t"
     };
-    private static string Op(string op)=>op switch{"add"=>"+","sub"=>"-","mul"=>"*","ceq"=>"==","cgt"=>">","clt"=>"<",_=>throw new InvalidDataException($"Unsupported Value IR binary operation {op}.")};
+    private static string Op(string op)=>op switch{"add"=>"+","sub"=>"-","mul"=>"*","ceq"=>"==","cgt" or "cgt.un"=>">","clt" or "clt.un"=>"<",_=>throw new InvalidDataException($"Unsupported Value IR binary operation {op}.")};
     private static IEnumerable<IrValue> Collect(ValueIrMethod m)
     {
         foreach(var b in m.Blocks)foreach(var i in b.Instructions)switch(i)
