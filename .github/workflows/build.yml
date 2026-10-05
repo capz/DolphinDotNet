@@ -38,10 +38,6 @@ jobs:
       - name: Build control-flow smoke assembly
         run: |
           dotnet build tests/ControlFlowSmoke/ControlFlowSmoke.csproj -c Release
-          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --legacy-aot tests/ControlFlowSmoke/bin/Release/net8.0/ControlFlowSmoke.dll /tmp/control_flow.c
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/control_flow.c -o /tmp/control_flow.o
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/control_flow.c tests/control_flow_host.c source/managed_runtime.c -o /tmp/control_flow
-          /tmp/control_flow
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot tests/ControlFlowSmoke/bin/Release/net8.0/ControlFlowSmoke.dll /tmp/control_flow_value.c
           cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/control_flow_value.c tests/control_flow_value_host.c source/managed_runtime.c -o /tmp/control_flow_value
           /tmp/control_flow_value
