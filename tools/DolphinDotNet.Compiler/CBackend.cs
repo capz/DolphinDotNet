@@ -36,6 +36,17 @@ internal static class CBackend{
    case IrReadButtonsDown:b.AppendLine("    { unsigned port=(unsigned)stack[--sp]; dnd_input_poll(); const DndGamePad *pad=dnd_input_gamepad(port); stack[sp++]=pad?(intptr_t)pad->down:0; }");break;
    case IrCompareGreaterThan:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l>r?1:0; }");break;
    case IrCompareEqual:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l==r?1:0; }");break;
+   case IrLabel l:b.AppendLine($"dnd_il_{l.Offset:x4}: ;");break;
+   case IrBranch br:{
+    if(br.Condition==IrBranchCondition.Always){b.AppendLine($"    goto dnd_il_{br.TargetOffset:x4};");break;}
+    if(br.Condition is IrBranchCondition.True or IrBranchCondition.False){
+     var test=br.Condition==IrBranchCondition.True?"v != 0":"v == 0";
+     b.AppendLine($"    {{ intptr_t v=stack[--sp]; if({test}) goto dnd_il_{br.TargetOffset:x4}; }}");break;
+    }
+    var op=br.Condition switch{IrBranchCondition.Equal=>"==",IrBranchCondition.NotEqual=>"!=",IrBranchCondition.GreaterThan=>">",IrBranchCondition.GreaterOrEqual=>">=",IrBranchCondition.LessThan=>"<",IrBranchCondition.LessOrEqual=>"<=",_=>throw new InvalidOperationException()};
+    var cast=br.Unsigned?"uintptr_t":"intptr_t";
+    b.AppendLine($"    {{ {cast} r=({cast})stack[--sp], l=({cast})stack[--sp]; if(l {op} r) goto dnd_il_{br.TargetOffset:x4}; }}");break;
+   }
    case IrCall c:{
     int total=c.ArgumentCount+(c.HasThis?1:0);b.AppendLine($"    {{ intptr_t ca[{Math.Max(1,total)}]; for(int i={total-1};i>=0;i--) ca[i]=stack[--sp]; intptr_t rv=dnd_method_{Id(c.Target.TypeName)}_{Id(c.Target.Name)}(heap,ca);{(c.ReturnsValue?" stack[sp++]=rv;":"")} }}");break;}
    case IrReturn r:b.AppendLine(r.HasValue?"    { intptr_t rv=stack[--sp]; dnd_gc_frame_pop(&gc_frame); return rv; }":"    dnd_gc_frame_pop(&gc_frame); return 0;");break;
