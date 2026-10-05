@@ -1,7 +1,7 @@
 #include "dnd_managed.h"
 #include <string.h>
 
-const DndType DND_TYPE_OBJECT = {"System.Object", NULL, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0};
+const DndType DND_TYPE_OBJECT = {"System.Object", NULL, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL};
 const DndType DND_TYPE_STRING = {"System.String", &DND_TYPE_OBJECT, sizeof(DndString), 0, NULL, 0, NULL, 0, 0};
 const DndType DND_TYPE_ARRAY = {"System.Array", &DND_TYPE_OBJECT, sizeof(DndArray), 0, NULL, 0, NULL, DND_TYPE_FLAG_ARRAY, 0};
 static const uint32_t delegate_refs[] = { (uint32_t)offsetof(DndDelegate, target) };
@@ -109,7 +109,7 @@ DndArray *dnd_managed_array_new(DndManagedHeap *heap,uint32_t length,uint32_t el
 void *dnd_managed_array_at(DndArray *a,uint32_t index){if(!a){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return NULL;}if(index>=a->length){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array index out of range.");return NULL;}return a->data+(size_t)index*a->element_size;}
 
 bool dnd_type_is_assignable_from(const DndType *target,const DndType *actual){if(!target||!actual)return false;for(const DndType*t=actual;t;t=t->base_type)if(t==target)return true;for(const DndType*t=actual;t;t=t->base_type)for(uint16_t i=0;i<t->interface_count;i++)if(t->interfaces[i]==target)return true;return false;}
-DndObject *dnd_cast(DndObject *object,const DndType *target){if(!object)return NULL;if(dnd_type_is_assignable_from(target,object->type))return object;dnd_exception_throw(DND_EXCEPTION_INVALID_CAST,"Invalid managed cast.");return NULL;}
+DndObject *dnd_cast(DndObject *object,const DndType *target){if(!object)return NULL;if(dnd_type_is_assignable_from(target,object->type))return object;dnd_exception_throw(DND_EXCEPTION_INVALID_CAST,"Invalid managed cast.");return NULL;}\nDndManagedMethod dnd_virtual_resolve(const DndObject *object,uint16_t slot){if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Virtual call target is null.");return NULL;}if(!object->type||slot>=object->type->vtable_count||!object->type->vtable){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Invalid virtual method slot.");return NULL;}return object->type->vtable[slot];}
 DndDelegate *dnd_delegate_new(DndManagedHeap *heap,void *target,DndDelegateFn method){if(!method){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Delegate method is null.");return NULL;}DndDelegate*d=(DndDelegate*)allocate(heap,&DND_TYPE_DELEGATE,sizeof(DndDelegate));if(d){d->target=target;d->method=method;}return d;}
 void dnd_delegate_invoke(DndDelegate*d,void*argument){if(!d||!d->method){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Delegate is null.");return;}d->method(d->target,argument);}
 
