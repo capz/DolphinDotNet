@@ -11,6 +11,7 @@ SOURCES := source
 INCLUDES := include
 PORTLIBS := $(DEVKITPRO)/portlibs/gamecube
 LIBS := -lopengx -logc -lm
+LIBOGC ?= $(DEVKITPRO)/libogc
 LIBDIRS := $(PORTLIBS) $(LIBOGC)
 CFLAGS := -g -O2 -Wall -Wextra $(MACHDEP) $(INCLUDE)
 CXXFLAGS := $(CFLAGS)
