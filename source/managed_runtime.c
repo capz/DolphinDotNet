@@ -10,7 +10,6 @@ const DndType DND_TYPE_DELEGATE = {"System.Delegate", &DND_TYPE_OBJECT, sizeof(D
 static DndGcFrame *gc_frames;
 static DndExceptionKind exception_kind;
 static const char *exception_text;
-static DndManagedHeap *active_heap;
 
 static size_t align8(size_t n) { return (n + 7u) & ~(size_t)7u; }
 static bool in_heap(const DndManagedHeap *heap, const DndObject *o) {
@@ -42,15 +41,17 @@ static DndObject *allocate_from_free(DndManagedHeap *heap,const DndType *type,si
     DndObject *prev=NULL;
     for(DndObject *o=heap->objects;o;prev=o,o=o->next) {
         if(o->type!=NULL || o->size<bytes)continue;
-        size_t remaining=o->size-bytes;
+        size_t original=o->size;
+        size_t remaining=original-bytes;
         DndObject *next=o->next;
         if(remaining>=align8(sizeof(DndObject)+8)) {
             DndObject *tail=(DndObject*)((uint8_t*)o+bytes);
             memset(tail,0,sizeof(*tail));tail->size=(uint32_t)remaining;tail->next=next;
             o->size=(uint32_t)bytes;o->next=tail;
         }
-        memset((uint8_t*)o+offsetof(DndObject,type),0,o->size);
-        o->type=type;o->size=(uint32_t)(remaining>=align8(sizeof(DndObject)+8)?bytes:o->size);
+        size_t allocated=remaining>=align8(sizeof(DndObject)+8)?bytes:original;
+        memset((uint8_t*)o+offsetof(DndObject,type),0,allocated);
+        o->type=type;o->size=(uint32_t)allocated;
         if(prev==NULL)heap->objects=o;
         rebuild_free_list(heap);
         return o;
@@ -80,7 +81,7 @@ static DndObject *allocate(DndManagedHeap *heap, const DndType *type, size_t byt
 }
 
 void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size) {
-    heap->start=memory;heap->capacity=size;heap->used=0;heap->objects=NULL;heap->free_list=NULL;heap->collections=0;active_heap=heap;
+    heap->start=memory;heap->capacity=size;heap->used=0;heap->objects=NULL;heap->free_list=NULL;heap->collections=0;
 }
 
 DndObject *dnd_object_new(DndManagedHeap *heap,const DndType *type) {
