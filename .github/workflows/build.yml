@@ -29,10 +29,11 @@ jobs:
       - name: Report .NET Standard 1.0 API compatibility
         run: |
           dotnet restore tests/NetStandard10Contract/NetStandard10Contract.csproj
-          CONTRACT=$(find "$HOME/.nuget/packages/netstandard.library/1.6.1" -path '*/netstandard1.0/*/netstandard.dll' -o -path '*/netstandard1.0/netstandard.dll' | head -1)
-          test -n "$CONTRACT"
+          mkdir -p /tmp/netstandard10-contract
+          find "$HOME/.nuget/packages" -path '*/ref/netstandard1.0/*.dll' -exec cp -n {} /tmp/netstandard10-contract/ \;
+          test "$(find /tmp/netstandard10-contract -name '*.dll' | wc -l)" -gt 0
           set +e
-          dotnet run --project tools/DolphinDotNet.ApiCompat/DolphinDotNet.ApiCompat.csproj -- "$CONTRACT" src/DolphinDotNet.Core/bin/Release/netstandard2.0/DolphinDotNet.Core.dll > /tmp/netstandard10-compat.txt 2>&1
+          dotnet run --project tools/DolphinDotNet.ApiCompat/DolphinDotNet.ApiCompat.csproj -- /tmp/netstandard10-contract src/DolphinDotNet.Core/bin/Release/netstandard2.0/DolphinDotNet.Core.dll > /tmp/netstandard10-compat.txt 2>&1
           STATUS=$?
           set -e
           cat /tmp/netstandard10-compat.txt
