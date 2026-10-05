@@ -11,7 +11,15 @@ public static class Program
         var mutated=MutateArgument(2);
         var switched=SwitchCase(4);
         var overloaded=Overload(7)+Overload(5,6);
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded;
+        var arrays=ArrayCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays;
+    }
+
+    static int ArrayCase()
+    {
+        var values=new int[3];
+        values[0]=1;values[1]=2;values[2]=3;
+        return values[0]+values[1]+values[2]+values.Length-3;
     }
 
     static int Overload(int value)=>value;
