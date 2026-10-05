@@ -28,6 +28,7 @@ internal static class CBackend{
    case IrAdd:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l+r; }");break;
    case IrSub:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l-r; }");break;
    case IrMul:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l*r; }");break;
+   case IrAnd:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l&r; }");break;
    case IrLoadField f:{var field=model.Fields[(f.TypeName,f.FieldName)];b.AppendLine($"    {{ DndObject *o=(DndObject*)stack[--sp]; stack[sp++]=*(int32_t*)((uint8_t*)o+sizeof(DndObject)+{field.Offset}); }}");break;}
    case IrStoreField f:{var field=model.Fields[(f.TypeName,f.FieldName)];b.AppendLine($"    {{ intptr_t v=stack[--sp]; DndObject *o=(DndObject*)stack[--sp]; *(int32_t*)((uint8_t*)o+sizeof(DndObject)+{field.Offset})=(int32_t)v; }}");break;}
    case IrNewObject n:{
