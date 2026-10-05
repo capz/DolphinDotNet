@@ -5,6 +5,7 @@ internal enum CilFlowKind { Next, Branch, ConditionalBranch, Return }
 internal abstract record CilOperand;
 internal sealed record CilBranchTarget(int Offset):CilOperand;
 internal sealed record CilMetadataToken(int Token):CilOperand;
+internal sealed record CilInteger(long Value):CilOperand;
 
 internal sealed record CilInstruction(int Offset, int Size, ushort OpCode, CilOperand? Operand, CilFlowKind Flow)
 {
@@ -37,7 +38,9 @@ internal static class CilDecoder
                 case >=0x39 and <=0x44: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
                 default:
                     var operandSize=OperandSize(op,il,p,start);
-                    if(op is 0x28 or 0x6f or 0x73){operand=new CilMetadataToken(BitConverter.ToInt32(il,p));}
+                    if(op==0x1f)operand=new CilInteger((sbyte)il[p]);
+                    else if(op==0x20)operand=new CilInteger(BitConverter.ToInt32(il,p));
+                    else if(op is 0x28 or 0x6f or 0x73)operand=new CilMetadataToken(BitConverter.ToInt32(il,p));
                     p += operandSize; break;
             }
             result.Add(new CilInstruction(start,p-start,op,operand,flow));
