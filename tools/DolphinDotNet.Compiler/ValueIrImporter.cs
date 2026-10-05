@@ -253,6 +253,7 @@ internal static class ValueIrImporter
                         var targets=sw.Offsets.Select(offset=>blocks.Single(x=>x.StartOffset==offset).Id).ToArray();var fallback=blocks.Single(x=>x.StartOffset==cil.EndOffset).Id;
                         terminator=new ValueIrSwitch(value,targets,fallback);break;
                     }
+                    case 0x7a: terminator=new ValueIrThrow(Pop(stack,cil));break;
                     case 0x2a:
                         terminator=new ValueIrReturn(method.ReturnsValue?Pop(stack,cil):null);break;
                     default:
