@@ -20,8 +20,8 @@ internal static class ValueCBackend
         foreach(var tn in graph.Types.OrderBy(x=>x))
         {
             if(!model.Types.TryGetValue(tn,out var t))continue;
-            var refs=model.Fields.Values.Where(f=>f.DeclaringType==tn&&f.IsReference).OrderBy(f=>f.Offset).ToArray();
-            if(refs.Length>0)b.AppendLine($"static const uint32_t dnd_refs_{Id(tn)}[] = {{ {string.Join(", ",refs.Select(r=>$"sizeof(DndObject)+{BasePayloadSize(tn,model)}u+{r.Offset}u"))} }};");
+            var refs=model.Fields.Values.Where(f=>f.DeclaringType==tn&&!f.IsStatic).SelectMany(f=>(f.EmbeddedReferenceOffsets??(f.IsReference?new[]{0}:Array.Empty<int>())).Select(o=>f.Offset+o)).Distinct().OrderBy(x=>x).ToArray();
+            if(refs.Length>0)b.AppendLine($"static const uint32_t dnd_refs_{Id(tn)}[] = {{ {string.Join(", ",refs.Select(r=>$"sizeof(DndObject)+{BasePayloadSize(tn,model)}u+{r}u"))} }};");
             var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";
             var totalSize=TotalInstanceSize(tn,model);
             var slots=VirtualSlots(tn,model,compiledKeys);
