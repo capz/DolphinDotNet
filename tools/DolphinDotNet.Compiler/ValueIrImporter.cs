@@ -49,13 +49,13 @@ internal static class ValueIrImporter
                     }
                     case >=0x06 and <=0x09:
                     {
-                        var v=New(CilStackKind.Unknown);instructions.Add(new ValueIrLoadLocal(v,cil.OpCode-0x06));stack.Add(v);break;
+                        var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadLocal(v,cil.OpCode-0x06));stack.Add(v);break;
                     }
                     case >=0x0a and <=0x0d:
                         instructions.Add(new ValueIrStoreLocal(cil.OpCode-0x0a,Pop(stack,cil)));break;
                     case >=0x02 and <=0x05:
                     {
-                        var v=New(CilStackKind.Unknown);instructions.Add(new ValueIrLoadArgument(v,cil.OpCode-0x02));stack.Add(v);break;
+                        var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadArgument(v,cil.OpCode-0x02));stack.Add(v);break;
                     }
                     case 0x25:
                     {
@@ -87,7 +87,7 @@ internal static class ValueIrImporter
                         var expected=analysis.InstructionExitStates.TryGetValue(cil.Offset,out var validated)?validated.Values.Count:throw new InvalidDataException($"Missing analyzed stack state at IL_{cil.Offset:x4}.");
                         while(stack.Count>expected)Pop(stack,cil);
                         var results=new List<IrValue>();
-                        while(stack.Count<expected){var v=New(CilStackKind.Unknown);stack.Add(v);results.Add(v);}
+                        while(stack.Count<expected){var v=New(ResultKind(analysis,cil,stack.Count));stack.Add(v);results.Add(v);}
                         if(beforeCount!=expected||results.Count!=0)instructions.Add(new ValueIrOpaqueStackEffect(Math.Max(0,beforeCount-expected),results,cil.OpCode));
                         break;
                     }
@@ -115,6 +115,13 @@ internal static class ValueIrImporter
             }
         }
         return new ValueIrMethod(method.Key,output,localCount,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
+    }
+
+    private static CilStackKind ResultKind(CilStackAnalysis analysis,CilInstruction instruction,int index=-1)
+    {
+        if(!analysis.InstructionExitStates.TryGetValue(instruction.Offset,out var state)||state.Values.Count==0)return CilStackKind.Unknown;
+        var i=index>=0?index:state.Values.Count-1;
+        return i>=0&&i<state.Values.Count?state.Values[i]:CilStackKind.Unknown;
     }
 
     private static IrValue Pop(List<IrValue>s,CilInstruction i){if(s.Count==0)throw new InvalidDataException($"Value IR stack underflow at IL_{i.Offset:x4}.");var v=s[^1];s.RemoveAt(s.Count-1);return v;}
