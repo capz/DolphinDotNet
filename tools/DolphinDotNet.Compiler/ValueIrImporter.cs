@@ -46,10 +46,14 @@ internal static class ValueIrImporter
                     {
                         var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,cil.OpCode-0x16));stack.Add(v);break;
                     }
-                    case 0x1f or 0x20:
+                    case 0x1f or 0x20 or 0x21:
                     {
                         var value=(cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing integer operand at IL_{cil.Offset:x4}.");
-                        var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,value));stack.Add(v);break;
+                        var v=New(cil.OpCode==0x21?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrConstant(v,value));stack.Add(v);break;
+                    }
+                    case 0x22 or 0x23:
+                    {
+                        var value=(cil.Operand as CilFloat)?.Value??throw new InvalidDataException($"Missing floating operand at IL_{cil.Offset:x4}.");var v=new IrValue(nextValue++,cil.OpCode==0x22?IrValueKind.R4:IrValueKind.R8);instructions.Add(new ValueIrFloatConstant(v,value));stack.Add(v);break;
                     }
                     case 0x15:
                     {
