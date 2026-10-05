@@ -5,7 +5,7 @@ internal static class ValueCBackend
 {
     public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry,CompilationModel model,DependencyGraph graph)
     {
-        var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\nstatic DndManagedHeap *dnd_value_heap;");
+        var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\nstatic DndManagedHeap *dnd_value_heap;");
         var compiledKeys=methods.Select(m=>m.Key).ToHashSet();
         var virtualMethods=methods.Where(m=>model.Methods.TryGetValue(m.Key,out var mm)&&mm.IsVirtual).ToArray();
         foreach(var method in virtualMethods)b.AppendLine($"static intptr_t {WrapperSymbol(method.Key)}(intptr_t *args);");
@@ -24,9 +24,19 @@ internal static class ValueCBackend
             var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";
             var totalSize=TotalInstanceSize(tn,model);
             var slots=VirtualSlots(tn,model,compiledKeys);
-            var interfaces=(t.Interfaces??Array.Empty<string>()).Where(i=>graph.Types.Contains(i)&&model.Types.ContainsKey(i)).ToArray();
+            var interfaces=InterfaceClosure(tn,model).Where(i=>graph.Types.Contains(i)&&model.Types.ContainsKey(i)).ToArray();
             if(interfaces.Length>0)b.AppendLine($"static const DndType *const dnd_interfaces_{Id(tn)}[] = {{ {string.Join(", ",interfaces.Select(i=>$"&dnd_type_{Id(i)}"))} }};");
-            b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{totalSize}u, {interfaces.Length}u, {(interfaces.Length>0?$"dnd_interfaces_{Id(tn)}":"NULL")}, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, {slots.Count}u, {(slots.Count>0?$"dnd_vtable_{Id(tn)}":"NULL")}, 0, NULL}};");
+            var interfaceMaps=new List<string>();
+            foreach(var iface in interfaces)
+            {
+                var implementations=InterfaceImplementations(tn,iface,model,compiledKeys);
+                if(implementations.Count==0)continue;
+                var methodsName=$"dnd_imethods_{Id(tn)}_{Id(iface)}";
+                b.AppendLine($"static const DndManagedMethod {methodsName}[] = {{ {string.Join(", ",implementations.Select(m=>WrapperSymbol(m.Key)))} }};");
+                interfaceMaps.Add($"{{ &dnd_type_{Id(iface)}, {implementations.Count}u, {methodsName} }}");
+            }
+            if(interfaceMaps.Count>0)b.AppendLine($"static const DndInterfaceEntry dnd_imap_{Id(tn)}[] = {{ {string.Join(", ",interfaceMaps)} }};");
+            b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{totalSize}u, {interfaces.Length}u, {(interfaces.Length>0?$"dnd_interfaces_{Id(tn)}":"NULL")}, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, {slots.Count}u, {(slots.Count>0?$"dnd_vtable_{Id(tn)}":"NULL")}, {interfaceMaps.Count}u, {(interfaceMaps.Count>0?$"dnd_imap_{Id(tn)}":"NULL")}}};");
         }
         var staticFields=model.Fields.Values.Where(f=>f.IsStatic&&graph.Types.Contains(f.DeclaringType)).OrderBy(f=>f.DeclaringType).ThenBy(f=>f.Name).ToArray();
         foreach(var field in staticFields)b.AppendLine($"static intptr_t {StaticSymbol(field)};");
@@ -62,7 +72,7 @@ internal static class ValueCBackend
     {
         var b=new StringBuilder();
         var values=Collect(method).GroupBy(v=>v.Id).Select(g=>g.First()).OrderBy(v=>v.Id).ToArray();
-        if(includeHeader)b.AppendLine("#include <stdint.h>");
+        if(includeHeader)b.AppendLine("#include <stdint.h>\n#include <string.h>");
         b.Append($"intptr_t {functionName}(");
         for(var i=0;i<method.ParameterCount+(method.HasThis?1:0);i++){if(i>0)b.Append(", ");b.Append($"intptr_t a{i}");}
         b.AppendLine(") {");
@@ -94,12 +104,20 @@ internal static class ValueCBackend
                     case ValueIrStoreArgument x:b.AppendLine($"  a{x.Index} = v{x.Value.Id};");break;
                     case ValueIrLoadIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  v{x.Result.Id} = *({ct}*)v{x.Address.Id};");break;}
                     case ValueIrStoreIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  *({ct}*)v{x.Address.Id} = ({ct})v{x.Value.Id};");break;}
+                    case ValueIrInitObject x:b.AppendLine($"  memset((void*)v{x.Address.Id}, 0, {ValueTypeSize(x.TypeName,model)}u);");break;
+                    case ValueIrCopyObject x:b.AppendLine($"  memcpy((void*)v{x.Destination.Id}, (void*)v{x.Source.Id}, {ValueTypeSize(x.TypeName,model)}u);");break;
                     case ValueIrConvert x:b.AppendLine($"  v{x.Result.Id} = ({CType(x.Result.Kind)})v{x.Value.Id};");break;
                     case ValueIrBinary x:{var unsigned=x.Operation.EndsWith(".un",StringComparison.Ordinal);var op=Op(x.Operation);var l=unsigned?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";var r=unsigned?$"(uintptr_t)v{x.Right.Id}":$"v{x.Right.Id}";b.AppendLine($"  v{x.Result.Id} = {l} {op} {r};");break;}
                     case ValueIrCall x:
                     {
                         var args=string.Join(", ",x.Arguments.Select(a=>$"v{a.Id}"));
-                        if(x.Virtual)
+                        if(x.Interface)
+                        {
+                            var slot=InterfaceSlot(x.Target,model);
+                            b.AppendLine($"  {{ intptr_t call_args[{Math.Max(1,x.Arguments.Count)}] = {{ {args} }}; DndManagedMethod target=dnd_interface_resolve((DndObject*)call_args[0], &dnd_type_{Id(x.Target.TypeName)}, {slot}u);");
+                            b.AppendLine(x.Result is { } ir?$"    v{ir.Id} = target ? target(call_args) : 0; }}":$"    if(target) (void)target(call_args); }}");
+                        }
+                        else if(x.Virtual)
                         {
                             var slot=VirtualSlot(x.Target,model);
                             b.AppendLine($"  {{ intptr_t call_args[{Math.Max(1,x.Arguments.Count)}] = {{ {args} }}; DndManagedMethod target=dnd_virtual_resolve((DndObject*)call_args[0], {slot}u);");
@@ -164,6 +182,7 @@ internal static class ValueCBackend
             if(phi.Inputs.TryGetValue(from,out var input))b.AppendLine($"{indent}v{phi.Result.Id} = v{input.Id};");
     }
     internal static string Symbol(MethodKey k)=>"dnd_value_"+Id(k.AssemblyName)+"_"+Id(k.TypeName)+"_"+Id(k.Name)+"_"+StableId(k.Signature);
+    private static int ValueTypeSize(string type,CompilationModel model)=>type switch{"System.Boolean" or "System.Byte" or "System.SByte"=>1,"System.Char" or "System.Int16" or "System.UInt16"=>2,"System.Int64" or "System.UInt64" or "System.Double"=>8,"System.Single" or "System.Int32" or "System.UInt32" or "System.IntPtr" or "System.UIntPtr"=>4,_ when model.Types.ContainsKey(type)=>Math.Max(1,TotalInstanceSize(type,model)),_=>4};
     private static int BasePayloadSize(string type,CompilationModel model){if(!model.Types.TryGetValue(type,out var t)||t.BaseType is not { } p||!model.Types.ContainsKey(p))return 0;return TotalInstanceSize(p,model);}
     private static int TotalInstanceSize(string type,CompilationModel model){if(!model.Types.TryGetValue(type,out var t))return 0;var parent=t.BaseType is { } p&&model.Types.ContainsKey(p)?TotalInstanceSize(p,model):0;return parent+t.InstanceSize;}
     private static MethodModel? TypeInitializer(string type,CompilationModel model)=>model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==type&&m.Key.Name==".cctor");
@@ -176,9 +195,39 @@ internal static class ValueCBackend
         foreach(var method in model.Methods.Values.Where(m=>m.Key.TypeName==type&&m.IsVirtual&&compiled.Contains(m.Key)).OrderBy(m=>m.Handle.GetHashCode()))
         {
             var slot=result.FindIndex(x=>x.Key.Name==method.Key.Name&&x.Key.Signature==method.Key.Signature);
-            if(slot>=0)result[slot]=method;else result.Add(method);
+            if(slot>=0&&!method.IsNewSlot)result[slot]=method;else result.Add(method);
         }
         return result;
+    }
+    private static IReadOnlyList<string> InterfaceClosure(string type,CompilationModel model)
+    {
+        var result=new List<string>();var seen=new HashSet<string>();
+        void Add(string current){if(!model.Types.TryGetValue(current,out var tm))return;foreach(var iface in tm.Interfaces??Array.Empty<string>())if(seen.Add(iface)){result.Add(iface);Add(iface);}if(tm.BaseType is { } parent)Add(parent);}
+        Add(type);return result;
+    }
+    private static IReadOnlyList<MethodModel> InterfaceImplementations(string type,string iface,CompilationModel model,HashSet<MethodKey> compiled)
+    {
+        var methods=model.Methods.Values.Where(m=>m.Key.TypeName==iface&&m.IsVirtual).OrderBy(m=>m.Handle.GetHashCode()).ToArray();
+        var result=new List<MethodModel>();
+        foreach(var contract in methods)
+        {
+            MethodModel? implementation=null;var current=type;
+            while(model.Types.ContainsKey(current))
+            {
+                implementation=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==current&&!m.IsAbstract&&compiled.Contains(m.Key)&&m.Key.Name==contract.Key.Name&&m.Key.Signature==contract.Key.Signature);
+                if(implementation is not null)break;
+                current=model.Types[current].BaseType??"";
+            }
+            if(implementation is null)return Array.Empty<MethodModel>();
+            result.Add(implementation);
+        }
+        return result;
+    }
+    private static int InterfaceSlot(MethodKey target,CompilationModel model)
+    {
+        var methods=model.Methods.Values.Where(m=>m.Key.TypeName==target.TypeName&&m.IsVirtual).OrderBy(m=>m.Handle.GetHashCode()).ToList();
+        var slot=methods.FindIndex(m=>m.Key.Name==target.Name&&m.Key.Signature==target.Signature);
+        if(slot<0)throw new NotSupportedException($"No interface slot for {target}.");return slot;
     }
     private static int VirtualSlot(MethodKey target,CompilationModel model)
     {
@@ -209,7 +258,7 @@ internal static class ValueCBackend
     {
         foreach(var b in m.Blocks)foreach(var i in b.Instructions)switch(i)
         {
-            case ValueIrCall x:if(x.Result is { } cr)yield return cr;foreach(var a in x.Arguments)yield return a;break;case ValueIrNewObject x:yield return x.Result;foreach(var a in x.Arguments)yield return a;break;case ValueIrLoadField x:yield return x.Result;yield return x.Object;break;case ValueIrStoreField x:yield return x.Object;yield return x.Value;break;case ValueIrLoadStaticField x:yield return x.Result;break;case ValueIrStoreStaticField x:yield return x.Value;break;case ValueIrLoadString x:yield return x.Result;break;case ValueIrTypeTest x:yield return x.Result;yield return x.Object;break;case ValueIrStringLength x:yield return x.Result;yield return x.String;break;case ValueIrBox x:yield return x.Result;yield return x.Value;break;case ValueIrUnboxAny x:yield return x.Result;yield return x.Object;break;case ValueIrNewArray x:yield return x.Result;yield return x.Length;break;case ValueIrArrayElementAddress x:yield return x.Result;yield return x.Array;yield return x.Index;break;case ValueIrArrayLength x:yield return x.Result;yield return x.Array;break;case ValueIrLoadElement x:yield return x.Result;yield return x.Array;yield return x.Index;break;case ValueIrStoreElement x:yield return x.Array;yield return x.Index;yield return x.Value;break;case ValueIrConsoleWriteLine x:yield return x.String;break;case ValueIrReadButtonsDown x:yield return x.Result;yield return x.Port;break;case ValueIrPresentDemoFrame x:yield return x.Rotation;break;case ValueIrConstant x:yield return x.Result;break;case ValueIrLoadArgument x:yield return x.Result;break;case ValueIrLoadLocal x:yield return x.Result;break;case ValueIrStoreLocal x:yield return x.Value;break;case ValueIrAddressOfLocal x:yield return x.Result;break;case ValueIrAddressOfArgument x:yield return x.Result;break;case ValueIrStoreArgument x:yield return x.Value;break;case ValueIrLoadIndirect x:yield return x.Result;yield return x.Address;break;case ValueIrStoreIndirect x:yield return x.Address;yield return x.Value;break;case ValueIrConvert x:yield return x.Result;yield return x.Value;break;case ValueIrBinary x:yield return x.Result;break;case ValueIrPhi x:yield return x.Result;foreach(var v in x.Inputs.Values)yield return v;break;case ValueIrOpaqueStackEffect x:foreach(var v in x.Results)yield return v;break;
+            case ValueIrCall x:if(x.Result is { } cr)yield return cr;foreach(var a in x.Arguments)yield return a;break;case ValueIrNewObject x:yield return x.Result;foreach(var a in x.Arguments)yield return a;break;case ValueIrLoadField x:yield return x.Result;yield return x.Object;break;case ValueIrStoreField x:yield return x.Object;yield return x.Value;break;case ValueIrLoadStaticField x:yield return x.Result;break;case ValueIrStoreStaticField x:yield return x.Value;break;case ValueIrLoadString x:yield return x.Result;break;case ValueIrTypeTest x:yield return x.Result;yield return x.Object;break;case ValueIrStringLength x:yield return x.Result;yield return x.String;break;case ValueIrBox x:yield return x.Result;yield return x.Value;break;case ValueIrUnboxAny x:yield return x.Result;yield return x.Object;break;case ValueIrNewArray x:yield return x.Result;yield return x.Length;break;case ValueIrArrayElementAddress x:yield return x.Result;yield return x.Array;yield return x.Index;break;case ValueIrArrayLength x:yield return x.Result;yield return x.Array;break;case ValueIrLoadElement x:yield return x.Result;yield return x.Array;yield return x.Index;break;case ValueIrStoreElement x:yield return x.Array;yield return x.Index;yield return x.Value;break;case ValueIrConsoleWriteLine x:yield return x.String;break;case ValueIrReadButtonsDown x:yield return x.Result;yield return x.Port;break;case ValueIrPresentDemoFrame x:yield return x.Rotation;break;case ValueIrConstant x:yield return x.Result;break;case ValueIrLoadArgument x:yield return x.Result;break;case ValueIrLoadLocal x:yield return x.Result;break;case ValueIrStoreLocal x:yield return x.Value;break;case ValueIrAddressOfLocal x:yield return x.Result;break;case ValueIrAddressOfArgument x:yield return x.Result;break;case ValueIrStoreArgument x:yield return x.Value;break;case ValueIrLoadIndirect x:yield return x.Result;yield return x.Address;break;case ValueIrStoreIndirect x:yield return x.Address;yield return x.Value;break;case ValueIrInitObject x:yield return x.Address;break;case ValueIrCopyObject x:yield return x.Destination;yield return x.Source;break;case ValueIrConvert x:yield return x.Result;yield return x.Value;break;case ValueIrBinary x:yield return x.Result;break;case ValueIrPhi x:yield return x.Result;foreach(var v in x.Inputs.Values)yield return v;break;case ValueIrOpaqueStackEffect x:foreach(var v in x.Results)yield return v;break;
         }
         foreach(var b in m.Blocks){foreach(var v in b.EntryStack.Values)yield return v;foreach(var v in b.ExitStack.Values)yield return v;if(b.Terminator is ValueIrBranch br){yield return br.Left;if(br.Right is { } r)yield return r;}else if(b.Terminator is ValueIrSwitch sw)yield return sw.Value;else if(b.Terminator is ValueIrReturn ret&&ret.Value is { } rv)yield return rv;}
     }

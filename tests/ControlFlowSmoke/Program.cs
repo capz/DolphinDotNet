@@ -28,7 +28,7 @@ public static class Program
         return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface;
     }
 
-    static int InterfaceIdentityCase(){object value=new VirtualDerived();return value is IValue?4:0;}
+    static int InterfaceIdentityCase(){object value=new VirtualDerived();return (value is IValue?4:0)+((IValue)value).GetValue();}
 
     static int ByRefCase(){var value=2;AddThree(ref value);return value;}
     static void AddThree(ref int value){value=5;}

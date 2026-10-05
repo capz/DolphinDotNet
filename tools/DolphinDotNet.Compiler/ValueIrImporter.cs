@@ -118,6 +118,14 @@ internal static class ValueIrImporter
                     {
                         var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);instructions.Add(new ValueIrStoreElement(array,index,value,cil.OpCode==0xa2));break;
                     }
+                    case 0xfe15:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve initobj type at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrInitObject(Pop(stack,cil),type));break;
+                    }
+                    case 0x70:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve cpobj type at IL_{cil.Offset:x4}.");var source=Pop(stack,cil);var destination=Pop(stack,cil);instructions.Add(new ValueIrCopyObject(destination,source,type));break;
+                    }
                     case >=0x46 and <=0x4a or 0x4c or 0x50:
                     {
                         var address=Pop(stack,cil);var reference=cil.OpCode==0x50;var size=cil.OpCode is 0x46 or 0x47?1:cil.OpCode is 0x48 or 0x49?2:cil.OpCode==0x4c?8:4;var result=New(reference?CilStackKind.ObjectReference:cil.OpCode==0x4c?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadIndirect(result,address,size,reference));stack.Add(result);break;
@@ -173,7 +181,7 @@ internal static class ValueIrImporter
                         var count=target.ParameterCount+(target.IsStatic?0:1);var args=new IrValue[count];
                         for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
                         IrValue? result=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));result=value;stack.Add(value);}
-                        instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual));break;
+                        var interfaceCall=cil.OpCode==0x6f&&target.DeclaringTypeIsInterface; instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual,interfaceCall));break;
                     }
                     case 0x73:
                     {
