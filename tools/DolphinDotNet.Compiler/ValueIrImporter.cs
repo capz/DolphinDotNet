@@ -128,6 +128,22 @@ internal static class ValueIrImporter
                     {
                         var value=Pop(stack,cil);var address=Pop(stack,cil);var size=cil.OpCode==0x52?1:cil.OpCode==0x53?2:cil.OpCode==0x55?8:4;instructions.Add(new ValueIrStoreIndirect(address,value,size,value.Kind==IrValueKind.ObjectReference));break;
                     }
+                    case 0xfe15:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve initobj type at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrInitValue(Pop(stack,cil),type));break;
+                    }
+                    case 0x70:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve cpobj type at IL_{cil.Offset:x4}.");var source=Pop(stack,cil);var destination=Pop(stack,cil);instructions.Add(new ValueIrCopyValue(destination,source,type));break;
+                    }
+                    case 0x71:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve ldobj type at IL_{cil.Offset:x4}.");var address=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadValue(result,address,type));stack.Add(result);break;
+                    }
+                    case 0x81:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve stobj type at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrStoreValue(address,value,type));break;
+                    }
                     case >=0x67 and <=0x6e or 0xd3 or 0xe0:
                     {
                         var input=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrConvert(result,input));stack.Add(result);break;
