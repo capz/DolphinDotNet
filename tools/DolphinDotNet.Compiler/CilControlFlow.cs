@@ -34,6 +34,7 @@ internal static class CilDecoder
             switch(op)
             {
                 case 0x2a: flow=CilFlowKind.Return; break;
+                case 0x7a: flow=CilFlowKind.Return; break;
                 case 0x2b: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
                 case >=0x2c and <=0x37: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
                 case 0x38: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
