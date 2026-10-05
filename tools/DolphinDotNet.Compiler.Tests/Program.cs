@@ -1,4 +1,6 @@
+using System;
 using System.Diagnostics;
+using System.IO;
 
 var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 var sample = Path.Combine(root, "samples/HelloGameCube/HelloGameCube.csproj");
