@@ -33,7 +33,8 @@ internal static class AotCompiler
                 var ilBytes=body.GetILBytes()??throw new InvalidDataException($"{method.Key} has no IL body.");
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
-                _=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
+                var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
+                _=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method));
                 var ir=IlImporter.Import(assembly.PE,model,method,graph);output.Add(ir);
                 foreach(var key in graph.Methods)
                     if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable))queue.Enqueue(reachable);
@@ -41,6 +42,15 @@ internal static class AotCompiler
             return new AotCompilation(model,graph,output);
         }
         catch { model.Dispose(); throw; }
+    }
+
+    private static int ReadLocalCount(AssemblyModel assembly,MethodModel method)
+    {
+        var def=assembly.Metadata.GetMethodDefinition(method.Handle);
+        var body=assembly.PE.GetMethodBody(def.RelativeVirtualAddress);
+        if(body.LocalSignature.IsNil)return 0;
+        var signature=assembly.Metadata.GetStandaloneSignature(body.LocalSignature);
+        var reader=assembly.Metadata.GetBlobReader(signature.Signature);reader.ReadSignatureHeader();return reader.ReadCompressedInteger();
     }
 
     private static CilCallStackEffect? ResolveCallEffect(MetadataReader md,CompilationModel model,CilInstruction i)
