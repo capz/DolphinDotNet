@@ -9,6 +9,7 @@ typedef struct DndObject DndObject;
 typedef struct DndString DndString;
 typedef struct DndArray DndArray;
 typedef struct DndDelegate DndDelegate;
+typedef struct DndExceptionObject DndExceptionObject;
 typedef struct DndInterfaceEntry DndInterfaceEntry;
 
 typedef void (*DndFinalizer)(DndObject *);
@@ -63,6 +64,12 @@ struct DndArray {
     uint8_t data[];
 };
 
+struct DndExceptionObject {
+    DndObject object;
+    DndExceptionKind kind;
+    DndString *message;
+};
+
 struct DndDelegate {
     DndObject object;
     void *target;
@@ -99,6 +106,7 @@ extern const DndType DND_TYPE_STRING;
 extern const DndType DND_TYPE_ARRAY;
 extern const DndType DND_TYPE_DELEGATE;
 extern const DndType DND_TYPE_BOXED_INT32;
+extern const DndType DND_TYPE_EXCEPTION;
 
 void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size);
 DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type);
@@ -148,4 +156,6 @@ void dnd_exception_clear(void);
 void dnd_exception_throw(DndExceptionKind kind, const char *message);
 DndExceptionKind dnd_exception_kind(void);
 const char *dnd_exception_message(void);
+DndExceptionObject *dnd_exception_object(void);
+void dnd_exception_throw_object(DndExceptionObject *exception);
 #endif
