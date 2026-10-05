@@ -6,10 +6,12 @@ internal static class CBackend{
   foreach(var tn in graph.Types.OrderBy(x=>x)){if(!model.Types.TryGetValue(tn,out var t))continue;var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";b.AppendLine($"static const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{t.InstanceSize}u, 0, NULL}};");}
   foreach(var m in methods)b.AppendLine($"static intptr_t dnd_method_{Id(m.Key.TypeName)}_{Id(m.Key.Name)}(DndManagedHeap*, intptr_t*);");
   foreach(var m in methods)EmitMethod(b,m,model);
+  var entry=methods.FirstOrDefault(m=>m.Key.Name=="Main");
+  if(entry!=null)b.AppendLine($"intptr_t dnd_aot_entry(DndManagedHeap *heap) {{ return dnd_method_{Id(entry.Key.TypeName)}_{Id(entry.Key.Name)}(heap, NULL); }}");
   return b.ToString();
  }
  private static void EmitMethod(StringBuilder b,IrMethod m,CompilationModel model){
-  string fn=$"dnd_method_{Id(m.Key.TypeName)}_{Id(m.Key.Name)}";b.AppendLine($"static intptr_t {fn}(DndManagedHeap *heap, intptr_t *args) {{");b.AppendLine("    intptr_t stack[64]; int sp=0;");b.AppendLine($"    intptr_t locals[{Math.Max(1,m.LocalCount)}]; memset(locals,0,sizeof(locals));");b.AppendLine("    DndObject *gc_objects[32]; size_t gc_count=0; DndGcFrame gc_frame; dnd_gc_frame_push(&gc_frame,gc_objects,0);");
+  string fn=$"dnd_method_{Id(m.Key.TypeName)}_{Id(m.Key.Name)}";b.AppendLine($"static intptr_t {fn}(DndManagedHeap *heap, intptr_t *args) {{");b.AppendLine("    (void)heap; (void)args;");b.AppendLine("    intptr_t stack[64]; int sp=0;");b.AppendLine($"    intptr_t locals[{Math.Max(1,m.LocalCount)}]; memset(locals,0,sizeof(locals));");b.AppendLine("    DndObject *gc_objects[32]; size_t gc_count=0; DndGcFrame gc_frame; (void)gc_count; dnd_gc_frame_push(&gc_frame,gc_objects,0);");
   foreach(var i in m.Instructions)Emit(b,i,model);b.AppendLine("    dnd_gc_frame_pop(&gc_frame); return 0;\n}");
  }
  private static void Emit(StringBuilder b,IrInstruction i,CompilationModel model){
