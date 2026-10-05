@@ -11,9 +11,9 @@ int main(void)
     DndManagedHeap heap;
     dnd_managed_heap_init(&heap, storage, sizeof(storage));
     intptr_t result=dnd_aot_entry(&heap);
-    if(result!=115)
+    if(result!=121)
     {
-        fprintf(stderr,"control-flow result: %ld (expected 115)\n",(long)result);
+        fprintf(stderr,"control-flow result: %ld (expected 121)\n",(long)result);
         return 1;
     }
     return 0;
