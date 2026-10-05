@@ -34,6 +34,7 @@ internal sealed record ValueIrStoreField(IrValue Object,IrValue Value,string Typ
 internal sealed record ValueIrStringLength(IrValue Result,IrValue String):ValueIrInstruction;
 internal sealed record ValueIrConsoleWriteLine(IrValue String):ValueIrInstruction;
 internal sealed record ValueIrReadButtonsDown(IrValue Result,IrValue Port):ValueIrInstruction;
+internal sealed record ValueIrPresentDemoFrame(IrValue Rotation):ValueIrInstruction;
 internal sealed record ValueIrOpaqueStackEffect(int PopCount,IReadOnlyList<IrValue> Results,ushort OpCode):ValueIrInstruction;
 internal sealed record ValueIrPhi(IrValue Result,IReadOnlyDictionary<int,IrValue> Inputs):ValueIrInstruction;
 internal sealed record ValueIrIncomingStack(IReadOnlyList<IrValue> Values);
