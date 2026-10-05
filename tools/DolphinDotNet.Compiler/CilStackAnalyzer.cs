@@ -73,6 +73,10 @@ internal static class CilStackAnalyzer
             case 0x72: Push(s,CilStackKind.ObjectReference); break;
             case 0x7b: Pop(s,i);Push(s,CilStackKind.Unknown);break;
             case 0x7d: Pop(s,i);Pop(s,i);break;
+            case 0x8d: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;
+            case 0x8e: Pop(s,i);Push(s,CilStackKind.NativeInt);break;
+            case 0x94 or 0x9a or 0xa3: Pop(s,i);Pop(s,i);Push(s,i.OpCode==0x9a?CilStackKind.ObjectReference:CilStackKind.I4);break;
+            case 0x9e or 0xa2 or 0xa4: Pop(s,i);Pop(s,i);Pop(s,i);break;
             case 0xfe01 or 0xfe02 or 0xfe03 or 0xfe04 or 0xfe05: Pop(s,i);Pop(s,i);Push(s,CilStackKind.I4);break;
             case 0x28 or 0x6f or 0x73:
                 var call=resolveCall?.Invoke(i)??throw new InvalidDataException($"Missing call signature at IL_{i.Offset:x4}.");
