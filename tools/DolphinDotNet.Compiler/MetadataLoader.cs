@@ -20,7 +20,6 @@ internal static class MetadataLoader
    foreach(var p in pending.Where(x=>unresolved.Contains(x.Full)).ToArray())
    {
     if(p.Base is { } b&&unresolved.Contains(b))continue;
-    var inherited=p.Base is { } parent&&model.Types.TryGetValue(parent,out var parentType)&&!p.ValueType?parentType.InstanceSize:0;
     var offset=0;var type=md.GetTypeDefinition(p.Handle);
     foreach(var fh in type.GetFields())
     {
