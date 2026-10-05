@@ -29,15 +29,13 @@ jobs:
       - name: Report .NET Standard 1.0 API compatibility
         run: |
           dotnet restore tests/NetStandard10Contract/NetStandard10Contract.csproj
-          mkdir -p /tmp/netstandard10-contract
-          find "$HOME/.nuget/packages" -path '*/ref/netstandard1.0/*.dll' -exec cp -n {} /tmp/netstandard10-contract/ \;
-          test "$(find /tmp/netstandard10-contract -name '*.dll' | wc -l)" -gt 0
           set +e
-          dotnet run --project tools/DolphinDotNet.ApiCompat/DolphinDotNet.ApiCompat.csproj -- /tmp/netstandard10-contract src/DolphinDotNet.Core/bin/Release/netstandard2.0/DolphinDotNet.Core.dll > /tmp/netstandard10-compat.txt 2>&1
+          dotnet run --project tools/DolphinDotNet.ApiCompat/DolphinDotNet.ApiCompat.csproj -- --assets tests/NetStandard10Contract/obj/project.assets.json src/DolphinDotNet.Core/bin/Release/netstandard2.0/DolphinDotNet.Core.dll > /tmp/netstandard10-compat.txt 2>&1
           STATUS=$?
           set -e
           cat /tmp/netstandard10-compat.txt
           echo "Scanner status: $STATUS (report-only until contract closure)"
+          if [ "$STATUS" -gt 1 ]; then exit "$STATUS"; fi
       - name: Build managed GameCube sample
         run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
       - name: Lower managed GameCube dependency graph

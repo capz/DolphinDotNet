@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Text.Json;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using DolphinDotNet.ApiCompat;
 
 var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
@@ -12,6 +15,7 @@ var implementationPath = Path.Combine(root, $"tests/ApiCompat/Implementation/bin
 var reference = ApiSurface.Read(referencePath);
 var implementation = ApiSurface.Read(implementationPath);
 var missing = reference.Except(implementation).Order().ToArray();
+Require(!RawEchoSignature(referencePath).SequenceEqual(RawEchoSignature(implementationPath)), "Fixtures did not actually shift signature tokens.");
 Require(missing.Length == 5, $"Expected five real mismatches, got {missing.Length}:\n{string.Join('\n', missing)}");
 Require(missing.Any(x => x.StartsWith("M:ContractFixture.Surface::Changed:")), "Changed parameter/return type was missed.");
 Require(missing.Any(x => x.StartsWith("M:ContractFixture.Surface::Storage:instance")), "Instance/static mismatch was missed.");
@@ -39,11 +43,44 @@ try
     File.WriteAllText(invalid, "not a managed assembly");
     Require(Run(invalid, implementationPath).ExitCode == 2, "Invalid assemblies must return status 2.");
     File.Delete(invalid);
-    File.Copy(referencePath, Path.Combine(scratch, "reference.dll"));
-    Require(ApiSurface.Read(scratch).SetEquals(reference), "Directory scanning changed the contract.");
+    var packages = Path.Combine(scratch, "packages");
+    var selected = Path.Combine(packages, "fixture", "1.0", "ref", "net8.0");
+    var unselected = Path.Combine(packages, "fixture", "2.0", "ref", "net8.0");
+    Directory.CreateDirectory(selected);
+    Directory.CreateDirectory(unselected);
+    File.Copy(referencePath, Path.Combine(selected, "Contract.dll"));
+    File.Copy(implementationPath, Path.Combine(unselected, "Contract.dll"));
+    var assets = Path.Combine(scratch, "project.assets.json");
+    File.WriteAllText(assets, JsonSerializer.Serialize(new
+    {
+        targets = new Dictionary<string, object>
+        {
+            ["netstandard1.0"] = new Dictionary<string, object>
+            {
+                ["Fixture/1.0"] = new { type = "package", compile = new Dictionary<string, object> { ["ref/net8.0/Contract.dll"] = new { } } }
+            }
+        },
+        libraries = new Dictionary<string, object> { ["Fixture/1.0"] = new { path = "fixture/1.0" } },
+        packageFolders = new Dictionary<string, object> { [packages] = new { } }
+    }));
+    Require(ContractAssets.Read(assets).SetEquals(reference), "Unselected cached package versions polluted the contract.");
+    Require(Run("--assets", assets, referencePath).ExitCode == 0, "Resolved-assets CLI scan failed.");
+    File.Delete(Path.Combine(selected, "Contract.dll"));
+    Require(Run("--assets", assets, referencePath).ExitCode == 2, "Missing resolved assets must return status 2.");
+    File.WriteAllText(assets, "{}");
+    Require(Run("--assets", assets, referencePath).ExitCode == 2, "Invalid assets shape must return status 2.");
+    File.WriteAllText(assets, "{broken");
+    Require(Run("--assets", assets, referencePath).ExitCode == 2, "Malformed assets JSON must return status 2.");
+    // Test directory union with just the contract, avoiding the deliberately different fixture.
+    var contractDirectory = Path.Combine(scratch, "contract");
+    Directory.CreateDirectory(contractDirectory);
+    File.Copy(referencePath, Path.Combine(contractDirectory, "reference.dll"));
+    Require(ApiSurface.Read(contractDirectory).SetEquals(reference), "Directory scanning changed the contract.");
 }
 finally
 {
+    var expectedParent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);
+    Require(Path.GetDirectoryName(Path.GetFullPath(scratch)) == expectedParent, "Unexpected scratch cleanup path.");
     Directory.Delete(scratch, recursive: true);
 }
 Console.WriteLine($"API compatibility tests passed: {reference.Count} reference declarations; five intentional differences; metadata-token shifts ignored.");
@@ -61,6 +98,21 @@ static (int ExitCode, string Output, string Error) Run(params string[] arguments
     using var process = Process.Start(start) ?? throw new Exception("Could not launch scanner.");
     var output = process.StandardOutput.ReadToEndAsync();
     var error = process.StandardError.ReadToEndAsync();
-    process.WaitForExit();
+    if (!process.WaitForExit(30_000))
+    {
+        process.Kill(entireProcessTree: true);
+        throw new Exception("Scanner test timed out.");
+    }
     return (process.ExitCode, output.GetAwaiter().GetResult(), error.GetAwaiter().GetResult());
+}
+static byte[] RawEchoSignature(string path)
+{
+    using var stream = File.OpenRead(path);
+    using var pe = new PEReader(stream);
+    var metadata = pe.GetMetadataReader();
+    var type = metadata.TypeDefinitions.Select(metadata.GetTypeDefinition)
+        .Single(x => metadata.GetString(x.Name) == "Surface");
+    var method = type.GetMethods().Select(metadata.GetMethodDefinition)
+        .Single(x => metadata.GetString(x.Name) == "Echo");
+    return metadata.GetBlobBytes(method.Signature);
 }

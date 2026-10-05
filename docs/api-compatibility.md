@@ -21,3 +21,13 @@ An optional third argument names a text file with one scanner declaration key pe
 This is a declaration inventory, not a conformance verifier. It does not compare behavior, inheritance obligations, generic constraints, attributes, optional parameter defaults, constant values, or type-forwarded declarations. Assembly scopes are intentionally omitted so facade and implementation assemblies can be compared by full type name; unrelated assemblies defining the same full type name will collide. Scanner coverage cannot prove a library executes on GameCube.
 
 DolphinDotNet.Core currently exposes DolphinDotNet-namespaced helpers. Those helpers are groundwork for a BCL, but do not implement the corresponding `System.*` contracts merely by providing similar algorithms. Report actual contract coverage separately from host tests and AOT/runtime execution tests.
+For the restored .NET Standard contract, use the exact NuGet compile assets instead of searching every version in the package cache:
+
+```
+dotnet restore tests/NetStandard10Contract/NetStandard10Contract.csproj
+dotnet run --project tools/DolphinDotNet.ApiCompat -- --assets tests/NetStandard10Contract/obj/project.assets.json src/DolphinDotNet.Core/bin/Release/netstandard2.0/DolphinDotNet.Core.dll
+```
+
+`--assets` expects a restored, single-framework `project.assets.json` with NuGet package compile assets. Missing packages, ambiguous targets, invalid JSON, and empty compile contracts return status 2. CI tolerates missing declarations (status 1) while the BCL grows, but fails on scanner/input errors.
+
+The 2026-10-06 local baseline against `NETStandard.Library` 1.6.1 is 8,363 inventoried declarations and zero matching declarations in DolphinDotNet.Core. This is expected while helpers use DolphinDotNet namespaces. It is a baseline for this scanner's supported inventory, rather than a count of every .NET Standard conformance obligation.
