@@ -114,8 +114,21 @@ internal static class ValueIrImporter
                 block.Instructions.Insert(slot,new ValueIrPhi(block.EntryStack.Values[slot],inputs));
             }
         }
-        return new ValueIrMethod(method.Key,output,localCount,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
+        var locals=InferLocals(output,localCount);
+        return new ValueIrMethod(method.Key,output,locals,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
     }
+
+    private static IReadOnlyList<ValueIrLocal> InferLocals(IReadOnlyList<ValueIrBlock> blocks,int count)
+    {
+        var kinds=Enumerable.Repeat(IrValueKind.Unknown,count).ToArray();
+        foreach(var instruction in blocks.SelectMany(b=>b.Instructions))
+        {
+            if(instruction is ValueIrStoreLocal store&&store.Index<count)kinds[store.Index]=MergeLocal(kinds[store.Index],store.Value.Kind);
+            else if(instruction is ValueIrLoadLocal load&&load.Index<count)kinds[load.Index]=MergeLocal(kinds[load.Index],load.Result.Kind);
+        }
+        return kinds.Select((kind,index)=>new ValueIrLocal(index,kind)).ToArray();
+    }
+    private static IrValueKind MergeLocal(IrValueKind current,IrValueKind next)=>current==IrValueKind.Unknown?next:next==IrValueKind.Unknown||current==next?current:IrValueKind.Unknown;
 
     private static CilStackKind ResultKind(CilStackAnalysis analysis,CilInstruction instruction,int index=-1)
     {
