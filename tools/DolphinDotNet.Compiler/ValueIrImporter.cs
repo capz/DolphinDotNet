@@ -14,10 +14,12 @@ internal static class ValueIrImporter
         Func<CilInstruction,string?> resolveString,
         Func<CilInstruction,FieldModel?> resolveField,
         Func<CilInstruction,string?> resolveType,
-        Func<string,bool>? isInterfaceType=null)
+        Func<string,bool>? isInterfaceType=null,
+        Func<string,bool>? isDelegateType=null)
     {
         var nextValue=0;
         bool resolveTypeForMethod(string name)=>isInterfaceType?.Invoke(name)??false;
+        bool delegateType(string name)=>isDelegateType?.Invoke(name)??false;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
         var output=new List<ValueIrBlock>();
         var entryValues=new Dictionary<int,List<IrValue>>();
@@ -176,6 +178,10 @@ internal static class ValueIrImporter
                     {
                         var text=resolveString(cil)??throw new InvalidDataException($"Missing user string at IL_{cil.Offset:x4}.");var value=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrLoadString(value,text));stack.Add(value);break;
                     }
+                    case 0xfe06 or 0xfe07:
+                    {
+                        var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved function pointer at IL_{cil.Offset:x4}.");IrValue? receiver=cil.OpCode==0xfe07?Pop(stack,cil):null;var result=New(CilStackKind.NativeInt);instructions.Add(new ValueIrFunctionPointer(result,target.Key,receiver));stack.Add(result);break;
+                    }
                     case 0x28 or 0x6f:
                     {
                         var ik=intrinsic(cil);
@@ -199,7 +205,7 @@ internal static class ValueIrImporter
                     }
                     case 0x73:
                     {
-                        var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved constructor at IL_{cil.Offset:x4}.");var args=new IrValue[target.ParameterCount];for(var ai=args.Length-1;ai>=0;ai--)args[ai]=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrNewObject(value,target.Key.TypeName,target.Key,args));stack.Add(value);break;
+                        var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved constructor at IL_{cil.Offset:x4}.");var args=new IrValue[target.ParameterCount];for(var ai=args.Length-1;ai>=0;ai--)args[ai]=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);if(delegateType(target.Key.TypeName)&&args.Length==2)instructions.Add(new ValueIrNewDelegate(value,target.Key.TypeName,args[0],args[1]));else instructions.Add(new ValueIrNewObject(value,target.Key.TypeName,target.Key,args));stack.Add(value);break;
                     }
                     case 0x7b:
                     {
