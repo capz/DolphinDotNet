@@ -8,7 +8,8 @@ internal static class ValueCBackend
         var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\nstatic DndManagedHeap *dnd_value_heap;");
         var compiledKeys=methods.Select(m=>m.Key).ToHashSet();
         var virtualMethods=methods.Where(m=>model.Methods.TryGetValue(m.Key,out var mm)&&mm.IsVirtual).ToArray();
-        foreach(var method in virtualMethods)b.AppendLine($"static intptr_t {WrapperSymbol(method.Key)}(intptr_t *args);");
+        var dispatchMethods=methods.Where(m=>IsDispatchTarget(m.Key,model)).ToArray();
+        foreach(var method in dispatchMethods)b.AppendLine($"static intptr_t {WrapperSymbol(method.Key)}(intptr_t *args);");
         var interfaceTypes=graph.Types.Where(t=>model.Types.TryGetValue(t,out var tm)&&tm.IsInterface).OrderBy(x=>x).ToArray();
         foreach(var iface in interfaceTypes)b.AppendLine($"extern const DndType dnd_type_{Id(iface)};");
         foreach(var tn in graph.Types.OrderBy(x=>x))
@@ -24,9 +25,19 @@ internal static class ValueCBackend
             var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";
             var totalSize=TotalInstanceSize(tn,model);
             var slots=VirtualSlots(tn,model,compiledKeys);
-            var interfaces=(t.Interfaces??Array.Empty<string>()).Where(i=>graph.Types.Contains(i)&&model.Types.ContainsKey(i)).ToArray();
+            var interfaces=AllInterfaces(tn,model).Where(i=>graph.Types.Contains(i)&&model.Types.ContainsKey(i)).Distinct().ToArray();
             if(interfaces.Length>0)b.AppendLine($"static const DndType *const dnd_interfaces_{Id(tn)}[] = {{ {string.Join(", ",interfaces.Select(i=>$"&dnd_type_{Id(i)}"))} }};");
-            b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{totalSize}u, {interfaces.Length}u, {(interfaces.Length>0?$"dnd_interfaces_{Id(tn)}":"NULL")}, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, {slots.Count}u, {(slots.Count>0?$"dnd_vtable_{Id(tn)}":"NULL")}, 0, NULL}};");
+            var interfaceMaps=new List<string>();
+            foreach(var iface in interfaces)
+            {
+                var implementations=InterfaceImplementations(tn,iface,model,compiledKeys);
+                if(implementations.Count==0)continue;
+                var symbol=$"dnd_imethods_{Id(tn)}_{Id(iface)}";
+                b.AppendLine($"static const DndManagedMethod {symbol}[] = {{ {string.Join(", ",implementations.Select(m=>WrapperSymbol(m.Key)))} }};");
+                interfaceMaps.Add($"{{ &dnd_type_{Id(iface)}, {implementations.Count}u, {symbol} }}");
+            }
+            if(interfaceMaps.Count>0)b.AppendLine($"static const DndInterfaceEntry dnd_imap_{Id(tn)}[] = {{ {string.Join(", ",interfaceMaps)} }};");
+            b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{totalSize}u, {interfaces.Length}u, {(interfaces.Length>0?$"dnd_interfaces_{Id(tn)}":"NULL")}, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, {slots.Count}u, {(slots.Count>0?$"dnd_vtable_{Id(tn)}":"NULL")}, {interfaceMaps.Count}u, {(interfaceMaps.Count>0?$"dnd_imap_{Id(tn)}":"NULL")}};");
         }
         var staticFields=model.Fields.Values.Where(f=>f.IsStatic&&graph.Types.Contains(f.DeclaringType)).OrderBy(f=>f.DeclaringType).ThenBy(f=>f.Name).ToArray();
         foreach(var field in staticFields)b.AppendLine($"static intptr_t {StaticSymbol(field)};");
@@ -39,7 +50,7 @@ internal static class ValueCBackend
             var cctor=TypeInitializer(type,model)!;
             b.AppendLine($"static void {EnsureSymbol(type)}(void) {{ if(dnd_cctor_state_{Id(type)}==2) return; if(dnd_cctor_state_{Id(type)}==1) return; dnd_cctor_state_{Id(type)}=1; (void){Symbol(cctor.Key)}(); dnd_cctor_state_{Id(type)}=2; }}");
         }
-        foreach(var m in virtualMethods)
+        foreach(var m in dispatchMethods)
         {
             var n=m.ParameterCount+(m.HasThis?1:0);
             b.Append($"static intptr_t {WrapperSymbol(m.Key)}(intptr_t *args) {{ ");
@@ -99,7 +110,13 @@ internal static class ValueCBackend
                     case ValueIrCall x:
                     {
                         var args=string.Join(", ",x.Arguments.Select(a=>$"v{a.Id}"));
-                        if(x.Virtual)
+                        if(x.Interface)
+                        {
+                            var slot=InterfaceSlot(x.Target,model);
+                            b.AppendLine($"  {{ intptr_t call_args[{Math.Max(1,x.Arguments.Count)}] = {{ {args} }}; DndManagedMethod target=dnd_interface_resolve((DndObject*)call_args[0], &dnd_type_{Id(x.Target.TypeName)}, {slot}u);");
+                            b.AppendLine(x.Result is { } ir?$"    v{ir.Id} = target ? target(call_args) : 0; }}":$"    if(target) (void)target(call_args); }}");
+                        }
+                        else if(x.Virtual)
                         {
                             var slot=VirtualSlot(x.Target,model);
                             b.AppendLine($"  {{ intptr_t call_args[{Math.Max(1,x.Arguments.Count)}] = {{ {args} }}; DndManagedMethod target=dnd_virtual_resolve((DndObject*)call_args[0], {slot}u);");
@@ -179,6 +196,38 @@ internal static class ValueCBackend
             if(slot>=0)result[slot]=method;else result.Add(method);
         }
         return result;
+    }
+    private static IEnumerable<string> AllInterfaces(string type,CompilationModel model)
+    {
+        if(!model.Types.TryGetValue(type,out var tm))yield break;
+        foreach(var i in tm.Interfaces??Array.Empty<string>()){yield return i;foreach(var nested in AllInterfaces(i,model))yield return nested;}
+        if(tm.BaseType is { } p)foreach(var i in AllInterfaces(p,model))yield return i;
+    }
+    private static IReadOnlyList<MethodModel> InterfaceImplementations(string type,string iface,CompilationModel model,HashSet<MethodKey> compiled)
+    {
+        var result=new List<MethodModel>();
+        foreach(var contract in model.Methods.Values.Where(m=>m.Key.TypeName==iface).OrderBy(m=>m.Handle.GetHashCode()))
+        {
+            MethodModel? implementation=null;
+            for(var current=type;current is not null&&model.Types.TryGetValue(current,out var tm);current=tm.BaseType)
+            {
+                implementation=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==current&&m.Key.Name==contract.Key.Name&&m.Key.Signature==contract.Key.Signature&&compiled.Contains(m.Key));
+                if(implementation is not null)break;
+            }
+            if(implementation is null)return Array.Empty<MethodModel>();result.Add(implementation);
+        }
+        return result;
+    }
+    private static bool IsDispatchTarget(MethodKey key,CompilationModel model)
+    {
+        if(model.Methods.TryGetValue(key,out var m)&&m.IsVirtual)return true;
+        return model.Types.Values.Any(t=>!t.IsInterface&&AllInterfaces(t.FullName,model).Any(i=>model.Methods.Values.Any(c=>c.Key.TypeName==i&&c.Key.Name==key.Name&&c.Key.Signature==key.Signature)));
+    }
+    private static int InterfaceSlot(MethodKey target,CompilationModel model)
+    {
+        var methods=model.Methods.Values.Where(m=>m.Key.TypeName==target.TypeName).OrderBy(m=>m.Handle.GetHashCode()).ToList();
+        var slot=methods.FindIndex(m=>m.Key.Name==target.Name&&m.Key.Signature==target.Signature);
+        if(slot<0)throw new NotSupportedException($"No interface slot for {target}.");return slot;
     }
     private static int VirtualSlot(MethodKey target,CompilationModel model)
     {
