@@ -6,7 +6,7 @@ internal static class ValueCBackend
     public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry)
     {
         var b=new StringBuilder();b.AppendLine("#include <stdint.h>");
-        foreach(var m in methods)b.AppendLine($"static intptr_t {Symbol(m.Key)}({Parameters(m)});");
+        foreach(var m in methods)b.AppendLine($"intptr_t {Symbol(m.Key)}({Parameters(m)});");
         foreach(var m in methods)b.AppendLine(Emit(m,Symbol(m.Key),false));
         var em=methods.Single(m=>m.Key==entry);b.Append($"intptr_t dnd_value_aot_entry({Parameters(em)}) {{ return {Symbol(entry)}(");b.Append(string.Join(", ",Enumerable.Range(0,em.ParameterCount+(em.HasThis?1:0)).Select(i=>$"a{i}")));b.AppendLine("); }");return b.ToString();
     }
