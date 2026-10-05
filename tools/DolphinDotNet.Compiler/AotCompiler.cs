@@ -34,7 +34,7 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i));
                 valueOutput.Add(valueIr);
                 var ir=IlImporter.Import(assembly.PE,model,method,graph);output.Add(ir);
                 foreach(var key in graph.Methods)
@@ -56,9 +56,15 @@ internal static class AotCompiler
 
     private static MethodModel? ResolveCall(MetadataReader md,CompilationModel model,CilInstruction i)
     {
-        if(i.OpCode is not (0x28 or 0x6f)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         try{return IlImporter.ResolveMethod(md,model,MetadataTokens.EntityHandle(raw));}
         catch(NotSupportedException){return null;}
+    }
+
+    private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i)
+    {
+        if(i.OpCode is not (0x7b or 0x7d)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        try{return IlImporter.ResolveField(md,model,MetadataTokens.EntityHandle(raw));}catch(NotSupportedException){return null;}
     }
 
     private static IntrinsicKind ResolveIntrinsic(MetadataReader md,CilInstruction i)
