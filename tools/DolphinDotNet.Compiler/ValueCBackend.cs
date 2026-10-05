@@ -11,7 +11,7 @@ internal static class ValueCBackend
         b.Append($"intptr_t {functionName}(");
         for(var i=0;i<method.ParameterCount+(method.HasThis?1:0);i++){if(i>0)b.Append(", ");b.Append($"intptr_t a{i}");}
         b.AppendLine(") {");
-        foreach(var v in values)b.AppendLine($"  intptr_t v{v.Id} = 0;");
+        foreach(var v in values)b.AppendLine($"  intptr_t v{v.Id} = 0; (void)v{v.Id};");
         foreach(var local in method.Locals)b.AppendLine($"  {CType(local.Kind)} l{local.Index} = 0;");
         if(method.Blocks.Count>0)b.AppendLine($"  goto block_{method.Blocks[0].Id};");
         foreach(var block in method.Blocks)
@@ -68,7 +68,8 @@ internal static class ValueCBackend
     {
         foreach(var b in m.Blocks)foreach(var i in b.Instructions)switch(i)
         {
-            case ValueIrConstant x:yield return x.Result;break;case ValueIrLoadArgument x:yield return x.Result;break;case ValueIrLoadLocal x:yield return x.Result;break;case ValueIrBinary x:yield return x.Result;break;case ValueIrPhi x:yield return x.Result;break;
+            case ValueIrConstant x:yield return x.Result;break;case ValueIrLoadArgument x:yield return x.Result;break;case ValueIrLoadLocal x:yield return x.Result;break;case ValueIrBinary x:yield return x.Result;break;case ValueIrPhi x:yield return x.Result;foreach(var v in x.Inputs.Values)yield return v;break;case ValueIrOpaqueStackEffect x:foreach(var v in x.Results)yield return v;break;
         }
+        foreach(var b in m.Blocks){foreach(var v in b.EntryStack.Values)yield return v;foreach(var v in b.ExitStack.Values)yield return v;if(b.Terminator is ValueIrBranch br){yield return br.Left;if(br.Right is { } r)yield return r;}else if(b.Terminator is ValueIrReturn ret&&ret.Value is { } rv)yield return rv;}
     }
 }
