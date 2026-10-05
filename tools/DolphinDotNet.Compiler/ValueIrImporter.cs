@@ -44,6 +44,7 @@ internal static class ValueIrImporter
                 switch(cil.OpCode)
                 {
                     case 0x00: break;
+                    case 0x14: { var v=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrConstant(v,0));stack.Add(v);break; }
                     case >=0x16 and <=0x1e:
                     {
                         var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,cil.OpCode-0x16));stack.Add(v);break;
