@@ -25,8 +25,15 @@ internal static class ValueCBackend
         }
         var staticFields=model.Fields.Values.Where(f=>f.IsStatic&&graph.Types.Contains(f.DeclaringType)).OrderBy(f=>f.DeclaringType).ThenBy(f=>f.Name).ToArray();
         foreach(var field in staticFields)b.AppendLine($"static intptr_t {StaticSymbol(field)};");
+        var initializedTypes=graph.Types.Where(t=>TypeInitializer(t,model) is not null).OrderBy(t=>t).ToArray();
+        foreach(var type in initializedTypes){b.AppendLine($"static uint8_t dnd_cctor_state_{Id(type)};");b.AppendLine($"static void {EnsureSymbol(type)}(void);");}
         foreach(var m in methods)b.AppendLine($"intptr_t {Symbol(m.Key)}({Parameters(m)});");
         foreach(var m in methods)b.AppendLine(Emit(m,model,Symbol(m.Key),false));
+        foreach(var type in initializedTypes)
+        {
+            var cctor=TypeInitializer(type,model)!;
+            b.AppendLine($"static void {EnsureSymbol(type)}(void) {{ if(dnd_cctor_state_{Id(type)}==2) return; if(dnd_cctor_state_{Id(type)}==1) return; dnd_cctor_state_{Id(type)}=1; (void){Symbol(cctor.Key)}(); dnd_cctor_state_{Id(type)}=2; }}");
+        }
         foreach(var m in virtualMethods)
         {
             var n=m.ParameterCount+(m.HasThis?1:0);
@@ -92,11 +99,11 @@ internal static class ValueCBackend
                         else b.AppendLine(x.Result is { } r?$"  v{r.Id} = {Symbol(x.Target)}({args});":$"  (void){Symbol(x.Target)}({args});");
                         break;
                     }
-                    case ValueIrNewObject x:{var args=string.Join(", ",new[]{$"(intptr_t)v{x.Result.Id}"}.Concat(x.Arguments.Select(a=>$"v{a.Id}")));b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_new(dnd_value_heap, &dnd_type_{Id(x.TypeName)});");b.AppendLine($"  (void){Symbol(x.Constructor)}({args});");break;}
+                    case ValueIrNewObject x:{var args=string.Join(", ",new[]{$"(intptr_t)v{x.Result.Id}"}.Concat(x.Arguments.Select(a=>$"v{a.Id}")));if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_new(dnd_value_heap, &dnd_type_{Id(x.TypeName)});");b.AppendLine($"  (void){Symbol(x.Constructor)}({args});");break;}
                     case ValueIrLoadField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":"int32_t";b.AppendLine($"  v{x.Result.Id} = *({ct}*)((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{field.Offset});");break;}
                     case ValueIrStoreField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":"int32_t";b.AppendLine($"  *({ct}*)((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{field.Offset}) = ({ct})v{x.Value.Id};");break;}
-                    case ValueIrLoadStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];b.AppendLine($"  v{x.Result.Id} = {StaticSymbol(field)};");break;}
-                    case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];b.AppendLine($"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
+                    case ValueIrLoadStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = {StaticSymbol(field)};");break;}
+                    case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
                     case ValueIrStringLength x:b.AppendLine($"  v{x.Result.Id} = ((DndString*)v{x.String.Id})->length;");break;
                     case ValueIrBox x:
                         if(x.TypeName!="System.Int32")throw new NotSupportedException($"Boxing {x.TypeName} is not implemented.");
@@ -146,6 +153,9 @@ internal static class ValueCBackend
             if(phi.Inputs.TryGetValue(from,out var input))b.AppendLine($"{indent}v{phi.Result.Id} = v{input.Id};");
     }
     internal static string Symbol(MethodKey k)=>"dnd_value_"+Id(k.AssemblyName)+"_"+Id(k.TypeName)+"_"+Id(k.Name)+"_"+StableId(k.Signature);
+    private static MethodModel? TypeInitializer(string type,CompilationModel model)=>model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==type&&m.Key.Name==".cctor");
+    private static bool HasTypeInitializer(string type,CompilationModel model)=>TypeInitializer(type,model) is not null;
+    private static string EnsureSymbol(string type)=>"dnd_ensure_"+Id(type);
     private static IReadOnlyList<MethodModel> VirtualSlots(string type,CompilationModel model,HashSet<MethodKey> compiled)
     {
         var result=new List<MethodModel>();
