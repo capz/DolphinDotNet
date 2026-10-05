@@ -67,6 +67,7 @@ internal sealed record ValueIrJump(int TargetBlock):ValueIrTerminator;
 internal enum ValueIrComparison { NonZero,Equal,NotEqual,GreaterThan,GreaterOrEqual,LessThan,LessOrEqual }
 internal sealed record ValueIrBranch(IrValue Left,IrValue? Right,ValueIrComparison Comparison,bool Unsigned,int TrueBlock,int FalseBlock):ValueIrTerminator;
 internal sealed record ValueIrSwitch(IrValue Value,IReadOnlyList<int> Targets,int DefaultBlock):ValueIrTerminator;
+internal sealed record ValueIrThrow(IrValue Exception):ValueIrTerminator;
 internal sealed record ValueIrReturn(IrValue? Value):ValueIrTerminator;
 
 internal sealed record ValueIrBlock(
