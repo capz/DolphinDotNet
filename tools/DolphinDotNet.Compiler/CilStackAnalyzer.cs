@@ -9,7 +9,9 @@ internal sealed record CilStackState(IReadOnlyList<CilStackKind> Values)
 
 internal sealed record CilStackAnalysis(
     IReadOnlyDictionary<int,CilStackState> EntryStates,
-    IReadOnlyDictionary<int,CilStackState> ExitStates);
+    IReadOnlyDictionary<int,CilStackState> ExitStates,
+    IReadOnlyDictionary<int,CilStackState> InstructionEntryStates,
+    IReadOnlyDictionary<int,CilStackState> InstructionExitStates);
 
 internal sealed record CilCallStackEffect(int PopCount,CilStackKind? PushKind);
 
@@ -17,15 +19,17 @@ internal static class CilStackAnalyzer
 {
     public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks,Func<CilInstruction,CilCallStackEffect?>? resolveCall=null,bool returnsValue=false)
     {
-        if(blocks.Count==0)return new CilStackAnalysis(new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>());
+        if(blocks.Count==0)return new CilStackAnalysis(new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>());
         var entry=new Dictionary<int,CilStackState>{{blocks[0].Id,CilStackState.Empty}};
         var exit=new Dictionary<int,CilStackState>();
+        var instructionEntry=new Dictionary<int,CilStackState>();
+        var instructionExit=new Dictionary<int,CilStackState>();
         var queue=new Queue<int>();queue.Enqueue(blocks[0].Id);
         while(queue.Count>0)
         {
             var id=queue.Dequeue();var block=blocks[id];
             var stack=entry[id].Values.ToList();
-            foreach(var i in block.Instructions)Apply(i,stack,resolveCall,returnsValue);
+            foreach(var i in block.Instructions){instructionEntry[i.Offset]=new CilStackState(stack.ToArray());Apply(i,stack,resolveCall,returnsValue);instructionExit[i.Offset]=new CilStackState(stack.ToArray());}
             var state=new CilStackState(stack.ToArray());exit[id]=state;
             foreach(var successor in block.Successors)
             {
@@ -34,7 +38,7 @@ internal static class CilStackAnalyzer
                 if(!merged.Equals(existing)){entry[successor]=merged;queue.Enqueue(successor);}
             }
         }
-        return new CilStackAnalysis(entry,exit);
+        return new CilStackAnalysis(entry,exit,instructionEntry,instructionExit);
     }
 
     private static CilStackState Merge(CilStackState a,CilStackState b,int offset)
