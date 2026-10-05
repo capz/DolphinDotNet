@@ -6,6 +6,7 @@ const DndType DND_TYPE_STRING = {"System.String", &DND_TYPE_OBJECT, sizeof(DndSt
 const DndType DND_TYPE_ARRAY = {"System.Array", &DND_TYPE_OBJECT, sizeof(DndArray), 0, NULL};
 const DndType DND_TYPE_DELEGATE = {"System.Delegate", &DND_TYPE_OBJECT, sizeof(DndDelegate), 0, NULL};
 
+static DndGcFrame *gc_frames;
 static DndExceptionKind exception_kind;
 static const char *exception_text;
 
@@ -117,6 +118,8 @@ bool dnd_root_add(DndRootSet *r, DndObject **slot) {
 }
 
 static void mark(DndObject *o) { if (o) o->marked = 1; }
+void dnd_gc_frame_push(DndGcFrame *f, DndObject **objects, size_t count) { f->objects=objects; f->count=count; f->previous=gc_frames; gc_frames=f; }
+void dnd_gc_frame_pop(DndGcFrame *f) { if (gc_frames==f) gc_frames=f->previous; }
 
 /* Phase 1 GC: roots and object accounting. Object fields become traceable once
  * compiler-emitted type metadata contains reference offsets. The bump heap is
@@ -126,6 +129,7 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     if (!heap) return;
     for (DndObject *o = heap->objects; o; o = o->next) o->marked = 0;
     if (roots) for (size_t i = 0; i < roots->count; i++) if (roots->slots[i]) mark(*roots->slots[i]);
+    for (DndGcFrame *f=gc_frames; f; f=f->previous) for (size_t i=0;i<f->count;i++) mark(f->objects[i]);
     bool any = false;
     for (DndObject *o = heap->objects; o; o = o->next) if (o->marked) { any = true; break; }
     if (!any) { heap->used = 0; heap->objects = NULL; }
