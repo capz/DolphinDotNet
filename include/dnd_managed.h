@@ -9,9 +9,23 @@ typedef struct DndObject DndObject;
 typedef struct DndString DndString;
 typedef struct DndArray DndArray;
 typedef struct DndDelegate DndDelegate;
+typedef struct DndInterfaceEntry DndInterfaceEntry;
 
 typedef void (*DndFinalizer)(DndObject *);
 typedef void (*DndDelegateFn)(void *target, void *argument);
+typedef intptr_t (*DndManagedMethod)(intptr_t *arguments);
+
+enum {
+    DND_TYPE_FLAG_NONE = 0,
+    DND_TYPE_FLAG_ARRAY = 1u << 0,
+    DND_TYPE_FLAG_VALUE_TYPE = 1u << 1
+};
+
+struct DndInterfaceEntry {
+    const DndType *interface_type;
+    uint16_t method_count;
+    const DndManagedMethod *methods;
+};
 
 struct DndType {
     const char *name;
@@ -19,15 +33,18 @@ struct DndType {
     uint32_t instance_size;
     uint16_t interface_count;
     const DndType *const *interfaces;
+    uint16_t reference_count;
+    const uint32_t *reference_offsets;
+    uint16_t flags;
+    uint16_t vtable_count;
+    const DndManagedMethod *vtable;
+    uint16_t interface_map_count;
+    const DndInterfaceEntry *interface_map;
 };
 
 struct DndObject {
     const DndType *type;
-    uint32_t size;
-    uint8_t marked;
-    uint8_t flags;
-    uint16_t reserved;
-    DndObject *next;
+    uint32_t gc;
 };
 
 struct DndString {
@@ -40,6 +57,9 @@ struct DndArray {
     DndObject object;
     uint32_t length;
     uint32_t element_size;
+    const DndType *element_type;
+    uint8_t elements_are_references;
+    uint8_t reserved[3];
     uint8_t data[];
 };
 
@@ -53,7 +73,9 @@ typedef struct {
     uint8_t *start;
     size_t capacity;
     size_t used;
-    DndObject *objects;
+    void *blocks;
+    void *free_list;
+    size_t collections;
 } DndManagedHeap;
 
 typedef struct {
@@ -75,6 +97,7 @@ extern const DndType DND_TYPE_OBJECT;
 extern const DndType DND_TYPE_STRING;
 extern const DndType DND_TYPE_ARRAY;
 extern const DndType DND_TYPE_DELEGATE;
+extern const DndType DND_TYPE_BOXED_INT32;
 
 void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size);
 DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type);
@@ -82,9 +105,19 @@ DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text);
 DndString *dnd_string_concat(DndManagedHeap *heap, const DndString *a, const DndString *b);
 bool dnd_string_equals(const DndString *a, const DndString *b);
 DndArray *dnd_managed_array_new(DndManagedHeap *heap, uint32_t length, uint32_t element_size);
+DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length, uint32_t element_size, const DndType *element_type, bool elements_are_references);
 void *dnd_managed_array_at(DndArray *array, uint32_t index);
+uint32_t dnd_array_length(DndArray *array);
+int32_t dnd_array_load_i32(DndArray *array, uint32_t index);
+DndObject *dnd_array_load_ref(DndArray *array, uint32_t index);
+bool dnd_array_store_i32(DndArray *array, uint32_t index, int32_t value);
+bool dnd_array_store_ref(DndArray *array, uint32_t index, DndObject *value);
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual);
 DndObject *dnd_cast(DndObject *object, const DndType *target);
+DndObject *dnd_box_i32(DndManagedHeap *heap, int32_t value);
+int32_t dnd_unbox_i32(DndObject *object);
+DndManagedMethod dnd_virtual_resolve(const DndObject *object, uint16_t slot);
+DndManagedMethod dnd_interface_resolve(const DndObject *object, const DndType *interface_type, uint16_t slot);
 DndDelegate *dnd_delegate_new(DndManagedHeap *heap, void *target, DndDelegateFn method);
 void dnd_delegate_invoke(DndDelegate *delegate, void *argument);
 
@@ -92,14 +125,12 @@ void dnd_roots_init(DndRootSet *roots, DndObject ***storage, size_t capacity);
 bool dnd_root_add(DndRootSet *roots, DndObject **slot);
 void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots);
 
-/* Compiler-emitted shadow-stack frames. Each frame contains managed references
- * created by the active method. */
 typedef struct DndGcFrame {
-    DndObject **objects;
+    DndObject ***slots;
     size_t count;
     struct DndGcFrame *previous;
 } DndGcFrame;
-void dnd_gc_frame_push(DndGcFrame *frame, DndObject **objects, size_t count);
+void dnd_gc_frame_push(DndGcFrame *frame, DndObject ***slots, size_t count);
 void dnd_gc_frame_pop(DndGcFrame *frame);
 
 void dnd_exception_clear(void);

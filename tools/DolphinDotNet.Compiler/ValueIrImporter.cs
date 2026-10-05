@@ -12,7 +12,8 @@ internal static class ValueIrImporter
         Func<CilInstruction,bool> ignoreCall,
         Func<CilInstruction,IntrinsicKind> intrinsic,
         Func<CilInstruction,string?> resolveString,
-        Func<CilInstruction,FieldModel?> resolveField)
+        Func<CilInstruction,FieldModel?> resolveField,
+        Func<CilInstruction,string?> resolveType)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -78,6 +79,37 @@ internal static class ValueIrImporter
                     {
                         var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));instructions.Add(new ValueIrStoreArgument(index,Pop(stack,cil)));break;
                     }
+                    case 0x8c:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrBox(result,input,type));stack.Add(result);break;
+                    }
+                    case 0xa5:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve unboxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrUnboxAny(result,input,type));stack.Add(result);break;
+                    }
+                    case 0x8d:
+                    {
+                        var length=Pop(stack,cil);var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve array element type at IL_{cil.Offset:x4}.");
+                        var reference=IsReferenceType(type);var result=New(CilStackKind.ObjectReference);
+                        instructions.Add(new ValueIrNewArray(result,length,type,reference,ElementSize(type)));stack.Add(result);break;
+                    }
+                    case 0x8e:
+                    {
+                        var array=Pop(stack,cil);var result=New(CilStackKind.NativeInt);instructions.Add(new ValueIrArrayLength(result,array));stack.Add(result);break;
+                    }
+                    case 0x94 or 0x9a:
+                    {
+                        var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0x9a;var result=New(reference?CilStackKind.ObjectReference:CilStackKind.I4);
+                        instructions.Add(new ValueIrLoadElement(result,array,index,reference));stack.Add(result);break;
+                    }
+                    case 0x9e or 0xa2:
+                    {
+                        var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);instructions.Add(new ValueIrStoreElement(array,index,value,cil.OpCode==0xa2));break;
+                    }
+                    case >=0x67 and <=0x6e or 0xd3 or 0xe0:
+                    {
+                        var input=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrConvert(result,input));stack.Add(result);break;
+                    }
                     case 0x25:
                     {
                         var value=Pop(stack,cil);stack.Add(value);stack.Add(value);break;
@@ -117,7 +149,7 @@ internal static class ValueIrImporter
                         var count=target.ParameterCount+(target.IsStatic?0:1);var args=new IrValue[count];
                         for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
                         IrValue? result=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));result=value;stack.Add(value);}
-                        instructions.Add(new ValueIrCall(result,target.Key,args));break;
+                        instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual));break;
                     }
                     case 0x73:
                     {
@@ -125,11 +157,19 @@ internal static class ValueIrImporter
                     }
                     case 0x7b:
                     {
-                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name));stack.Add(value);break;
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(field.IsReference?CilStackKind.ObjectReference:ResultKind(analysis,cil));instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name));stack.Add(value);break;
                     }
                     case 0x7d:
                     {
                         var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var obj=Pop(stack,cil);instructions.Add(new ValueIrStoreField(obj,value,field.DeclaringType,field.Name));break;
+                    }
+                    case 0x7e:
+                    {
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");var value=New(field.IsReference?CilStackKind.ObjectReference:ResultKind(analysis,cil));instructions.Add(new ValueIrLoadStaticField(value,field.DeclaringType,field.Name));stack.Add(value);break;
+                    }
+                    case 0x80:
+                    {
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrStoreStaticField(Pop(stack,cil),field.DeclaringType,field.Name));break;
                     }
                     case 0x2b or 0x38:
                         terminator=new ValueIrJump(Target(blocks,cil));break;
@@ -208,6 +248,9 @@ internal static class ValueIrImporter
         }
         return kinds.Select((kind,index)=>new ValueIrLocal(index,kind)).ToArray();
     }
+    private static bool IsReferenceType(string type)=>type is "System.String" or "System.Object" || !type.StartsWith("System.",StringComparison.Ordinal);
+    private static uint ElementSize(string type)=>type switch{"System.Boolean" or "System.Byte" or "System.SByte"=>1u,"System.Char" or "System.Int16" or "System.UInt16"=>2u,"System.Int64" or "System.UInt64" or "System.Double"=>8u,_=>4u};
+
     private static IrValueKind MergeLocal(IrValueKind current,IrValueKind next)=>current==IrValueKind.Unknown?next:next==IrValueKind.Unknown||current==next?current:IrValueKind.Unknown;
 
     private static CilStackKind ResultKind(CilStackAnalysis analysis,CilInstruction instruction,int index=-1)

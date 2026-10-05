@@ -36,15 +36,49 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
-                var ir=IlImporter.Import(assembly.PE,model,method,graph);output.Add(ir);
+                Discover(valueIr,graph);
+                DiscoverVirtuals(model,graph);
+                DiscoverTypeInitializers(model,graph);
+                try { output.Add(IlImporter.Import(assembly.PE,model,method,new DependencyGraph())); }
+                catch(NotSupportedException) { /* Legacy backend is a regression oracle, not a production dependency. */ }
                 foreach(var key in graph.Methods)
                     if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable))queue.Enqueue(reachable);
             }
             return new AotCompilation(model,graph,output,valueOutput);
         }
         catch { model.Dispose(); throw; }
+    }
+
+    private static void DiscoverTypeInitializers(CompilationModel model,DependencyGraph graph)
+    {
+        foreach(var method in model.Methods.Values)
+            if(method.Key.Name==".cctor"&&graph.Types.Contains(method.Key.TypeName))graph.AddMethod(method.Key);
+    }
+
+    private static void DiscoverVirtuals(CompilationModel model,DependencyGraph graph)
+    {
+        foreach(var method in model.Methods.Values)
+            if(method.IsVirtual&&graph.Types.Contains(method.Key.TypeName))graph.AddMethod(method.Key);
+    }
+
+    private static void Discover(ValueIrMethod method,DependencyGraph graph)
+    {
+        graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);
+        foreach(var instruction in method.Blocks.SelectMany(b=>b.Instructions))
+        {
+            switch(instruction)
+            {
+                case ValueIrCall call: graph.AddMethod(call.Target);graph.AddType(call.Target.TypeName);break;
+                case ValueIrNewObject created: graph.AddMethod(created.Constructor);graph.AddType(created.TypeName);break;
+                case ValueIrLoadField field: graph.AddType(field.TypeName);break;
+                case ValueIrStoreField field: graph.AddType(field.TypeName);break;
+                case ValueIrLoadStaticField field: graph.AddType(field.TypeName);break;
+                case ValueIrStoreStaticField field: graph.AddType(field.TypeName);break;
+                case ValueIrNewArray array: if(!array.ElementType.StartsWith("System.",StringComparison.Ordinal))graph.AddType(array.ElementType);break;
+            }
+        }
     }
 
     private static int ReadLocalCount(AssemblyModel assembly,MethodModel method)
@@ -63,9 +97,15 @@ internal static class AotCompiler
         catch(NotSupportedException){return null;}
     }
 
+    private static string? ResolveType(MetadataReader md,CilInstruction i)
+    {
+        if(i.Operand is not CilMetadataToken { Token: var raw })return null;
+        try{return MetadataLoader.ResolveTypeName(md,MetadataTokens.EntityHandle(raw));}catch{return null;}
+    }
+
     private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i)
     {
-        if(i.OpCode is not (0x7b or 0x7d)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        if(i.OpCode is not (0x7b or 0x7d or 0x7e or 0x80)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         try{return IlImporter.ResolveField(md,model,MetadataTokens.EntityHandle(raw));}catch(NotSupportedException){return null;}
     }
 
@@ -91,6 +131,7 @@ internal static class AotCompiler
     {
         if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
         if(handle.Kind==HandleKind.MemberReference)
         {
             var member=md.GetMemberReference((MemberReferenceHandle)handle);

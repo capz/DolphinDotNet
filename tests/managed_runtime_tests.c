@@ -4,6 +4,21 @@
 #include <stdint.h>
 #include <stdio.h>
 
+typedef struct { DndObject object; DndObject *child; int32_t value; } TestNode;
+static const uint32_t node_refs[] = { (uint32_t)offsetof(TestNode, child) };
+static const DndType NODE_TYPE = { "TestNode", &DND_TYPE_OBJECT, sizeof(TestNode), 0, NULL, 1, node_refs, 0, 0, NULL, 0, NULL };
+
+static intptr_t virtual_base(intptr_t *args) { (void)args; return 10; }
+static intptr_t virtual_derived(intptr_t *args) { (void)args; return 20; }
+static intptr_t interface_method(intptr_t *args) { (void)args; return 30; }
+static const DndManagedMethod base_vtable[] = { virtual_base };
+static const DndManagedMethod derived_vtable[] = { virtual_derived };
+static const DndType INTERFACE_TYPE = { "ITest", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL };
+static const DndManagedMethod iface_methods[] = { interface_method };
+static const DndInterfaceEntry iface_map[] = { { &INTERFACE_TYPE, 1, iface_methods } };
+static const DndType BASE_TYPE = { "Base", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 1, base_vtable, 0, NULL };
+static const DndType DERIVED_TYPE = { "Derived", &BASE_TYPE, sizeof(DndObject), 1, (const DndType *const[]){ &INTERFACE_TYPE }, 0, NULL, 0, 1, derived_vtable, 1, iface_map };
+
 static int invoked;
 static void callback(void *target, void *arg) {
     (void)target; invoked = *(int *)arg;
@@ -54,12 +69,44 @@ int main(void) {
     DndRootSet roots;
     dnd_roots_init(&roots, slots, 1);
     assert(dnd_root_add(&roots, &root));
-    size_t used = heap.used;
     dnd_gc_collect(&heap, &roots);
-    assert(heap.used == used);
+    assert(root == (DndObject *)hello);
+    assert(hello->length == 5);
     root = NULL;
     dnd_gc_collect(&heap, &roots);
     assert(heap.used == 0);
+
+    DndObject *dispatch = dnd_object_new(&heap, &DERIVED_TYPE); assert(dispatch); intptr_t dispatch_args[1] = { (intptr_t)dispatch };
+    assert(dnd_virtual_resolve(dispatch, 0)(dispatch_args) == 20);
+    assert(dnd_interface_resolve(dispatch, &INTERFACE_TYPE, 0)(dispatch_args) == 30);
+    assert(dnd_type_is_assignable_from(&BASE_TYPE, dispatch->type));
+    assert(dnd_type_is_assignable_from(&INTERFACE_TYPE, dispatch->type));
+
+    DndObject *boxed = dnd_box_i32(&heap, 123);
+    assert(boxed && dnd_unbox_i32(boxed) == 123);
+
+    /* Reference arrays participate in precise tracing. */
+    DndArray *references = dnd_managed_array_new_typed(&heap, 1, sizeof(DndObject *), &NODE_TYPE, true);
+    TestNode *array_child = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    assert(references && array_child);
+    assert(dnd_array_store_ref(references, 0, (DndObject *)array_child));
+    DndObject *array_root = (DndObject *)references; DndObject **array_slots[1]; DndRootSet array_roots;
+    dnd_roots_init(&array_roots, array_slots, 1); assert(dnd_root_add(&array_roots, &array_root));
+    dnd_gc_collect(&heap, &array_roots);
+    assert(dnd_array_load_ref(references, 0) == (DndObject *)array_child);
+
+    /* Precise tracing keeps an object reachable through a managed field. */
+    TestNode *parent = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    TestNode *child = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    assert(parent && child); parent->child = (DndObject *)child; child->value = 99;
+    DndObject *parent_root = (DndObject *)parent; DndObject **trace_slots[1]; DndRootSet trace_roots;
+    dnd_roots_init(&trace_roots, trace_slots, 1); assert(dnd_root_add(&trace_roots, &parent_root));
+    dnd_gc_collect(&heap, &trace_roots); assert(parent->child == (DndObject *)child); assert(child->value == 99);
+
+    /* Dead middle blocks are reusable without requiring the whole heap to die. */
+    parent->child = NULL; size_t before_collect = heap.used; dnd_gc_collect(&heap, &trace_roots);
+    TestNode *replacement = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    assert(replacement); assert(heap.used <= before_collect);
 
     puts("managed runtime + core BCL tests passed");
     return 0;
