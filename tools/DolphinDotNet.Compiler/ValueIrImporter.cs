@@ -149,7 +149,7 @@ internal static class ValueIrImporter
                         var count=target.ParameterCount+(target.IsStatic?0:1);var args=new IrValue[count];
                         for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
                         IrValue? result=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));result=value;stack.Add(value);}
-                        instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f));break;
+                        instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual));break;
                     }
                     case 0x73:
                     {
