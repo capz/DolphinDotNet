@@ -1,15 +1,21 @@
-#include <stdint.h>
 #include <stdio.h>
+#include <stdint.h>
 
-intptr_t dnd_value_aot_entry(void);
+extern intptr_t dnd_value_aot_entry(void);
+extern intptr_t dnd_value_Program_LoopSum(void);
+extern intptr_t dnd_value_Program_BranchCases(intptr_t);
+extern intptr_t dnd_value_Program_Nested(intptr_t,intptr_t);
+extern intptr_t dnd_value_Program_ShortCircuit(intptr_t,intptr_t);
 
 int main(void)
 {
+    intptr_t loop=dnd_value_Program_LoopSum();
+    intptr_t branches=dnd_value_Program_BranchCases(7);
+    intptr_t nested=dnd_value_Program_Nested(3,8);
+    intptr_t short_circuit=dnd_value_Program_ShortCircuit(4,9);
     intptr_t result=dnd_value_aot_entry();
-    if(result!=52)
-    {
-        fprintf(stderr,"value-ir control-flow result: %ld (expected 52)\n",(long)result);
-        return 1;
-    }
+    printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld total=%ld\n",
+        (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)result);
+    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||result!=52)return 1;
     return 0;
 }
