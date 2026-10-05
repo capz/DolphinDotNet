@@ -89,7 +89,7 @@ internal static class ValueCBackend
         IrValueKind.ObjectReference or IrValueKind.ManagedPointer or IrValueKind.NativeInt=>"intptr_t",
         _=>"int32_t"
     };
-    private static string Op(string op)=>op switch{"add"=>"+","sub"=>"-","mul"=>"*","ceq"=>"==","cgt" or "cgt.un"=>">","clt" or "clt.un"=>"<",_=>throw new InvalidDataException($"Unsupported Value IR binary operation {op}.")};
+    private static string Op(string op)=>op switch{"add"=>"+","sub"=>"-","mul"=>"*","and"=>"&","ceq"=>"==","cgt" or "cgt.un"=>">","clt" or "clt.un"=>"<",_=>throw new InvalidDataException($"Unsupported Value IR binary operation {op}.")};
     private static IEnumerable<IrValue> Collect(ValueIrMethod m)
     {
         foreach(var b in m.Blocks)foreach(var i in b.Instructions)switch(i)
