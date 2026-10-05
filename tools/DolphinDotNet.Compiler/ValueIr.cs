@@ -23,6 +23,7 @@ internal sealed record ValueIrLoadLocal(IrValue Result,int Index):ValueIrInstruc
 internal sealed record ValueIrStoreLocal(int Index,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrBinary(IrValue Result,string Operation,IrValue Left,IrValue Right):ValueIrInstruction;
 internal sealed record ValueIrPhi(IrValue Result,IReadOnlyDictionary<int,IrValue> Inputs):ValueIrInstruction;
+internal sealed record ValueIrIncomingStack(IReadOnlyList<IrValue> Values);
 
 internal abstract record ValueIrTerminator;
 internal sealed record ValueIrJump(int TargetBlock):ValueIrTerminator;
@@ -33,7 +34,9 @@ internal sealed record ValueIrBlock(
     int Id,
     int CilOffset,
     List<ValueIrInstruction> Instructions,
-    ValueIrTerminator? Terminator);
+    ValueIrTerminator? Terminator,
+    ValueIrIncomingStack EntryStack,
+    ValueIrIncomingStack ExitStack);
 
 internal sealed record ValueIrMethod(
     MethodKey Key,
