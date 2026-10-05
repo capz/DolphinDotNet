@@ -21,7 +21,7 @@ try
         if(valueAot)
         {
             var entry=compiled.ValueMethods.FirstOrDefault(m=>m.Key.Name=="Main")??throw new InvalidDataException("Value IR entry point missing.");
-            File.WriteAllText(output,ValueCBackend.Emit(entry,"dnd_value_aot_entry"));
+            File.WriteAllText(output,ValueCBackend.EmitProgram(compiled.ValueMethods,entry.Key));
         }
         else File.WriteAllText(output, CBackend.Emit(compiled.Methods, compiled.Model, compiled.Graph));
         Console.WriteLine($"AOT compiled {input} -> {output} ({compiled.Methods.Count} reachable methods, {compiled.Graph.Types.Count} types)");
