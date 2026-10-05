@@ -126,6 +126,10 @@ internal static class ValueIrImporter
                         var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(Merge(left.Kind,right.Kind));
                         instructions.Add(new ValueIrBinary(result,cil.OpCode switch{0x58=>"add",0x59=>"sub",0x5a=>"mul",_=>"and"},left,right));stack.Add(result);break;
                     }
+                    case 0x74 or 0x75:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve type test at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrTypeTest(result,obj,type,cil.OpCode==0x74));stack.Add(result);break;
+                    }
                     case 0x72:
                     {
                         var text=resolveString(cil)??throw new InvalidDataException($"Missing user string at IL_{cil.Offset:x4}.");var value=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrLoadString(value,text));stack.Add(value);break;
