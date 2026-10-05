@@ -70,6 +70,10 @@ internal static class ValueIrImporter
                     {
                         var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadArgument(v,index));stack.Add(v);break;
                     }
+                    case 0x10 or 0xfe0b:
+                    {
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));instructions.Add(new ValueIrStoreArgument(index,Pop(stack,cil)));break;
+                    }
                     case 0x25:
                     {
                         var value=Pop(stack,cil);stack.Add(value);stack.Add(value);break;
