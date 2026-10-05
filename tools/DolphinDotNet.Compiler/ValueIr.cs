@@ -20,6 +20,7 @@ internal readonly record struct IrValue(int Id,IrValueKind Kind)
 
 internal abstract record ValueIrInstruction;
 internal sealed record ValueIrConstant(IrValue Result,long Value):ValueIrInstruction;
+internal sealed record ValueIrLoadString(IrValue Result,string Value):ValueIrInstruction;
 internal sealed record ValueIrLoadArgument(IrValue Result,int Index):ValueIrInstruction;
 internal sealed record ValueIrLoadLocal(IrValue Result,int Index):ValueIrInstruction;
 internal sealed record ValueIrLocal(int Index,IrValueKind Kind);
@@ -27,6 +28,9 @@ internal sealed record ValueIrStoreLocal(int Index,IrValue Value):ValueIrInstruc
 internal sealed record ValueIrStoreArgument(int Index,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrBinary(IrValue Result,string Operation,IrValue Left,IrValue Right):ValueIrInstruction;
 internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
+internal sealed record ValueIrStringLength(IrValue Result,IrValue String):ValueIrInstruction;
+internal sealed record ValueIrConsoleWriteLine(IrValue String):ValueIrInstruction;
+internal sealed record ValueIrReadButtonsDown(IrValue Result,IrValue Port):ValueIrInstruction;
 internal sealed record ValueIrOpaqueStackEffect(int PopCount,IReadOnlyList<IrValue> Results,ushort OpCode):ValueIrInstruction;
 internal sealed record ValueIrPhi(IrValue Result,IReadOnlyDictionary<int,IrValue> Inputs):ValueIrInstruction;
 internal sealed record ValueIrIncomingStack(IReadOnlyList<IrValue> Values);
