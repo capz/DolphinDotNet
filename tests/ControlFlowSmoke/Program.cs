@@ -5,7 +5,7 @@ class VirtualDerived : VirtualBase { public override int GetValue()=>9; }
 
 public static class Program
 {
-    static int StaticValue;
+    static int StaticValue=4;
     public static int Main()
     {
         var loop=LoopSum();
@@ -29,7 +29,7 @@ public static class Program
 
     static T Identity<T>(T value)=>value;
 
-    static int StaticCase(){StaticValue=4;return StaticValue;}
+    static int StaticCase()=>StaticValue;
 
     static int ArrayCase()
     {
