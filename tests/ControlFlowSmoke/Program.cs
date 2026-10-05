@@ -1,5 +1,6 @@
 using System;
 
+delegate int IntFn(int value);
 interface IValue { int GetValue(); }
 class VirtualBase { public int BaseField=4; public virtual int GetValue()=>3; }
 class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }
@@ -25,8 +26,12 @@ public static class Program
         var inherited=InheritedFieldCase();
         var byref=ByRefCase();
         var iface=InterfaceIdentityCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface;
+        var delegates=DelegateCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+delegates;
     }
+
+    static int DelegateCase(){IntFn fn=AddOne;return fn(10);}
+    static int AddOne(int value)=>value+1;
 
     static int InterfaceIdentityCase(){object value=new VirtualDerived();return (value is IValue?4:0)+((IValue)value).GetValue();}
 
