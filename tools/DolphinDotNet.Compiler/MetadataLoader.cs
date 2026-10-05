@@ -21,14 +21,14 @@ internal static class MetadataLoader
    {
     if(p.Base is { } b&&unresolved.Contains(b))continue;
     var inherited=p.Base is { } parent&&model.Types.TryGetValue(parent,out var parentType)&&!p.ValueType?parentType.InstanceSize:0;
-    var offset=inherited;var type=md.GetTypeDefinition(p.Handle);
+    var offset=0;var type=md.GetTypeDefinition(p.Handle);
     foreach(var fh in type.GetFields())
     {
      var field=md.GetFieldDefinition(fh);var isStatic=(field.Attributes&FieldAttributes.Static)!=0;var(size,reference)=FieldLayout(md,field.Signature,model);
      var align=Math.Min(Math.Max(size,1),4);if(!isStatic)offset=Align(offset,align);
      var name=md.GetString(field.Name);model.Fields[(p.Full,name)]=new(p.Full,name,isStatic?0:offset,reference,isStatic,size);if(!isStatic)offset+=size;
     }
-    model.Types[p.Full]=new(p.Ns,p.Name,p.Full,p.Base,p.ValueType?offset:offset-inherited,p.Interface,p.ValueType,p.Interfaces);unresolved.Remove(p.Full);progress=true;
+    model.Types[p.Full]=new(p.Ns,p.Name,p.Full,p.Base,offset,p.Interface,p.ValueType,p.Interfaces);unresolved.Remove(p.Full);progress=true;
     foreach(var mh in type.GetMethods()){var m=md.GetMethodDefinition(mh);var key=new MethodKey(p.Full,md.GetString(m.Name),assemblyName,Convert.ToHexString(md.GetBlobBytes(m.Signature)));var sig=ReadMethodSignature(md,m.Signature);model.Methods[key]=new(key,mh,(m.Attributes&MethodAttributes.Static)!=0,sig.Parameters,sig.ReturnsValue,assemblyName,(m.Attributes&MethodAttributes.Virtual)!=0);}
    }
    if(!progress)throw new InvalidDataException("Unable to resolve type layout inheritance.");
