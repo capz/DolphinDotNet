@@ -145,11 +145,19 @@ internal static class ValueIrImporter
                     }
                     case 0x7b:
                     {
-                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name));stack.Add(value);break;
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(field.IsReference?CilStackKind.ObjectReference:ResultKind(analysis,cil));instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name));stack.Add(value);break;
                     }
                     case 0x7d:
                     {
                         var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var obj=Pop(stack,cil);instructions.Add(new ValueIrStoreField(obj,value,field.DeclaringType,field.Name));break;
+                    }
+                    case 0x7e:
+                    {
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");var value=New(field.IsReference?CilStackKind.ObjectReference:ResultKind(analysis,cil));instructions.Add(new ValueIrLoadStaticField(value,field.DeclaringType,field.Name));stack.Add(value);break;
+                    }
+                    case 0x80:
+                    {
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrStoreStaticField(Pop(stack,cil),field.DeclaringType,field.Name));break;
                     }
                     case 0x2b or 0x38:
                         terminator=new ValueIrJump(Target(blocks,cil));break;
