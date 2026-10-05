@@ -9,7 +9,7 @@ internal static class ValueCBackend
         foreach(var m in methods)b.AppendLine($"intptr_t {Symbol(m.Key)}({Parameters(m)});");
         foreach(var m in methods)b.AppendLine(Emit(m,model,Symbol(m.Key),false));
         foreach(var group in methods.GroupBy(m=>(m.Key.TypeName,m.Key.Name)).Where(g=>g.Count()==1)){var m=group.Single();var alias=LegacySymbol(m.Key);if(alias==Symbol(m.Key))continue;b.Append($"intptr_t {alias}({Parameters(m)}) {{ return {Symbol(m.Key)}(");b.Append(string.Join(", ",Enumerable.Range(0,m.ParameterCount+(m.HasThis?1:0)).Select(i=>$"a{i}")));b.AppendLine("); }");}
-        var em=methods.Single(m=>m.Key==entry);b.Append($"intptr_t dnd_value_aot_entry(DndManagedHeap *heap) {{ dnd_value_heap=heap; return {Symbol(entry)}(");b.Append(string.Join(", ",Enumerable.Range(0,em.ParameterCount+(em.HasThis?1:0)).Select(i=>$"a{i}")));b.AppendLine("); }");return b.ToString();
+        var em=methods.Single(m=>m.Key==entry);b.Append($"intptr_t dnd_aot_entry(DndManagedHeap *heap) {{ dnd_value_heap=heap; return {Symbol(entry)}(");b.Append(string.Join(", ",Enumerable.Range(0,em.ParameterCount+(em.HasThis?1:0)).Select(i=>$"a{i}")));b.AppendLine("); }");b.AppendLine("intptr_t dnd_value_aot_entry(DndManagedHeap *heap) { return dnd_aot_entry(heap); }");return b.ToString();
     }
 
     public static string Emit(ValueIrMethod method,CompilationModel model,string functionName="dnd_value_ir_test",bool includeHeader=true)
