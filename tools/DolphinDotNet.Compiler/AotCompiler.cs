@@ -77,7 +77,7 @@ internal static class AotCompiler
         {
             switch(instruction)
             {
-                case ValueIrCall call: graph.AddMethod(call.Target);graph.AddType(call.Target.TypeName);break;
+                case ValueIrCall call: if(!model.Methods.TryGetValue(call.Target,out var called)||!called.IsAbstract)graph.AddMethod(call.Target);graph.AddType(call.Target.TypeName);AddTypeClosure(call.Target.TypeName,model,graph);break;
                 case ValueIrNewObject created: graph.AddMethod(created.Constructor);graph.AddType(created.TypeName);break;
                 case ValueIrLoadField field: graph.AddType(field.TypeName);break;
                 case ValueIrStoreField field: graph.AddType(field.TypeName);break;
