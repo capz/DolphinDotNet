@@ -45,7 +45,10 @@ internal sealed record ValueIrBlock(
 internal sealed record ValueIrMethod(
     MethodKey Key,
     IReadOnlyList<ValueIrBlock> Blocks,
-    int LocalCount,
+    IReadOnlyList<ValueIrLocal> Locals,
     int ParameterCount,
     bool HasThis,
-    bool ReturnsValue);
+    bool ReturnsValue)
+{
+    public int LocalCount=>Locals.Count;
+}
