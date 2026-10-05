@@ -26,7 +26,7 @@ internal static class CilDecoder
                 op=(ushort)(0xfe00|il[p++]);
             }
 
-            object? operand=null;
+            CilOperand? operand=null;
             var flow=CilFlowKind.Next;
             switch(op)
             {
