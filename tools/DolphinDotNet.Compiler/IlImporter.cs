@@ -5,7 +5,7 @@ namespace DolphinDotNet.Compiler;
 internal static class IlImporter{
  public static IrMethod Import(PEReader pe,CompilationModel model,MethodModel method,DependencyGraph graph){
   var md=model.Assemblies[method.AssemblyName].Metadata;var def=md.GetMethodDefinition(method.Handle);if(def.RelativeVirtualAddress==0)throw new InvalidDataException($"{method.Key} has no body.");var body=pe.GetMethodBody(def.RelativeVirtualAddress);if(body.ExceptionRegions.Length!=0)throw new NotSupportedException($"Exception regions in {method.Key} are not supported yet.");
-  int locals=body.LocalSignature.IsNil?0:ReadLocalCount(md,body.LocalSignature);var il=body.GetILBytes().ToArray();var result=new List<IrInstruction>();int p=0;graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);
+  int locals=body.LocalSignature.IsNil?0:ReadLocalCount(md,body.LocalSignature);var il=(body.GetILBytes() ?? throw new InvalidDataException("Method body has no IL bytes.")).ToArray();var result=new List<IrInstruction>();int p=0;graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);
   while(p<il.Length){int off=p;byte op=il[p++];if(op==0xfe){Need(il,p,1,off);byte ext=il[p++];switch(ext){case 0x01:result.Add(new IrCompareEqual());break;case 0x02:result.Add(new IrCompareGreaterThan());break;default:throw new NotSupportedException($"AOT importer: unsupported CIL opcode 0xfe{ext:x2} in {method.Key} at IL_{off:x4}.");}continue;}switch(op){
    case 0x00:break;case >=0x02 and <=0x05:result.Add(new IrLoadArg(op-2));break;
    case >=0x06 and <=0x09:result.Add(new IrLoadLocal(op-6));break;case >=0x0a and <=0x0d:result.Add(new IrStoreLocal(op-0x0a));break;
