@@ -6,7 +6,7 @@ internal static class ValueCBackend
     public static string Emit(ValueIrMethod method,string functionName="dnd_value_ir_test")
     {
         var b=new StringBuilder();
-        var values=Collect(method).OrderBy(v=>v.Id).ToArray();
+        var values=Collect(method).GroupBy(v=>v.Id).Select(g=>g.First()).OrderBy(v=>v.Id).ToArray();
         b.AppendLine("#include <stdint.h>");
         b.Append($"intptr_t {functionName}(");
         for(var i=0;i<method.ParameterCount+(method.HasThis?1:0);i++){if(i>0)b.Append(", ");b.Append($"intptr_t a{i}");}
