@@ -16,8 +16,8 @@ bool dnd_guid_parse(const char*t,DndGuid*g){if(!t||!g)return false;int n=0,hi=-1
 void dnd_guid_to_string(const DndGuid*g,char o[37]){static const char h[]="0123456789abcdef";int p=0;for(int i=0;i<16;i++){if(i==4||i==6||i==8||i==10)o[p++]='-';o[p++]=h[g->bytes[i]>>4];o[p++]=h[g->bytes[i]&15];}o[p]=0;}
 bool dnd_guid_new(DndGuid*g){if(!g)return false;static uint32_t state=0;if(!state)state=(uint32_t)time(NULL)^0x9e3779b9u;for(int i=0;i<16;i++){state^=state<<13;state^=state>>17;state^=state<<5;g->bytes[i]=(uint8_t)state;}g->bytes[6]=(g->bytes[6]&0x0f)|0x40;g->bytes[8]=(g->bytes[8]&0x3f)|0x80;return true;}
 
-void dnd_console_write(const char*t){dnd_platform_write(t?t:"");}
-void dnd_console_write_line(const char*t){dnd_platform_write(t?t:"");dnd_platform_write("\n");}
+void dnd_system_console_write(const char*t){dnd_platform_write(t?t:"");}
+void dnd_system_console_write_line(const char*t){dnd_platform_write(t?t:"");dnd_platform_write("\n");}
 void dnd_console_write_i32(int32_t v){dnd_platform_write_int(v);}
 
 bool dnd_file_exists(const char*p){if(!p)return false;FILE*f=fopen(p,"rb");if(!f)return false;fclose(f);return true;}
