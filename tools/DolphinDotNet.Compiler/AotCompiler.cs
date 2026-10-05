@@ -77,7 +77,10 @@ internal static class AotCompiler
         {
             switch(instruction)
             {
+                case ValueIrLoadFunction fn: graph.AddMethod(fn.Target);graph.AddType(fn.Target.TypeName);break;
                 case ValueIrCall call: if(!model.Methods.TryGetValue(call.Target,out var called)||!called.IsAbstract)graph.AddMethod(call.Target);graph.AddType(call.Target.TypeName);AddTypeClosure(call.Target.TypeName,model,graph);break;
+                case ValueIrNewDelegate: break;
+                case ValueIrDelegateInvoke: break;
                 case ValueIrNewObject created: graph.AddMethod(created.Constructor);graph.AddType(created.TypeName);break;
                 case ValueIrLoadField field: graph.AddType(field.TypeName);break;
                 case ValueIrStoreField field: graph.AddType(field.TypeName);break;
@@ -102,7 +105,7 @@ internal static class AotCompiler
 
     private static MethodModel? ResolveCall(MetadataReader md,CompilationModel model,CilInstruction i)
     {
-        if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        if(i.OpCode is not (0x28 or 0x6f or 0x73 or 0xfe06 or 0xfe07)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         try{return IlImporter.ResolveMethod(md,model,MetadataTokens.EntityHandle(raw));}
         catch(NotSupportedException){return null;}
     }
