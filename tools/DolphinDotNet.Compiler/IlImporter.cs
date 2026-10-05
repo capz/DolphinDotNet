@@ -4,7 +4,7 @@ using System.Reflection.PortableExecutable;
 namespace DolphinDotNet.Compiler;
 internal static class IlImporter{
  public static IrMethod Import(PEReader pe,CompilationModel model,MethodModel method,DependencyGraph graph){
-  var md=model.Metadata;var def=md.GetMethodDefinition(method.Handle);if(def.RelativeVirtualAddress==0)throw new InvalidDataException($"{method.Key} has no body.");var body=pe.GetMethodBody(def.RelativeVirtualAddress);if(body.ExceptionRegions.Length!=0)throw new NotSupportedException($"Exception regions in {method.Key} are not supported yet.");
+  var md=model.Assemblies[method.AssemblyName].Metadata;var def=md.GetMethodDefinition(method.Handle);if(def.RelativeVirtualAddress==0)throw new InvalidDataException($"{method.Key} has no body.");var body=pe.GetMethodBody(def.RelativeVirtualAddress);if(body.ExceptionRegions.Length!=0)throw new NotSupportedException($"Exception regions in {method.Key} are not supported yet.");
   int locals=body.LocalSignature.IsNil?0:ReadLocalCount(md,body.LocalSignature);var il=body.GetILBytes().ToArray();var result=new List<IrInstruction>();int p=0;graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);
   while(p<il.Length){int off=p;byte op=il[p++];switch(op){
    case 0x00:break;case >=0x02 and <=0x05:result.Add(new IrLoadArg(op-2));break;
