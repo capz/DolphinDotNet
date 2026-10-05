@@ -32,6 +32,7 @@ internal static class CBackend{
     b.AppendLine($"    {{ intptr_t ca[{Math.Max(1,n.ArgumentCount+1)}]; for(int i={n.ArgumentCount};i>0;i--) ca[i]=stack[--sp]; DndObject *o=dnd_object_new(heap,&dnd_type_{Id(n.TypeName)}); ca[0]=(intptr_t)o;");
     b.AppendLine($"      gc_objects[gc_count++]=o; gc_frame.count=gc_count; dnd_method_{Id(n.Constructor.TypeName)}_{Id(n.Constructor.Name)}(heap,ca); stack[sp++]=(intptr_t)o; }}");break;}
    case IrStringLength:b.AppendLine("    { DndString *s=(DndString*)stack[--sp]; stack[sp++]=s?(intptr_t)s->length:0; }");break;
+   case IrConsoleWriteLine:b.AppendLine("    { DndString *s=(DndString*)stack[--sp]; char text[256]; size_t n=s&&s->length<255?s->length:255; for(size_t i=0;i<n;i++) text[i]=(char)(s->chars[i]&0x7f); text[n]=0; dnd_console_write_line(text); }");break;
    case IrCompareGreaterThan:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l>r?1:0; }");break;
    case IrCompareEqual:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l==r?1:0; }");break;
    case IrCall c:{
