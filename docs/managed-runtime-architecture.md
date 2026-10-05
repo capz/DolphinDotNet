@@ -48,4 +48,8 @@ The typed AOT path models one-dimensional arrays, checked length/index access, r
 
 The native runtime is intentionally limited to mechanisms: allocation/GC, type identity and dispatch, array primitives, boxing primitives, exception state, delegates, and platform services. Collections, LINQ, streams, formatting, and other framework algorithms should be managed C# as the core library grows.
 
+## API compatibility tracking
+
+`tools/DolphinDotNet.ApiCompat` compares the public metadata surface of a reference-contract assembly with an implementation assembly and reports exact missing type/member signatures plus coverage. It is intended to turn the selected .NET Standard reference contract into a measurable compatibility checklist as the managed core library grows.
+
 The legacy stack-oriented backend is no longer part of production CI. `--aot` uses typed Value IR; the old backend remains only as a diagnostic/regression aid while it is useful.
