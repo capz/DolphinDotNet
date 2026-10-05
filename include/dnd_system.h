@@ -21,8 +21,8 @@ bool dnd_guid_new(DndGuid *value);
 bool dnd_guid_parse(const char *text,DndGuid *value);
 void dnd_guid_to_string(const DndGuid *value,char output[37]);
 
-void dnd_console_write(const char *text);
-void dnd_console_write_line(const char *text);
+void dnd_system_console_write(const char *text);
+void dnd_system_console_write_line(const char *text);
 void dnd_console_write_i32(int32_t value);
 
 bool dnd_file_exists(const char *path);
