@@ -79,6 +79,14 @@ internal static class ValueIrImporter
                     {
                         var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));instructions.Add(new ValueIrStoreArgument(index,Pop(stack,cil)));break;
                     }
+                    case 0x0f or 0xfe0a:
+                    {
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));var result=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrAddressOfArgument(result,index));stack.Add(result);break;
+                    }
+                    case 0x12 or 0xfe0d:
+                    {
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));var result=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrAddressOfLocal(result,index));stack.Add(result);break;
+                    }
                     case 0x8c:
                     {
                         var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrBox(result,input,type));stack.Add(result);break;
