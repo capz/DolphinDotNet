@@ -9,58 +9,70 @@ const DndType DND_TYPE_DELEGATE = {"System.Delegate", &DND_TYPE_OBJECT, sizeof(D
 typedef struct { DndObject object; int32_t value; } DndBoxedInt32;
 const DndType DND_TYPE_BOXED_INT32 = {"System.Int32", &DND_TYPE_OBJECT, sizeof(DndBoxedInt32), 0, NULL, 0, NULL, DND_TYPE_FLAG_VALUE_TYPE, 0, NULL, 0, NULL};
 
+typedef struct DndHeapBlock {
+    uint32_t size;
+    uint8_t marked;
+    uint8_t free;
+    uint16_t reserved;
+    struct DndHeapBlock *next;
+} DndHeapBlock;
+
 static DndGcFrame *gc_frames;
 static DndExceptionKind exception_kind;
 static const char *exception_text;
 
 static size_t align8(size_t n) { return (n + 7u) & ~(size_t)7u; }
+static size_t block_header_size(void) { return align8(sizeof(DndHeapBlock)); }
+static DndHeapBlock *first_block(DndManagedHeap *heap) { return (DndHeapBlock *)heap->blocks; }
+static DndObject *block_object(DndHeapBlock *block) { return (DndObject *)((uint8_t *)block + block_header_size()); }
+static DndHeapBlock *object_block(DndObject *object) { return (DndHeapBlock *)((uint8_t *)object - block_header_size()); }
 
 static bool in_heap(const DndManagedHeap *heap, const DndObject *object) {
     const uint8_t *p = (const uint8_t *)object;
-    return heap && p >= heap->start && p < heap->start + heap->capacity;
+    return heap && p >= heap->start + block_header_size() && p < heap->start + heap->used;
 }
 
 static void rebuild_free_list(DndManagedHeap *heap) {
     heap->free_list = NULL;
-    DndObject *current = heap->objects;
-    while (current) {
-        if (current->type == NULL) {
-            current->marked = 0;
-            current->flags = 0;
-            while (current->next && current->next->type == NULL &&
-                   (uint8_t *)current + current->size == (uint8_t *)current->next) {
-                DndObject *next = current->next;
-                current->size += next->size;
-                current->next = next->next;
+    DndHeapBlock *block = first_block(heap);
+    while (block) {
+        if (block->free) {
+            while (block->next && block->next->free &&
+                   (uint8_t *)block + block_header_size() + block->size == (uint8_t *)block->next) {
+                DndHeapBlock *next = block->next;
+                block->size += (uint32_t)(block_header_size() + next->size);
+                block->next = next->next;
             }
-            if (!heap->free_list) heap->free_list = current;
+            if (!heap->free_list) heap->free_list = block;
         }
-        current = current->next;
+        block = block->next;
     }
 }
 
-static DndObject *allocate_from_free(DndManagedHeap *heap, const DndType *type, size_t bytes) {
-    for (DndObject *object = heap->objects; object; object = object->next) {
-        if (object->type != NULL || object->size < bytes) continue;
-        size_t original = object->size;
-        size_t remaining = original - bytes;
-        DndObject *next = object->next;
-        if (remaining >= align8(sizeof(DndObject) + 8)) {
-            DndObject *tail = (DndObject *)((uint8_t *)object + bytes);
-            memset(tail, 0, sizeof(*tail));
-            tail->size = (uint32_t)remaining;
-            tail->next = next;
-            object->next = tail;
-        }
-        size_t allocated = remaining >= align8(sizeof(DndObject) + 8) ? bytes : original;
-        DndObject *saved_next = object->next;
-        memset(object, 0, allocated);
-        object->type = type;
-        object->size = (uint32_t)allocated;
-        object->next = saved_next;
-        rebuild_free_list(heap);
-        return object;
+static DndObject *prepare_block(DndManagedHeap *heap, DndHeapBlock *block, const DndType *type, size_t bytes) {
+    size_t original = block->size;
+    size_t minimum_tail = block_header_size() + align8(sizeof(DndObject) + 8);
+    if (original >= bytes + minimum_tail) {
+        DndHeapBlock *tail = (DndHeapBlock *)((uint8_t *)block + block_header_size() + bytes);
+        memset(tail, 0, block_header_size());
+        tail->size = (uint32_t)(original - bytes - block_header_size());
+        tail->free = 1;
+        tail->next = block->next;
+        block->next = tail;
+        block->size = (uint32_t)bytes;
     }
+    block->free = 0;
+    block->marked = 0;
+    DndObject *object = block_object(block);
+    memset(object, 0, block->size);
+    object->type = type;
+    rebuild_free_list(heap);
+    return object;
+}
+
+static DndObject *allocate_from_free(DndManagedHeap *heap, const DndType *type, size_t bytes) {
+    for (DndHeapBlock *block = first_block(heap); block; block = block->next)
+        if (block->free && block->size >= bytes) return prepare_block(heap, block, type, bytes);
     return NULL;
 }
 
@@ -70,35 +82,35 @@ static DndObject *allocate(DndManagedHeap *heap, const DndType *type, size_t byt
     DndObject *reused = allocate_from_free(heap, type, bytes);
     if (reused) return reused;
 
-    if (bytes > heap->capacity - heap->used) {
+    size_t total = block_header_size() + bytes;
+    if (total > heap->capacity - heap->used) {
         dnd_gc_collect(heap, NULL);
         reused = allocate_from_free(heap, type, bytes);
         if (reused) return reused;
-        if (bytes > heap->capacity - heap->used) {
+        if (total > heap->capacity - heap->used) {
             dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY, "Managed heap exhausted.");
             return NULL;
         }
     }
 
-    DndObject *object = (DndObject *)(heap->start + heap->used);
-    heap->used += bytes;
-    memset(object, 0, bytes);
-    object->type = type;
-    object->size = (uint32_t)bytes;
-    if (!heap->objects) heap->objects = object;
+    DndHeapBlock *block = (DndHeapBlock *)(heap->start + heap->used);
+    memset(block, 0, block_header_size());
+    block->size = (uint32_t)bytes;
+    if (!heap->blocks) heap->blocks = block;
     else {
-        DndObject *tail = heap->objects;
+        DndHeapBlock *tail = first_block(heap);
         while (tail->next) tail = tail->next;
-        tail->next = object;
+        tail->next = block;
     }
-    return object;
+    heap->used += total;
+    return prepare_block(heap, block, type, bytes);
 }
 
 void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size) {
     heap->start = memory;
     heap->capacity = size;
     heap->used = 0;
-    heap->objects = NULL;
+    heap->blocks = NULL;
     heap->free_list = NULL;
     heap->collections = 0;
 }
@@ -317,13 +329,15 @@ void dnd_gc_frame_pop(DndGcFrame *frame) {
 }
 
 static void mark_object(DndManagedHeap *heap, DndObject *object) {
-    if (!object || !in_heap(heap, object) || object->type == NULL || object->marked) return;
-    object->marked = 1;
+    if (!object || !in_heap(heap, object)) return;
+    DndHeapBlock *block = object_block(object);
+    if (block->free || block->marked || !object->type) return;
+    block->marked = 1;
     const DndType *type = object->type;
     for (const DndType *current = type; current; current = current->base_type) {
         for (uint16_t i = 0; i < current->reference_count; i++) {
             uint32_t offset = current->reference_offsets[i];
-            if (offset + sizeof(void *) <= object->size)
+            if (offset + sizeof(void *) <= block->size)
                 mark_object(heap, *(DndObject **)((uint8_t *)object + offset));
         }
     }
@@ -344,28 +358,29 @@ static void mark_object(DndManagedHeap *heap, DndObject *object) {
 void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     if (!heap) return;
     heap->collections++;
-    for (DndObject *object = heap->objects; object; object = object->next) object->marked = 0;
+    for (DndHeapBlock *block = first_block(heap); block; block = block->next) block->marked = 0;
     if (roots)
         for (size_t i = 0; i < roots->count; i++)
             if (roots->slots[i]) mark_object(heap, *roots->slots[i]);
     for (DndGcFrame *frame = gc_frames; frame; frame = frame->previous)
         for (size_t i = 0; i < frame->count; i++)
             if (frame->slots[i]) mark_object(heap, *frame->slots[i]);
-    for (DndObject *object = heap->objects; object; object = object->next)
-        if (object->type && !object->marked) object->type = NULL;
+
+    for (DndHeapBlock *block = first_block(heap); block; block = block->next)
+        if (!block->free && !block->marked) {
+            block->free = 1;
+            block_object(block)->type = NULL;
+        }
 
     rebuild_free_list(heap);
-    while (heap->objects) {
-        DndObject *last = heap->objects;
-        DndObject *before = NULL;
-        while (last->next) {
-            before = last;
-            last = last->next;
-        }
-        if (last->type != NULL) break;
+    while (heap->blocks) {
+        DndHeapBlock *last = first_block(heap);
+        DndHeapBlock *before = NULL;
+        while (last->next) { before = last; last = last->next; }
+        if (!last->free) break;
         heap->used = (size_t)((uint8_t *)last - heap->start);
         if (before) before->next = NULL;
-        else heap->objects = NULL;
+        else heap->blocks = NULL;
     }
     rebuild_free_list(heap);
 }
