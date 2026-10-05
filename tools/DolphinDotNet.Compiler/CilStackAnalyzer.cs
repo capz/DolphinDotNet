@@ -11,9 +11,11 @@ internal sealed record CilStackAnalysis(
     IReadOnlyDictionary<int,CilStackState> EntryStates,
     IReadOnlyDictionary<int,CilStackState> ExitStates);
 
+internal sealed record CilCallStackEffect(int PopCount,CilStackKind? PushKind);
+
 internal static class CilStackAnalyzer
 {
-    public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks)
+    public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks,Func<CilInstruction,CilCallStackEffect?>? resolveCall=null,bool returnsValue=false)
     {
         if(blocks.Count==0)return new CilStackAnalysis(new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>());
         var entry=new Dictionary<int,CilStackState>{{blocks[0].Id,CilStackState.Empty}};
@@ -23,7 +25,7 @@ internal static class CilStackAnalyzer
         {
             var id=queue.Dequeue();var block=blocks[id];
             var stack=entry[id].Values.ToList();
-            foreach(var i in block.Instructions)Apply(i,stack);
+            foreach(var i in block.Instructions)Apply(i,stack,resolveCall,returnsValue);
             var state=new CilStackState(stack.ToArray());exit[id]=state;
             foreach(var successor in block.Successors)
             {
@@ -43,7 +45,7 @@ internal static class CilStackAnalyzer
         return changed?new CilStackState(values):a;
     }
 
-    private static void Apply(CilInstruction i,List<CilStackKind> s)
+    private static void Apply(CilInstruction i,List<CilStackKind> s,Func<CilInstruction,CilCallStackEffect?>? resolveCall,bool returnsValue)
     {
         switch(i.OpCode)
         {
@@ -66,8 +68,15 @@ internal static class CilStackAnalyzer
             case 0x7b: Pop(s,i);Push(s,CilStackKind.Unknown);break;
             case 0x7d: Pop(s,i);Pop(s,i);break;
             case 0xfe01 or 0xfe02 or 0xfe03: Pop(s,i);Pop(s,i);Push(s,CilStackKind.I4);break;
-            // Calls/newobj/ret need signature metadata and are deliberately handled by the later typed importer.
-            case 0x28 or 0x6f or 0x73 or 0x2a: break;
+            case 0x28 or 0x6f or 0x73:
+                var call=resolveCall?.Invoke(i)??throw new InvalidDataException($"Missing call signature at IL_{i.Offset:x4}.");
+                for(var n=0;n<call.PopCount;n++)Pop(s,i);
+                if(call.PushKind is { } kind)Push(s,kind);
+                break;
+            case 0x2a:
+                if(returnsValue)Pop(s,i);
+                if(s.Count!=0)throw new InvalidDataException($"CIL return at IL_{i.Offset:x4} leaves {s.Count} value(s) on the evaluation stack.");
+                break;
         }
     }
     private static CilStackKind Pop(List<CilStackKind>s,CilInstruction i){if(s.Count==0)Underflow(i);var v=s[^1];s.RemoveAt(s.Count-1);return v;}
