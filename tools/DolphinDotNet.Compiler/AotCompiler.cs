@@ -45,7 +45,7 @@ internal static class AotCompiler
 
     private static CilCallStackEffect? ResolveCallEffect(MetadataReader md,CompilationModel model,CilInstruction i)
     {
-        if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not int raw)return null;
+        if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         var handle=MetadataTokens.EntityHandle(raw);
         if(handle.Kind==HandleKind.MemberReference)
         {
