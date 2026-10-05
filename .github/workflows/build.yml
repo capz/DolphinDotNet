@@ -50,7 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install OpenGX
-        run: dkp-pacman -S --needed --noconfirm gamecube-opengx
+        run: dkp-pacman -S --needed --noconfirm gamecube-dev gamecube-opengx
       - name: Show toolchain
         run: |
           echo "DEVKITPRO=$DEVKITPRO"
