@@ -35,6 +35,6 @@ else
 DEPENDS := $(OFILES:.o=.d)
 $(OUTPUT).dol: $(OUTPUT).elf
 $(OUTPUT).elf: $(OFILES)
-	$(LD) $^ $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@
+	$(CC) $^ $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@
 -include $(DEPENDS)
 endif
