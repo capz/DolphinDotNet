@@ -21,8 +21,36 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Build managed DolphinDotNet libraries
+        run: |
+          dotnet build src/DolphinDotNet.Core/DolphinDotNet.Core.csproj -c Release
+          dotnet build src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj -c Release
+      - name: Build managed GameCube sample
+        run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
+      - name: Lower managed GameCube dependency graph
+        run: |
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube.c -o /tmp/managed_gamecube.o
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube_value.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube_value.c -o /tmp/managed_gamecube_value.o
       - name: Compiler integration tests
         run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
+      - name: Build control-flow smoke assembly
+        run: |
+          dotnet build tests/ControlFlowSmoke/ControlFlowSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --legacy-aot tests/ControlFlowSmoke/bin/Release/net8.0/ControlFlowSmoke.dll /tmp/control_flow.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/control_flow.c -o /tmp/control_flow.o
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/control_flow.c tests/control_flow_host.c source/managed_runtime.c -o /tmp/control_flow
+          /tmp/control_flow
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot tests/ControlFlowSmoke/bin/Release/net8.0/ControlFlowSmoke.dll /tmp/control_flow_value.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/control_flow_value.c tests/control_flow_value_host.c source/managed_runtime.c -o /tmp/control_flow_value
+          /tmp/control_flow_value
+      - name: Build AOT smoke assembly
+        run: dotnet build tests/AotSmoke/AotSmoke.csproj -c Release
+      - name: Lower AOT smoke assembly to native C
+        run: dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/AotSmoke/bin/Release/net8.0/AotSmoke.dll /tmp/aot_smoke.c
+      - name: Compile generated AOT C
+        run: cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/aot_smoke.c -o /tmp/aot_smoke.o
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
       - name: Verify generated source
@@ -44,13 +72,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install OpenGX
-        run: dkp-pacman -S --needed --noconfirm gamecube-opengx
+        run: dkp-pacman -S --needed --noconfirm gamecube-dev gamecube-opengx libogc
+      - name: Locate libogc installation
+        run: |
+          find "$DEVKITPRO" -name gccore.h -print
+          find "$DEVKITPRO" -name 'libogc.a' -print
+          test -f "$DEVKITPRO/libogc/include/gccore.h"
+          test -f "$DEVKITPRO/libogc/lib/cube/libogc.a"
+          find "$DEVKITPRO" -name 'libbba.a' -o -name 'liblwip.a' -o -name 'libnetwork*.a' -print
       - name: Show toolchain
         run: |
-          powerpc-eabi-gcc --version
           echo "DEVKITPRO=$DEVKITPRO"
           echo "DEVKITPPC=$DEVKITPPC"
+          test -x "$DEVKITPPC/bin/powerpc-eabi-gcc"
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" --version
           test -f "$DEVKITPRO/portlibs/gamecube/lib/libopengx.a"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Generate managed GameCube AOT source
+        run: |
+          dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll generated/managed_gamecube.c
       - name: Build ELF and DOL
         run: make V=1
       - name: Verify outputs

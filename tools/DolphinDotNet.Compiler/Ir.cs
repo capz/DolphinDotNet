@@ -1,0 +1,25 @@
+namespace DolphinDotNet.Compiler;
+internal abstract record IrInstruction;
+internal sealed record IrConstI4(int Value):IrInstruction;
+internal sealed record IrLoadString(string Value):IrInstruction;
+internal sealed record IrLoadArg(int Index):IrInstruction;
+internal sealed record IrStoreArg(int Index):IrInstruction;
+internal sealed record IrLoadLocal(int Index):IrInstruction;
+internal sealed record IrStoreLocal(int Index):IrInstruction;
+internal sealed record IrNewObject(string TypeName,MethodKey Constructor,int ArgumentCount):IrInstruction;
+internal sealed record IrLoadField(string TypeName,string FieldName):IrInstruction;
+internal sealed record IrStoreField(string TypeName,string FieldName):IrInstruction;
+internal sealed record IrCall(MethodKey Target,bool Virtual,int ArgumentCount,bool HasThis,bool ReturnsValue):IrInstruction;
+internal sealed record IrStringLength:IrInstruction;
+internal sealed record IrConsoleWriteLine:IrInstruction;
+internal sealed record IrReadButtonsDown:IrInstruction;
+internal sealed record IrPresentDemoFrame:IrInstruction;
+internal sealed record IrCompareGreaterThan:IrInstruction;
+internal sealed record IrCompareEqual:IrInstruction;
+internal sealed record IrLabel(int Offset):IrInstruction;
+internal enum IrBranchCondition { Always, True, False, Equal, NotEqual, GreaterThan, GreaterOrEqual, LessThan, LessOrEqual }
+internal sealed record IrBranch(int TargetOffset,IrBranchCondition Condition,bool Unsigned=false):IrInstruction;
+internal sealed record IrSwitch(IReadOnlyList<int> TargetOffsets):IrInstruction;
+internal sealed record IrAdd:IrInstruction; internal sealed record IrSub:IrInstruction; internal sealed record IrMul:IrInstruction; internal sealed record IrAnd:IrInstruction;
+internal sealed record IrDup:IrInstruction; internal sealed record IrPop:IrInstruction; internal sealed record IrReturn(bool HasValue):IrInstruction;
+internal sealed record IrMethod(MethodKey Key,List<IrInstruction> Instructions,int LocalCount,int ParameterCount,bool HasThis,bool ReturnsValue);

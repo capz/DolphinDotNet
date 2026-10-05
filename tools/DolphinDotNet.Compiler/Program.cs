@@ -2,19 +2,37 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Reflection.Metadata.Ecma335;
 using System.Text;
+using DolphinDotNet.Compiler;
 
-if (args.Length is < 1 or > 2)
+var valueAot = args.Length >= 1 && args[0] == "--value-aot";
+var legacyAot = args.Length >= 1 && args[0] == "--legacy-aot";
+var aot = valueAot || legacyAot || (args.Length >= 1 && args[0] == "--aot");
+if ((!aot && args.Length is < 1 or > 2) || (aot && args.Length is < 2 or > 3))
 {
-    Console.Error.WriteLine("Usage: dndc <assembly.dll> [output.h]");
+    Console.Error.WriteLine(aot ? "Usage: dndc [--aot|--value-aot|--legacy-aot] <assembly.dll> [output.c]" : "Usage: dndc <assembly.dll> [output.h]");
     return 2;
 }
-
-var output = args.Length == 2 ? args[1] : "generated_program.h";
+var input = aot ? args[1] : args[0];
+var output = aot ? (args.Length == 3 ? args[2] : "generated_program.c") : (args.Length == 2 ? args[1] : "generated_program.h");
 try
 {
-    var compiled = Compiler.Compile(args[0]);
-    File.WriteAllText(output, CEmitter.Emit(compiled));
-    Console.WriteLine($"Compiled {args[0]} -> {output} ({compiled.Code.Count} bytes, {compiled.Strings.Count} strings)");
+    if (aot)
+    {
+        var compiled = AotCompiler.Compile(input);
+        if(legacyAot)File.WriteAllText(output,CBackend.Emit(compiled.Methods,compiled.Model,compiled.Graph));
+        else
+        {
+            var entry=compiled.ValueMethods.FirstOrDefault(m=>m.Key.Name=="Main")??throw new InvalidDataException("Value IR entry point missing.");
+            File.WriteAllText(output,ValueCBackend.EmitProgram(compiled.ValueMethods,entry.Key,compiled.Model,compiled.Graph));
+        }
+        Console.WriteLine($"AOT compiled {input} -> {output} ({compiled.Methods.Count} reachable methods, {compiled.Graph.Types.Count} types)");
+    }
+    else
+    {
+        var compiled = Compiler.Compile(input);
+        File.WriteAllText(output, CEmitter.Emit(compiled));
+        Console.WriteLine($"Compiled {input} -> {output} ({compiled.Code.Count} bytes, {compiled.Strings.Count} strings)");
+    }
     return 0;
 }
 catch (Exception ex)
@@ -55,7 +73,7 @@ internal static class Compiler
         var strings = new List<string>();
         var stringIds = new Dictionary<string, int>(StringComparer.Ordinal);
         var code = new List<byte>();
-        var il = body.GetILBytes().ToArray();
+        var il = (body.GetILBytes() ?? throw new InvalidDataException("Method body has no IL bytes.")).ToArray();
         int p = 0;
 
         while (p < il.Length)
