@@ -164,7 +164,7 @@ internal static class ValueIrImporter
                         while(stack.Count>expected)Pop(stack,cil);
                         var results=new List<IrValue>();
                         while(stack.Count<expected){var v=New(ResultKind(analysis,cil,stack.Count));stack.Add(v);results.Add(v);}
-                        if(beforeCount!=expected||results.Count!=0)instructions.Add(new ValueIrOpaqueStackEffect(Math.Max(0,beforeCount-expected),results,cil.OpCode));
+                        instructions.Add(new ValueIrOpaqueStackEffect(Math.Max(0,beforeCount-expected),results,cil.OpCode));
                         break;
                     }
                 }
