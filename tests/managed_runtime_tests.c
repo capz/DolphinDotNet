@@ -6,7 +6,7 @@
 
 typedef struct { DndObject object; DndObject *child; int32_t value; } TestNode;
 static const uint32_t node_refs[] = { (uint32_t)offsetof(TestNode, child) };
-static const DndType NODE_TYPE = { "TestNode", &DND_TYPE_OBJECT, sizeof(TestNode), 0, NULL, 1, node_refs, 0, 0 };
+static const DndType NODE_TYPE = { "TestNode", &DND_TYPE_OBJECT, sizeof(TestNode), 0, NULL, 1, node_refs, 0, 0, NULL };
 
 static int invoked;
 static void callback(void *target, void *arg) {
