@@ -27,6 +27,10 @@ jobs:
           dotnet build src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj -c Release
       - name: Build managed GameCube sample
         run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
+      - name: Lower managed GameCube dependency graph
+        run: |
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube.c -o /tmp/managed_gamecube.o
       - name: Compiler integration tests
         run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
       - name: Build AOT smoke assembly
