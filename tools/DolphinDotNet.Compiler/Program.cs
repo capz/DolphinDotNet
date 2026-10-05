@@ -2,6 +2,7 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Reflection.Metadata.Ecma335;
 using System.Text;
+using DolphinDotNet.Compiler;
 
 if (args.Length is < 1 or > 2)
 {
