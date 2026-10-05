@@ -22,8 +22,12 @@ public static class Program
         var virtuals=VirtualCase();
         var types=TypeCase();
         var inherited=InheritedFieldCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited;
+        var byref=ByRefCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref;
     }
+
+    static int ByRefCase(){var value=2;AddThree(ref value);return value;}
+    static void AddThree(ref int value){value=value+3;}
 
     static int InheritedFieldCase(){var value=new VirtualDerived();return value.BaseField+value.DerivedField;}
 
