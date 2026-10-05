@@ -113,7 +113,7 @@ internal static class ValueCBackend
                     case ValueIrAddressOfLocal x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&l{x.Index};");break;
                     case ValueIrAddressOfArgument x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&a{x.Index};");break;
                     case ValueIrStoreArgument x:b.AppendLine($"  a{x.Index} = v{x.Value.Id};");break;
-                    case ValueIrLoadIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  v{x.Result.Id} = *({ct}*)v{x.Address.Id};");break;}
+                    case ValueIrLoadIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  v{x.Result.Id} = *({ct}*)(intptr_t)v{x.Address.Id};");break;}
                     case ValueIrStoreIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  *({ct}*)v{x.Address.Id} = ({ct})v{x.Value.Id};");break;}
                     case ValueIrInitValue x:b.AppendLine($"  dnd_value_init((void*)(intptr_t)v{x.Address.Id}, {ValueSize(x.TypeName,model)}u);");break;
                     case ValueIrCopyValue x:b.AppendLine($"  dnd_value_copy((void*)(intptr_t)v{x.Destination.Id}, (void*)(intptr_t)v{x.Source.Id}, {ValueSize(x.TypeName,model)}u);");break;
