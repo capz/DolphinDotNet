@@ -12,6 +12,7 @@ typedef struct DndDelegate DndDelegate;
 
 typedef void (*DndFinalizer)(DndObject *);
 typedef void (*DndDelegateFn)(void *target, void *argument);
+typedef intptr_t (*DndManagedMethod)(intptr_t *arguments);
 
 enum {
     DND_TYPE_FLAG_NONE = 0,
@@ -28,7 +29,8 @@ struct DndType {
     uint16_t reference_count;
     const uint32_t *reference_offsets;
     uint16_t flags;
-    uint16_t reserved;
+    uint16_t vtable_count;
+    const DndManagedMethod *vtable;
 };
 
 struct DndObject {
@@ -101,6 +103,7 @@ DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length, uin
 void *dnd_managed_array_at(DndArray *array, uint32_t index);
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual);
 DndObject *dnd_cast(DndObject *object, const DndType *target);
+DndManagedMethod dnd_virtual_resolve(const DndObject *object, uint16_t slot);
 DndDelegate *dnd_delegate_new(DndManagedHeap *heap, void *target, DndDelegateFn method);
 void dnd_delegate_invoke(DndDelegate *delegate, void *argument);
 
