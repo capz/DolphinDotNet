@@ -40,6 +40,7 @@ internal static class AotCompiler
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,graph);
                 DiscoverVirtuals(model,graph);
+                DiscoverTypeInitializers(model,graph);
                 try { output.Add(IlImporter.Import(assembly.PE,model,method,new DependencyGraph())); }
                 catch(NotSupportedException) { /* Legacy backend is a regression oracle, not a production dependency. */ }
                 foreach(var key in graph.Methods)
@@ -48,6 +49,12 @@ internal static class AotCompiler
             return new AotCompilation(model,graph,output,valueOutput);
         }
         catch { model.Dispose(); throw; }
+    }
+
+    private static void DiscoverTypeInitializers(CompilationModel model,DependencyGraph graph)
+    {
+        foreach(var method in model.Methods.Values)
+            if(method.Key.Name==".cctor"&&graph.Types.Contains(method.Key.TypeName))graph.AddMethod(method.Key);
     }
 
     private static void DiscoverVirtuals(CompilationModel model,DependencyGraph graph)
