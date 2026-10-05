@@ -123,7 +123,7 @@ internal static class ValueCBackend
                     case ValueIrBinary x:{var unsigned=x.Operation.EndsWith(".un",StringComparison.Ordinal);var op=Op(x.Operation);var l=unsigned?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";var r=unsigned?$"(uintptr_t)v{x.Right.Id}":$"v{x.Right.Id}";b.AppendLine($"  v{x.Result.Id} = {l} {op} {r};");break;}
                     case ValueIrDelegateInvoke x:b.AppendLine($"  dnd_delegate_invoke((DndDelegate*)(intptr_t)v{x.Delegate.Id}, {(x.Argument is { } a?$"(void*)(intptr_t)v{a.Id}":"NULL")});");break;
                     case ValueIrFunctionPointer x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&{DelegateThunkSymbol(x.Target)};");break;
-                    case ValueIrNewDelegate x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_delegate_new(dnd_value_heap, (void*)(intptr_t)v{x.Target.Id}, (DndDelegateFn)v{x.Function.Id});");break;
+                    case ValueIrNewDelegate x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_delegate_new(dnd_value_heap, (void*)(intptr_t)v{x.Target.Id}, (DndDelegateFn)(intptr_t)v{x.Function.Id});");break;
                     case ValueIrCall x:
                     {
                         var args=string.Join(", ",x.Arguments.Select(a=>$"v{a.Id}"));
@@ -144,7 +144,7 @@ internal static class ValueCBackend
                     }
                     case ValueIrNewObject x:{var args=string.Join(", ",new[]{$"(intptr_t)v{x.Result.Id}"}.Concat(x.Arguments.Select(a=>$"v{a.Id}")));if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_new(dnd_value_heap, &dnd_type_{Id(x.TypeName)});");b.AppendLine($"  (void){Symbol(x.Constructor)}({args});");break;}
                     case ValueIrLoadField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);b.AppendLine($"  if(dnd_require_object((DndObject*)(intptr_t)v{x.Object.Id})) v{x.Result.Id} = *({ct}*)((uint8_t*)(intptr_t)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset});");break;}
-                    case ValueIrStoreField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);b.AppendLine($"  if(dnd_require_object((DndObject*)(intptr_t)v{x.Object.Id})) *({ct}*)((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset}) = ({ct})v{x.Value.Id};");break;}
+                    case ValueIrStoreField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);b.AppendLine($"  if(dnd_require_object((DndObject*)(intptr_t)v{x.Object.Id})) *({ct}*)((uint8_t*)(intptr_t)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset}) = ({ct})v{x.Value.Id};");break;}
                     case ValueIrLoadStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = {StaticSymbol(field)};");break;}
                     case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
                     case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)(intptr_t)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
