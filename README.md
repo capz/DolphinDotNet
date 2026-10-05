@@ -27,7 +27,7 @@ Install devkitPro with the GameCube development packages and make sure `DEVKITPP
 make
 ```
 
-The output is `build/DolphinDotNet.dol`.
+The output is `DolphinDotNet.dol` (with intermediate objects under `build/`).
 
 ## Runtime model
 
