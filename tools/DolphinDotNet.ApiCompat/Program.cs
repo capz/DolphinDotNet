@@ -15,6 +15,7 @@ return missing.Length==0?0:1;
 
 static HashSet<string> Read(string path)
 {
+    if(Directory.Exists(path)){var union=new HashSet<string>(StringComparer.Ordinal);foreach(var file in Directory.EnumerateFiles(path,"*.dll",SearchOption.AllDirectories))union.UnionWith(Read(file));return union;}
     using var stream=File.OpenRead(path);using var pe=new PEReader(stream);var md=pe.GetMetadataReader();var result=new HashSet<string>(StringComparer.Ordinal);
     foreach(var handle in md.TypeDefinitions)
     {
