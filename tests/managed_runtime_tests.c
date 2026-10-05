@@ -93,6 +93,9 @@ int main(void) {
     DndDelegate *multi=dnd_delegate_combine(&heap,d1,d2); delegate_total=0; dnd_delegate_invoke(multi,&arg); assert(delegate_total==13);
     multi=dnd_delegate_remove(multi,d1); delegate_total=0; dnd_delegate_invoke(multi,&arg); assert(delegate_total==7);
 
+    DndExceptionObject managed_exception={{&DND_TYPE_EXCEPTION,0},DND_EXCEPTION_ARGUMENT,NULL};
+    dnd_exception_throw_object(&managed_exception); assert(dnd_exception_object()==&managed_exception); assert(dnd_exception_kind()==DND_EXCEPTION_ARGUMENT); dnd_exception_clear();
+
     DndObject *boxed = dnd_box_i32(&heap, 123);
     assert(boxed && dnd_unbox_i32(boxed) == 123);
 
