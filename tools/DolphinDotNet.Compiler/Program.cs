@@ -5,10 +5,11 @@ using System.Text;
 using DolphinDotNet.Compiler;
 
 var valueAot = args.Length >= 1 && args[0] == "--value-aot";
-var aot = valueAot || (args.Length >= 1 && args[0] == "--aot");
+var legacyAot = args.Length >= 1 && args[0] == "--legacy-aot";
+var aot = valueAot || legacyAot || (args.Length >= 1 && args[0] == "--aot");
 if ((!aot && args.Length is < 1 or > 2) || (aot && args.Length is < 2 or > 3))
 {
-    Console.Error.WriteLine(aot ? "Usage: dndc --aot <assembly.dll> [output.c]" : "Usage: dndc <assembly.dll> [output.h]");
+    Console.Error.WriteLine(aot ? "Usage: dndc [--aot|--value-aot|--legacy-aot] <assembly.dll> [output.c]" : "Usage: dndc <assembly.dll> [output.h]");
     return 2;
 }
 var input = aot ? args[1] : args[0];
@@ -18,12 +19,12 @@ try
     if (aot)
     {
         var compiled = AotCompiler.Compile(input);
-        if(valueAot)
+        if(legacyAot)File.WriteAllText(output,CBackend.Emit(compiled.Methods,compiled.Model,compiled.Graph));
+        else
         {
             var entry=compiled.ValueMethods.FirstOrDefault(m=>m.Key.Name=="Main")??throw new InvalidDataException("Value IR entry point missing.");
             File.WriteAllText(output,ValueCBackend.EmitProgram(compiled.ValueMethods,entry.Key,compiled.Model,compiled.Graph));
         }
-        else File.WriteAllText(output, CBackend.Emit(compiled.Methods, compiled.Model, compiled.Graph));
         Console.WriteLine($"AOT compiled {input} -> {output} ({compiled.Methods.Count} reachable methods, {compiled.Graph.Types.Count} types)");
     }
     else
