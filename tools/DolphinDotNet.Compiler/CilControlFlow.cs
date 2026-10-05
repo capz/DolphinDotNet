@@ -44,7 +44,7 @@ internal static class CilDecoder
                     else if(op==0x20)operand=new CilInteger(BitConverter.ToInt32(il,p));
                     else if(op is 0x0e or 0x0f or 0x10 or 0x11 or 0x12 or 0x13)operand=new CilInteger(il[p]);
                     else if(op is 0xfe09 or 0xfe0a or 0xfe0b or 0xfe0c or 0xfe0d or 0xfe0e)operand=new CilInteger(BitConverter.ToUInt16(il,p));
-                    else if(op is 0x28 or 0x6f or 0x72 or 0x73 or 0x7b or 0x7d or 0x8d or 0xa3 or 0xa4)operand=new CilMetadataToken(BitConverter.ToInt32(il,p));
+                    else if(op is 0x28 or 0x6f or 0x72 or 0x73 or 0x7b or 0x7d or 0x7e or 0x80 or 0x8d or 0xa3 or 0xa4)operand=new CilMetadataToken(BitConverter.ToInt32(il,p));
                     p += operandSize; break;
             }
             result.Add(new CilInstruction(start,p-start,op,operand,flow));
