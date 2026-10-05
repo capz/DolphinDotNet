@@ -50,7 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install OpenGX
-        run: dkp-pacman -S --needed --noconfirm gamecube-dev gamecube-opengx
+        run: dkp-pacman -S --needed --noconfirm gamecube-dev gamecube-opengx libogc
       - name: Locate libogc headers
         run: |
           find "$DEVKITPRO" -name gccore.h -print
