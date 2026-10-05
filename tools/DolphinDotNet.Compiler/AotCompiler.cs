@@ -44,7 +44,7 @@ internal static class AotCompiler
                 try { output.Add(IlImporter.Import(assembly.PE,model,method,new DependencyGraph())); }
                 catch(NotSupportedException) { /* Legacy backend is a regression oracle, not a production dependency. */ }
                 foreach(var key in graph.Methods)
-                    if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable))queue.Enqueue(reachable);
+                    if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable)&&model.Assemblies.TryGetValue(reachable.AssemblyName,out var reachableAssembly)&&reachableAssembly.Metadata.GetMethodDefinition(reachable.Handle).RelativeVirtualAddress!=0)queue.Enqueue(reachable);
             }
             return new AotCompilation(model,graph,output,valueOutput);
         }
