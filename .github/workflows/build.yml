@@ -1,26 +1,69 @@
-name: build
-on: [push, pull_request]
+name: DolphinDotNet CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
-  host-tests:
+  managed:
+    name: Managed compiler
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: '8.0.x' }
-      - run: make -C tests test
-      - run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
-      - run: sh scripts/compile-sample.sh
-      - run: git diff --exit-code -- generated/generated_program.h
-  gamecube:
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compiler integration tests
+        run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
+      - name: Regenerate managed sample
+        run: sh scripts/compile-sample.sh
+      - name: Verify generated source
+        run: git diff --exit-code -- generated/generated_program.h
+
+  portable-runtime:
+    name: Portable runtime
     runs-on: ubuntu-latest
-    container: devkitpro/devkitppc:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test runtime
+        run: make -C tests test
+
+  gamecube:
+    name: GameCube DOL
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitppc:latest
     steps:
       - uses: actions/checkout@v4
       - name: Install OpenGX
-        run: dkp-pacman -Syu --noconfirm gamecube-opengx
-      - name: Build DOL
-        run: make
+        run: dkp-pacman -S --needed --noconfirm gamecube-opengx
+      - name: Show toolchain
+        run: |
+          powerpc-eabi-gcc --version
+          echo "DEVKITPRO=$DEVKITPRO"
+          echo "DEVKITPPC=$DEVKITPPC"
+          test -f "$DEVKITPRO/portlibs/gamecube/lib/libopengx.a"
+      - name: Build ELF and DOL
+        run: make V=1
+      - name: Verify outputs
+        run: |
+          test -s DolphinDotNet.elf
+          test -s DolphinDotNet.dol
+          file DolphinDotNet.elf || true
+          ls -lh DolphinDotNet.elf DolphinDotNet.dol
       - uses: actions/upload-artifact@v4
         with:
-          name: DolphinDotNet-dol
-          path: DolphinDotNet.dol
+          name: DolphinDotNet-gamecube
+          path: |
+            DolphinDotNet.elf
+            DolphinDotNet.dol
+            DolphinDotNet.map
+          if-no-files-found: error
