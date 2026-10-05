@@ -60,6 +60,8 @@ internal static class AotCompiler
                 case ValueIrNewObject created: graph.AddMethod(created.Constructor);graph.AddType(created.TypeName);break;
                 case ValueIrLoadField field: graph.AddType(field.TypeName);break;
                 case ValueIrStoreField field: graph.AddType(field.TypeName);break;
+                case ValueIrLoadStaticField field: graph.AddType(field.TypeName);break;
+                case ValueIrStoreStaticField field: graph.AddType(field.TypeName);break;
                 case ValueIrNewArray array: if(!array.ElementType.StartsWith("System.",StringComparison.Ordinal))graph.AddType(array.ElementType);break;
             }
         }
@@ -89,7 +91,7 @@ internal static class AotCompiler
 
     private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i)
     {
-        if(i.OpCode is not (0x7b or 0x7d)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        if(i.OpCode is not (0x7b or 0x7d or 0x7e or 0x80)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         try{return IlImporter.ResolveField(md,model,MetadataTokens.EntityHandle(raw));}catch(NotSupportedException){return null;}
     }
 
