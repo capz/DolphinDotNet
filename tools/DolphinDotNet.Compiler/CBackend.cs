@@ -12,7 +12,8 @@ internal static class CBackend{
  }
  private static void EmitMethod(StringBuilder b,IrMethod m,CompilationModel model){
   string fn=$"dnd_method_{Id(m.Key.TypeName)}_{Id(m.Key.Name)}";b.AppendLine($"static intptr_t {fn}(DndManagedHeap *heap, intptr_t *args) {{");b.AppendLine("    (void)heap; (void)args;");b.AppendLine("    intptr_t stack[64]; int sp=0;");b.AppendLine($"    intptr_t locals[{Math.Max(1,m.LocalCount)}]; memset(locals,0,sizeof(locals));");b.AppendLine("    DndObject *gc_objects[32]; size_t gc_count=0; DndGcFrame gc_frame; (void)gc_count; dnd_gc_frame_push(&gc_frame,gc_objects,0);");
-  foreach(var i in m.Instructions)Emit(b,i,model);b.AppendLine("    dnd_gc_frame_pop(&gc_frame); return 0;\n}");
+  var branchTargets=m.Instructions.OfType<IrBranch>().Select(x=>x.TargetOffset).ToHashSet();
+  foreach(var i in m.Instructions){if(i is IrLabel l&&!branchTargets.Contains(l.Offset))continue;Emit(b,i,model);}b.AppendLine("    dnd_gc_frame_pop(&gc_frame); return 0;\n}");
  }
  private static void Emit(StringBuilder b,IrInstruction i,CompilationModel model){
   switch(i){
