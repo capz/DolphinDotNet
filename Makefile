@@ -7,7 +7,7 @@ endif
 include $(DEVKITPPC)/gamecube_rules
 TARGET := DolphinDotNet
 BUILD := build
-SOURCES := source
+SOURCES := source generated
 INCLUDES := include
 PORTLIBS := $(DEVKITPRO)/portlibs/gamecube
 LIBS := -lopengx -logc -lm
