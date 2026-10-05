@@ -30,7 +30,7 @@ public static class Program
         return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+delegates;
     }
 
-    static int DelegateCase(){IntFn fn=AddOne;return fn(10);}
+    static int DelegateCase(){var fn=new IntFn(AddOne);return fn(10);}
     static int AddOne(int value)=>value+1;
 
     static int InterfaceIdentityCase(){object value=new VirtualDerived();return (value is IValue?4:0)+((IValue)value).GetValue();}
