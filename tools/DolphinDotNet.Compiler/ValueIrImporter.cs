@@ -72,7 +72,7 @@ internal static class ValueIrImporter
                         var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved managed call at IL_{cil.Offset:x4}.");
                         var count=target.ParameterCount+(target.IsStatic?0:1);var args=new IrValue[count];
                         for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
-                        IrValue? result=null;if(target.ReturnsValue){result=New(ResultKind(analysis,cil));stack.Add(result);}
+                        IrValue? result=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));result=value;stack.Add(value);}
                         instructions.Add(new ValueIrCall(result,target.Key,args));break;
                     }
                     case 0x2b or 0x38:
