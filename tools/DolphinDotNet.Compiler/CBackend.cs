@@ -12,7 +12,7 @@ internal static class CBackend{
  }
  private static void EmitMethod(StringBuilder b,IrMethod m,CompilationModel model){
   string fn=$"dnd_method_{Id(m.Key.TypeName)}_{Id(m.Key.Name)}";b.AppendLine($"static intptr_t {fn}(DndManagedHeap *heap, intptr_t *args) {{");b.AppendLine("    (void)heap; (void)args;");b.AppendLine("    intptr_t stack[64]; int sp=0;");b.AppendLine($"    intptr_t locals[{Math.Max(1,m.LocalCount)}]; memset(locals,0,sizeof(locals));");b.AppendLine("    DndObject *gc_objects[32]; size_t gc_count=0; DndGcFrame gc_frame; (void)gc_count; dnd_gc_frame_push(&gc_frame,gc_objects,0);");
-  var branchTargets=m.Instructions.OfType<IrBranch>().Select(x=>x.TargetOffset).ToHashSet();
+  var branchTargets=m.Instructions.OfType<IrBranch>().Select(x=>x.TargetOffset).Concat(m.Instructions.OfType<IrSwitch>().SelectMany(x=>x.TargetOffsets)).ToHashSet();
   foreach(var i in m.Instructions){if(i is IrLabel l&&!branchTargets.Contains(l.Offset))continue;Emit(b,i,model);}b.AppendLine("    dnd_gc_frame_pop(&gc_frame); return 0;\n}");
  }
  private static void Emit(StringBuilder b,IrInstruction i,CompilationModel model){
@@ -49,6 +49,7 @@ internal static class CBackend{
     var cast=br.Unsigned?"uintptr_t":"intptr_t";
     b.AppendLine($"    {{ {cast} r=({cast})stack[--sp], l=({cast})stack[--sp]; if(l {op} r) goto dnd_il_{br.TargetOffset:x4}; }}");break;
    }
+   case IrSwitch sw:{b.AppendLine("    { intptr_t v=stack[--sp]; switch(v) {");for(var si=0;si<sw.TargetOffsets.Count;si++)b.AppendLine($"      case {si}: goto dnd_il_{sw.TargetOffsets[si]:x4};");b.AppendLine("      default: break; } }");break;}
    case IrCall c:{
     int total=c.ArgumentCount+(c.HasThis?1:0);b.AppendLine($"    {{ intptr_t ca[{Math.Max(1,total)}]; for(int i={total-1};i>=0;i--) ca[i]=stack[--sp]; intptr_t rv=dnd_method_{Id(c.Target.TypeName)}_{Id(c.Target.Name)}(heap,ca);{(c.ReturnsValue?" stack[sp++]=rv;":"")} }}");break;}
    case IrReturn r:b.AppendLine(r.HasValue?"    { intptr_t rv=stack[--sp]; dnd_gc_frame_pop(&gc_frame); return rv; }":"    dnd_gc_frame_pop(&gc_frame); return 0;");break;
