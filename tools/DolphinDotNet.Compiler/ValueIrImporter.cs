@@ -70,11 +70,19 @@ internal static class ValueIrImporter
                         terminator=new ValueIrJump(Target(blocks,cil));break;
                     case 0x2c or 0x39:
                     {
-                        var condition=Pop(stack,cil);var target=Target(blocks,cil);terminator=new ValueIrBranch(condition,Fallthrough(blocks,block,cil),target);break;
+                        var condition=Pop(stack,cil);var target=Target(blocks,cil);terminator=new ValueIrBranch(condition,null,ValueIrComparison.NonZero,false,Fallthrough(blocks,block,cil),target);break;
                     }
                     case 0x2d or 0x3a:
                     {
-                        var condition=Pop(stack,cil);var target=Target(blocks,cil);terminator=new ValueIrBranch(condition,target,Fallthrough(blocks,block,cil));break;
+                        var condition=Pop(stack,cil);var target=Target(blocks,cil);terminator=new ValueIrBranch(condition,null,ValueIrComparison.NonZero,false,target,Fallthrough(blocks,block,cil));break;
+                    }
+                    case >=0x2e and <=0x37 or >=0x3b and <=0x44:
+                    {
+                        var right=Pop(stack,cil);var left=Pop(stack,cil);var target=Target(blocks,cil);var fall=Fallthrough(blocks,block,cil);
+                        var shortForm=cil.OpCode<=0x37;var n=shortForm?cil.OpCode-0x2e:cil.OpCode-0x3b;
+                        var cmp=n switch{0=>ValueIrComparison.Equal,1 or 5=>ValueIrComparison.GreaterOrEqual,2 or 6=>ValueIrComparison.GreaterThan,3 or 7=>ValueIrComparison.LessOrEqual,4 or 8=>ValueIrComparison.LessThan,_=>ValueIrComparison.NotEqual};
+                        var unsigned=n>=5;
+                        terminator=new ValueIrBranch(left,right,cmp,unsigned,target,fall);break;
                     }
                     case 0x2a:
                         terminator=new ValueIrReturn(method.ReturnsValue?Pop(stack,cil):null);break;
