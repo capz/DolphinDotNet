@@ -1,10 +1,11 @@
 namespace DolphinDotNet.Compiler;
 
-internal enum CilFlowKind { Next, Branch, ConditionalBranch, Return }
+internal enum CilFlowKind { Next, Branch, ConditionalBranch, Switch, Return }
 
 internal abstract record CilOperand;
 internal sealed record CilBranchTarget(int Offset):CilOperand;
 internal sealed record CilMetadataToken(int Token):CilOperand;
+internal sealed record CilSwitchTargets(IReadOnlyList<int> Offsets):CilOperand;
 internal sealed record CilInteger(long Value):CilOperand;
 
 internal sealed record CilInstruction(int Offset, int Size, ushort OpCode, CilOperand? Operand, CilFlowKind Flow)
@@ -35,6 +36,7 @@ internal static class CilDecoder
                 case 0x2b: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
                 case >=0x2c and <=0x37: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
                 case 0x38: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
+                case 0x45: operand=ReadSwitchTargets(il,ref p,start); flow=CilFlowKind.Switch; break;
                 case >=0x39 and <=0x44: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
                 default:
                     var operandSize=OperandSize(op,il,p,start);
@@ -50,6 +52,7 @@ internal static class CilDecoder
         return result;
     }
 
+    private static CilSwitchTargets ReadSwitchTargets(byte[] il,ref int p,int start){Need(il,p,4,start);var n=BitConverter.ToInt32(il,p);p+=4;if(n<0)throw new InvalidDataException($"Invalid switch at IL_{start:x4}.");Need(il,p,checked(n*4),start);var baseOffset=p+n*4;var targets=new int[n];for(var i=0;i<n;i++){targets[i]=baseOffset+BitConverter.ToInt32(il,p);p+=4;}return new CilSwitchTargets(targets);}
     private static int ShortTarget(byte[] il,ref int p,int start){Need(il,p,1,start);var delta=(sbyte)il[p++];return p+delta;}
     private static int LongTarget(byte[] il,ref int p,int start){Need(il,p,4,start);var delta=BitConverter.ToInt32(il,p);p+=4;return p+delta;}
 
@@ -80,7 +83,8 @@ internal static class CilControlFlowGraph
         foreach(var i in instructions)
         {
             if(i.Operand is CilBranchTarget { Offset: var target })starts.Add(target);
-            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Return && i!=instructions[^1])starts.Add(i.EndOffset);
+            if(i.Operand is CilSwitchTargets sw)foreach(var target in sw.Offsets)starts.Add(target);
+            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Switch or CilFlowKind.Return && i!=instructions[^1])starts.Add(i.EndOffset);
         }
         var ordered=starts.OrderBy(x=>x).ToArray();
         var byStart=ordered.Select((x,n)=>(x,n)).ToDictionary(x=>x.x,x=>x.n);
@@ -92,7 +96,9 @@ internal static class CilControlFlowGraph
             if(body.Count==0)throw new InvalidDataException($"Branch target IL_{start:x4} is not an instruction boundary.");
             var last=body[^1];var successors=new List<int>();
             if(last.Operand is CilBranchTarget { Offset: var target })successors.Add(byStart[target]);
-            if(last.Flow==CilFlowKind.ConditionalBranch && byStart.TryGetValue(last.EndOffset,out var fall))successors.Add(fall);
+            if(last.Operand is CilSwitchTargets sw)foreach(var target in sw.Offsets)successors.Add(byStart[target]);
+            if(last.Flow==CilFlowKind.Switch && byStart.TryGetValue(last.EndOffset,out var switchFall))successors.Add(switchFall);
+            else if(last.Flow==CilFlowKind.ConditionalBranch && byStart.TryGetValue(last.EndOffset,out var fall))successors.Add(fall);
             else if(last.Flow==CilFlowKind.Next && byStart.TryGetValue(last.EndOffset,out var next))successors.Add(next);
             blocks.Add(new CilBasicBlock(n,start,body,successors,new List<int>()));
         }
