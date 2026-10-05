@@ -2,7 +2,7 @@ using System.Text;
 namespace DolphinDotNet.Compiler;
 internal static class CBackend{
  public static string Emit(IEnumerable<IrMethod> source,CompilationModel model,DependencyGraph graph){
-  var methods=source.ToList();var b=new StringBuilder();b.AppendLine("/* DolphinDotNet closed-world AOT output. */\n#include <stdint.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"");
+  var methods=source.ToList();var b=new StringBuilder();b.AppendLine("/* DolphinDotNet closed-world AOT output. */\n#include <stdint.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"");
   foreach(var tn in graph.Types.OrderBy(x=>x)){if(!model.Types.TryGetValue(tn,out var t))continue;var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{t.InstanceSize}u, 0, NULL}};");}
   foreach(var m in methods)b.AppendLine($"static intptr_t dnd_method_{Id(m.Key.TypeName)}_{Id(m.Key.Name)}(DndManagedHeap*, intptr_t*);");
   foreach(var m in methods)EmitMethod(b,m,model);
@@ -33,6 +33,7 @@ internal static class CBackend{
     b.AppendLine($"      gc_objects[gc_count++]=o; gc_frame.count=gc_count; dnd_method_{Id(n.Constructor.TypeName)}_{Id(n.Constructor.Name)}(heap,ca); stack[sp++]=(intptr_t)o; }}");break;}
    case IrStringLength:b.AppendLine("    { DndString *s=(DndString*)stack[--sp]; stack[sp++]=s?(intptr_t)s->length:0; }");break;
    case IrConsoleWriteLine:b.AppendLine("    { DndString *s=(DndString*)stack[--sp]; char text[256]; size_t n=s&&s->length<255?s->length:255; for(size_t i=0;i<n;i++) text[i]=(char)(s->chars[i]&0x7f); text[n]=0; dnd_console_write_line(text); }");break;
+   case IrReadButtonsDown:b.AppendLine("    { unsigned port=(unsigned)stack[--sp]; dnd_input_poll(); const DndGamePad *pad=dnd_input_gamepad(port); stack[sp++]=pad?(intptr_t)pad->down:0; }");break;
    case IrCompareGreaterThan:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l>r?1:0; }");break;
    case IrCompareEqual:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l==r?1:0; }");break;
    case IrCall c:{
