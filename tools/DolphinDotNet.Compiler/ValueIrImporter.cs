@@ -48,6 +48,14 @@ internal static class ValueIrImporter
                     {
                         var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,-1));stack.Add(v);break;
                     }
+                    case 0x11:
+                    {
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadLocal(v,index));stack.Add(v);break;
+                    }
+                    case 0x13:
+                    {
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));instructions.Add(new ValueIrStoreLocal(index,Pop(stack,cil)));break;
+                    }
                     case >=0x06 and <=0x09:
                     {
                         var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadLocal(v,cil.OpCode-0x06));stack.Add(v);break;
