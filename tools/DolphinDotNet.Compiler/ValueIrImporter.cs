@@ -76,7 +76,7 @@ internal static class ValueIrImporter
                         if(target is null)
                         {
                             var effect=resolveCallEffect(cil)??throw new NotSupportedException($"Unresolved call at IL_{cil.Offset:x4}.");
-                            var externalArgs=new IrValue[effect.PopCount];for(var ai=effect.PopCount-1;ai>=0;ai--)externalArgs[ai]=Pop(stack,cil);
+                            for(var ai=effect.PopCount-1;ai>=0;ai--)Pop(stack,cil);
                             IrValue? externalResult=null;if(effect.PushKind is { } push){var value=new IrValue(nextValue++,Map(push));externalResult=value;stack.Add(value);}
                             instructions.Add(new ValueIrOpaqueStackEffect(effect.PopCount,externalResult is { } er?[er]:[],cil.OpCode));break;
                         }
