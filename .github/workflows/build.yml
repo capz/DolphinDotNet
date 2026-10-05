@@ -53,9 +53,10 @@ jobs:
         run: dkp-pacman -S --needed --noconfirm gamecube-opengx
       - name: Show toolchain
         run: |
-          powerpc-eabi-gcc --version
           echo "DEVKITPRO=$DEVKITPRO"
           echo "DEVKITPPC=$DEVKITPPC"
+          test -x "$DEVKITPPC/bin/powerpc-eabi-gcc"
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" --version
           test -f "$DEVKITPRO/portlibs/gamecube/lib/libopengx.a"
       - name: Build ELF and DOL
         run: make V=1
