@@ -1,6 +1,7 @@
 namespace DolphinDotNet.Compiler;
 internal abstract record IrInstruction;
 internal sealed record IrConstI4(int Value):IrInstruction;
+internal sealed record IrLoadString(string Value):IrInstruction;
 internal sealed record IrLoadArg(int Index):IrInstruction;
 internal sealed record IrLoadLocal(int Index):IrInstruction;
 internal sealed record IrStoreLocal(int Index):IrInstruction;
