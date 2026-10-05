@@ -2,7 +2,11 @@ namespace DolphinDotNet.Compiler;
 
 internal enum CilFlowKind { Next, Branch, ConditionalBranch, Return }
 
-internal sealed record CilInstruction(int Offset, int Size, ushort OpCode, object? Operand, CilFlowKind Flow)
+internal abstract record CilOperand;
+internal sealed record CilBranchTarget(int Offset):CilOperand;
+internal sealed record CilMetadataToken(int Token):CilOperand;
+
+internal sealed record CilInstruction(int Offset, int Size, ushort OpCode, CilOperand? Operand, CilFlowKind Flow)
 {
     public int EndOffset => Offset + Size;
 }
@@ -27,13 +31,13 @@ internal static class CilDecoder
             switch(op)
             {
                 case 0x2a: flow=CilFlowKind.Return; break;
-                case 0x2b: operand=ShortTarget(il,ref p,start); flow=CilFlowKind.Branch; break;
-                case >=0x2c and <=0x37: operand=ShortTarget(il,ref p,start); flow=CilFlowKind.ConditionalBranch; break;
-                case 0x38: operand=LongTarget(il,ref p,start); flow=CilFlowKind.Branch; break;
-                case >=0x39 and <=0x44: operand=LongTarget(il,ref p,start); flow=CilFlowKind.ConditionalBranch; break;
+                case 0x2b: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
+                case >=0x2c and <=0x37: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
+                case 0x38: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
+                case >=0x39 and <=0x44: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
                 default:
                     var operandSize=OperandSize(op,il,p,start);
-                    if(op is 0x28 or 0x6f or 0x73){operand=BitConverter.ToInt32(il,p);}
+                    if(op is 0x28 or 0x6f or 0x73){operand=new CilMetadataToken(BitConverter.ToInt32(il,p));}
                     p += operandSize; break;
             }
             result.Add(new CilInstruction(start,p-start,op,operand,flow));
@@ -69,7 +73,7 @@ internal static class CilControlFlowGraph
         var starts=new HashSet<int>{instructions[0].Offset};
         foreach(var i in instructions)
         {
-            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch && i.Operand is int target)starts.Add(target);
+            if(i.Operand is CilBranchTarget { Offset: var target })starts.Add(target);
             if(i.Flow is CilFlowKind.ConditionalBranch && i!=instructions[^1])starts.Add(i.EndOffset);
         }
         var ordered=starts.OrderBy(x=>x).ToArray();
@@ -81,7 +85,7 @@ internal static class CilControlFlowGraph
             var body=instructions.Where(i=>i.Offset>=start&&i.Offset<end).ToList();
             if(body.Count==0)throw new InvalidDataException($"Branch target IL_{start:x4} is not an instruction boundary.");
             var last=body[^1];var successors=new List<int>();
-            if(last.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch && last.Operand is int target)successors.Add(byStart[target]);
+            if(last.Operand is CilBranchTarget { Offset: var target })successors.Add(byStart[target]);
             if(last.Flow==CilFlowKind.ConditionalBranch && byStart.TryGetValue(last.EndOffset,out var fall))successors.Add(fall);
             else if(last.Flow==CilFlowKind.Next && byStart.TryGetValue(last.EndOffset,out var next))successors.Add(next);
             blocks.Add(new CilBasicBlock(n,start,body,successors));
