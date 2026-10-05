@@ -73,6 +73,7 @@ internal static class CilStackAnalyzer
             case >=0x67 and <=0x6e: Pop(s,i);Push(s,i.OpCode is 0x6a or 0x6e?CilStackKind.I8:i.OpCode is 0x6b or 0x6c?CilStackKind.Float:CilStackKind.I4);break;
             case 0xd3 or 0xe0: Pop(s,i);Push(s,CilStackKind.NativeInt);break;
             case 0x72: Push(s,CilStackKind.ObjectReference); break;
+            case 0x74 or 0x75: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;
             case 0x7b: Pop(s,i);Push(s,CilStackKind.Unknown);break;
             case 0x7d: Pop(s,i);Pop(s,i);break;
             case 0x7e: Push(s,CilStackKind.Unknown);break;
@@ -80,6 +81,11 @@ internal static class CilStackAnalyzer
             case 0x8c: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;
             case 0x8d: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;
             case 0x8e: Pop(s,i);Push(s,CilStackKind.NativeInt);break;
+            case 0x8f: Pop(s,i);Pop(s,i);Push(s,CilStackKind.ManagedPointer);break;
+            case >=0x46 and <=0x49 or 0x4a: Pop(s,i);Push(s,CilStackKind.I4);break;
+            case 0x4c: Pop(s,i);Push(s,CilStackKind.I8);break;
+            case 0x50: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;
+            case >=0x51 and <=0x57: Pop(s,i);Pop(s,i);break;
             case 0x94 or 0x9a or 0xa3: Pop(s,i);Pop(s,i);Push(s,i.OpCode==0x9a?CilStackKind.ObjectReference:CilStackKind.I4);break;
             case 0x9e or 0xa2 or 0xa4: Pop(s,i);Pop(s,i);Pop(s,i);break;
             case 0xa5: Pop(s,i);Push(s,CilStackKind.Unknown);break;

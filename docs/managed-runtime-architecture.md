@@ -48,6 +48,12 @@ The typed AOT path models one-dimensional arrays, checked length/index access, r
 
 The native runtime is intentionally limited to mechanisms: allocation/GC, type identity and dispatch, array primitives, boxing primitives, exception state, delegates, and platform services. Collections, LINQ, streams, formatting, and other framework algorithms should be managed C# as the core library grows.
 
+## CLR semantics phase
+
+The typed compiler now carries inherited/aligned field layout, managed casts/type tests, explicit null checking for instance fields, and managed pointer identities for local/argument/array addresses. Indirect integer loads/stores are lowered through typed IR. These features are characterized independently before higher-level CoreLib code depends on them.
+
+The collector also has an explicit stress mode so root-map correctness can be exercised under collection-heavy tests rather than only when the heap naturally fills.
+
 ## API compatibility tracking
 
 `tools/DolphinDotNet.ApiCompat` compares the public metadata surface of a reference-contract assembly with an implementation assembly and reports exact missing type/member signatures plus coverage. It is intended to turn the selected .NET Standard reference contract into a measurable compatibility checklist as the managed core library grows.

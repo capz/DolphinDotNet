@@ -79,6 +79,14 @@ internal static class ValueIrImporter
                     {
                         var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));instructions.Add(new ValueIrStoreArgument(index,Pop(stack,cil)));break;
                     }
+                    case 0x0f or 0xfe0a:
+                    {
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));var result=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrAddressOfArgument(result,index));stack.Add(result);break;
+                    }
+                    case 0x12 or 0xfe0d:
+                    {
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));var result=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrAddressOfLocal(result,index));stack.Add(result);break;
+                    }
                     case 0x8c:
                     {
                         var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrBox(result,input,type));stack.Add(result);break;
@@ -97,6 +105,10 @@ internal static class ValueIrImporter
                     {
                         var array=Pop(stack,cil);var result=New(CilStackKind.NativeInt);instructions.Add(new ValueIrArrayLength(result,array));stack.Add(result);break;
                     }
+                    case 0x8f:
+                    {
+                        var index=Pop(stack,cil);var array=Pop(stack,cil);var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve array address element type at IL_{cil.Offset:x4}.");var result=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrArrayElementAddress(result,array,index,type));stack.Add(result);break;
+                    }
                     case 0x94 or 0x9a:
                     {
                         var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0x9a;var result=New(reference?CilStackKind.ObjectReference:CilStackKind.I4);
@@ -105,6 +117,14 @@ internal static class ValueIrImporter
                     case 0x9e or 0xa2:
                     {
                         var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);instructions.Add(new ValueIrStoreElement(array,index,value,cil.OpCode==0xa2));break;
+                    }
+                    case >=0x46 and <=0x4a or 0x4c or 0x50:
+                    {
+                        var address=Pop(stack,cil);var reference=cil.OpCode==0x50;var size=cil.OpCode is 0x46 or 0x47?1:cil.OpCode is 0x48 or 0x49?2:cil.OpCode==0x4c?8:4;var result=New(reference?CilStackKind.ObjectReference:cil.OpCode==0x4c?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadIndirect(result,address,size,reference));stack.Add(result);break;
+                    }
+                    case >=0x51 and <=0x57:
+                    {
+                        var value=Pop(stack,cil);var address=Pop(stack,cil);var size=cil.OpCode==0x52?1:cil.OpCode==0x53?2:cil.OpCode==0x55?8:4;instructions.Add(new ValueIrStoreIndirect(address,value,size,value.Kind==IrValueKind.ObjectReference));break;
                     }
                     case >=0x67 and <=0x6e or 0xd3 or 0xe0:
                     {
@@ -125,6 +145,10 @@ internal static class ValueIrImporter
                     {
                         var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(Merge(left.Kind,right.Kind));
                         instructions.Add(new ValueIrBinary(result,cil.OpCode switch{0x58=>"add",0x59=>"sub",0x5a=>"mul",_=>"and"},left,right));stack.Add(result);break;
+                    }
+                    case 0x74 or 0x75:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve type test at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrTypeTest(result,obj,type,cil.OpCode==0x74));stack.Add(result);break;
                     }
                     case 0x72:
                     {

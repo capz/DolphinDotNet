@@ -25,7 +25,11 @@ internal sealed record ValueIrLoadArgument(IrValue Result,int Index):ValueIrInst
 internal sealed record ValueIrLoadLocal(IrValue Result,int Index):ValueIrInstruction;
 internal sealed record ValueIrLocal(int Index,IrValueKind Kind);
 internal sealed record ValueIrStoreLocal(int Index,IrValue Value):ValueIrInstruction;
+internal sealed record ValueIrAddressOfLocal(IrValue Result,int Index):ValueIrInstruction;
+internal sealed record ValueIrAddressOfArgument(IrValue Result,int Index):ValueIrInstruction;
 internal sealed record ValueIrStoreArgument(int Index,IrValue Value):ValueIrInstruction;
+internal sealed record ValueIrLoadIndirect(IrValue Result,IrValue Address,int Size,bool Reference):ValueIrInstruction;
+internal sealed record ValueIrStoreIndirect(IrValue Address,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrConvert(IrValue Result,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrBinary(IrValue Result,string Operation,IrValue Left,IrValue Right):ValueIrInstruction;
 internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments,bool Virtual=false):ValueIrInstruction;
@@ -34,10 +38,12 @@ internal sealed record ValueIrLoadField(IrValue Result,IrValue Object,string Typ
 internal sealed record ValueIrStoreField(IrValue Object,IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrLoadStaticField(IrValue Result,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrStoreStaticField(IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
+internal sealed record ValueIrTypeTest(IrValue Result,IrValue Object,string TypeName,bool ThrowOnFailure):ValueIrInstruction;
 internal sealed record ValueIrStringLength(IrValue Result,IrValue String):ValueIrInstruction;
 internal sealed record ValueIrNewArray(IrValue Result,IrValue Length,string ElementType,bool ElementsAreReferences,uint ElementSize):ValueIrInstruction;
 internal sealed record ValueIrBox(IrValue Result,IrValue Value,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrUnboxAny(IrValue Result,IrValue Object,string TypeName):ValueIrInstruction;
+internal sealed record ValueIrArrayElementAddress(IrValue Result,IrValue Array,IrValue Index,string ElementType):ValueIrInstruction;
 internal sealed record ValueIrArrayLength(IrValue Result,IrValue Array):ValueIrInstruction;
 internal sealed record ValueIrLoadElement(IrValue Result,IrValue Array,IrValue Index,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrStoreElement(IrValue Array,IrValue Index,IrValue Value,bool Reference):ValueIrInstruction;

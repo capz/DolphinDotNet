@@ -38,7 +38,7 @@ internal static class AotCompiler
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
                 var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
-                Discover(valueIr,graph);
+                Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
                 DiscoverTypeInitializers(model,graph);
                 try { output.Add(IlImporter.Import(assembly.PE,model,method,new DependencyGraph())); }
@@ -51,6 +51,13 @@ internal static class AotCompiler
         catch { model.Dispose(); throw; }
     }
 
+    private static void AddTypeClosure(string type,CompilationModel model,DependencyGraph graph)
+    {
+        if(!model.Types.TryGetValue(type,out var tm))return;
+        if(tm.BaseType is { } parent&&model.Types.ContainsKey(parent)){graph.AddType(parent);AddTypeClosure(parent,model,graph);}
+        foreach(var iface in tm.Interfaces??Array.Empty<string>())if(model.Types.ContainsKey(iface)){graph.AddType(iface);AddTypeClosure(iface,model,graph);}
+    }
+
     private static void DiscoverTypeInitializers(CompilationModel model,DependencyGraph graph)
     {
         foreach(var method in model.Methods.Values)
@@ -60,12 +67,12 @@ internal static class AotCompiler
     private static void DiscoverVirtuals(CompilationModel model,DependencyGraph graph)
     {
         foreach(var method in model.Methods.Values)
-            if(method.IsVirtual&&graph.Types.Contains(method.Key.TypeName))graph.AddMethod(method.Key);
+            if(method.IsVirtual&&graph.Types.Contains(method.Key.TypeName)&&model.Assemblies.TryGetValue(method.AssemblyName,out var assembly)&&assembly.Metadata.GetMethodDefinition(method.Handle).RelativeVirtualAddress!=0)graph.AddMethod(method.Key);
     }
 
-    private static void Discover(ValueIrMethod method,DependencyGraph graph)
+    private static void Discover(ValueIrMethod method,CompilationModel model,DependencyGraph graph)
     {
-        graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);
+        graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);AddTypeClosure(method.Key.TypeName,model,graph);
         foreach(var instruction in method.Blocks.SelectMany(b=>b.Instructions))
         {
             switch(instruction)
@@ -76,6 +83,7 @@ internal static class AotCompiler
                 case ValueIrStoreField field: graph.AddType(field.TypeName);break;
                 case ValueIrLoadStaticField field: graph.AddType(field.TypeName);break;
                 case ValueIrStoreStaticField field: graph.AddType(field.TypeName);break;
+                case ValueIrTypeTest test: graph.AddType(test.TypeName);break;
                 case ValueIrNewArray array: if(!array.ElementType.StartsWith("System.",StringComparison.Ordinal))graph.AddType(array.ElementType);break;
             }
         }

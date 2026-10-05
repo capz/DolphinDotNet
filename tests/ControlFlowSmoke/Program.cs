@@ -1,7 +1,8 @@
 using System;
 
-class VirtualBase { public virtual int GetValue()=>3; }
-class VirtualDerived : VirtualBase { public override int GetValue()=>9; }
+interface IValue { int GetValue(); }
+class VirtualBase { public int BaseField=4; public virtual int GetValue()=>3; }
+class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }
 
 public static class Program
 {
@@ -20,8 +21,21 @@ public static class Program
         var generic=Identity(6);
         var boxing=BoxCase();
         var virtuals=VirtualCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals;
+        var types=TypeCase();
+        var inherited=InheritedFieldCase();
+        var byref=ByRefCase();
+        var iface=InterfaceIdentityCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface;
     }
+
+    static int InterfaceIdentityCase(){object value=new VirtualDerived();return value is IValue?4:0;}
+
+    static int ByRefCase(){var value=2;AddThree(ref value);return value;}
+    static void AddThree(ref int value){value=5;}
+
+    static int InheritedFieldCase(){var value=new VirtualDerived();return value.BaseField+value.DerivedField;}
+
+    static int TypeCase(){VirtualBase value=new VirtualDerived();var derived=value as VirtualDerived;var cast=(VirtualDerived)value;return (derived!=null?2:0)+(cast!=null?3:0);}
 
     static int VirtualCase(){VirtualBase value=new VirtualDerived();return value.GetValue();}
 

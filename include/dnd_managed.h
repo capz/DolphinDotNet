@@ -108,12 +108,15 @@ DndArray *dnd_managed_array_new(DndManagedHeap *heap, uint32_t length, uint32_t 
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length, uint32_t element_size, const DndType *element_type, bool elements_are_references);
 void *dnd_managed_array_at(DndArray *array, uint32_t index);
 uint32_t dnd_array_length(DndArray *array);
+void *dnd_array_element_address(DndArray *array, uint32_t index);
 int32_t dnd_array_load_i32(DndArray *array, uint32_t index);
 DndObject *dnd_array_load_ref(DndArray *array, uint32_t index);
 bool dnd_array_store_i32(DndArray *array, uint32_t index, int32_t value);
 bool dnd_array_store_ref(DndArray *array, uint32_t index, DndObject *value);
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual);
 DndObject *dnd_cast(DndObject *object, const DndType *target);
+DndObject *dnd_isinst(DndObject *object, const DndType *target);
+bool dnd_require_object(const DndObject *object);
 DndObject *dnd_box_i32(DndManagedHeap *heap, int32_t value);
 int32_t dnd_unbox_i32(DndObject *object);
 DndManagedMethod dnd_virtual_resolve(const DndObject *object, uint16_t slot);
@@ -124,6 +127,7 @@ void dnd_delegate_invoke(DndDelegate *delegate, void *argument);
 void dnd_roots_init(DndRootSet *roots, DndObject ***storage, size_t capacity);
 bool dnd_root_add(DndRootSet *roots, DndObject **slot);
 void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots);
+void dnd_gc_set_stress(bool enabled);
 
 typedef struct DndGcFrame {
     DndObject ***slots;
