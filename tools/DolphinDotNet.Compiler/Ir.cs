@@ -1,0 +1,10 @@
+namespace DolphinDotNet.Compiler;
+internal abstract record IrInstruction;
+internal sealed record IrConstI4(int Value):IrInstruction;
+internal sealed record IrLoadArg(int Index):IrInstruction;
+internal sealed record IrNewObject(string TypeName):IrInstruction;
+internal sealed record IrLoadField(string TypeName,string FieldName):IrInstruction;
+internal sealed record IrStoreField(string TypeName,string FieldName):IrInstruction;
+internal sealed record IrCall(MethodKey Target,bool Virtual):IrInstruction;
+internal sealed record IrAdd:IrInstruction; internal sealed record IrSub:IrInstruction; internal sealed record IrMul:IrInstruction; internal sealed record IrReturn:IrInstruction;
+internal sealed record IrMethod(MethodKey Key,List<IrInstruction> Instructions);
