@@ -40,6 +40,7 @@ internal static class CilDecoder
                     var operandSize=OperandSize(op,il,p,start);
                     if(op==0x1f)operand=new CilInteger((sbyte)il[p]);
                     else if(op==0x20)operand=new CilInteger(BitConverter.ToInt32(il,p));
+                    else if(op is 0x0e or 0x0f or 0x10 or 0x11 or 0x12 or 0x13)operand=new CilInteger(il[p]);
                     else if(op is 0x28 or 0x6f or 0x73)operand=new CilMetadataToken(BitConverter.ToInt32(il,p));
                     p += operandSize; break;
             }
