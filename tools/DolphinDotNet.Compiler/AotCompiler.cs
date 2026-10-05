@@ -29,6 +29,11 @@ internal static class AotCompiler
             {
                 var method=queue.Dequeue();
                 var assembly=model.Assemblies[method.AssemblyName];
+                var body=assembly.PE.GetMethodBody(assembly.Metadata.GetMethodDefinition(method.Handle).RelativeVirtualAddress);
+                var ilBytes=body.GetILBytes()??throw new InvalidDataException($"{method.Key} has no IL body.");
+                var cil=CilDecoder.Decode(ilBytes);
+                var cfg=CilControlFlowGraph.Build(cil);
+                _=CilStackAnalyzer.Analyze(cfg);
                 var ir=IlImporter.Import(assembly.PE,model,method,graph);output.Add(ir);
                 foreach(var key in graph.Methods)
                     if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable))queue.Enqueue(reachable);
