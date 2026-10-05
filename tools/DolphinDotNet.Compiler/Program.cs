@@ -9,12 +9,28 @@ if (args.Length is < 1 or > 2)
     return 2;
 }
 
-var output = args.Length == 2 ? args[1] : "generated_program.h";
+var aot = args.Length >= 1 && args[0] == "--aot";
+if (aot && args.Length is < 2 or > 3)
+{
+    Console.Error.WriteLine("Usage: dndc --aot <assembly.dll> [output.c]");
+    return 2;
+}
+var input = aot ? args[1] : args[0];
+var output = aot ? (args.Length == 3 ? args[2] : "generated_program.c") : (args.Length == 2 ? args[1] : "generated_program.h");
 try
 {
-    var compiled = Compiler.Compile(args[0]);
-    File.WriteAllText(output, CEmitter.Emit(compiled));
-    Console.WriteLine($"Compiled {args[0]} -> {output} ({compiled.Code.Count} bytes, {compiled.Strings.Count} strings)");
+    if (aot)
+    {
+        var compiled = AotCompiler.Compile(input);
+        File.WriteAllText(output, CBackend.Emit(compiled.Methods, compiled.Model, compiled.Graph));
+        Console.WriteLine($"AOT compiled {input} -> {output} ({compiled.Methods.Count} reachable methods, {compiled.Graph.Types.Count} types)");
+    }
+    else
+    {
+        var compiled = Compiler.Compile(input);
+        File.WriteAllText(output, CEmitter.Emit(compiled));
+        Console.WriteLine($"Compiled {input} -> {output} ({compiled.Code.Count} bytes, {compiled.Strings.Count} strings)");
+    }
     return 0;
 }
 catch (Exception ex)
