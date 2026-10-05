@@ -12,7 +12,7 @@ internal static class ValueCBackend
         for(var i=0;i<method.ParameterCount+(method.HasThis?1:0);i++){if(i>0)b.Append(", ");b.Append($"intptr_t a{i}");}
         b.AppendLine(") {");
         foreach(var v in values)b.AppendLine($"  intptr_t v{v.Id} = 0;");
-        for(var i=0;i<method.LocalCount;i++)b.AppendLine($"  intptr_t l{i} = 0;");
+        foreach(var local in method.Locals)b.AppendLine($"  {CType(local.Kind)} l{local.Index} = 0;");
         if(method.Blocks.Count>0)b.AppendLine($"  goto block_{method.Blocks[0].Id};");
         foreach(var block in method.Blocks)
         {
@@ -52,6 +52,14 @@ internal static class ValueCBackend
         foreach(var phi in target.Instructions.OfType<ValueIrPhi>())
             if(phi.Inputs.TryGetValue(from,out var input))b.AppendLine($"{indent}v{phi.Result.Id} = v{input.Id};");
     }
+    private static string CType(IrValueKind kind)=>kind switch
+    {
+        IrValueKind.R4=>"float",
+        IrValueKind.R8=>"double",
+        IrValueKind.I8=>"int64_t",
+        IrValueKind.ObjectReference or IrValueKind.ManagedPointer or IrValueKind.NativeInt=>"intptr_t",
+        _=>"int32_t"
+    };
     private static string Op(string op)=>op switch{"add"=>"+","sub"=>"-","mul"=>"*",_=>throw new InvalidDataException($"Unsupported Value IR binary operation {op}.")};
     private static IEnumerable<IrValue> Collect(ValueIrMethod m)
     {
