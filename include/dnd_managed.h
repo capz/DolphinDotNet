@@ -108,6 +108,7 @@ DndArray *dnd_managed_array_new(DndManagedHeap *heap, uint32_t length, uint32_t 
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length, uint32_t element_size, const DndType *element_type, bool elements_are_references);
 void *dnd_managed_array_at(DndArray *array, uint32_t index);
 uint32_t dnd_array_length(DndArray *array);
+void *dnd_array_element_address(DndArray *array, uint32_t index);
 int32_t dnd_array_load_i32(DndArray *array, uint32_t index);
 DndObject *dnd_array_load_ref(DndArray *array, uint32_t index);
 bool dnd_array_store_i32(DndArray *array, uint32_t index, int32_t value);
