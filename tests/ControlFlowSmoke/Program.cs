@@ -2,6 +2,7 @@ using System;
 
 public static class Program
 {
+    static int StaticValue;
     public static int Main()
     {
         var loop=LoopSum();
@@ -12,8 +13,11 @@ public static class Program
         var switched=SwitchCase(4);
         var overloaded=Overload(7)+Overload(5,6);
         var arrays=ArrayCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays;
+        var statics=StaticCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics;
     }
+
+    static int StaticCase(){StaticValue=4;return StaticValue;}
 
     static int ArrayCase()
     {
