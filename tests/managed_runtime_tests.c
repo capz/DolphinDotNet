@@ -82,6 +82,10 @@ int main(void) {
     assert(dnd_type_is_assignable_from(&BASE_TYPE, dispatch->type));
     assert(dnd_type_is_assignable_from(&INTERFACE_TYPE, dispatch->type));
 
+    assert(dnd_isinst(dispatch, &BASE_TYPE) == dispatch);
+    assert(dnd_cast(dispatch, &BASE_TYPE) == dispatch);
+    dnd_exception_clear(); assert(!dnd_require_object(NULL)); assert(dnd_exception_kind() == DND_EXCEPTION_NULL_REFERENCE); dnd_exception_clear();
+
     DndObject *boxed = dnd_box_i32(&heap, 123);
     assert(boxed && dnd_unbox_i32(boxed) == 123);
 
@@ -94,6 +98,13 @@ int main(void) {
     dnd_roots_init(&array_roots, array_slots, 1); assert(dnd_root_add(&array_roots, &array_root));
     dnd_gc_collect(&heap, &array_roots);
     assert(dnd_array_load_ref(references, 0) == (DndObject *)array_child);
+
+    /* Stress collection exercises precise roots on every allocation. */
+    dnd_gc_set_stress(true);
+    DndObject *stress_root = dnd_object_new(&heap, &NODE_TYPE); DndObject **stress_slots[1]; DndRootSet stress_roots;
+    dnd_roots_init(&stress_roots, stress_slots, 1); assert(dnd_root_add(&stress_roots, &stress_root));
+    for (int i=0;i<8;i++) { DndObject *temporary=dnd_object_new(&heap,&NODE_TYPE); assert(temporary); dnd_gc_collect(&heap,&stress_roots); assert(stress_root); }
+    dnd_gc_set_stress(false);
 
     /* Precise tracing keeps an object reachable through a managed field. */
     TestNode *parent = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
