@@ -31,7 +31,10 @@ internal static class CilDecoder
                 case >=0x2c and <=0x37: operand=ShortTarget(il,ref p,start); flow=CilFlowKind.ConditionalBranch; break;
                 case 0x38: operand=LongTarget(il,ref p,start); flow=CilFlowKind.Branch; break;
                 case >=0x39 and <=0x44: operand=LongTarget(il,ref p,start); flow=CilFlowKind.ConditionalBranch; break;
-                default: p += OperandSize(op,il,p,start); break;
+                default:
+                    var operandSize=OperandSize(op,il,p,start);
+                    if(op is 0x28 or 0x6f or 0x73){operand=BitConverter.ToInt32(il,p);}
+                    p += operandSize; break;
             }
             result.Add(new CilInstruction(start,p-start,op,operand,flow));
         }
