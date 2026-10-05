@@ -24,7 +24,7 @@ internal static class ValueCBackend
             var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";
             var totalSize=TotalInstanceSize(tn,model);
             var slots=VirtualSlots(tn,model,compiledKeys);
-            var interfaces=(t.Interfaces??Array.Empty<string>()).Where(i=>graph.Types.Contains(i)&&model.Types.ContainsKey(i)).ToArray();
+            var interfaces=InterfaceClosure(tn,model).Where(i=>graph.Types.Contains(i)&&model.Types.ContainsKey(i)).ToArray();
             if(interfaces.Length>0)b.AppendLine($"static const DndType *const dnd_interfaces_{Id(tn)}[] = {{ {string.Join(", ",interfaces.Select(i=>$"&dnd_type_{Id(i)}"))} }};");
             var interfaceMaps=new List<string>();
             foreach(var iface in interfaces)
@@ -198,6 +198,12 @@ internal static class ValueCBackend
             if(slot>=0&&!method.IsNewSlot)result[slot]=method;else result.Add(method);
         }
         return result;
+    }
+    private static IReadOnlyList<string> InterfaceClosure(string type,CompilationModel model)
+    {
+        var result=new List<string>();var seen=new HashSet<string>();
+        void Add(string current){if(!model.Types.TryGetValue(current,out var tm))return;foreach(var iface in tm.Interfaces??Array.Empty<string>())if(seen.Add(iface)){result.Add(iface);Add(iface);}if(tm.BaseType is { } parent)Add(parent);}
+        Add(type);return result;
     }
     private static IReadOnlyList<MethodModel> InterfaceImplementations(string type,string iface,CompilationModel model,HashSet<MethodKey> compiled)
     {
