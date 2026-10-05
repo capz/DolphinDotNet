@@ -25,8 +25,11 @@ public static class Program
         var inherited=InheritedFieldCase();
         var byref=ByRefCase();
         var iface=InterfaceIdentityCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface;
+        var ifaceCall=InterfaceCallCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall;
     }
+
+    static int InterfaceCallCase(){IValue value=new VirtualDerived();return value.GetValue();}
 
     static int InterfaceIdentityCase(){object value=new VirtualDerived();return value is IValue?4:0;}
 
