@@ -14,19 +14,17 @@ internal static class ValueIrImporter
         var entryValues=new Dictionary<int,List<IrValue>>();
         var exitValues=new Dictionary<int,List<IrValue>>();
 
+        // Allocate stable identities for every block entry before translating any body.
+        // This makes backward edges independent of block traversal order.
+        foreach(var block in blocks)
+            if(analysis.EntryStates.TryGetValue(block.Id,out var state))
+                entryValues[block.Id]=state.Values.Select(New).ToList();
+
         foreach(var block in blocks)
         {
             var instructions=new List<ValueIrInstruction>();
             var stack=new List<IrValue>();
-            if(analysis.EntryStates.TryGetValue(block.Id,out var entry))
-            {
-                if(!entryValues.TryGetValue(block.Id,out var incoming))
-                {
-                    incoming=entry.Values.Select(New).ToList();
-                    entryValues[block.Id]=incoming;
-                }
-                stack.AddRange(incoming);
-            }
+            if(entryValues.TryGetValue(block.Id,out var incoming))stack.AddRange(incoming);
 
             ValueIrTerminator? terminator=null;
             foreach(var cil in block.Instructions)
