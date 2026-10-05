@@ -4,7 +4,7 @@ using System.Reflection.PortableExecutable;
 
 namespace DolphinDotNet.Compiler;
 
-internal sealed record AotCompilation(CompilationModel Model,DependencyGraph Graph,List<IrMethod> Methods);
+internal sealed record AotCompilation(CompilationModel Model,DependencyGraph Graph,List<IrMethod> Methods,List<ValueIrMethod> ValueMethods);
 
 internal static class AotCompiler
 {
@@ -23,7 +23,7 @@ internal static class AotCompiler
             var entryKey=new MethodKey(Full(root.Metadata.GetString(td.Namespace),root.Metadata.GetString(td.Name)),root.Metadata.GetString(def.Name));
             if(!model.Methods.TryGetValue(entryKey,out var entryMethod))throw new InvalidDataException("Entry point missing from model.");
 
-            var graph=new DependencyGraph();var output=new List<IrMethod>();var queue=new Queue<MethodModel>();var queued=new HashSet<MethodKey>();
+            var graph=new DependencyGraph();var output=new List<IrMethod>();var valueOutput=new List<ValueIrMethod>();var queue=new Queue<MethodModel>();var queued=new HashSet<MethodKey>();
             queue.Enqueue(entryMethod);queued.Add(entryMethod.Key);
             while(queue.Count>0)
             {
@@ -35,12 +35,12 @@ internal static class AotCompiler
                 var cfg=CilControlFlowGraph.Build(cil);
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
                 var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method));
-                _=ValueCBackend.Emit(valueIr);
+                valueOutput.Add(valueIr);
                 var ir=IlImporter.Import(assembly.PE,model,method,graph);output.Add(ir);
                 foreach(var key in graph.Methods)
                     if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable))queue.Enqueue(reachable);
             }
-            return new AotCompilation(model,graph,output);
+            return new AotCompilation(model,graph,output,valueOutput);
         }
         catch { model.Dispose(); throw; }
     }
