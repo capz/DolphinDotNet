@@ -92,6 +92,16 @@ void dnd_roots_init(DndRootSet *roots, DndObject ***storage, size_t capacity);
 bool dnd_root_add(DndRootSet *roots, DndObject **slot);
 void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots);
 
+/* Compiler-emitted shadow-stack frames. Each frame contains managed references
+ * created by the active method. */
+typedef struct DndGcFrame {
+    DndObject **objects;
+    size_t count;
+    struct DndGcFrame *previous;
+} DndGcFrame;
+void dnd_gc_frame_push(DndGcFrame *frame, DndObject **objects, size_t count);
+void dnd_gc_frame_pop(DndGcFrame *frame);
+
 void dnd_exception_clear(void);
 void dnd_exception_throw(DndExceptionKind kind, const char *message);
 DndExceptionKind dnd_exception_kind(void);
