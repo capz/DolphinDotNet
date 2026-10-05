@@ -1,0 +1,5 @@
+build/
+*.dol
+*.elf
+*.map
+tests/runtime_tests
