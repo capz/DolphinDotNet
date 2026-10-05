@@ -270,6 +270,22 @@ int32_t dnd_unbox_i32(DndObject *object) {
     return ((DndBoxedInt32 *)object)->value;
 }
 
+DndObject *dnd_box_value(DndManagedHeap *heap, const DndType *type, const void *value, uint32_t size) {
+    if (!type || !value) return NULL;
+    DndObject *boxed = allocate(heap, type, sizeof(DndObject) + size);
+    if (boxed) memcpy((uint8_t *)boxed + sizeof(DndObject), value, size);
+    return boxed;
+}
+
+bool dnd_unbox_value(DndObject *object, const DndType *type, void *value, uint32_t size) {
+    if (!object || !value) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Cannot unbox null."); return false; }
+    if (object->type != type) { dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Boxed value has the wrong type."); return false; }
+    memcpy(value, (uint8_t *)object + sizeof(DndObject), size); return true;
+}
+
+void dnd_value_init(void *value, uint32_t size) { if (value) memset(value, 0, size); }
+void dnd_value_copy(void *destination, const void *source, uint32_t size) { if (destination && source) memcpy(destination, source, size); }
+
 DndManagedMethod dnd_virtual_resolve(const DndObject *object, uint16_t slot) {
     if (!object) {
         dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Virtual call target is null.");
