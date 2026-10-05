@@ -7,5 +7,5 @@ public static class GameCube
 
     /// <summary>Writes a line to the GameCube diagnostic overlay.</summary>
     public static void WriteLine(string text) =>
-        throw new PlatformNotSupportedException("GameCube.WriteLine is replaced by the DolphinDotNet AOT compiler.");
+        throw new System.PlatformNotSupportedException("GameCube.WriteLine is replaced by the DolphinDotNet AOT compiler.");
 }
