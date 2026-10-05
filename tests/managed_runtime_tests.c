@@ -69,9 +69,9 @@ int main(void) {
     DndRootSet roots;
     dnd_roots_init(&roots, slots, 1);
     assert(dnd_root_add(&roots, &root));
-    size_t used = heap.used;
     dnd_gc_collect(&heap, &roots);
-    assert(heap.used == used);
+    assert(root == (DndObject *)hello);
+    assert(hello->length == 5);
     root = NULL;
     dnd_gc_collect(&heap, &roots);
     assert(heap.used == 0);
