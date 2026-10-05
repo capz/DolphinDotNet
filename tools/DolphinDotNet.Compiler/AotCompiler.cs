@@ -34,7 +34,7 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i));
                 valueOutput.Add(valueIr);
                 var ir=IlImporter.Import(assembly.PE,model,method,graph);output.Add(ir);
                 foreach(var key in graph.Methods)
@@ -52,6 +52,15 @@ internal static class AotCompiler
         if(body.LocalSignature.IsNil)return 0;
         var signature=assembly.Metadata.GetStandaloneSignature(body.LocalSignature);
         var reader=assembly.Metadata.GetBlobReader(signature.Signature);reader.ReadSignatureHeader();return reader.ReadCompressedInteger();
+    }
+
+    private static MethodModel? ResolveCall(MetadataReader md,CompilationModel model,CilInstruction i)
+    {
+        if(i.OpCode is not (0x28 or 0x6f)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        var handle=MetadataTokens.EntityHandle(raw);string? type=null,name=null;
+        if(handle.Kind==HandleKind.MethodDefinition){var d=md.GetMethodDefinition((MethodDefinitionHandle)handle);name=md.GetString(d.Name);var t=md.GetTypeDefinition(d.GetDeclaringType());type=Full(md.GetString(t.Namespace),md.GetString(t.Name));}
+        else if(handle.Kind==HandleKind.MemberReference){var m=md.GetMemberReference((MemberReferenceHandle)handle);name=md.GetString(m.Name);type=MetadataLoader.ResolveTypeName(md,m.Parent);}
+        return type!=null&&name!=null&&model.Methods.TryGetValue(new MethodKey(type,name),out var method)?method:null;
     }
 
     private static CilCallStackEffect? ResolveCallEffect(MetadataReader md,CompilationModel model,CilInstruction i)
