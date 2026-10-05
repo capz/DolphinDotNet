@@ -24,6 +24,9 @@ static void callback(void *target, void *arg) {
     (void)target; invoked = *(int *)arg;
 }
 
+static int delegate_total;
+static void add_delegate(void *target, void *argument) { delegate_total += *(int *)target + *(int *)argument; }
+
 int main(void) {
     uint8_t memory[16384];
     DndManagedHeap heap;
@@ -85,6 +88,10 @@ int main(void) {
     assert(dnd_isinst(dispatch, &BASE_TYPE) == dispatch);
     assert(dnd_cast(dispatch, &BASE_TYPE) == dispatch);
     dnd_exception_clear(); assert(!dnd_require_object(NULL)); assert(dnd_exception_kind() == DND_EXCEPTION_NULL_REFERENCE); dnd_exception_clear();
+
+    int d1v=2,d2v=3,arg=4; DndDelegate *d1=dnd_delegate_new(&heap,&d1v,add_delegate); DndDelegate *d2=dnd_delegate_new(&heap,&d2v,add_delegate);
+    DndDelegate *multi=dnd_delegate_combine(&heap,d1,d2); delegate_total=0; dnd_delegate_invoke(multi,&arg); assert(delegate_total==13);
+    multi=dnd_delegate_remove(multi,d1); delegate_total=0; dnd_delegate_invoke(multi,&arg); assert(delegate_total==7);
 
     DndObject *boxed = dnd_box_i32(&heap, 123);
     assert(boxed && dnd_unbox_i32(boxed) == 123);
