@@ -9,8 +9,8 @@ internal static class CBackend{
   return b.ToString();
  }
  private static void EmitMethod(StringBuilder b,IrMethod m,CompilationModel model){
-  string fn=$"dnd_method_{Id(m.Key.TypeName)}_{Id(m.Key.Name)}";b.AppendLine($"static intptr_t {fn}(DndManagedHeap *heap, intptr_t *args) {{");b.AppendLine("    intptr_t stack[64]; int sp=0;");b.AppendLine($"    intptr_t locals[{Math.Max(1,m.LocalCount)}]; memset(locals,0,sizeof(locals));");
-  foreach(var i in m.Instructions)Emit(b,i,model);b.AppendLine("    return 0;\n}");
+  string fn=$"dnd_method_{Id(m.Key.TypeName)}_{Id(m.Key.Name)}";b.AppendLine($"static intptr_t {fn}(DndManagedHeap *heap, intptr_t *args) {{");b.AppendLine("    intptr_t stack[64]; int sp=0;");b.AppendLine($"    intptr_t locals[{Math.Max(1,m.LocalCount)}]; memset(locals,0,sizeof(locals));");b.AppendLine("    DndObject *gc_objects[32]; size_t gc_count=0; DndGcFrame gc_frame; dnd_gc_frame_push(&gc_frame,gc_objects,0);");
+  foreach(var i in m.Instructions)Emit(b,i,model);b.AppendLine("    dnd_gc_frame_pop(&gc_frame); return 0;\n}");
  }
  private static void Emit(StringBuilder b,IrInstruction i,CompilationModel model){
   switch(i){
@@ -27,10 +27,10 @@ internal static class CBackend{
    case IrStoreField f:{var field=model.Fields[(f.TypeName,f.FieldName)];b.AppendLine($"    {{ intptr_t v=stack[--sp]; DndObject *o=(DndObject*)stack[--sp]; *(int32_t*)((uint8_t*)o+sizeof(DndObject)+{field.Offset})=(int32_t)v; }}");break;}
    case IrNewObject n:{
     b.AppendLine($"    {{ intptr_t ca[{Math.Max(1,n.ArgumentCount+1)}]; for(int i={n.ArgumentCount};i>0;i--) ca[i]=stack[--sp]; DndObject *o=dnd_object_new(heap,&dnd_type_{Id(n.TypeName)}); ca[0]=(intptr_t)o;");
-    b.AppendLine($"      dnd_method_{Id(n.Constructor.TypeName)}_{Id(n.Constructor.Name)}(heap,ca); stack[sp++]=(intptr_t)o; }}");break;}
+    b.AppendLine($"      gc_objects[gc_count++]=o; gc_frame.count=gc_count; dnd_method_{Id(n.Constructor.TypeName)}_{Id(n.Constructor.Name)}(heap,ca); stack[sp++]=(intptr_t)o; }}");break;}
    case IrCall c:{
     int total=c.ArgumentCount+(c.HasThis?1:0);b.AppendLine($"    {{ intptr_t ca[{Math.Max(1,total)}]; for(int i={total-1};i>=0;i--) ca[i]=stack[--sp]; intptr_t rv=dnd_method_{Id(c.Target.TypeName)}_{Id(c.Target.Name)}(heap,ca);{(c.ReturnsValue?" stack[sp++]=rv;":"")} }}");break;}
-   case IrReturn r:b.AppendLine(r.HasValue?"    return stack[--sp];":"    return 0;");break;
+   case IrReturn r:b.AppendLine(r.HasValue?"    { intptr_t rv=stack[--sp]; dnd_gc_frame_pop(&gc_frame); return rv; }":"    dnd_gc_frame_pop(&gc_frame); return 0;");break;
   }
  }
  private static string Id(string s)=>new(s.Select(c=>char.IsLetterOrDigit(c)?c:'_').ToArray());
