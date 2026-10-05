@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable><DefineConstants>IMPLEMENTATION</DefineConstants></PropertyGroup><ItemGroup><Compile Include="../Fixture.cs" Link="Fixture.cs" /></ItemGroup></Project>

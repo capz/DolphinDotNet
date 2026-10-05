@@ -60,6 +60,6 @@ Delegate function pointers now have explicit typed IR. The AOT backend emits ABI
 
 ## API compatibility tracking
 
-`tools/DolphinDotNet.ApiCompat` compares the public metadata surface of a reference-contract assembly with an implementation assembly and reports exact missing type/member signatures plus coverage. It is intended to turn the selected .NET Standard reference contract into a measurable compatibility checklist as the managed core library grows.
+`tools/DolphinDotNet.ApiCompat` compares the public metadata surface of a reference-contract assembly with an implementation assembly and reports missing decoded declaration signatures plus coverage. It is intended to turn the selected .NET Standard reference contract into a measurable compatibility checklist as the managed core library grows. See `api-compatibility.md` for inventory limits, characterization keys, and regression fixtures.
 
 The legacy stack-oriented backend is no longer part of production CI. `--aot` uses typed Value IR; the old backend remains only as a diagnostic/regression aid while it is useful.
