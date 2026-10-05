@@ -3,10 +3,12 @@ namespace DolphinDotNet.Compiler;
 internal enum IrValueKind
 {
     Unknown,
+    Void,
     I4,
     I8,
+    R4,
+    R8,
     NativeInt,
-    Float,
     ObjectReference,
     ManagedPointer
 }
