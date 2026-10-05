@@ -38,7 +38,7 @@ internal static class AotCompiler
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
                 var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
-                Discover(valueIr,graph);
+                Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
                 DiscoverTypeInitializers(model,graph);
                 try { output.Add(IlImporter.Import(assembly.PE,model,method,new DependencyGraph())); }
@@ -70,7 +70,7 @@ internal static class AotCompiler
             if(method.IsVirtual&&graph.Types.Contains(method.Key.TypeName))graph.AddMethod(method.Key);
     }
 
-    private static void Discover(ValueIrMethod method,DependencyGraph graph)
+    private static void Discover(ValueIrMethod method,CompilationModel model,DependencyGraph graph)
     {
         graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);AddTypeClosure(method.Key.TypeName,model,graph);
         foreach(var instruction in method.Blocks.SelectMany(b=>b.Instructions))
