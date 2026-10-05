@@ -8,7 +8,8 @@ internal static class ValueIrImporter
         CilStackAnalysis analysis,
         int localCount,
         Func<CilInstruction,MethodModel?> resolveCall,
-        Func<CilInstruction,CilCallStackEffect?> resolveCallEffect)
+        Func<CilInstruction,CilCallStackEffect?> resolveCallEffect,
+        Func<CilInstruction,bool> ignoreCall)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -70,6 +71,7 @@ internal static class ValueIrImporter
                     }
                     case 0x28 or 0x6f:
                     {
+                        if(ignoreCall(cil)){Pop(stack,cil);break;}
                         var target=resolveCall(cil);
                         if(target is null)
                         {
