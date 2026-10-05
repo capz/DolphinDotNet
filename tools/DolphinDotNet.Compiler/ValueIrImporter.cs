@@ -11,13 +11,22 @@ internal static class ValueIrImporter
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
         var output=new List<ValueIrBlock>();
+        var entryValues=new Dictionary<int,List<IrValue>>();
+        var exitValues=new Dictionary<int,List<IrValue>>();
 
         foreach(var block in blocks)
         {
             var instructions=new List<ValueIrInstruction>();
             var stack=new List<IrValue>();
             if(analysis.EntryStates.TryGetValue(block.Id,out var entry))
-                foreach(var kind in entry.Values)stack.Add(New(kind));
+            {
+                if(!entryValues.TryGetValue(block.Id,out var incoming))
+                {
+                    incoming=entry.Values.Select(New).ToList();
+                    entryValues[block.Id]=incoming;
+                }
+                stack.AddRange(incoming);
+            }
 
             ValueIrTerminator? terminator=null;
             foreach(var cil in block.Instructions)
@@ -61,7 +70,26 @@ internal static class ValueIrImporter
                         terminator=new ValueIrReturn(method.ReturnsValue?Pop(stack,cil):null);break;
                 }
             }
-            output.Add(new ValueIrBlock(block.Id,block.StartOffset,instructions,terminator));
+            exitValues[block.Id]=stack.ToList();
+            output.Add(new ValueIrBlock(block.Id,block.StartOffset,instructions,terminator,
+                new ValueIrIncomingStack(entryValues.TryGetValue(block.Id,out var ev)?ev.ToArray():Array.Empty<IrValue>()),
+                new ValueIrIncomingStack(stack.ToArray())));
+        }
+        // Materialize stack joins as phi values. The entry value is the stable identity
+        // used by instructions in the destination block; predecessor exit values feed it.
+        foreach(var block in output)
+        {
+            if(block.EntryStack.Values.Count==0)continue;
+            var predecessors=blocks.Where(b=>b.Successors.Contains(block.Id)).ToArray();
+            if(predecessors.Length<2)continue;
+            for(var slot=0;slot<block.EntryStack.Values.Count;slot++)
+            {
+                var inputs=new Dictionary<int,IrValue>();
+                foreach(var pred in predecessors)
+                    if(exitValues.TryGetValue(pred.Id,out var values)&&slot<values.Count)inputs[pred.Id]=values[slot];
+                if(inputs.Count==predecessors.Length)
+                    block.Instructions.Insert(slot,new ValueIrPhi(block.EntryStack.Values[slot],inputs));
+            }
         }
         return new ValueIrMethod(method.Key,output,localCount,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
     }
