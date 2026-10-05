@@ -22,8 +22,9 @@ int main(void)
     unsigned char storage[4096]; DndManagedHeap heap; dnd_managed_heap_init(&heap,storage,sizeof(storage));
     intptr_t result=dnd_value_aot_entry(&heap);
     intptr_t delegate_result=dnd_value_Program_DelegateCase();
-    printf("delegate exception=%d %s\\n",(int)dnd_exception_kind(),dnd_exception_message()?dnd_exception_message():"none");\n    printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld mutated=%ld switched=%ld delegate=%ld total=%ld\n",
+    printf("delegate exception=%d %s\n",(int)dnd_exception_kind(),dnd_exception_message()?dnd_exception_message():"none");
+    printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld mutated=%ld switched=%ld delegate=%ld total=%ld\n",
         (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)mutated,(long)switched,(long)delegate_result,(long)result);
-    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=198)return 1;
+    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||delegate_result!=11||result!=198)return 1;
     return 0;
 }
