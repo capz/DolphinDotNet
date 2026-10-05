@@ -64,6 +64,11 @@ internal static class ValueIrImporter
                     }
                     case 0x26:
                         Pop(stack,cil);break;
+                    case 0xfe01 or 0xfe02 or 0xfe04:
+                    {
+                        var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(CilStackKind.I4);var op=cil.OpCode==0xfe01?"ceq":cil.OpCode==0xfe02?"cgt":"clt";
+                        instructions.Add(new ValueIrBinary(result,op,left,right));stack.Add(result);break;
+                    }
                     case 0x58 or 0x59 or 0x5a:
                     {
                         var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(Merge(left.Kind,right.Kind));
