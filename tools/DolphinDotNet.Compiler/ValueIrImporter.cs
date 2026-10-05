@@ -9,7 +9,9 @@ internal static class ValueIrImporter
         int localCount,
         Func<CilInstruction,MethodModel?> resolveCall,
         Func<CilInstruction,CilCallStackEffect?> resolveCallEffect,
-        Func<CilInstruction,bool> ignoreCall)
+        Func<CilInstruction,bool> ignoreCall,
+        Func<CilInstruction,IntrinsicKind> intrinsic,
+        Func<CilInstruction,string?> resolveString)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -90,8 +92,16 @@ internal static class ValueIrImporter
                         var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(Merge(left.Kind,right.Kind));
                         instructions.Add(new ValueIrBinary(result,cil.OpCode==0x58?"add":cil.OpCode==0x59?"sub":"mul",left,right));stack.Add(result);break;
                     }
+                    case 0x72:
+                    {
+                        var text=resolveString(cil)??throw new InvalidDataException($"Missing user string at IL_{cil.Offset:x4}.");var value=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrLoadString(value,text));stack.Add(value);break;
+                    }
                     case 0x28 or 0x6f:
                     {
+                        var ik=intrinsic(cil);
+                        if(ik==IntrinsicKind.StringLength){var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringLength(value,str));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.GameCubeWriteLine){instructions.Add(new ValueIrConsoleWriteLine(Pop(stack,cil)));break;}
+                        if(ik==IntrinsicKind.GameCubeReadButtonsDown){var port=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrReadButtonsDown(value,port));stack.Add(value);break;}
                         if(ignoreCall(cil)){Pop(stack,cil);break;}
                         var target=resolveCall(cil);
                         if(target is null)
