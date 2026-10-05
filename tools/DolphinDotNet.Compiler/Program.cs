@@ -4,16 +4,10 @@ using System.Reflection.Metadata.Ecma335;
 using System.Text;
 using DolphinDotNet.Compiler;
 
-if (args.Length is < 1 or > 2)
-{
-    Console.Error.WriteLine("Usage: dndc <assembly.dll> [output.h]");
-    return 2;
-}
-
 var aot = args.Length >= 1 && args[0] == "--aot";
-if (aot && args.Length is < 2 or > 3)
+if ((!aot && args.Length is < 1 or > 2) || (aot && args.Length is < 2 or > 3))
 {
-    Console.Error.WriteLine("Usage: dndc --aot <assembly.dll> [output.c]");
+    Console.Error.WriteLine(aot ? "Usage: dndc --aot <assembly.dll> [output.c]" : "Usage: dndc <assembly.dll> [output.h]");
     return 2;
 }
 var input = aot ? args[1] : args[0];
