@@ -82,6 +82,19 @@ int main(void) {
     assert(dnd_type_is_assignable_from(&BASE_TYPE, dispatch->type));
     assert(dnd_type_is_assignable_from(&INTERFACE_TYPE, dispatch->type));
 
+    DndObject *boxed = dnd_box_i32(&heap, 123);
+    assert(boxed && dnd_unbox_i32(boxed) == 123);
+
+    /* Reference arrays participate in precise tracing. */
+    DndArray *references = dnd_managed_array_new_typed(&heap, 1, sizeof(DndObject *), &NODE_TYPE, true);
+    TestNode *array_child = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    assert(references && array_child);
+    assert(dnd_array_store_ref(references, 0, (DndObject *)array_child));
+    DndObject *array_root = (DndObject *)references; DndObject **array_slots[1]; DndRootSet array_roots;
+    dnd_roots_init(&array_roots, array_slots, 1); assert(dnd_root_add(&array_roots, &array_root));
+    dnd_gc_collect(&heap, &array_roots);
+    assert(dnd_array_load_ref(references, 0) == (DndObject *)array_child);
+
     /* Precise tracing keeps an object reachable through a managed field. */
     TestNode *parent = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
     TestNode *child = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
