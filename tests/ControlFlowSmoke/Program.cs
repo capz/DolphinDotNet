@@ -20,8 +20,11 @@ public static class Program
         var generic=Identity(6);
         var boxing=BoxCase();
         var virtuals=VirtualCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals;
+        var types=TypeCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types;
     }
+
+    static int TypeCase(){VirtualBase value=new VirtualDerived();var derived=value as VirtualDerived;var cast=(VirtualDerived)value;return (derived!=null?2:0)+(cast!=null?3:0);}
 
     static int VirtualCase(){VirtualBase value=new VirtualDerived();return value.GetValue();}
 
