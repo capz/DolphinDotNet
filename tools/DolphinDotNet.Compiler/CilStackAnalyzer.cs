@@ -59,6 +59,7 @@ internal static class CilStackAnalyzer
             case 0x0e or 0x11 or 0xfe09 or 0xfe0c: Push(s,CilStackKind.Unknown); break;
             case 0x10 or 0x13 or 0xfe0b or 0xfe0e: Pop(s,i); break;
             case 0x0f or 0x12 or 0xfe0a or 0xfe0d: Push(s,CilStackKind.ManagedPointer); break;
+            case 0x14: Push(s,CilStackKind.ObjectReference);break;
             case >=0x15 and <=0x20: Push(s,CilStackKind.I4); break;
             case 0x21: Push(s,CilStackKind.I8); break;
             case 0x22 or 0x23: Push(s,CilStackKind.Float); break;
