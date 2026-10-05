@@ -48,11 +48,11 @@ internal static class ValueIrImporter
                     {
                         var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,-1));stack.Add(v);break;
                     }
-                    case 0x11:
+                    case 0x11 or 0xfe0c:
                     {
                         var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadLocal(v,index));stack.Add(v);break;
                     }
-                    case 0x13:
+                    case 0x13 or 0xfe0e:
                     {
                         var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));instructions.Add(new ValueIrStoreLocal(index,Pop(stack,cil)));break;
                     }
@@ -65,6 +65,10 @@ internal static class ValueIrImporter
                     case >=0x02 and <=0x05:
                     {
                         var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadArgument(v,cil.OpCode-0x02));stack.Add(v);break;
+                    }
+                    case 0x0e or 0xfe09:
+                    {
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadArgument(v,index));stack.Add(v);break;
                     }
                     case 0x25:
                     {
