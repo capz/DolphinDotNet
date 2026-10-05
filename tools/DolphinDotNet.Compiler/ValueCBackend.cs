@@ -121,7 +121,7 @@ internal static class ValueCBackend
                     case ValueIrStoreValue x:{var size=ValueSize(x.TypeName,model);if(size>8)throw new NotSupportedException($"Value store larger than 8 bytes: {x.TypeName}.");b.AppendLine($"  dnd_value_copy((void*)(intptr_t)v{x.Address.Id}, &v{x.Value.Id}, {size}u);");break;}
                     case ValueIrConvert x:b.AppendLine($"  v{x.Result.Id} = ({CType(x.Result.Kind)})v{x.Value.Id};");break;
                     case ValueIrBinary x:{var unsigned=x.Operation.EndsWith(".un",StringComparison.Ordinal);var op=Op(x.Operation);var l=unsigned?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";var r=unsigned?$"(uintptr_t)v{x.Right.Id}":$"v{x.Right.Id}";b.AppendLine($"  v{x.Result.Id} = {l} {op} {r};");break;}
-                    case ValueIrDelegateInvoke x:b.AppendLine($"  dnd_delegate_invoke((DndDelegate*)v{x.Delegate.Id}, {(x.Argument is { } a?$"(void*)(intptr_t)v{a.Id}":"NULL")});");break;
+                    case ValueIrDelegateInvoke x:b.AppendLine($"  dnd_delegate_invoke((DndDelegate*)(intptr_t)v{x.Delegate.Id}, {(x.Argument is { } a?$"(void*)(intptr_t)v{a.Id}":"NULL")});");break;
                     case ValueIrFunctionPointer x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&{DelegateThunkSymbol(x.Target)};");break;
                     case ValueIrNewDelegate x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_delegate_new(dnd_value_heap, (void*)(intptr_t)v{x.Target.Id}, (DndDelegateFn)v{x.Function.Id});");break;
                     case ValueIrCall x:
