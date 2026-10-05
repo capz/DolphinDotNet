@@ -33,6 +33,7 @@ internal static class ValueCBackend
                     case ValueIrLoadArgument x:b.AppendLine($"  v{x.Result.Id} = a{x.Index};");break;
                     case ValueIrLoadLocal x:b.AppendLine($"  v{x.Result.Id} = l{x.Index};");break;
                     case ValueIrStoreLocal x:b.AppendLine($"  l{x.Index} = v{x.Value.Id};");break;
+                    case ValueIrStoreArgument x:b.AppendLine($"  a{x.Index} = v{x.Value.Id};");break;
                     case ValueIrBinary x:b.AppendLine($"  v{x.Result.Id} = v{x.Left.Id} {Op(x.Operation)} v{x.Right.Id};");break;
                     case ValueIrCall x:{var args=string.Join(", ",x.Arguments.Select(a=>$"v{a.Id}"));b.AppendLine(x.Result is { } r?$"  v{r.Id} = {Symbol(x.Target)}({args});":$"  (void){Symbol(x.Target)}({args});");break;}
                     case ValueIrPhi: break; // Assigned on predecessor edges.
