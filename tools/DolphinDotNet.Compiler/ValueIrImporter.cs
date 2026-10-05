@@ -168,7 +168,7 @@ internal static class ValueIrImporter
                     }
                     case 0xfe06 or 0xfe07:
                     {
-                        var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved function pointer at IL_{cil.Offset:x4}.");IrValue? obj=cil.OpCode==0xfe07?Pop(stack,cil):null;var value=New(CilStackKind.NativeInt);instructions.Add(new ValueIrLoadFunction(value,target.Key,cil.OpCode==0xfe07,obj));stack.Add(value);break;
+                        var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved function pointer at IL_{cil.Offset:x4}.");IrValue? obj=cil.OpCode==0xfe07?Pop(stack,cil):null;var value=New(CilStackKind.NativeInt);instructions.Add(new ValueIrLoadFunction(value,target.Key,cil.OpCode==0xfe07&&target.IsVirtual,obj));stack.Add(value);break;
                     }
                     case 0x28 or 0x6f:
                     {
