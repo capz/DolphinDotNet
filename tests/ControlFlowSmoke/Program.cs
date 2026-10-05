@@ -8,10 +8,10 @@ public static class Program
         var branches=BranchCases(7);
         var nested=Nested(3,8);
         var shortCircuit=ShortCircuit(4,9);
-        return loop+branches+nested+shortCircuit;
+        var mutated=MutateArgument(2);return loop+branches+nested+shortCircuit+mutated;
     }
 
-    static int LoopSum()
+    static int MutateArgument(int value){value=value+3;return value;}\nstatic int LoopSum()
     {
         var i=0;var sum=0;
         while(i<5){sum=sum+i;i=i+1;}
