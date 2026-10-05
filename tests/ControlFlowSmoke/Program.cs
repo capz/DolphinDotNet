@@ -1,5 +1,8 @@
 using System;
 
+class VirtualBase { public virtual int GetValue()=>3; }
+class VirtualDerived : VirtualBase { public override int GetValue()=>9; }
+
 public static class Program
 {
     static int StaticValue;
@@ -16,8 +19,11 @@ public static class Program
         var statics=StaticCase();
         var generic=Identity(6);
         var boxing=BoxCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing;
+        var virtuals=VirtualCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals;
     }
+
+    static int VirtualCase(){VirtualBase value=new VirtualDerived();return value.GetValue();}
 
     static int BoxCase(){object value=7;return (int)value;}
 
