@@ -168,6 +168,7 @@ internal static class ValueIrImporter
                     }
                 }
             }
+            if(terminator is null&&block.Successors.Count==1)terminator=new ValueIrJump(block.Successors[0]);
             exitValues[block.Id]=stack.ToList();
             output.Add(new ValueIrBlock(block.Id,block.StartOffset,instructions,terminator,
                 new ValueIrIncomingStack(entryValues.TryGetValue(block.Id,out var ev)?ev.ToArray():Array.Empty<IrValue>()),
