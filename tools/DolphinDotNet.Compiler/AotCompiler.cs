@@ -34,7 +34,8 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
-                _=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method));
+                _=ValueCBackend.Emit(valueIr);
                 var ir=IlImporter.Import(assembly.PE,model,method,graph);output.Add(ir);
                 foreach(var key in graph.Methods)
                     if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable))queue.Enqueue(reachable);
