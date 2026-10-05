@@ -102,14 +102,16 @@ internal static class ValueIrImporter
         {
             if(block.EntryStack.Values.Count==0)continue;
             var predecessors=blocks[block.Id].Predecessors.Select(id=>blocks[id]).ToArray();
-            if(predecessors.Length<2)continue;
+            if(predecessors.Length==0)continue;
             for(var slot=0;slot<block.EntryStack.Values.Count;slot++)
             {
                 var inputs=new Dictionary<int,IrValue>();
                 foreach(var pred in predecessors)
                     if(exitValues.TryGetValue(pred.Id,out var values)&&slot<values.Count)inputs[pred.Id]=values[slot];
-                if(inputs.Count==predecessors.Length)
-                    block.Instructions.Insert(slot,new ValueIrPhi(block.EntryStack.Values[slot],inputs));
+                if(inputs.Count!=predecessors.Length)throw new InvalidDataException($"Incomplete Value IR edge state for block {block.Id}, stack slot {slot}.");
+                // A single predecessor still needs an explicit edge assignment because entry
+                // identities are deliberately preallocated and independent of traversal order.
+                block.Instructions.Insert(slot,new ValueIrPhi(block.EntryStack.Values[slot],inputs));
             }
         }
         return new ValueIrMethod(method.Key,output,localCount,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
