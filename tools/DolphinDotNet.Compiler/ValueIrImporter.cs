@@ -173,7 +173,7 @@ internal static class ValueIrImporter
                         var count=target.ParameterCount+(target.IsStatic?0:1);var args=new IrValue[count];
                         for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
                         IrValue? result=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));result=value;stack.Add(value);}
-                        var interfaceCall=cil.OpCode==0x6f&&target.IsVirtual&&target.Key.TypeName is { } dt&&target.Key.TypeName.Length>0&&target.Key.TypeName==dt; instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual,interfaceCall));break;
+                        var interfaceCall=cil.OpCode==0x6f&&target.DeclaringTypeIsInterface; instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual,interfaceCall));break;
                     }
                     case 0x73:
                     {
