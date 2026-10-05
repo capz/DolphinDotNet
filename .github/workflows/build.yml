@@ -25,6 +25,8 @@ jobs:
         run: |
           dotnet build src/DolphinDotNet.Core/DolphinDotNet.Core.csproj -c Release
           dotnet build src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj -c Release
+      - name: Build managed GameCube sample
+        run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
       - name: Compiler integration tests
         run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
       - name: Build AOT smoke assembly
