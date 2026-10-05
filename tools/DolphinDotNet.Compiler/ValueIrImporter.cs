@@ -106,6 +106,10 @@ internal static class ValueIrImporter
                     {
                         var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);instructions.Add(new ValueIrStoreElement(array,index,value,cil.OpCode==0xa2));break;
                     }
+                    case >=0x67 and <=0x6e or 0xd3 or 0xe0:
+                    {
+                        var input=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrConvert(result,input));stack.Add(result);break;
+                    }
                     case 0x25:
                     {
                         var value=Pop(stack,cil);stack.Add(value);stack.Add(value);break;
