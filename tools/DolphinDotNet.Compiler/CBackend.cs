@@ -17,6 +17,7 @@ internal static class CBackend{
  private static void Emit(StringBuilder b,IrInstruction i,CompilationModel model){
   switch(i){
    case IrConstI4 x:b.AppendLine($"    stack[sp++] = (intptr_t){x.Value};");break;
+   case IrLoadString s:{var lit=Escape(s.Value);b.AppendLine($"    {{ DndString *str=dnd_string_from_utf8(heap,\"{lit}\"); gc_objects[gc_count++]=(DndObject*)str; gc_frame.count=gc_count; stack[sp++]=(intptr_t)str; }}");break;}
    case IrLoadArg x:b.AppendLine($"    stack[sp++] = args[{x.Index}];");break;
    case IrLoadLocal x:b.AppendLine($"    stack[sp++] = locals[{x.Index}];");break;
    case IrStoreLocal x:b.AppendLine($"    locals[{x.Index}] = stack[--sp];");break;
@@ -38,5 +39,6 @@ internal static class CBackend{
    case IrReturn r:b.AppendLine(r.HasValue?"    { intptr_t rv=stack[--sp]; dnd_gc_frame_pop(&gc_frame); return rv; }":"    dnd_gc_frame_pop(&gc_frame); return 0;");break;
   }
  }
+ private static string Escape(string s)=>s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n").Replace("\r","\\r").Replace("\t","\\t");
  private static string Id(string s)=>new(s.Select(c=>char.IsLetterOrDigit(c)?c:'_').ToArray());
 }
