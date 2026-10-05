@@ -6,18 +6,36 @@ internal static class ValueCBackend
     public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry,CompilationModel model,DependencyGraph graph)
     {
         var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\nstatic DndManagedHeap *dnd_value_heap;");
+        var compiledKeys=methods.Select(m=>m.Key).ToHashSet();
+        var virtualMethods=methods.Where(m=>model.Methods.TryGetValue(m.Key,out var mm)&&mm.IsVirtual).ToArray();
+        foreach(var method in virtualMethods)b.AppendLine($"static intptr_t {WrapperSymbol(method.Key)}(intptr_t *args);");
+        foreach(var tn in graph.Types.OrderBy(x=>x))
+        {
+            var slots=VirtualSlots(tn,model,compiledKeys);
+            if(slots.Count>0)b.AppendLine($"static const DndManagedMethod dnd_vtable_{Id(tn)}[] = {{ {string.Join(", ",slots.Select(s=>WrapperSymbol(s.Key)))} }};");
+        }
         foreach(var tn in graph.Types.OrderBy(x=>x))
         {
             if(!model.Types.TryGetValue(tn,out var t))continue;
             var refs=model.Fields.Values.Where(f=>f.DeclaringType==tn&&f.IsReference).OrderBy(f=>f.Offset).ToArray();
             if(refs.Length>0)b.AppendLine($"static const uint32_t dnd_refs_{Id(tn)}[] = {{ {string.Join(", ",refs.Select(r=>$"sizeof(DndObject)+{r.Offset}u"))} }};");
             var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";
-            b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{t.InstanceSize}u, 0, NULL, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, 0, NULL, 0, NULL}};");
+            var slots=VirtualSlots(tn,model,compiledKeys);
+            b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{t.InstanceSize}u, 0, NULL, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, {slots.Count}u, {(slots.Count>0?$"dnd_vtable_{Id(tn)}":"NULL")}, 0, NULL}};");
         }
         var staticFields=model.Fields.Values.Where(f=>f.IsStatic&&graph.Types.Contains(f.DeclaringType)).OrderBy(f=>f.DeclaringType).ThenBy(f=>f.Name).ToArray();
         foreach(var field in staticFields)b.AppendLine($"static intptr_t {StaticSymbol(field)};");
         foreach(var m in methods)b.AppendLine($"intptr_t {Symbol(m.Key)}({Parameters(m)});");
         foreach(var m in methods)b.AppendLine(Emit(m,model,Symbol(m.Key),false));
+        foreach(var m in virtualMethods)
+        {
+            var n=m.ParameterCount+(m.HasThis?1:0);
+            b.Append($"static intptr_t {WrapperSymbol(m.Key)}(intptr_t *args) {{ ");
+            if(m.ReturnsValue)b.Append("return ");else b.Append("(void)");
+            b.Append($"{Symbol(m.Key)}({string.Join(", ",Enumerable.Range(0,n).Select(i=>$"args[{i}]"))});");
+            if(!m.ReturnsValue)b.Append(" return 0;");
+            b.AppendLine(" }");
+        }
         foreach(var group in methods.GroupBy(m=>(m.Key.TypeName,m.Key.Name)).Where(g=>g.Count()==1)){var m=group.Single();var alias=LegacySymbol(m.Key);if(alias==Symbol(m.Key))continue;b.Append($"intptr_t {alias}({Parameters(m)}) {{ return {Symbol(m.Key)}(");b.Append(string.Join(", ",Enumerable.Range(0,m.ParameterCount+(m.HasThis?1:0)).Select(i=>$"a{i}")));b.AppendLine("); }");}
         var em=methods.Single(m=>m.Key==entry);
         b.AppendLine("intptr_t dnd_aot_entry(DndManagedHeap *heap) {");b.AppendLine("  dnd_value_heap=heap;");
@@ -62,7 +80,18 @@ internal static class ValueCBackend
                     case ValueIrStoreArgument x:b.AppendLine($"  a{x.Index} = v{x.Value.Id};");break;
                     case ValueIrConvert x:b.AppendLine($"  v{x.Result.Id} = ({CType(x.Result.Kind)})v{x.Value.Id};");break;
                     case ValueIrBinary x:{var unsigned=x.Operation.EndsWith(".un",StringComparison.Ordinal);var op=Op(x.Operation);var l=unsigned?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";var r=unsigned?$"(uintptr_t)v{x.Right.Id}":$"v{x.Right.Id}";b.AppendLine($"  v{x.Result.Id} = {l} {op} {r};");break;}
-                    case ValueIrCall x:{var args=string.Join(", ",x.Arguments.Select(a=>$"v{a.Id}"));b.AppendLine(x.Result is { } r?$"  v{r.Id} = {Symbol(x.Target)}({args});":$"  (void){Symbol(x.Target)}({args});");break;}
+                    case ValueIrCall x:
+                    {
+                        var args=string.Join(", ",x.Arguments.Select(a=>$"v{a.Id}"));
+                        if(x.Virtual)
+                        {
+                            var slot=VirtualSlot(x.Target,model);
+                            b.AppendLine($"  {{ intptr_t call_args[{Math.Max(1,x.Arguments.Count)}] = {{ {args} }}; DndManagedMethod target=dnd_virtual_resolve((DndObject*)call_args[0], {slot}u);");
+                            b.AppendLine(x.Result is { } vr?$"    v{vr.Id} = target ? target(call_args) : 0; }}":$"    if(target) (void)target(call_args); }}");
+                        }
+                        else b.AppendLine(x.Result is { } r?$"  v{r.Id} = {Symbol(x.Target)}({args});":$"  (void){Symbol(x.Target)}({args});");
+                        break;
+                    }
                     case ValueIrNewObject x:{var args=string.Join(", ",new[]{$"(intptr_t)v{x.Result.Id}"}.Concat(x.Arguments.Select(a=>$"v{a.Id}")));b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_new(dnd_value_heap, &dnd_type_{Id(x.TypeName)});");b.AppendLine($"  (void){Symbol(x.Constructor)}({args});");break;}
                     case ValueIrLoadField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":"int32_t";b.AppendLine($"  v{x.Result.Id} = *({ct}*)((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{field.Offset});");break;}
                     case ValueIrStoreField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":"int32_t";b.AppendLine($"  *({ct}*)((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{field.Offset}) = ({ct})v{x.Value.Id};");break;}
@@ -117,6 +146,24 @@ internal static class ValueCBackend
             if(phi.Inputs.TryGetValue(from,out var input))b.AppendLine($"{indent}v{phi.Result.Id} = v{input.Id};");
     }
     internal static string Symbol(MethodKey k)=>"dnd_value_"+Id(k.AssemblyName)+"_"+Id(k.TypeName)+"_"+Id(k.Name)+"_"+StableId(k.Signature);
+    private static IReadOnlyList<MethodModel> VirtualSlots(string type,CompilationModel model,HashSet<MethodKey> compiled)
+    {
+        var result=new List<MethodModel>();
+        if(model.Types.TryGetValue(type,out var tm)&&tm.BaseType is { } parent&&model.Types.ContainsKey(parent))result.AddRange(VirtualSlots(parent,model,compiled));
+        foreach(var method in model.Methods.Values.Where(m=>m.Key.TypeName==type&&m.IsVirtual&&compiled.Contains(m.Key)).OrderBy(m=>m.Handle.GetHashCode()))
+        {
+            var slot=result.FindIndex(x=>x.Key.Name==method.Key.Name&&x.Key.Signature==method.Key.Signature);
+            if(slot>=0)result[slot]=method;else result.Add(method);
+        }
+        return result;
+    }
+    private static int VirtualSlot(MethodKey target,CompilationModel model)
+    {
+        var compiled=model.Methods.Keys.ToHashSet();var slots=VirtualSlots(target.TypeName,model,compiled);
+        var slot=slots.ToList().FindIndex(x=>x.Key.Name==target.Name&&x.Key.Signature==target.Signature);
+        if(slot<0)throw new NotSupportedException($"No virtual slot for {target}.");return slot;
+    }
+    private static string WrapperSymbol(MethodKey k)=>"dnd_wrap_"+Id(k.AssemblyName)+"_"+Id(k.TypeName)+"_"+Id(k.Name)+"_"+StableId(k.Signature);
     private static string StaticSymbol(FieldModel f)=>"dnd_static_"+Id(f.DeclaringType)+"_"+Id(f.Name);
     private static string TypeExpr(string type)=>type switch{"System.String"=>"&DND_TYPE_STRING","System.Object"=>"&DND_TYPE_OBJECT",_ when type.StartsWith("System.",StringComparison.Ordinal)=>"NULL",_=>$"&dnd_type_{Id(type)}"};
     private static string LegacySymbol(MethodKey k)=>"dnd_value_"+Id(k.TypeName)+"_"+Id(k.Name);
