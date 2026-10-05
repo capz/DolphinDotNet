@@ -7,6 +7,8 @@ const DndType DND_TYPE_ARRAY = {"System.Array", &DND_TYPE_OBJECT, sizeof(DndArra
 static const uint32_t delegate_refs[] = {(uint32_t)offsetof(DndDelegate, target), (uint32_t)offsetof(DndDelegate, next)};
 const DndType DND_TYPE_DELEGATE = {"System.Delegate", &DND_TYPE_OBJECT, sizeof(DndDelegate), 0, NULL, 2, delegate_refs, 0, 0, NULL, 0, NULL};
 typedef struct { DndObject object; int32_t value; } DndBoxedInt32;
+static const uint32_t exception_refs[] = {(uint32_t)offsetof(DndExceptionObject, message)};
+const DndType DND_TYPE_EXCEPTION = {"System.Exception", &DND_TYPE_OBJECT, sizeof(DndExceptionObject), 0, NULL, 1, exception_refs, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_BOXED_INT32 = {"System.Int32", &DND_TYPE_OBJECT, sizeof(DndBoxedInt32), 0, NULL, 0, NULL, DND_TYPE_FLAG_VALUE_TYPE, 0, NULL, 0, NULL};
 
 typedef struct DndHeapBlock {
@@ -21,6 +23,7 @@ static DndGcFrame *gc_frames;
 static bool gc_stress;
 static DndExceptionKind exception_kind;
 static const char *exception_text;
+static DndExceptionObject *exception_object;
 
 static size_t align8(size_t n) { return (n + 7u) & ~(size_t)7u; }
 static size_t block_header_size(void) { return align8(sizeof(DndHeapBlock)); }
@@ -434,7 +437,9 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     rebuild_free_list(heap);
 }
 
-void dnd_exception_clear(void) { exception_kind = DND_EXCEPTION_NONE; exception_text = NULL; }
+void dnd_exception_clear(void) { exception_kind = DND_EXCEPTION_NONE; exception_text = NULL; exception_object = NULL; }
 void dnd_exception_throw(DndExceptionKind kind, const char *message) { exception_kind = kind; exception_text = message; }
+void dnd_exception_throw_object(DndExceptionObject *exception) { exception_object=exception; exception_kind=exception?(DndExceptionKind)exception->kind:DND_EXCEPTION_NONE; exception_text=NULL; }
+DndExceptionObject *dnd_exception_object(void) { return exception_object; }
 DndExceptionKind dnd_exception_kind(void) { return exception_kind; }
 const char *dnd_exception_message(void) { return exception_text ? exception_text : ""; }
