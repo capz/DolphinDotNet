@@ -158,4 +158,5 @@ DndExceptionKind dnd_exception_kind(void);
 const char *dnd_exception_message(void);
 DndExceptionObject *dnd_exception_object(void);
 void dnd_exception_throw_object(DndExceptionObject *exception);
+void dnd_throw(DndObject *exception);
 #endif
