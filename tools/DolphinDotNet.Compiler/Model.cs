@@ -3,7 +3,7 @@ using System.Reflection.PortableExecutable;
 namespace DolphinDotNet.Compiler;
 internal sealed record MethodKey(string TypeName,string Name,string AssemblyName="",string Signature=""){public override string ToString()=>$"{(string.IsNullOrEmpty(AssemblyName)?"":AssemblyName+"!")} {TypeName}::{Name}{(string.IsNullOrEmpty(Signature)?"":" ["+Signature+"]")}";}
 internal sealed record TypeModel(string Namespace,string Name,string FullName,string? BaseType,int InstanceSize);
-internal sealed record FieldModel(string DeclaringType,string Name,int Offset,bool IsReference);
+internal sealed record FieldModel(string DeclaringType,string Name,int Offset,bool IsReference,bool IsStatic=false);
 internal sealed record MethodModel(MethodKey Key,MethodDefinitionHandle Handle,bool IsStatic,int ParameterCount,bool ReturnsValue,string AssemblyName);
 internal sealed class AssemblyModel : IDisposable
 {
