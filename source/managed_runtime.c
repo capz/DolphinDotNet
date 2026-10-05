@@ -4,8 +4,8 @@
 const DndType DND_TYPE_OBJECT = {"System.Object", NULL, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_STRING = {"System.String", &DND_TYPE_OBJECT, sizeof(DndString), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_ARRAY = {"System.Array", &DND_TYPE_OBJECT, sizeof(DndArray), 0, NULL, 0, NULL, DND_TYPE_FLAG_ARRAY, 0, NULL, 0, NULL};
-static const uint32_t delegate_refs[] = {(uint32_t)offsetof(DndDelegate, target)};
-const DndType DND_TYPE_DELEGATE = {"System.Delegate", &DND_TYPE_OBJECT, sizeof(DndDelegate), 0, NULL, 1, delegate_refs, 0, 0, NULL, 0, NULL};
+static const uint32_t delegate_refs[] = {(uint32_t)offsetof(DndDelegate, target), (uint32_t)offsetof(DndDelegate, next)};
+const DndType DND_TYPE_DELEGATE = {"System.Delegate", &DND_TYPE_OBJECT, sizeof(DndDelegate), 0, NULL, 2, delegate_refs, 0, 0, NULL, 0, NULL};
 typedef struct { DndObject object; int32_t value; } DndBoxedInt32;
 const DndType DND_TYPE_BOXED_INT32 = {"System.Int32", &DND_TYPE_OBJECT, sizeof(DndBoxedInt32), 0, NULL, 0, NULL, DND_TYPE_FLAG_VALUE_TYPE, 0, NULL, 0, NULL};
 
@@ -323,6 +323,7 @@ DndDelegate *dnd_delegate_new(DndManagedHeap *heap, void *target, DndDelegateFn 
     if (delegate) {
         delegate->target = target;
         delegate->method = method;
+        delegate->next = NULL;
     }
     return delegate;
 }
@@ -332,7 +333,22 @@ void dnd_delegate_invoke(DndDelegate *delegate, void *argument) {
         dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Delegate is null.");
         return;
     }
-    delegate->method(delegate->target, argument);
+    for (DndDelegate *current = delegate; current; current = current->next) current->method(current->target, argument);
+}
+
+DndDelegate *dnd_delegate_combine(DndManagedHeap *heap, DndDelegate *first, DndDelegate *second) {
+    if (!first) return second; if (!second) return first;
+    DndDelegate *head = dnd_delegate_new(heap, first->target, first->method); if (!head) return NULL;
+    DndDelegate *tail = head;
+    for (DndDelegate *p = first->next; p; p = p->next) { tail->next = dnd_delegate_new(heap, p->target, p->method); if (!tail->next) return NULL; tail = tail->next; }
+    tail->next = second; return head;
+}
+
+DndDelegate *dnd_delegate_remove(DndDelegate *source, DndDelegate *value) {
+    if (!source || !value) return source;
+    DndDelegate *previous = NULL;
+    for (DndDelegate *p = source; p; previous = p, p = p->next) if (p->target == value->target && p->method == value->method) { if (previous) previous->next = p->next; else source = p->next; break; }
+    return source;
 }
 
 void dnd_roots_init(DndRootSet *roots, DndObject ***storage, size_t capacity) {
