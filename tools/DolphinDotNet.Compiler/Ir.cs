@@ -14,6 +14,9 @@ internal sealed record IrConsoleWriteLine:IrInstruction;
 internal sealed record IrReadButtonsDown:IrInstruction;
 internal sealed record IrCompareGreaterThan:IrInstruction;
 internal sealed record IrCompareEqual:IrInstruction;
+internal sealed record IrLabel(int Offset):IrInstruction;
+internal enum IrBranchCondition { Always, True, False, Equal, NotEqual, GreaterThan, GreaterOrEqual, LessThan, LessOrEqual }
+internal sealed record IrBranch(int TargetOffset,IrBranchCondition Condition,bool Unsigned=false):IrInstruction;
 internal sealed record IrAdd:IrInstruction; internal sealed record IrSub:IrInstruction; internal sealed record IrMul:IrInstruction;
 internal sealed record IrDup:IrInstruction; internal sealed record IrPop:IrInstruction; internal sealed record IrReturn(bool HasValue):IrInstruction;
 internal sealed record IrMethod(MethodKey Key,List<IrInstruction> Instructions,int LocalCount,int ParameterCount,bool HasThis,bool ReturnsValue);
