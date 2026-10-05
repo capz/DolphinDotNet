@@ -76,7 +76,13 @@ int main(void) {
     dnd_gc_collect(&heap, &roots);
     assert(heap.used == 0);
 
-    DndObject *dispatch = dnd_object_new(&heap, &DERIVED_TYPE); assert(dispatch); intptr_t dispatch_args[1] = { (intptr_t)dispatch };\n    assert(dnd_virtual_resolve(dispatch, 0)(dispatch_args) == 20);\n    assert(dnd_interface_resolve(dispatch, &INTERFACE_TYPE, 0)(dispatch_args) == 30);\n    assert(dnd_type_is_assignable_from(&BASE_TYPE, dispatch->type));\n    assert(dnd_type_is_assignable_from(&INTERFACE_TYPE, dispatch->type));\n\n    /* Precise tracing keeps an object reachable through a managed field. */
+    DndObject *dispatch = dnd_object_new(&heap, &DERIVED_TYPE); assert(dispatch); intptr_t dispatch_args[1] = { (intptr_t)dispatch };
+    assert(dnd_virtual_resolve(dispatch, 0)(dispatch_args) == 20);
+    assert(dnd_interface_resolve(dispatch, &INTERFACE_TYPE, 0)(dispatch_args) == 30);
+    assert(dnd_type_is_assignable_from(&BASE_TYPE, dispatch->type));
+    assert(dnd_type_is_assignable_from(&INTERFACE_TYPE, dispatch->type));
+
+    /* Precise tracing keeps an object reachable through a managed field. */
     TestNode *parent = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
     TestNode *child = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
     assert(parent && child); parent->child = (DndObject *)child; child->value = 99;
