@@ -69,7 +69,7 @@ internal static class CilControlFlowGraph
         var starts=new HashSet<int>{instructions[0].Offset};
         foreach(var i in instructions)
         {
-            if(i.Operand is int target)starts.Add(target);
+            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch && i.Operand is int target)starts.Add(target);
             if(i.Flow is CilFlowKind.ConditionalBranch && i!=instructions[^1])starts.Add(i.EndOffset);
         }
         var ordered=starts.OrderBy(x=>x).ToArray();
@@ -81,7 +81,7 @@ internal static class CilControlFlowGraph
             var body=instructions.Where(i=>i.Offset>=start&&i.Offset<end).ToList();
             if(body.Count==0)throw new InvalidDataException($"Branch target IL_{start:x4} is not an instruction boundary.");
             var last=body[^1];var successors=new List<int>();
-            if(last.Operand is int target)successors.Add(byStart[target]);
+            if(last.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch && last.Operand is int target)successors.Add(byStart[target]);
             if(last.Flow==CilFlowKind.ConditionalBranch && byStart.TryGetValue(last.EndOffset,out var fall))successors.Add(fall);
             else if(last.Flow==CilFlowKind.Next && byStart.TryGetValue(last.EndOffset,out var next))successors.Add(next);
             blocks.Add(new CilBasicBlock(n,start,body,successors));
