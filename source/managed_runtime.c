@@ -337,7 +337,8 @@ void dnd_delegate_invoke(DndDelegate *delegate, void *argument) {
 }
 
 DndDelegate *dnd_delegate_combine(DndManagedHeap *heap, DndDelegate *first, DndDelegate *second) {
-    if (!first) return second; if (!second) return first;
+    if (!first) return second;
+    if (!second) return first;
     DndDelegate *head = dnd_delegate_new(heap, first->target, first->method); if (!head) return NULL;
     DndDelegate *tail = head;
     for (DndDelegate *p = first->next; p; p = p->next) { tail->next = dnd_delegate_new(heap, p->target, p->method); if (!tail->next) return NULL; tail = tail->next; }
