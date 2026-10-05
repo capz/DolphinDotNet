@@ -20,8 +20,9 @@ internal static class ValueCBackend
             var refs=model.Fields.Values.Where(f=>f.DeclaringType==tn&&f.IsReference).OrderBy(f=>f.Offset).ToArray();
             if(refs.Length>0)b.AppendLine($"static const uint32_t dnd_refs_{Id(tn)}[] = {{ {string.Join(", ",refs.Select(r=>$"sizeof(DndObject)+{r.Offset}u"))} }};");
             var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";
+            var totalSize=TotalInstanceSize(tn,model);
             var slots=VirtualSlots(tn,model,compiledKeys);
-            b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{t.InstanceSize}u, 0, NULL, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, {slots.Count}u, {(slots.Count>0?$"dnd_vtable_{Id(tn)}":"NULL")}, 0, NULL}};");
+            b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{totalSize}u, 0, NULL, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, {slots.Count}u, {(slots.Count>0?$"dnd_vtable_{Id(tn)}":"NULL")}, 0, NULL}};");
         }
         var staticFields=model.Fields.Values.Where(f=>f.IsStatic&&graph.Types.Contains(f.DeclaringType)).OrderBy(f=>f.DeclaringType).ThenBy(f=>f.Name).ToArray();
         foreach(var field in staticFields)b.AppendLine($"static intptr_t {StaticSymbol(field)};");
@@ -154,6 +155,7 @@ internal static class ValueCBackend
             if(phi.Inputs.TryGetValue(from,out var input))b.AppendLine($"{indent}v{phi.Result.Id} = v{input.Id};");
     }
     internal static string Symbol(MethodKey k)=>"dnd_value_"+Id(k.AssemblyName)+"_"+Id(k.TypeName)+"_"+Id(k.Name)+"_"+StableId(k.Signature);
+    private static int TotalInstanceSize(string type,CompilationModel model){if(!model.Types.TryGetValue(type,out var t))return 0;var parent=t.BaseType is { } p&&model.Types.ContainsKey(p)?TotalInstanceSize(p,model):0;return parent+t.InstanceSize;}
     private static MethodModel? TypeInitializer(string type,CompilationModel model)=>model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==type&&m.Key.Name==".cctor");
     private static bool HasTypeInitializer(string type,CompilationModel model)=>TypeInitializer(type,model) is not null;
     private static string EnsureSymbol(string type)=>"dnd_ensure_"+Id(type);
