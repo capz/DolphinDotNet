@@ -118,6 +118,14 @@ internal static class ValueIrImporter
                     {
                         var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);instructions.Add(new ValueIrStoreElement(array,index,value,cil.OpCode==0xa2));break;
                     }
+                    case 0x46 or 0x4a or 0x4c or 0x50:
+                    {
+                        var address=Pop(stack,cil);var reference=cil.OpCode==0x50;var size=cil.OpCode==0x4c?8:4;var result=New(reference?CilStackKind.ObjectReference:cil.OpCode==0x4c?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadIndirect(result,address,size,reference));stack.Add(result);break;
+                    }
+                    case 0x51:
+                    {
+                        var value=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrStoreIndirect(address,value,4,value.Kind==IrValueKind.ObjectReference));break;
+                    }
                     case >=0x67 and <=0x6e or 0xd3 or 0xe0:
                     {
                         var input=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrConvert(result,input));stack.Add(result);break;
