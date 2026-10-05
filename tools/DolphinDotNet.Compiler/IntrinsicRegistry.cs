@@ -8,7 +8,8 @@ internal enum IntrinsicKind
     ObjectConstructor,
     StringLength,
     GameCubeWriteLine,
-    GameCubeReadButtonsDown
+    GameCubeReadButtonsDown,
+    GameCubePresentDemoFrame
 }
 
 internal static class IntrinsicRegistry
@@ -34,6 +35,7 @@ internal static class IntrinsicRegistry
             ("System.String","get_Length")=>IntrinsicKind.StringLength,
             ("DolphinDotNet.GameCube.GameCube","WriteLine")=>IntrinsicKind.GameCubeWriteLine,
             ("DolphinDotNet.GameCube.GameCube","ReadButtonsDown")=>IntrinsicKind.GameCubeReadButtonsDown,
+            ("DolphinDotNet.GameCube.GameCube","PresentDemoFrame")=>IntrinsicKind.GameCubePresentDemoFrame,
             _=>IntrinsicKind.None
         };
     }
