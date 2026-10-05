@@ -51,10 +51,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install OpenGX
         run: dkp-pacman -S --needed --noconfirm gamecube-dev gamecube-opengx libogc
-      - name: Locate libogc headers
+      - name: Locate libogc installation
         run: |
           find "$DEVKITPRO" -name gccore.h -print
+          find "$DEVKITPRO" -name 'libogc.a' -print
           test -f "$DEVKITPRO/libogc/include/gccore.h"
+          test -f "$DEVKITPRO/libogc/lib/cube/libogc.a"
       - name: Show toolchain
         run: |
           echo "DEVKITPRO=$DEVKITPRO"
