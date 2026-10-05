@@ -254,6 +254,7 @@ internal static class ValueIrImporter
                         terminator=new ValueIrSwitch(value,targets,fallback);break;
                     }
                     case 0x7a: terminator=new ValueIrThrow(Pop(stack,cil));break;
+                    case 0xfe1a: terminator=new ValueIrRethrow();break;
                     case 0x2a:
                         terminator=new ValueIrReturn(method.ReturnsValue?Pop(stack,cil):null);break;
                     default:
