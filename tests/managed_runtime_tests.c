@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+typedef struct { DndObject object; DndObject *child; int32_t value; } TestNode;
+static const uint32_t node_refs[] = { (uint32_t)offsetof(TestNode, child) };
+static const DndType NODE_TYPE = { "TestNode", &DND_TYPE_OBJECT, sizeof(TestNode), 0, NULL, 1, node_refs, 0, 0 };
+
 static int invoked;
 static void callback(void *target, void *arg) {
     (void)target; invoked = *(int *)arg;
@@ -60,6 +64,19 @@ int main(void) {
     root = NULL;
     dnd_gc_collect(&heap, &roots);
     assert(heap.used == 0);
+
+    /* Precise tracing keeps an object reachable through a managed field. */
+    TestNode *parent = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    TestNode *child = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    assert(parent && child); parent->child = (DndObject *)child; child->value = 99;
+    DndObject *parent_root = (DndObject *)parent; DndObject **trace_slots[1]; DndRootSet trace_roots;
+    dnd_roots_init(&trace_roots, trace_slots, 1); assert(dnd_root_add(&trace_roots, &parent_root));
+    dnd_gc_collect(&heap, &trace_roots); assert(parent->child == (DndObject *)child); assert(child->value == 99);
+
+    /* Dead middle blocks are reusable without requiring the whole heap to die. */
+    parent->child = NULL; size_t before_collect = heap.used; dnd_gc_collect(&heap, &trace_roots);
+    TestNode *replacement = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    assert(replacement); assert(heap.used <= before_collect);
 
     puts("managed runtime + core BCL tests passed");
     return 0;
