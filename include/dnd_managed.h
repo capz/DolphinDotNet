@@ -44,11 +44,7 @@ struct DndType {
 
 struct DndObject {
     const DndType *type;
-    uint32_t size;
-    uint8_t marked;
-    uint8_t flags;
-    uint16_t reserved;
-    DndObject *next;
+    uint32_t gc;
 };
 
 struct DndString {
@@ -77,8 +73,8 @@ typedef struct {
     uint8_t *start;
     size_t capacity;
     size_t used;
-    DndObject *objects;
-    DndObject *free_list;
+    void *blocks;
+    void *free_list;
     size_t collections;
 } DndManagedHeap;
 
