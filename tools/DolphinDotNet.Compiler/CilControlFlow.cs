@@ -7,6 +7,7 @@ internal sealed record CilBranchTarget(int Offset):CilOperand;
 internal sealed record CilMetadataToken(int Token):CilOperand;
 internal sealed record CilSwitchTargets(IReadOnlyList<int> Offsets):CilOperand;
 internal sealed record CilInteger(long Value):CilOperand;
+internal sealed record CilFloat(double Value):CilOperand;
 
 internal sealed record CilInstruction(int Offset, int Size, ushort OpCode, CilOperand? Operand, CilFlowKind Flow)
 {
@@ -42,6 +43,9 @@ internal static class CilDecoder
                     var operandSize=OperandSize(op,il,p,start);
                     if(op==0x1f)operand=new CilInteger((sbyte)il[p]);
                     else if(op==0x20)operand=new CilInteger(BitConverter.ToInt32(il,p));
+                    else if(op==0x21)operand=new CilInteger(BitConverter.ToInt64(il,p));
+                    else if(op==0x22)operand=new CilFloat(BitConverter.ToSingle(il,p));
+                    else if(op==0x23)operand=new CilFloat(BitConverter.ToDouble(il,p));
                     else if(op is 0x0e or 0x0f or 0x10 or 0x11 or 0x12 or 0x13)operand=new CilInteger(il[p]);
                     else if(op is 0xfe09 or 0xfe0a or 0xfe0b or 0xfe0c or 0xfe0d or 0xfe0e)operand=new CilInteger(BitConverter.ToUInt16(il,p));
                     else if(op is 0x28 or 0x6f or 0x70 or 0x71 or 0x72 or 0x73 or 0x7b or 0x7d or 0x7e or 0x80 or 0x81 or 0x8c or 0x8d or 0x8f or 0xa3 or 0xa4 or 0xa5 or 0x74 or 0x75 or 0xfe15)operand=new CilMetadataToken(BitConverter.ToInt32(il,p));
