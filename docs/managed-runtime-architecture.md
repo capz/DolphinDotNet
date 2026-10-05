@@ -54,6 +54,10 @@ The typed compiler now carries inherited/aligned field layout, managed casts/typ
 
 The collector also has an explicit stress mode so root-map correctness can be exercised under collection-heavy tests rather than only when the heap naturally fills.
 
+## Delegate lowering
+
+Delegate function pointers now have explicit typed IR. The AOT backend emits ABI wrappers for referenced managed methods, and delegate construction/invocation routes through the managed runtime while keeping the delegate target visible to the precise collector. This is the foundation for Action/Func and multicast semantics; multicast combination/removal remains a later layer.
+
 ## API compatibility tracking
 
 `tools/DolphinDotNet.ApiCompat` compares the public metadata surface of a reference-contract assembly with an implementation assembly and reports exact missing type/member signatures plus coverage. It is intended to turn the selected .NET Standard reference contract into a measurable compatibility checklist as the managed core library grows.
