@@ -11,7 +11,8 @@ internal static class ValueIrImporter
         Func<CilInstruction,CilCallStackEffect?> resolveCallEffect,
         Func<CilInstruction,bool> ignoreCall,
         Func<CilInstruction,IntrinsicKind> intrinsic,
-        Func<CilInstruction,string?> resolveString)
+        Func<CilInstruction,string?> resolveString,
+        Func<CilInstruction,FieldModel?> resolveField)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -115,6 +116,18 @@ internal static class ValueIrImporter
                         for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
                         IrValue? result=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));result=value;stack.Add(value);}
                         instructions.Add(new ValueIrCall(result,target.Key,args));break;
+                    }
+                    case 0x73:
+                    {
+                        var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved constructor at IL_{cil.Offset:x4}.");var args=new IrValue[target.ParameterCount];for(var ai=args.Length-1;ai>=0;ai--)args[ai]=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrNewObject(value,target.Key.TypeName,target.Key,args));stack.Add(value);break;
+                    }
+                    case 0x7b:
+                    {
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name));stack.Add(value);break;
+                    }
+                    case 0x7d:
+                    {
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var obj=Pop(stack,cil);instructions.Add(new ValueIrStoreField(obj,value,field.DeclaringType,field.Name));break;
                     }
                     case 0x2b or 0x38:
                         terminator=new ValueIrJump(Target(blocks,cil));break;
