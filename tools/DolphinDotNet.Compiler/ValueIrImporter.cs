@@ -7,7 +7,8 @@ internal static class ValueIrImporter
         IReadOnlyList<CilBasicBlock> blocks,
         CilStackAnalysis analysis,
         int localCount,
-        Func<CilInstruction,MethodModel?> resolveCall)
+        Func<CilInstruction,MethodModel?> resolveCall,
+        Func<CilInstruction,CilCallStackEffect?> resolveCallEffect)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -69,7 +70,14 @@ internal static class ValueIrImporter
                     }
                     case 0x28 or 0x6f:
                     {
-                        var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved managed call at IL_{cil.Offset:x4}.");
+                        var target=resolveCall(cil);
+                        if(target is null)
+                        {
+                            var effect=resolveCallEffect(cil)??throw new NotSupportedException($"Unresolved call at IL_{cil.Offset:x4}.");
+                            var externalArgs=new IrValue[effect.PopCount];for(var ai=effect.PopCount-1;ai>=0;ai--)externalArgs[ai]=Pop(stack,cil);
+                            IrValue? externalResult=null;if(effect.PushKind is { } push){var value=New(Map(push));externalResult=value;stack.Add(value);}
+                            instructions.Add(new ValueIrOpaqueStackEffect(effect.PopCount,externalResult is { } er?[er]:[],cil.OpCode));break;
+                        }
                         var count=target.ParameterCount+(target.IsStatic?0:1);var args=new IrValue[count];
                         for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
                         IrValue? result=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));result=value;stack.Add(value);}
