@@ -30,6 +30,10 @@ internal sealed record ValueIrAddressOfArgument(IrValue Result,int Index):ValueI
 internal sealed record ValueIrStoreArgument(int Index,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrLoadIndirect(IrValue Result,IrValue Address,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrStoreIndirect(IrValue Address,IrValue Value,int Size,bool Reference):ValueIrInstruction;
+internal sealed record ValueIrInitValue(IrValue Address,string TypeName):ValueIrInstruction;
+internal sealed record ValueIrCopyValue(IrValue Destination,IrValue Source,string TypeName):ValueIrInstruction;
+internal sealed record ValueIrLoadValue(IrValue Result,IrValue Address,string TypeName):ValueIrInstruction;
+internal sealed record ValueIrStoreValue(IrValue Address,IrValue Value,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrConvert(IrValue Result,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrBinary(IrValue Result,string Operation,IrValue Left,IrValue Right):ValueIrInstruction;
 internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments,bool Virtual=false,bool Interface=false):ValueIrInstruction;
