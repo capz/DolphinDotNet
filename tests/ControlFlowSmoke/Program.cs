@@ -14,8 +14,11 @@ public static class Program
         var overloaded=Overload(7)+Overload(5,6);
         var arrays=ArrayCase();
         var statics=StaticCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics;
+        var generic=Identity(6);
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic;
     }
+
+    static T Identity<T>(T value)=>value;
 
     static int StaticCase(){StaticValue=4;return StaticValue;}
 
