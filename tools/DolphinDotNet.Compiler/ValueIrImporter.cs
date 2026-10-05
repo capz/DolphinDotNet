@@ -91,7 +91,7 @@ internal static class ValueIrImporter
         foreach(var block in output)
         {
             if(block.EntryStack.Values.Count==0)continue;
-            var predecessors=blocks.Where(b=>b.Successors.Contains(block.Id)).ToArray();
+            var predecessors=blocks[block.Id].Predecessors.Select(id=>blocks[id]).ToArray();
             if(predecessors.Length<2)continue;
             for(var slot=0;slot<block.EntryStack.Values.Count;slot++)
             {
