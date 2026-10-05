@@ -3,7 +3,6 @@ using System.Runtime.CompilerServices;
 
 namespace DolphinDotNet.Threading;
 
-[AsyncMethodBuilder(typeof(GameTaskMethodBuilder))]
 public sealed class GameTask
 {
     private Action? continuation;
@@ -25,21 +24,6 @@ public readonly struct GameTaskAwaiter : ICriticalNotifyCompletion
     public void OnCompleted(Action continuation) => task.OnCompleted(continuation);
     public void UnsafeOnCompleted(Action continuation) => task.OnCompleted(continuation);
     public void GetResult() => task.GetResult();
-}
-
-public struct GameTaskMethodBuilder
-{
-    private GameTask task;
-    public static GameTaskMethodBuilder Create() => new(){task=new GameTask()};
-    public GameTask Task => task;
-    public void SetResult() => task.Complete();
-    public void SetException(Exception exception) => task.Fail(exception);
-    public void SetStateMachine(IAsyncStateMachine stateMachine) { }
-    public void Start<TStateMachine>(ref TStateMachine stateMachine) where TStateMachine:IAsyncStateMachine => stateMachine.MoveNext();
-    public void AwaitOnCompleted<TAwaiter,TStateMachine>(ref TAwaiter awaiter,ref TStateMachine stateMachine)
-        where TAwaiter:INotifyCompletion where TStateMachine:IAsyncStateMachine => awaiter.OnCompleted(stateMachine.MoveNext);
-    public void AwaitUnsafeOnCompleted<TAwaiter,TStateMachine>(ref TAwaiter awaiter,ref TStateMachine stateMachine)
-        where TAwaiter:ICriticalNotifyCompletion where TStateMachine:IAsyncStateMachine => awaiter.UnsafeOnCompleted(stateMachine.MoveNext);
 }
 
 public static class GameTaskScheduler
