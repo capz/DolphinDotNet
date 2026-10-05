@@ -124,6 +124,12 @@ internal static class ValueIrImporter
                         var unsigned=n>=5;
                         terminator=new ValueIrBranch(left,right,cmp,unsigned,target,fall);break;
                     }
+                    case 0x45:
+                    {
+                        var value=Pop(stack,cil);var sw=cil.Operand as CilSwitchTargets??throw new InvalidDataException($"Missing switch targets at IL_{cil.Offset:x4}.");
+                        var targets=sw.Offsets.Select(offset=>blocks.Single(x=>x.StartOffset==offset).Id).ToArray();var fallback=blocks.Single(x=>x.StartOffset==cil.EndOffset).Id;
+                        terminator=new ValueIrSwitch(value,targets,fallback);break;
+                    }
                     case 0x2a:
                         terminator=new ValueIrReturn(method.ReturnsValue?Pop(stack,cil):null);break;
                     default:
