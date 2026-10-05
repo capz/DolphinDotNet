@@ -25,6 +25,7 @@ internal sealed record ValueIrLoadLocal(IrValue Result,int Index):ValueIrInstruc
 internal sealed record ValueIrLocal(int Index,IrValueKind Kind);
 internal sealed record ValueIrStoreLocal(int Index,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrBinary(IrValue Result,string Operation,IrValue Left,IrValue Right):ValueIrInstruction;
+internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
 internal sealed record ValueIrOpaqueStackEffect(int PopCount,IReadOnlyList<IrValue> Results,ushort OpCode):ValueIrInstruction;
 internal sealed record ValueIrPhi(IrValue Result,IReadOnlyDictionary<int,IrValue> Inputs):ValueIrInstruction;
 internal sealed record ValueIrIncomingStack(IReadOnlyList<IrValue> Values);
