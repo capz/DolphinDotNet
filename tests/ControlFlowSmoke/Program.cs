@@ -15,8 +15,11 @@ public static class Program
         var arrays=ArrayCase();
         var statics=StaticCase();
         var generic=Identity(6);
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic;
+        var boxing=BoxCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing;
     }
+
+    static int BoxCase(){object value=7;return (int)value;}
 
     static T Identity<T>(T value)=>value;
 
