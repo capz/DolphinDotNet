@@ -1,7 +1,8 @@
 using System;
 
+interface IValue { int GetValue(); }
 class VirtualBase { public int BaseField=4; public virtual int GetValue()=>3; }
-class VirtualDerived : VirtualBase { public int DerivedField=5; public override int GetValue()=>9; }
+class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }
 
 public static class Program
 {
@@ -23,8 +24,11 @@ public static class Program
         var types=TypeCase();
         var inherited=InheritedFieldCase();
         var byref=ByRefCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref;
+        var iface=InterfaceIdentityCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface;
     }
+
+    static int InterfaceIdentityCase(){object value=new VirtualDerived();return value is IValue?4:0;}
 
     static int ByRefCase(){var value=2;AddThree(ref value);return value;}
     static void AddThree(ref int value){value=5;}
