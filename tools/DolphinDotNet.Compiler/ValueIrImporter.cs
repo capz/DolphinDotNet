@@ -79,6 +79,14 @@ internal static class ValueIrImporter
                     {
                         var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));instructions.Add(new ValueIrStoreArgument(index,Pop(stack,cil)));break;
                     }
+                    case 0x8c:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrBox(result,input,type));stack.Add(result);break;
+                    }
+                    case 0xa5:
+                    {
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve unboxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrUnboxAny(result,input,type));stack.Add(result);break;
+                    }
                     case 0x8d:
                     {
                         var length=Pop(stack,cil);var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve array element type at IL_{cil.Offset:x4}.");
