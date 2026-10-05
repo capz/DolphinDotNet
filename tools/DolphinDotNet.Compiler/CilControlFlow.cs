@@ -66,7 +66,7 @@ internal static class CilDecoder
     private static void Need(byte[] il,int p,int n,int start){if(p+n>il.Length)throw new InvalidDataException($"Truncated CIL at IL_{start:x4}.");}
 }
 
-internal sealed record CilBasicBlock(int Id,int StartOffset,List<CilInstruction> Instructions,List<int> Successors);
+internal sealed record CilBasicBlock(int Id,int StartOffset,List<CilInstruction> Instructions,List<int> Successors,List<int> Predecessors);
 
 internal static class CilControlFlowGraph
 {
@@ -77,7 +77,7 @@ internal static class CilControlFlowGraph
         foreach(var i in instructions)
         {
             if(i.Operand is CilBranchTarget { Offset: var target })starts.Add(target);
-            if(i.Flow is CilFlowKind.ConditionalBranch && i!=instructions[^1])starts.Add(i.EndOffset);
+            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Return && i!=instructions[^1])starts.Add(i.EndOffset);
         }
         var ordered=starts.OrderBy(x=>x).ToArray();
         var byStart=ordered.Select((x,n)=>(x,n)).ToDictionary(x=>x.x,x=>x.n);
@@ -91,8 +91,9 @@ internal static class CilControlFlowGraph
             if(last.Operand is CilBranchTarget { Offset: var target })successors.Add(byStart[target]);
             if(last.Flow==CilFlowKind.ConditionalBranch && byStart.TryGetValue(last.EndOffset,out var fall))successors.Add(fall);
             else if(last.Flow==CilFlowKind.Next && byStart.TryGetValue(last.EndOffset,out var next))successors.Add(next);
-            blocks.Add(new CilBasicBlock(n,start,body,successors));
+            blocks.Add(new CilBasicBlock(n,start,body,successors,new List<int>()));
         }
+        foreach(var block in blocks)foreach(var successor in block.Successors)blocks[successor].Predecessors.Add(block.Id);
         return blocks;
     }
 }
