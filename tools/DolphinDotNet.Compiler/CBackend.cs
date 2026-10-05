@@ -32,6 +32,7 @@ internal static class CBackend{
     b.AppendLine($"      gc_objects[gc_count++]=o; gc_frame.count=gc_count; dnd_method_{Id(n.Constructor.TypeName)}_{Id(n.Constructor.Name)}(heap,ca); stack[sp++]=(intptr_t)o; }}");break;}
    case IrStringLength:b.AppendLine("    { DndString *s=(DndString*)stack[--sp]; stack[sp++]=s?(intptr_t)s->length:0; }");break;
    case IrCompareGreaterThan:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l>r?1:0; }");break;
+   case IrCompareEqual:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l==r?1:0; }");break;
    case IrCall c:{
     int total=c.ArgumentCount+(c.HasThis?1:0);b.AppendLine($"    {{ intptr_t ca[{Math.Max(1,total)}]; for(int i={total-1};i>=0;i--) ca[i]=stack[--sp]; intptr_t rv=dnd_method_{Id(c.Target.TypeName)}_{Id(c.Target.Name)}(heap,ca);{(c.ReturnsValue?" stack[sp++]=rv;":"")} }}");break;}
    case IrReturn r:b.AppendLine(r.HasValue?"    { intptr_t rv=stack[--sp]; dnd_gc_frame_pop(&gc_frame); return rv; }":"    dnd_gc_frame_pop(&gc_frame); return 0;");break;
