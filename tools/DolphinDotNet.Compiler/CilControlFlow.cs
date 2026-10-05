@@ -83,7 +83,7 @@ internal static class CilControlFlowGraph
         foreach(var i in instructions)
         {
             if(i.Operand is CilBranchTarget { Offset: var target })starts.Add(target);
-            if(i.Operand is CilSwitchTargets sw)foreach(var target in sw.Offsets)starts.Add(target);
+            if(i.Operand is CilSwitchTargets sw)foreach(var switchTarget in sw.Offsets)starts.Add(switchTarget);
             if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Switch or CilFlowKind.Return && i!=instructions[^1])starts.Add(i.EndOffset);
         }
         var ordered=starts.OrderBy(x=>x).ToArray();
@@ -96,7 +96,7 @@ internal static class CilControlFlowGraph
             if(body.Count==0)throw new InvalidDataException($"Branch target IL_{start:x4} is not an instruction boundary.");
             var last=body[^1];var successors=new List<int>();
             if(last.Operand is CilBranchTarget { Offset: var target })successors.Add(byStart[target]);
-            if(last.Operand is CilSwitchTargets sw)foreach(var target in sw.Offsets)successors.Add(byStart[target]);
+            if(last.Operand is CilSwitchTargets sw)foreach(var switchTarget in sw.Offsets)successors.Add(byStart[switchTarget]);
             if(last.Flow==CilFlowKind.Switch && byStart.TryGetValue(last.EndOffset,out var switchFall))successors.Add(switchFall);
             else if(last.Flow==CilFlowKind.ConditionalBranch && byStart.TryGetValue(last.EndOffset,out var fall))successors.Add(fall);
             else if(last.Flow==CilFlowKind.Next && byStart.TryGetValue(last.EndOffset,out var next))successors.Add(next);
