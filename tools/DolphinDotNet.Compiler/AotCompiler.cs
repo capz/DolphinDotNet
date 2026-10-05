@@ -36,7 +36,7 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),t=>model.Types.TryGetValue(t,out var tm)&&tm.IsInterface);
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
