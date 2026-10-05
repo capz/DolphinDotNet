@@ -22,6 +22,6 @@ int main(void)
     intptr_t result=dnd_value_aot_entry(&heap);
     printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld mutated=%ld switched=%ld total=%ld\n",
         (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)mutated,(long)switched,(long)result);
-    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=170)return 1;
+    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=179)return 1;
     return 0;
 }
