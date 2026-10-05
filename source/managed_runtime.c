@@ -191,6 +191,8 @@ void *dnd_managed_array_at(DndArray *array, uint32_t index) {
     return array->data + (size_t)index * array->element_size;
 }
 
+void *dnd_array_element_address(DndArray *array, uint32_t index) { return dnd_managed_array_at(array, index); }
+
 uint32_t dnd_array_length(DndArray *array) {
     if (!array) {
         dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Array is null.");
