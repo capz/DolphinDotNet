@@ -9,8 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
       - name: Test portable runtime
         run: make -C tests test
+      - name: Test C# assembly compiler
+        run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
+      - name: Regenerate managed sample
+        run: sh scripts/compile-sample.sh
+      - name: Verify generated source is committed
+        run: git diff --exit-code -- generated/generated_program.h
 
   gamecube:
     runs-on: ubuntu-latest
