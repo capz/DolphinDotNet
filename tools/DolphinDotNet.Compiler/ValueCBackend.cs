@@ -3,11 +3,19 @@ namespace DolphinDotNet.Compiler;
 
 internal static class ValueCBackend
 {
-    public static string Emit(ValueIrMethod method,string functionName="dnd_value_ir_test")
+    public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry)
+    {
+        var b=new StringBuilder();b.AppendLine("#include <stdint.h>");
+        foreach(var m in methods)b.AppendLine($"static intptr_t {Symbol(m.Key)}({Parameters(m)});");
+        foreach(var m in methods)b.AppendLine(Emit(m,Symbol(m.Key),false));
+        var em=methods.Single(m=>m.Key==entry);b.Append($"intptr_t dnd_value_aot_entry({Parameters(em)}) {{ return {Symbol(entry)}(");b.Append(string.Join(", ",Enumerable.Range(0,em.ParameterCount+(em.HasThis?1:0)).Select(i=>$"a{i}")));b.AppendLine("); }");return b.ToString();
+    }
+
+    public static string Emit(ValueIrMethod method,string functionName="dnd_value_ir_test",bool includeHeader=true)
     {
         var b=new StringBuilder();
         var values=Collect(method).GroupBy(v=>v.Id).Select(g=>g.First()).OrderBy(v=>v.Id).ToArray();
-        b.AppendLine("#include <stdint.h>");
+        if(includeHeader)b.AppendLine("#include <stdint.h>");
         b.Append($"intptr_t {functionName}(");
         for(var i=0;i<method.ParameterCount+(method.HasThis?1:0);i++){if(i>0)b.Append(", ");b.Append($"intptr_t a{i}");}
         b.AppendLine(") {");
@@ -26,6 +34,7 @@ internal static class ValueCBackend
                     case ValueIrLoadLocal x:b.AppendLine($"  v{x.Result.Id} = l{x.Index};");break;
                     case ValueIrStoreLocal x:b.AppendLine($"  l{x.Index} = v{x.Value.Id};");break;
                     case ValueIrBinary x:b.AppendLine($"  v{x.Result.Id} = v{x.Left.Id} {Op(x.Operation)} v{x.Right.Id};");break;
+                    case ValueIrCall x:{var args=string.Join(", ",x.Arguments.Select(a=>$"v{a.Id}"));b.AppendLine(x.Result is { } r?$"  v{r.Id} = {Symbol(x.Target)}({args});":$"  (void){Symbol(x.Target)}({args});");break;}
                     case ValueIrPhi: break; // Assigned on predecessor edges.
                 }
             }
@@ -55,6 +64,9 @@ internal static class ValueCBackend
         foreach(var phi in target.Instructions.OfType<ValueIrPhi>())
             if(phi.Inputs.TryGetValue(from,out var input))b.AppendLine($"{indent}v{phi.Result.Id} = v{input.Id};");
     }
+    private static string Symbol(MethodKey k)=>"dnd_value_"+Id(k.TypeName)+"_"+Id(k.Name);
+    private static string Parameters(ValueIrMethod m){var n=m.ParameterCount+(m.HasThis?1:0);return n==0?"void":string.Join(", ",Enumerable.Range(0,n).Select(i=>$"intptr_t a{i}"));}
+    private static string Id(string s)=>new(s.Select(ch=>char.IsLetterOrDigit(ch)?ch:'_').ToArray());
     private static string CType(IrValueKind kind)=>kind switch
     {
         IrValueKind.R4=>"float",
@@ -68,7 +80,7 @@ internal static class ValueCBackend
     {
         foreach(var b in m.Blocks)foreach(var i in b.Instructions)switch(i)
         {
-            case ValueIrConstant x:yield return x.Result;break;case ValueIrLoadArgument x:yield return x.Result;break;case ValueIrLoadLocal x:yield return x.Result;break;case ValueIrBinary x:yield return x.Result;break;case ValueIrPhi x:yield return x.Result;foreach(var v in x.Inputs.Values)yield return v;break;case ValueIrOpaqueStackEffect x:foreach(var v in x.Results)yield return v;break;
+            case ValueIrCall x:if(x.Result is { } cr)yield return cr;foreach(var a in x.Arguments)yield return a;break;case ValueIrConstant x:yield return x.Result;break;case ValueIrLoadArgument x:yield return x.Result;break;case ValueIrLoadLocal x:yield return x.Result;break;case ValueIrBinary x:yield return x.Result;break;case ValueIrPhi x:yield return x.Result;foreach(var v in x.Inputs.Values)yield return v;break;case ValueIrOpaqueStackEffect x:foreach(var v in x.Results)yield return v;break;
         }
         foreach(var b in m.Blocks){foreach(var v in b.EntryStack.Values)yield return v;foreach(var v in b.ExitStack.Values)yield return v;if(b.Terminator is ValueIrBranch br){yield return br.Left;if(br.Right is { } r)yield return r;}else if(b.Terminator is ValueIrReturn ret&&ret.Value is { } rv)yield return rv;}
     }
