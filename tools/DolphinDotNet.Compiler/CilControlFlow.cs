@@ -100,7 +100,7 @@ internal static class CilControlFlowGraph
         {
             if(i.Operand is CilBranchTarget { Offset: var target })starts.Add(target);
             if(i.Operand is CilSwitchTargets sw)foreach(var switchTarget in sw.Offsets)starts.Add(switchTarget);
-            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Switch or CilFlowKind.Return or CilFlowKind.Leave or CilFlowKind.EndFinally && i!=instructions[^1])starts.Add(i.EndOffset);
+            if(i!=instructions[^1] && i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Switch or CilFlowKind.Return or CilFlowKind.Leave or CilFlowKind.EndFinally)starts.Add(i.EndOffset);
         }
         var ordered=starts.OrderBy(x=>x).ToArray();
         var byStart=ordered.Select((x,n)=>(x,n)).ToDictionary(x=>x.x,x=>x.n);
