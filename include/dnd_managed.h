@@ -157,6 +157,7 @@ void dnd_gc_frame_push(DndGcFrame *frame, DndObject ***slots, size_t count);
 void dnd_gc_frame_pop(DndGcFrame *frame);
 
 void dnd_exception_clear(void);
+void dnd_exception_enter_handler(void);
 void dnd_exception_throw(DndExceptionKind kind, const char *message);
 DndExceptionKind dnd_exception_kind(void);
 const char *dnd_exception_message(void);
