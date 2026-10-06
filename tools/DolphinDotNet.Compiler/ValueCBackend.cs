@@ -81,6 +81,7 @@ internal static class ValueCBackend
         foreach(var v in values)b.AppendLine($"  {CType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
         foreach(var local in method.Locals)b.AppendLine($"  {CType(local.Kind)} l{local.Index} = 0;");
         if(method.Blocks.Any(x=>x.Terminator is ValueIrLeave { FinallyBlocks.Count: >0 }))b.AppendLine("  int32_t dnd_leave_source = -1;");
+        if((method.ExceptionRegions??Array.Empty<ExceptionRegionModel>()).Any(r=>r.Kind==ExceptionRegionKind.Finally))b.AppendLine("  int32_t dnd_unwind_finally = -1;");
         var roots=values.Where(v=>v.Kind==IrValueKind.ObjectReference).Select(v=>$"(DndObject**)&v{v.Id}").ToList();
         roots.AddRange(method.Locals.Where(l=>l.Kind==IrValueKind.ObjectReference).Select(l=>$"(DndObject**)&l{l.Index}"));
         if(method.HasThis)roots.Add("(DndObject**)&a0");
@@ -185,6 +186,11 @@ internal static class ValueCBackend
             b.AppendLine($"eh_dispatch_{block.Id}:");
             EmitCatchDispatch(b,method,block,model);
         }
+        foreach(var handler in method.Blocks.Where(x=>(method.ExceptionRegions??Array.Empty<ExceptionRegionModel>()).Any(r=>r.Kind==ExceptionRegionKind.Finally&&r.HandlerOffset==x.CilOffset)))
+        {
+            b.AppendLine($"eh_resume_{handler.Id}:");
+            EmitExceptionalResume(b,method,handler,model);
+        }
         b.AppendLine("}");
         return b.ToString();
     }
@@ -207,6 +213,8 @@ internal static class ValueCBackend
                 break;
             case ValueIrEndFinally:
             {
+                var unwindRegions=(method.ExceptionRegions??Array.Empty<ExceptionRegionModel>()).Where(r=>r.Kind==ExceptionRegionKind.Finally&&r.HandlerOffset==block.CilOffset).ToArray();
+                if(unwindRegions.Length>0)b.AppendLine($"  if (dnd_unwind_finally == {block.Id}) {{ dnd_unwind_finally = -1; goto eh_resume_{block.Id}; }}");
                 var leaves=method.Blocks.Where(x=>x.Terminator is ValueIrLeave leave&&leave.FinallyBlocks.Contains(block.Id)).ToArray();
                 if(leaves.Length==0){b.AppendLine("  /* endfinally with no statically reachable leave: exception unwind continues below. */");if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");break;}
                 b.AppendLine("  switch (dnd_leave_source) {");
@@ -237,13 +245,40 @@ internal static class ValueCBackend
     {
         var regions=(method.ExceptionRegions??Array.Empty<ExceptionRegionModel>())
             .Where(r=>r.ContainsTryOffset(block.CilOffset)).OrderBy(r=>r.TryLength).ThenBy(r=>r.HandlerOffset).ToArray();
+        var finallyRegion=regions.FirstOrDefault(r=>r.Kind is ExceptionRegionKind.Finally or ExceptionRegionKind.Fault);
+        if(finallyRegion is not null)
+        {
+            var target=method.Blocks.Single(x=>x.CilOffset==finallyRegion.HandlerOffset);
+            b.AppendLine($"  dnd_unwind_finally = {target.Id}; goto block_{target.Id};");
+            return;
+        }
+        EmitCatchCandidates(b,method,regions,model);
+    }
+
+    private static void EmitExceptionalResume(StringBuilder b,ValueIrMethod method,ValueIrBlock handler,CompilationModel model)
+    {
+        var completed=(method.ExceptionRegions??Array.Empty<ExceptionRegionModel>()).Single(r=>r.HandlerOffset==handler.CilOffset&&r.Kind is ExceptionRegionKind.Finally or ExceptionRegionKind.Fault);
+        var outer=(method.ExceptionRegions??Array.Empty<ExceptionRegionModel>())
+            .Where(r=>r.ContainsTryOffset(completed.TryOffset)&&r!=completed&&r.TryLength>=completed.TryLength)
+            .OrderBy(r=>r.TryLength).ThenBy(r=>r.HandlerOffset).ToArray();
+        var nextFinally=outer.FirstOrDefault(r=>r.Kind is ExceptionRegionKind.Finally or ExceptionRegionKind.Fault);
+        if(nextFinally is not null)
+        {
+            var target=method.Blocks.Single(x=>x.CilOffset==nextFinally.HandlerOffset);
+            b.AppendLine($"  dnd_unwind_finally = {target.Id}; goto block_{target.Id};");
+            return;
+        }
+        EmitCatchCandidates(b,method,outer,model);
+    }
+
+    private static void EmitCatchCandidates(StringBuilder b,ValueIrMethod method,IEnumerable<ExceptionRegionModel> regions,CompilationModel model)
+    {
         foreach(var region in regions.Where(r=>r.Kind==ExceptionRegionKind.Catch))
         {
             var target=method.Blocks.Single(x=>x.CilOffset==region.HandlerOffset);
-            var type=region.CatchType is null?"NULL":region.CatchType=="System.Object"?"&DND_TYPE_OBJECT":model.Types.ContainsKey(region.CatchType)?$"&dnd_type_{Id(region.CatchType)}":"NULL";
+            var type=region.CatchType is null?"&DND_TYPE_OBJECT":region.CatchType=="System.Object"?"&DND_TYPE_OBJECT":model.Types.ContainsKey(region.CatchType)?$"&dnd_type_{Id(region.CatchType)}":"NULL";
             b.AppendLine($"  if (dnd_exception_object() && {type} && dnd_type_is_assignable_from({type}, ((DndObject*)dnd_exception_object())->type)) goto block_{target.Id};");
         }
-        /* Abnormal finally unwind is added separately; until then never swallow an unmatched exception. */
         if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");
         b.AppendLine("  return 0;");
     }
