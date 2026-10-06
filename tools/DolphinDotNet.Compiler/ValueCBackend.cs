@@ -93,6 +93,12 @@ internal static class ValueCBackend
         foreach(var block in method.Blocks)
         {
             b.AppendLine($"block_{block.Id}:");
+            var handler=(method.ExceptionRegions??Array.Empty<ExceptionRegionModel>()).FirstOrDefault(r=>r.Kind==ExceptionRegionKind.Catch&&r.HandlerOffset==block.CilOffset);
+            if(handler is not null&&block.EntryStack.Values.Count>0)
+            {
+                b.AppendLine($"  v{block.EntryStack.Values[0].Id} = (intptr_t)dnd_exception_object();");
+                b.AppendLine("  dnd_exception_clear();");
+            }
             foreach(var i in block.Instructions)
             {
                 switch(i)
@@ -170,8 +176,14 @@ internal static class ValueCBackend
                     case ValueIrPresentDemoFrame x:b.AppendLine($"  dnd_graphics_begin_frame(0.025f,0.035f,0.06f,1.0f); dnd_graphics_draw_demo((float)v{x.Rotation.Id}); dnd_graphics_begin_overlay(); dnd_console_render(); dnd_graphics_end_frame();");break;
                     case ValueIrPhi: break; // Assigned on predecessor edges.
                 }
+                if(HasProtectedRegion(method,block))b.AppendLine($"  if (dnd_exception_kind()!=DND_EXCEPTION_NONE) goto eh_dispatch_{block.Id};");
             }
             EmitTerminator(b,method,block);
+        }
+        foreach(var block in method.Blocks.Where(x=>HasProtectedRegion(method,x)))
+        {
+            b.AppendLine($"eh_dispatch_{block.Id}:");
+            EmitCatchDispatch(b,method,block,model);
         }
         b.AppendLine("}");
         return b.ToString();
@@ -207,9 +219,9 @@ internal static class ValueCBackend
                 if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");break;
             }
             case ValueIrRethrow:
-                b.AppendLine("  dnd_throw((DndObject*)dnd_exception_object());");if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");break;
+                b.AppendLine("  dnd_throw((DndObject*)dnd_exception_object());");if(HasProtectedRegion(method,block))b.AppendLine($"  goto eh_dispatch_{block.Id};");else {if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}break;
             case ValueIrThrow t:
-                b.AppendLine($"  dnd_throw((DndObject*)(intptr_t)v{t.Exception.Id});");if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");break;
+                b.AppendLine($"  dnd_throw((DndObject*)(intptr_t)v{t.Exception.Id});");if(HasProtectedRegion(method,block))b.AppendLine($"  goto eh_dispatch_{block.Id};");else {if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}break;
             case ValueIrReturn r:
                 if(r.Value is { } v){b.AppendLine($"  {{ intptr_t return_value = v{v.Id};");if(HasRoots(method))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
                 else {if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
@@ -217,6 +229,25 @@ internal static class ValueCBackend
             case null:b.AppendLine("  return 0;");break;
         }
     }
+
+    private static bool HasProtectedRegion(ValueIrMethod method,ValueIrBlock block)=>
+        (method.ExceptionRegions??Array.Empty<ExceptionRegionModel>()).Any(r=>r.ContainsTryOffset(block.CilOffset));
+
+    private static void EmitCatchDispatch(StringBuilder b,ValueIrMethod method,ValueIrBlock block,CompilationModel model)
+    {
+        var regions=(method.ExceptionRegions??Array.Empty<ExceptionRegionModel>())
+            .Where(r=>r.ContainsTryOffset(block.CilOffset)).OrderBy(r=>r.TryLength).ThenBy(r=>r.HandlerOffset).ToArray();
+        foreach(var region in regions.Where(r=>r.Kind==ExceptionRegionKind.Catch))
+        {
+            var target=method.Blocks.Single(x=>x.CilOffset==region.HandlerOffset);
+            var type=region.CatchType is null?"NULL":region.CatchType=="System.Object"?"&DND_TYPE_OBJECT":model.Types.ContainsKey(region.CatchType)?$"&dnd_type_{Id(region.CatchType)}":"NULL";
+            b.AppendLine($"  if (dnd_exception_object() && {type} && dnd_type_is_assignable_from({type}, ((DndObject*)dnd_exception_object())->type)) goto block_{target.Id};");
+        }
+        /* Abnormal finally unwind is added separately; until then never swallow an unmatched exception. */
+        if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");
+        b.AppendLine("  return 0;");
+    }
+
     private static void Edge(StringBuilder b,ValueIrMethod method,int from,int to,string indent="  ")
     {
         var target=method.Blocks.Single(x=>x.Id==to);
