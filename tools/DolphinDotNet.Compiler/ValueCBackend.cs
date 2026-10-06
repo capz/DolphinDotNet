@@ -163,12 +163,12 @@ internal static class ValueCBackend
                     case ValueIrStringLength x:b.AppendLine($"  v{x.Result.Id} = ((DndString*)(intptr_t)v{x.String.Id})->length;");break;
                     case ValueIrBox x:
                     {
-                        var size=ValueSize(x.TypeName,model); if(size>8 throw new NotSupportedException($"Boxing values larger than the IR scalar width is not implemented: {x.TypeName}.");
+                        var size=ValueSize(x.TypeName,model); if(size>8) throw new NotSupportedException($"Boxing values larger than the IR scalar width is not implemented: {x.TypeName}.");
                         b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_box_value(dnd_value_heap, {TypeExpr(x.TypeName)}, &v{x.Value.Id}, {size}u);");break;
                     }
                     case ValueIrUnboxAny x:
                     {
-                        var size=ValueSize(x.TypeName,model); if(size>8 throw new NotSupportedException($"Unboxing values larger than the IR scalar width is not implemented: {x.TypeName}.");
+                        var size=ValueSize(x.TypeName,model); if(size>8) throw new NotSupportedException($"Unboxing values larger than the IR scalar width is not implemented: {x.TypeName}.");
                         b.AppendLine($"  {{ intptr_t unboxed=0; (void)dnd_unbox_value((DndObject*)(intptr_t)v{x.Object.Id}, {TypeExpr(x.TypeName)}, &unboxed, {size}u); v{x.Result.Id}=unboxed; }}");break;
                     }
                     case ValueIrNewArray x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_array_new_typed(dnd_value_heap, (uint32_t)v{x.Length.Id}, {x.ElementSize}u, {TypeExpr(x.ElementType)}, {(x.ElementsAreReferences?"true":"false")});");break;
