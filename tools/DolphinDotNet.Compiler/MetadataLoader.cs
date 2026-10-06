@@ -20,6 +20,8 @@ internal static class MetadataLoader
    foreach(var p in pending.Where(x=>unresolved.Contains(x.Full)).ToArray())
    {
     if(p.Base is { } b&&unresolved.Contains(b))continue;
+    var dependencies=ValueTypeFieldDependencies(md,md.GetTypeDefinition(p.Handle)).Where(unresolved.Contains).ToArray();
+    if(dependencies.Length>0)continue;
     var offset=0;var type=md.GetTypeDefinition(p.Handle);
     foreach(var fh in type.GetFields())
     {
@@ -59,6 +61,15 @@ internal static class MetadataLoader
   if(code!=SignatureTypeCode.TypeHandle)return Array.Empty<int>();
   var name=ResolveTypeName(md,r.ReadTypeHandle());if(name is null||!model.Types.TryGetValue(name,out var t)||!t.IsValueType)return Array.Empty<int>();
   return model.Fields.Values.Where(f=>f.DeclaringType==name&&!f.IsStatic).SelectMany(f=>(f.EmbeddedReferenceOffsets??(f.IsReference?new[]{0}:Array.Empty<int>())).Select(o=>f.Offset+o)).ToArray();
+ }
+ private static IEnumerable<string> ValueTypeFieldDependencies(MetadataReader md,TypeDefinition type)
+ {
+  foreach(var fh in type.GetFields())
+  {
+   var field=md.GetFieldDefinition(fh);if((field.Attributes&FieldAttributes.Static)!=0)continue;
+   var r=md.GetBlobReader(field.Signature);r.ReadSignatureHeader();if(r.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)continue;
+   var name=ResolveTypeName(md,r.ReadTypeHandle());if(name is not null)yield return name;
+  }
  }
  private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
  private static string Full(string ns,string name)=>string.IsNullOrEmpty(ns)?name:ns+"."+name;
