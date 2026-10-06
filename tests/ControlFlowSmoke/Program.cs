@@ -30,7 +30,7 @@ public static class Program
         var iface=InterfaceIdentityCase();
         var ifaceCall=InterfaceCallCase();
         var delegates=DelegateCase()+ReturningDelegateCase();
-        var exceptions=ExceptionCase()+FinallyCase()+NestedFinallyCase();
+        var exceptions=ExceptionCase()+FinallyCase()+NestedFinallyCase()+RethrowIdentityCase()+CatchThrowsCase()+FinallyReturnCase();
         var core=CorePrimitiveCase();
         return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates+exceptions+core;
     }
@@ -58,6 +58,42 @@ public static class Program
         Array.Copy(source,destination,3);Array.Clear(destination,1,1);
         return destination[0]+destination[1]+destination[2];
     }
+
+    static int RethrowIdentityCase()
+    {
+        Exception first=null;
+        try
+        {
+            try { throw new Exception(); }
+            catch(Exception ex)
+            {
+                first=ex;
+                try { throw new Exception(); } catch(Exception) { }
+                throw;
+            }
+        }
+        catch(Exception ex) { return object.ReferenceEquals(first,ex)?8:0; }
+    }
+
+    static int CatchThrowsCase()
+    {
+        try
+        {
+            try { throw new Exception(); }
+            catch(Exception) { throw new Exception(); }
+        }
+        catch(Exception) { return 9; }
+    }
+
+    static int FinallyReturnCase()
+    {
+        FinallyMarker=0;
+        var value=ReturnInsideTry();
+        return value+FinallyMarker;
+    }
+
+    static int FinallyMarker;
+    static int ReturnInsideTry(){try{return 2;}finally{FinallyMarker=5;}}
 
     static int ExceptionCase(){try{ThrowHelper();return 0;}catch(Exception){return 7;}}
     static void ThrowHelper(){throw new Exception();}
