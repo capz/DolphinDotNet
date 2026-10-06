@@ -166,6 +166,26 @@ bool dnd_string_equals(const DndString *a, const DndString *b) {
     return memcmp(a->chars, b->chars, (size_t)a->length * sizeof(uint16_t)) == 0;
 }
 
+uint32_t dnd_string_hash(const DndString *value) {
+    if (!value) return 0;
+    uint32_t hash=2166136261u;
+    for(uint32_t i=0;i<value->length;i++){hash^=value->chars[i];hash*=16777619u;}
+    return hash;
+}
+int32_t dnd_string_index_of(const DndString *value,const DndString *needle) {
+    if(!value||!needle){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return -1;}
+    if(needle->length==0)return 0;if(needle->length>value->length)return -1;
+    for(uint32_t i=0;i<=value->length-needle->length;i++)
+        if(memcmp(value->chars+i,needle->chars,(size_t)needle->length*sizeof(uint16_t))==0)return (int32_t)i;
+    return -1;
+}
+DndString *dnd_string_substring(DndManagedHeap *heap,const DndString *value,uint32_t start,uint32_t length) {
+    if(!value){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return NULL;}
+    if(start>value->length||length>value->length-start){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Substring range is invalid.");return NULL;}
+    DndString *result=(DndString*)allocate(heap,&DND_TYPE_STRING,sizeof(DndString)+((size_t)length+1)*sizeof(uint16_t));
+    if(!result)return NULL;result->length=length;memcpy(result->chars,value->chars+start,(size_t)length*sizeof(uint16_t));result->chars[length]=0;return result;
+}
+
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length,
     uint32_t element_size, const DndType *element_type, bool references) {
     if (element_size && length > SIZE_MAX / element_size) {
@@ -239,6 +259,12 @@ static bool type_reaches(const DndType *actual, const DndType *target, unsigned 
         if (type_reaches(actual->interfaces[i], target, depth + 1)) return true;
     return actual->base_type ? type_reaches(actual->base_type, target, depth + 1) : false;
 }
+
+bool dnd_object_reference_equals(const DndObject *a,const DndObject *b){return a==b;}
+uint32_t dnd_object_hash(const DndObject *object){uintptr_t v=(uintptr_t)object;return (uint32_t)(v^(v>>32));}
+const DndType *dnd_object_get_type(const DndObject *object){if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Object is null.");return NULL;}return object->type;}
+bool dnd_array_clear(DndArray *array,uint32_t index,uint32_t length){if(!array){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return false;}if(index>array->length||length>array->length-index){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array range out of bounds.");return false;}memset(array->data+(size_t)index*array->element_size,0,(size_t)length*array->element_size);return true;}
+bool dnd_array_copy(DndArray *source,uint32_t source_index,DndArray *destination,uint32_t destination_index,uint32_t length){if(!source||!destination){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return false;}if(source->element_size!=destination->element_size||source->elements_are_references!=destination->elements_are_references){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Array element types are incompatible.");return false;}if(source_index>source->length||length>source->length-source_index||destination_index>destination->length||length>destination->length-destination_index){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array range out of bounds.");return false;}memmove(destination->data+(size_t)destination_index*destination->element_size,source->data+(size_t)source_index*source->element_size,(size_t)length*source->element_size);return true;}
 
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual) {
     return type_reaches(actual, target, 0);
