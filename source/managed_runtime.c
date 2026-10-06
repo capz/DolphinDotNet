@@ -174,7 +174,8 @@ uint32_t dnd_string_hash(const DndString *value) {
 }
 int32_t dnd_string_index_of(const DndString *value,const DndString *needle) {
     if(!value||!needle){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return -1;}
-    if(needle->length==0)return 0;if(needle->length>value->length)return -1;
+    if(needle->length==0)return 0;
+    if(needle->length>value->length)return -1;
     for(uint32_t i=0;i<=value->length-needle->length;i++)
         if(memcmp(value->chars+i,needle->chars,(size_t)needle->length*sizeof(uint16_t))==0)return (int32_t)i;
     return -1;
@@ -183,7 +184,11 @@ DndString *dnd_string_substring(DndManagedHeap *heap,const DndString *value,uint
     if(!value){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return NULL;}
     if(start>value->length||length>value->length-start){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Substring range is invalid.");return NULL;}
     DndString *result=(DndString*)allocate(heap,&DND_TYPE_STRING,sizeof(DndString)+((size_t)length+1)*sizeof(uint16_t));
-    if(!result)return NULL;result->length=length;memcpy(result->chars,value->chars+start,(size_t)length*sizeof(uint16_t));result->chars[length]=0;return result;
+    if(!result)return NULL;
+    result->length=length;
+    memcpy(result->chars,value->chars+start,(size_t)length*sizeof(uint16_t));
+    result->chars[length]=0;
+    return result;
 }
 
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length,
