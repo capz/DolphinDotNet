@@ -68,8 +68,13 @@ internal static class MetadataLoader
   {
    var field=md.GetFieldDefinition(fh);if((field.Attributes&FieldAttributes.Static)!=0)continue;
    var r=md.GetBlobReader(field.Signature);r.ReadSignatureHeader();if(r.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)continue;
-   var name=ResolveTypeName(md,r.ReadTypeHandle());if(name is not null)yield return name;
+   var name=ResolveTypeName(md,r.ReadTypeHandle());if(name is not null&&IsValueTypeDefinition(md,name))yield return name;
   }
+ }
+ private static bool IsValueTypeDefinition(MetadataReader md,string name)
+ {
+  foreach(var th in md.TypeDefinitions){var t=md.GetTypeDefinition(th);if(Full(md.GetString(t.Namespace),md.GetString(t.Name))==name){var b=ResolveTypeName(md,t.BaseType);return b is "System.ValueType" or "System.Enum";}}
+  return false;
  }
  private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
  private static string Full(string ns,string name)=>string.IsNullOrEmpty(ns)?name:ns+"."+name;
