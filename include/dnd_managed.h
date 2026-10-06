@@ -116,6 +116,7 @@ DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type);
 DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text);
 DndString *dnd_string_concat(DndManagedHeap *heap, const DndString *a, const DndString *b);
 bool dnd_string_equals(const DndString *a, const DndString *b);
+uint32_t dnd_string_length(const DndString *value);
 uint32_t dnd_string_hash(const DndString *value);
 int32_t dnd_string_index_of(const DndString *value, const DndString *needle);
 DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, uint32_t start, uint32_t length);
