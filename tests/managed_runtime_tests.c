@@ -14,6 +14,8 @@ static intptr_t interface_method(intptr_t *args) { (void)args; return 30; }
 static const DndManagedMethod base_vtable[] = { virtual_base };
 static const DndManagedMethod derived_vtable[] = { virtual_derived };
 static const DndType INTERFACE_TYPE = { "ITest", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL };
+static const DndType CHILD_INTERFACE_TYPE = { "IChildTest", &DND_TYPE_OBJECT, sizeof(DndObject), 1, (const DndType *const[]){ &INTERFACE_TYPE }, 0, NULL, 0, 0, NULL, 0, NULL };
+static const DndType TRANSITIVE_TYPE = { "Transitive", &DND_TYPE_OBJECT, sizeof(DndObject), 1, (const DndType *const[]){ &CHILD_INTERFACE_TYPE }, 0, NULL, 0, 0, NULL, 0, NULL };
 static const DndManagedMethod iface_methods[] = { interface_method };
 static const DndInterfaceEntry iface_map[] = { { &INTERFACE_TYPE, 1, iface_methods } };
 static const DndType BASE_TYPE = { "Base", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 1, base_vtable, 0, NULL };
@@ -87,6 +89,8 @@ int main(void) {
     assert(dnd_interface_resolve(dispatch, &INTERFACE_TYPE, 0)(dispatch_args) == 30);
     assert(dnd_type_is_assignable_from(&BASE_TYPE, dispatch->type));
     assert(dnd_type_is_assignable_from(&INTERFACE_TYPE, dispatch->type));
+    DndObject *transitive = dnd_object_new(&heap, &TRANSITIVE_TYPE);
+    assert(transitive && dnd_type_is_assignable_from(&INTERFACE_TYPE, transitive->type));
 
     assert(dnd_isinst(dispatch, &BASE_TYPE) == dispatch);
     assert(dnd_cast(dispatch, &BASE_TYPE) == dispatch);
@@ -123,6 +127,13 @@ int main(void) {
     DndDelegate *instance_delegate = dnd_managed_delegate_new(&delegate_heap, (DndObject *)delegate_target, managed_instance, true);
     dnd_gc_set_stress(false);
     assert(instance_delegate && dnd_managed_delegate_invoke(instance_delegate, managed_args, 1) == 42);
+
+    /* Pending managed exceptions are implicit GC roots across collection. */
+    DndExceptionObject *heap_exception = (DndExceptionObject *)dnd_object_new(&heap, &DND_TYPE_EXCEPTION);
+    assert(heap_exception); heap_exception->kind = DND_EXCEPTION_ARGUMENT;
+    dnd_exception_throw_object(heap_exception); dnd_gc_collect(&heap, NULL);
+    assert(dnd_exception_object() == heap_exception && heap_exception->object.type == &DND_TYPE_EXCEPTION);
+    dnd_exception_clear();
 
     DndObject *boxed = dnd_box_i32(&heap, 123);
     assert(boxed && dnd_unbox_i32(boxed) == 123);
