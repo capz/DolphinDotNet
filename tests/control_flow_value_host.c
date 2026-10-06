@@ -24,8 +24,8 @@ int main(void)
     intptr_t switched=dnd_value_Program_SwitchCase(4);
     unsigned char storage[4096]; DndManagedHeap heap; dnd_managed_heap_init(&heap,storage,sizeof(storage));
     intptr_t result=dnd_value_aot_entry(&heap);
-    printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld mutated=%ld switched=%ld total=%ld\n",
-        (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)mutated,(long)switched,(long)result);
+    printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld mutated=%ld switched=%ld total=%ld exception=%d\n",
+        (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)mutated,(long)switched,(long)result,(int)dnd_exception_kind());
     if(dnd_value_Program_ReturningDelegateCase()!=11)return 1;
     if(dnd_value_Program_ExceptionCase()!=7)return 1;
     if(dnd_value_Program_FinallyCase()!=5)return 1;
