@@ -6,6 +6,7 @@ internal enum IntrinsicKind
 {
     None,
     ObjectConstructor,
+    ExceptionConstructor,
     StringLength,
     ObjectReferenceEquals,
     ObjectGetHashCode,
@@ -39,6 +40,7 @@ internal static class IntrinsicRegistry
         return (type,name) switch
         {
             ("System.Object",".ctor")=>IntrinsicKind.ObjectConstructor,
+            ("System.Exception",".ctor")=>IntrinsicKind.ExceptionConstructor,
             ("System.String","get_Length")=>IntrinsicKind.StringLength,
             ("System.Object","ReferenceEquals")=>IntrinsicKind.ObjectReferenceEquals,
             ("System.Object","GetHashCode")=>IntrinsicKind.ObjectGetHashCode,
