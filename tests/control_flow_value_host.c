@@ -39,7 +39,10 @@ int main(void)
     intptr_t switched=dnd_value_Program_SwitchCase(4);
     unsigned char storage[4096]; DndManagedHeap heap; dnd_managed_heap_init(&heap,storage,sizeof(storage));
     intptr_t result=dnd_value_aot_entry(&heap); int entry_exception=(int)dnd_exception_kind(); dnd_exception_clear();
-    printf("extra primitives: arraycase=%ld/%d box=%ld/%d type=%ld/%d\n",(long)dnd_value_Program_ArrayCase(),(int)dnd_exception_kind(),(long)dnd_value_Program_BoxCase(),(int)dnd_exception_kind(),(long)dnd_value_Program_TypeCase(),(int)dnd_exception_kind()); dnd_exception_clear();
+    intptr_t extra_array=dnd_value_Program_ArrayCase(); int extra_array_ex=(int)dnd_exception_kind(); dnd_exception_clear();
+    intptr_t extra_box=dnd_value_Program_BoxCase(); int extra_box_ex=(int)dnd_exception_kind(); dnd_exception_clear();
+    intptr_t extra_type=dnd_value_Program_TypeCase(); int extra_type_ex=(int)dnd_exception_kind(); dnd_exception_clear();
+    printf("extra primitives: arraycase=%ld/%d box=%ld/%d type=%ld/%d\n",(long)extra_array,extra_array_ex,(long)extra_box,extra_box_ex,(long)extra_type,extra_type_ex);
     intptr_t object_core=dnd_value_Program_ObjectPrimitiveCase(); int object_exception=(int)dnd_exception_kind(); dnd_exception_clear();
     intptr_t string_core=dnd_value_Program_StringPrimitiveCase(); int string_exception=(int)dnd_exception_kind(); dnd_exception_clear();
     intptr_t array_core=dnd_value_Program_ArrayPrimitiveCase(); int array_exception=(int)dnd_exception_kind(); dnd_exception_clear();
