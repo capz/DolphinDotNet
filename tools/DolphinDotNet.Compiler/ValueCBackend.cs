@@ -188,7 +188,7 @@ internal static class ValueCBackend
                     case ValueIrPresentDemoFrame x:b.AppendLine($"  dnd_graphics_begin_frame(0.025f,0.035f,0.06f,1.0f); dnd_graphics_draw_demo((float)v{x.Rotation.Id}); dnd_graphics_begin_overlay(); dnd_console_render(); dnd_graphics_end_frame();");break;
                     case ValueIrPhi: break; // Assigned on predecessor edges.
                 }
-                if(HasProtectedRegion(method,block))b.AppendLine($"  if (dnd_exception_kind()!=DND_EXCEPTION_NONE) goto eh_dispatch_{block.Id};");
+                if(MayThrow(i)){if(HasProtectedRegion(method,block))b.AppendLine($"  if (dnd_exception_kind()!=DND_EXCEPTION_NONE) goto eh_dispatch_{block.Id};");else {b.AppendLine("  if (dnd_exception_kind()!=DND_EXCEPTION_NONE) {");if(HasRoots(method))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return 0;");b.AppendLine("  }");}}
             }
             EmitTerminator(b,method,block);
         }
@@ -248,6 +248,13 @@ internal static class ValueCBackend
             case null:b.AppendLine("  return 0;");break;
         }
     }
+
+    private static bool MayThrow(ValueIrInstruction instruction)=>instruction is
+        ValueIrCall or ValueIrNewObject or ValueIrLoadField or ValueIrStoreField or ValueIrTypeTest or
+        ValueIrLoadString or ValueIrStringLength or ValueIrObjectGetHashCode or ValueIrObjectGetType or
+        ValueIrStringIndexOf or ValueIrStringSubstring or ValueIrNewArray or ValueIrBox or ValueIrUnboxAny or
+        ValueIrArrayElementAddress or ValueIrArrayLength or ValueIrLoadElement or ValueIrStoreElement or
+        ValueIrArrayClear or ValueIrArrayCopy or ValueIrDelegateInvoke;
 
     private static bool HasProtectedRegion(ValueIrMethod method,ValueIrBlock block)=>
         (method.ExceptionRegions??Array.Empty<ExceptionRegionModel>()).Any(r=>r.ContainsTryOffset(block.CilOffset));
