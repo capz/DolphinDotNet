@@ -43,20 +43,32 @@ public static class Program
         var score=object.ReferenceEquals(same,same)?1:0;
         if(!object.ReferenceEquals(same.GetType(),null))score+=2;
         if(same.GetHashCode()==same.GetHashCode())score+=4;
+        if(same.Equals(same))score+=8;
+        if(same.ToString().Length>0)score+=16;
         return score;
     }
 
     static int StringPrimitiveCase()
     {
         var text="hello";
-        return text.IndexOf("ell")+text.Substring(1,3).Length;
+        var score=text.IndexOf("ell")+text.Substring(1,3).Length;
+        if(text[1]=='e')score+=4;
+        if(text.StartsWith("he"))score+=8;
+        if(text.EndsWith("lo"))score+=16;
+        if(text.Contains("ell"))score+=32;
+        if(("he"+"llo")==text)score+=64;
+        return score;
     }
 
     static int ArrayPrimitiveCase()
     {
         var source=new int[3];source[0]=1;source[1]=2;source[2]=3;var destination=new int[3];
         Array.Copy(source,destination,3);Array.Clear(destination,1,1);
-        return destination[0]+destination[1]+destination[2];
+        var score=destination[0]+destination[1]+destination[2];
+        if(source.Rank==1)score+=4;
+        if(source.GetLength(0)==3)score+=8;
+        foreach(var value in source)score+=value;
+        return score;
     }
 
     static int RethrowIdentityCase()
