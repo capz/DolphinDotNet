@@ -52,10 +52,10 @@ static void boxing_stress(DndManagedHeap *heap){
 
 static void exhaustion_and_reuse(void){
     uint8_t memory[768];DndManagedHeap heap;dnd_managed_heap_init(&heap,memory,sizeof(memory));
-    Node *root=(Node*)dnd_object_new(&heap,&NODE);assert(root);DndObject *root_object=(DndObject*)root;DndObject **slots[]={&root_object};DndRootSet roots;dnd_roots_init(&roots,slots,1);assert(dnd_root_add(&roots,&root_object));
+    Node *root=(Node*)dnd_object_new(&heap,&NODE);assert(root);DndObject *root_object=(DndObject*)root;DndObject **slots[]={&root_object};DndGcFrame frame;dnd_gc_frame_push(&frame,slots,1);
     Node *tail=root;for(;;){Node *next=(Node*)dnd_object_new(&heap,&NODE);if(!next)break;tail->left=(DndObject*)next;tail=next;}
     assert(dnd_exception_kind()==DND_EXCEPTION_OUT_OF_MEMORY);dnd_exception_clear();
-    root_object=NULL;dnd_gc_collect(&heap,&roots);size_t used=heap.used;DndObject *again=dnd_object_new(&heap,&NODE);assert(again);assert(heap.used<=used);
+    root_object=NULL;dnd_gc_collect(&heap,NULL);size_t used=heap.used;DndObject *again=dnd_object_new(&heap,&NODE);assert(again);assert(heap.used<=used);dnd_gc_frame_pop(&frame);
 }
 
 static void invalid_operations(DndManagedHeap *heap){
