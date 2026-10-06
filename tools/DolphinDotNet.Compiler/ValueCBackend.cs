@@ -98,7 +98,7 @@ internal static class ValueCBackend
             if(handler is not null&&block.EntryStack.Values.Count>0)
             {
                 b.AppendLine($"  v{block.EntryStack.Values[0].Id} = (intptr_t)dnd_exception_object();");
-                b.AppendLine("  dnd_exception_clear();");
+                b.AppendLine("  dnd_exception_enter_handler();");
             }
             foreach(var i in block.Instructions)
             {
