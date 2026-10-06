@@ -21,7 +21,6 @@ typedef struct DndHeapBlock {
 
 static DndGcFrame *gc_frames;
 static bool gc_stress;
-static DndManagedHeap *active_heap;
 static DndExceptionKind exception_kind;
 static const char *exception_text;
 static DndExceptionObject *exception_object;
@@ -130,7 +129,6 @@ void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size) {
     heap->blocks = NULL;
     heap->free_list = NULL;
     heap->collections = 0;
-    active_heap = heap;
 }
 
 DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type) {
