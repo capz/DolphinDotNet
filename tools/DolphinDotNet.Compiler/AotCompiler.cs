@@ -34,9 +34,10 @@ internal static class AotCompiler
                 var body=assembly.PE.GetMethodBody(assembly.Metadata.GetMethodDefinition(method.Handle).RelativeVirtualAddress);
                 var ilBytes=body.GetILBytes()??throw new InvalidDataException($"{method.Key} has no IL body.");
                 var cil=CilDecoder.Decode(ilBytes);
-                var cfg=CilControlFlowGraph.Build(cil);
-                var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),t=>model.Types.TryGetValue(t,out var tm)&&tm.IsInterface,t=>model.Types.TryGetValue(t,out var tm)&&tm.BaseType is "System.MulticastDelegate" or "System.Delegate");
+                var regions=ReadExceptionRegions(assembly.Metadata,body);
+                var cfg=CilControlFlowGraph.Build(cil,regions);
+                var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue,regions);
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),t=>model.Types.TryGetValue(t,out var tm)&&tm.IsInterface,t=>model.Types.TryGetValue(t,out var tm)&&tm.BaseType is "System.MulticastDelegate" or "System.Delegate",regions);
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
@@ -93,6 +94,27 @@ internal static class AotCompiler
                 case ValueIrNewArray array: if(!array.ElementType.StartsWith("System.",StringComparison.Ordinal))graph.AddType(array.ElementType);break;
             }
         }
+    }
+
+
+    private static IReadOnlyList<ExceptionRegionModel> ReadExceptionRegions(MetadataReader md,MethodBodyBlock body)
+    {
+        var result=new List<ExceptionRegionModel>();
+        foreach(var region in body.ExceptionRegions)
+        {
+            var kind=region.Kind switch
+            {
+                System.Reflection.Metadata.ExceptionRegionKind.Catch=>ExceptionRegionKind.Catch,
+                System.Reflection.Metadata.ExceptionRegionKind.Finally=>ExceptionRegionKind.Finally,
+                System.Reflection.Metadata.ExceptionRegionKind.Fault=>ExceptionRegionKind.Fault,
+                System.Reflection.Metadata.ExceptionRegionKind.Filter=>ExceptionRegionKind.Filter,
+                _=>throw new NotSupportedException($"Unsupported exception region kind {region.Kind}.")
+            };
+            string? catchType=null;
+            if(kind==ExceptionRegionKind.Catch&&!region.CatchType.IsNil)catchType=MetadataLoader.ResolveTypeName(md,region.CatchType);
+            result.Add(new ExceptionRegionModel(region.TryOffset,region.TryLength,region.HandlerOffset,region.HandlerLength,kind,catchType,region.FilterOffset));
+        }
+        return result;
     }
 
     private static int ReadLocalCount(AssemblyModel assembly,MethodModel method)
