@@ -19,7 +19,7 @@ internal static class MetadataLoader
    var progress=false;
    foreach(var p in pending.Where(x=>unresolved.Contains(x.Full)).ToArray())
    {
-    if(p.Base is { } b&&unresolved.Contains(b))continue;
+    if(p.Base is { } b&&unresolved.Contains(b)&&IsValueTypeDefinition(md,p.Full))continue;
     var dependencies=ValueTypeFieldDependencies(md,md.GetTypeDefinition(p.Handle)).Where(unresolved.Contains).ToArray();
     if(dependencies.Length>0)continue;
     var offset=0;var type=md.GetTypeDefinition(p.Handle);
