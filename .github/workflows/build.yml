@@ -37,6 +37,8 @@ jobs:
           cat /tmp/netstandard10-compat.txt
           echo "Scanner status: $STATUS (report-only until contract closure)"
           if [ "$STATUS" -gt 1 ]; then exit "$STATUS"; fi
+      - name: Core compatibility tests
+        run: dotnet run --project tests/CoreCompatibility/CoreCompatibility.csproj -c Release
       - name: Build managed GameCube sample
         run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
       - name: Lower managed GameCube dependency graph
