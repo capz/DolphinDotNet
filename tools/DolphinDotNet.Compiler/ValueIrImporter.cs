@@ -192,6 +192,7 @@ internal static class ValueIrImporter
                     {
                         var ik=intrinsic(cil);
                         if(ik==IntrinsicKind.ExceptionConstructor){var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing Exception constructor signature at IL_{cil.Offset:x4}.");for(var ai=0;ai<effect.PopCount;ai++)Pop(stack,cil);break;}
+                        if(ik==IntrinsicKind.ExceptionConstructor){var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing Exception constructor signature at IL_{cil.Offset:x4}.");for(var ai=0;ai<effect.PopCount;ai++)Pop(stack,cil);break;}
                         if(ik==IntrinsicKind.StringLength){var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringLength(value,str));stack.Add(value);break;}
                         if(ik==IntrinsicKind.StringChars){var index=Pop(stack,cil);var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringCharAt(value,str,index));stack.Add(value);break;}
                         if(ik==IntrinsicKind.StringEquals){var right=Pop(stack,cil);var left=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringEquals(value,left,right));stack.Add(value);break;}
