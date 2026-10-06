@@ -92,8 +92,8 @@ internal static class CilControlFlowGraph
         foreach(var region in regions??Array.Empty<ExceptionRegionModel>())
         {
             starts.Add(region.TryOffset); starts.Add(region.HandlerOffset);
-            if(region.TryEnd<=(instructions[^1].EndOffset))starts.Add(region.TryEnd);
-            if(region.HandlerEnd<=(instructions[^1].EndOffset))starts.Add(region.HandlerEnd);
+            if(region.TryEnd<instructions[^1].EndOffset)starts.Add(region.TryEnd);
+            if(region.HandlerEnd<instructions[^1].EndOffset)starts.Add(region.HandlerEnd);
             if(region.FilterOffset>=0)starts.Add(region.FilterOffset);
         }
         foreach(var i in instructions)
