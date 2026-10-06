@@ -155,6 +155,7 @@ internal static class ValueCBackend
                         break;
                     }
                     case ValueIrNewObject x:{var args=string.Join(", ",new[]{$"(intptr_t)v{x.Result.Id}"}.Concat(x.Arguments.Select(a=>$"v{a.Id}")));if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_new(dnd_value_heap, &dnd_type_{Id(x.TypeName)});");b.AppendLine($"  (void){Symbol(x.Constructor)}({args});");break;}
+                    case ValueIrNewRuntimeException x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_new(dnd_value_heap, &DND_TYPE_EXCEPTION); if(v{x.Result.Id}) ((DndExceptionObject*)(intptr_t)v{x.Result.Id})->kind = DND_EXCEPTION_MANAGED;");break;
                     case ValueIrLoadField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);b.AppendLine($"  if(dnd_require_object((DndObject*)(intptr_t)v{x.Object.Id})) v{x.Result.Id} = *({ct}*)((uint8_t*)(intptr_t)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset});");break;}
                     case ValueIrStoreField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);b.AppendLine($"  if(dnd_require_object((DndObject*)(intptr_t)v{x.Object.Id})) *({ct}*)((uint8_t*)(intptr_t)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset}) = ({ct})v{x.Value.Id};");break;}
                     case ValueIrLoadStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = {StaticSymbol(field)};");break;}
@@ -250,7 +251,7 @@ internal static class ValueCBackend
     }
 
     private static bool MayThrow(ValueIrInstruction instruction)=>instruction is
-        ValueIrCall or ValueIrNewObject or ValueIrLoadField or ValueIrStoreField or ValueIrTypeTest or
+        ValueIrCall or ValueIrNewObject or ValueIrNewRuntimeException or ValueIrLoadField or ValueIrStoreField or ValueIrTypeTest or
         ValueIrLoadString or ValueIrStringLength or ValueIrObjectGetHashCode or ValueIrObjectGetType or
         ValueIrStringIndexOf or ValueIrStringSubstring or ValueIrNewArray or ValueIrBox or ValueIrUnboxAny or
         ValueIrArrayElementAddress or ValueIrArrayLength or ValueIrLoadElement or ValueIrStoreElement or
