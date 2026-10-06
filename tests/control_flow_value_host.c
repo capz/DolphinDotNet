@@ -15,7 +15,16 @@ extern intptr_t dnd_value_Program_FinallyCase(void);
 extern intptr_t dnd_value_Program_NestedFinallyCase(void);
 extern intptr_t dnd_value_Program_ObjectPrimitiveCase(void);
 extern intptr_t dnd_value_Program_StringPrimitiveCase(void);
-extern intptr_t dnd_value_Program_ArrayPrimitiveCase(void);
+extern intptr_t dnd_value_Program_ArrayPrimitiveCase(void);\nextern intptr_t dnd_value_Program_ArrayCase(void);
+extern intptr_t dnd_value_Program_StaticCase(void);
+extern intptr_t dnd_value_Program_BoxCase(void);
+extern intptr_t dnd_value_Program_VirtualCase(void);
+extern intptr_t dnd_value_Program_TypeCase(void);
+extern intptr_t dnd_value_Program_InheritedFieldCase(void);
+extern intptr_t dnd_value_Program_ByRefCase(void);
+extern intptr_t dnd_value_Program_InterfaceIdentityCase(void);
+extern intptr_t dnd_value_Program_InterfaceCallCase(void);
+extern intptr_t dnd_value_Program_DelegateCase(void);
 
 int main(void)
 {
