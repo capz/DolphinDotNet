@@ -11,6 +11,7 @@ public static class Program
 {
     static int StaticValue=4;
     static int DelegateTotal;
+    static int FinallyProbe;
     public static int Main()
     {
         var loop=LoopSum();
