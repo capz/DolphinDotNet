@@ -239,9 +239,20 @@ internal static class ValueCBackend
                 if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");break;
             }
             case ValueIrRethrow:
-                b.AppendLine("  dnd_throw((DndObject*)dnd_exception_object());");if(HasProtectedRegion(method,block))b.AppendLine($"  goto eh_dispatch_{block.Id};");else {if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}break;
+            {
+                var catchRegion=(method.ExceptionRegions??Array.Empty<ExceptionRegionModel>())
+                    .Where(r=>r.Kind==ExceptionRegionKind.Catch&&block.CilOffset>=r.HandlerOffset&&block.CilOffset<r.HandlerEnd)
+                    .OrderBy(r=>r.HandlerLength).FirstOrDefault()
+                    ??throw new InvalidDataException($"rethrow outside catch in {method.Key}.");
+                var catchBlock=method.Blocks.Single(x=>x.CilOffset==catchRegion.HandlerOffset);
+                if(catchBlock.EntryStack.Values.Count==0)throw new InvalidDataException($"catch entry has no exception object in {method.Key}.");
+                b.AppendLine($"  dnd_throw((DndObject*)(intptr_t)v{catchBlock.EntryStack.Values[0].Id});");
+                if(DispatchRegions(method,block).Count>0)b.AppendLine($"  goto eh_dispatch_{block.Id};");
+                else {if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
+                break;
+            }
             case ValueIrThrow t:
-                b.AppendLine($"  dnd_throw((DndObject*)(intptr_t)v{t.Exception.Id});");if(HasProtectedRegion(method,block))b.AppendLine($"  goto eh_dispatch_{block.Id};");else {if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}break;
+                b.AppendLine($"  dnd_throw((DndObject*)(intptr_t)v{t.Exception.Id});");if(DispatchRegions(method,block).Count>0)b.AppendLine($"  goto eh_dispatch_{block.Id};");else {if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}break;
             case ValueIrReturn r:
                 if(r.Value is { } v){b.AppendLine($"  {{ intptr_t return_value = v{v.Id};");if(HasRoots(method))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
                 else {if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
