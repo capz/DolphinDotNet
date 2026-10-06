@@ -558,7 +558,7 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
 void dnd_exception_clear(void) { exception_kind = DND_EXCEPTION_NONE; exception_text = NULL; exception_object = NULL; }
 void dnd_exception_enter_handler(void) { exception_kind = DND_EXCEPTION_NONE; exception_text = NULL; }
 void dnd_exception_throw(DndExceptionKind kind, const char *message) { exception_kind = kind; exception_text = message; exception_object = NULL; }
-void dnd_throw(DndObject *exception) { if (!exception) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Thrown exception is null."); return; } dnd_exception_throw_object((DndExceptionObject *)exception); }
+void dnd_throw(DndObject *exception) { if (!exception) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Thrown exception is null."); return; } if (exception->type == &DND_TYPE_EXCEPTION) { dnd_exception_throw_object((DndExceptionObject *)exception); return; } exception_object=(DndExceptionObject *)exception; exception_kind=DND_EXCEPTION_MANAGED; exception_text=NULL; }
 void dnd_exception_throw_object(DndExceptionObject *exception) { exception_object=exception; exception_kind=exception?(DndExceptionKind)exception->kind:DND_EXCEPTION_NONE; exception_text=NULL; }
 DndExceptionObject *dnd_exception_object(void) { return exception_object; }
 DndExceptionKind dnd_exception_kind(void) { return exception_kind; }
