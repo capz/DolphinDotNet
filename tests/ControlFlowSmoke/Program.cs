@@ -30,8 +30,14 @@ public static class Program
         var iface=InterfaceIdentityCase();
         var ifaceCall=InterfaceCallCase();
         var delegates=DelegateCase()+ReturningDelegateCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates;
+        var exceptions=ExceptionCase()+FinallyCase()+NestedFinallyCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates+exceptions;
     }
+
+    static int ExceptionCase(){try{ThrowHelper();return 0;}catch(Exception){return 7;}}
+    static void ThrowHelper(){throw new Exception();}
+    static int FinallyCase(){var value=1;try{value=2;}finally{value=value+3;}return value;}
+    static int NestedFinallyCase(){var value=0;try{try{value=1;ThrowHelper();}finally{value=value+2;}}catch(Exception){value=value+4;}return value;}
 
     static int DelegateCase(){IntSink sink=Sink;sink(6);return DelegateTotal;}
     static int ReturningDelegateCase(){var fn=new IntFn(AddOne);return fn(10);}
