@@ -1,6 +1,6 @@
 namespace DolphinDotNet.Compiler;
 
-internal enum CilFlowKind { Next, Branch, ConditionalBranch, Switch, Return }
+internal enum CilFlowKind { Next, Branch, ConditionalBranch, Switch, Return, Leave, EndFinally }
 
 internal abstract record CilOperand;
 internal sealed record CilBranchTarget(int Offset):CilOperand;
@@ -36,6 +36,9 @@ internal static class CilDecoder
                 case 0x2a: flow=CilFlowKind.Return; break;
                 case 0x7a: flow=CilFlowKind.Return; break;
                 case 0xfe1a: flow=CilFlowKind.Return; break;
+                case 0xdc: flow=CilFlowKind.EndFinally; break;
+                case 0xde: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.Leave; break;
+                case 0xdd: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.Leave; break;
                 case 0x2b: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
                 case >=0x2c and <=0x37: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
                 case 0x38: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
@@ -90,7 +93,7 @@ internal static class CilControlFlowGraph
         {
             if(i.Operand is CilBranchTarget { Offset: var target })starts.Add(target);
             if(i.Operand is CilSwitchTargets sw)foreach(var switchTarget in sw.Offsets)starts.Add(switchTarget);
-            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Switch or CilFlowKind.Return && i!=instructions[^1])starts.Add(i.EndOffset);
+            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Switch or CilFlowKind.Return or CilFlowKind.Leave or CilFlowKind.EndFinally && i!=instructions[^1])starts.Add(i.EndOffset);
         }
         var ordered=starts.OrderBy(x=>x).ToArray();
         var byStart=ordered.Select((x,n)=>(x,n)).ToDictionary(x=>x.x,x=>x.n);
