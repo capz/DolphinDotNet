@@ -74,6 +74,8 @@ internal static class AotCompiler
     private static void Discover(ValueIrMethod method,CompilationModel model,DependencyGraph graph)
     {
         graph.AddMethod(method.Key);graph.AddType(method.Key.TypeName);AddTypeClosure(method.Key.TypeName,model,graph);
+        foreach(var region in method.ExceptionRegions??Array.Empty<ExceptionRegionModel>())
+            if(region.CatchType is { } catchType&&model.Types.ContainsKey(catchType)){graph.AddType(catchType);AddTypeClosure(catchType,model,graph);}
         foreach(var instruction in method.Blocks.SelectMany(b=>b.Instructions))
         {
             switch(instruction)
