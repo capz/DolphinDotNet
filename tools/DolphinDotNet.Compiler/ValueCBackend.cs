@@ -160,7 +160,7 @@ internal static class ValueCBackend
                     case ValueIrLoadStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = {StaticSymbol(field)};");break;}
                     case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
                     case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)(intptr_t)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
-                    case ValueIrStringLength x:b.AppendLine($"  v{x.Result.Id} = ((DndString*)(intptr_t)v{x.String.Id})->length;");break;
+                    case ValueIrStringLength x:b.AppendLine($"  v{x.Result.Id} = dnd_string_length((DndString*)(intptr_t)v{x.String.Id});");break;
                     case ValueIrObjectReferenceEquals x:b.AppendLine($"  v{x.Result.Id} = dnd_object_reference_equals((DndObject*)(intptr_t)v{x.Left.Id}, (DndObject*)(intptr_t)v{x.Right.Id}) ? 1 : 0;");break;
                     case ValueIrObjectGetHashCode x:b.AppendLine($"  v{x.Result.Id} = (int32_t)dnd_object_hash((DndObject*)(intptr_t)v{x.Object.Id});");break;
                     case ValueIrObjectGetType x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_get_type((DndObject*)(intptr_t)v{x.Object.Id});");break;
