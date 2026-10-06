@@ -4,12 +4,14 @@ delegate void IntSink(int value);
 delegate int IntFn(int value);
 interface IValue { int GetValue(); }
 class VirtualBase { public int BaseField=4; public virtual int GetValue()=>3; }
-class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }\nclass SmokeException : Exception { }
+class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }
+class SmokeException : Exception { }
 
 public static class Program
 {
     static int StaticValue=4;
-    static int DelegateTotal;\n    static int FinallyProbe;
+    static int DelegateTotal;
+    static int FinallyProbe;
     public static int Main()
     {
         var loop=LoopSum();
