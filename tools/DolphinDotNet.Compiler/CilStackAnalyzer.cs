@@ -52,7 +52,7 @@ internal static class CilStackAnalyzer
 
     private static CilStackState Merge(CilStackState a,CilStackState b,int offset)
     {
-        if(a.Values.Count!=b.Values.Count)throw new InvalidDataException($"CIL stack height mismatch at IL_{offset:x4}: {a.Values.Count} vs {b.Values.Count}.");
+        if(a.Values.Count!=b.Values.Count)throw new InvalidDataException($"CIL stack height mismatch at IL_{offset:x4}: [{string.Join(\",\",a.Values)}] vs [{string.Join(\",\",b.Values)}].");
         var values=new CilStackKind[a.Values.Count];var changed=false;
         for(var i=0;i<values.Length;i++){values[i]=a.Values[i]==b.Values[i]?a.Values[i]:CilStackKind.Unknown;changed|=values[i]!=a.Values[i];}
         return changed?new CilStackState(values):a;
