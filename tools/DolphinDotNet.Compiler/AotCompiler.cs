@@ -151,7 +151,7 @@ internal static class AotCompiler
 
     private static IntrinsicKind ResolveIntrinsic(MetadataReader md,CilInstruction i)
     {
-        if(i.OpCode is not (0x28 or 0x6f)||i.Operand is not CilMetadataToken { Token: var raw })return IntrinsicKind.None;
+        if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return IntrinsicKind.None;
         return IntrinsicRegistry.Classify(md,MetadataTokens.EntityHandle(raw));
     }
 
