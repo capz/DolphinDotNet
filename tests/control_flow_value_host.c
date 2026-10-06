@@ -90,6 +90,8 @@ int main(void)
     if(capture0(dnd_value_Program_RethrowIdentityCase,&ex_delegate)!=8)return 1;
     if(capture0(dnd_value_Program_CatchThrowsCase,&ex_delegate)!=9)return 1;
     if(capture0(dnd_value_Program_FinallyReturnCase,&ex_delegate)!=7)return 1;
-    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=254)return 1;
+    if(object_core!=31||string_core!=128||array_core!=22)return 1;
+    if(ex_object||ex_string||ex_array_core||entry_exception)return 1;
+    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=420)return 1;
     return 0;
 }
