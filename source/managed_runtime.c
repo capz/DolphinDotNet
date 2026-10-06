@@ -29,8 +29,6 @@ static size_t align8(size_t n) { return (n + 7u) & ~(size_t)7u; }
 static size_t block_header_size(void) { return align8(sizeof(DndHeapBlock)); }
 static DndHeapBlock *first_block(DndManagedHeap *heap) { return (DndHeapBlock *)heap->blocks; }
 static DndObject *block_object(DndHeapBlock *block) { return (DndObject *)((uint8_t *)block + block_header_size()); }
-static DndHeapBlock *object_block(DndObject *object) { return (DndHeapBlock *)((uint8_t *)object - block_header_size()); }
-
 static DndHeapBlock *find_block_containing(const DndManagedHeap *heap, const void *pointer) {
     if (!heap || !pointer) return NULL;
     const uint8_t *p = (const uint8_t *)pointer;
@@ -40,11 +38,6 @@ static DndHeapBlock *find_block_containing(const DndManagedHeap *heap, const voi
         if (!block->free && p >= start && p < end) return block;
     }
     return NULL;
-}
-
-static bool in_heap(const DndManagedHeap *heap, const DndObject *object) {
-    const uint8_t *p = (const uint8_t *)object;
-    return heap && p >= heap->start + block_header_size() && p < heap->start + heap->used;
 }
 
 static void rebuild_free_list(DndManagedHeap *heap) {
