@@ -31,7 +31,23 @@ public static class Program
         var ifaceCall=InterfaceCallCase();
         var delegates=DelegateCase()+ReturningDelegateCase();
         var exceptions=ExceptionCase()+FinallyCase()+NestedFinallyCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates+exceptions;
+        var core=CorePrimitiveCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates+exceptions+core;
+    }
+
+    static int CorePrimitiveCase()
+    {
+        object same=new VirtualDerived();
+        var score=object.ReferenceEquals(same,same)?1:0;
+        if(same.GetType()!=null)score+=2;
+        if(same.GetHashCode()==same.GetHashCode())score+=4;
+        var text="hello";
+        score+=text.IndexOf("ell");
+        score+=text.Substring(1,3).Length;
+        var source=new int[]{1,2,3};var destination=new int[3];
+        Array.Copy(source,destination,3);Array.Clear(destination,1,1);
+        score+=destination[0]+destination[1]+destination[2];
+        return score;
     }
 
     static int ExceptionCase(){try{ThrowHelper();return 0;}catch(Exception){return 7;}}
