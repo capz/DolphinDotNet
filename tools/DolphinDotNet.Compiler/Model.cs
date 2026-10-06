@@ -4,6 +4,13 @@ namespace DolphinDotNet.Compiler;
 internal sealed record MethodKey(string TypeName,string Name,string AssemblyName="",string Signature=""){public override string ToString()=>$"{(string.IsNullOrEmpty(AssemblyName)?"":AssemblyName+"!")} {TypeName}::{Name}{(string.IsNullOrEmpty(Signature)?"":" ["+Signature+"]")}";}
 internal sealed record TypeModel(string Namespace,string Name,string FullName,string? BaseType,int InstanceSize,bool IsInterface=false,bool IsValueType=false,IReadOnlyList<string>? Interfaces=null);
 internal sealed record FieldModel(string DeclaringType,string Name,int Offset,bool IsReference,bool IsStatic=false,int Size=4,IReadOnlyList<int>? EmbeddedReferenceOffsets=null);
+internal enum ExceptionRegionKind { Catch, Finally, Fault, Filter }
+internal sealed record ExceptionRegionModel(int TryOffset,int TryLength,int HandlerOffset,int HandlerLength,ExceptionRegionKind Kind,string? CatchType=null,int FilterOffset=-1)
+{
+ public int TryEnd=>TryOffset+TryLength;
+ public int HandlerEnd=>HandlerOffset+HandlerLength;
+ public bool ContainsTryOffset(int offset)=>offset>=TryOffset&&offset<TryEnd;
+}
 internal sealed record MethodModel(MethodKey Key,MethodDefinitionHandle Handle,bool IsStatic,int ParameterCount,bool ReturnsValue,string AssemblyName,bool IsVirtual=false,bool IsAbstract=false,bool IsNewSlot=false,bool DeclaringTypeIsInterface=false,bool DeclaringTypeIsDelegate=false);
 internal sealed class AssemblyModel : IDisposable
 {
