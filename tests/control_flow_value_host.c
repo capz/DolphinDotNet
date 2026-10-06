@@ -33,10 +33,14 @@ int main(void)
     printf("core primitives: object=%ld/%d string=%ld/%d array=%ld/%d\n",(long)object_core,object_exception,(long)string_core,string_exception,(long)array_core,array_exception);
     printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld mutated=%ld switched=%ld total=%ld exception=%d\n",
         (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)mutated,(long)switched,(long)result,entry_exception);
-    if(dnd_value_Program_ReturningDelegateCase()!=11)return 1;\n    dnd_exception_clear();
-    if(dnd_value_Program_ExceptionCase()!=7)return 1;\n    dnd_exception_clear();
-    if(dnd_value_Program_FinallyCase()!=5)return 1;\n    dnd_exception_clear();
-    if(dnd_value_Program_NestedFinallyCase()!=7)return 1;\n    dnd_exception_clear();
+    if(dnd_value_Program_ReturningDelegateCase()!=11)return 1;
+    dnd_exception_clear();
+    if(dnd_value_Program_ExceptionCase()!=7)return 1;
+    dnd_exception_clear();
+    if(dnd_value_Program_FinallyCase()!=5)return 1;
+    dnd_exception_clear();
+    if(dnd_value_Program_NestedFinallyCase()!=7)return 1;
+    dnd_exception_clear();
     if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=230)return 1;
     return 0;
 }
