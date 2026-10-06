@@ -49,17 +49,6 @@ internal sealed record ValueIrLoadStaticField(IrValue Result,string TypeName,str
 internal sealed record ValueIrStoreStaticField(IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrTypeTest(IrValue Result,IrValue Object,string TypeName,bool ThrowOnFailure):ValueIrInstruction;
 internal sealed record ValueIrStringLength(IrValue Result,IrValue String):ValueIrInstruction;
-internal sealed record ValueIrStringChars(IrValue Result,IrValue String,IrValue Index):ValueIrInstruction;
-internal sealed record ValueIrStringEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
-internal sealed record ValueIrStringConcat(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
-internal sealed record ValueIrStringStartsWith(IrValue Result,IrValue String,IrValue Prefix):ValueIrInstruction;
-internal sealed record ValueIrStringEndsWith(IrValue Result,IrValue String,IrValue Suffix):ValueIrInstruction;
-internal sealed record ValueIrStringContains(IrValue Result,IrValue String,IrValue Needle):ValueIrInstruction;
-internal sealed record ValueIrObjectEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
-internal sealed record ValueIrObjectToString(IrValue Result,IrValue Object):ValueIrInstruction;
-internal sealed record ValueIrArrayRank(IrValue Result,IrValue Array):ValueIrInstruction;
-internal sealed record ValueIrArrayGetLength(IrValue Result,IrValue Array,IrValue Dimension):ValueIrInstruction;
-
 internal sealed record ValueIrStringCharAt(IrValue Result,IrValue String,IrValue Index):ValueIrInstruction;
 internal sealed record ValueIrStringEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
 internal sealed record ValueIrStringConcat(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
