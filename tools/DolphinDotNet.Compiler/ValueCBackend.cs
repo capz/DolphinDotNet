@@ -162,11 +162,21 @@ internal static class ValueCBackend
                     case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
                     case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)(intptr_t)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
                     case ValueIrStringLength x:b.AppendLine($"  v{x.Result.Id} = dnd_string_length((DndString*)(intptr_t)v{x.String.Id});");break;
+                    case ValueIrStringCharAt x:b.AppendLine($"  v{x.Result.Id} = dnd_string_char_at((DndString*)(intptr_t)v{x.String.Id}, (uint32_t)v{x.Index.Id});");break;
+                    case ValueIrStringEquals x:b.AppendLine($"  v{x.Result.Id} = dnd_string_equals((DndString*)(intptr_t)v{x.Left.Id}, (DndString*)(intptr_t)v{x.Right.Id}) ? 1 : 0;");break;
+                    case ValueIrStringConcat x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_string_concat(dnd_value_heap, (DndString*)(intptr_t)v{x.Left.Id}, (DndString*)(intptr_t)v{x.Right.Id});");break;
+                    case ValueIrStringStartsWith x:b.AppendLine($"  v{x.Result.Id} = dnd_string_starts_with((DndString*)(intptr_t)v{x.String.Id}, (DndString*)(intptr_t)v{x.Prefix.Id}) ? 1 : 0;");break;
+                    case ValueIrStringEndsWith x:b.AppendLine($"  v{x.Result.Id} = dnd_string_ends_with((DndString*)(intptr_t)v{x.String.Id}, (DndString*)(intptr_t)v{x.Suffix.Id}) ? 1 : 0;");break;
+                    case ValueIrStringContains x:b.AppendLine($"  v{x.Result.Id} = dnd_string_contains((DndString*)(intptr_t)v{x.String.Id}, (DndString*)(intptr_t)v{x.Needle.Id}) ? 1 : 0;");break;
                     case ValueIrObjectReferenceEquals x:b.AppendLine($"  v{x.Result.Id} = dnd_object_reference_equals((DndObject*)(intptr_t)v{x.Left.Id}, (DndObject*)(intptr_t)v{x.Right.Id}) ? 1 : 0;");break;
+                    case ValueIrObjectEquals x:b.AppendLine($"  v{x.Result.Id} = dnd_object_equals((DndObject*)(intptr_t)v{x.Left.Id}, (DndObject*)(intptr_t)v{x.Right.Id}) ? 1 : 0;");break;
+                    case ValueIrObjectToString x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_to_string(dnd_value_heap, (DndObject*)(intptr_t)v{x.Object.Id});");break;
                     case ValueIrObjectGetHashCode x:b.AppendLine($"  v{x.Result.Id} = (int32_t)dnd_object_hash((DndObject*)(intptr_t)v{x.Object.Id});");break;
                     case ValueIrObjectGetType x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_get_type((DndObject*)(intptr_t)v{x.Object.Id});");break;
                     case ValueIrStringIndexOf x:b.AppendLine($"  v{x.Result.Id} = dnd_string_index_of((DndString*)(intptr_t)v{x.String.Id}, (DndString*)(intptr_t)v{x.Needle.Id});");break;
                     case ValueIrStringSubstring x:b.AppendLine(x.Length is { } len?$"  v{x.Result.Id} = (intptr_t)dnd_string_substring(dnd_value_heap, (DndString*)(intptr_t)v{x.String.Id}, (uint32_t)v{x.Start.Id}, (uint32_t)v{len.Id});":$"  v{x.Result.Id} = (intptr_t)dnd_string_substring(dnd_value_heap, (DndString*)(intptr_t)v{x.String.Id}, (uint32_t)v{x.Start.Id}, dnd_string_length((DndString*)(intptr_t)v{x.String.Id})-(uint32_t)v{x.Start.Id});");break;
+                    case ValueIrArrayRank x:b.AppendLine($"  v{x.Result.Id} = dnd_array_rank((DndArray*)(intptr_t)v{x.Array.Id});");break;
+                    case ValueIrArrayGetLength x:b.AppendLine($"  v{x.Result.Id} = dnd_array_get_length((DndArray*)(intptr_t)v{x.Array.Id}, (uint32_t)v{x.Dimension.Id});");break;
                     case ValueIrArrayClear x:b.AppendLine($"  (void)dnd_array_clear((DndArray*)(intptr_t)v{x.Array.Id}, (uint32_t)v{x.Index.Id}, (uint32_t)v{x.Length.Id});");break;
                     case ValueIrArrayCopy x:b.AppendLine($"  (void)dnd_array_copy((DndArray*)(intptr_t)v{x.Source.Id}, (uint32_t)v{x.SourceIndex.Id}, (DndArray*)(intptr_t)v{x.Destination.Id}, (uint32_t)v{x.DestinationIndex.Id}, (uint32_t)v{x.Length.Id});");break;
                     case ValueIrBox x:
