@@ -48,6 +48,13 @@ internal sealed record ValueIrLoadStaticField(IrValue Result,string TypeName,str
 internal sealed record ValueIrStoreStaticField(IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrTypeTest(IrValue Result,IrValue Object,string TypeName,bool ThrowOnFailure):ValueIrInstruction;
 internal sealed record ValueIrStringLength(IrValue Result,IrValue String):ValueIrInstruction;
+internal sealed record ValueIrObjectReferenceEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
+internal sealed record ValueIrObjectGetHashCode(IrValue Result,IrValue Object):ValueIrInstruction;
+internal sealed record ValueIrObjectGetType(IrValue Result,IrValue Object):ValueIrInstruction;
+internal sealed record ValueIrStringIndexOf(IrValue Result,IrValue String,IrValue Needle):ValueIrInstruction;
+internal sealed record ValueIrStringSubstring(IrValue Result,IrValue String,IrValue Start,IrValue? Length):ValueIrInstruction;
+internal sealed record ValueIrArrayClear(IrValue Array,IrValue Index,IrValue Length):ValueIrInstruction;
+internal sealed record ValueIrArrayCopy(IrValue Source,IrValue SourceIndex,IrValue Destination,IrValue DestinationIndex,IrValue Length):ValueIrInstruction;
 internal sealed record ValueIrNewArray(IrValue Result,IrValue Length,string ElementType,bool ElementsAreReferences,uint ElementSize):ValueIrInstruction;
 internal sealed record ValueIrBox(IrValue Result,IrValue Value,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrUnboxAny(IrValue Result,IrValue Object,string TypeName):ValueIrInstruction;
