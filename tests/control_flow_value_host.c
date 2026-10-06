@@ -88,13 +88,20 @@ int main(void)
     printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld mutated=%ld switched=%ld total=%ld exception=%d\n",
         (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)mutated,(long)switched,(long)result,entry_exception);
 
-    if(capture0(dnd_value_Program_ReturningDelegateCase,&ex_delegate)!=11)return 1;
-    if(capture0(dnd_value_Program_ExceptionCase,&ex_delegate)!=7)return 1;
-    if(capture0(dnd_value_Program_FinallyCase,&ex_delegate)!=5)return 1;
-    if(capture0(dnd_value_Program_NestedFinallyCase,&ex_delegate)!=7)return 1;
-    if(capture0(dnd_value_Program_RethrowIdentityCase,&ex_delegate)!=8)return 1;
-    if(capture0(dnd_value_Program_CatchThrowsCase,&ex_delegate)!=9)return 1;
-    if(capture0(dnd_value_Program_FinallyReturnCase,&ex_delegate)!=7)return 1;
+    int ex_returning,ex_exception,ex_finally,ex_nested_finally,ex_rethrow,ex_catch_throws,ex_finally_return;
+    intptr_t returning_value=capture0(dnd_value_Program_ReturningDelegateCase,&ex_returning);
+    intptr_t exception_value=capture0(dnd_value_Program_ExceptionCase,&ex_exception);
+    intptr_t finally_value=capture0(dnd_value_Program_FinallyCase,&ex_finally);
+    intptr_t nested_finally_value=capture0(dnd_value_Program_NestedFinallyCase,&ex_nested_finally);
+    intptr_t rethrow_value=capture0(dnd_value_Program_RethrowIdentityCase,&ex_rethrow);
+    intptr_t catch_throws_value=capture0(dnd_value_Program_CatchThrowsCase,&ex_catch_throws);
+    intptr_t finally_return_value=capture0(dnd_value_Program_FinallyReturnCase,&ex_finally_return);
+    printf("eh cases: delegate=%ld/%d catch=%ld/%d finally=%ld/%d nested=%ld/%d rethrow=%ld/%d catchthrow=%ld/%d returnfinally=%ld/%d\n",
+        (long)returning_value,ex_returning,(long)exception_value,ex_exception,(long)finally_value,ex_finally,
+        (long)nested_finally_value,ex_nested_finally,(long)rethrow_value,ex_rethrow,(long)catch_throws_value,ex_catch_throws,
+        (long)finally_return_value,ex_finally_return);
+    if(returning_value!=11||exception_value!=7||finally_value!=5||nested_finally_value!=7||rethrow_value!=8||catch_throws_value!=9||finally_return_value!=7)return 1;
+    if(ex_returning||ex_exception||ex_finally||ex_nested_finally||ex_rethrow||ex_catch_throws||ex_finally_return)return 1;
     if(object_core!=31||string_core!=128||array_core!=22)return 1;
     if(ex_object||ex_string||ex_array_core||entry_exception)return 1;
     if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=420)return 1;
