@@ -16,6 +16,9 @@ extern intptr_t dnd_value_Program_NestedFinallyCase(void);
 extern intptr_t dnd_value_Program_ObjectPrimitiveCase(void);
 extern intptr_t dnd_value_Program_StringPrimitiveCase(void);
 extern intptr_t dnd_value_Program_ArrayPrimitiveCase(void);
+extern intptr_t dnd_value_Program_ObjectPrimitiveCase(void);
+extern intptr_t dnd_value_Program_StringPrimitiveCase(void);
+extern intptr_t dnd_value_Program_ArrayPrimitiveCase(void);
 
 int main(void)
 {
@@ -26,9 +29,13 @@ int main(void)
     intptr_t mutated=dnd_value_Program_MutateArgument(2);
     intptr_t switched=dnd_value_Program_SwitchCase(4);
     unsigned char storage[4096]; DndManagedHeap heap; dnd_managed_heap_init(&heap,storage,sizeof(storage));
-    intptr_t result=dnd_value_aot_entry(&heap);
+    intptr_t result=dnd_value_aot_entry(&heap); int entry_exception=(int)dnd_exception_kind(); dnd_exception_clear();
+    intptr_t object_core=dnd_value_Program_ObjectPrimitiveCase(); int object_exception=(int)dnd_exception_kind(); dnd_exception_clear();
+    intptr_t string_core=dnd_value_Program_StringPrimitiveCase(); int string_exception=(int)dnd_exception_kind(); dnd_exception_clear();
+    intptr_t array_core=dnd_value_Program_ArrayPrimitiveCase(); int array_exception=(int)dnd_exception_kind(); dnd_exception_clear();
+    printf("core primitives: object=%ld/%d string=%ld/%d array=%ld/%d\\n",(long)object_core,object_exception,(long)string_core,string_exception,(long)array_core,array_exception);
     printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld mutated=%ld switched=%ld total=%ld exception=%d\n",
-        (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)mutated,(long)switched,(long)result,(int)dnd_exception_kind());
+        (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)mutated,(long)switched,(long)result,entry_exception);
     dnd_exception_clear();
     intptr_t object_core=dnd_value_Program_ObjectPrimitiveCase(); int object_ex=dnd_exception_kind(); dnd_exception_clear();
     intptr_t string_core=dnd_value_Program_StringPrimitiveCase(); int string_ex=dnd_exception_kind(); dnd_exception_clear();
