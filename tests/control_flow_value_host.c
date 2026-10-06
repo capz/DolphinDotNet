@@ -13,6 +13,9 @@ extern intptr_t dnd_value_Program_ReturningDelegateCase(void);
 extern intptr_t dnd_value_Program_ExceptionCase(void);
 extern intptr_t dnd_value_Program_FinallyCase(void);
 extern intptr_t dnd_value_Program_NestedFinallyCase(void);
+extern intptr_t dnd_value_Program_RethrowIdentityCase(void);
+extern intptr_t dnd_value_Program_CatchThrowsCase(void);
+extern intptr_t dnd_value_Program_FinallyReturnCase(void);
 extern intptr_t dnd_value_Program_ObjectPrimitiveCase(void);
 extern intptr_t dnd_value_Program_StringPrimitiveCase(void);
 extern intptr_t dnd_value_Program_ArrayPrimitiveCase(void);
@@ -84,6 +87,9 @@ int main(void)
     if(capture0(dnd_value_Program_ExceptionCase,&ex_delegate)!=7)return 1;
     if(capture0(dnd_value_Program_FinallyCase,&ex_delegate)!=5)return 1;
     if(capture0(dnd_value_Program_NestedFinallyCase,&ex_delegate)!=7)return 1;
-    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=230)return 1;
+    if(capture0(dnd_value_Program_RethrowIdentityCase,&ex_delegate)!=8)return 1;
+    if(capture0(dnd_value_Program_CatchThrowsCase,&ex_delegate)!=9)return 1;
+    if(capture0(dnd_value_Program_FinallyReturnCase,&ex_delegate)!=7)return 1;
+    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=254)return 1;
     return 0;
 }
