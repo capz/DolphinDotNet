@@ -21,6 +21,7 @@ typedef struct DndHeapBlock {
 
 static DndGcFrame *gc_frames;
 static bool gc_stress;
+static DndManagedHeap *active_heap;
 static DndExceptionKind exception_kind;
 static const char *exception_text;
 static DndExceptionObject *exception_object;
@@ -30,6 +31,17 @@ static size_t block_header_size(void) { return align8(sizeof(DndHeapBlock)); }
 static DndHeapBlock *first_block(DndManagedHeap *heap) { return (DndHeapBlock *)heap->blocks; }
 static DndObject *block_object(DndHeapBlock *block) { return (DndObject *)((uint8_t *)block + block_header_size()); }
 static DndHeapBlock *object_block(DndObject *object) { return (DndHeapBlock *)((uint8_t *)object - block_header_size()); }
+
+static DndHeapBlock *find_block_containing(const DndManagedHeap *heap, const void *pointer) {
+    if (!heap || !pointer) return NULL;
+    const uint8_t *p = (const uint8_t *)pointer;
+    for (DndHeapBlock *block = first_block((DndManagedHeap *)heap); block; block = block->next) {
+        const uint8_t *start = (const uint8_t *)block_object(block);
+        const uint8_t *end = start + block->size;
+        if (!block->free && p >= start && p < end) return block;
+    }
+    return NULL;
+}
 
 static bool in_heap(const DndManagedHeap *heap, const DndObject *object) {
     const uint8_t *p = (const uint8_t *)object;
@@ -118,6 +130,7 @@ void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size) {
     heap->blocks = NULL;
     heap->free_list = NULL;
     heap->collections = 0;
+    active_heap = heap;
 }
 
 DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type) {
@@ -228,14 +241,16 @@ bool dnd_array_store_ref(DndArray *array, uint32_t index, DndObject *value) {
     return true;
 }
 
+static bool type_reaches(const DndType *actual, const DndType *target, unsigned depth) {
+    if (!actual || !target || depth > 64) return false;
+    if (actual == target) return true;
+    for (uint16_t i = 0; i < actual->interface_count; i++)
+        if (type_reaches(actual->interfaces[i], target, depth + 1)) return true;
+    return actual->base_type ? type_reaches(actual->base_type, target, depth + 1) : false;
+}
+
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual) {
-    if (!target || !actual) return false;
-    for (const DndType *type = actual; type; type = type->base_type)
-        if (type == target) return true;
-    for (const DndType *type = actual; type; type = type->base_type)
-        for (uint16_t i = 0; i < type->interface_count; i++)
-            if (type->interfaces[i] == target) return true;
-    return false;
+    return type_reaches(actual, target, 0);
 }
 
 DndObject *dnd_isinst(DndObject *object, const DndType *target) {
@@ -451,8 +466,10 @@ void dnd_gc_frame_pop(DndGcFrame *frame) {
 }
 
 static void mark_object(DndManagedHeap *heap, DndObject *object) {
-    if (!object || !in_heap(heap, object)) return;
-    DndHeapBlock *block = object_block(object);
+    if (!object) return;
+    DndHeapBlock *block = find_block_containing(heap, object);
+    if (!block) return;
+    object = block_object(block);
     if (block->free || block->marked || !object->type) return;
     block->marked = 1;
     const DndType *type = object->type;
@@ -463,16 +480,22 @@ static void mark_object(DndManagedHeap *heap, DndObject *object) {
                 mark_object(heap, *(DndObject **)((uint8_t *)object + offset));
         }
     }
-    if (type == &DND_TYPE_ARRAY) {
+    if ((type->flags & DND_TYPE_FLAG_ARRAY) != 0) {
         DndArray *array = (DndArray *)object;
         if (array->elements_are_references) {
             for (uint32_t i = 0; i < array->length; i++)
                 mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size));
-        } else if (array->element_type && array->element_type->reference_count) {
-            for (uint32_t i = 0; i < array->length; i++)
-                for (uint16_t r = 0; r < array->element_type->reference_count; r++)
-                    mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size +
-                        array->element_type->reference_offsets[r] - ((array->element_type->flags & DND_TYPE_FLAG_VALUE_TYPE) ? sizeof(DndObject) : 0)));
+        } else if (array->element_type) {
+            for (uint32_t i = 0; i < array->length; i++) {
+                uint8_t *element = array->data + (size_t)i * array->element_size;
+                for (const DndType *current = array->element_type; current; current = current->base_type)
+                    for (uint16_t r = 0; r < current->reference_count; r++) {
+                        uint32_t offset = current->reference_offsets[r];
+                        if ((array->element_type->flags & DND_TYPE_FLAG_VALUE_TYPE) && offset >= sizeof(DndObject)) offset -= sizeof(DndObject);
+                        if (offset + sizeof(void *) <= array->element_size)
+                            mark_object(heap, *(DndObject **)(element + offset));
+                    }
+            }
         }
     }
 }
@@ -486,6 +509,7 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     if (roots)
         for (size_t i = 0; i < roots->count; i++)
             if (roots->slots[i]) mark_object(heap, *roots->slots[i]);
+    if (exception_object) mark_object(heap, (DndObject *)exception_object);
     for (DndGcFrame *frame = gc_frames; frame; frame = frame->previous)
         for (size_t i = 0; i < frame->count; i++)
             if (frame->slots[i]) mark_object(heap, *frame->slots[i]);
