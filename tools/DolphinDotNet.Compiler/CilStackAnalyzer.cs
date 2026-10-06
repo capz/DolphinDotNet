@@ -17,14 +17,20 @@ internal sealed record CilCallStackEffect(int PopCount,CilStackKind? PushKind);
 
 internal static class CilStackAnalyzer
 {
-    public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks,Func<CilInstruction,CilCallStackEffect?>? resolveCall=null,bool returnsValue=false)
+    public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks,Func<CilInstruction,CilCallStackEffect?>? resolveCall=null,bool returnsValue=false,IReadOnlyList<ExceptionRegionModel>? regions=null)
     {
         if(blocks.Count==0)return new CilStackAnalysis(new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>());
         var entry=new Dictionary<int,CilStackState>{{blocks[0].Id,CilStackState.Empty}};
+        foreach(var region in regions??Array.Empty<ExceptionRegionModel>())
+        {
+            var handler=blocks.SingleOrDefault(b=>b.StartOffset==region.HandlerOffset);
+            if(handler is not null)entry[handler.Id]=region.Kind==ExceptionRegionKind.Catch?new CilStackState(new[]{CilStackKind.ObjectReference}):CilStackState.Empty;
+            if(region.FilterOffset>=0){var filter=blocks.SingleOrDefault(b=>b.StartOffset==region.FilterOffset);if(filter is not null)entry[filter.Id]=new CilStackState(new[]{CilStackKind.ObjectReference});}
+        }
         var exit=new Dictionary<int,CilStackState>();
         var instructionEntry=new Dictionary<int,CilStackState>();
         var instructionExit=new Dictionary<int,CilStackState>();
-        var queue=new Queue<int>();queue.Enqueue(blocks[0].Id);
+        var queue=new Queue<int>();foreach(var id in entry.Keys)queue.Enqueue(id);
         while(queue.Count>0)
         {
             var id=queue.Dequeue();var block=blocks[id];
@@ -65,7 +71,7 @@ internal static class CilStackAnalyzer
             case 0x22 or 0x23: Push(s,CilStackKind.Float); break;
             case 0x25: if(s.Count==0)Underflow(i); Push(s,s[^1]); break;
             case 0x26: Pop(s,i); break;
-            case 0x2b or 0x38: break;
+            case 0x2b or 0x38 or 0xdd or 0xde: s.Clear(); break;
             case 0x45: Pop(s,i); break;
             case 0x2c or 0x2d or 0x39 or 0x3a: Pop(s,i); break;
             case >=0x2e and <=0x37 or >=0x3b and <=0x44: Pop(s,i);Pop(s,i);break;
@@ -103,7 +109,7 @@ internal static class CilStackAnalyzer
                 if(call.PushKind is { } kind)Push(s,kind);
                 break;
             case 0x7a: Pop(s,i);break;
-            case 0xfe1a: break;
+            case 0xfe1a or 0xdc: s.Clear(); break;
             case 0x2a:
                 if(returnsValue)Pop(s,i);
                 if(s.Count!=0)throw new InvalidDataException($"CIL return at IL_{i.Offset:x4} leaves {s.Count} value(s) on the evaluation stack.");
