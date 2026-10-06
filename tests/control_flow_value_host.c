@@ -13,6 +13,9 @@ extern intptr_t dnd_value_Program_ReturningDelegateCase(void);
 extern intptr_t dnd_value_Program_ExceptionCase(void);
 extern intptr_t dnd_value_Program_FinallyCase(void);
 extern intptr_t dnd_value_Program_NestedFinallyCase(void);
+extern intptr_t dnd_value_Program_ObjectPrimitiveCase(void);
+extern intptr_t dnd_value_Program_StringPrimitiveCase(void);
+extern intptr_t dnd_value_Program_ArrayPrimitiveCase(void);
 
 int main(void)
 {
@@ -26,10 +29,15 @@ int main(void)
     intptr_t result=dnd_value_aot_entry(&heap);
     printf("value-ir components: loop=%ld branches=%ld nested=%ld short=%ld mutated=%ld switched=%ld total=%ld exception=%d\n",
         (long)loop,(long)branches,(long)nested,(long)short_circuit,(long)mutated,(long)switched,(long)result,(int)dnd_exception_kind());
-    if(dnd_value_Program_ReturningDelegateCase()!=11)return 1;
-    if(dnd_value_Program_ExceptionCase()!=7)return 1;
-    if(dnd_value_Program_FinallyCase()!=5)return 1;
-    if(dnd_value_Program_NestedFinallyCase()!=7)return 1;
+    dnd_exception_clear();
+    intptr_t object_core=dnd_value_Program_ObjectPrimitiveCase(); int object_ex=dnd_exception_kind(); dnd_exception_clear();
+    intptr_t string_core=dnd_value_Program_StringPrimitiveCase(); int string_ex=dnd_exception_kind(); dnd_exception_clear();
+    intptr_t array_core=dnd_value_Program_ArrayPrimitiveCase(); int array_ex=dnd_exception_kind(); dnd_exception_clear();
+    printf("core primitives: object=%ld ex=%d string=%ld ex=%d array=%ld ex=%d\n",(long)object_core,object_ex,(long)string_core,string_ex,(long)array_core,array_ex);
+    if(dnd_value_Program_ReturningDelegateCase()!=11)return 1; dnd_exception_clear();
+    if(dnd_value_Program_ExceptionCase()!=7)return 1; dnd_exception_clear();
+    if(dnd_value_Program_FinallyCase()!=5)return 1; dnd_exception_clear();
+    if(dnd_value_Program_NestedFinallyCase()!=7)return 1; dnd_exception_clear();
     if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=230)return 1;
     return 0;
 }
