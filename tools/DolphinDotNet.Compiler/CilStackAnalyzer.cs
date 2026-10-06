@@ -41,6 +41,7 @@ internal static class CilStackAnalyzer
             {
                 /* Handler entry stacks are supplied by the CLR, never by normal-flow predecessors. */
                 if((regions??Array.Empty<ExceptionRegionModel>()).Any(r=>r.HandlerOffset==blocks[successor].StartOffset))continue;
+                if(block.Instructions[^1].Flow==CilFlowKind.Leave) state=CilStackState.Empty;
                 if(!entry.TryGetValue(successor,out var existing)){entry[successor]=state;queue.Enqueue(successor);continue;}
                 var merged=Merge(existing,state,blocks[successor].StartOffset);
                 if(!merged.Equals(existing)){entry[successor]=merged;queue.Enqueue(successor);}
