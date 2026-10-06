@@ -80,6 +80,7 @@ internal static class ValueCBackend
         b.AppendLine(") {");
         foreach(var v in values)b.AppendLine($"  {CType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
         foreach(var local in method.Locals)b.AppendLine($"  {CType(local.Kind)} l{local.Index} = 0;");
+        if(method.Blocks.Any(x=>x.Terminator is ValueIrLeave { FinallyBlocks.Count: >0 }))b.AppendLine("  int32_t dnd_leave_source = -1;");
         var roots=values.Where(v=>v.Kind==IrValueKind.ObjectReference).Select(v=>$"(DndObject**)&v{v.Id}").ToList();
         roots.AddRange(method.Locals.Where(l=>l.Kind==IrValueKind.ObjectReference).Select(l=>$"(DndObject**)&l{l.Index}"));
         if(method.HasThis)roots.Add("(DndObject**)&a0");
@@ -188,6 +189,23 @@ internal static class ValueCBackend
                 b.AppendLine($"  if ({left} {op} {right}) {{");Edge(b,method,block.Id,x.TrueBlock,"    ");b.AppendLine($"    goto block_{x.TrueBlock};");b.AppendLine("  } else {");Edge(b,method,block.Id,x.FalseBlock,"    ");b.AppendLine($"    goto block_{x.FalseBlock};");b.AppendLine("  }");break;
             case ValueIrSwitch x:
                 b.AppendLine($"  switch ((int32_t)v{x.Value.Id}) {{");for(var i=0;i<x.Targets.Count;i++){b.AppendLine($"    case {i}:");Edge(b,method,block.Id,x.Targets[i],"      ");b.AppendLine($"      goto block_{x.Targets[i]};");}b.AppendLine("    default:");Edge(b,method,block.Id,x.DefaultBlock,"      ");b.AppendLine($"      goto block_{x.DefaultBlock};");b.AppendLine("  }");break;
+            case ValueIrLeave l:
+                if(l.FinallyBlocks.Count==0){Edge(b,method,block.Id,l.TargetBlock);b.AppendLine($"  goto block_{l.TargetBlock};");}
+                else {b.AppendLine($"  dnd_leave_source = {block.Id};");b.AppendLine($"  goto block_{l.FinallyBlocks[0]};");}
+                break;
+            case ValueIrEndFinally:
+            {
+                var leaves=method.Blocks.Where(x=>x.Terminator is ValueIrLeave leave&&leave.FinallyBlocks.Contains(block.Id)).ToArray();
+                if(leaves.Length==0){b.AppendLine("  /* endfinally with no statically reachable leave: exception unwind continues below. */");if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");break;}
+                b.AppendLine("  switch (dnd_leave_source) {");
+                foreach(var source in leaves)
+                {
+                    var leave=(ValueIrLeave)source.Terminator!;var index=leave.FinallyBlocks.IndexOf(block.Id);var next=index+1<leave.FinallyBlocks.Count?leave.FinallyBlocks[index+1]:leave.TargetBlock;
+                    b.AppendLine($"    case {source.Id}: goto block_{next};");
+                }
+                b.AppendLine("    default: break;");b.AppendLine("  }");
+                if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");break;
+            }
             case ValueIrRethrow:
                 b.AppendLine("  dnd_throw((DndObject*)dnd_exception_object());");if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");break;
             case ValueIrThrow t:
