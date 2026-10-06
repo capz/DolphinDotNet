@@ -193,7 +193,7 @@ internal static class ValueCBackend
             }
             EmitTerminator(b,method,block);
         }
-        foreach(var block in method.Blocks.Where(x=>HasProtectedRegion(method,x)))
+        foreach(var block in method.Blocks.Where(x=>NeedsDispatch(method,x)))
         {
             b.AppendLine($"eh_dispatch_{block.Id}:");
             EmitCatchDispatch(b,method,block,model);
@@ -256,6 +256,8 @@ internal static class ValueCBackend
         ValueIrStringIndexOf or ValueIrStringSubstring or ValueIrNewArray or ValueIrBox or ValueIrUnboxAny or
         ValueIrArrayElementAddress or ValueIrArrayLength or ValueIrLoadElement or ValueIrStoreElement or
         ValueIrArrayClear or ValueIrArrayCopy or ValueIrDelegateInvoke;
+
+    private static bool NeedsDispatch(ValueIrMethod method,ValueIrBlock block)=>HasProtectedRegion(method,block)&&(block.Instructions.Any(MayThrow)||block.Terminator is ValueIrThrow or ValueIrRethrow);
 
     private static bool HasProtectedRegion(ValueIrMethod method,ValueIrBlock block)=>
         (method.ExceptionRegions??Array.Empty<ExceptionRegionModel>()).Any(r=>r.ContainsTryOffset(block.CilOffset));
