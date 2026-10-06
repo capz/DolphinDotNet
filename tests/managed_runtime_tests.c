@@ -178,10 +178,10 @@ int main(void) {
     TestNode *replacement = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
     assert(replacement); assert(heap.used <= before_collect);
 
-    DndObject *managed_exception=dnd_object_new(&heap,&TRANSITIVE_TYPE);assert(managed_exception);dnd_throw(managed_exception);
-    assert(dnd_exception_kind()==DND_EXCEPTION_MANAGED);assert((DndObject*)dnd_exception_object()==managed_exception);dnd_exception_enter_handler();
-    assert(dnd_exception_kind()==DND_EXCEPTION_NONE);assert((DndObject*)dnd_exception_object()==managed_exception);dnd_throw((DndObject*)dnd_exception_object());
-    assert(dnd_exception_kind()==DND_EXCEPTION_MANAGED);assert((DndObject*)dnd_exception_object()==managed_exception);dnd_exception_clear();
+    DndObject *managed_exception_object=dnd_object_new(&heap,&TRANSITIVE_TYPE);assert(managed_exception_object);dnd_throw(managed_exception_object);
+    assert(dnd_exception_kind()==DND_EXCEPTION_MANAGED);assert((DndObject*)dnd_exception_object()==managed_exception_object);dnd_exception_enter_handler();
+    assert(dnd_exception_kind()==DND_EXCEPTION_NONE);assert((DndObject*)dnd_exception_object()==managed_exception_object);dnd_throw((DndObject*)dnd_exception_object());
+    assert(dnd_exception_kind()==DND_EXCEPTION_MANAGED);assert((DndObject*)dnd_exception_object()==managed_exception_object);dnd_exception_clear();
 
     puts("managed runtime + core BCL tests passed");
     return 0;
