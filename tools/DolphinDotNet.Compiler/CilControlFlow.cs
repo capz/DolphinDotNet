@@ -85,10 +85,17 @@ internal sealed record CilBasicBlock(int Id,int StartOffset,List<CilInstruction>
 
 internal static class CilControlFlowGraph
 {
-    public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions)
+    public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<ExceptionRegionModel>? regions=null)
     {
         if(instructions.Count==0)return [];
         var starts=new HashSet<int>{instructions[0].Offset};
+        foreach(var region in regions??Array.Empty<ExceptionRegionModel>())
+        {
+            starts.Add(region.TryOffset); starts.Add(region.HandlerOffset);
+            if(region.TryEnd<=(instructions[^1].EndOffset))starts.Add(region.TryEnd);
+            if(region.HandlerEnd<=(instructions[^1].EndOffset))starts.Add(region.HandlerEnd);
+            if(region.FilterOffset>=0)starts.Add(region.FilterOffset);
+        }
         foreach(var i in instructions)
         {
             if(i.Operand is CilBranchTarget { Offset: var target })starts.Add(target);
