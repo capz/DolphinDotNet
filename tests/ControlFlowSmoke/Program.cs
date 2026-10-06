@@ -41,7 +41,7 @@ public static class Program
     {
         object same=new VirtualDerived();
         var score=object.ReferenceEquals(same,same)?1:0;
-        if(same.GetType()!=null)score+=2;
+        if(!object.ReferenceEquals(same.GetType(),null))score+=2;
         if(same.GetHashCode()==same.GetHashCode())score+=4;
         return score;
     }
