@@ -42,6 +42,7 @@ internal sealed record ValueIrFunctionPointer(IrValue Result,MethodKey Target,Ir
 internal sealed record ValueIrNewDelegate(IrValue Result,string TypeName,IrValue Target,IrValue Function):ValueIrInstruction;
 internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments,bool Virtual=false,bool Interface=false):ValueIrInstruction;
 internal sealed record ValueIrNewObject(IrValue Result,string TypeName,MethodKey Constructor,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
+internal sealed record ValueIrNewRuntimeException(IrValue Result):ValueIrInstruction;
 internal sealed record ValueIrLoadField(IrValue Result,IrValue Object,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrStoreField(IrValue Object,IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrLoadStaticField(IrValue Result,string TypeName,string FieldName):ValueIrInstruction;
