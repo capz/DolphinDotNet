@@ -41,7 +41,7 @@ internal static class CilStackAnalyzer
             {
                 /* Handler entry stacks are supplied by the CLR, never by normal-flow predecessors. */
                 if((regions??Array.Empty<ExceptionRegionModel>()).Any(r=>r.HandlerOffset==blocks[successor].StartOffset))continue;
-                if(block.Instructions[^1].Flow==CilFlowKind.Leave) state=CilStackState.Empty;
+                
                 if(!entry.TryGetValue(successor,out var existing)){entry[successor]=state;queue.Enqueue(successor);continue;}
                 var merged=Merge(existing,state,blocks[successor].StartOffset);
                 if(!merged.Equals(existing)){entry[successor]=merged;queue.Enqueue(successor);}
@@ -76,8 +76,8 @@ internal static class CilStackAnalyzer
             case 0x26: Pop(s,i); break;
             case 0x2b or 0x38 or 0xdd or 0xde: s.Clear(); break;
             case 0x45: Pop(s,i); break;
-            case 0x2c or 0x2d or 0x39 or 0x3a: Pop(s,i); break;
-            case >=0x2e and <=0x37 or >=0x3b and <=0x44: Pop(s,i);Pop(s,i);break;
+            case 0x2c or 0x2d or 0x39 or 0x3a: Pop(s,i); break; // brfalse/brtrue
+            case >=0x2e and <=0x37 or >=0x3b and <=0x44: Pop(s,i);Pop(s,i);break; // relational branches
             case 0x58 or 0x59 or 0x5a or 0x5b or 0x5d or 0x5e or 0x5f or 0x60 or 0x61 or 0x62 or 0x63 or 0x64:
                 var r=Pop(s,i);var l=Pop(s,i);Push(s,l==r?l:CilStackKind.Unknown);break;
             case >=0x67 and <=0x6e: Pop(s,i);Push(s,i.OpCode is 0x6a or 0x6e?CilStackKind.I8:i.OpCode is 0x6b or 0x6c?CilStackKind.Float:CilStackKind.I4);break;
