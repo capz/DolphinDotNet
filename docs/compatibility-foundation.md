@@ -14,6 +14,27 @@ This index prioritizes APIs by **dependency unlock**, not raw API count. The fir
 | Array primitives | length/rank, element access/copy/clear, generic enumeration | Foundation for collections and compiler-generated storage. |
 | Delegates | construction, static/instance invocation, multicast combine/remove | Required by callbacks, events and LINQ. |
 
+## Completed P0 compatibility milestones
+
+### Phase 1 — structured exception handling
+
+Complete for the compatibility-foundation scope: `throw`, `rethrow`, `leave`, typed catches, `finally`, nested unwinding and cross-method exception propagation are lowered through Value IR and the native runtime. Regression coverage includes typed catch selection, exceptions thrown from catch handlers, normal and exceptional `finally`, return-through-`finally`, nested `finally`, and rethrow object identity after a nested catch.
+
+Exception filters and full CLR fault/filter parity remain outside this P0 compatibility gate and are tracked as later CLR-surface expansion.
+
+### Phase 2 — Object / String / Array primitives
+
+Complete for the P0 primitive set through ordinary framework calls recognized by the AOT compiler. Runtime/compiler coverage includes:
+
+- `System.Object`: equality/reference equality, hash code, type identity and string conversion.
+- `System.String`: length, indexer, equality, hash, two-string concat, substring, ordinal search, prefix/suffix and contains.
+- `System.Array`: length/rank, dimension length, element access, copy, clear and compiler-generated one-dimensional enumeration.
+- checked null/range behavior and propagation through the structured EH path.
+
+These are runtime/compiler intrinsics, not replacement CoreLib declarations. Consequently the strict .NET Standard declaration scanner intentionally remains at 0/8,363 until compatible `System.*` contract declarations are introduced.
+
+Validation gate: portable runtime/stress tests, managed compiler integration, control-flow/EH smoke, AOT smoke, generated C compilation and the devkitPPC GameCube ELF/DOL pipeline must all remain green.
+
 ## P1 — small managed surface, large payoff
 
 Implement these primarily in managed CoreLib once the P0 primitives exist:
