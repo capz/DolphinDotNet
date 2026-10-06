@@ -43,6 +43,9 @@ int main(void) {
     DndString *hello2 = dnd_string_from_utf8(&heap, "Hello");
     assert(hello && hello->length == 5);
     assert(dnd_string_equals(hello, hello2));
+    assert(dnd_string_hash(hello)==dnd_string_hash(hello2));
+    DndString *ell=dnd_string_from_utf8(&heap,"ell"); assert(dnd_string_index_of(hello,ell)==1);
+    DndString *sub=dnd_string_substring(&heap,hello,1,3); assert(sub&&dnd_string_equals(sub,ell));
     DndString *left = dnd_string_concat(&heap, hello, space);
     DndString *sentence = dnd_string_concat(&heap, left, world);
     assert(sentence && sentence->length == 11);
@@ -50,6 +53,9 @@ int main(void) {
     DndArray *array = dnd_managed_array_new(&heap, 4, sizeof(int32_t));
     *(int32_t *)dnd_managed_array_at(array, 2) = 42;
     assert(*(int32_t *)dnd_managed_array_at(array, 2) == 42);
+    DndArray *copy_array=dnd_managed_array_new(&heap,4,sizeof(int32_t));assert(copy_array);
+    assert(dnd_array_copy(array,0,copy_array,0,4));assert(*(int32_t*)dnd_managed_array_at(copy_array,2)==42);
+    assert(dnd_array_clear(copy_array,1,2));assert(*(int32_t*)dnd_managed_array_at(copy_array,2)==0);
     assert(dnd_managed_array_at(array, 9) == NULL);
     assert(dnd_exception_kind() == DND_EXCEPTION_INDEX_OUT_OF_RANGE);
     dnd_exception_clear();
@@ -87,6 +93,10 @@ int main(void) {
     DndObject *dispatch = dnd_object_new(&heap, &DERIVED_TYPE); assert(dispatch); intptr_t dispatch_args[1] = { (intptr_t)dispatch };
     assert(dnd_virtual_resolve(dispatch, 0)(dispatch_args) == 20);
     assert(dnd_interface_resolve(dispatch, &INTERFACE_TYPE, 0)(dispatch_args) == 30);
+    assert(dnd_object_reference_equals(dispatch,dispatch));
+    assert(!dnd_object_reference_equals(dispatch,(DndObject*)transitive));
+    assert(dnd_object_hash(dispatch)!=0);
+    assert(dnd_object_get_type(dispatch)==&DERIVED_TYPE);
     assert(dnd_type_is_assignable_from(&BASE_TYPE, dispatch->type));
     assert(dnd_type_is_assignable_from(&INTERFACE_TYPE, dispatch->type));
     DndObject *transitive = dnd_object_new(&heap, &TRANSITIVE_TYPE);
