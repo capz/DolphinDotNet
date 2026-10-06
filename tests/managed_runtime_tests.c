@@ -94,13 +94,13 @@ int main(void) {
     assert(dnd_virtual_resolve(dispatch, 0)(dispatch_args) == 20);
     assert(dnd_interface_resolve(dispatch, &INTERFACE_TYPE, 0)(dispatch_args) == 30);
     assert(dnd_object_reference_equals(dispatch,dispatch));
-    assert(!dnd_object_reference_equals(dispatch,(DndObject*)transitive));
     assert(dnd_object_hash(dispatch)!=0);
     assert(dnd_object_get_type(dispatch)==&DERIVED_TYPE);
     assert(dnd_type_is_assignable_from(&BASE_TYPE, dispatch->type));
     assert(dnd_type_is_assignable_from(&INTERFACE_TYPE, dispatch->type));
     DndObject *transitive = dnd_object_new(&heap, &TRANSITIVE_TYPE);
     assert(transitive && dnd_type_is_assignable_from(&INTERFACE_TYPE, transitive->type));
+    assert(!dnd_object_reference_equals(dispatch,transitive));
 
     assert(dnd_isinst(dispatch, &BASE_TYPE) == dispatch);
     assert(dnd_cast(dispatch, &BASE_TYPE) == dispatch);
