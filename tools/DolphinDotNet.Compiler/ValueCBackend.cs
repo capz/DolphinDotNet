@@ -162,11 +162,15 @@ internal static class ValueCBackend
                     case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)(intptr_t)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
                     case ValueIrStringLength x:b.AppendLine($"  v{x.Result.Id} = ((DndString*)(intptr_t)v{x.String.Id})->length;");break;
                     case ValueIrBox x:
-                        if(x.TypeName!="System.Int32")throw new NotSupportedException($"Boxing {x.TypeName} is not implemented.");
-                        b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_box_i32(dnd_value_heap, (int32_t)v{x.Value.Id});");break;
+                    {
+                        var size=ValueSize(x.TypeName,model); if(size>8 throw new NotSupportedException($"Boxing values larger than the IR scalar width is not implemented: {x.TypeName}.");
+                        b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_box_value(dnd_value_heap, {TypeExpr(x.TypeName)}, &v{x.Value.Id}, {size}u);");break;
+                    }
                     case ValueIrUnboxAny x:
-                        if(x.TypeName!="System.Int32")throw new NotSupportedException($"Unboxing {x.TypeName} is not implemented.");
-                        b.AppendLine($"  v{x.Result.Id} = dnd_unbox_i32((DndObject*)(intptr_t)v{x.Object.Id});");break;
+                    {
+                        var size=ValueSize(x.TypeName,model); if(size>8 throw new NotSupportedException($"Unboxing values larger than the IR scalar width is not implemented: {x.TypeName}.");
+                        b.AppendLine($"  {{ intptr_t unboxed=0; (void)dnd_unbox_value((DndObject*)(intptr_t)v{x.Object.Id}, {TypeExpr(x.TypeName)}, &unboxed, {size}u); v{x.Result.Id}=unboxed; }}");break;
+                    }
                     case ValueIrNewArray x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_array_new_typed(dnd_value_heap, (uint32_t)v{x.Length.Id}, {x.ElementSize}u, {TypeExpr(x.ElementType)}, {(x.ElementsAreReferences?"true":"false")});");break;
                     case ValueIrArrayElementAddress x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_array_element_address((DndArray*)(intptr_t)v{x.Array.Id}, (uint32_t)v{x.Index.Id});");break;
                     case ValueIrArrayLength x:b.AppendLine($"  v{x.Result.Id} = dnd_array_length((DndArray*)(intptr_t)v{x.Array.Id});");break;
