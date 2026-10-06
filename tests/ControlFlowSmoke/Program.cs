@@ -35,19 +35,28 @@ public static class Program
         return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates+exceptions+core;
     }
 
-    static int CorePrimitiveCase()
+    static int CorePrimitiveCase()=>ObjectPrimitiveCase()+StringPrimitiveCase()+ArrayPrimitiveCase();
+
+    static int ObjectPrimitiveCase()
     {
         object same=new VirtualDerived();
         var score=object.ReferenceEquals(same,same)?1:0;
         if(same.GetType()!=null)score+=2;
         if(same.GetHashCode()==same.GetHashCode())score+=4;
-        var text="hello";
-        score+=text.IndexOf("ell");
-        score+=text.Substring(1,3).Length;
-        var source=new int[]{1,2,3};var destination=new int[3];
-        Array.Copy(source,destination,3);Array.Clear(destination,1,1);
-        score+=destination[0]+destination[1]+destination[2];
         return score;
+    }
+
+    static int StringPrimitiveCase()
+    {
+        var text="hello";
+        return text.IndexOf("ell")+text.Substring(1,3).Length;
+    }
+
+    static int ArrayPrimitiveCase()
+    {
+        var source=new int[3];source[0]=1;source[1]=2;source[2]=3;var destination=new int[3];
+        Array.Copy(source,destination,3);Array.Clear(destination,1,1);
+        return destination[0]+destination[1]+destination[2];
     }
 
     static int ExceptionCase(){try{ThrowHelper();return 0;}catch(Exception){return 7;}}
