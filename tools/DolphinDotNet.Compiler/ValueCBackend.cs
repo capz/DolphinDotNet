@@ -189,7 +189,7 @@ internal static class ValueCBackend
                     case ValueIrPresentDemoFrame x:b.AppendLine($"  dnd_graphics_begin_frame(0.025f,0.035f,0.06f,1.0f); dnd_graphics_draw_demo((float)v{x.Rotation.Id}); dnd_graphics_begin_overlay(); dnd_console_render(); dnd_graphics_end_frame();");break;
                     case ValueIrPhi: break; // Assigned on predecessor edges.
                 }
-                if(MayThrow(i)){if(HasProtectedRegion(method,block))b.AppendLine($"  if (dnd_exception_kind()!=DND_EXCEPTION_NONE) goto eh_dispatch_{block.Id};");else {b.AppendLine("  if (dnd_exception_kind()!=DND_EXCEPTION_NONE) {");if(HasRoots(method))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return 0;");b.AppendLine("  }");}}
+                if(MayThrow(i)){if(DispatchRegions(method,block).Count>0)b.AppendLine($"  if (dnd_exception_kind()!=DND_EXCEPTION_NONE) goto eh_dispatch_{block.Id};");else {b.AppendLine("  if (dnd_exception_kind()!=DND_EXCEPTION_NONE) {");if(HasRoots(method))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return 0;");b.AppendLine("  }");}}
             }
             EmitTerminator(b,method,block);
         }
@@ -257,15 +257,24 @@ internal static class ValueCBackend
         ValueIrArrayElementAddress or ValueIrArrayLength or ValueIrLoadElement or ValueIrStoreElement or
         ValueIrArrayClear or ValueIrArrayCopy or ValueIrDelegateInvoke;
 
-    private static bool NeedsDispatch(ValueIrMethod method,ValueIrBlock block)=>HasProtectedRegion(method,block)&&(block.Instructions.Any(MayThrow)||block.Terminator is ValueIrThrow or ValueIrRethrow);
+    private static bool NeedsDispatch(ValueIrMethod method,ValueIrBlock block)=>DispatchRegions(method,block).Count>0&&(block.Instructions.Any(MayThrow)||block.Terminator is ValueIrThrow or ValueIrRethrow);
 
     private static bool HasProtectedRegion(ValueIrMethod method,ValueIrBlock block)=>
         (method.ExceptionRegions??Array.Empty<ExceptionRegionModel>()).Any(r=>r.ContainsTryOffset(block.CilOffset));
 
+    private static IReadOnlyList<ExceptionRegionModel> DispatchRegions(ValueIrMethod method,ValueIrBlock block)
+    {
+        var all=(method.ExceptionRegions??Array.Empty<ExceptionRegionModel>()).ToArray();
+        var result=new List<ExceptionRegionModel>();
+        result.AddRange(all.Where(r=>r.ContainsTryOffset(block.CilOffset)));
+        foreach(var handler in all.Where(r=>block.CilOffset>=r.HandlerOffset&&block.CilOffset<r.HandlerEnd))
+            result.AddRange(all.Where(r=>r.ContainsTryOffset(handler.TryOffset)&&!(r.TryOffset==handler.TryOffset&&r.TryLength==handler.TryLength)));
+        return result.Distinct().OrderBy(r=>r.TryLength).ThenBy(r=>r.HandlerOffset).ToArray();
+    }
+
     private static void EmitCatchDispatch(StringBuilder b,ValueIrMethod method,ValueIrBlock block,CompilationModel model)
     {
-        var regions=(method.ExceptionRegions??Array.Empty<ExceptionRegionModel>())
-            .Where(r=>r.ContainsTryOffset(block.CilOffset)).OrderBy(r=>r.TryLength).ThenBy(r=>r.HandlerOffset).ToArray();
+        var regions=DispatchRegions(method,block).ToArray();
         var finallyRegion=regions.FirstOrDefault(r=>r.Kind is ExceptionRegionKind.Finally or ExceptionRegionKind.Fault);
         if(finallyRegion is not null)
         {
