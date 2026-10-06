@@ -166,6 +166,20 @@ bool dnd_string_equals(const DndString *a, const DndString *b) {
     return memcmp(a->chars, b->chars, (size_t)a->length * sizeof(uint16_t)) == 0;
 }
 
+uint16_t dnd_string_char_at(const DndString *value, uint32_t index) {
+    if(!value){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return 0;}
+    if(index>=value->length){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"String index out of range.");return 0;}
+    return value->chars[index];
+}
+bool dnd_string_starts_with(const DndString *value,const DndString *prefix) {
+    if(!value||!prefix){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return false;}
+    return prefix->length<=value->length&&memcmp(value->chars,prefix->chars,(size_t)prefix->length*sizeof(uint16_t))==0;
+}
+bool dnd_string_ends_with(const DndString *value,const DndString *suffix) {
+    if(!value||!suffix){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return false;}
+    return suffix->length<=value->length&&memcmp(value->chars+value->length-suffix->length,suffix->chars,(size_t)suffix->length*sizeof(uint16_t))==0;
+}
+bool dnd_string_contains(const DndString *value,const DndString *needle) { return dnd_string_index_of(value,needle)>=0; }
 uint32_t dnd_string_length(const DndString *value) { if(!value){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return 0;}return value->length; }
 uint32_t dnd_string_hash(const DndString *value) {
     if (!value) return 0;
@@ -226,6 +240,8 @@ void *dnd_managed_array_at(DndArray *array, uint32_t index) {
 
 void *dnd_array_element_address(DndArray *array, uint32_t index) { return dnd_managed_array_at(array, index); }
 
+uint32_t dnd_array_rank(DndArray *array){if(!array){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return 0;}return 1;}
+uint32_t dnd_array_get_length(DndArray *array,uint32_t dimension){if(!array){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return 0;}if(dimension!=0){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array dimension out of range.");return 0;}return array->length;}
 uint32_t dnd_array_length(DndArray *array) {
     if (!array) {
         dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Array is null.");
@@ -266,6 +282,11 @@ static bool type_reaches(const DndType *actual, const DndType *target, unsigned 
     return actual->base_type ? type_reaches(actual->base_type, target, depth + 1) : false;
 }
 
+bool dnd_object_equals(const DndObject *a,const DndObject *b){return a==b;}
+DndString *dnd_object_to_string(DndManagedHeap *heap,const DndObject *object){
+    if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Object is null.");return NULL;}
+    return dnd_string_from_utf8(heap,object->type&&object->type->name?object->type->name:"System.Object");
+}
 bool dnd_object_reference_equals(const DndObject *a,const DndObject *b){return a==b;}
 uint32_t dnd_object_hash(const DndObject *object){if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Object is null.");return 0;}uintptr_t v=(uintptr_t)object;return (uint32_t)(v^(v>>32));}
 const DndType *dnd_object_get_type(const DndObject *object){if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Object is null.");return NULL;}return object->type;}
