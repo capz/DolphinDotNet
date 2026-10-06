@@ -297,7 +297,7 @@ internal static class ValueCBackend
         foreach(var region in regions.Where(r=>r.Kind==ExceptionRegionKind.Catch))
         {
             var target=method.Blocks.Single(x=>x.CilOffset==region.HandlerOffset);
-            var type=region.CatchType is null?"&DND_TYPE_OBJECT":region.CatchType=="System.Object"?"&DND_TYPE_OBJECT":model.Types.ContainsKey(region.CatchType)?$"&dnd_type_{Id(region.CatchType)}":"NULL";
+            var type=region.CatchType is null?"&DND_TYPE_OBJECT":region.CatchType=="System.Object"?"&DND_TYPE_OBJECT":region.CatchType=="System.Exception"?"&DND_TYPE_EXCEPTION":model.Types.ContainsKey(region.CatchType)?$"&dnd_type_{Id(region.CatchType)}":"NULL";
             b.AppendLine($"  if (dnd_exception_object() && {type} && dnd_type_is_assignable_from({type}, ((DndObject*)dnd_exception_object())->type)) goto block_{target.Id};");
         }
         if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");
@@ -369,7 +369,7 @@ internal static class ValueCBackend
     private static string WrapperSymbol(MethodKey k)=>"dnd_wrap_"+Id(k.AssemblyName)+"_"+Id(k.TypeName)+"_"+Id(k.Name)+"_"+StableId(k.Signature);
     private static string FieldCType(FieldModel f)=>f.Size switch{1=>"int8_t",2=>"int16_t",8=>"int64_t",_=>"int32_t"};
     private static string StaticSymbol(FieldModel f)=>"dnd_static_"+Id(f.DeclaringType)+"_"+Id(f.Name);
-    private static string TypeExpr(string type)=>type switch{"System.String"=>"&DND_TYPE_STRING","System.Object"=>"&DND_TYPE_OBJECT",_ when type.StartsWith("System.",StringComparison.Ordinal)=>"NULL",_=>$"&dnd_type_{Id(type)}"};
+    private static string TypeExpr(string type)=>type switch{"System.String"=>"&DND_TYPE_STRING","System.Object"=>"&DND_TYPE_OBJECT","System.Exception"=>"&DND_TYPE_EXCEPTION",_ when type.StartsWith("System.",StringComparison.Ordinal)=>"NULL",_=>$"&dnd_type_{Id(type)}"};
     private static string LegacySymbol(MethodKey k)=>"dnd_value_"+Id(k.TypeName)+"_"+Id(k.Name);
     private static string StableId(string s){uint h=2166136261;foreach(var ch in s){h^=ch;h*=16777619;}return h.ToString("x8");}
     private static string Parameters(ValueIrMethod m){var n=m.ParameterCount+(m.HasThis?1:0);return n==0?"void":string.Join(", ",Enumerable.Range(0,n).Select(i=>$"intptr_t a{i}"));}
