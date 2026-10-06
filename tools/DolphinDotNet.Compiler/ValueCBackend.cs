@@ -298,7 +298,7 @@ internal static class ValueCBackend
         {
             var target=method.Blocks.Single(x=>x.CilOffset==region.HandlerOffset);
             var type=region.CatchType is null?"&DND_TYPE_OBJECT":region.CatchType=="System.Object"?"&DND_TYPE_OBJECT":region.CatchType=="System.Exception"?"&DND_TYPE_EXCEPTION":model.Types.ContainsKey(region.CatchType)?$"&dnd_type_{Id(region.CatchType)}":"NULL";
-            b.AppendLine($"  if (dnd_exception_object() && {type} && dnd_type_is_assignable_from({type}, ((DndObject*)dnd_exception_object())->type)) goto block_{target.Id};");
+            if(type=="NULL")continue;b.AppendLine($"  if (dnd_exception_object() && dnd_type_is_assignable_from({type}, ((DndObject*)dnd_exception_object())->type)) goto block_{target.Id};");
         }
         if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");
         b.AppendLine("  return 0;");
