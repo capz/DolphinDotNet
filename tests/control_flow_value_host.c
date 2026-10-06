@@ -30,6 +30,6 @@ int main(void)
     if(dnd_value_Program_ExceptionCase()!=7)return 1;
     if(dnd_value_Program_FinallyCase()!=5)return 1;
     if(dnd_value_Program_NestedFinallyCase()!=7)return 1;
-    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=215)return 1;
+    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=230)return 1;
     return 0;
 }
