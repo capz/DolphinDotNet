@@ -200,7 +200,7 @@ internal static class ValueCBackend
                 b.AppendLine("  switch (dnd_leave_source) {");
                 foreach(var source in leaves)
                 {
-                    var leave=(ValueIrLeave)source.Terminator!;var index=leave.FinallyBlocks.IndexOf(block.Id);var next=index+1<leave.FinallyBlocks.Count?leave.FinallyBlocks[index+1]:leave.TargetBlock;
+                    var leave=(ValueIrLeave)source.Terminator!;var index=leave.FinallyBlocks.ToList().IndexOf(block.Id);var next=index+1<leave.FinallyBlocks.Count?leave.FinallyBlocks[index+1]:leave.TargetBlock;
                     b.AppendLine($"    case {source.Id}: goto block_{next};");
                 }
                 b.AppendLine("    default: break;");b.AppendLine("  }");
