@@ -166,6 +166,7 @@ bool dnd_string_equals(const DndString *a, const DndString *b) {
     return memcmp(a->chars, b->chars, (size_t)a->length * sizeof(uint16_t)) == 0;
 }
 
+uint32_t dnd_string_length(const DndString *value) { if(!value){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return 0;}return value->length; }
 uint32_t dnd_string_hash(const DndString *value) {
     if (!value) return 0;
     uint32_t hash=2166136261u;
@@ -266,7 +267,7 @@ static bool type_reaches(const DndType *actual, const DndType *target, unsigned 
 }
 
 bool dnd_object_reference_equals(const DndObject *a,const DndObject *b){return a==b;}
-uint32_t dnd_object_hash(const DndObject *object){uintptr_t v=(uintptr_t)object;return (uint32_t)(v^(v>>32));}
+uint32_t dnd_object_hash(const DndObject *object){if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Object is null.");return 0;}uintptr_t v=(uintptr_t)object;return (uint32_t)(v^(v>>32));}
 const DndType *dnd_object_get_type(const DndObject *object){if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Object is null.");return NULL;}return object->type;}
 bool dnd_array_clear(DndArray *array,uint32_t index,uint32_t length){if(!array){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return false;}if(index>array->length||length>array->length-index){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array range out of bounds.");return false;}memset(array->data+(size_t)index*array->element_size,0,(size_t)length*array->element_size);return true;}
 bool dnd_array_copy(DndArray *source,uint32_t source_index,DndArray *destination,uint32_t destination_index,uint32_t length){if(!source||!destination){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return false;}if(source->element_size!=destination->element_size||source->elements_are_references!=destination->elements_are_references){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Array element types are incompatible.");return false;}if(source_index>source->length||length>source->length-source_index||destination_index>destination->length||length>destination->length-destination_index){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array range out of bounds.");return false;}memmove(destination->data+(size_t)destination_index*destination->element_size,source->data+(size_t)source_index*source->element_size,(size_t)length*source->element_size);return true;}
