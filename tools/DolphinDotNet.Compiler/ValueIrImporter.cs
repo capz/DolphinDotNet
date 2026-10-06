@@ -15,7 +15,8 @@ internal static class ValueIrImporter
         Func<CilInstruction,FieldModel?> resolveField,
         Func<CilInstruction,string?> resolveType,
         Func<string,bool>? isInterfaceType=null,
-        Func<string,bool>? isDelegateType=null)
+        Func<string,bool>? isDelegateType=null,
+        IReadOnlyList<ExceptionRegionModel>? exceptionRegions=null)
     {
         var nextValue=0;
         bool resolveTypeForMethod(string name)=>isInterfaceType?.Invoke(name)??false;
@@ -233,6 +234,18 @@ internal static class ValueIrImporter
                     {
                         var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrStoreStaticField(Pop(stack,cil),field.DeclaringType,field.Name));break;
                     }
+                    case 0xdd or 0xde:
+                    {
+                        var target=Target(blocks,cil); stack.Clear();
+                        var targetOffset=(cil.Operand as CilBranchTarget)!.Offset;
+                        var finallyBlocks=(exceptionRegions??Array.Empty<ExceptionRegionModel>())
+                            .Where(r=>r.Kind==ExceptionRegionKind.Finally&&r.ContainsTryOffset(cil.Offset)&&!r.ContainsTryOffset(targetOffset))
+                            .OrderBy(r=>r.TryLength)
+                            .Select(r=>blocks.Single(b=>b.StartOffset==r.HandlerOffset).Id).ToArray();
+                        terminator=new ValueIrLeave(target,finallyBlocks);break;
+                    }
+                    case 0xdc:
+                        stack.Clear();terminator=new ValueIrEndFinally();break;
                     case 0x2b or 0x38:
                         terminator=new ValueIrJump(Target(blocks,cil));break;
                     case 0x2c or 0x39:
@@ -299,7 +312,7 @@ internal static class ValueIrImporter
             }
         }
         var locals=InferLocals(output,localCount);
-        return new ValueIrMethod(method.Key,output,locals,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
+        return new ValueIrMethod(method.Key,output,locals,method.ParameterCount,!method.IsStatic,method.ReturnsValue,exceptionRegions);
     }
 
     private static IReadOnlyList<ValueIrLocal> InferLocals(IReadOnlyList<ValueIrBlock> blocks,int count)
