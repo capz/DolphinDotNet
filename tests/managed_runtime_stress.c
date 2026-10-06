@@ -55,7 +55,7 @@ static void exhaustion_and_reuse(void){
     Node *root=(Node*)dnd_object_new(&heap,&NODE);assert(root);DndObject *root_object=(DndObject*)root;DndObject **slots[]={&root_object};DndGcFrame frame;dnd_gc_frame_push(&frame,slots,1);
     Node *tail=root;for(;;){Node *next=(Node*)dnd_object_new(&heap,&NODE);if(!next)break;tail->left=(DndObject*)next;tail=next;}
     assert(dnd_exception_kind()==DND_EXCEPTION_OUT_OF_MEMORY);dnd_exception_clear();
-    root_object=NULL;dnd_gc_collect(&heap,NULL);size_t used=heap.used;DndObject *again=dnd_object_new(&heap,&NODE);assert(again);assert(heap.used<=used);dnd_gc_frame_pop(&frame);
+    root_object=NULL;dnd_gc_collect(&heap,NULL);assert(heap.used==0);DndObject *again=dnd_object_new(&heap,&NODE);assert(again);assert(heap.used>0&&heap.used<heap.capacity);dnd_gc_frame_pop(&frame);
 }
 
 static void invalid_operations(DndManagedHeap *heap){
