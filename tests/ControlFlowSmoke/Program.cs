@@ -4,12 +4,12 @@ delegate void IntSink(int value);
 delegate int IntFn(int value);
 interface IValue { int GetValue(); }
 class VirtualBase { public int BaseField=4; public virtual int GetValue()=>3; }
-class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }
+class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }\nclass SmokeException : Exception { }
 
 public static class Program
 {
     static int StaticValue=4;
-    static int DelegateTotal;
+    static int DelegateTotal;\n    static int FinallyProbe;
     public static int Main()
     {
         var loop=LoopSum();
@@ -111,6 +111,13 @@ public static class Program
     static void ThrowHelper(){throw new Exception();}
     static int FinallyCase(){var value=1;try{value=2;}finally{value=value+3;}return value;}
     static int NestedFinallyCase(){var value=0;try{try{value=1;ThrowHelper();}finally{value=value+2;}}catch(Exception){value=value+4;}return value;}
+    static int RethrowCase(){try{try{ThrowHelper();}catch(Exception){throw;}}catch(Exception){return 11;}return 0;}
+    static int CatchThrowsCase(){try{try{ThrowHelper();}catch(Exception){throw new Exception();}}catch(Exception){return 13;}return 0;}
+    static int ReturnFinallyCase(){FinallyProbe=0;var result=ReturnInsideTry();return result+FinallyProbe;}
+    static int ReturnInsideTry(){try{return 17;}finally{FinallyProbe=5;}}
+    static int RethrowIdentityCase(){Exception captured=null;try{try{ThrowHelper();}catch(Exception ex){captured=ex;throw;}}catch(Exception ex){return object.ReferenceEquals(captured,ex)?19:0;}return 0;}
+    static int TypedCatchCase(){try{throw new SmokeException();}catch(SmokeException){return 23;}catch(Exception){return 0;}}
+
 
     static int DelegateCase(){IntSink sink=Sink;sink(6);return DelegateTotal;}
     static int ReturningDelegateCase(){var fn=new IntFn(AddOne);return fn(10);}
