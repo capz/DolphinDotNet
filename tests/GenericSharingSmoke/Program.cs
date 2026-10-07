@@ -19,6 +19,8 @@ internal static class Program
         object? boxedEmpty = empty;
         object? boxedPresent = present;
         if (boxedEmpty is not null || boxedPresent is not int || (int)boxedPresent != 42) return 5;
+        object? boxedWide = wide;
+        if (boxedWide is null) return 6;
         return 0;
     }
 
