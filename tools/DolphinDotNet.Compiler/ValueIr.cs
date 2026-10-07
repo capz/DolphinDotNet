@@ -32,6 +32,7 @@ internal sealed record ValueIrStoreArgument(int Index,IrValue Value):ValueIrInst
 internal sealed record ValueIrNullableInit(IrValue Address,IrValue Value,int ValueSize):ValueIrInstruction;
 internal sealed record ValueIrNullableHasValue(IrValue Result,IrValue Address):ValueIrInstruction;
 internal sealed record ValueIrNullableGetValue(IrValue Result,IrValue Address,int ValueSize,bool ThrowIfEmpty):ValueIrInstruction;
+internal sealed record ValueIrNullableGetValueOrDefault(IrValue Result,IrValue Address,IrValue DefaultValue,int ValueSize):ValueIrInstruction;
 internal sealed record ValueIrLoadIndirect(IrValue Result,IrValue Address,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrStoreIndirect(IrValue Address,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrInitObject(IrValue Address,string TypeName):ValueIrInstruction;
