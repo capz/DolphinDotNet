@@ -30,6 +30,9 @@ internal static class Program
         var stage2 = TestNullableEquality(present, empty); if (stage2 != 0) return stage2;
         stage2 = TestPairs(); if (stage2 != 0) return stage2;
         stage2 = TestSegment(); if (stage2 != 0) return stage2;
+        stage2 = TestConcreteEnumeration(); if (stage2 != 0) return stage2;
+        stage2 = TestGenericInterfaceEnumeration(); if (stage2 != 0) return stage2;
+        stage2 = TestNonGenericInterfaceEnumeration(); if (stage2 != 0) return stage2;
         return 0;
     }
 
@@ -59,6 +62,31 @@ internal static class Program
         var segment = new ArraySegment<string>(values, 1, 2);
         if (segment.Array is null || segment.Array.Length != 3 || segment.Offset != 1 || segment.Count != 2 || segment[0].Length != 3) return 11;
         return 0;
+    }
+
+    private static int TestConcreteEnumeration()
+    {
+        var values = new[] { 3, 4, 5 };
+        var segment = new ArraySegment<int>(values, 1, 2);
+        var sum = 0;
+        foreach (var value in segment) sum += value;
+        return sum == 9 ? 0 : 20;
+    }
+
+    private static int TestGenericInterfaceEnumeration()
+    {
+        IEnumerable<int> values = new[] { 2, 3, 4 };
+        var sum = 0;
+        foreach (var value in values) sum += value;
+        return sum == 9 ? 0 : 21;
+    }
+
+    private static int TestNonGenericInterfaceEnumeration()
+    {
+        System.Collections.IEnumerable values = new[] { 6, 7 };
+        var sum = 0;
+        foreach (int value in values) sum += value;
+        return sum == 13 ? 0 : 22;
     }
 
     private static T Identity<T>(T value) => value;
