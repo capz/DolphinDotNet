@@ -128,3 +128,153 @@ internal static class AotCompiler
         try{return IlImporter.ResolveMethod(md,model,MetadataTokens.EntityHandle(raw));}
         catch(NotSupportedException){return null;}
     }
+
+    private static string? ResolveType(MetadataReader md,CilInstruction i)
+    {
+        if(i.Operand is not CilMetadataToken { Token: var raw })return null;
+        try{return MetadataLoader.ResolveTypeName(md,MetadataTokens.EntityHandle(raw));}catch{return null;}
+    }
+
+    private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i)
+    {
+        if(i.OpCode is not (0x7b or 0x7d or 0x7e or 0x80)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        try{return IlImporter.ResolveField(md,model,MetadataTokens.EntityHandle(raw));}catch(NotSupportedException){return null;}
+    }
+
+    private static int NullableValueSize(MetadataReader md,CompilationModel model,CilInstruction i)
+    {
+        if(i.Operand is not CilMetadataToken { Token: var raw })return 4;
+        var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind==HandleKind.TypeSpecification)
+        {
+            var typeArgs=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)handle,model);
+            return typeArgs.Count==1?Math.Max(1,typeArgs[0].Size):4;
+        }
+        if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
+        if(handle.Kind!=HandleKind.MemberReference)return 4;
+        var member=md.GetMemberReference((MemberReferenceHandle)handle);
+        if(member.Parent.Kind!=HandleKind.TypeSpecification)return 4;
+        var args=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)member.Parent,model);
+        return args.Count==1?Math.Max(1,args[0].Size):4;
+    }
+
+    private static IReadOnlyList<GenericRepresentation> GenericArguments(MetadataReader md,CompilationModel model,CilInstruction i)
+    {
+        if(i.Operand is not CilMetadataToken { Token: var raw })return Array.Empty<GenericRepresentation>();
+        var handle=MetadataTokens.EntityHandle(raw);if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
+        if(handle.Kind!=HandleKind.MemberReference)return Array.Empty<GenericRepresentation>();var member=md.GetMemberReference((MemberReferenceHandle)handle);
+        return member.Parent.Kind==HandleKind.TypeSpecification?GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)member.Parent,model):Array.Empty<GenericRepresentation>();
+    }
+
+    private static IntrinsicKind ResolveIntrinsic(MetadataReader md,CilInstruction i)
+    {
+        if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return IntrinsicKind.None;
+        return IntrinsicRegistry.Classify(md,MetadataTokens.EntityHandle(raw));
+    }
+
+    private static string? ResolveString(MetadataReader md,CilInstruction i)
+    {
+        if(i.OpCode!=0x72||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        return md.GetUserString(MetadataTokens.UserStringHandle(raw&0x00ffffff));
+    }
+
+    private static bool IsIgnoredCall(MetadataReader md,CilInstruction i)
+    {
+        if(i.OpCode is not (0x28 or 0x6f)||i.Operand is not CilMetadataToken { Token: var raw })return false;
+        return IlImporter.TryIgnoreObjectCtor(md,MetadataTokens.EntityHandle(raw));
+    }
+
+    private static CilCallStackEffect? ResolveCallEffect(MetadataReader md,CompilationModel model,CilInstruction i)
+    {
+        if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        var resolved=ResolveCall(md,model,i);
+        if(resolved?.Abi is { } abi)
+        {
+            var pop=resolved.ParameterCount+(resolved.IsStatic||i.OpCode==0x73?0:1);
+            return new CilCallStackEffect(pop,i.OpCode==0x73?CilStackKind.ObjectReference:abi.Return);
+        }
+        var intrinsic=ResolveIntrinsic(md,i);
+        if(intrinsic is IntrinsicKind.NullableConstructor or IntrinsicKind.NullableHasValue or IntrinsicKind.NullableValue or IntrinsicKind.NullableGetValueOrDefault or IntrinsicKind.NullableGetValueOrDefaultValue or IntrinsicKind.NullableEquals or IntrinsicKind.NullableGetHashCode)
+        {
+            var size=NullableValueSize(md,model,i);
+            return intrinsic switch
+            {
+                IntrinsicKind.NullableConstructor=>new CilCallStackEffect(2,null),
+                IntrinsicKind.NullableHasValue=>new CilCallStackEffect(1,CilStackKind.I4),
+                IntrinsicKind.NullableGetValueOrDefaultValue=>new CilCallStackEffect(2,size==8?CilStackKind.I8:CilStackKind.I4),
+                IntrinsicKind.NullableEquals=>new CilCallStackEffect(2,CilStackKind.I4),
+                IntrinsicKind.NullableGetHashCode=>new CilCallStackEffect(1,CilStackKind.I4),
+                _=>new CilCallStackEffect(1,size==8?CilStackKind.I8:CilStackKind.I4)
+            };
+        }
+        if(intrinsic==IntrinsicKind.ObjectGetHashCode)return new CilCallStackEffect(1,CilStackKind.I4);
+        if(intrinsic==IntrinsicKind.ObjectEquals)return new CilCallStackEffect(2,CilStackKind.I4);
+        if(intrinsic is IntrinsicKind.KeyValuePairConstructor)return i.OpCode==0x73?new CilCallStackEffect(2,CilStackKind.ManagedPointer):new CilCallStackEffect(3,null);
+        if(intrinsic is IntrinsicKind.KeyValuePairKey or IntrinsicKind.KeyValuePairValue){var a=GenericArguments(md,model,i);var index=intrinsic==IntrinsicKind.KeyValuePairKey?0:1;var rep=a.Count>index?a[index]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(1,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
+        if(intrinsic==IntrinsicKind.ArraySegmentConstructor)return i.OpCode==0x73?new CilCallStackEffect(3,CilStackKind.ManagedPointer):new CilCallStackEffect(4,null);
+        if(intrinsic==IntrinsicKind.ArraySegmentArray)return new CilCallStackEffect(1,CilStackKind.ObjectReference);
+        if(intrinsic is IntrinsicKind.ArraySegmentOffset or IntrinsicKind.ArraySegmentCount)return new CilCallStackEffect(1,CilStackKind.I4);
+        if(intrinsic==IntrinsicKind.ArraySegmentItem){var a=GenericArguments(md,model,i);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(2,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
+        if(intrinsic==IntrinsicKind.ArraySegmentGetEnumerator)return new CilCallStackEffect(1,CilStackKind.ManagedPointer);
+        if(intrinsic==IntrinsicKind.ArraySegmentEnumeratorMoveNext)return new CilCallStackEffect(1,CilStackKind.I4);
+        if(intrinsic==IntrinsicKind.ArraySegmentEnumeratorCurrent){var a=GenericArguments(md,model,i);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(1,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
+        if(intrinsic==IntrinsicKind.ArraySegmentEnumeratorDispose)return new CilCallStackEffect(1,null);
+        var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
+        if(handle.Kind==HandleKind.MemberReference)
+        {
+            var member=md.GetMemberReference((MemberReferenceHandle)handle);
+            var reader=md.GetBlobReader(member.Signature);var header=reader.ReadSignatureHeader();
+            if(header.IsGeneric)reader.ReadCompressedInteger();
+            var parameters=reader.ReadCompressedInteger();var ret=reader.ReadSignatureTypeCode();
+            var hasThis=header.IsInstance&&i.OpCode!=0x73;
+            return new CilCallStackEffect(parameters+(hasThis?1:0),i.OpCode==0x73?CilStackKind.ObjectReference:ret==SignatureTypeCode.Void?null:Kind(ret));
+        }
+        if(handle.Kind==HandleKind.MethodDefinition)
+        {
+            var def=md.GetMethodDefinition((MethodDefinitionHandle)handle);var reader=md.GetBlobReader(def.Signature);var header=reader.ReadSignatureHeader();
+            if(header.IsGeneric)reader.ReadCompressedInteger();
+            var parameters=reader.ReadCompressedInteger();var ret=reader.ReadSignatureTypeCode();
+            var hasThis=(def.Attributes&System.Reflection.MethodAttributes.Static)==0&&i.OpCode!=0x73;
+            return new CilCallStackEffect(parameters+(hasThis?1:0),i.OpCode==0x73?CilStackKind.ObjectReference:ret==SignatureTypeCode.Void?null:Kind(ret));
+        }
+        return null;
+    }
+    private static CilStackKind Kind(SignatureTypeCode code)=>code switch
+    {
+        SignatureTypeCode.Int64 or SignatureTypeCode.UInt64=>CilStackKind.I8,
+        SignatureTypeCode.Single or SignatureTypeCode.Double=>CilStackKind.Float,
+        SignatureTypeCode.IntPtr or SignatureTypeCode.UIntPtr=>CilStackKind.NativeInt,
+        SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>CilStackKind.ObjectReference,
+        SignatureTypeCode.Pointer or SignatureTypeCode.ByReference=>CilStackKind.ManagedPointer,
+        _=>CilStackKind.I4
+    };
+
+    private static AssemblyModel LoadAssembly(CompilationModel model,string path)
+    {
+        var stream=File.OpenRead(path);var pe=new PEReader(stream);
+        if(!pe.HasMetadata){pe.Dispose();stream.Dispose();throw new InvalidDataException($"{path} is not a managed assembly.");}
+        var md=pe.GetMetadataReader();
+        var name=md.IsAssembly?md.GetString(md.GetAssemblyDefinition().Name):Path.GetFileNameWithoutExtension(path);
+        var assembly=new AssemblyModel{Name=name,Path=path,Stream=stream,PE=pe,Metadata=md};
+        model.Assemblies[name]=assembly;MetadataLoader.LoadInto(model,md,name);return assembly;
+    }
+
+    private static void LoadDolphinDependencies(CompilationModel model,AssemblyModel root)
+    {
+        var queue=new Queue<AssemblyModel>();queue.Enqueue(root);
+        while(queue.Count>0)
+        {
+            var current=queue.Dequeue();var dir=Path.GetDirectoryName(current.Path)!;
+            foreach(var rh in current.Metadata.AssemblyReferences)
+            {
+                var r=current.Metadata.GetAssemblyReference(rh);var name=current.Metadata.GetString(r.Name);
+                if(model.Assemblies.ContainsKey(name)||!name.StartsWith("DolphinDotNet",StringComparison.Ordinal))continue;
+                var candidate=Path.Combine(dir,name+".dll");
+                if(!File.Exists(candidate))throw new FileNotFoundException($"Referenced DolphinDotNet assembly '{name}' was not found beside {current.Path}.",candidate);
+                queue.Enqueue(LoadAssembly(model,candidate));
+            }
+        }
+    }
+    private static string Full(string ns,string name)=>string.IsNullOrEmpty(ns)?name:ns+"."+name;
+}
