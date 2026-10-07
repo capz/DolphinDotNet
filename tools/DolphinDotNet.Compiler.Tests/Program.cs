@@ -34,6 +34,13 @@ if (!genericGenerated.Contains("setjmp(dnd_eh_frame.environment)", StringCompari
     !genericGenerated.Contains("dnd_exception_rethrow_current", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_exception_new", StringComparison.Ordinal))
     throw new Exception("Exception handling lowering missing.");
+if (!genericGenerated.Contains("dnd_string_char_at", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_string_starts_with", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_string_ends_with", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_string_index_of", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_string_substring", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_string_concat", StringComparison.Ordinal))
+    throw new Exception("Core immutable string lowering missing.");
 if (!genericGenerated.Contains("dnd_array_load_scalar", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_array_store_scalar", StringComparison.Ordinal) ||
     !genericGenerated.Contains(", 1u,", StringComparison.Ordinal) ||
