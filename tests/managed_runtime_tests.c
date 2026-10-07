@@ -66,6 +66,15 @@ int main(void) {
     assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
     dnd_exception_clear();
 
+    DndArray *array_copy = dnd_managed_array_new(&heap, 4, sizeof(int32_t));
+    assert(array_copy && dnd_array_long_length(array) == 4 && dnd_array_get_length(array, 0) == 4);
+    assert(dnd_array_get_lower_bound(array, 0) == 0 && dnd_array_get_upper_bound(array, 0) == 3);
+    assert(dnd_array_copy(array, 0, array_copy, 0, 4));
+    assert(dnd_array_load_i32(array_copy, 2) == 42);
+    assert(dnd_array_index_of(array_copy, 42, 4, false, 0, 4) == 2);
+    assert(dnd_array_clear(array_copy, 1, 2));
+    assert(dnd_array_load_i32(array_copy, 2) == 0);
+
     DndList list;
     assert(dnd_list_init(&list, &heap, sizeof(int32_t), 2));
     for (int32_t i = 0; i < 10; i++) assert(dnd_list_add(&list, &i));
