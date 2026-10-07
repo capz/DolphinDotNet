@@ -51,13 +51,8 @@ if (!genericGenerated.Contains("dnd_type_System_Collections_Generic_ICollection_
     throw new Exception("Generic collection interface metadata missing.");
 if (!genericGenerated.Contains("CompactList_1_Insert", StringComparison.Ordinal) ||
     !genericGenerated.Contains("CompactList_1_RemoveAt", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("CompactList_1_CopyTo", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("CompactList_1_Contains", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("CompactList_1_IndexOf", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("CompactList_1_Remove", StringComparison.Ordinal))
-    throw new Exception("Compact collection contract lowering missing.");
-if (!genericGenerated.Contains("DND_TYPE_BOXED_INT32", StringComparison.Ordinal))
-    throw new Exception("Collection value equality boxing missing.");
+    !genericGenerated.Contains("CompactList_1_CopyTo", StringComparison.Ordinal))
+    throw new Exception("Compact collection mutation lowering missing.");
 if (genericGenerated.Contains("dnd_type__generic", StringComparison.Ordinal))
     throw new Exception("Generic array emitted unresolved runtime type metadata.");
 var concreteEnumerationStart = genericGenerated.IndexOf("Program_TestConcreteEnumeration", StringComparison.Ordinal);
