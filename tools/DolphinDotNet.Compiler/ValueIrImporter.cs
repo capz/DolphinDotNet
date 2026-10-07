@@ -12,6 +12,7 @@ internal static class ValueIrImporter
         Func<CilInstruction,bool> ignoreCall,
         Func<CilInstruction,IntrinsicKind> intrinsic,
         Func<CilInstruction,int> nullableValueSize,
+        Func<CilInstruction,IReadOnlyList<GenericRepresentation>> genericArguments,
         Func<CilInstruction,string?> resolveString,
         Func<CilInstruction,FieldModel?> resolveField,
         Func<CilInstruction,string?> resolveType)
@@ -186,6 +187,13 @@ internal static class ValueIrImporter
                         if(ik==IntrinsicKind.NullableHasValue){var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrNullableHasValue(value,address));stack.Add(value);break;}
                         if(ik is IntrinsicKind.NullableValue or IntrinsicKind.NullableGetValueOrDefault){var size=nullableValueSize(cil);var address=Pop(stack,cil);var value=New(size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrNullableGetValue(value,address,size,ik==IntrinsicKind.NullableValue));stack.Add(value);break;}
                         if(ik==IntrinsicKind.NullableGetValueOrDefaultValue){var size=nullableValueSize(cil);var fallback=Pop(stack,cil);var address=Pop(stack,cil);var value=New(size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrNullableGetValueOrDefault(value,address,fallback,size));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.NullableEquals){var size=nullableValueSize(cil);var other=Pop(stack,cil);var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrNullableEquals(value,address,other,size));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.NullableGetHashCode){var size=nullableValueSize(cil);var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrNullableHash(value,address,size));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.KeyValuePairConstructor){var a=genericArguments(cil);var second=Pop(stack,cil);var first=Pop(stack,cil);var address=Pop(stack,cil);var a0=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var a1=a.Count>1?a[1]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var secondOffset=Align(a0.Size,Math.Min(Math.Max(a1.Size,1),4));instructions.Add(new ValueIrStructStore(address,0,first,a0.Size,a0.ContainsReferences));instructions.Add(new ValueIrStructStore(address,secondOffset,second,a1.Size,a1.ContainsReferences));break;}
+                        if(ik is IntrinsicKind.KeyValuePairKey or IntrinsicKind.KeyValuePairValue){var a=genericArguments(cil);var index=ik==IntrinsicKind.KeyValuePairKey?0:1;var rep=a.Count>index?a[index]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var offset=index==0?0:Align(a[0].Size,Math.Min(Math.Max(rep.Size,1),4));var address=Pop(stack,cil);var value=New(rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrStructLoad(value,address,offset,rep.Size,rep.ContainsReferences));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ArraySegmentConstructor){var count=Pop(stack,cil);var offset=Pop(stack,cil);var array=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrStructStore(address,0,array,4,true));instructions.Add(new ValueIrStructStore(address,4,offset,4,false));instructions.Add(new ValueIrStructStore(address,8,count,4,false));break;}
+                        if(ik is IntrinsicKind.ArraySegmentArray or IntrinsicKind.ArraySegmentOffset or IntrinsicKind.ArraySegmentCount){var address=Pop(stack,cil);var isArray=ik==IntrinsicKind.ArraySegmentArray;var offset=ik==IntrinsicKind.ArraySegmentOffset?4:ik==IntrinsicKind.ArraySegmentCount?8:0;var value=New(isArray?CilStackKind.ObjectReference:CilStackKind.I4);instructions.Add(new ValueIrStructLoad(value,address,offset,4,isArray));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ArraySegmentItem){var a=genericArguments(cil);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var index=Pop(stack,cil);var address=Pop(stack,cil);var value=New(rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrArraySegmentItem(value,address,index,rep.Size,rep.ContainsReferences));stack.Add(value);break;}
                         if(ik==IntrinsicKind.GameCubeWriteLine){instructions.Add(new ValueIrConsoleWriteLine(Pop(stack,cil)));break;}
                         if(ik==IntrinsicKind.GameCubeReadButtonsDown){var port=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrReadButtonsDown(value,port));stack.Add(value);break;}
                         if(ik==IntrinsicKind.GameCubePresentDemoFrame){instructions.Add(new ValueIrPresentDemoFrame(Pop(stack,cil)));break;}
@@ -295,6 +303,7 @@ internal static class ValueIrImporter
     }
 
     private static int AlignNullable(int valueSize)=>4+((valueSize+3)&~3);
+    private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
 
     private static CilStackKind ArgumentKind(MethodModel method,int index,CilStackAnalysis analysis,CilInstruction instruction)
     {
