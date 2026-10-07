@@ -143,6 +143,12 @@ internal static class AotCompiler
     private static CilCallStackEffect? ResolveCallEffect(MetadataReader md,CompilationModel model,CilInstruction i)
     {
         if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        var resolved=ResolveCall(md,model,i);
+        if(resolved?.Abi is { } abi)
+        {
+            var pop=resolved.ParameterCount+(resolved.IsStatic||i.OpCode==0x73?0:1);
+            return new CilCallStackEffect(pop,i.OpCode==0x73?CilStackKind.ObjectReference:abi.Return);
+        }
         var handle=MetadataTokens.EntityHandle(raw);
         if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
         if(handle.Kind==HandleKind.MemberReference)

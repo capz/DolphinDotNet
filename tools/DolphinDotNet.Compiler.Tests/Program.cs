@@ -30,6 +30,12 @@ var sharedDefinitions = genericGenerated.Split('\n')
     .Count(line => line.Contains("Shared_1_Marker", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
 if (sharedDefinitions != 1)
     throw new Exception($"Expected one shared generic method body, found {sharedDefinitions}.");
+var identityDefinitions = genericGenerated.Split('\n')
+    .Count(line => line.Contains("Program_Identity", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
+if (identityDefinitions != 2)
+    throw new Exception($"Expected one pointer-shared Identity body plus one wide-value specialization, found {identityDefinitions}.");
+if (!genericGenerated.Split('\n').Any(line => line.Contains("Program_Identity", StringComparison.Ordinal) && line.Contains("int64_t", StringComparison.Ordinal)))
+    throw new Exception("Wide generic specialization did not emit a 64-bit ABI.");
 File.Delete(genericOutput);
 Console.WriteLine("DolphinDotNet compiler integration test passed.");
 
