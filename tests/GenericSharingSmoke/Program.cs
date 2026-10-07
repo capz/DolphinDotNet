@@ -134,12 +134,12 @@ internal sealed class CompactList<T> : IList<T>, IReadOnlyList<T>
     public T this[int index] { get => _items[index]; set => _items[index] = value; }
     public void Add(T item) { _items[_count++] = item; }
     public void Clear() { for (var i=0;i<_count;i++) _items[i]=default!; _count = 0; }
-    public bool Contains(T item) => false;
+    public bool Contains(T item) { _ = item; return false; }
     public void CopyTo(T[] array, int arrayIndex) { for (var i=0;i<_count;i++) array[arrayIndex+i]=_items[i]; }
     public IEnumerator<T> GetEnumerator() => new CompactListEnumerator<T>(this);
-    public int IndexOf(T item) => -1;
+    public int IndexOf(T item) { _ = item; return -1; }
     public void Insert(int index,T item) { for (var i=_count;i>index;i--) _items[i]=_items[i-1]; _items[index]=item; _count++; }
-    public bool Remove(T item) => false;
+    public bool Remove(T item) { _ = item; return false; }
     public void RemoveAt(int index) { _count--; for(var i=index;i<_count;i++) _items[i]=_items[i+1]; _items[_count]=default!; }
     System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 }
