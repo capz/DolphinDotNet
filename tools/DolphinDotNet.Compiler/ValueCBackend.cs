@@ -373,6 +373,11 @@ internal static class ValueCBackend
             for(var current=type;current is not null&&model.Types.TryGetValue(current,out var tm);current=tm.BaseType)
             {
                 implementation=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==current&&m.Key.Name==contract.Key.Name&&m.Key.Signature==contract.Key.Signature&&compiled.Contains(m.Key));
+                if(implementation is null&&iface.Contains('[',StringComparison.Ordinal))
+                {
+                    var compatible=model.Methods.Values.Where(m=>m.Key.TypeName==current&&m.Key.Name==contract.Key.Name&&m.ParameterCount==contract.ParameterCount&&compiled.Contains(m.Key)).ToArray();
+                    if(compatible.Length==1)implementation=compatible[0];
+                }
                 if(implementation is not null)break;
             }
             if(implementation is null)return Array.Empty<MethodModel>();result.Add(implementation);
