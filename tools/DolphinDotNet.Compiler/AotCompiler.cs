@@ -36,7 +36,7 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
@@ -94,13 +94,32 @@ internal static class AotCompiler
         }
     }
 
-    private static int ReadLocalCount(AssemblyModel assembly,MethodModel method)
+    private static IReadOnlyList<LocalStorage> ReadLocalStorage(AssemblyModel assembly,MethodModel method,CompilationModel model)
     {
-        var def=assembly.Metadata.GetMethodDefinition(method.Handle);
-        var body=assembly.PE.GetMethodBody(def.RelativeVirtualAddress);
-        if(body.LocalSignature.IsNil)return 0;
-        var signature=assembly.Metadata.GetStandaloneSignature(body.LocalSignature);
-        var reader=assembly.Metadata.GetBlobReader(signature.Signature);reader.ReadSignatureHeader();return reader.ReadCompressedInteger();
+        var def=assembly.Metadata.GetMethodDefinition(method.Handle);var body=assembly.PE.GetMethodBody(def.RelativeVirtualAddress);
+        if(body.LocalSignature.IsNil)return Array.Empty<LocalStorage>();
+        var signature=assembly.Metadata.GetStandaloneSignature(body.LocalSignature);var reader=assembly.Metadata.GetBlobReader(signature.Signature);reader.ReadSignatureHeader();
+        var count=reader.ReadCompressedInteger();var locals=new LocalStorage[count];
+        for(var i=0;i<count;i++)
+        {
+            var start=reader.Offset;var code=reader.ReadSignatureTypeCode();
+            if(code==SignatureTypeCode.GenericTypeInstance)
+            {
+                reader.Offset=start;var size=GenericSharing.ReadGenericLocalStorage(assembly.Metadata,ref reader,model);locals[i]=new LocalStorage(size,size>0?CilStackKind.ManagedPointer:CilStackKind.ObjectReference);
+            }
+            else
+            {
+                SkipLocalType(assembly.Metadata,ref reader,code,model);
+                locals[i]=new LocalStorage(0,code==SignatureTypeCode.TypeHandle?CilStackKind.NativeInt:Kind(code));
+            }
+        }
+        return locals;
+    }
+    private static void SkipLocalType(MetadataReader md,ref BlobReader reader,SignatureTypeCode code,CompilationModel model)
+    {
+        if(code==SignatureTypeCode.TypeHandle)reader.ReadTypeHandle();
+        else if(code is SignatureTypeCode.ByReference or SignatureTypeCode.Pointer)GenericSharing.ReadRepresentation(md,ref reader,model);
+        else if(code==SignatureTypeCode.SZArray)GenericSharing.ReadRepresentation(md,ref reader,model);
     }
 
     private static MethodModel? ResolveCall(MetadataReader md,CompilationModel model,CilInstruction i)
@@ -120,6 +139,23 @@ internal static class AotCompiler
     {
         if(i.OpCode is not (0x7b or 0x7d or 0x7e or 0x80)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         try{return IlImporter.ResolveField(md,model,MetadataTokens.EntityHandle(raw));}catch(NotSupportedException){return null;}
+    }
+
+    private static int NullableValueSize(MetadataReader md,CompilationModel model,CilInstruction i)
+    {
+        if(i.Operand is not CilMetadataToken { Token: var raw })return 4;
+        var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind==HandleKind.TypeSpecification)
+        {
+            var typeArgs=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)handle,model);
+            return typeArgs.Count==1?Math.Max(1,typeArgs[0].Size):4;
+        }
+        if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
+        if(handle.Kind!=HandleKind.MemberReference)return 4;
+        var member=md.GetMemberReference((MemberReferenceHandle)handle);
+        if(member.Parent.Kind!=HandleKind.TypeSpecification)return 4;
+        var args=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)member.Parent,model);
+        return args.Count==1?Math.Max(1,args[0].Size):4;
     }
 
     private static IntrinsicKind ResolveIntrinsic(MetadataReader md,CilInstruction i)
@@ -148,6 +184,18 @@ internal static class AotCompiler
         {
             var pop=resolved.ParameterCount+(resolved.IsStatic||i.OpCode==0x73?0:1);
             return new CilCallStackEffect(pop,i.OpCode==0x73?CilStackKind.ObjectReference:abi.Return);
+        }
+        var intrinsic=ResolveIntrinsic(md,i);
+        if(intrinsic is IntrinsicKind.NullableConstructor or IntrinsicKind.NullableHasValue or IntrinsicKind.NullableValue or IntrinsicKind.NullableGetValueOrDefault or IntrinsicKind.NullableGetValueOrDefaultValue)
+        {
+            var size=NullableValueSize(md,model,i);
+            return intrinsic switch
+            {
+                IntrinsicKind.NullableConstructor=>new CilCallStackEffect(2,null),
+                IntrinsicKind.NullableHasValue=>new CilCallStackEffect(1,CilStackKind.I4),
+                IntrinsicKind.NullableGetValueOrDefaultValue=>new CilCallStackEffect(2,size==8?CilStackKind.I8:CilStackKind.I4),
+                _=>new CilCallStackEffect(1,size==8?CilStackKind.I8:CilStackKind.I4)
+            };
         }
         var handle=MetadataTokens.EntityHandle(raw);
         if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;

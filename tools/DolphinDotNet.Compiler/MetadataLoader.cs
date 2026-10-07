@@ -38,7 +38,7 @@ internal static class MetadataLoader
   if(h.IsNil)return null;
   if(h.Kind==HandleKind.TypeDefinition){var t=md.GetTypeDefinition((TypeDefinitionHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}
   if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}
-  if(h.Kind==HandleKind.TypeSpecification)return null;
+  if(h.Kind==HandleKind.TypeSpecification)return ResolveTypeSpecificationName(md,(TypeSpecificationHandle)h);
   return null;
  }
  public static string? ResolveMemberParentTypeName(MetadataReader md,EntityHandle h)
