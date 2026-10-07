@@ -50,6 +50,11 @@ internal static class ValueIrImporter
                         var value=(cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing integer operand at IL_{cil.Offset:x4}.");
                         var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,value));stack.Add(v);break;
                     }
+                    case 0x21:
+                    {
+                        var value=(cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing Int64 operand at IL_{cil.Offset:x4}.");
+                        var v=New(CilStackKind.I8);instructions.Add(new ValueIrConstant(v,value));stack.Add(v);break;
+                    }
                     case 0x14:
                     {
                         var v=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrConstant(v,0));stack.Add(v);break;
