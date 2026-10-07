@@ -34,6 +34,12 @@ if (!genericGenerated.Contains("setjmp(dnd_eh_frame.environment)", StringCompari
     !genericGenerated.Contains("dnd_exception_rethrow_current", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_exception_new", StringComparison.Ordinal))
     throw new Exception("Exception handling lowering missing.");
+if (!genericGenerated.Contains("dnd_array_load_scalar", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_array_store_scalar", StringComparison.Ordinal) ||
+    !genericGenerated.Contains(", 1u,", StringComparison.Ordinal) ||
+    !genericGenerated.Contains(", 2u,", StringComparison.Ordinal) ||
+    !genericGenerated.Contains(", 8u,", StringComparison.Ordinal))
+    throw new Exception("Primitive scalar array width lowering missing.");
 if (!genericGenerated.Contains("Nullable object must have a value.", StringComparison.Ordinal)) throw new Exception("Nullable Value guard missing.");
 if (!genericGenerated.Contains("DND_EXCEPTION_INVALID_OPERATION", StringComparison.Ordinal)) throw new Exception("Nullable exception category missing.");
 if (!genericGenerated.Contains("DND_TYPE_INT64", StringComparison.Ordinal)) throw new Exception("Wide nullable boxing missing.");
