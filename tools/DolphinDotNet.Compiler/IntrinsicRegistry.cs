@@ -14,7 +14,17 @@ internal enum IntrinsicKind
     NullableHasValue,
     NullableValue,
     NullableGetValueOrDefault,
-    NullableGetValueOrDefaultValue
+    NullableGetValueOrDefaultValue,
+    NullableEquals,
+    NullableGetHashCode,
+    KeyValuePairConstructor,
+    KeyValuePairKey,
+    KeyValuePairValue,
+    ArraySegmentConstructor,
+    ArraySegmentArray,
+    ArraySegmentOffset,
+    ArraySegmentCount,
+    ArraySegmentItem
 }
 
 internal static class IntrinsicRegistry
@@ -43,6 +53,16 @@ internal static class IntrinsicRegistry
             ("System.Nullable`1","get_Value")=>IntrinsicKind.NullableValue,
             ("System.Nullable`1","GetValueOrDefault") when parameterCount==1=>IntrinsicKind.NullableGetValueOrDefaultValue,
             ("System.Nullable`1","GetValueOrDefault")=>IntrinsicKind.NullableGetValueOrDefault,
+            ("System.Nullable`1","Equals")=>IntrinsicKind.NullableEquals,
+            ("System.Nullable`1","GetHashCode")=>IntrinsicKind.NullableGetHashCode,
+            ("System.Collections.Generic.KeyValuePair`2",".ctor")=>IntrinsicKind.KeyValuePairConstructor,
+            ("System.Collections.Generic.KeyValuePair`2","get_Key")=>IntrinsicKind.KeyValuePairKey,
+            ("System.Collections.Generic.KeyValuePair`2","get_Value")=>IntrinsicKind.KeyValuePairValue,
+            ("System.ArraySegment`1",".ctor")=>IntrinsicKind.ArraySegmentConstructor,
+            ("System.ArraySegment`1","get_Array")=>IntrinsicKind.ArraySegmentArray,
+            ("System.ArraySegment`1","get_Offset")=>IntrinsicKind.ArraySegmentOffset,
+            ("System.ArraySegment`1","get_Count")=>IntrinsicKind.ArraySegmentCount,
+            ("System.ArraySegment`1","get_Item")=>IntrinsicKind.ArraySegmentItem,
             ("DolphinDotNet.GameCube.GameCube","WriteLine")=>IntrinsicKind.GameCubeWriteLine,
             ("DolphinDotNet.GameCube.GameCube","ReadButtonsDown")=>IntrinsicKind.GameCubeReadButtonsDown,
             ("DolphinDotNet.GameCube.GameCube","PresentDemoFrame")=>IntrinsicKind.GameCubePresentDemoFrame,
