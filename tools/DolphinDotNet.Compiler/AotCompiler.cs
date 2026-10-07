@@ -37,7 +37,7 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil,body.ExceptionRegions);
                 CilStackAnalysis stackAnalysis;try{stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);}catch(Exception ex){throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex);}
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),i=>ResolveGenericTypeParameter(assembly.Metadata,model,method,i));
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
@@ -134,6 +134,21 @@ internal static class AotCompiler
     {
         if(i.Operand is not CilMetadataToken { Token: var raw })return null;
         try{return MetadataLoader.ResolveTypeName(md,MetadataTokens.EntityHandle(raw));}catch{return null;}
+    }
+
+    private static GenericRepresentation? ResolveGenericTypeParameter(MetadataReader md,CompilationModel model,MethodModel method,CilInstruction i)
+    {
+        if(i.Operand is not CilMetadataToken { Token: var raw })return null;
+        var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind!=HandleKind.TypeSpecification)return null;
+        var reader=md.GetBlobReader(md.GetTypeSpecification((TypeSpecificationHandle)handle).Signature);
+        if(reader.ReadSignatureTypeCode()!=SignatureTypeCode.GenericTypeParameter)return null;
+        var index=reader.ReadCompressedInteger();
+        var marker="|g:";var pos=method.Key.Signature.IndexOf(marker,StringComparison.Ordinal);
+        if(pos<0)return new GenericRepresentation(GenericRepresentationKind.PointerSized,4);
+        var keys=method.Key.Signature[(pos+marker.Length)..].Split(',');
+        if(index>=keys.Length)return null;
+        return keys[index]=="v8"?new GenericRepresentation(GenericRepresentationKind.ValueType,8):new GenericRepresentation(GenericRepresentationKind.PointerSized,4);
     }
 
     private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i)
