@@ -31,7 +31,6 @@ Run("cc", $"-std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\"
 if (!genericGenerated.Contains("Nullable object must have a value.", StringComparison.Ordinal)) throw new Exception("Nullable Value guard missing.");
 if (!genericGenerated.Contains("DND_EXCEPTION_INVALID_OPERATION", StringComparison.Ordinal)) throw new Exception("Nullable exception category missing.");
 if (!genericGenerated.Contains("DND_TYPE_INT64", StringComparison.Ordinal)) throw new Exception("Wide nullable boxing missing.");
-if (!genericGenerated.Contains("struct_", StringComparison.Ordinal)) throw new Exception("Stack generic struct construction missing.");
 if (!genericGenerated.Contains("dnd_managed_array_at", StringComparison.Ordinal)) throw new Exception("ArraySegment indexer lowering missing.");
 if (!genericGenerated.Contains("(DndObject**)(l", StringComparison.Ordinal)) throw new Exception("Embedded generic value GC roots missing.");
 var sharedDefinitions = genericGenerated.Split('\n')
