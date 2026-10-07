@@ -14,17 +14,34 @@ internal readonly struct Score:ICompatEquatable<Score>,ICompatComparable<Score>
 
 public static class Program
 {
-    public static int Main()
+    public static int EqualityCase()
     {
         var eq=CompatEqualityComparer<Score>.Default;
-        var cmp=CompatComparer<Score>.Default;
         var score=0;
         if(eq.Equals(new Score(4),new Score(4)))score+=1;
         if(!eq.Equals(new Score(4),new Score(5)))score+=2;
-        if(eq.GetHashCode(new Score(3))==93)score+=4;
+        return score;
+    }
+
+    public static int HashCase()
+    {
+        var eq=CompatEqualityComparer<Score>.Default;
+        return eq.GetHashCode(new Score(3))==93?4:0;
+    }
+
+    public static int CompareCase()
+    {
+        var cmp=CompatComparer<Score>.Default;
+        var score=0;
         if(cmp.Compare(new Score(2),new Score(5))<0)score+=8;
         if(cmp.Compare(new Score(5),new Score(2))>0)score+=16;
         if(cmp.Compare(new Score(3),new Score(3))==0)score+=32;
+        return score;
+    }
+
+    public static int Main()
+    {
+        var score=EqualityCase()+HashCase()+CompareCase();
         return score==63?0:score;
     }
 }
