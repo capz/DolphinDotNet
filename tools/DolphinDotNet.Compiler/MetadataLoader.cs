@@ -58,7 +58,7 @@ internal static class MetadataLoader
    if(code==SignatureTypeCode.GenericTypeInstance)
    {
     var kind=r.ReadSignatureTypeCode();
-    if(kind is not (SignatureTypeCode.TypeHandle or SignatureTypeCode.ValueType))return null;
+    if(kind!=SignatureTypeCode.TypeHandle)return null;
     return ResolveTypeName(md,r.ReadTypeHandle());
    }
    if(code==SignatureTypeCode.TypeHandle)return ResolveTypeName(md,r.ReadTypeHandle());
