@@ -15,7 +15,8 @@ internal static class ValueIrImporter
         Func<CilInstruction,IReadOnlyList<GenericRepresentation>> genericArguments,
         Func<CilInstruction,string?> resolveString,
         Func<CilInstruction,FieldModel?> resolveField,
-        Func<CilInstruction,string?> resolveType)
+        Func<CilInstruction,string?> resolveType,
+        Func<CilInstruction,GenericRepresentation?> resolveGenericTypeParameter)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -111,9 +112,11 @@ internal static class ValueIrImporter
                     }
                     case 0x8d:
                     {
-                        var length=Pop(stack,cil);var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve array element type at IL_{cil.Offset:x4}.");
-                        var reference=IsReferenceType(type);var result=New(CilStackKind.ObjectReference);
-                        instructions.Add(new ValueIrNewArray(result,length,type,reference,ElementSize(type)));stack.Add(result);break;
+                        var length=Pop(stack,cil);var type=resolveType(cil);var generic=type is null?resolveGenericTypeParameter(cil):null;
+                        if(type is null&&generic is null)throw new NotSupportedException($"Unable to resolve array element type at IL_{cil.Offset:x4}.");
+                        var reference=generic?.ContainsReferences??(type is not null&&IsReferenceType(type));var result=New(CilStackKind.ObjectReference);
+                        var elementType=type??"$generic";var elementSize=generic?.Size??ElementSize(type!);
+                        instructions.Add(new ValueIrNewArray(result,length,elementType,reference,elementSize));stack.Add(result);break;
                     }
                     case 0x8e:
                     {
