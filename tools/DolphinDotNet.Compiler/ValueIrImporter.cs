@@ -240,9 +240,9 @@ internal static class ValueIrImporter
                     {
                         var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrStoreStaticField(Pop(stack,cil),field.DeclaringType,field.Name));break;
                     }
-                    case 0x2b or 0x38 or 0xdd or 0xde or 0xdc:
+                    case 0x2b or 0x38 or 0xdc:
                         terminator=new ValueIrJump(Target(blocks,cil));break;
-                    case 0x2c or 0x39:
+                    case 0xdd or 0xde:\n                        stack.Clear();terminator=new ValueIrJump(Target(blocks,cil));break;\n                    case 0x2c or 0x39:
                     {
                         var condition=Pop(stack,cil);var target=Target(blocks,cil);terminator=new ValueIrBranch(condition,null,ValueIrComparison.NonZero,false,Fallthrough(blocks,block,cil),target);break;
                     }
