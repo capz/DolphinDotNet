@@ -125,6 +125,16 @@ internal static class ValueCBackend
                     case ValueIrCopyObject x:b.AppendLine($"  memcpy((void*)v{x.Destination.Id}, (void*)v{x.Source.Id}, {ValueTypeSize(x.TypeName,model)}u);");break;
                     case ValueIrConvert x:b.AppendLine($"  v{x.Result.Id} = ({CType(x.Result.Kind)})v{x.Value.Id};");break;
                     case ValueIrBinary x:{var unsigned=x.Operation.EndsWith(".un",StringComparison.Ordinal);var op=Op(x.Operation);var l=unsigned?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";var r=unsigned?$"(uintptr_t)v{x.Right.Id}":$"v{x.Right.Id}";b.AppendLine($"  v{x.Result.Id} = {l} {op} {r};");break;}
+                    case ValueIrObjectEquals x:
+                    {
+                        b.AppendLine($"  if (v{x.Left.Id} == v{x.Right.Id}) v{x.Result.Id}=1;");
+                        b.AppendLine($"  else if (!v{x.Left.Id} || !v{x.Right.Id}) v{x.Result.Id}=0;");
+                        b.AppendLine($"  else if (((DndObject*)v{x.Left.Id})->type != ((DndObject*)v{x.Right.Id})->type) v{x.Result.Id}=0;");
+                        b.AppendLine($"  else if (((DndObject*)v{x.Left.Id})->type == &DND_TYPE_BOXED_INT32) v{x.Result.Id}=dnd_unbox_i32((DndObject*)v{x.Left.Id})==dnd_unbox_i32((DndObject*)v{x.Right.Id});");
+                        b.AppendLine($"  else if (((DndObject*)v{x.Left.Id})->type == &DND_TYPE_INT64) v{x.Result.Id}=dnd_unbox_scalar((DndObject*)v{x.Left.Id},&DND_TYPE_INT64,8u)==dnd_unbox_scalar((DndObject*)v{x.Right.Id},&DND_TYPE_INT64,8u);");
+                        b.AppendLine($"  else v{x.Result.Id}=0;");
+                        break;
+                    }
                     case ValueIrLoadFunction x:
                         if(x.Virtual&&x.Object is { } functionObject){var slot=VirtualSlot(x.Target,model);b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_virtual_resolve((DndObject*)v{functionObject.Id}, {slot}u);");}
                         else b.AppendLine($"  v{x.Result.Id} = (intptr_t){WrapperSymbol(x.Target)};");
