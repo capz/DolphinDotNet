@@ -16,11 +16,13 @@ internal static class ValueIrImporter
         Func<CilInstruction,string?> resolveType,
         Func<string,bool>? isInterfaceType=null,
         Func<string,bool>? isDelegateType=null,
+        Func<string,bool>? isValueType=null,
         IReadOnlyList<ExceptionRegionModel>? exceptionRegions=null)
     {
         var nextValue=0;
         bool resolveTypeForMethod(string name)=>isInterfaceType?.Invoke(name)??false;
         bool delegateType(string name)=>isDelegateType?.Invoke(name)??false;
+        bool valueType(string name)=>isValueType?.Invoke(name)??name is "System.Boolean" or "System.Byte" or "System.SByte" or "System.Char" or "System.Int16" or "System.UInt16" or "System.Int32" or "System.UInt32" or "System.Int64" or "System.UInt64" or "System.Single" or "System.Double" or "System.IntPtr" or "System.UIntPtr";
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
         var output=new List<ValueIrBlock>();
         var entryValues=new Dictionary<int,List<IrValue>>();
@@ -103,11 +105,16 @@ internal static class ValueIrImporter
                     }
                     case 0x8c:
                     {
-                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrBox(result,input,type));stack.Add(result);break;
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);
+                        if(valueType(type))instructions.Add(new ValueIrBox(result,input,type));else instructions.Add(new ValueIrConvert(result,input));
+                        stack.Add(result);break;
                     }
                     case 0xa5:
                     {
-                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve unboxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrUnboxAny(result,input,type));stack.Add(result);break;
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve unboxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);
+                        if(valueType(type)){var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrUnboxAny(result,input,type));stack.Add(result);}
+                        else {var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrTypeTest(result,input,type,true));stack.Add(result);}
+                        break;
                     }
                     case 0x8d:
                     {
