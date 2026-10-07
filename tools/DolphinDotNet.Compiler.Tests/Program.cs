@@ -14,14 +14,20 @@ Run("dotnet", $"run --project \"{compiler}\" -- \"{dll}\" \"{temp}\"");
 var generated = File.ReadAllText(temp);
 if (!generated.Contains("Hello from real C#!") ||
     !generated.Contains("0x06, 0x01") ||
-    !generated.Contains("0x06, 0x02") ||
-    !generated.Contains("Shared generic AOT body."))
+    !generated.Contains("0x06, 0x02"))
     throw new Exception("Compiler output did not contain expected strings/internal calls.");
 
-if (CountOccurrences(generated, "Shared generic AOT body.") != 1)
-    throw new Exception("Closed generic instantiations emitted duplicate shared generic data/code.");
-
 File.Delete(temp);
+
+var genericProject = Path.Combine(root, "tests/GenericSharingSmoke/GenericSharingSmoke.csproj");
+Run("dotnet", $"build \"{genericProject}\" -c Release");
+var genericDll = Path.Combine(root, "tests/GenericSharingSmoke/bin/Release/net8.0/GenericSharingSmoke.dll");
+var genericOutput = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.c");
+Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{genericDll}\" \"{genericOutput}\"");
+var genericGenerated = File.ReadAllText(genericOutput);
+if (CountOccurrences(genericGenerated, "Shared generic AOT body.") != 1)
+    throw new Exception("Closed generic instantiations did not share one AOT generic body/data instance.");
+File.Delete(genericOutput);
 Console.WriteLine("DolphinDotNet compiler integration test passed.");
 
 static void Run(string file, string args)
