@@ -19,22 +19,26 @@ public static class Foundation
     public static void Copy<T>(T[] source,T[] target,int count)=>Array.Copy(source,target,count);
 }
 
-public sealed class CompatList<T>:IEnumerable<T>,IReadOnlyList<T>
+public sealed class CompatList<T>:IEnumerable<T>,IReadOnlyList<T>,ICompatList<T>
 {
     private T[] items; public int Count{get;private set;}
     public CompatList(int capacity=4)=>items=new T[capacity<1?1:capacity];
     public T this[int index]{get{Check(index);return items[index];}set{Check(index);items[index]=value;}}
     public void Add(T value){Ensure(Count+1);items[Count++]=value;}
+    public int IndexOf(T value){var eq=CompatEqualityComparer<T>.Default;for(var i=0;i<Count;i++)if(eq.Equals(items[i],value))return i;return -1;}
+    public void Insert(int index,T value){if((uint)index>(uint)Count)throw new ArgumentOutOfRangeException(nameof(index));Ensure(Count+1);for(var i=Count;i>index;i--)items[i]=items[i-1];items[index]=value;Count++;}
+    public void RemoveAt(int index){Check(index);for(var i=index+1;i<Count;i++)items[i-1]=items[i];items[--Count]=default!;}
     public bool Contains(T value){var eq=CompatEqualityComparer<T>.Default;for(var i=0;i<Count;i++)if(eq.Equals(items[i],value))return true;return false;}
     public bool Remove(T value){var eq=CompatEqualityComparer<T>.Default;for(var i=0;i<Count;i++)if(eq.Equals(items[i],value)){for(var j=i+1;j<Count;j++)items[j-1]=items[j];items[--Count]=default!;return true;}return false;}
     public void Clear(){Array.Clear(items,0,Count);Count=0;}
     public Enumerator GetEnumerator()=>new(this);
+    public ICompatEnumerator<T> GetCompatEnumerator()=>new Enumerator(this);
     IEnumerator<T> IEnumerable<T>.GetEnumerator()=>new Enumerator(this);
     IEnumerator IEnumerable.GetEnumerator()=>new Enumerator(this);
     private void Check(int index){if((uint)index>=(uint)Count)throw new ArgumentOutOfRangeException(nameof(index));}
     private void Ensure(int count){if(count<=items.Length)return;var next=new T[items.Length*2];Array.Copy(items,next,Count);items=next;}
 
-    public struct Enumerator:IEnumerator<T>
+    public struct Enumerator:IEnumerator<T>,ICompatEnumerator<T>
     {
         private readonly CompatList<T> list; private int index;
         internal Enumerator(CompatList<T> list){this.list=list;index=-1;}
