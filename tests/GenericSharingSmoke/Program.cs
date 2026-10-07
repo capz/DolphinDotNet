@@ -41,8 +41,29 @@ internal static class Program
         }
     }
 
+    private static int RethrowProbe()
+    {
+        try
+        {
+            try
+            {
+                int? value = null;
+                return value.Value;
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+        }
+        catch (Exception)
+        {
+            return 14;
+        }
+    }
+
     private static int Main()
     {
+        if (RethrowProbe() != 14) return 93;
         if (TypedCatchProbe() != 13) return 92;
         if (CatchProbe() != 11) return 91;
         if (FinallyProbe() != 7) return 90;
