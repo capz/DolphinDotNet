@@ -30,7 +30,7 @@ public readonly struct CompatArraySegment<T>
     public CompatArraySegment(T[] array,int offset,int count)
     {
         if(array is null)throw new Exception("Array is null.");
-        if((uint)offset>(uint)array.Length||(uint)count>(uint)(array.Length-offset))throw new Exception("Array segment range is invalid.")
+        if((uint)offset>(uint)array.Length||(uint)count>(uint)(array.Length-offset))throw new Exception("Array segment range is invalid.");
         this.array=array;Offset=offset;Count=count;
     }
     public T[] Array=>array;
