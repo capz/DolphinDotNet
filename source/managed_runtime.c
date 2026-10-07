@@ -227,9 +227,21 @@ uint32_t dnd_array_length(DndArray *array) {
     return array->length;
 }
 
-int32_t dnd_array_load_i32(DndArray *array, uint32_t index) {
+uint64_t dnd_array_load_scalar(DndArray *array, uint32_t index, uint32_t size, bool sign_extend) {
     void *address = dnd_managed_array_at(array, index);
-    return address ? *(int32_t *)address : 0;
+    if (!address || size == 0 || size > 8 || size > array->element_size) return 0;
+    uint64_t value = 0;
+    memcpy(&value, address, size);
+    if (sign_extend && size < 8) {
+        uint32_t bits = size * 8u;
+        uint64_t sign = UINT64_C(1) << (bits - 1u);
+        if (value & sign) value |= UINT64_MAX << bits;
+    }
+    return value;
+}
+
+int32_t dnd_array_load_i32(DndArray *array, uint32_t index) {
+    return (int32_t)dnd_array_load_scalar(array, index, 4u, true);
 }
 
 DndObject *dnd_array_load_ref(DndArray *array, uint32_t index) {
@@ -237,11 +249,15 @@ DndObject *dnd_array_load_ref(DndArray *array, uint32_t index) {
     return address ? *(DndObject **)address : NULL;
 }
 
-bool dnd_array_store_i32(DndArray *array, uint32_t index, int32_t value) {
+bool dnd_array_store_scalar(DndArray *array, uint32_t index, uint64_t value, uint32_t size) {
     void *address = dnd_managed_array_at(array, index);
-    if (!address) return false;
-    *(int32_t *)address = value;
+    if (!address || size == 0 || size > 8 || size > array->element_size) return false;
+    memcpy(address, &value, size);
     return true;
+}
+
+bool dnd_array_store_i32(DndArray *array, uint32_t index, int32_t value) {
+    return dnd_array_store_scalar(array, index, (uint32_t)value, 4u);
 }
 
 bool dnd_array_store_ref(DndArray *array, uint32_t index, DndObject *value) {

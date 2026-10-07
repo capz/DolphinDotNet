@@ -97,8 +97,35 @@ internal static class Program
         }
     }
 
+    private static int PrimitiveRepresentationProbe()
+    {
+        var bytes = new byte[2]; bytes[0] = 0xff; bytes[1] = 1;
+        if (bytes[0] != 255 || bytes[1] != 1) return 1;
+
+        var signed = new sbyte[1]; signed[0] = -2;
+        if (signed[0] != -2) return 2;
+
+        var chars = new char[2]; chars[0] = '\u03a9'; chars[1] = 'A';
+        if (chars[0] != '\u03a9' || chars[1] != 'A') return 3;
+
+        var shorts = new short[1]; shorts[0] = -1234;
+        if (shorts[0] != -1234) return 4;
+
+        var ushorts = new ushort[1]; ushorts[0] = 60000;
+        if (ushorts[0] != 60000) return 5;
+
+        var longs = new long[1]; longs[0] = 0x100000002L;
+        if (longs[0] != 0x100000002L) return 6;
+
+        var ulongs = new ulong[1]; ulongs[0] = 0xf000000000000002UL;
+        if (ulongs[0] != 0xf000000000000002UL) return 7;
+
+        return 0;
+    }
+
     private static int Main()
     {
+        var primitiveStage = PrimitiveRepresentationProbe(); if (primitiveStage != 0) return 100 + primitiveStage;
         if (EhIntegrationProbe() != 16) return 95;
         if (ExplicitExceptionProbe() != 15) return 94;
         if (RethrowProbe() != 14) return 93;

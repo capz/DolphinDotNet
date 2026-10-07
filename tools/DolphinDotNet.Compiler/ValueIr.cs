@@ -68,8 +68,8 @@ internal sealed record ValueIrBoxNullable(IrValue Result,IrValue Address,int Val
 internal sealed record ValueIrUnboxAny(IrValue Result,IrValue Object,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrArrayElementAddress(IrValue Result,IrValue Array,IrValue Index,string ElementType):ValueIrInstruction;
 internal sealed record ValueIrArrayLength(IrValue Result,IrValue Array):ValueIrInstruction;
-internal sealed record ValueIrLoadElement(IrValue Result,IrValue Array,IrValue Index,bool Reference):ValueIrInstruction;
-internal sealed record ValueIrStoreElement(IrValue Array,IrValue Index,IrValue Value,bool Reference):ValueIrInstruction;
+internal sealed record ValueIrLoadElement(IrValue Result,IrValue Array,IrValue Index,int Size,bool Reference,bool Signed=false):ValueIrInstruction;
+internal sealed record ValueIrStoreElement(IrValue Array,IrValue Index,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrConsoleWriteLine(IrValue String):ValueIrInstruction;
 internal sealed record ValueIrReadButtonsDown(IrValue Result,IrValue Port):ValueIrInstruction;
 internal sealed record ValueIrPresentDemoFrame(IrValue Rotation):ValueIrInstruction;
