@@ -7,6 +7,18 @@ internal static class Program
         _ = Identity(7);
         _ = Identity("reference");
         _ = Identity(9L);
+
+        int? empty = null;
+        int? present = 42;
+        if (empty.HasValue) return 1;
+        if (!present.HasValue || present.Value != 42 || present.GetValueOrDefault() != 42) return 2;
+        if (empty.GetValueOrDefault() != 0) return 3;
+
+        long? wide = 0x100000002L;
+        if (!wide.HasValue || wide.GetValueOrDefault() != 0x100000002L) return 4;
+        object? boxedEmpty = empty;
+        object? boxedPresent = present;
+        if (boxedEmpty is not null || boxedPresent is not int || (int)boxedPresent != 42) return 5;
         return 0;
     }
 
