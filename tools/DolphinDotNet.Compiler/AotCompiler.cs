@@ -156,6 +156,9 @@ internal static class AotCompiler
     {
         if(i.Operand is not CilMetadataToken { Token: var raw })return null;
         var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
+        if(handle.Kind==HandleKind.MemberReference)return MetadataLoader.ResolveTypeName(md,md.GetMemberReference((MemberReferenceHandle)handle).Parent);
+        if(handle.Kind==HandleKind.MethodDefinition){var def=md.GetMethodDefinition((MethodDefinitionHandle)handle);return MetadataLoader.ResolveTypeName(md,def.GetDeclaringType());}
         if(handle.Kind!=HandleKind.TypeSpecification)return null;
         var reader=md.GetBlobReader(md.GetTypeSpecification((TypeSpecificationHandle)handle).Signature);
         if(reader.ReadSignatureTypeCode()!=SignatureTypeCode.GenericTypeParameter)return null;
