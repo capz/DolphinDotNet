@@ -46,7 +46,25 @@ internal static class MetadataLoader
    }
   }
  }
- public static string? ResolveTypeName(MetadataReader md,EntityHandle h){if(h.IsNil)return null;if(h.Kind==HandleKind.TypeDefinition){var t=md.GetTypeDefinition((TypeDefinitionHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}if(h.Kind==HandleKind.TypeSpecification)return null;return null;}
+ public static string? ResolveTypeName(MetadataReader md,EntityHandle h)
+ {
+  if(h.IsNil)return null;
+  if(h.Kind==HandleKind.TypeDefinition){var t=md.GetTypeDefinition((TypeDefinitionHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}
+  if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}
+  if(h.Kind==HandleKind.TypeSpecification)
+  {
+   var spec=md.GetTypeSpecification((TypeSpecificationHandle)h);var r=md.GetBlobReader(spec.Signature);
+   var code=r.ReadSignatureTypeCode();
+   if(code==SignatureTypeCode.GenericTypeInstance)
+   {
+    var kind=r.ReadSignatureTypeCode();
+    if(kind is not (SignatureTypeCode.TypeHandle or SignatureTypeCode.ValueType))return null;
+    return ResolveTypeName(md,r.ReadTypeHandle());
+   }
+   if(code==SignatureTypeCode.TypeHandle)return ResolveTypeName(md,r.ReadTypeHandle());
+  }
+  return null;
+ }
  private static (int Parameters,bool ReturnsValue) ReadMethodSignature(MetadataReader md,BlobHandle sig){var r=md.GetBlobReader(sig);var h=r.ReadSignatureHeader();if(h.IsGeneric)r.ReadCompressedInteger();int p=r.ReadCompressedInteger();var ret=r.ReadSignatureTypeCode();return(p,ret!=SignatureTypeCode.Void);}
  private static(int Size,bool Reference)FieldLayout(MetadataReader md,BlobHandle sig,CompilationModel model){var r=md.GetBlobReader(sig);r.ReadSignatureHeader();return ReadFieldType(md,ref r,model);}
  private static(int Size,bool Reference)ReadFieldType(MetadataReader md,ref BlobReader r,CompilationModel model)
