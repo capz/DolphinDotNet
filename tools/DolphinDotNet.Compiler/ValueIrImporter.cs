@@ -252,8 +252,8 @@ internal static class ValueIrImporter
                             var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing exception constructor signature at IL_{cil.Offset:x4}.");
                             IrValue? message=null;
                             for(var ai=effect.PopCount-1;ai>=0;ai--){var arg=Pop(stack,cil);if(ai==0&&arg.Kind==IrValueKind.ObjectReference)message=arg;}
-                            var type=resolveType(cil)??"System.Exception";var value=New(CilStackKind.ObjectReference);
-                            instructions.Add(new ValueIrNewException(value,type,message));stack.Add(value);break;
+                            var type=resolveType(cil)??"System.Exception";var exceptionValue=New(CilStackKind.ObjectReference);
+                            instructions.Add(new ValueIrNewException(exceptionValue,type,message));stack.Add(exceptionValue);break;
                         }
                         if(ik==IntrinsicKind.KeyValuePairConstructor){var a=genericArguments(cil);var second=Pop(stack,cil);var first=Pop(stack,cil);var a0=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var a1=a.Count>1?a[1]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var secondOffset=Align(a0.Size,Math.Min(Math.Max(a1.Size,1),4));var pairValue=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrNewStruct(pairValue,secondOffset+a1.Size,new[]{(0,first,a0.Size,a0.ContainsReferences),(secondOffset,second,a1.Size,a1.ContainsReferences)}));stack.Add(pairValue);break;}
                         if(ik==IntrinsicKind.ArraySegmentConstructor){var segmentCount=Pop(stack,cil);var offset=Pop(stack,cil);var array=Pop(stack,cil);var segmentValue=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrNewStruct(segmentValue,12,new[]{(0,array,4,true),(4,offset,4,false),(8,segmentCount,4,false)}));stack.Add(segmentValue);break;}
