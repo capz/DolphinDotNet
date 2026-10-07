@@ -115,7 +115,8 @@ internal static class Program
         collection.Clear();
         if (collection.Count != 0) return 38;
         var refs = new CompactList<string>(); refs.Add("a"); refs.Insert(0,"b"); refs.RemoveAt(1); refs.Clear();
-        return refs.Count == 0 ? 0 : 39;
+        if (refs.Count != 0) return 39;
+        return 0;
     }
 
     private static T Identity<T>(T value) => value;
