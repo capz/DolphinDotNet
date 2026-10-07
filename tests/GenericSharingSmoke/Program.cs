@@ -106,6 +106,7 @@ internal static class Program
         indexed[1] = 7;
         if (readOnlyList[1] != 7) return 32;
         if (collection.IsReadOnly) return 33;
+        if (!collection.Contains(4)) return 34;
         return 0;
     }
 
