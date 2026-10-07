@@ -25,6 +25,7 @@ internal sealed record ValueIrLoadArgument(IrValue Result,int Index):ValueIrInst
 internal sealed record ValueIrLoadLocal(IrValue Result,int Index):ValueIrInstruction;
 internal sealed record ValueIrLocal(int Index,IrValueKind Kind,int StorageSize=0);
 internal sealed record ValueIrStoreLocal(int Index,IrValue Value):ValueIrInstruction;
+internal sealed record ValueIrStoreLocalStruct(int Index,IrValue SourceAddress,int Size):ValueIrInstruction;
 internal sealed record ValueIrAddressOfLocal(IrValue Result,int Index):ValueIrInstruction;
 internal sealed record ValueIrAddressOfArgument(IrValue Result,int Index):ValueIrInstruction;
 internal sealed record ValueIrStoreArgument(int Index,IrValue Value):ValueIrInstruction;
