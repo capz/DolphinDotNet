@@ -8,6 +8,7 @@ internal readonly struct Score:ICompatEquatable<Score>,ICompatComparable<Score>
     public bool Equals(Score other)=>Value==other.Value;
     public override bool Equals(object? obj)=>obj is Score other&&Equals(other);
     public override int GetHashCode()=>Value*31;
+    public int GetCompatHashCode()=>Value*31;
     public int CompareTo(Score other)=>Value-other.Value;
 }
 
