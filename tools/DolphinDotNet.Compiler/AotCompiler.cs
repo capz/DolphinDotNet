@@ -105,10 +105,7 @@ internal static class AotCompiler
             var start=reader.Offset;var code=reader.ReadSignatureTypeCode();
             if(code==SignatureTypeCode.GenericTypeInstance)
             {
-                reader.Offset=start;var rep=GenericSharing.ReadRepresentation(assembly.Metadata,ref reader,model);
-                // Nullable<T> and other generic value locals need addressable storage. The
-                // representation size is the payload; reserve a compact flag word as well.
-                sizes[i]=rep.Kind==GenericRepresentationKind.ValueType?4+((rep.Size+3)&~3):0;
+                reader.Offset=start;sizes[i]=GenericSharing.ReadGenericLocalStorage(assembly.Metadata,ref reader,model);
             }
             else SkipLocalType(assembly.Metadata,ref reader,code,model);
         }
