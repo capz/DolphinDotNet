@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -37,7 +38,8 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil,body.ExceptionRegions);
                 CilStackAnalysis stackAnalysis;try{stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);}catch(Exception ex){throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex);}
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),i=>ResolveGenericTypeParameter(assembly.Metadata,model,method,i));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),i=>ResolveGenericTypeParameter(assembly.Metadata,model,method,i))
+                    with { ExceptionRegions = ReadExceptionRegions(assembly.Metadata,body.ExceptionRegions) };
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
@@ -50,6 +52,20 @@ internal static class AotCompiler
             return new AotCompilation(model,graph,output,valueOutput);
         }
         catch { model.Dispose(); throw; }
+    }
+
+    private static IReadOnlyList<ValueIrExceptionRegion> ReadExceptionRegions(MetadataReader md,ImmutableArray<ExceptionRegion> regions)
+    {
+        return regions.Select(region=>new ValueIrExceptionRegion(
+            region.Kind switch {
+                ExceptionRegionKind.Catch=>ValueIrExceptionRegionKind.Catch,
+                ExceptionRegionKind.Finally=>ValueIrExceptionRegionKind.Finally,
+                ExceptionRegionKind.Fault=>ValueIrExceptionRegionKind.Fault,
+                ExceptionRegionKind.Filter=>ValueIrExceptionRegionKind.Filter,
+                _=>throw new NotSupportedException($"Unsupported EH region {region.Kind}.")
+            },
+            region.TryOffset,region.TryLength,region.HandlerOffset,region.HandlerLength,region.FilterOffset,
+            region.Kind==ExceptionRegionKind.Catch&&!region.CatchType.IsNil?MetadataLoader.ResolveTypeName(md,region.CatchType):null)).ToArray();
     }
 
     private static void AddTypeClosure(string type,CompilationModel model,DependencyGraph graph)
