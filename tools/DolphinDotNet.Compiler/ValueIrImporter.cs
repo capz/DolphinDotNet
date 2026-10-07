@@ -115,7 +115,7 @@ internal static class ValueIrImporter
                         var length=Pop(stack,cil);var type=resolveType(cil);var generic=type is null?resolveGenericTypeParameter(cil):null;
                         if(type is null&&generic is null)throw new NotSupportedException($"Unable to resolve array element type at IL_{cil.Offset:x4}.");
                         var reference=generic?.ContainsReferences??(type is not null&&IsReferenceType(type));var result=New(CilStackKind.ObjectReference);
-                        var elementType=type??"$generic";var elementSize=generic is { } g?g.Size:ElementSize(type!);
+                        var elementType=type??"$generic";var elementSize=generic is { } g?(uint)g.Size:ElementSize(type!);
                         instructions.Add(new ValueIrNewArray(result,length,elementType,reference,elementSize));stack.Add(result);break;
                     }
                     case 0x8e:
