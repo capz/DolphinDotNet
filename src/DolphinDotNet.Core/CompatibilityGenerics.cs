@@ -39,6 +39,16 @@ public readonly struct CompatArraySegment<T>
     public T this[int index]=>index>=0&&index<Count?array[Offset+index]:throw new ArgumentOutOfRangeException(nameof(index));
 }
 
+public interface ICompatEquatable<T>
+{
+    bool Equals(T other);
+}
+
+public interface ICompatComparable<T>
+{
+    int CompareTo(T other);
+}
+
 public interface ICompatEnumerator<out T>
 {
     T Current{get;}
