@@ -29,6 +29,8 @@ typedef struct DndHeapBlock {
 static DndGcFrame *gc_frames;
 static bool gc_stress;
 static DndExceptionKind exception_kind;
+static bool exception_is_pending;
+static DndObject *exception_object;
 static DndEhFrame *eh_frames;
 static const char *exception_text;
 
@@ -453,21 +455,29 @@ void dnd_eh_pop(DndEhFrame *frame) {
     if (eh_frames == frame) eh_frames = frame->previous;
 }
 
-bool dnd_exception_pending(void) { return exception_kind != DND_EXCEPTION_NONE; }
+bool dnd_exception_pending(void) { return exception_is_pending; }
+DndObject *dnd_exception_object(void) { return exception_object; }
+void dnd_exception_begin_catch(void) { exception_is_pending = false; }
 
-void dnd_exception_clear(void) { exception_kind = DND_EXCEPTION_NONE; exception_text = NULL; }
+void dnd_exception_clear(void) { exception_kind = DND_EXCEPTION_NONE; exception_text = NULL; exception_object = NULL; exception_is_pending = false; }
 
 void dnd_exception_rethrow(void) {
-    if (!eh_frames || exception_kind == DND_EXCEPTION_NONE) return;
+    if (exception_kind == DND_EXCEPTION_NONE) return;
+    exception_is_pending = true;
+    if (!eh_frames) return;
     DndEhFrame *target = eh_frames;
     eh_frames = target->previous;
     gc_frames = target->gc_snapshot;
     longjmp(target->environment, 1);
 }
 
+void dnd_exception_rethrow_current(void) { dnd_exception_rethrow(); }
+
 void dnd_exception_throw(DndExceptionKind kind, const char *message) {
     exception_kind = kind;
     exception_text = message;
+    exception_object = NULL;
+    exception_is_pending = true;
     dnd_exception_rethrow();
 }
 DndExceptionKind dnd_exception_kind(void) { return exception_kind; }
