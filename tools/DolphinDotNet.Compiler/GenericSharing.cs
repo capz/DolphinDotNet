@@ -39,8 +39,49 @@ internal static class GenericSharing
         };
     }
 
-    public static string SpecializationSuffix(IReadOnlyList<GenericRepresentation> args)
-        =>args.Any(x=>x.RequiresSpecialization)?"|g:"+string.Join(",",args.Select(x=>x.Key)):string.Empty;
+    public static string SpecializationSuffix(IReadOnlyList<GenericRepresentation> typeArgs,IReadOnlyList<GenericRepresentation> methodArgs)
+    {
+        var all=typeArgs.Concat(methodArgs).ToArray();
+        return all.Any(x=>x.RequiresSpecialization)?"|g:"+string.Join(",",all.Select(x=>x.Key)):string.Empty;
+    }
+
+    public static IReadOnlyList<GenericRepresentation> ReadTypeArguments(MetadataReader md,TypeSpecificationHandle handle,CompilationModel model)
+    {
+        var reader=md.GetBlobReader(md.GetTypeSpecification(handle).Signature);
+        if(reader.ReadSignatureTypeCode()!=SignatureTypeCode.GenericTypeInstance||reader.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)return Array.Empty<GenericRepresentation>();
+        reader.ReadTypeHandle();var count=reader.ReadCompressedInteger();var result=new GenericRepresentation[count];
+        for(var i=0;i<count;i++)result[i]=ReadRepresentation(md,ref reader,model);
+        return result;
+    }
+
+    public static GenericAbi BuildAbi(MetadataReader md,MethodModel definition,IReadOnlyList<GenericRepresentation> typeArgs,IReadOnlyList<GenericRepresentation> methodArgs)
+    {
+        var method=md.GetMethodDefinition(definition.Handle);var reader=md.GetBlobReader(method.Signature);var header=reader.ReadSignatureHeader();
+        if(header.IsGeneric)reader.ReadCompressedInteger();var count=reader.ReadCompressedInteger();
+        var ret=ReadAbiKind(md,ref reader,typeArgs,methodArgs);var parameters=new CilStackKind[count];
+        for(var i=0;i<count;i++)parameters[i]=ReadAbiKind(md,ref reader,typeArgs,methodArgs)??CilStackKind.Unknown;
+        return new GenericAbi(parameters,ret);
+    }
+
+    private static CilStackKind? ReadAbiKind(MetadataReader md,ref BlobReader reader,IReadOnlyList<GenericRepresentation> typeArgs,IReadOnlyList<GenericRepresentation> methodArgs)
+    {
+        var code=reader.ReadSignatureTypeCode();
+        if(code==SignatureTypeCode.Void)return null;
+        if(code==SignatureTypeCode.GenericMethodParameter){var i=reader.ReadCompressedInteger();return AbiKind(methodArgs[i]);}
+        if(code==SignatureTypeCode.GenericTypeParameter){var i=reader.ReadCompressedInteger();return AbiKind(typeArgs[i]);}
+        return code switch
+        {
+            SignatureTypeCode.Int64 or SignatureTypeCode.UInt64=>CilStackKind.I8,
+            SignatureTypeCode.Single or SignatureTypeCode.Double=>CilStackKind.Float,
+            SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>CilStackKind.ObjectReference,
+            SignatureTypeCode.IntPtr or SignatureTypeCode.UIntPtr=>CilStackKind.NativeInt,
+            SignatureTypeCode.ByReference or SignatureTypeCode.Pointer=>CilStackKind.ManagedPointer,
+            _=>CilStackKind.I4
+        };
+    }
+
+    private static CilStackKind AbiKind(GenericRepresentation representation)
+        =>representation.RequiresSpecialization&&representation.Size==8?CilStackKind.I8:CilStackKind.NativeInt;
 
     private static GenericRepresentation FromTypeHandle(MetadataReader md,EntityHandle handle,CompilationModel model)
     {
