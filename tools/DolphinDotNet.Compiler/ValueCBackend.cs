@@ -6,6 +6,13 @@ internal static class ValueCBackend
     public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry,CompilationModel model,DependencyGraph graph)
     {
         var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\nstatic DndManagedHeap *dnd_value_heap;");
+        var stringLiterals=methods.SelectMany(m=>m.Blocks).SelectMany(block=>block.Instructions).OfType<ValueIrLoadString>().Select(x=>x.Value).Distinct(StringComparer.Ordinal).OrderBy(x=>x,StringComparer.Ordinal).ToArray();
+        var stringIds=stringLiterals.Select((value,index)=>(value,index)).ToDictionary(x=>x.value,x=>x.index,StringComparer.Ordinal);
+        foreach(var literal in stringLiterals)
+        {
+            var id=stringIds[literal];var units=literal.Select(ch=>$"0x{(int)ch:x4}u").Concat(new[]{"0u"});
+            b.AppendLine($"static const struct {{ DndObject object; uint32_t length; uint16_t chars[{literal.Length+1}]; }} dnd_string_literal_{id} = {{ {{ &DND_TYPE_STRING, 0 }}, {literal.Length}u, {{ {string.Join(", ",units)} }} }};");
+        }
         var compiledKeys=methods.Select(m=>m.Key).ToHashSet();
         var virtualMethods=methods.Where(m=>model.Methods.TryGetValue(m.Key,out var mm)&&mm.IsVirtual).ToArray();
         var functionTargets=methods.SelectMany(m=>m.Blocks).SelectMany(b=>b.Instructions).OfType<ValueIrLoadFunction>().Select(x=>x.Target).ToHashSet();
@@ -45,7 +52,7 @@ internal static class ValueCBackend
         var initializedTypes=graph.Types.Where(t=>TypeInitializer(t,model) is not null).OrderBy(t=>t).ToArray();
         foreach(var type in initializedTypes){b.AppendLine($"static uint8_t dnd_cctor_state_{Id(type)};");b.AppendLine($"static void {EnsureSymbol(type)}(void);");}
         foreach(var m in methods)b.AppendLine($"{ReturnCType(m,model)} {Symbol(m.Key)}({Parameters(m,model)});");
-        foreach(var m in methods)b.AppendLine(Emit(m,model,Symbol(m.Key),false));
+        foreach(var m in methods)b.AppendLine(Emit(m,model,Symbol(m.Key),false,stringIds));
         foreach(var type in initializedTypes)
         {
             var cctor=TypeInitializer(type,model)!;
@@ -70,7 +77,7 @@ internal static class ValueCBackend
         b.AppendLine("intptr_t dnd_value_aot_entry(DndManagedHeap *heap) { return dnd_aot_entry(heap); }");return b.ToString();
     }
 
-    public static string Emit(ValueIrMethod method,CompilationModel model,string functionName="dnd_value_ir_test",bool includeHeader=true)
+    public static string Emit(ValueIrMethod method,CompilationModel model,string functionName="dnd_value_ir_test",bool includeHeader=true,IReadOnlyDictionary<string,int>? stringIds=null)
     {
         var b=new StringBuilder();
         var values=Collect(method).GroupBy(v=>v.Id).Select(g=>g.First()).OrderBy(v=>v.Id).ToArray();
@@ -127,7 +134,7 @@ internal static class ValueCBackend
                 switch(i)
                 {
                     case ValueIrConstant x:b.AppendLine($"  v{x.Result.Id} = {x.Value};");break;
-                    case ValueIrLoadString x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_string_from_utf8(dnd_value_heap, \"{Escape(x.Value)}\");");break;
+                    case ValueIrLoadString x:b.AppendLine(stringIds is not null&&stringIds.TryGetValue(x.Value,out var sid)?$"  v{x.Result.Id} = (intptr_t)&dnd_string_literal_{sid};":$"  v{x.Result.Id} = (intptr_t)dnd_string_from_utf8(dnd_value_heap, \"{Escape(x.Value)}\");");break;
                     case ValueIrLoadArgument x:b.AppendLine($"  v{x.Result.Id} = a{x.Index};");break;
                     case ValueIrLoadLocal x:b.AppendLine($"  v{x.Result.Id} = l{x.Index};");break;
                     case ValueIrStoreLocal x:b.AppendLine($"  l{x.Index} = v{x.Value.Id};");break;
