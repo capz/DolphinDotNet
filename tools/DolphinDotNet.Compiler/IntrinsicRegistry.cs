@@ -26,7 +26,11 @@ internal enum IntrinsicKind
     ArraySegmentArray,
     ArraySegmentOffset,
     ArraySegmentCount,
-    ArraySegmentItem
+    ArraySegmentItem,
+    ArraySegmentGetEnumerator,
+    ArraySegmentEnumeratorMoveNext,
+    ArraySegmentEnumeratorCurrent,
+    ArraySegmentEnumeratorDispose
 }
 
 internal static class IntrinsicRegistry
