@@ -182,13 +182,14 @@ internal static class AotCompiler
             return new CilCallStackEffect(pop,i.OpCode==0x73?CilStackKind.ObjectReference:abi.Return);
         }
         var intrinsic=ResolveIntrinsic(md,i);
-        if(intrinsic is IntrinsicKind.NullableConstructor or IntrinsicKind.NullableHasValue or IntrinsicKind.NullableValue or IntrinsicKind.NullableGetValueOrDefault)
+        if(intrinsic is IntrinsicKind.NullableConstructor or IntrinsicKind.NullableHasValue or IntrinsicKind.NullableValue or IntrinsicKind.NullableGetValueOrDefault or IntrinsicKind.NullableGetValueOrDefaultValue)
         {
             var size=NullableValueSize(md,model,i);
             return intrinsic switch
             {
                 IntrinsicKind.NullableConstructor=>new CilCallStackEffect(2,null),
                 IntrinsicKind.NullableHasValue=>new CilCallStackEffect(1,CilStackKind.I4),
+                IntrinsicKind.NullableGetValueOrDefaultValue=>new CilCallStackEffect(2,size==8?CilStackKind.I8:CilStackKind.I4),
                 _=>new CilCallStackEffect(1,size==8?CilStackKind.I8:CilStackKind.I4)
             };
         }
