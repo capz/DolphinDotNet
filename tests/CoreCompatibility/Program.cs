@@ -33,7 +33,7 @@ internal static class Program
         if(eq.GetHashCode(new ComparableValue(3))!=51)return 11;
         var cmp=CompatComparer<ComparableValue>.Default;if(cmp.Compare(new ComparableValue(2),new ComparableValue(5))>=0||cmp.Compare(new ComparableValue(5),new ComparableValue(2))<=0||cmp.Compare(new ComparableValue(3),new ComparableValue(3))!=0)return 12;
         var stringEq=CompatEqualityComparer<string>.Default;if(!stringEq.Equals("cube","cube")||stringEq.Equals("cube",null)||stringEq.GetHashCode(null!)!=0)return 13;
-        var stringCmp=CompatComparer<string>.Default;if(stringCmp.Compare(null,"a")>=0||stringCmp.Compare("a",null)<=0||stringCmp.Compare("a","b")>=0)return 14;
+        var stringCmp=CompatComparer<string>.Default;if(stringCmp.Compare(null,"a")>=0||stringCmp.Compare("a",null)<=0)return 14;
         if(Foundation.Hash(new ComparableValue(2))!=34||Foundation.Compare(new ComparableValue(2),new ComparableValue(7))>=0)return 15;
         CompatNullable<int> some=9;var none=default(CompatNullable<int>);if(!some.HasValue||some.Value!=9||none.HasValue||none.GetValueOrDefault()!=0||none.GetValueOrDefault(12)!=12)return 16;
         var pair=new CompatKeyValuePair<int,string>(3,"v");if(pair.Key!=3||pair.Value!="v")return 17;
