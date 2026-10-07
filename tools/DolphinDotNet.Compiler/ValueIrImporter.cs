@@ -94,7 +94,7 @@ internal static class ValueIrImporter
                     }
                     case 0x8c:
                     {
-                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrBox(result,input,type));stack.Add(result);break;
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);if(type=="System.Nullable`1")instructions.Add(new ValueIrBoxNullable(result,input,nullableValueSize(cil)));else instructions.Add(new ValueIrBox(result,input,type));stack.Add(result);break;
                     }
                     case 0xa5:
                     {
