@@ -105,7 +105,7 @@ internal static class AotCompiler
             var start=reader.Offset;var code=reader.ReadSignatureTypeCode();
             if(code==SignatureTypeCode.GenericTypeInstance)
             {
-                reader.Offset=start;var size=GenericSharing.ReadGenericLocalStorage(assembly.Metadata,ref reader,model);locals[i]=new LocalStorage(size,size>0?CilStackKind.ManagedPointer:CilStackKind.ObjectReference);
+                reader.Offset=start;var layout=GenericSharing.ReadGenericLocalLayout(assembly.Metadata,ref reader,model);locals[i]=new LocalStorage(layout.Size,layout.Size>0?CilStackKind.ManagedPointer:CilStackKind.ObjectReference,layout.References);
             }
             else
             {
