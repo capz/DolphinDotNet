@@ -161,7 +161,10 @@ typedef struct DndEhFrame {
 void dnd_eh_push(DndEhFrame *frame);
 void dnd_eh_pop(DndEhFrame *frame);
 bool dnd_exception_pending(void);
+DndObject *dnd_exception_object(void);
+void dnd_exception_begin_catch(void);
 void dnd_exception_rethrow(void);
+void dnd_exception_rethrow_current(void);
 
 void dnd_exception_clear(void);
 void dnd_exception_throw(DndExceptionKind kind, const char *message);
