@@ -6,7 +6,10 @@
 
 typedef struct { DndObject object; DndObject *child; int32_t value; } TestNode;
 static const uint32_t node_refs[] = { (uint32_t)offsetof(TestNode, child) };
-static const DndType NODE_TYPE = { "TestNode", &DND_TYPE_OBJECT, sizeof(TestNode), 0, NULL, 1, node_refs, 0, 0, NULL, 0, NULL };\ntypedef struct { DndObject object; DndObject *child; } RefValue;\nstatic const uint32_t ref_value_refs[] = { (uint32_t)offsetof(RefValue, child) };\nstatic const DndType REF_VALUE_TYPE = { "RefValue", &DND_TYPE_OBJECT, sizeof(RefValue), 0, NULL, 1, ref_value_refs, DND_TYPE_FLAG_VALUE_TYPE, 0, NULL, 0, NULL };
+static const DndType NODE_TYPE = { "TestNode", &DND_TYPE_OBJECT, sizeof(TestNode), 0, NULL, 1, node_refs, 0, 0, NULL, 0, NULL };
+typedef struct { DndObject object; DndObject *child; } RefValue;
+static const uint32_t ref_value_refs[] = { (uint32_t)offsetof(RefValue, child) };
+static const DndType REF_VALUE_TYPE = { "RefValue", &DND_TYPE_OBJECT, sizeof(RefValue), 0, NULL, 1, ref_value_refs, DND_TYPE_FLAG_VALUE_TYPE, 0, NULL, 0, NULL };
 
 static intptr_t virtual_base(intptr_t *args) { (void)args; return 10; }
 static intptr_t virtual_derived(intptr_t *args) { (void)args; return 20; }
