@@ -16,7 +16,8 @@ internal static class ValueIrImporter
         Func<CilInstruction,string?> resolveString,
         Func<CilInstruction,FieldModel?> resolveField,
         Func<CilInstruction,string?> resolveType,
-        Func<CilInstruction,GenericRepresentation?> resolveGenericTypeParameter)
+        Func<CilInstruction,GenericRepresentation?> resolveGenericTypeParameter,
+        Func<string,GenericRepresentation?> resolveTypeRepresentation)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -120,9 +121,11 @@ internal static class ValueIrImporter
                     {
                         var length=Pop(stack,cil);var type=resolveType(cil);var generic=type is null?resolveGenericTypeParameter(cil):null;
                         if(type is null&&generic is null)throw new NotSupportedException($"Unable to resolve array element type at IL_{cil.Offset:x4}.");
-                        var reference=generic?.ContainsReferences??(type is not null&&IsReferenceType(type));var result=New(CilStackKind.ObjectReference);
-                        var elementType=type??"$generic";var elementSize=generic is { } g?(uint)g.Size:ElementSize(type!);
-                        instructions.Add(new ValueIrNewArray(result,length,elementType,reference,elementSize));stack.Add(result);break;
+                        var concreteRep=type is not null?resolveTypeRepresentation(type):null;
+                        var reference=generic?.Kind==GenericRepresentationKind.PointerSized&&generic.Value.ContainsReferences || (generic is null&&type is not null&&IsReferenceType(type));var result=New(CilStackKind.ObjectReference);
+                        var elementType=type??"$generic";var elementSize=generic is { } g?(uint)g.Size:concreteRep is { } cr?(uint)cr.Size:ElementSize(type!);
+                        var elementRefs=!reference?(generic?.ReferenceOffsets??concreteRep?.ReferenceOffsets):null;
+                        instructions.Add(new ValueIrNewArray(result,length,elementType,reference,elementSize,elementRefs));stack.Add(result);break;
                     }
                     case 0x8e:
                     {
