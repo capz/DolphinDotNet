@@ -33,9 +33,9 @@ internal static class CilDecoder
             switch(op)
             {
                 case 0x2a: flow=CilFlowKind.Return; break;
-                case 0x2b: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
+                case 0x2b or 0xde: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
                 case >=0x2c and <=0x37: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
-                case 0x38: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
+                case 0x38 or 0xdd: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
                 case 0x45: operand=ReadSwitchTargets(il,ref p,start); flow=CilFlowKind.Switch; break;
                 case >=0x39 and <=0x44: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
                 default:
@@ -77,6 +77,28 @@ internal sealed record CilBasicBlock(int Id,int StartOffset,List<CilInstruction>
 
 internal static class CilControlFlowGraph
 {
+    private static IReadOnlyList<CilInstruction> RewriteFinallyControlFlow(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<System.Reflection.PortableExecutable.ExceptionRegion> regions)
+    {
+        if(regions.Count==0)return instructions;
+        var rewritten=instructions.ToArray();
+        foreach(var region in regions.Where(r=>r.Kind==System.Reflection.PortableExecutable.ExceptionRegionKind.Finally))
+        {
+            var tryEnd=region.TryOffset+region.TryLength;var handlerEnd=region.HandlerOffset+region.HandlerLength;
+            var leaves=instructions.Where(i=>i.Offset>=region.TryOffset&&i.Offset<tryEnd&&i.OpCode is 0xdd or 0xde&&i.Operand is CilBranchTarget t&&(t.Offset<region.TryOffset||t.Offset>=tryEnd)).ToArray();
+            var continuations=leaves.Select(i=>((CilBranchTarget)i.Operand!).Offset).Distinct().ToArray();
+            if(continuations.Length>1)throw new NotSupportedException("Finally regions with multiple leave continuations are not yet supported.");
+            if(continuations.Length==0)continue;
+            var continuation=continuations[0];
+            for(var n=0;n<rewritten.Length;n++)
+            {
+                var i=rewritten[n];
+                if(leaves.Any(l=>l.Offset==i.Offset))rewritten[n]=i with { Operand=new CilBranchTarget(region.HandlerOffset),Flow=CilFlowKind.Branch };
+                else if(i.Offset>=region.HandlerOffset&&i.Offset<handlerEnd&&i.OpCode==0xdc)rewritten[n]=i with { Operand=new CilBranchTarget(continuation),Flow=CilFlowKind.Branch };
+            }
+        }
+        return rewritten;
+    }
+
     public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions)
     {
         if(instructions.Count==0)return [];
