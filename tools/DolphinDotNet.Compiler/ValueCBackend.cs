@@ -275,7 +275,7 @@ internal static class ValueCBackend
             MethodModel? implementation=null;var current=type;
             while(model.Types.ContainsKey(current))
             {
-                implementation=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==current&&!m.IsAbstract&&compiled.Contains(m.Key)&&m.Key.Name==contract.Key.Name&&m.Key.Signature==contract.Key.Signature);
+                implementation=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==current&&!m.IsAbstract&&compiled.Contains(m.Key)&&(m.Key.Name==contract.Key.Name||m.Key.Name.EndsWith("."+contract.Key.Name,StringComparison.Ordinal))&&m.ParameterCount==contract.ParameterCount);
                 if(implementation is not null)break;
                 current=model.Types[current].BaseType??"";
             }
