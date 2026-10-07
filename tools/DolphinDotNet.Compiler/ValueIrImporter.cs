@@ -135,6 +135,17 @@ internal static class ValueIrImporter
                     {
                         var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);instructions.Add(new ValueIrStoreElement(array,index,value,cil.OpCode==0xa2));break;
                     }
+                    case 0xa3:
+                    {
+                        var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array load at IL_{cil.Offset:x4}.");var index=Pop(stack,cil);var array=Pop(stack,cil);
+                        var kind=rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4;var result=New(kind);
+                        instructions.Add(new ValueIrLoadElement(result,array,index,rep.ContainsReferences));stack.Add(result);break;
+                    }
+                    case 0xa4:
+                    {
+                        var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array store at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);
+                        instructions.Add(new ValueIrStoreElement(array,index,value,rep.ContainsReferences));break;
+                    }
                     case 0xfe15:
                     {
                         var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve initobj type at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrInitObject(Pop(stack,cil),type));break;
