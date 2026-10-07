@@ -75,7 +75,7 @@ internal static class Program
 
     private static int TestGenericInterfaceEnumeration()
     {
-        IEnumerable<int> values = new[] { 2, 3, 4 };
+        IEnumerable<int> values = new IntEnumerable(new[] { 2, 3, 4 });
         var sum = 0;
         foreach (var value in values) sum += value;
         return sum == 9 ? 0 : 21;
@@ -83,7 +83,7 @@ internal static class Program
 
     private static int TestNonGenericInterfaceEnumeration()
     {
-        System.Collections.IEnumerable values = new[] { 6, 7 };
+        System.Collections.IEnumerable values = new IntEnumerable(new[] { 6, 7 });
         var sum = 0;
         foreach (int value in values) sum += value;
         return sum == 13 ? 0 : 22;
