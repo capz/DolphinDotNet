@@ -45,6 +45,10 @@ if (!genericGenerated.Contains("dnd_string_char_at", StringComparison.Ordinal) |
     !genericGenerated.Contains("dnd_string_substring", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_string_concat", StringComparison.Ordinal))
     throw new Exception("Core immutable string lowering missing.");
+if (!genericGenerated.Contains("dnd_managed_array_new_layout", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_array_store_ref", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_array_load_ref", StringComparison.Ordinal))
+    throw new Exception("SZ-array typed allocation/reference lowering missing.");
 if (!genericGenerated.Contains("dnd_array_load_scalar", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_array_store_scalar", StringComparison.Ordinal) ||
     !genericGenerated.Contains(", 1u,", StringComparison.Ordinal) ||
