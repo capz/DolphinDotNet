@@ -147,16 +147,24 @@ internal static class Program
     private static int SystemArrayProbe()
     {
         var values = new[] { 3, 5, 7, 9 };
-        if (values.Rank != 1 || values.LongLength != 4 || values.GetLength(0) != 4) return 1;
-        if (values.GetLowerBound(0) != 0 || values.GetUpperBound(0) != 3) return 2;
+        if (values.Rank != 1) return 1;
+        if (values.LongLength != 4) return 1;
+        if (values.GetLength(0) != 4) return 1;
+        if (values.GetLowerBound(0) != 0) return 2;
+        if (values.GetUpperBound(0) != 3) return 2;
         if (Array.IndexOf(values, 7) != 2) return 3;
         var copy = new int[4];
         Array.Copy(values, copy, values.Length);
-        if (copy[0] != 3 || copy[3] != 9) return 4;
+        if (copy[0] != 3) return 4;
+        if (copy[3] != 9) return 4;
         Array.Clear(copy, 1, 2);
-        if (copy[0] != 3 || copy[1] != 0 || copy[2] != 0 || copy[3] != 9) return 5;
+        if (copy[0] != 3) return 5;
+        if (copy[1] != 0) return 5;
+        if (copy[2] != 0) return 5;
+        if (copy[3] != 9) return 5;
         Array.Copy(values, 1, copy, 1, 2);
-        if (copy[1] != 5 || copy[2] != 7) return 6;
+        if (copy[1] != 5) return 6;
+        if (copy[2] != 7) return 6;
         return 0;
     }
 
