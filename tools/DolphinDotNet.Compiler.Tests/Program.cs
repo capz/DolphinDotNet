@@ -44,6 +44,17 @@ if (!genericGenerated.Contains("dnd_type_System_Collections_Generic_IEnumerable_
     !genericGenerated.Contains("dnd_type_System_Collections_IEnumerable", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_type_System_Collections_IEnumerator", StringComparison.Ordinal))
     throw new Exception("Generic/non-generic enumeration interface metadata missing.");
+if (!genericGenerated.Contains("dnd_type_System_Collections_Generic_ICollection_1", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_type_System_Collections_Generic_IList_1", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_type_System_Collections_Generic_IReadOnlyCollection_1", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_type_System_Collections_Generic_IReadOnlyList_1", StringComparison.Ordinal))
+    throw new Exception("Generic collection interface metadata missing.");
+if (!genericGenerated.Contains("CompactList_1_Insert", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("CompactList_1_RemoveAt", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("CompactList_1_CopyTo", StringComparison.Ordinal))
+    throw new Exception("Compact collection mutation lowering missing.");
+if (genericGenerated.Contains("dnd_type__generic", StringComparison.Ordinal))
+    throw new Exception("Generic array emitted unresolved runtime type metadata.");
 var concreteEnumerationStart = genericGenerated.IndexOf("Program_TestConcreteEnumeration", StringComparison.Ordinal);
 var genericInterfaceStart = genericGenerated.IndexOf("Program_TestGenericInterfaceEnumeration", StringComparison.Ordinal);
 if (concreteEnumerationStart < 0 || genericInterfaceStart <= concreteEnumerationStart)
