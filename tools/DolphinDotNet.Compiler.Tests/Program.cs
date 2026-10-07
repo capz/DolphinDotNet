@@ -45,6 +45,12 @@ if (!genericGenerated.Contains("dnd_string_char_at", StringComparison.Ordinal) |
     !genericGenerated.Contains("dnd_string_substring", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_string_concat", StringComparison.Ordinal))
     throw new Exception("Core immutable string lowering missing.");
+if (!genericGenerated.Contains("dnd_array_get_length", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_array_get_upper_bound", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_array_clear", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_array_copy", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_array_index_of", StringComparison.Ordinal))
+    throw new Exception("System.Array contract lowering missing.");
 if (!genericGenerated.Contains("dnd_array_load_scalar", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_array_store_scalar", StringComparison.Ordinal) ||
     !genericGenerated.Contains(", 1u,", StringComparison.Ordinal) ||
