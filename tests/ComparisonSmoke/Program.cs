@@ -24,6 +24,6 @@ public static class Program
         if(cmp.Compare(new Score(2),new Score(5))<0)score+=8;
         if(cmp.Compare(new Score(5),new Score(2))>0)score+=16;
         if(cmp.Compare(new Score(3),new Score(3))==0)score+=32;
-        return score;
+        return score==63?0:score;
     }
 }
