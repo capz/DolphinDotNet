@@ -48,6 +48,7 @@ internal static class GenericSharing
         if(definition=="System.Nullable`1"&&args.Length==1)return NullableLayout(args[0]).Size;
         if(definition=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2)return PairLayout(args[0],args[1]).Size;
         if(definition=="System.ArraySegment`1"&&args.Length==1)return 12;
+        if(definition=="System.ArraySegment`1+Enumerator"&&args.Length==1)return 16;
         if(definition is not null&&model.Types.TryGetValue(definition,out var type)&&type.IsValueType)return Math.Max(1,type.InstanceSize);
         return 0;
     }
@@ -59,6 +60,7 @@ internal static class GenericSharing
         if(definition=="System.Nullable`1"&&args.Length==1)return NullableLayout(args[0]);
         if(definition=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2)return PairLayout(args[0],args[1]);
         if(definition=="System.ArraySegment`1"&&args.Length==1)return (12,new[]{0});
+        if(definition=="System.ArraySegment`1+Enumerator"&&args.Length==1)return (16,new[]{0});
         if(definition is not null&&model.Types.TryGetValue(definition,out var type)&&type.IsValueType)return (Math.Max(1,type.InstanceSize),model.Fields.Values.Where(f=>f.DeclaringType==definition&&f.IsReference&&!f.IsStatic).Select(f=>f.Offset).ToArray());
         return (0,Array.Empty<int>());
     }
@@ -130,6 +132,7 @@ internal static class GenericSharing
         if(name=="System.Nullable`1"&&args.Length==1){var l=NullableLayout(args[0]);return new(GenericRepresentationKind.ValueType,l.Size,l.References);}
         if(name=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2){var l=PairLayout(args[0],args[1]);return new(GenericRepresentationKind.ValueType,l.Size,l.References);}
         if(name=="System.ArraySegment`1"&&args.Length==1)return new(GenericRepresentationKind.ValueType,12,new[]{0});
+        if(name=="System.ArraySegment`1+Enumerator"&&args.Length==1)return new(GenericRepresentationKind.ValueType,16,new[]{0});
         return isValue?new(GenericRepresentationKind.ValueType,Math.Max(1,model.Types[name!].InstanceSize)):new(GenericRepresentationKind.PointerSized,4,new[]{0});
     }
 }
