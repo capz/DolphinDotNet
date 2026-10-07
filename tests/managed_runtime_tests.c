@@ -6,7 +6,7 @@
 
 typedef struct { DndObject object; DndObject *child; int32_t value; } TestNode;
 static const uint32_t node_refs[] = { (uint32_t)offsetof(TestNode, child) };
-static const DndType NODE_TYPE = { "TestNode", &DND_TYPE_OBJECT, sizeof(TestNode), 0, NULL, 1, node_refs, 0, 0, NULL, 0, NULL };
+static const DndType NODE_TYPE = { "TestNode", &DND_TYPE_OBJECT, sizeof(TestNode), 0, NULL, 1, node_refs, 0, 0, NULL, 0, NULL };\ntypedef struct { DndObject object; DndObject *child; } RefValue;\nstatic const uint32_t ref_value_refs[] = { (uint32_t)offsetof(RefValue, child) };\nstatic const DndType REF_VALUE_TYPE = { "RefValue", &DND_TYPE_OBJECT, sizeof(RefValue), 0, NULL, 1, ref_value_refs, DND_TYPE_FLAG_VALUE_TYPE, 0, NULL, 0, NULL };
 
 static intptr_t virtual_base(intptr_t *args) { (void)args; return 10; }
 static intptr_t virtual_derived(intptr_t *args) { (void)args; return 20; }
@@ -45,6 +45,25 @@ int main(void) {
     assert(*(int32_t *)dnd_managed_array_at(array, 2) == 42);
     assert(dnd_managed_array_at(array, 9) == NULL);
     assert(dnd_exception_kind() == DND_EXCEPTION_INDEX_OUT_OF_RANGE);
+    dnd_exception_clear();
+
+    /* SZ arrays are zero-initialized and preserve scalar widths. */
+    DndArray *bytes = dnd_managed_array_new(&heap, 2, 1);
+    DndArray *wide = dnd_managed_array_new(&heap, 1, 8);
+    assert(bytes && wide && dnd_array_load_scalar(bytes, 0, 1, false) == 0);
+    assert(dnd_array_store_scalar(bytes, 0, 0xff, 1));
+    assert(dnd_array_load_scalar(bytes, 0, 1, false) == 0xff);
+    assert(dnd_array_store_scalar(wide, 0, UINT64_C(0xf000000000000002), 8));
+    assert(dnd_array_load_scalar(wide, 0, 8, false) == UINT64_C(0xf000000000000002));
+
+    /* Reference array stores enforce their declared element type. */
+    DndArray *typed_refs = dnd_managed_array_new_typed(&heap, 1, sizeof(DndObject *), &BASE_TYPE, true);
+    DndObject *derived_for_array = dnd_object_new(&heap, &DERIVED_TYPE);
+    DndObject *wrong_for_array = dnd_object_new(&heap, &NODE_TYPE);
+    assert(dnd_array_store_ref(typed_refs, 0, derived_for_array));
+    dnd_exception_clear();
+    assert(!dnd_array_store_ref(typed_refs, 0, wrong_for_array));
+    assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
     dnd_exception_clear();
 
     DndList list;
