@@ -113,33 +113,10 @@ internal static class ValueCBackend
             b.AppendLine("    dnd_exception_rethrow(); return 0;");
             b.AppendLine("  }");
         }
-        if(method.ExceptionRegions.Count>0)
-        {
-            b.AppendLine("  volatile int32_t dnd_eh_site = -1; volatile int dnd_eh_active = 1; DndEhFrame dnd_eh_frame;");
-            b.AppendLine("  dnd_eh_push(&dnd_eh_frame);");
-            b.AppendLine("  if (setjmp(dnd_eh_frame.environment) != 0) {");
-            b.AppendLine("    if (dnd_eh_active) { dnd_eh_pop(&dnd_eh_frame); dnd_eh_active = 0; }");
-            foreach(var region in method.ExceptionRegions.OrderBy(r=>r.TryLength))
-            {
-                var handler=method.Blocks.FirstOrDefault(x=>x.CilOffset==region.HandlerOffset);
-                if(handler is null)continue;
-                if(region.Kind==ValueIrExceptionRegionKind.Finally)
-                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength}) goto block_{handler.Id};");
-            }
-            b.AppendLine("    dnd_exception_rethrow(); return 0;");
-            b.AppendLine("  }");
-        }
         if(method.Blocks.Count>0)b.AppendLine($"  goto block_{method.Blocks[0].Id};");
         foreach(var block in method.Blocks)
         {
             b.AppendLine($"block_{block.Id}:");
-            if(method.ExceptionRegions.Count>0)
-            {
-                var protectedHere=method.ExceptionRegions.Any(r=>block.CilOffset>=r.TryOffset&&block.CilOffset<r.TryOffset+r.TryLength);
-                if(protectedHere)b.AppendLine($"  dnd_eh_site = {block.CilOffset};");
-                if(method.ExceptionRegions.Any(r=>r.HandlerOffset==block.CilOffset))
-                    b.AppendLine("  if (dnd_eh_active) { dnd_eh_pop(&dnd_eh_frame); dnd_eh_active = 0; }");
-            }
             if(method.ExceptionRegions.Count>0)
             {
                 var protectedHere=method.ExceptionRegions.Any(r=>block.CilOffset>=r.TryOffset&&block.CilOffset<r.TryOffset+r.TryLength);
