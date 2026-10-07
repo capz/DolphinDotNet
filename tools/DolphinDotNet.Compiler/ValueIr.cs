@@ -90,6 +90,7 @@ internal enum ValueIrComparison { NonZero,Equal,NotEqual,GreaterThan,GreaterOrEq
 internal sealed record ValueIrBranch(IrValue Left,IrValue? Right,ValueIrComparison Comparison,bool Unsigned,int TrueBlock,int FalseBlock):ValueIrTerminator;
 internal sealed record ValueIrSwitch(IrValue Value,IReadOnlyList<int> Targets,int DefaultBlock):ValueIrTerminator;
 internal sealed record ValueIrReturn(IrValue? Value):ValueIrTerminator;
+internal sealed record ValueIrEndFinally(int NormalTargetBlock):ValueIrTerminator;
 
 internal sealed record ValueIrBlock(
     int Id,
