@@ -10,6 +10,7 @@ typedef struct DndObject DndObject;
 typedef struct DndString DndString;
 typedef struct DndArray DndArray;
 typedef struct DndDelegate DndDelegate;
+typedef struct DndException DndException;
 typedef struct DndInterfaceEntry DndInterfaceEntry;
 
 typedef void (*DndFinalizer)(DndObject *);
@@ -62,6 +63,11 @@ struct DndArray {
     uint8_t elements_are_references;
     uint8_t reserved[3];
     uint8_t data[];
+};
+
+struct DndException {
+    DndObject object;
+    DndString *message;
 };
 
 struct DndDelegate {
@@ -173,6 +179,8 @@ void dnd_eh_push(DndEhFrame *frame);
 void dnd_eh_pop(DndEhFrame *frame);
 bool dnd_exception_pending(void);
 DndObject *dnd_exception_object(void);
+DndException *dnd_exception_new(DndManagedHeap *heap, const DndType *type, DndString *message);
+DndString *dnd_exception_get_message(DndException *exception);
 bool dnd_exception_matches(const DndType *type);
 void dnd_exception_begin_catch(void);
 void dnd_exception_rethrow(void);
