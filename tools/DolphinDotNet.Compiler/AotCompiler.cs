@@ -270,6 +270,10 @@ internal static class AotCompiler
         Type("System.Collections.IEnumerator");Method("System.Collections.IEnumerator","get_Current",true);Method("System.Collections.IEnumerator","MoveNext",true);Method("System.Collections.IEnumerator","Reset",false);
         Type("System.Collections.Generic.IEnumerable`1","System.Collections.IEnumerable");Method("System.Collections.Generic.IEnumerable`1","GetEnumerator",true);
         Type("System.Collections.Generic.IEnumerator`1","System.IDisposable","System.Collections.IEnumerator");Method("System.Collections.Generic.IEnumerator`1","get_Current",true);
+        Type("System.Collections.Generic.ICollection`1","System.Collections.Generic.IEnumerable`1");Method("System.Collections.Generic.ICollection`1","get_Count",true);Method("System.Collections.Generic.ICollection`1","get_IsReadOnly",true);Method("System.Collections.Generic.ICollection`1","Add",false);Method("System.Collections.Generic.ICollection`1","Clear",false);Method("System.Collections.Generic.ICollection`1","Contains",true);Method("System.Collections.Generic.ICollection`1","CopyTo",false);Method("System.Collections.Generic.ICollection`1","Remove",true);
+        Type("System.Collections.Generic.IList`1","System.Collections.Generic.ICollection`1");Method("System.Collections.Generic.IList`1","get_Item",true);Method("System.Collections.Generic.IList`1","set_Item",false);Method("System.Collections.Generic.IList`1","IndexOf",true);Method("System.Collections.Generic.IList`1","Insert",false);Method("System.Collections.Generic.IList`1","RemoveAt",false);
+        Type("System.Collections.Generic.IReadOnlyCollection`1","System.Collections.Generic.IEnumerable`1");Method("System.Collections.Generic.IReadOnlyCollection`1","get_Count",true);
+        Type("System.Collections.Generic.IReadOnlyList`1","System.Collections.Generic.IReadOnlyCollection`1");Method("System.Collections.Generic.IReadOnlyList`1","get_Item",true);
     }
 
     private static void LoadDolphinDependencies(CompilationModel model,AssemblyModel root)
