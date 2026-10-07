@@ -40,7 +40,11 @@ jobs:
       - name: Core compatibility tests
         run: dotnet run --project tests/CoreCompatibility/CoreCompatibility.csproj -c Release
       - name: Comparison compatibility tests
-        run: dotnet run --project tests/ComparisonSmoke/ComparisonSmoke.csproj -c Release
+        run: |
+          dotnet run --project tests/ComparisonSmoke/ComparisonSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot tests/ComparisonSmoke/bin/Release/net8.0/ComparisonSmoke.dll /tmp/comparison_value.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/comparison_value.c tests/comparison_value_host.c source/managed_runtime.c -o /tmp/comparison_value
+          /tmp/comparison_value
       - name: Build managed GameCube sample
         run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
       - name: Lower managed GameCube dependency graph
