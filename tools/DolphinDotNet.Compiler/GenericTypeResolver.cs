@@ -88,10 +88,19 @@ internal static class GenericTypeResolver
 
         var baseType=CloseRelated(model,source.BaseType,arguments);
         var interfaces=(source.Interfaces??Array.Empty<string>()).Select(x=>CloseRelated(model,x,arguments)??x).ToArray();
-        model.Types[closed]=source with { Name=source.Name+"["+string.Join(",",arguments)+"]",FullName=closed,BaseType=baseType,Interfaces=interfaces };
 
-        foreach(var field in model.Fields.Values.Where(x=>x.DeclaringType==definition).ToArray())
-            model.Fields[(closed,field.Name)]=field with { DeclaringType=closed };
+        var ownSize=0;
+        foreach(var field in model.Fields.Values.Where(x=>x.DeclaringType==definition).OrderBy(x=>x.IsStatic?1:0).ThenBy(x=>x.Offset).ToArray())
+        {
+            var size=field.Size;var reference=field.IsReference;var embedded=field.EmbeddedReferenceOffsets;
+            if(field.GenericParameterIndex>=0&&field.GenericParameterIndex<arguments.Count)
+                (size,reference,embedded)=ArgumentLayout(model,arguments[field.GenericParameterIndex]);
+            var offset=field.IsStatic?0:Align(ownSize,Math.Min(Math.Max(size,1),4));
+            model.Fields[(closed,field.Name)]=field with { DeclaringType=closed,Offset=offset,Size=size,IsReference=reference,EmbeddedReferenceOffsets=embedded };
+            if(!field.IsStatic)ownSize=offset+size;
+        }
+
+        model.Types[closed]=source with { Name=source.Name+"["+string.Join(",",arguments)+"]",FullName=closed,BaseType=baseType,Interfaces=interfaces,InstanceSize=ownSize };
 
         foreach(var method in model.Methods.Values.Where(x=>x.Key.TypeName==definition).ToArray())
         {
@@ -100,6 +109,29 @@ internal static class GenericTypeResolver
         }
         return closed;
     }
+
+    private static (int Size,bool Reference,IReadOnlyList<int> Embedded) ArgumentLayout(CompilationModel model,string type)
+    {
+        switch(type)
+        {
+            case "System.Boolean":case "System.Byte":case "System.SByte":return(1,false,Array.Empty<int>());
+            case "System.Char":case "System.Int16":case "System.UInt16":return(2,false,Array.Empty<int>());
+            case "System.Int64":case "System.UInt64":case "System.Double":return(8,false,Array.Empty<int>());
+            case "System.Single":case "System.Int32":case "System.UInt32":case "System.IntPtr":case "System.UIntPtr":return(4,false,Array.Empty<int>());
+            case "System.String":case "System.Object":return(4,true,new[]{0});
+        }
+        if(type.EndsWith("[]",StringComparison.Ordinal))return(4,true,new[]{0});
+        if(model.Types.TryGetValue(type,out var tm))
+        {
+            if(!tm.IsValueType)return(4,true,new[]{0});
+            var refs=model.Fields.Values.Where(f=>f.DeclaringType==type&&!f.IsStatic)
+                .SelectMany(f=>(f.EmbeddedReferenceOffsets??(f.IsReference?new[]{0}:Array.Empty<int>())).Select(o=>f.Offset+o)).Distinct().OrderBy(x=>x).ToArray();
+            return(Math.Max(1,tm.InstanceSize),false,refs);
+        }
+        return(4,true,new[]{0});
+    }
+
+    private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
 
     private static string? CloseRelated(CompilationModel model,string? related,IReadOnlyList<string> arguments)
     {
