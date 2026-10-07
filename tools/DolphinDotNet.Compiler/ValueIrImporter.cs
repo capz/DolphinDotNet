@@ -140,6 +140,7 @@ internal static class ValueIrImporter
                     {
                         var value=Pop(stack,cil);var address=Pop(stack,cil);var size=cil.OpCode==0x52?1:cil.OpCode==0x53?2:cil.OpCode==0x55?8:4;instructions.Add(new ValueIrStoreIndirect(address,value,size,value.Kind==IrValueKind.ObjectReference));break;
                     }
+                    case 0xfe16: break; // constrained. prefix; closed generic type is already carried by method context
                     case 0xfe15:
                     {
                         var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve initobj type at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrInitValue(Pop(stack,cil),type));break;
