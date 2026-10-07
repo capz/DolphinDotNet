@@ -107,7 +107,13 @@ internal static class Program
         if (readOnlyList[1] != 7) return 32;
         if (collection.IsReadOnly) return 33;
         if (!collection.Contains(4)) return 34;
-        return 0;
+        indexed.Insert(1, 5);
+        if (indexed.Count != 3 || indexed[1] != 5 || indexed[2] != 7) return 35;
+        indexed.RemoveAt(0);
+        if (indexed.Count != 2 || indexed[0] != 5) return 36;
+        if (!collection.Remove(5) || collection.Count != 1 || indexed[0] != 7) return 37;
+        collection.Clear();
+        return collection.Count == 0 ? 0 : 38;
     }
 
     private static T Identity<T>(T value) => value;
@@ -123,14 +129,14 @@ internal sealed class CompactList<T> : IList<T>, IReadOnlyList<T>
     public bool IsReadOnly => false;
     public T this[int index] { get => _items[index]; set => _items[index] = value; }
     public void Add(T item) { _items[_count++] = item; }
-    public void Clear() => _count = 0;
+    public void Clear() { for (var i=0;i<_count;i++) _items[i]=default!; _count = 0; }
     public bool Contains(T item) => IndexOf(item) >= 0;
     public void CopyTo(T[] array, int arrayIndex) { for (var i=0;i<_count;i++) array[arrayIndex+i]=_items[i]; }
     public IEnumerator<T> GetEnumerator() => new CompactListEnumerator<T>(this);
     public int IndexOf(T item) { for (var i=0;i<_count;i++) if (EqualityComparer<T>.Default.Equals(_items[i],item)) return i; return -1; }
-    public void Insert(int index,T item) { throw new NotSupportedException(); }
-    public bool Remove(T item) { throw new NotSupportedException(); }
-    public void RemoveAt(int index) { throw new NotSupportedException(); }
+    public void Insert(int index,T item) { for (var i=_count;i>index;i--) _items[i]=_items[i-1]; _items[index]=item; _count++; }
+    public bool Remove(T item) { var index=IndexOf(item); if(index<0)return false; RemoveAt(index); return true; }
+    public void RemoveAt(int index) { _count--; for(var i=index;i<_count;i++) _items[i]=_items[i+1]; _items[_count]=default!; }
     System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 }
 
