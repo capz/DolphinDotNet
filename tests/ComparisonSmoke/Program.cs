@@ -1,7 +1,7 @@
 using System;
 using DolphinDotNet.Compatibility;
 
-internal readonly struct Score:IEquatable<Score>,IComparable<Score>
+internal readonly struct Score:ICompatEquatable<Score>,ICompatComparable<Score>
 {
     public Score(int value)=>Value=value;
     public int Value{get;}
