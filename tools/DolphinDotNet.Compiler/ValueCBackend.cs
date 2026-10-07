@@ -102,6 +102,12 @@ internal static class ValueCBackend
                 if(handler is null)continue;
                 if(region.Kind==ValueIrExceptionRegionKind.Finally)
                     b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength}) goto block_{handler.Id};");
+                else if(region.Kind==ValueIrExceptionRegionKind.Catch)
+                {
+                    var exceptionValue=handler.EntryStack.Values.FirstOrDefault();
+                    var assign=handler.EntryStack.Values.Count>0?$"v{exceptionValue.Id} = (intptr_t)dnd_exception_object(); ":"";
+                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength}) {{ {assign}dnd_exception_begin_catch(); goto block_{handler.Id}; }}");
+                }
             }
             b.AppendLine("    dnd_exception_rethrow(); return 0;");
             b.AppendLine("  }");
