@@ -5,7 +5,13 @@ internal static class ValueCBackend
 {
     public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry,CompilationModel model,DependencyGraph graph)
     {
-        var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\nstatic DndManagedHeap *dnd_value_heap;");
+        var b=new StringBuilder();b.AppendLine("#include <stdint.h>
+#include <string.h>
+#include \"dnd_managed.h\"
+#include \"dnd_console.h\"
+#include \"dnd_input.h\"
+#include \"dnd_graphics.h\"
+static DndManagedHeap *dnd_value_heap;");
         var compiledKeys=methods.Select(m=>m.Key).ToHashSet();
         var virtualMethods=methods.Where(m=>model.Methods.TryGetValue(m.Key,out var mm)&&mm.IsVirtual).ToArray();
         var functionTargets=methods.SelectMany(m=>m.Blocks).SelectMany(b=>b.Instructions).OfType<ValueIrLoadFunction>().Select(x=>x.Target).ToHashSet();
@@ -74,7 +80,8 @@ internal static class ValueCBackend
     {
         var b=new StringBuilder();
         var values=Collect(method).GroupBy(v=>v.Id).Select(g=>g.First()).OrderBy(v=>v.Id).ToArray();
-        if(includeHeader)b.AppendLine("#include <stdint.h>\n#include <string.h>");
+        if(includeHeader)b.AppendLine("#include <stdint.h>
+#include <string.h>");
         b.Append($"{ReturnCType(method,model)} {functionName}(");
         b.Append(Parameters(method,model));
         b.AppendLine(") {");
@@ -268,7 +275,7 @@ internal static class ValueCBackend
     }
     private static IReadOnlyList<MethodModel> InterfaceImplementations(string type,string iface,CompilationModel model,HashSet<MethodKey> compiled)
     {
-        var methods=model.Methods.Values.Where(m=>m.Key.TypeName==iface&&m.IsVirtual).OrderBy(m=>m.Handle.GetHashCode()).ToArray();
+        var methods=model.Methods.Values.Where(m=>m.Key.TypeName==iface&&m.IsVirtual&&!m.Key.Signature.Contains("|contract:",StringComparison.Ordinal)).OrderBy(m=>m.Handle.GetHashCode()).ToArray();
         var result=new List<MethodModel>();
         foreach(var contract in methods)
         {
@@ -317,7 +324,9 @@ internal static class ValueCBackend
         =>model.Methods.TryGetValue(m.Key,out var mm)&&mm.Abi?.Return is { } kind?AbiCType(kind):"intptr_t";
     private static string AbiCType(CilStackKind kind)=>kind switch{CilStackKind.I8=>"int64_t",CilStackKind.Float=>"double",_=>"intptr_t"};
     private static string Id(string s)=>new(s.Select(ch=>char.IsLetterOrDigit(ch)?ch:'_').ToArray());
-    private static string Escape(string s)=>s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n").Replace("\r","\\r").Replace("\t","\\t");
+    private static string Escape(string s)=>s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("
+","\
+").Replace("\r","\\r").Replace("\t","\\t");
     private static bool HasRoots(ValueIrMethod m)=>Collect(m).Any(v=>v.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>l.Kind==IrValueKind.ObjectReference)||m.HasThis;
     private static string ValueStorageCType(IrValueKind kind)=>kind==IrValueKind.I8?"int64_t":"intptr_t";
     private static string CType(IrValueKind kind)=>kind switch
