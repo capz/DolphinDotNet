@@ -113,6 +113,8 @@ internal static class Program
         if (string.Concat(null, "cube") != "cube") return 11;
         string? missing = null;
         if (!string.Equals(missing, null) || string.Equals(missing, value)) return 12;
+        var duplicate = "dolphin.net";
+        if (!object.ReferenceEquals(value, duplicate)) return 13;
         return 0;
     }
 
