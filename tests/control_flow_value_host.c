@@ -35,13 +35,9 @@ extern intptr_t dnd_value_Program_ComparisonContractCase(void);
 
 static intptr_t capture0(intptr_t (*fn)(void), int *exception)
 {
-    static int capture_index;
-    capture_index++;
-    fprintf(stderr,"capture %d start\n",capture_index); fflush(stderr);
     dnd_exception_clear();
     intptr_t value=fn();
     *exception=(int)dnd_exception_kind();
-    fprintf(stderr,"capture %d end value=%ld ex=%d\n",capture_index,(long)value,*exception); fflush(stderr);
     dnd_exception_clear();
     return value;
 }
