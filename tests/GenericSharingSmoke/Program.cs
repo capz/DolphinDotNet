@@ -14,6 +14,8 @@ internal static class Program
         if (empty.HasValue) return 1;
         if (!present.HasValue || present.Value != 42 || present.GetValueOrDefault() != 42) return 2;
         if (empty.GetValueOrDefault() != 0) return 3;
+        int? copy = present;
+        if (!copy.HasValue || copy.Value != 42) return 7;
 
         long? wide = 0x100000002L;
         if (!wide.HasValue || wide.GetValueOrDefault() != 0x100000002L) return 4;
