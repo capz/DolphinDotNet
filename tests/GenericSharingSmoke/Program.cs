@@ -104,7 +104,8 @@ internal static class Program
         if (collection.Count != 2 || readOnlyCollection.Count != 2) return 30;
         if (indexed[0] != 4 || readOnlyList[1] != 6) return 31;
         indexed[1] = 7;
-        return readOnlyList[1] == 7 ? 0 : 32;
+        if (readOnlyList[1] != 7) return 32;
+        return 0;
     }
 
     private static T Identity<T>(T value) => value;
