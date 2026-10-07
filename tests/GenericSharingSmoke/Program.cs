@@ -1,7 +1,14 @@
-_ = Shared<int>.Marker();
-_ = Shared<string>.Marker();
+internal static class Program
+{
+    private static int Main()
+    {
+        _ = Shared<int>.Marker();
+        _ = Shared<string>.Marker();
+        return 0;
+    }
+}
 
-static class Shared<T>
+internal static class Shared<T>
 {
     public static int Marker() => 42;
 }
