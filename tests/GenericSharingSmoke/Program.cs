@@ -61,8 +61,21 @@ internal static class Program
         }
     }
 
+    private static int ExplicitExceptionProbe()
+    {
+        try
+        {
+            throw new InvalidOperationException("explicit");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ex.Message.Length == 8 ? 15 : -1;
+        }
+    }
+
     private static int Main()
     {
+        if (ExplicitExceptionProbe() != 15) return 94;
         if (RethrowProbe() != 14) return 93;
         if (TypedCatchProbe() != 13) return 92;
         if (CatchProbe() != 11) return 91;
