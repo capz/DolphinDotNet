@@ -12,7 +12,7 @@ public readonly struct CompatNullable<T> where T:struct
     public T GetValueOrDefault(T defaultValue)=>HasValue?value:defaultValue;
     public override bool Equals(object? other)=>HasValue&&other is T item&&CompatEqualityComparer<T>.Default.Equals(value,item);
     public override int GetHashCode()=>HasValue?CompatEqualityComparer<T>.Default.GetHashCode(value):0;
-    public override string ToString()=>HasValue?(value.ToString()??string.Empty):string.Empty;
+    public override string ToString()=>HasValue?((object)value).ToString():"";
     public static implicit operator CompatNullable<T>(T value)=>new(value);
 }
 
