@@ -132,25 +132,30 @@ internal static class ValueIrImporter
                     {
                         var index=Pop(stack,cil);var array=Pop(stack,cil);var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve array address element type at IL_{cil.Offset:x4}.");var result=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrArrayElementAddress(result,array,index,type));stack.Add(result);break;
                     }
-                    case 0x94 or 0x9a:
+                    case >=0x90 and <=0x9a:
                     {
-                        var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0x9a;var result=New(reference?CilStackKind.ObjectReference:CilStackKind.I4);
-                        instructions.Add(new ValueIrLoadElement(result,array,index,reference));stack.Add(result);break;
+                        var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0x9a;
+                        var size=cil.OpCode switch { 0x90 or 0x91 or 0x92=>1, 0x93 or 0x94=>2, 0x96 or 0x97 or 0x99=>8, _=>4 };
+                        var signed=cil.OpCode is 0x90 or 0x92 or 0x93 or 0x95 or 0x97;
+                        var kind=reference?CilStackKind.ObjectReference:size==8?CilStackKind.I8:CilStackKind.I4;var result=New(kind);
+                        instructions.Add(new ValueIrLoadElement(result,array,index,size,reference,signed));stack.Add(result);break;
                     }
-                    case 0x9e or 0xa2:
+                    case >=0x9b and <=0xa2:
                     {
-                        var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);instructions.Add(new ValueIrStoreElement(array,index,value,cil.OpCode==0xa2));break;
+                        var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0xa2;
+                        var size=cil.OpCode switch { 0x9b=>1, 0x9c=>2, 0x9f or 0xa0=>8, _=>4 };
+                        instructions.Add(new ValueIrStoreElement(array,index,value,size,reference));break;
                     }
                     case 0xa3:
                     {
                         var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array load at IL_{cil.Offset:x4}.");var index=Pop(stack,cil);var array=Pop(stack,cil);
                         var kind=rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4;var result=New(kind);
-                        instructions.Add(new ValueIrLoadElement(result,array,index,rep.ContainsReferences));stack.Add(result);break;
+                        instructions.Add(new ValueIrLoadElement(result,array,index,rep.Size,rep.ContainsReferences));stack.Add(result);break;
                     }
                     case 0xa4:
                     {
                         var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array store at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);
-                        instructions.Add(new ValueIrStoreElement(array,index,value,rep.ContainsReferences));break;
+                        instructions.Add(new ValueIrStoreElement(array,index,value,rep.Size,rep.ContainsReferences));break;
                     }
                     case 0xfe15:
                     {
