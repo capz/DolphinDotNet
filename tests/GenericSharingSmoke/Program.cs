@@ -1,3 +1,4 @@
+#nullable enable
 internal static class Program
 {
     private static int Main()
