@@ -137,7 +137,8 @@ internal sealed class CompactList<T> : IList<T>, IReadOnlyList<T>
     public bool Contains(T item) => IndexOf(item) >= 0;
     public void CopyTo(T[] array, int arrayIndex) { for (var i=0;i<_count;i++) array[arrayIndex+i]=_items[i]; }
     public IEnumerator<T> GetEnumerator() => new CompactListEnumerator<T>(this);
-    public int IndexOf(T item) { for (var i=0;i<_count;i++) if (object.Equals(_items[i],item)) return i; return -1; }
+    public int IndexOf(T item) { for (var i=0;i<_count;i++) if (Same(_items[i],item)) return i; return -1; }
+    private static bool Same(T left,T right) => object.ReferenceEquals(left,right);
     public void Insert(int index,T item) { for (var i=_count;i>index;i--) _items[i]=_items[i-1]; _items[index]=item; _count++; }
     public bool Remove(T item) { var index=IndexOf(item); if(index<0)return false; RemoveAt(index); return true; }
     public void RemoveAt(int index) { _count--; for(var i=index;i<_count;i++) _items[i]=_items[i+1]; _items[_count]=default!; }
