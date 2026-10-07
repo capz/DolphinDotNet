@@ -39,6 +39,16 @@ internal static class GenericSharing
         };
     }
 
+    public static int ReadGenericLocalStorage(MetadataReader md,ref BlobReader reader,CompilationModel model)
+    {
+        if(reader.ReadSignatureTypeCode()!=SignatureTypeCode.GenericTypeInstance||reader.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)return 0;
+        var definition=MetadataLoader.ResolveTypeName(md,reader.ReadTypeHandle());var count=reader.ReadCompressedInteger();
+        var args=new GenericRepresentation[count];for(var i=0;i<count;i++)args[i]=ReadRepresentation(md,ref reader,model);
+        if(definition=="System.Nullable`1"&&args.Length==1)return 4+((args[0].Size+3)&~3);
+        if(definition is not null&&model.Types.TryGetValue(definition,out var type)&&type.IsValueType)return Math.Max(1,type.InstanceSize);
+        return 0;
+    }
+
     public static string SpecializationSuffix(IReadOnlyList<GenericRepresentation> typeArgs,IReadOnlyList<GenericRepresentation> methodArgs)
     {
         var all=typeArgs.Concat(methodArgs).ToArray();
