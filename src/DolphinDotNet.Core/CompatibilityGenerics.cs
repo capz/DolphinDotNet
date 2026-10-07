@@ -42,6 +42,7 @@ public readonly struct CompatArraySegment<T>
 public interface ICompatEquatable<T>
 {
     bool Equals(T other);
+    int GetCompatHashCode();
 }
 
 public interface ICompatComparable<T>
