@@ -23,6 +23,7 @@ File.Delete(temp);
 var genericProject = Path.Combine(root, "tests/GenericSharingSmoke/GenericSharingSmoke.csproj");
 Run("dotnet", $"build \"{genericProject}\" -c Release");
 var genericDll = Path.Combine(root, "tests/GenericSharingSmoke/bin/Release/net8.0/GenericSharingSmoke.dll");
+Run("dotnet", $"\"{genericDll}\"");
 var genericOutput = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.c");
 Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{genericDll}\" \"{genericOutput}\"");
 var genericGenerated = File.ReadAllText(genericOutput);
