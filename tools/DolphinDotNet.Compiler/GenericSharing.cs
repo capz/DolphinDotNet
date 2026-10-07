@@ -10,6 +10,7 @@ internal readonly record struct GenericRepresentation(GenericRepresentationKind 
     public string Key=>RequiresSpecialization?$"v{Size}":"p";
 }
 
+// GameCube is 32-bit: only representations wider than one machine word need a distinct body.
 internal static class GenericSharing
 {
     public static IReadOnlyList<GenericRepresentation> ReadMethodArguments(MetadataReader md,MethodSpecificationHandle handle,CompilationModel model)
