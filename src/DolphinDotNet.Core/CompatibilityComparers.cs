@@ -12,7 +12,7 @@ public sealed class CompatEqualityComparer<T>
     {
         if(object.ReferenceEquals(x,y))return true;
         if(x is null||y is null)return false;
-        if(x is IEquatable<T> equatable)return equatable.Equals(y);
+        if(x is ICompatEquatable<T> equatable)return equatable.Equals(y);
         return object.Equals(x,y);
     }
 
@@ -30,8 +30,7 @@ public sealed class CompatComparer<T>
         if(object.ReferenceEquals(x,y))return 0;
         if(x is null)return -1;
         if(y is null)return 1;
-        if(x is IComparable<T> generic)return generic.CompareTo(y);
-        if(x is IComparable comparable)return comparable.CompareTo(y);
+        if(x is ICompatComparable<T> generic)return generic.CompareTo(y);
         throw new ArgumentException("Type does not provide a comparison contract.");
     }
 }
