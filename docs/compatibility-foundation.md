@@ -49,6 +49,33 @@ Implemented and characterized:
 
 Constructed generic types from referenced assemblies are intentionally not yet lowered through Value IR because `TypeSpecification` instantiation belongs to the following generic-CoreLib phase. The strict .NET Standard declaration scanner therefore remains separate from this runtime/managed implementation milestone.
 
+### Phase 4 — generic CoreLib foundation
+
+Complete for the compatibility-foundation scope, with GameCube memory pressure treated as a primary design constraint.
+
+Implemented:
+
+- on-demand closed generic type metadata for `TypeSpecification` references; unused closed generic instantiations create no AOT metadata or code;
+- closed generic field/method resolution and generic-parameter substitution in AOT signatures;
+- closed generic interface identity and overload-safe interface dispatch;
+- `CompatNullable<T>`, `CompatKeyValuePair<TKey,TValue>`, `CompatArraySegment<T>`;
+- lean generic enumerable, enumerator, read-only collection/list and mutable collection/list contracts;
+- compact `CompatList<T>` integration with allocation-free concrete struct enumeration;
+- correct inline value-type field access for compact generic structs;
+- primitive value-type fast paths remain distinct from generic metadata so boxing/unboxing and typed arrays retain their compact runtime representation.
+
+Memory policy for this phase:
+
+- generic instantiations are materialized only when reachable from the user's program;
+- no blanket monomorphization of all possible generic types;
+- empty `CompatList<T>` instances allocate no backing array; storage is created on first insertion;
+- concrete list enumeration uses a struct enumerator and allocates no iterator object;
+- interface-based enumeration remains available for compatibility and may box the struct enumerator, so allocation-sensitive game loops should prefer the concrete path;
+- value structs remain inline and do not receive object headers until explicitly boxed;
+- no additional runtime dictionaries or reflection tables were introduced for generic dispatch.
+
+The strict .NET Standard declaration scanner remains separate from this runtime/managed compatibility milestone and therefore still reports the literal `System.*` contract surface independently.
+
 ## P1 — small managed surface, large payoff
 
 Implement these primarily in managed CoreLib once the P0 primitives exist:
