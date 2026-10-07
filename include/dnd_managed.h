@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <setjmp.h>
 
 typedef struct DndType DndType;
 typedef struct DndObject DndObject;
@@ -151,6 +152,16 @@ typedef struct DndGcFrame {
 } DndGcFrame;
 void dnd_gc_frame_push(DndGcFrame *frame, DndObject ***slots, size_t count);
 void dnd_gc_frame_pop(DndGcFrame *frame);
+
+typedef struct DndEhFrame {
+    jmp_buf environment;
+    struct DndEhFrame *previous;
+    DndGcFrame *gc_snapshot;
+} DndEhFrame;
+void dnd_eh_push(DndEhFrame *frame);
+void dnd_eh_pop(DndEhFrame *frame);
+bool dnd_exception_pending(void);
+void dnd_exception_rethrow(void);
 
 void dnd_exception_clear(void);
 void dnd_exception_throw(DndExceptionKind kind, const char *message);
