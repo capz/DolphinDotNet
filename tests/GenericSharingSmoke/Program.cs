@@ -92,6 +92,27 @@ internal static class Program
     private static T Identity<T>(T value) => value;
 }
 
+
+internal sealed class IntEnumerable : IEnumerable<int>
+{
+    private readonly int[] _values;
+    public IntEnumerable(int[] values) => _values = values;
+    public IEnumerator<int> GetEnumerator() => new IntEnumerator(_values);
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+}
+
+internal sealed class IntEnumerator : IEnumerator<int>
+{
+    private readonly int[] _values;
+    private int _index = -1;
+    public IntEnumerator(int[] values) => _values = values;
+    public int Current => _values[_index];
+    object System.Collections.IEnumerator.Current => Current;
+    public bool MoveNext() { _index++; return _index < _values.Length; }
+    public void Reset() => _index = -1;
+    public void Dispose() { }
+}
+
 internal static class Shared<T>
 {
     public static int Marker() => 42;
