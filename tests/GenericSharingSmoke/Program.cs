@@ -113,7 +113,9 @@ internal static class Program
         if (indexed.Count != 2 || indexed[0] != 5) return 36;
         if (!collection.Remove(5) || collection.Count != 1 || indexed[0] != 7) return 37;
         collection.Clear();
-        return collection.Count == 0 ? 0 : 38;
+        if (collection.Count != 0) return 38;
+        var refs = new CompactList<string>(); refs.Add("a"); refs.Insert(0,"b"); refs.RemoveAt(1); refs.Clear();
+        return refs.Count == 0 ? 0 : 39;
     }
 
     private static T Identity<T>(T value) => value;
