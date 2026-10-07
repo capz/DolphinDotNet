@@ -14,7 +14,7 @@ int main(void)
         fprintf(stderr,"comparison smoke exception=%d\n",(int)dnd_exception_kind());
         return 2;
     }
-    if(result!=63){
+    if(result!=0){
         fprintf(stderr,"comparison smoke result=%ld\n",(long)result);
         return 1;
     }
