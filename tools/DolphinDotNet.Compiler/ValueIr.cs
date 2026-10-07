@@ -91,6 +91,7 @@ internal sealed record ValueIrBranch(IrValue Left,IrValue? Right,ValueIrComparis
 internal sealed record ValueIrSwitch(IrValue Value,IReadOnlyList<int> Targets,int DefaultBlock):ValueIrTerminator;
 internal sealed record ValueIrReturn(IrValue? Value):ValueIrTerminator;
 internal sealed record ValueIrEndFinally(int NormalTargetBlock):ValueIrTerminator;
+internal sealed record ValueIrThrow(IrValue? Exception):ValueIrTerminator;
 
 internal sealed record ValueIrBlock(
     int Id,
