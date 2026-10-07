@@ -214,6 +214,9 @@ internal static class ValueIrImporter
                     }
                     case 0x73:
                     {
+                        var ik=intrinsic(cil);
+                        if(ik==IntrinsicKind.KeyValuePairConstructor){var a=genericArguments(cil);var second=Pop(stack,cil);var first=Pop(stack,cil);var a0=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var a1=a.Count>1?a[1]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var secondOffset=Align(a0.Size,Math.Min(Math.Max(a1.Size,1),4));var value=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrNewStruct(value,secondOffset+a1.Size,new[]{(0,first,a0.Size,a0.ContainsReferences),(secondOffset,second,a1.Size,a1.ContainsReferences)}));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ArraySegmentConstructor){var count=Pop(stack,cil);var offset=Pop(stack,cil);var array=Pop(stack,cil);var value=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrNewStruct(value,12,new[]{(0,array,4,true),(4,offset,4,false),(8,count,4,false)}));stack.Add(value);break;}
                         var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved constructor at IL_{cil.Offset:x4}.");var args=new IrValue[target.ParameterCount];for(var ai=args.Length-1;ai>=0;ai--)args[ai]=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);
                         if(target.DeclaringTypeIsDelegate&&args.Length==2)instructions.Add(new ValueIrNewDelegate(value,args[0],args[1]));
                         else instructions.Add(new ValueIrNewObject(value,target.Key.TypeName,target.Key,args));
