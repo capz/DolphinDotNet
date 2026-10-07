@@ -116,6 +116,7 @@ internal static class Program
         if (collection.Count != 0) return 38;
         var refs = new CompactList<string>(); refs.Add("a"); refs.Insert(0,"b"); refs.RemoveAt(1); refs.Clear();
         if (refs.Count != 0) return 39;
+        var copy = new int[2]; indexed.CopyTo(copy,0); if (copy[0] != 7) return 40;
         return 0;
     }
 
