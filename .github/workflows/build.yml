@@ -61,7 +61,7 @@ jobs:
         run: |
           dotnet build tests/ControlFlowSmoke/ControlFlowSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot tests/ControlFlowSmoke/bin/Release/net8.0/ControlFlowSmoke.dll /tmp/control_flow_value.c
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/control_flow_value.c tests/control_flow_value_host.c source/managed_runtime.c -o /tmp/control_flow_value
+          cc -std=c11 -Wall -Wextra -Werror -g -fsanitize=address -Iinclude /tmp/control_flow_value.c tests/control_flow_value_host.c source/managed_runtime.c -o /tmp/control_flow_value
           /tmp/control_flow_value
       - name: Build AOT smoke assembly
         run: dotnet build tests/AotSmoke/AotSmoke.csproj -c Release
