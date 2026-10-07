@@ -9,8 +9,8 @@ public static class Foundation
 {
     public static bool ReferenceEquals(object? a,object? b)=>object.ReferenceEquals(a,b);
     public static bool Equals(object? a,object? b)=>object.Equals(a,b);
-    public static int Hash<T>(T value)=>EqualityComparer<T>.Default.GetHashCode(value!);
-    public static int Compare<T>(T a,T b)=>Comparer<T>.Default.Compare(a,b);
+    public static int Hash<T>(T value)=>CompatEqualityComparer<T>.Default.GetHashCode(value!);
+    public static int Compare<T>(T a,T b)=>CompatComparer<T>.Default.Compare(a,b);
     public static T? NullableOrDefault<T>(T? value) where T:struct=>value;
     public static string Concat(string? a,string? b)=>string.Concat(a,b);
     public static int IndexOf(string value,string needle)=>value.IndexOf(needle,StringComparison.Ordinal);
@@ -25,7 +25,7 @@ public sealed class CompatList<T>:IEnumerable<T>
     public CompatList(int capacity=4)=>items=new T[Math.Max(1,capacity)];
     public T this[int index]{get{Check(index);return items[index];}set{Check(index);items[index]=value;}}
     public void Add(T value){Ensure(Count+1);items[Count++]=value;}
-    public bool Contains(T value){var eq=EqualityComparer<T>.Default;for(var i=0;i<Count;i++)if(eq.Equals(items[i],value))return true;return false;}
+    public bool Contains(T value){var eq=CompatEqualityComparer<T>.Default;for(var i=0;i<Count;i++)if(eq.Equals(items[i],value))return true;return false;}
     public bool Remove(T value){var eq=EqualityComparer<T>.Default;for(var i=0;i<Count;i++)if(eq.Equals(items[i],value)){for(var j=i+1;j<Count;j++)items[j-1]=items[j];items[--Count]=default!;return true;}return false;}
     public void Clear(){Array.Clear(items,0,Count);Count=0;}
     public IEnumerator<T> GetEnumerator(){for(var i=0;i<Count;i++)yield return items[i];}
@@ -42,7 +42,7 @@ public sealed class CompatDictionary<TKey,TValue> where TKey:notnull
     public void Add(TKey key,TValue value){if(Find(key)>=0)throw new ArgumentException("Duplicate key.");Set(key,value);}
     public bool ContainsKey(TKey key)=>Find(key)>=0;
     public bool TryGetValue(TKey key,out TValue value){var i=Find(key);if(i>=0){value=values[i];return true;}value=default!;return false;}
-    private int Find(TKey key){var eq=EqualityComparer<TKey>.Default;for(var i=0;i<used.Length;i++)if(used[i]&&eq.Equals(keys[i],key))return i;return -1;}
+    private int Find(TKey key){var eq=CompatEqualityComparer<TKey>.Default;for(var i=0;i<used.Length;i++)if(used[i]&&eq.Equals(keys[i],key))return i;return -1;}
     private void Set(TKey key,TValue value){var i=Find(key);if(i>=0){values[i]=value;return;}if(Count==used.Length)Grow();for(i=0;i<used.Length;i++)if(!used[i]){used[i]=true;keys[i]=key;values[i]=value;Count++;return;}}
     private void Grow(){Array.Resize(ref keys,keys.Length*2);Array.Resize(ref values,values.Length*2);Array.Resize(ref used,used.Length*2);}
 }
