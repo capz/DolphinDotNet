@@ -144,8 +144,36 @@ internal static class Program
         return 0;
     }
 
+    private struct ArrayValue
+    {
+        public int Number;
+        public string? Text;
+    }
+
+    private static int SzArrayProbe()
+    {
+        var refs = new string?[3];
+        if (refs.Length != 3 || refs[0] is not null) return 1;
+        refs[1] = "array-root";
+        if (!string.Equals(refs[1], "array-root")) return 2;
+
+        var values = new ArrayValue[2];
+        if (values[0].Number != 0 || values[0].Text is not null) return 3;
+        values[1].Number = 42;
+        values[1].Text = "embedded-root";
+        if (values[1].Number != 42 || !string.Equals(values[1].Text, "embedded-root")) return 4;
+
+        var generic = new TArrayProbe<long>();
+        if (generic.Run(0x100000002L) != 0x100000002L) return 5;
+
+        try { _ = refs[-1]; return 6; } catch (IndexOutOfRangeException) { }
+        try { _ = refs[refs.Length]; return 7; } catch (IndexOutOfRangeException) { }
+        return 0;
+    }
+
     private static int Main()
     {
+        var arrayStage = SzArrayProbe(); if (arrayStage != 0) return 140 + arrayStage;
         var stringStage = StringPrimitiveProbe(); if (stringStage != 0) return 120 + stringStage;
         var primitiveStage = PrimitiveRepresentationProbe(); if (primitiveStage != 0) return 100 + primitiveStage;
         if (EhIntegrationProbe() != 16) return 95;
@@ -274,6 +302,16 @@ internal static class Program
 }
 
 
+
+internal sealed class TArrayProbe<T>
+{
+    public T Run(T value)
+    {
+        var values = new T[2];
+        values[1] = value;
+        return values[1];
+    }
+}
 
 internal sealed class CompactList<T> : IList<T>, IReadOnlyList<T>
 {
