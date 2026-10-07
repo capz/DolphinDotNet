@@ -6,6 +6,15 @@ interface IValue { int GetValue(); }
 class VirtualBase { public int BaseField=4; public virtual int GetValue()=>3; }
 class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }
 class SmokeException : Exception { }
+interface ISmokeEquatable { bool Same(ComparableNode other); }
+interface ISmokeComparable { int Compare(ComparableNode other); }
+class ComparableNode : ISmokeEquatable, ISmokeComparable
+{
+    public ComparableNode(int value)=>Value=value;
+    public int Value;
+    public bool Same(ComparableNode other)=>Value==other.Value;
+    public int Compare(ComparableNode other)=>Value-other.Value;
+}
 
 public static class Program
 {
@@ -34,10 +43,21 @@ public static class Program
         var delegates=DelegateCase()+ReturningDelegateCase();
         var exceptions=ExceptionCase()+FinallyCase()+NestedFinallyCase()+RethrowCase()+CatchThrowsCase()+ReturnFinallyCase()+RethrowIdentityCase()+TypedCatchCase();
         var core=CorePrimitiveCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates+exceptions+core;
+        var comparison=ComparisonContractCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates+exceptions+core+comparison;
     }
 
     static int CorePrimitiveCase()=>ObjectPrimitiveCase()+StringPrimitiveCase()+ArrayPrimitiveCase();
+
+    static int ComparisonContractCase()
+    {
+        var a=new ComparableNode(3);var b=new ComparableNode(5);var same=new ComparableNode(3);var score=0;
+        ISmokeEquatable eq=a;ISmokeComparable cmp=a;
+        if(eq.Same(same))score+=1;
+        if(!eq.Same(b))score+=2;
+        if(cmp.Compare(b)<0)score+=4;
+        return score;
+    }
 
     static int ObjectPrimitiveCase()
     {
