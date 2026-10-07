@@ -35,6 +35,7 @@ internal sealed record ValueIrNullableGetValue(IrValue Result,IrValue Address,in
 internal sealed record ValueIrNullableGetValueOrDefault(IrValue Result,IrValue Address,IrValue DefaultValue,int ValueSize):ValueIrInstruction;
 internal sealed record ValueIrNullableEquals(IrValue Result,IrValue Address,IrValue Other,int ValueSize):ValueIrInstruction;
 internal sealed record ValueIrNullableHash(IrValue Result,IrValue Address,int ValueSize):ValueIrInstruction;
+internal sealed record ValueIrNewStruct(IrValue Result,int Size,IReadOnlyList<(int Offset,IrValue Value,int Size,bool Reference)> Fields):ValueIrInstruction;
 internal sealed record ValueIrStructStore(IrValue Address,int Offset,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrStructLoad(IrValue Result,IrValue Address,int Offset,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrArraySegmentItem(IrValue Result,IrValue Address,IrValue Index,int ElementSize,bool Reference):ValueIrInstruction;
