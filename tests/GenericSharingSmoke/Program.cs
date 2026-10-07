@@ -24,8 +24,26 @@ internal static class Program
         }
     }
 
+    private static int TypedCatchProbe()
+    {
+        try
+        {
+            int? value = null;
+            return value.Value;
+        }
+        catch (ArgumentException)
+        {
+            return 12;
+        }
+        catch (InvalidOperationException)
+        {
+            return 13;
+        }
+    }
+
     private static int Main()
     {
+        if (TypedCatchProbe() != 13) return 92;
         if (CatchProbe() != 11) return 91;
         if (FinallyProbe() != 7) return 90;
         _ = Shared<int>.Marker();
