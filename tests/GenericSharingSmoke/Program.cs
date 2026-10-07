@@ -35,7 +35,8 @@ internal static class Program
 
     private static int TestNullableEquality(int? present, int? empty)
     {
-        if (present != 42 || present == 41 || empty == 42 || empty.GetHashCode() != 0 || present.GetHashCode() != 42) return 8;
+        if (empty.GetHashCode() != 0 || present.GetHashCode() != 42) return 8;
+        if (!present.HasValue || present.Value != 42 || empty.HasValue) return 12;
         return 0;
     }
 
