@@ -59,8 +59,10 @@ int main(void)
     DndManagedHeap heap;
     dnd_managed_heap_init(&heap,storage,sizeof(storage));
 
-    intptr_t result=0;
-    int entry_exception=0;
+    dnd_exception_clear();
+    intptr_t result=dnd_value_aot_entry(&heap);
+    int entry_exception=(int)dnd_exception_kind();
+    dnd_exception_clear();
 
     int ex_array,ex_static,ex_box,ex_virtual,ex_type,ex_inherited,ex_byref,ex_iface_id,ex_iface_call,ex_delegate;
     intptr_t v_array=capture0(dnd_value_Program_ArrayCase,&ex_array);
@@ -104,11 +106,6 @@ int main(void)
         (long)finally_return_value,ex_finally_return,(long)typed_value,ex_typed);
     if(returning_value!=11||exception_value!=7||finally_value!=5||nested_finally_value!=7||rethrow_value!=19||rethrow_simple_value!=11||catch_throws_value!=13||finally_return_value!=22||typed_value!=23)return 1;
     if(ex_returning||ex_exception||ex_finally||ex_nested_finally||ex_rethrow||ex_rethrow_simple||ex_catch_throws||ex_finally_return||ex_typed)return 1;
-    dnd_exception_clear();
-    result=dnd_value_aot_entry(&heap);
-    entry_exception=(int)dnd_exception_kind();
-    dnd_exception_clear();
-
     int ex_compare; intptr_t comparison_value=capture0(dnd_value_Program_ComparisonContractCase,&ex_compare);
     if(comparison_value!=7||ex_compare)return 1;
     if(object_core!=31||string_core!=128||array_core!=22)return 1;
