@@ -223,9 +223,9 @@ internal static class ValueIrImporter
                         }
                         if(ik==IntrinsicKind.StringSubstring)
                         {
-                            var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing substring stack effect at IL_{cil.Offset:x4}.");var args=new List<IrValue>();
-                            for(var n=0;n<effect.PopCount;n++)args.Add(Pop(stack,cil));args.Reverse();var value=New(CilStackKind.ObjectReference);
-                            instructions.Add(new ValueIrStringOperation(value,args.Count==2?"substring1":"substring2",args));stack.Add(value);break;
+                            var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing substring stack effect at IL_{cil.Offset:x4}.");var substringArgs=new List<IrValue>();
+                            for(var n=0;n<effect.PopCount;n++)substringArgs.Add(Pop(stack,cil));substringArgs.Reverse();var value=New(CilStackKind.ObjectReference);
+                            instructions.Add(new ValueIrStringOperation(value,substringArgs.Count==2?"substring1":"substring2",substringArgs));stack.Add(value);break;
                         }
                         if(ik==IntrinsicKind.ExceptionMessage){var exception=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrExceptionMessage(value,exception));stack.Add(value);break;}
                         if(ik==IntrinsicKind.NullableConstructor){var size=nullableValueSize(cil);var value=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrNullableInit(address,value,size));break;}
