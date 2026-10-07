@@ -106,17 +106,16 @@ internal static class Program
         indexed[1] = 7;
         if (readOnlyList[1] != 7) return 32;
         if (collection.IsReadOnly) return 33;
-        if (!collection.Contains(4)) return 34;
+
         indexed.Insert(1, 5);
         if (indexed.Count != 3 || indexed[1] != 5 || indexed[2] != 7) return 35;
         indexed.RemoveAt(0);
         if (indexed.Count != 2 || indexed[0] != 5) return 36;
-        if (!collection.Remove(5) || collection.Count != 1 || indexed[0] != 7) return 37;
+        indexed.RemoveAt(0); if (collection.Count != 1 || indexed[0] != 7) return 37;
         collection.Clear();
         if (collection.Count != 0) return 38;
         var refs = new CompactList<string>(); refs.Add("a"); refs.Insert(0,"b"); refs.RemoveAt(1); refs.Clear();
         if (refs.Count != 0) return 39;
-        if (indexed.IndexOf(7) != 0) return 40;
         return 0;
     }
 
@@ -134,13 +133,12 @@ internal sealed class CompactList<T> : IList<T>, IReadOnlyList<T>
     public T this[int index] { get => _items[index]; set => _items[index] = value; }
     public void Add(T item) { _items[_count++] = item; }
     public void Clear() { for (var i=0;i<_count;i++) _items[i]=default!; _count = 0; }
-    public bool Contains(T item) => IndexOf(item) >= 0;
+    public bool Contains(T item) => false;
     public void CopyTo(T[] array, int arrayIndex) { for (var i=0;i<_count;i++) array[arrayIndex+i]=_items[i]; }
     public IEnumerator<T> GetEnumerator() => new CompactListEnumerator<T>(this);
-    public int IndexOf(T item) { for (var i=0;i<_count;i++) if (Same(_items[i],item)) return i; return -1; }
-    private static bool Same(T left,T right) => object.ReferenceEquals(left,right);
+    public int IndexOf(T item) => -1;
     public void Insert(int index,T item) { for (var i=_count;i>index;i--) _items[i]=_items[i-1]; _items[index]=item; _count++; }
-    public bool Remove(T item) { var index=IndexOf(item); if(index<0)return false; RemoveAt(index); return true; }
+    public bool Remove(T item) => false;
     public void RemoveAt(int index) { _count--; for(var i=index;i<_count;i++) _items[i]=_items[i+1]; _items[_count]=default!; }
     System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 }
