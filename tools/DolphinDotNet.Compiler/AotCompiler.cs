@@ -225,6 +225,11 @@ internal static class AotCompiler
     private static CilCallStackEffect? ResolveCallEffect(MetadataReader md,CompilationModel model,CilInstruction i)
     {
         if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        var arrayIntrinsic=ResolveIntrinsic(md,i);
+        if(arrayIntrinsic is IntrinsicKind.ArrayInterfaceCount or IntrinsicKind.ArrayInterfaceIsReadOnly) return new CilCallStackEffect(1,CilStackKind.I4);
+        if(arrayIntrinsic is IntrinsicKind.ArrayInterfaceItemGet){var a=GenericArguments(md,model,i);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(2,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
+        if(arrayIntrinsic==IntrinsicKind.ArrayInterfaceItemSet)return new CilCallStackEffect(3,null);
+        if(arrayIntrinsic is IntrinsicKind.ArrayInterfaceContains or IntrinsicKind.ArrayInterfaceIndexOf)return new CilCallStackEffect(2,CilStackKind.I4);
         var resolved=ResolveCall(md,model,i);
         if(resolved?.Abi is { } abi)
         {

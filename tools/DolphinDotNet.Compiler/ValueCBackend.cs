@@ -285,6 +285,16 @@ internal static class ValueCBackend
                                 if(a.Count==3)b.AppendLine($"  (void)dnd_array_copy((DndArray*)v{a[0].Id}, 0, (DndArray*)v{a[1].Id}, 0, (int32_t)v{a[2].Id});");
                                 else b.AppendLine($"  (void)dnd_array_copy((DndArray*)v{a[0].Id}, (int32_t)v{a[1].Id}, (DndArray*)v{a[2].Id}, (int32_t)v{a[3].Id}, (int32_t)v{a[4].Id});");
                                 break;
+                            case "ArrayInterfaceCount": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_length((DndArray*)v{a[0].Id});"); break;
+                            case "ArrayInterfaceIsReadOnly": b.AppendLine($"  v{x.Result.Value.Id} = 1;"); break;
+                            case "ArrayInterfaceItemGet":
+                                b.AppendLine(x.Reference?$"  v{x.Result.Value.Id} = (intptr_t)dnd_array_load_ref((DndArray*)v{a[0].Id}, (uint32_t)v{a[1].Id});":$"  v{x.Result.Value.Id} = ({CType(x.Result.Value.Kind)})dnd_array_load_scalar((DndArray*)v{a[0].Id}, (uint32_t)v{a[1].Id}, {x.ElementSize}u, false);"); break;
+                            case "ArrayInterfaceItemSet":
+                                b.AppendLine(x.Reference?$"  (void)dnd_array_store_ref((DndArray*)v{a[0].Id}, (uint32_t)v{a[1].Id}, (DndObject*)v{a[2].Id});":$"  (void)dnd_array_store_scalar((DndArray*)v{a[0].Id}, (uint32_t)v{a[1].Id}, (uint64_t)v{a[2].Id}, {x.ElementSize}u);"); break;
+                            case "ArrayInterfaceContains":
+                                b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_index_of((DndArray*)v{a[0].Id}, (uint64_t)v{a[1].Id}, {x.ElementSize}u, {(x.Reference?"true":"false")}, 0, (int32_t)dnd_array_length((DndArray*)v{a[0].Id})) >= 0;"); break;
+                            case "ArrayInterfaceIndexOf":
+                                b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_index_of((DndArray*)v{a[0].Id}, (uint64_t)v{a[1].Id}, {x.ElementSize}u, {(x.Reference?"true":"false")}, 0, (int32_t)dnd_array_length((DndArray*)v{a[0].Id}));"); break;
                             case "ArrayIndexOf":
                             {
                                 var start=a.Count>2?$"(int32_t)v{a[2].Id}":"0";

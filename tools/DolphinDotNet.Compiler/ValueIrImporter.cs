@@ -230,6 +230,22 @@ internal static class ValueIrImporter
                             for(var n=0;n<effect.PopCount;n++)arrayArgs.Add(Pop(stack,cil));arrayArgs.Reverse();
                             instructions.Add(new ValueIrArrayOperation(null,ik.ToString(),arrayArgs));break;
                         }
+                        if(ik is IntrinsicKind.ArrayInterfaceCount or IntrinsicKind.ArrayInterfaceIsReadOnly)
+                        {
+                            var array=Pop(stack,cil);var value=New(CilStackKind.I4);
+                            instructions.Add(new ValueIrArrayOperation(value,ik.ToString(),new[]{array}));stack.Add(value);break;
+                        }
+                        if(ik is IntrinsicKind.ArrayInterfaceItemGet or IntrinsicKind.ArrayInterfaceContains or IntrinsicKind.ArrayInterfaceIndexOf)
+                        {
+                            var arg=Pop(stack,cil);var array=Pop(stack,cil);var ga=genericArguments(cil);var rep=ga.Count>0?ga[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);
+                            var value=New(ik==IntrinsicKind.ArrayInterfaceItemGet?(rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4):CilStackKind.I4);
+                            instructions.Add(new ValueIrArrayOperation(value,ik.ToString(),new[]{array,arg},rep.Size,rep.ContainsReferences));stack.Add(value);break;
+                        }
+                        if(ik==IntrinsicKind.ArrayInterfaceItemSet)
+                        {
+                            var valueArg=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);var ga=genericArguments(cil);var rep=ga.Count>0?ga[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);
+                            instructions.Add(new ValueIrArrayOperation(null,ik.ToString(),new[]{array,index,valueArg},rep.Size,rep.ContainsReferences));break;
+                        }
                         if(ik==IntrinsicKind.ArrayIndexOf)
                         {
                             var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing Array.IndexOf stack effect at IL_{cil.Offset:x4}.");var arrayArgs=new List<IrValue>();
