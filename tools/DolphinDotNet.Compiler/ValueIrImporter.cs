@@ -148,7 +148,11 @@ internal static class ValueIrImporter
                     }
                     case 0xfe15:
                     {
-                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve initobj type at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrInitObject(Pop(stack,cil),type));break;
+                        var type=resolveType(cil);var generic=type is null?resolveGenericTypeParameter(cil):null;
+                        if(type is null&&generic is null)throw new NotSupportedException($"Unable to resolve initobj type at IL_{cil.Offset:x4}.");
+                        var address=Pop(stack,cil);
+                        if(generic is { } rep){var zero=New(rep.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrConstant(zero,0));instructions.Add(new ValueIrStoreIndirect(address,zero,rep.Size,rep.ContainsReferences));}
+                        else instructions.Add(new ValueIrInitObject(address,type!));break;
                     }
                     case 0x70:
                     {
