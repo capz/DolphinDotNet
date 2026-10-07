@@ -89,6 +89,21 @@ int main(void) {
 
     DndDelegate *managed_delegate=dnd_managed_delegate_new(&heap,NULL,managed_add,false); intptr_t managed_args[1]={10}; assert(dnd_managed_delegate_invoke(managed_delegate,managed_args,1)==11);
 
+    /* EH frames cost nothing in methods that do not install one. A throw jumps
+       directly to the nearest protected frame and restores the precise-GC chain. */
+    DndEhFrame eh;
+    dnd_eh_push(&eh);
+    if (setjmp(eh.environment) == 0) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION, "boom");
+        assert(!"throw must transfer control");
+    } else {
+        assert(dnd_exception_pending());
+        assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_OPERATION);
+        assert(dnd_exception_message()[0] == 'b');
+        dnd_exception_clear();
+    }
+    dnd_eh_pop(&eh);
+
     DndObject *boxed = dnd_box_i32(&heap, 123);
     assert(boxed && dnd_unbox_i32(boxed) == 123);
 

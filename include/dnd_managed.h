@@ -3,12 +3,14 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <setjmp.h>
 
 typedef struct DndType DndType;
 typedef struct DndObject DndObject;
 typedef struct DndString DndString;
 typedef struct DndArray DndArray;
 typedef struct DndDelegate DndDelegate;
+typedef struct DndException DndException;
 typedef struct DndInterfaceEntry DndInterfaceEntry;
 
 typedef void (*DndFinalizer)(DndObject *);
@@ -63,6 +65,11 @@ struct DndArray {
     uint8_t data[];
 };
 
+struct DndException {
+    DndObject object;
+    DndString *message;
+};
+
 struct DndDelegate {
     DndObject object;
     void *target;
@@ -109,6 +116,17 @@ extern const DndType DND_TYPE_INT16;
 extern const DndType DND_TYPE_UINT16;
 extern const DndType DND_TYPE_UINT32;
 extern const DndType DND_TYPE_INT64;
+extern const DndType DND_TYPE_EXCEPTION;
+extern const DndType DND_TYPE_SYSTEM_EXCEPTION;
+extern const DndType DND_TYPE_INVALID_OPERATION_EXCEPTION;
+extern const DndType DND_TYPE_ARGUMENT_EXCEPTION;
+extern const DndType DND_TYPE_ARGUMENT_NULL_EXCEPTION;
+extern const DndType DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION;
+extern const DndType DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION;
+extern const DndType DND_TYPE_NULL_REFERENCE_EXCEPTION;
+extern const DndType DND_TYPE_INVALID_CAST_EXCEPTION;
+extern const DndType DND_TYPE_NOT_SUPPORTED_EXCEPTION;
+extern const DndType DND_TYPE_OUT_OF_MEMORY_EXCEPTION;
 
 void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size);
 DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type);
@@ -152,8 +170,25 @@ typedef struct DndGcFrame {
 void dnd_gc_frame_push(DndGcFrame *frame, DndObject ***slots, size_t count);
 void dnd_gc_frame_pop(DndGcFrame *frame);
 
+typedef struct DndEhFrame {
+    jmp_buf environment;
+    struct DndEhFrame *previous;
+    DndGcFrame *gc_snapshot;
+} DndEhFrame;
+void dnd_eh_push(DndEhFrame *frame);
+void dnd_eh_pop(DndEhFrame *frame);
+bool dnd_exception_pending(void);
+DndObject *dnd_exception_object(void);
+DndException *dnd_exception_new(DndManagedHeap *heap, const DndType *type, DndString *message);
+DndString *dnd_exception_get_message(DndException *exception);
+bool dnd_exception_matches(const DndType *type);
+void dnd_exception_begin_catch(void);
+void dnd_exception_rethrow(void);
+void dnd_exception_rethrow_current(void);
+
 void dnd_exception_clear(void);
 void dnd_exception_throw(DndExceptionKind kind, const char *message);
+void dnd_exception_throw_object(DndObject *exception);
 DndExceptionKind dnd_exception_kind(void);
 const char *dnd_exception_message(void);
 #endif

@@ -3,8 +3,108 @@ using System;
 using System.Collections.Generic;
 internal static class Program
 {
+    private static int FinallyProbe()
+    {
+        var value = 1;
+        try { value += 2; }
+        finally { value += 4; }
+        return value;
+    }
+
+    private static int CatchProbe()
+    {
+        try
+        {
+            int? value = null;
+            return value.Value;
+        }
+        catch
+        {
+            return 11;
+        }
+    }
+
+    private static int TypedCatchProbe()
+    {
+        try
+        {
+            int? value = null;
+            return value.Value;
+        }
+        catch (ArgumentException)
+        {
+            return 12;
+        }
+        catch (InvalidOperationException)
+        {
+            return 13;
+        }
+    }
+
+    private static int RethrowProbe()
+    {
+        try
+        {
+            try
+            {
+                int? value = null;
+                return value.Value;
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+        }
+        catch (Exception)
+        {
+            return 14;
+        }
+    }
+
+    private static int ExplicitExceptionProbe()
+    {
+        try
+        {
+            throw new InvalidOperationException("explicit");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ex.Message.Length == 8 ? 15 : -1;
+        }
+    }
+
+    private static int EhIntegrationProbe()
+    {
+        var cleanup = 0;
+        try
+        {
+            try
+            {
+                var values = new CompactList<int>();
+                values.Add(3);
+                if (!values.Contains(3)) return -1;
+                int? missing = null;
+                return missing.Value;
+            }
+            finally
+            {
+                cleanup += 4;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            return cleanup == 4 ? 16 : -2;
+        }
+    }
+
     private static int Main()
     {
+        if (EhIntegrationProbe() != 16) return 95;
+        if (ExplicitExceptionProbe() != 15) return 94;
+        if (RethrowProbe() != 14) return 93;
+        if (TypedCatchProbe() != 13) return 92;
+        if (CatchProbe() != 11) return 91;
+        if (FinallyProbe() != 7) return 90;
         _ = Shared<int>.Marker();
         _ = Shared<string>.Marker();
         _ = Identity(7);

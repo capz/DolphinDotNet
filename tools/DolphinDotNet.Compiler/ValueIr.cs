@@ -54,6 +54,8 @@ internal sealed record ValueIrNewDelegate(IrValue Result,IrValue? Target,IrValue
 internal sealed record ValueIrDelegateInvoke(IrValue? Result,IrValue Delegate,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
 internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments,bool Virtual=false,bool Interface=false):ValueIrInstruction;
 internal sealed record ValueIrNewObject(IrValue Result,string TypeName,MethodKey Constructor,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
+internal sealed record ValueIrNewException(IrValue Result,string TypeName,IrValue? Message):ValueIrInstruction;
+internal sealed record ValueIrExceptionMessage(IrValue Result,IrValue Exception):ValueIrInstruction;
 internal sealed record ValueIrLoadField(IrValue Result,IrValue Object,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrStoreField(IrValue Object,IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrLoadStaticField(IrValue Result,string TypeName,string FieldName):ValueIrInstruction;
@@ -74,6 +76,15 @@ internal sealed record ValueIrPresentDemoFrame(IrValue Rotation):ValueIrInstruct
 internal sealed record ValueIrOpaqueStackEffect(int PopCount,IReadOnlyList<IrValue> Results,ushort OpCode):ValueIrInstruction;
 internal sealed record ValueIrPhi(IrValue Result,IReadOnlyDictionary<int,IrValue> Inputs):ValueIrInstruction;
 internal sealed record ValueIrIncomingStack(IReadOnlyList<IrValue> Values);
+internal enum ValueIrExceptionRegionKind { Catch, Finally, Fault, Filter }
+internal sealed record ValueIrExceptionRegion(
+    ValueIrExceptionRegionKind Kind,
+    int TryOffset,
+    int TryLength,
+    int HandlerOffset,
+    int HandlerLength,
+    int FilterOffset,
+    string? CatchType);
 
 internal abstract record ValueIrTerminator;
 internal sealed record ValueIrJump(int TargetBlock):ValueIrTerminator;
@@ -81,6 +92,8 @@ internal enum ValueIrComparison { NonZero,Equal,NotEqual,GreaterThan,GreaterOrEq
 internal sealed record ValueIrBranch(IrValue Left,IrValue? Right,ValueIrComparison Comparison,bool Unsigned,int TrueBlock,int FalseBlock):ValueIrTerminator;
 internal sealed record ValueIrSwitch(IrValue Value,IReadOnlyList<int> Targets,int DefaultBlock):ValueIrTerminator;
 internal sealed record ValueIrReturn(IrValue? Value):ValueIrTerminator;
+internal sealed record ValueIrEndFinally(int NormalTargetBlock):ValueIrTerminator;
+internal sealed record ValueIrThrow(IrValue? Exception):ValueIrTerminator;
 
 internal sealed record ValueIrBlock(
     int Id,
@@ -99,4 +112,5 @@ internal sealed record ValueIrMethod(
     bool ReturnsValue)
 {
     public int LocalCount=>Locals.Count;
+    public IReadOnlyList<ValueIrExceptionRegion> ExceptionRegions { get; init; } = Array.Empty<ValueIrExceptionRegion>();
 }

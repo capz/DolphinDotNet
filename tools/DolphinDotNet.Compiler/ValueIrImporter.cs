@@ -210,6 +210,7 @@ internal static class ValueIrImporter
                         if(ik==IntrinsicKind.ObjectGetHashCode){var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableHash(value,input,4));else instructions.Add(new ValueIrOpaqueStackEffect(1,new[]{value},cil.OpCode));stack.Add(value);break;}
                         if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,4));else instructions.Add(new ValueIrObjectEquals(value,input,other));stack.Add(value);break;}
                         if(ik==IntrinsicKind.StringLength){var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringLength(value,str));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ExceptionMessage){var exception=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrExceptionMessage(value,exception));stack.Add(value);break;}
                         if(ik==IntrinsicKind.NullableConstructor){var size=nullableValueSize(cil);var value=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrNullableInit(address,value,size));break;}
                         if(ik==IntrinsicKind.NullableHasValue){var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrNullableHasValue(value,address));stack.Add(value);break;}
                         if(ik is IntrinsicKind.NullableValue or IntrinsicKind.NullableGetValueOrDefault){var size=nullableValueSize(cil);var address=Pop(stack,cil);var value=New(size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrNullableGetValue(value,address,size,ik==IntrinsicKind.NullableValue));stack.Add(value);break;}
@@ -246,6 +247,14 @@ internal static class ValueIrImporter
                     case 0x73:
                     {
                         var ik=intrinsic(cil);
+                        if(ik==IntrinsicKind.ExceptionConstructor)
+                        {
+                            var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing exception constructor signature at IL_{cil.Offset:x4}.");
+                            IrValue? message=null;
+                            for(var ai=effect.PopCount-1;ai>=0;ai--){var arg=Pop(stack,cil);if(ai==0&&arg.Kind==IrValueKind.ObjectReference)message=arg;}
+                            var type=resolveType(cil)??"System.Exception";var exceptionValue=New(CilStackKind.ObjectReference);
+                            instructions.Add(new ValueIrNewException(exceptionValue,type,message));stack.Add(exceptionValue);break;
+                        }
                         if(ik==IntrinsicKind.KeyValuePairConstructor){var a=genericArguments(cil);var second=Pop(stack,cil);var first=Pop(stack,cil);var a0=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var a1=a.Count>1?a[1]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var secondOffset=Align(a0.Size,Math.Min(Math.Max(a1.Size,1),4));var pairValue=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrNewStruct(pairValue,secondOffset+a1.Size,new[]{(0,first,a0.Size,a0.ContainsReferences),(secondOffset,second,a1.Size,a1.ContainsReferences)}));stack.Add(pairValue);break;}
                         if(ik==IntrinsicKind.ArraySegmentConstructor){var segmentCount=Pop(stack,cil);var offset=Pop(stack,cil);var array=Pop(stack,cil);var segmentValue=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrNewStruct(segmentValue,12,new[]{(0,array,4,true),(4,offset,4,false),(8,segmentCount,4,false)}));stack.Add(segmentValue);break;}
                         var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved constructor at IL_{cil.Offset:x4}.");var args=new IrValue[target.ParameterCount];for(var ai=args.Length-1;ai>=0;ai--)args[ai]=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);
@@ -269,8 +278,10 @@ internal static class ValueIrImporter
                     {
                         var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrStoreStaticField(Pop(stack,cil),field.DeclaringType,field.Name));break;
                     }
-                    case 0x2b or 0x38 or 0xdc:
+                    case 0x2b or 0x38:
                         terminator=new ValueIrJump(Target(blocks,cil));break;
+                    case 0xdc:
+                        terminator=new ValueIrEndFinally(Target(blocks,cil));break;
                     case 0xdd or 0xde:
                         stack.Clear();terminator=new ValueIrJump(Target(blocks,cil));break;
                     case 0x2c or 0x39:
@@ -295,6 +306,10 @@ internal static class ValueIrImporter
                         var targets=sw.Offsets.Select(offset=>blocks.Single(x=>x.StartOffset==offset).Id).ToArray();var fallback=blocks.Single(x=>x.StartOffset==cil.EndOffset).Id;
                         terminator=new ValueIrSwitch(value,targets,fallback);break;
                     }
+                    case 0x7a:
+                        terminator=new ValueIrThrow(Pop(stack,cil));break;
+                    case 0xfe1a:
+                        terminator=new ValueIrThrow(null);break;
                     case 0x2a:
                         terminator=new ValueIrReturn(method.ReturnsValue?Pop(stack,cil):null);break;
                     default:

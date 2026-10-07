@@ -1,6 +1,6 @@
 namespace DolphinDotNet.Compiler;
 
-internal enum CilFlowKind { Next, Branch, ConditionalBranch, Switch, Return }
+internal enum CilFlowKind { Next, Branch, ConditionalBranch, Switch, Return, Throw }
 
 internal abstract record CilOperand;
 internal sealed record CilBranchTarget(int Offset):CilOperand;
@@ -33,6 +33,7 @@ internal static class CilDecoder
             switch(op)
             {
                 case 0x2a: flow=CilFlowKind.Return; break;
+                case 0x7a or 0xfe1a: flow=CilFlowKind.Throw; break;
                 case 0x2b or 0xde: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
                 case >=0x2c and <=0x37: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
                 case 0x38 or 0xdd: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
@@ -101,13 +102,20 @@ internal static class CilControlFlowGraph
 
     public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion>? exceptionRegions=null)
     {
+        var regions=exceptionRegions??Array.Empty<System.Reflection.Metadata.ExceptionRegion>();
+        instructions=RewriteFinallyControlFlow(instructions,regions);
         if(instructions.Count==0)return [];
         var starts=new HashSet<int>{instructions[0].Offset};
+        foreach(var region in regions) {
+            starts.Add(region.TryOffset);
+            starts.Add(region.HandlerOffset);
+            if(region.Kind==System.Reflection.Metadata.ExceptionRegionKind.Filter) starts.Add(region.FilterOffset);
+        }
         foreach(var i in instructions)
         {
             if(i.Operand is CilBranchTarget { Offset: var target })starts.Add(target);
             if(i.Operand is CilSwitchTargets sw)foreach(var switchTarget in sw.Offsets)starts.Add(switchTarget);
-            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Switch or CilFlowKind.Return && i!=instructions[^1])starts.Add(i.EndOffset);
+            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Switch or CilFlowKind.Return or CilFlowKind.Throw && i!=instructions[^1])starts.Add(i.EndOffset);
         }
         var ordered=starts.OrderBy(x=>x).ToArray();
         var byStart=ordered.Select((x,n)=>(x,n)).ToDictionary(x=>x.x,x=>x.n);
