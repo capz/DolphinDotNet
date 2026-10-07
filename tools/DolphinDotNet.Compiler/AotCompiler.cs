@@ -168,7 +168,7 @@ internal static class AotCompiler
 
     private static IntrinsicKind ResolveIntrinsic(MetadataReader md,CilInstruction i)
     {
-        if(i.OpCode is not (0x28 or 0x6f)||i.Operand is not CilMetadataToken { Token: var raw })return IntrinsicKind.None;
+        if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return IntrinsicKind.None;
         return IntrinsicRegistry.Classify(md,MetadataTokens.EntityHandle(raw));
     }
 
@@ -207,9 +207,9 @@ internal static class AotCompiler
                 _=>new CilCallStackEffect(1,size==8?CilStackKind.I8:CilStackKind.I4)
             };
         }
-        if(intrinsic is IntrinsicKind.KeyValuePairConstructor)return new CilCallStackEffect(3,null);
+        if(intrinsic is IntrinsicKind.KeyValuePairConstructor)return i.OpCode==0x73?new CilCallStackEffect(2,CilStackKind.ManagedPointer):new CilCallStackEffect(3,null);
         if(intrinsic is IntrinsicKind.KeyValuePairKey or IntrinsicKind.KeyValuePairValue){var a=GenericArguments(md,model,i);var index=intrinsic==IntrinsicKind.KeyValuePairKey?0:1;var rep=a.Count>index?a[index]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(1,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
-        if(intrinsic==IntrinsicKind.ArraySegmentConstructor)return new CilCallStackEffect(4,null);
+        if(intrinsic==IntrinsicKind.ArraySegmentConstructor)return i.OpCode==0x73?new CilCallStackEffect(3,CilStackKind.ManagedPointer):new CilCallStackEffect(4,null);
         if(intrinsic==IntrinsicKind.ArraySegmentArray)return new CilCallStackEffect(1,CilStackKind.ObjectReference);
         if(intrinsic is IntrinsicKind.ArraySegmentOffset or IntrinsicKind.ArraySegmentCount)return new CilCallStackEffect(1,CilStackKind.I4);
         if(intrinsic==IntrinsicKind.ArraySegmentItem){var a=GenericArguments(md,model,i);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(2,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
