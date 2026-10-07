@@ -487,6 +487,15 @@ void dnd_exception_rethrow(void) {
 
 void dnd_exception_rethrow_current(void) { dnd_exception_rethrow(); }
 
+void dnd_exception_throw_object(DndObject *exception) {
+    if (!exception) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Cannot throw null."); return; }
+    exception_kind = DND_EXCEPTION_ARGUMENT;
+    exception_text = exception->type ? exception->type->name : "System.Exception";
+    exception_object = exception;
+    exception_is_pending = true;
+    dnd_exception_rethrow();
+}
+
 void dnd_exception_throw(DndExceptionKind kind, const char *message) {
     exception_kind = kind;
     exception_text = message;
