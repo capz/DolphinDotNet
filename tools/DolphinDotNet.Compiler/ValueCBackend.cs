@@ -78,7 +78,7 @@ internal static class ValueCBackend
         b.Append($"{ReturnCType(method,model)} {functionName}(");
         b.Append(Parameters(method,model));
         b.AppendLine(") {");
-        foreach(var v in values)b.AppendLine($"  {CType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
+        foreach(var v in values)b.AppendLine($"  {ValueStorageCType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
         foreach(var local in method.Locals)b.AppendLine(local.StorageSize>0?$"  uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {CType(local.Kind)} l{local.Index} = 0;");
         var roots=values.Where(v=>v.Kind==IrValueKind.ObjectReference).Select(v=>$"(DndObject**)&v{v.Id}").ToList();
         roots.AddRange(method.Locals.Where(l=>l.Kind==IrValueKind.ObjectReference).Select(l=>$"(DndObject**)&l{l.Index}"));
@@ -300,6 +300,7 @@ internal static class ValueCBackend
     private static string Id(string s)=>new(s.Select(ch=>char.IsLetterOrDigit(ch)?ch:'_').ToArray());
     private static string Escape(string s)=>s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n").Replace("\r","\\r").Replace("\t","\\t");
     private static bool HasRoots(ValueIrMethod m)=>Collect(m).Any(v=>v.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>l.Kind==IrValueKind.ObjectReference)||m.HasThis;
+    private static string ValueStorageCType(IrValueKind kind)=>kind==IrValueKind.I8?"int64_t":"intptr_t";
     private static string CType(IrValueKind kind)=>kind switch
     {
         IrValueKind.R4=>"float",
