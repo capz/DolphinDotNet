@@ -272,14 +272,13 @@ uint32_t dnd_array_length(DndArray *array) {
 uint64_t dnd_array_load_scalar(DndArray *array, uint32_t index, uint32_t size, bool sign_extend) {
     void *address = dnd_managed_array_at(array, index);
     if (!address || size == 0 || size > 8 || size > array->element_size) return 0;
-    uint64_t value = 0;
-    memcpy(&value, address, size);
-    if (sign_extend && size < 8) {
-        uint32_t bits = size * 8u;
-        uint64_t sign = UINT64_C(1) << (bits - 1u);
-        if (value & sign) value |= UINT64_MAX << bits;
+    switch (size) {
+        case 1: { uint8_t v; memcpy(&v, address, 1); return sign_extend ? (uint64_t)(int64_t)(int8_t)v : v; }
+        case 2: { uint16_t v; memcpy(&v, address, 2); return sign_extend ? (uint64_t)(int64_t)(int16_t)v : v; }
+        case 4: { uint32_t v; memcpy(&v, address, 4); return sign_extend ? (uint64_t)(int64_t)(int32_t)v : v; }
+        case 8: { uint64_t v; memcpy(&v, address, 8); return v; }
+        default: return 0;
     }
-    return value;
 }
 
 int32_t dnd_array_load_i32(DndArray *array, uint32_t index) {
@@ -294,7 +293,13 @@ DndObject *dnd_array_load_ref(DndArray *array, uint32_t index) {
 bool dnd_array_store_scalar(DndArray *array, uint32_t index, uint64_t value, uint32_t size) {
     void *address = dnd_managed_array_at(array, index);
     if (!address || size == 0 || size > 8 || size > array->element_size) return false;
-    memcpy(address, &value, size);
+    switch (size) {
+        case 1: { uint8_t v = (uint8_t)value; memcpy(address, &v, 1); break; }
+        case 2: { uint16_t v = (uint16_t)value; memcpy(address, &v, 2); break; }
+        case 4: { uint32_t v = (uint32_t)value; memcpy(address, &v, 4); break; }
+        case 8: { uint64_t v = value; memcpy(address, &v, 8); break; }
+        default: return false;
+    }
     return true;
 }
 
@@ -305,6 +310,10 @@ bool dnd_array_store_i32(DndArray *array, uint32_t index, int32_t value) {
 bool dnd_array_store_ref(DndArray *array, uint32_t index, DndObject *value) {
     void *address = dnd_managed_array_at(array, index);
     if (!address) return false;
+    if (value && array->element_type && !dnd_type_is_assignable_from(array->element_type, value->type)) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Array element type mismatch.");
+        return false;
+    }
     *(DndObject **)address = value;
     return true;
 }
@@ -480,7 +489,7 @@ static void mark_object(DndManagedHeap *heap, DndObject *object) {
             for (uint32_t i = 0; i < array->length; i++)
                 for (uint16_t r = 0; r < array->element_type->reference_count; r++)
                     mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size +
-                        array->element_type->reference_offsets[r]));
+                        array->element_type->reference_offsets[r] - sizeof(DndObject)));
         }
     }
 }
