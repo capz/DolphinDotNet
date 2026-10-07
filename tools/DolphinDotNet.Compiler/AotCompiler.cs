@@ -36,7 +36,7 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
@@ -94,13 +94,31 @@ internal static class AotCompiler
         }
     }
 
-    private static int ReadLocalCount(AssemblyModel assembly,MethodModel method)
+    private static IReadOnlyList<int> ReadLocalStorage(AssemblyModel assembly,MethodModel method,CompilationModel model)
     {
-        var def=assembly.Metadata.GetMethodDefinition(method.Handle);
-        var body=assembly.PE.GetMethodBody(def.RelativeVirtualAddress);
-        if(body.LocalSignature.IsNil)return 0;
-        var signature=assembly.Metadata.GetStandaloneSignature(body.LocalSignature);
-        var reader=assembly.Metadata.GetBlobReader(signature.Signature);reader.ReadSignatureHeader();return reader.ReadCompressedInteger();
+        var def=assembly.Metadata.GetMethodDefinition(method.Handle);var body=assembly.PE.GetMethodBody(def.RelativeVirtualAddress);
+        if(body.LocalSignature.IsNil)return Array.Empty<int>();
+        var signature=assembly.Metadata.GetStandaloneSignature(body.LocalSignature);var reader=assembly.Metadata.GetBlobReader(signature.Signature);reader.ReadSignatureHeader();
+        var count=reader.ReadCompressedInteger();var sizes=new int[count];
+        for(var i=0;i<count;i++)
+        {
+            var start=reader.Offset;var code=reader.ReadSignatureTypeCode();
+            if(code==SignatureTypeCode.GenericTypeInstance)
+            {
+                reader.Offset=start;var rep=GenericSharing.ReadRepresentation(assembly.Metadata,ref reader,model);
+                // Nullable<T> and other generic value locals need addressable storage. The
+                // representation size is the payload; reserve a compact flag word as well.
+                sizes[i]=rep.Kind==GenericRepresentationKind.ValueType?4+((rep.Size+3)&~3):0;
+            }
+            else SkipLocalType(assembly.Metadata,ref reader,code,model);
+        }
+        return sizes;
+    }
+    private static void SkipLocalType(MetadataReader md,ref BlobReader reader,SignatureTypeCode code,CompilationModel model)
+    {
+        if(code==SignatureTypeCode.TypeHandle)reader.ReadTypeHandle();
+        else if(code is SignatureTypeCode.ByReference or SignatureTypeCode.Pointer)GenericSharing.ReadRepresentation(md,ref reader,model);
+        else if(code==SignatureTypeCode.SZArray)GenericSharing.ReadRepresentation(md,ref reader,model);
     }
 
     private static MethodModel? ResolveCall(MetadataReader md,CompilationModel model,CilInstruction i)
