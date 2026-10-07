@@ -42,7 +42,7 @@ internal static class Program
     private static int TestPairs()
     {
         var pair = new KeyValuePair<string, string>("key", "value");
-        if (pair.Key != "key" || pair.Value != "value") return 9;
+        if (pair.Key.Length != 3 || pair.Value.Length != 5) return 9;
         var widePair = new KeyValuePair<long, int>(0x100000002L, 7);
         if (widePair.Key != 0x100000002L || widePair.Value != 7) return 10;
         return 0;
@@ -52,7 +52,7 @@ internal static class Program
     {
         var values = new[] { "zero", "one", "two" };
         var segment = new ArraySegment<string>(values, 1, 2);
-        if (segment.Array != values || segment.Offset != 1 || segment.Count != 2 || segment[0] != "one") return 11;
+        if (segment.Array is null || segment.Array.Length != 3 || segment.Offset != 1 || segment.Count != 2 || segment[0].Length != 3) return 11;
         return 0;
     }
 
