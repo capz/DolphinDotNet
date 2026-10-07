@@ -16,7 +16,12 @@ public sealed class CompatEqualityComparer<T>
         return object.Equals(x,y);
     }
 
-    public int GetHashCode(T value)=>value is null?0:value.GetHashCode();
+    public int GetHashCode(T value)
+    {
+        if(value is null)return 0;
+        if(value is ICompatEquatable<T> equatable)return equatable.GetCompatHashCode();
+        return ((object)value).GetHashCode();
+    }
 }
 
 public sealed class CompatComparer<T>
