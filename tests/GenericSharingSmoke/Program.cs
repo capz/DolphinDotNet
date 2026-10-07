@@ -3,8 +3,17 @@ using System;
 using System.Collections.Generic;
 internal static class Program
 {
+    private static int FinallyProbe()
+    {
+        var value = 1;
+        try { value += 2; }
+        finally { value += 4; }
+        return value;
+    }
+
     private static int Main()
     {
+        if (FinallyProbe() != 7) return 90;
         _ = Shared<int>.Marker();
         _ = Shared<string>.Marker();
         _ = Identity(7);
