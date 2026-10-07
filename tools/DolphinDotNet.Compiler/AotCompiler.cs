@@ -15,6 +15,7 @@ internal static class AotCompiler
         {
             var root=LoadAssembly(model,Path.GetFullPath(path));
             LoadDolphinDependencies(model,root);
+            EnsureEnumerationContracts(model);
             var cor=root.PE.PEHeaders.CorHeader??throw new InvalidDataException("Missing CLI header.");
             if(cor.EntryPointTokenOrRelativeVirtualAddress==0)throw new InvalidDataException("Assembly has no managed entry point.");
             var entry=MetadataTokens.EntityHandle(cor.EntryPointTokenOrRelativeVirtualAddress);
@@ -258,6 +259,17 @@ internal static class AotCompiler
         var name=md.IsAssembly?md.GetString(md.GetAssemblyDefinition().Name):Path.GetFileNameWithoutExtension(path);
         var assembly=new AssemblyModel{Name=name,Path=path,Stream=stream,PE=pe,Metadata=md};
         model.Assemblies[name]=assembly;MetadataLoader.LoadInto(model,md,name);return assembly;
+    }
+
+    private static void EnsureEnumerationContracts(CompilationModel model)
+    {
+        void Type(string name,params string[] interfaces){if(model.Types.ContainsKey(name))return;var dot=name.LastIndexOf('.');model.Types[name]=new(dot<0?"":name[..dot],dot<0?name:name[(dot+1)..],name,null,0,true,false,interfaces);}
+        void Method(string type,string name,bool returnsValue){if(model.Methods.Values.Any(m=>m.Key.TypeName==type&&m.Key.Name==name))return;var key=new MethodKey(type,name,"<contracts>",name);model.Methods[key]=new(key,default,false,0,returnsValue,"<contracts>",true,true,true,true);}
+        Type("System.IDisposable");Method("System.IDisposable","Dispose",false);
+        Type("System.Collections.IEnumerable");Method("System.Collections.IEnumerable","GetEnumerator",true);
+        Type("System.Collections.IEnumerator");Method("System.Collections.IEnumerator","get_Current",true);Method("System.Collections.IEnumerator","MoveNext",true);Method("System.Collections.IEnumerator","Reset",false);
+        Type("System.Collections.Generic.IEnumerable`1","System.Collections.IEnumerable");Method("System.Collections.Generic.IEnumerable`1","GetEnumerator",true);
+        Type("System.Collections.Generic.IEnumerator`1","System.IDisposable","System.Collections.IEnumerator");Method("System.Collections.Generic.IEnumerator`1","get_Current",true);
     }
 
     private static void LoadDolphinDependencies(CompilationModel model,AssemblyModel root)
