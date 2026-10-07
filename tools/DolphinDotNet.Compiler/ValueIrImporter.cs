@@ -31,6 +31,7 @@ internal static class ValueIrImporter
 
         foreach(var block in blocks)
         {
+            if(!analysis.EntryStates.ContainsKey(block.Id))continue;
             var instructions=new List<ValueIrInstruction>();
             var stack=new List<IrValue>();
             if(entryValues.TryGetValue(block.Id,out var incoming))stack.AddRange(incoming);
