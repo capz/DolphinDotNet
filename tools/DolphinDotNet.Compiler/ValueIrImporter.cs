@@ -105,7 +105,8 @@ internal static class ValueIrImporter
                     case 0x8c:
                     {
                         var type=resolveType(cil);var generic=type is null?resolveGenericTypeParameter(cil):null;var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);
-                        if(generic is { } rep)instructions.Add(new ValueIrBox(result,input,rep.Size==8?"System.Int64":"System.Int32"));
+                        if(generic is { ContainsReferences:true })instructions.Add(new ValueIrConvert(result,input));
+                        else if(generic is { } rep)instructions.Add(new ValueIrBox(result,input,rep.Size==8?"System.Int64":"System.Int32"));
                         else if(type=="System.Nullable`1")instructions.Add(new ValueIrBoxNullable(result,input,nullableValueSize(cil)));
                         else if(type is not null)instructions.Add(new ValueIrBox(result,input,type));
                         else throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");
@@ -207,7 +208,7 @@ internal static class ValueIrImporter
                     {
                         var ik=intrinsic(cil);
                         if(ik==IntrinsicKind.ObjectGetHashCode){var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableHash(value,input,4));else instructions.Add(new ValueIrOpaqueStackEffect(1,new[]{value},cil.OpCode));stack.Add(value);break;}
-                        if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,4));else instructions.Add(new ValueIrOpaqueStackEffect(2,new[]{value},cil.OpCode));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,4));else instructions.Add(new ValueIrObjectEquals(value,input,other));stack.Add(value);break;}
                         if(ik==IntrinsicKind.StringLength){var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringLength(value,str));stack.Add(value);break;}
                         if(ik==IntrinsicKind.NullableConstructor){var size=nullableValueSize(cil);var value=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrNullableInit(address,value,size));break;}
                         if(ik==IntrinsicKind.NullableHasValue){var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrNullableHasValue(value,address));stack.Add(value);break;}
