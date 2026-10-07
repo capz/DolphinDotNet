@@ -18,6 +18,19 @@ DND_SCALAR_TYPE(DND_TYPE_UINT16,"System.UInt16",2);
 DND_SCALAR_TYPE(DND_TYPE_UINT32,"System.UInt32",4);
 DND_SCALAR_TYPE(DND_TYPE_INT64,"System.Int64",8);
 
+const DndType DND_TYPE_EXCEPTION = {"System.Exception", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_SYSTEM_EXCEPTION = {"System.SystemException", &DND_TYPE_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_INVALID_OPERATION_EXCEPTION = {"System.InvalidOperationException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_ARGUMENT_EXCEPTION = {"System.ArgumentException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_ARGUMENT_NULL_EXCEPTION = {"System.ArgumentNullException", &DND_TYPE_ARGUMENT_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION = {"System.ArgumentOutOfRangeException", &DND_TYPE_ARGUMENT_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION = {"System.IndexOutOfRangeException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_NULL_REFERENCE_EXCEPTION = {"System.NullReferenceException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_INVALID_CAST_EXCEPTION = {"System.InvalidCastException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_NOT_SUPPORTED_EXCEPTION = {"System.NotSupportedException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_OUT_OF_MEMORY_EXCEPTION = {"System.OutOfMemoryException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+static DndObject builtin_exception = { &DND_TYPE_EXCEPTION, 0 };
+
 typedef struct DndHeapBlock {
     uint32_t size;
     uint8_t marked;
@@ -457,6 +470,7 @@ void dnd_eh_pop(DndEhFrame *frame) {
 
 bool dnd_exception_pending(void) { return exception_is_pending; }
 DndObject *dnd_exception_object(void) { return exception_object; }
+bool dnd_exception_matches(const DndType *type) { return exception_object && type && dnd_type_is_assignable_from(type, exception_object->type); }
 void dnd_exception_begin_catch(void) { exception_is_pending = false; }
 
 void dnd_exception_clear(void) { exception_kind = DND_EXCEPTION_NONE; exception_text = NULL; exception_object = NULL; exception_is_pending = false; }
@@ -476,7 +490,14 @@ void dnd_exception_rethrow_current(void) { dnd_exception_rethrow(); }
 void dnd_exception_throw(DndExceptionKind kind, const char *message) {
     exception_kind = kind;
     exception_text = message;
-    exception_object = NULL;
+    const DndType *type = kind==DND_EXCEPTION_NULL_REFERENCE?&DND_TYPE_NULL_REFERENCE_EXCEPTION:
+        kind==DND_EXCEPTION_INDEX_OUT_OF_RANGE?&DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION:
+        kind==DND_EXCEPTION_INVALID_CAST?&DND_TYPE_INVALID_CAST_EXCEPTION:
+        kind==DND_EXCEPTION_OUT_OF_MEMORY?&DND_TYPE_OUT_OF_MEMORY_EXCEPTION:
+        kind==DND_EXCEPTION_ARGUMENT?&DND_TYPE_ARGUMENT_EXCEPTION:
+        kind==DND_EXCEPTION_INVALID_OPERATION?&DND_TYPE_INVALID_OPERATION_EXCEPTION:&DND_TYPE_EXCEPTION;
+    builtin_exception.type = type;
+    exception_object = &builtin_exception;
     exception_is_pending = true;
     dnd_exception_rethrow();
 }
