@@ -189,8 +189,22 @@ internal static class Program
         return 0;
     }
 
+    private static int FormattingProbe()
+    {
+        if (!string.Equals(42.ToString(), "42")) return 1;
+        if (!string.Equals((-17).ToString(), "-17")) return 2;
+        if (!string.Equals(4294967295u.ToString(), "4294967295")) return 3;
+        if (!string.Equals(9223372036854775807L.ToString(), "9223372036854775807")) return 4;
+        if (!string.Equals(true.ToString(), "True")) return 5;
+        if (!string.Equals('a'.ToString(), "a")) return 6;
+        var text = string.Concat("Value: ", 42.ToString());
+        if (!string.Equals(text, "Value: 42")) return 7;
+        return 0;
+    }
+
     private static int Main()
     {
+        var formatting = FormattingProbe(); if (formatting != 0) return 180 + formatting;
         var arrayInterfaces = ArrayInterfaceProbe(); if (arrayInterfaces != 0) return 160 + arrayInterfaces;
         var arrayStage = SystemArrayProbe(); if (arrayStage != 0) return 140 + arrayStage;
         var stringStage = StringPrimitiveProbe(); if (stringStage != 0) return 120 + stringStage;
