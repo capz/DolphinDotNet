@@ -101,6 +101,7 @@ internal static class ValueCBackend
                     case ValueIrLoadArgument x:b.AppendLine($"  v{x.Result.Id} = a{x.Index};");break;
                     case ValueIrLoadLocal x:b.AppendLine($"  v{x.Result.Id} = l{x.Index};");break;
                     case ValueIrStoreLocal x:b.AppendLine($"  l{x.Index} = v{x.Value.Id};");break;
+                    case ValueIrStoreLocalStruct x:b.AppendLine($"  memcpy(l{x.Index}, (void*)v{x.SourceAddress.Id}, {x.Size}u);");break;
                     case ValueIrAddressOfLocal x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&l{x.Index};");break;
                     case ValueIrNullableInit x:
                     {
