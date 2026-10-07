@@ -7,7 +7,7 @@ public readonly struct CompatNullable<T> where T:struct
     private readonly T value;
     public CompatNullable(T value){this.value=value;HasValue=true;}
     public bool HasValue{get;}
-    public T Value=>HasValue?value:throw new InvalidOperationException("Nullable object must have a value.");
+    public T Value=>HasValue?value:throw new Exception("Nullable object must have a value.");
     public T GetValueOrDefault()=>value;
     public T GetValueOrDefault(T defaultValue)=>HasValue?value:defaultValue;
     public override bool Equals(object? other)=>HasValue&&other is T item&&CompatEqualityComparer<T>.Default.Equals(value,item);
@@ -26,17 +26,17 @@ public readonly struct CompatKeyValuePair<TKey,TValue>
 public readonly struct CompatArraySegment<T>
 {
     private readonly T[] array;
-    public CompatArraySegment(T[] array):this(array,0,array?.Length??throw new ArgumentNullException(nameof(array))){}
+    public CompatArraySegment(T[] array):this(array,0,array?.Length??throw new Exception("Array is null.")){}
     public CompatArraySegment(T[] array,int offset,int count)
     {
-        if(array is null)throw new ArgumentNullException(nameof(array));
-        if((uint)offset>(uint)array.Length||(uint)count>(uint)(array.Length-offset))throw new ArgumentOutOfRangeException();
+        if(array is null)throw new Exception("Array is null.");
+        if((uint)offset>(uint)array.Length||(uint)count>(uint)(array.Length-offset))throw new Exception("Array segment range is invalid.")
         this.array=array;Offset=offset;Count=count;
     }
     public T[] Array=>array;
     public int Offset{get;}
     public int Count{get;}
-    public T this[int index]=>index>=0&&index<Count?array[Offset+index]:throw new ArgumentOutOfRangeException(nameof(index));
+    public T this[int index]=>index>=0&&index<Count?array[Offset+index]:throw new Exception("Array segment index is invalid.");
 }
 
 public interface ICompatEquatable<T>
