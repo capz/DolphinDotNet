@@ -1,7 +1,7 @@
 #include "dnd_managed.h"
 #include <string.h>
 
-const DndType DND_TYPE_OBJECT = {"System.Object", NULL, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_OBJECT = {"System.Object", NULL, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_STRING = {"System.String", &DND_TYPE_OBJECT, sizeof(DndString), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_ARRAY = {"System.Array", &DND_TYPE_OBJECT, sizeof(DndArray), 0, NULL, 0, NULL, DND_TYPE_FLAG_ARRAY, 0, NULL, 0, NULL};
 static const uint32_t delegate_refs[] = {(uint32_t)offsetof(DndDelegate, target)};
@@ -29,8 +29,8 @@ const DndType DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION = {"System.IndexOutOfRangeEx
 const DndType DND_TYPE_NULL_REFERENCE_EXCEPTION = {"System.NullReferenceException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_INVALID_CAST_EXCEPTION = {"System.InvalidCastException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_NOT_SUPPORTED_EXCEPTION = {"System.NotSupportedException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_OUT_OF_MEMORY_EXCEPTION = {"System.OutOfMemoryException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-static DndObject builtin_exception = { &DND_TYPE_EXCEPTION, 0 };
+const DndType DND_TYPE_OUT_OF_MEMORY_EXCEPTION = {"System.OutOfMemoryException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+static DndException builtin_exception = {{ &DND_TYPE_EXCEPTION, 0 }, NULL};
 
 typedef struct DndHeapBlock {
     uint32_t size;
@@ -512,8 +512,9 @@ void dnd_exception_throw(DndExceptionKind kind, const char *message) {
         kind==DND_EXCEPTION_OUT_OF_MEMORY?&DND_TYPE_OUT_OF_MEMORY_EXCEPTION:
         kind==DND_EXCEPTION_ARGUMENT?&DND_TYPE_ARGUMENT_EXCEPTION:
         kind==DND_EXCEPTION_INVALID_OPERATION?&DND_TYPE_INVALID_OPERATION_EXCEPTION:&DND_TYPE_EXCEPTION;
-    builtin_exception.type = type;
-    exception_object = &builtin_exception;
+    builtin_exception.object.type = type;
+    builtin_exception.message = NULL;
+    exception_object = (DndObject *)&builtin_exception;
     exception_is_pending = true;
     dnd_exception_rethrow();
 }
