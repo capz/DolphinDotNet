@@ -73,8 +73,33 @@ internal static class Program
         }
     }
 
+    private static int EhIntegrationProbe()
+    {
+        var cleanup = 0;
+        try
+        {
+            try
+            {
+                var values = new CompactList<int>();
+                values.Add(3);
+                if (!values.Contains(3)) return -1;
+                int? missing = null;
+                return missing.Value;
+            }
+            finally
+            {
+                cleanup += 4;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            return cleanup == 4 ? 16 : -2;
+        }
+    }
+
     private static int Main()
     {
+        if (EhIntegrationProbe() != 16) return 95;
         if (ExplicitExceptionProbe() != 15) return 94;
         if (RethrowProbe() != 14) return 93;
         if (TypedCatchProbe() != 13) return 92;
