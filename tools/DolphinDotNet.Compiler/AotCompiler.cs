@@ -215,6 +215,10 @@ internal static class AotCompiler
         if(intrinsic==IntrinsicKind.ArraySegmentArray)return new CilCallStackEffect(1,CilStackKind.ObjectReference);
         if(intrinsic is IntrinsicKind.ArraySegmentOffset or IntrinsicKind.ArraySegmentCount)return new CilCallStackEffect(1,CilStackKind.I4);
         if(intrinsic==IntrinsicKind.ArraySegmentItem){var a=GenericArguments(md,model,i);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(2,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
+        if(intrinsic==IntrinsicKind.ArraySegmentGetEnumerator)return new CilCallStackEffect(1,CilStackKind.ManagedPointer);
+        if(intrinsic==IntrinsicKind.ArraySegmentEnumeratorMoveNext)return new CilCallStackEffect(1,CilStackKind.I4);
+        if(intrinsic==IntrinsicKind.ArraySegmentEnumeratorCurrent){var a=GenericArguments(md,model,i);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(1,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
+        if(intrinsic==IntrinsicKind.ArraySegmentEnumeratorDispose)return new CilCallStackEffect(1,null);
         var handle=MetadataTokens.EntityHandle(raw);
         if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
         if(handle.Kind==HandleKind.MemberReference)
