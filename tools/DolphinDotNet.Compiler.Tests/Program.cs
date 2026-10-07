@@ -30,8 +30,11 @@ var genericObject = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid
 Run("cc", $"-std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" -c \"{genericOutput}\" -o \"{genericObject}\"");
 if (!genericGenerated.Contains("Nullable object must have a value.", StringComparison.Ordinal) ||
     !genericGenerated.Contains("DND_EXCEPTION_INVALID_OPERATION", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("DND_TYPE_INT64", StringComparison.Ordinal))
-    throw new Exception("Nullable<T> lowering did not emit expected compact/value semantics.");
+    !genericGenerated.Contains("DND_TYPE_INT64", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("struct_", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_managed_array_at", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("(DndObject**)(l", StringComparison.Ordinal))
+    throw new Exception("Stage 4 generic value lowering did not emit expected nullable/struct/reference-map semantics.");
 var sharedDefinitions = genericGenerated.Split('\n')
     .Count(line => line.Contains("Shared_1_Marker", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
 if (sharedDefinitions != 1)
