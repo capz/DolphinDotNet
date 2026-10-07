@@ -31,6 +31,7 @@ extern intptr_t dnd_value_Program_ByRefCase(void);
 extern intptr_t dnd_value_Program_InterfaceIdentityCase(void);
 extern intptr_t dnd_value_Program_InterfaceCallCase(void);
 extern intptr_t dnd_value_Program_DelegateCase(void);
+extern intptr_t dnd_value_Program_ComparisonContractCase(void);
 
 static intptr_t capture0(intptr_t (*fn)(void), int *exception)
 {
@@ -101,8 +102,10 @@ int main(void)
         (long)finally_return_value,ex_finally_return,(long)typed_value,ex_typed);
     if(returning_value!=11||exception_value!=7||finally_value!=5||nested_finally_value!=7||rethrow_value!=19||rethrow_simple_value!=11||catch_throws_value!=13||finally_return_value!=22||typed_value!=23)return 1;
     if(ex_returning||ex_exception||ex_finally||ex_nested_finally||ex_rethrow||ex_rethrow_simple||ex_catch_throws||ex_finally_return||ex_typed)return 1;
+    int ex_compare; intptr_t comparison_value=capture0(dnd_value_Program_ComparisonContractCase,&ex_compare);
+    if(comparison_value!=7||ex_compare)return 1;
     if(object_core!=31||string_core!=128||array_core!=22)return 1;
     if(ex_object||ex_string||ex_array_core||entry_exception)return 1;
-    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=484)return 1;
+    if(loop!=10||branches!=13||nested!=5||short_circuit!=24||mutated!=5||switched!=40||result!=491)return 1;
     return 0;
 }
