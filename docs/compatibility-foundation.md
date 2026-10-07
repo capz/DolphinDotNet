@@ -35,6 +35,20 @@ These are runtime/compiler intrinsics, not replacement CoreLib declarations. Con
 
 Validation gate: portable runtime/stress tests, managed compiler integration, control-flow/EH smoke, AOT smoke, generated C compilation and the devkitPPC GameCube ELF/DOL pipeline must all remain green.
 
+### Phase 3 — equality / comparison infrastructure
+
+Complete for the compatibility-foundation scope. DolphinDotNet.Core now owns its default equality and ordering infrastructure instead of delegating compatibility collections to the host framework's `EqualityComparer<T>` / `Comparer<T>`.
+
+Implemented and characterized:
+
+- `CompatEqualityComparer<T>.Default` with reference/null handling, `IEquatable<T>` preference, fallback object equality and stable hash delegation.
+- `CompatComparer<T>.Default` with null ordering, `IComparable<T>` preference and non-generic `IComparable` fallback.
+- `Foundation.Hash` / `Foundation.Compare`, `CompatList<T>` and `CompatDictionary<TKey,TValue>` use the DolphinDotNet comparer infrastructure.
+- managed tests cover value types, reference/null semantics, hashing and ordering.
+- AOT control-flow smoke covers the interface-dispatch/equality/ordering mechanics used by comparer contracts.
+
+Constructed generic types from referenced assemblies are intentionally not yet lowered through Value IR because `TypeSpecification` instantiation belongs to the following generic-CoreLib phase. The strict .NET Standard declaration scanner therefore remains separate from this runtime/managed implementation milestone.
+
 ## P1 — small managed surface, large payoff
 
 Implement these primarily in managed CoreLib once the P0 primitives exist:
