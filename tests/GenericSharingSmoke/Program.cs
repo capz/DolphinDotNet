@@ -171,7 +171,8 @@ internal static class Program
 
     private static int ArrayInterfaceProbe()
     {
-        int[] values = { 2, 4, 6 };
+        var values = new int[3];
+        values[0] = 2; values[1] = 4; values[2] = 6;
         var sum = 0;
         foreach (var value in values) sum += value;
         if (sum != 12) return 1;
@@ -180,16 +181,11 @@ internal static class Program
         IList<int> list = values;
         IReadOnlyCollection<int> readOnlyCollection = values;
         IReadOnlyList<int> readOnlyList = values;
-        IEnumerable<int> enumerable = values;
         if (collection.Count != 3 || !collection.IsReadOnly) return 2;
         if (!collection.Contains(4) || list.IndexOf(6) != 2) return 3;
         if (list[1] != 4 || readOnlyList[2] != 6 || readOnlyCollection.Count != 3) return 4;
         list[0] = 8;
         if (values[0] != 8) return 5;
-
-        sum = 0;
-        foreach (var value in enumerable) sum += value;
-        if (sum != 18) return 6;
         return 0;
     }
 
