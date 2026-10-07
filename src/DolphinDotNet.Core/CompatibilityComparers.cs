@@ -36,6 +36,6 @@ public sealed class CompatComparer<T>
         if(x is null)return -1;
         if(y is null)return 1;
         if(x is ICompatComparable<T> generic)return generic.CompareTo(y);
-        throw new ArgumentException("Type does not provide a comparison contract.");
+        throw new Exception("Type does not provide a comparison contract.");
     }
 }
