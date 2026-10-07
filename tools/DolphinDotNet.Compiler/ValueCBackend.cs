@@ -82,6 +82,7 @@ internal static class ValueCBackend
         foreach(var local in method.Locals)b.AppendLine(local.StorageSize>0?$"  uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {CType(local.Kind)} l{local.Index} = 0;");
         var roots=values.Where(v=>v.Kind==IrValueKind.ObjectReference).Select(v=>$"(DndObject**)&v{v.Id}").ToList();
         roots.AddRange(method.Locals.Where(l=>l.Kind==IrValueKind.ObjectReference).Select(l=>$"(DndObject**)&l{l.Index}"));
+        roots.AddRange(method.Locals.SelectMany(l=>(l.ReferenceOffsets??Array.Empty<int>()).Select(offset=>$"(DndObject**)(l{l.Index}+{offset})")));
         if(method.HasThis)roots.Add("(DndObject**)&a0");
         if(roots.Count>0)
         {
