@@ -1,7 +1,7 @@
 #include "dnd_managed.h"
 #include <string.h>
 
-const DndType DND_TYPE_OBJECT = {"System.Object", NULL, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_OBJECT = {"System.Object", NULL, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_STRING = {"System.String", &DND_TYPE_OBJECT, sizeof(DndString), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_ARRAY = {"System.Array", &DND_TYPE_OBJECT, sizeof(DndArray), 0, NULL, 0, NULL, DND_TYPE_FLAG_ARRAY, 0, NULL, 0, NULL};
 static const uint32_t delegate_refs[] = {(uint32_t)offsetof(DndDelegate, target)};
@@ -18,16 +18,17 @@ DND_SCALAR_TYPE(DND_TYPE_UINT16,"System.UInt16",2);
 DND_SCALAR_TYPE(DND_TYPE_UINT32,"System.UInt32",4);
 DND_SCALAR_TYPE(DND_TYPE_INT64,"System.Int64",8);
 
-const DndType DND_TYPE_EXCEPTION = {"System.Exception", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_SYSTEM_EXCEPTION = {"System.SystemException", &DND_TYPE_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_INVALID_OPERATION_EXCEPTION = {"System.InvalidOperationException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_ARGUMENT_EXCEPTION = {"System.ArgumentException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_ARGUMENT_NULL_EXCEPTION = {"System.ArgumentNullException", &DND_TYPE_ARGUMENT_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION = {"System.ArgumentOutOfRangeException", &DND_TYPE_ARGUMENT_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION = {"System.IndexOutOfRangeException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_NULL_REFERENCE_EXCEPTION = {"System.NullReferenceException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_INVALID_CAST_EXCEPTION = {"System.InvalidCastException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_NOT_SUPPORTED_EXCEPTION = {"System.NotSupportedException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+static const uint32_t exception_refs[] = {(uint32_t)offsetof(DndException, message)};
+const DndType DND_TYPE_EXCEPTION = {"System.Exception", &DND_TYPE_OBJECT, sizeof(DndException), 0, NULL, 1, exception_refs, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_SYSTEM_EXCEPTION = {"System.SystemException", &DND_TYPE_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_INVALID_OPERATION_EXCEPTION = {"System.InvalidOperationException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_ARGUMENT_EXCEPTION = {"System.ArgumentException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_ARGUMENT_NULL_EXCEPTION = {"System.ArgumentNullException", &DND_TYPE_ARGUMENT_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION = {"System.ArgumentOutOfRangeException", &DND_TYPE_ARGUMENT_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION = {"System.IndexOutOfRangeException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_NULL_REFERENCE_EXCEPTION = {"System.NullReferenceException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_INVALID_CAST_EXCEPTION = {"System.InvalidCastException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_NOT_SUPPORTED_EXCEPTION = {"System.NotSupportedException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_OUT_OF_MEMORY_EXCEPTION = {"System.OutOfMemoryException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 static DndObject builtin_exception = { &DND_TYPE_EXCEPTION, 0 };
 
@@ -470,6 +471,12 @@ void dnd_eh_pop(DndEhFrame *frame) {
 
 bool dnd_exception_pending(void) { return exception_is_pending; }
 DndObject *dnd_exception_object(void) { return exception_object; }
+DndException *dnd_exception_new(DndManagedHeap *heap, const DndType *type, DndString *message) {
+    DndException *exception=(DndException *)allocate(heap,type?type:&DND_TYPE_EXCEPTION,sizeof(DndException));
+    if(exception) exception->message=message;
+    return exception;
+}
+DndString *dnd_exception_get_message(DndException *exception) { return exception?exception->message:NULL; }
 bool dnd_exception_matches(const DndType *type) { return exception_object && type && dnd_type_is_assignable_from(type, exception_object->type); }
 void dnd_exception_begin_catch(void) { exception_is_pending = false; }
 
