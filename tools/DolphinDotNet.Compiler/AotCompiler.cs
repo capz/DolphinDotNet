@@ -264,7 +264,7 @@ internal static class AotCompiler
     private static void EnsureEnumerationContracts(CompilationModel model)
     {
         void Type(string name,params string[] interfaces){if(model.Types.ContainsKey(name))return;var dot=name.LastIndexOf('.');model.Types[name]=new(dot<0?"":name[..dot],dot<0?name:name[(dot+1)..],name,null,0,true,false,interfaces);}
-        void Method(string type,string name,bool returnsValue){if(model.Methods.Values.Any(m=>m.Key.TypeName==type&&m.Key.Name==name))return;var key=new MethodKey(type,name,"<contracts>",name);model.Methods[key]=new(key,default,false,0,returnsValue,"<contracts>",true,true,true,true);}
+        void Method(string type,string name,bool returnsValue){if(model.Methods.Values.Any(m=>m.Key.TypeName==type&&m.Key.Name==name))return;var key=new MethodKey(type,name,"<contracts>",name);var kind=!returnsValue?(CilStackKind?)null:name=="MoveNext"?CilStackKind.I4:CilStackKind.ObjectReference;model.Methods[key]=new(key,default,false,0,returnsValue,"<contracts>",true,true,true,true,Abi:new GenericAbi(Array.Empty<CilStackKind>(),kind));}
         Type("System.IDisposable");Method("System.IDisposable","Dispose",false);
         Type("System.Collections.IEnumerable");Method("System.Collections.IEnumerable","GetEnumerator",true);
         Type("System.Collections.IEnumerator");Method("System.Collections.IEnumerator","get_Current",true);Method("System.Collections.IEnumerator","MoveNext",true);Method("System.Collections.IEnumerator","Reset",false);
