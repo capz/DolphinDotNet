@@ -29,6 +29,11 @@ Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{genericDll}\" \"{generi
 var genericGenerated = File.ReadAllText(genericOutput);
 var genericObject = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.o");
 Run("cc", $"-std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" -c \"{genericOutput}\" -o \"{genericObject}\"");
+if (!genericGenerated.Contains("setjmp(dnd_eh_frame.environment)", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_exception_matches", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_exception_rethrow_current", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_exception_new", StringComparison.Ordinal))
+    throw new Exception("Exception handling lowering missing.");
 if (!genericGenerated.Contains("Nullable object must have a value.", StringComparison.Ordinal)) throw new Exception("Nullable Value guard missing.");
 if (!genericGenerated.Contains("DND_EXCEPTION_INVALID_OPERATION", StringComparison.Ordinal)) throw new Exception("Nullable exception category missing.");
 if (!genericGenerated.Contains("DND_TYPE_INT64", StringComparison.Ordinal)) throw new Exception("Wide nullable boxing missing.");
