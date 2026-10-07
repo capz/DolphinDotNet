@@ -101,8 +101,15 @@ internal static class CilControlFlowGraph
 
     public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion>? exceptionRegions=null)
     {
+        var regions=exceptionRegions??Array.Empty<System.Reflection.Metadata.ExceptionRegion>();
+        instructions=RewriteFinallyControlFlow(instructions,regions);
         if(instructions.Count==0)return [];
         var starts=new HashSet<int>{instructions[0].Offset};
+        foreach(var region in regions) {
+            starts.Add(region.TryOffset);
+            starts.Add(region.HandlerOffset);
+            if(region.Kind==System.Reflection.Metadata.ExceptionRegionKind.Filter) starts.Add(region.FilterOffset);
+        }
         foreach(var i in instructions)
         {
             if(i.Operand is CilBranchTarget { Offset: var target })starts.Add(target);
