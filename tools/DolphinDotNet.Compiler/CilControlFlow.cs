@@ -77,11 +77,11 @@ internal sealed record CilBasicBlock(int Id,int StartOffset,List<CilInstruction>
 
 internal static class CilControlFlowGraph
 {
-    private static IReadOnlyList<CilInstruction> RewriteFinallyControlFlow(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<System.Reflection.PortableExecutable.ExceptionRegion> regions)
+    private static IReadOnlyList<CilInstruction> RewriteFinallyControlFlow(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion> regions)
     {
         if(regions.Count==0)return instructions;
         var rewritten=instructions.ToArray();
-        foreach(var region in regions.Where(r=>r.Kind==System.Reflection.PortableExecutable.ExceptionRegionKind.Finally))
+        foreach(var region in regions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally))
         {
             var tryEnd=region.TryOffset+region.TryLength;var handlerEnd=region.HandlerOffset+region.HandlerLength;
             var leaves=instructions.Where(i=>i.Offset>=region.TryOffset&&i.Offset<tryEnd&&i.OpCode is 0xdd or 0xde&&i.Operand is CilBranchTarget t&&(t.Offset<region.TryOffset||t.Offset>=tryEnd)).ToArray();
