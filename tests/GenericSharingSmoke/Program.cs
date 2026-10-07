@@ -146,7 +146,8 @@ internal static class Program
 
     private static int SystemArrayProbe()
     {
-        var values = new[] { 3, 5, 7, 9 };
+        var values = new int[4];
+        values[0] = 3; values[1] = 5; values[2] = 7; values[3] = 9;
         if (values.Rank != 1) return 1;
         if (values.LongLength != 4) return 1;
         if (values.GetLength(0) != 4) return 1;
