@@ -160,6 +160,11 @@ internal static class ValueCBackend
                     case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
                     case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
                     case ValueIrStringLength x:b.AppendLine($"  v{x.Result.Id} = ((DndString*)v{x.String.Id})->length;");break;
+                    case ValueIrNullableGetValueOrDefault x:
+                    {
+                        var ct=x.ValueSize==8?"int64_t":"int32_t";
+                        b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? *({ct}*)((uint8_t*)v{x.Address.Id}+4) : ({ct})v{x.DefaultValue.Id};");break;
+                    }
                     case ValueIrBoxNullable x:
                     {
                         var type=x.ValueSize==8?"&DND_TYPE_INT64":"&DND_TYPE_BOXED_INT32";
