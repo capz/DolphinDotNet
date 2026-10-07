@@ -6,6 +6,7 @@ internal enum IntrinsicKind
 {
     None,
     ObjectConstructor,
+    ObjectGetHashCode,
     StringLength,
     GameCubeWriteLine,
     GameCubeReadButtonsDown,
@@ -47,6 +48,7 @@ internal static class IntrinsicRegistry
         return (type,name) switch
         {
             ("System.Object",".ctor")=>IntrinsicKind.ObjectConstructor,
+            ("System.Object","GetHashCode")=>IntrinsicKind.ObjectGetHashCode,
             ("System.String","get_Length")=>IntrinsicKind.StringLength,
             ("System.Nullable`1",".ctor")=>IntrinsicKind.NullableConstructor,
             ("System.Nullable`1","get_HasValue")=>IntrinsicKind.NullableHasValue,
