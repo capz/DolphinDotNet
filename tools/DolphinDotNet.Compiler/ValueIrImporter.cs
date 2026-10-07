@@ -214,6 +214,29 @@ internal static class ValueIrImporter
                         var ik=intrinsic(cil);
                         if(ik==IntrinsicKind.ObjectGetHashCode){var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableHash(value,input,4));else instructions.Add(new ValueIrOpaqueStackEffect(1,new[]{value},cil.OpCode));stack.Add(value);break;}
                         if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,4));else instructions.Add(new ValueIrObjectEquals(value,input,other));stack.Add(value);break;}
+                        if(ik is IntrinsicKind.ArrayLength or IntrinsicKind.ArrayLongLength or IntrinsicKind.ArrayRank)
+                        {
+                            var array=Pop(stack,cil);var value=New(ik==IntrinsicKind.ArrayLongLength?CilStackKind.I8:CilStackKind.I4);
+                            instructions.Add(new ValueIrArrayOperation(value,ik.ToString(),new[]{array}));stack.Add(value);break;
+                        }
+                        if(ik is IntrinsicKind.ArrayGetLength or IntrinsicKind.ArrayGetLowerBound or IntrinsicKind.ArrayGetUpperBound)
+                        {
+                            var dimension=Pop(stack,cil);var array=Pop(stack,cil);var value=New(CilStackKind.I4);
+                            instructions.Add(new ValueIrArrayOperation(value,ik.ToString(),new[]{array,dimension}));stack.Add(value);break;
+                        }
+                        if(ik is IntrinsicKind.ArrayClear or IntrinsicKind.ArrayCopy)
+                        {
+                            var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing array stack effect at IL_{cil.Offset:x4}.");var arrayArgs=new List<IrValue>();
+                            for(var n=0;n<effect.PopCount;n++)arrayArgs.Add(Pop(stack,cil));arrayArgs.Reverse();
+                            instructions.Add(new ValueIrArrayOperation(null,ik.ToString(),arrayArgs));break;
+                        }
+                        if(ik==IntrinsicKind.ArrayIndexOf)
+                        {
+                            var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing Array.IndexOf stack effect at IL_{cil.Offset:x4}.");var arrayArgs=new List<IrValue>();
+                            for(var n=0;n<effect.PopCount;n++)arrayArgs.Add(Pop(stack,cil));arrayArgs.Reverse();
+                            var ga=genericArguments(cil);var rep=ga.Count>0?ga[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);
+                            var value=New(CilStackKind.I4);instructions.Add(new ValueIrArrayOperation(value,"ArrayIndexOf",arrayArgs,rep.Size,rep.ContainsReferences));stack.Add(value);break;
+                        }
                         if(ik==IntrinsicKind.StringLength){var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringLength(value,str));stack.Add(value);break;}
                         if(ik==IntrinsicKind.StringCharAt){var index=Pop(stack,cil);var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringOperation(value,"charAt",new[]{str,index}));stack.Add(value);break;}
                         if(ik is IntrinsicKind.StringEquals or IntrinsicKind.StringStartsWith or IntrinsicKind.StringEndsWith or IntrinsicKind.StringContains or IntrinsicKind.StringIndexOf or IntrinsicKind.StringConcat)
