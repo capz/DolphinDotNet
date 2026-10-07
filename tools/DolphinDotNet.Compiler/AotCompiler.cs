@@ -37,7 +37,7 @@ internal static class AotCompiler
                 var ilBytes=body.GetILBytes()??throw new InvalidDataException($"{method.Key} has no IL body.");
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil,body.ExceptionRegions);
-                CilStackAnalysis stackAnalysis;try{stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);}catch(Exception ex){throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex);}
+                CilStackAnalysis stackAnalysis;try{stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue,body.ExceptionRegions);}catch(Exception ex){throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex);}
                 var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),i=>ResolveGenericTypeParameter(assembly.Metadata,model,method,i))
                     with { ExceptionRegions = ReadExceptionRegions(assembly.Metadata,body.ExceptionRegions) };
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
