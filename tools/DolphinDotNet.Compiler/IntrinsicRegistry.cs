@@ -57,6 +57,7 @@ internal static class IntrinsicRegistry
     public static IntrinsicKind Classify(MetadataReader md,EntityHandle handle)
     {
         string? type=null;string? name=null;var parameterCount=-1;
+        if(handle.Kind==HandleKind.MethodSpecification) return Classify(md,md.GetMethodSpecification((MethodSpecificationHandle)handle).Method);
         if(handle.Kind==HandleKind.MemberReference)
         {
             var member=md.GetMemberReference((MemberReferenceHandle)handle);
