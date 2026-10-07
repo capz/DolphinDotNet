@@ -126,7 +126,7 @@ internal static class AotCompiler
     {
         if(i.OpCode is not (0x28 or 0x6f or 0x73 or 0xfe06 or 0xfe07)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         try{return IlImporter.ResolveMethod(md,model,MetadataTokens.EntityHandle(raw));}
-        catch(NotSupportedException){return null;}
+        catch(NotSupportedException ex){if(i.Operand is CilMetadataToken { Token: var token }){var h=MetadataTokens.EntityHandle(token);if(h.Kind==HandleKind.MemberReference){var m=md.GetMemberReference((MemberReferenceHandle)h);throw new NotSupportedException($"Unresolved call {MetadataLoader.ResolveMemberParentTypeName(md,m.Parent)}::{md.GetString(m.Name)} at IL_{i.Offset:x4}.",ex);}}return null;}
     }
 
     private static string? ResolveType(MetadataReader md,CilInstruction i)
