@@ -84,7 +84,7 @@ internal static class GenericTypeResolver
         if(arguments.Count==0)return definition;
         var closed=definition+"["+string.Join(",",arguments)+"]";
         if(model.Types.ContainsKey(closed))return closed;
-        if(!model.Types.TryGetValue(definition,out var source))return definition;
+        if(!model.Types.TryGetValue(definition,out var source))return closed;
 
         var baseType=CloseRelated(model,source.BaseType,arguments);
         var interfaces=(source.Interfaces??Array.Empty<string>()).Select(x=>CloseRelated(model,x,arguments)??x).ToArray();
