@@ -3,7 +3,7 @@ using System.Reflection.PortableExecutable;
 namespace DolphinDotNet.Compiler;
 internal sealed record MethodKey(string TypeName,string Name,string AssemblyName="",string Signature=""){public override string ToString()=>$"{(string.IsNullOrEmpty(AssemblyName)?"":AssemblyName+"!")} {TypeName}::{Name}{(string.IsNullOrEmpty(Signature)?"":" ["+Signature+"]")}";}
 internal sealed record TypeModel(string Namespace,string Name,string FullName,string? BaseType,int InstanceSize,bool IsInterface=false,bool IsValueType=false,IReadOnlyList<string>? Interfaces=null);
-internal sealed record FieldModel(string DeclaringType,string Name,int Offset,bool IsReference,bool IsStatic=false,int Size=4,IReadOnlyList<int>? EmbeddedReferenceOffsets=null);
+internal sealed record FieldModel(string DeclaringType,string Name,int Offset,bool IsReference,bool IsStatic=false,int Size=4,IReadOnlyList<int>? EmbeddedReferenceOffsets=null,int GenericParameterIndex=-1);
 internal enum ExceptionRegionKind { Catch, Finally, Fault, Filter }
 internal sealed record ExceptionRegionModel(int TryOffset,int TryLength,int HandlerOffset,int HandlerLength,ExceptionRegionKind Kind,string? CatchType=null,int FilterOffset=-1)
 {
