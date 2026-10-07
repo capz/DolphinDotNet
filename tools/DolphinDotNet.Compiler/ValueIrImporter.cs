@@ -6,7 +6,7 @@ internal static class ValueIrImporter
         MethodModel method,
         IReadOnlyList<CilBasicBlock> blocks,
         CilStackAnalysis analysis,
-        int localCount,
+        IReadOnlyList<int> localStorage,
         Func<CilInstruction,MethodModel?> resolveCall,
         Func<CilInstruction,CilCallStackEffect?> resolveCallEffect,
         Func<CilInstruction,bool> ignoreCall,
@@ -282,7 +282,7 @@ internal static class ValueIrImporter
                 block.Instructions.Insert(slot,new ValueIrPhi(block.EntryStack.Values[slot],inputs));
             }
         }
-        var locals=InferLocals(output,localCount);
+        var locals=InferLocals(output,localStorage);
         return new ValueIrMethod(method.Key,output,locals,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
     }
 
@@ -295,15 +295,15 @@ internal static class ValueIrImporter
         return index>=0&&index<abi.Parameters.Count?abi.Parameters[index]:ResultKind(analysis,instruction);
     }
 
-    private static IReadOnlyList<ValueIrLocal> InferLocals(IReadOnlyList<ValueIrBlock> blocks,int count)
+    private static IReadOnlyList<ValueIrLocal> InferLocals(IReadOnlyList<ValueIrBlock> blocks,IReadOnlyList<int> declaredStorage)
     {
-        var kinds=Enumerable.Repeat(IrValueKind.Unknown,count).ToArray();
+        var count=declaredStorage.Count;var kinds=Enumerable.Repeat(IrValueKind.Unknown,count).ToArray();
         foreach(var instruction in blocks.SelectMany(b=>b.Instructions))
         {
             if(instruction is ValueIrStoreLocal store&&store.Index<count)kinds[store.Index]=MergeLocal(kinds[store.Index],store.Value.Kind);
             else if(instruction is ValueIrLoadLocal load&&load.Index<count)kinds[load.Index]=MergeLocal(kinds[load.Index],load.Result.Kind);
         }
-        var storage=new int[count];var addresses=new Dictionary<int,int>();
+        var storage=declaredStorage.ToArray();var addresses=new Dictionary<int,int>();
         foreach(var instruction in blocks.SelectMany(b=>b.Instructions))
         {
             if(instruction is ValueIrAddressOfLocal address)addresses[address.Result.Id]=address.Index;
