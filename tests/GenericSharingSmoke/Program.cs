@@ -13,7 +13,7 @@ internal static class Program
         int? present = 42;
         if (empty.HasValue) return 1;
         if (!present.HasValue || present.Value != 42 || present.GetValueOrDefault() != 42) return 2;
-        if (empty.GetValueOrDefault() != 0) return 3;
+        if (empty.GetValueOrDefault() != 0 || empty.GetValueOrDefault(17) != 17) return 3;
         int? copy = present;
         if (!copy.HasValue || copy.Value != 42) return 7;
 
