@@ -215,6 +215,18 @@ internal static class ValueIrImporter
                         if(ik==IntrinsicKind.ObjectGetHashCode){var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableHash(value,input,4));else instructions.Add(new ValueIrOpaqueStackEffect(1,new[]{value},cil.OpCode));stack.Add(value);break;}
                         if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,4));else instructions.Add(new ValueIrObjectEquals(value,input,other));stack.Add(value);break;}
                         if(ik==IntrinsicKind.StringLength){var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringLength(value,str));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.StringCharAt){var index=Pop(stack,cil);var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringOperation(value,"charAt",new[]{str,index}));stack.Add(value);break;}
+                        if(ik is IntrinsicKind.StringEquals or IntrinsicKind.StringStartsWith or IntrinsicKind.StringEndsWith or IntrinsicKind.StringContains or IntrinsicKind.StringIndexOf or IntrinsicKind.StringConcat)
+                        {
+                            var right=Pop(stack,cil);var left=Pop(stack,cil);var kind=ik==IntrinsicKind.StringConcat?CilStackKind.ObjectReference:CilStackKind.I4;var value=New(kind);
+                            instructions.Add(new ValueIrStringOperation(value,ik.ToString(),new[]{left,right}));stack.Add(value);break;
+                        }
+                        if(ik==IntrinsicKind.StringSubstring)
+                        {
+                            var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing substring stack effect at IL_{cil.Offset:x4}.");var args=new List<IrValue>();
+                            for(var n=0;n<effect.PopCount;n++)args.Add(Pop(stack,cil));args.Reverse();var value=New(CilStackKind.ObjectReference);
+                            instructions.Add(new ValueIrStringOperation(value,args.Count==2?"substring1":"substring2",args));stack.Add(value);break;
+                        }
                         if(ik==IntrinsicKind.ExceptionMessage){var exception=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrExceptionMessage(value,exception));stack.Add(value);break;}
                         if(ik==IntrinsicKind.NullableConstructor){var size=nullableValueSize(cil);var value=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrNullableInit(address,value,size));break;}
                         if(ik==IntrinsicKind.NullableHasValue){var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrNullableHasValue(value,address));stack.Add(value);break;}
