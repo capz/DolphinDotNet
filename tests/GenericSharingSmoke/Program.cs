@@ -26,13 +26,30 @@ internal static class Program
         if (boxedEmpty is not null || boxedPresent is not int || (int)boxedPresent != 42) return 5;
         object? boxedWide = wide;
         if (boxedWide is null) return 6;
-        if (!present.Equals((object)42) || present.Equals((object)41) || empty.GetHashCode() != 0 || present.GetHashCode() != 42) return 8;
+        var stage2 = TestNullableEquality(present, empty); if (stage2 != 0) return stage2;
+        stage2 = TestPairs(); if (stage2 != 0) return stage2;
+        stage2 = TestSegment(); if (stage2 != 0) return stage2;
+        return 0;
+    }
 
+
+    private static int TestNullableEquality(int? present, int? empty)
+    {
+        if (!present.Equals((object)42) || present.Equals((object)41) || empty.GetHashCode() != 0 || present.GetHashCode() != 42) return 8;
+        return 0;
+    }
+
+    private static int TestPairs()
+    {
         var pair = new KeyValuePair<string, string>("key", "value");
         if (pair.Key != "key" || pair.Value != "value") return 9;
         var widePair = new KeyValuePair<long, int>(0x100000002L, 7);
         if (widePair.Key != 0x100000002L || widePair.Value != 7) return 10;
+        return 0;
+    }
 
+    private static int TestSegment()
+    {
         var values = new[] { "zero", "one", "two" };
         var segment = new ArraySegment<string>(values, 1, 2);
         if (segment.Array != values || segment.Offset != 1 || segment.Count != 2 || segment[0] != "one") return 11;
