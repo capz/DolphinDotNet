@@ -97,6 +97,7 @@ internal static class CilStackAnalyzer
             case 0x71: Pop(s,i);Push(s,CilStackKind.I4);break;
             case 0x81: Pop(s,i);Pop(s,i);break;
             case 0xfe15: Pop(s,i);break;
+            case 0xfe16: break; // constrained. is a prefix; stack effect belongs to following callvirt
             case 0xfe06: Push(s,CilStackKind.NativeInt);break;
             case 0xfe07: Pop(s,i);Push(s,CilStackKind.NativeInt);break;
             case >=0x46 and <=0x49 or 0x4a: Pop(s,i);Push(s,CilStackKind.I4);break;
