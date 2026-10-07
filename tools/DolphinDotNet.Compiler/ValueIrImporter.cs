@@ -22,7 +22,7 @@ internal static class ValueIrImporter
         var nextValue=0;
         bool resolveTypeForMethod(string name)=>isInterfaceType?.Invoke(name)??false;
         bool delegateType(string name)=>isDelegateType?.Invoke(name)??false;
-        bool valueType(string name)=>isValueType?.Invoke(name)??name is "System.Boolean" or "System.Byte" or "System.SByte" or "System.Char" or "System.Int16" or "System.UInt16" or "System.Int32" or "System.UInt32" or "System.Int64" or "System.UInt64" or "System.Single" or "System.Double" or "System.IntPtr" or "System.UIntPtr";
+        bool valueType(string name)=>(isValueType?.Invoke(name)??false)||name is "System.Boolean" or "System.Byte" or "System.SByte" or "System.Char" or "System.Int16" or "System.UInt16" or "System.Int32" or "System.UInt32" or "System.Int64" or "System.UInt64" or "System.Single" or "System.Double" or "System.IntPtr" or "System.UIntPtr";
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
         var output=new List<ValueIrBlock>();
         var entryValues=new Dictionary<int,List<IrValue>>();
