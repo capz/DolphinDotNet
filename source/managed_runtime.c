@@ -318,6 +318,84 @@ bool dnd_array_store_ref(DndArray *array, uint32_t index, DndObject *value) {
     return true;
 }
 
+int64_t dnd_array_long_length(DndArray *array) { return (int64_t)dnd_array_length(array); }
+
+static bool dnd_array_dimension_ok(DndArray *array, int32_t dimension) {
+    if (!array) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Array is null."); return false; }
+    if (dimension != 0) { dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE, "Array dimension out of range."); return false; }
+    return true;
+}
+
+int32_t dnd_array_get_length(DndArray *array, int32_t dimension) {
+    return dnd_array_dimension_ok(array, dimension) ? (int32_t)array->length : 0;
+}
+
+int32_t dnd_array_get_lower_bound(DndArray *array, int32_t dimension) {
+    return dnd_array_dimension_ok(array, dimension) ? 0 : 0;
+}
+
+int32_t dnd_array_get_upper_bound(DndArray *array, int32_t dimension) {
+    return dnd_array_dimension_ok(array, dimension) ? (int32_t)array->length - 1 : -1;
+}
+
+bool dnd_array_clear(DndArray *array, int32_t index, int32_t length) {
+    if (!array) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Array is null."); return false; }
+    if (index < 0 || length < 0 || (uint32_t)index > array->length || (uint32_t)length > array->length - (uint32_t)index) {
+        dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Array range out of bounds."); return false;
+    }
+    memset(array->data + (size_t)(uint32_t)index * array->element_size, 0, (size_t)(uint32_t)length * array->element_size);
+    return true;
+}
+
+bool dnd_array_copy(DndArray *source, int32_t source_index, DndArray *destination, int32_t destination_index, int32_t length) {
+    if (!source || !destination) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Array is null."); return false; }
+    if (source_index < 0 || destination_index < 0 || length < 0 ||
+        (uint32_t)source_index > source->length || (uint32_t)length > source->length - (uint32_t)source_index ||
+        (uint32_t)destination_index > destination->length || (uint32_t)length > destination->length - (uint32_t)destination_index ||
+        source->element_size != destination->element_size) {
+        dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Array copy range or element size mismatch."); return false;
+    }
+    if (source->elements_are_references && destination->elements_are_references && destination->element_type) {
+        for (int32_t i = 0; i < length; i++) {
+            DndObject *value = *(DndObject **)(source->data + (size_t)(source_index + i) * source->element_size);
+            if (value && !dnd_type_is_assignable_from(destination->element_type, value->type)) {
+                dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Array element type mismatch."); return false;
+            }
+        }
+    } else if (source->elements_are_references != destination->elements_are_references) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Array element type mismatch."); return false;
+    }
+    memmove(destination->data + (size_t)(uint32_t)destination_index * destination->element_size,
+            source->data + (size_t)(uint32_t)source_index * source->element_size,
+            (size_t)(uint32_t)length * source->element_size);
+    return true;
+}
+
+int32_t dnd_array_index_of(DndArray *array, uint64_t value, uint32_t size, bool reference, int32_t start, int32_t count) {
+    if (!array) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Array is null."); return -1; }
+    if (start < 0 || count < 0 || (uint32_t)start > array->length || (uint32_t)count > array->length - (uint32_t)start) {
+        dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Array search range out of bounds."); return -1;
+    }
+    if (reference) {
+        DndObject *needle = (DndObject *)(uintptr_t)value;
+        for (int32_t i = 0; i < count; i++)
+            if (*(DndObject **)(array->data + (size_t)(start + i) * array->element_size) == needle) return start + i;
+        return -1;
+    }
+    if (size == 0 || size > 8 || size > array->element_size) return -1;
+    uint8_t needle[8] = {0};
+    switch (size) {
+        case 1: { uint8_t v=(uint8_t)value; memcpy(needle,&v,1); break; }
+        case 2: { uint16_t v=(uint16_t)value; memcpy(needle,&v,2); break; }
+        case 4: { uint32_t v=(uint32_t)value; memcpy(needle,&v,4); break; }
+        case 8: { uint64_t v=value; memcpy(needle,&v,8); break; }
+        default: return -1;
+    }
+    for (int32_t i = 0; i < count; i++)
+        if (memcmp(array->data + (size_t)(start + i) * array->element_size, needle, size) == 0) return start + i;
+    return -1;
+}
+
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual) {
     if (!target || !actual) return false;
     for (const DndType *type = actual; type; type = type->base_type)
