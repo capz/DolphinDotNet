@@ -49,8 +49,11 @@ internal static class MetadataLoader
   var spec=md.GetTypeSpecification(h);var r=md.GetBlobReader(spec.Signature);
   var code=r.ReadSignatureTypeCode();
   if(code!=SignatureTypeCode.GenericTypeInstance)return null;
-  var kind=r.ReadSignatureTypeCode();
-  if(kind!=SignatureTypeCode.TypeHandle)return null;
+  // ECMA-335 encodes the generic type after GENERICINST as CLASS (0x12) or
+  // VALUETYPE (0x11), followed by a TypeDefOrRef coded index. BlobReader's
+  // ReadSignatureTypeCode maps those bytes to TypeHandle, so the handle itself
+  // is the generic definition that all closed instantiations share.
+  if(r.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)return null;
   return ResolveTypeName(md,r.ReadTypeHandle());
  }
  private static (int Parameters,bool ReturnsValue) ReadMethodSignature(MetadataReader md,BlobHandle sig){var r=md.GetBlobReader(sig);var h=r.ReadSignatureHeader();if(h.IsGeneric)r.ReadCompressedInteger();int p=r.ReadCompressedInteger();var ret=r.ReadSignatureTypeCode();return(p,ret!=SignatureTypeCode.Void);}
