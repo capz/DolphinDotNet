@@ -141,6 +141,11 @@ internal static class AotCompiler
     {
         if(i.Operand is not CilMetadataToken { Token: var raw })return 4;
         var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind==HandleKind.TypeSpecification)
+        {
+            var args=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)handle,model);
+            return args.Count==1?Math.Max(1,args[0].Size):4;
+        }
         if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
         if(handle.Kind!=HandleKind.MemberReference)return 4;
         var member=md.GetMemberReference((MemberReferenceHandle)handle);
