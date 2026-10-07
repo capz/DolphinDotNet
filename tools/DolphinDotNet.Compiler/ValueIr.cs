@@ -63,7 +63,7 @@ internal sealed record ValueIrStoreStaticField(IrValue Value,string TypeName,str
 internal sealed record ValueIrTypeTest(IrValue Result,IrValue Object,string TypeName,bool ThrowOnFailure):ValueIrInstruction;
 internal sealed record ValueIrStringLength(IrValue Result,IrValue String):ValueIrInstruction;
 internal sealed record ValueIrStringOperation(IrValue Result,string Operation,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
-internal sealed record ValueIrNewArray(IrValue Result,IrValue Length,string ElementType,bool ElementsAreReferences,uint ElementSize):ValueIrInstruction;
+internal sealed record ValueIrNewArray(IrValue Result,IrValue Length,string ElementType,bool ElementsAreReferences,uint ElementSize,IReadOnlyList<int>? ElementReferenceOffsets=null):ValueIrInstruction;
 internal sealed record ValueIrBox(IrValue Result,IrValue Value,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrBoxNullable(IrValue Result,IrValue Address,int ValueSize):ValueIrInstruction;
 internal sealed record ValueIrUnboxAny(IrValue Result,IrValue Object,string TypeName):ValueIrInstruction;
