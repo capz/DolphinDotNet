@@ -1,7 +1,7 @@
-Shared<int>.WriteMarker();
-Shared<string>.WriteMarker();
+_ = Shared<int>.Marker();
+_ = Shared<string>.Marker();
 
 static class Shared<T>
 {
-    public static void WriteMarker() => System.Console.WriteLine("Shared generic AOT body.");
+    public static int Marker() => 42;
 }
