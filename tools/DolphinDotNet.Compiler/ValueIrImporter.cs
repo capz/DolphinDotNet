@@ -11,6 +11,7 @@ internal static class ValueIrImporter
         Func<CilInstruction,CilCallStackEffect?> resolveCallEffect,
         Func<CilInstruction,bool> ignoreCall,
         Func<CilInstruction,IntrinsicKind> intrinsic,
+        Func<CilInstruction,int> nullableValueSize,
         Func<CilInstruction,string?> resolveString,
         Func<CilInstruction,FieldModel?> resolveField,
         Func<CilInstruction,string?> resolveType)
@@ -174,6 +175,9 @@ internal static class ValueIrImporter
                     {
                         var ik=intrinsic(cil);
                         if(ik==IntrinsicKind.StringLength){var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringLength(value,str));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.NullableConstructor){var size=nullableValueSize(cil);var value=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrNullableInit(address,value,size));break;}
+                        if(ik==IntrinsicKind.NullableHasValue){var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrNullableHasValue(value,address));stack.Add(value);break;}
+                        if(ik is IntrinsicKind.NullableValue or IntrinsicKind.NullableGetValueOrDefault){var size=nullableValueSize(cil);var address=Pop(stack,cil);var value=New(size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrNullableGetValue(value,address,size,ik==IntrinsicKind.NullableValue));stack.Add(value);break;}
                         if(ik==IntrinsicKind.GameCubeWriteLine){instructions.Add(new ValueIrConsoleWriteLine(Pop(stack,cil)));break;}
                         if(ik==IntrinsicKind.GameCubeReadButtonsDown){var port=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrReadButtonsDown(value,port));stack.Add(value);break;}
                         if(ik==IntrinsicKind.GameCubePresentDemoFrame){instructions.Add(new ValueIrPresentDemoFrame(Pop(stack,cil)));break;}
@@ -282,7 +286,7 @@ internal static class ValueIrImporter
         return new ValueIrMethod(method.Key,output,locals,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
     }
 
-    private static CilStackKind ArgumentKind(MethodModel method,int index,CilStackAnalysis analysis,CilInstruction instruction)
+    private static int AlignNullable(int valueSize)=>4+((valueSize+3)&~3);\n\n    private static CilStackKind ArgumentKind(MethodModel method,int index,CilStackAnalysis analysis,CilInstruction instruction)
     {
         if(method.Abi is not { } abi)return ResultKind(analysis,instruction);
         if(!method.IsStatic){if(index==0)return CilStackKind.ObjectReference;index--;}
@@ -297,7 +301,15 @@ internal static class ValueIrImporter
             if(instruction is ValueIrStoreLocal store&&store.Index<count)kinds[store.Index]=MergeLocal(kinds[store.Index],store.Value.Kind);
             else if(instruction is ValueIrLoadLocal load&&load.Index<count)kinds[load.Index]=MergeLocal(kinds[load.Index],load.Result.Kind);
         }
-        return kinds.Select((kind,index)=>new ValueIrLocal(index,kind)).ToArray();
+        var storage=new int[count];var addresses=new Dictionary<int,int>();
+        foreach(var instruction in blocks.SelectMany(b=>b.Instructions))
+        {
+            if(instruction is ValueIrAddressOfLocal address)addresses[address.Result.Id]=address.Index;
+            else if(instruction is ValueIrNullableInit nullable&&addresses.TryGetValue(nullable.Address.Id,out var li))storage[li]=Math.Max(storage[li],AlignNullable(nullable.ValueSize));
+            else if(instruction is ValueIrNullableGetValue get&&addresses.TryGetValue(get.Address.Id,out var gi))storage[gi]=Math.Max(storage[gi],AlignNullable(get.ValueSize));
+            else if(instruction is ValueIrNullableHasValue has&&addresses.TryGetValue(has.Address.Id,out var hi))storage[hi]=Math.Max(storage[hi],8);
+        }
+        return kinds.Select((kind,index)=>new ValueIrLocal(index,kind,storage[index])).ToArray();
     }
     private static bool IsReferenceType(string type)=>type is "System.String" or "System.Object" || !type.StartsWith("System.",StringComparison.Ordinal);
     private static uint ElementSize(string type)=>type switch{"System.Boolean" or "System.Byte" or "System.SByte"=>1u,"System.Char" or "System.Int16" or "System.UInt16"=>2u,"System.Int64" or "System.UInt64" or "System.Double"=>8u,_=>4u};
