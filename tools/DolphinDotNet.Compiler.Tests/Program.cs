@@ -26,6 +26,12 @@ var genericDll = Path.Combine(root, "tests/GenericSharingSmoke/bin/Release/net8.
 var genericOutput = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.c");
 Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{genericDll}\" \"{genericOutput}\"");
 var genericGenerated = File.ReadAllText(genericOutput);
+var genericObject = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.o");
+Run("cc", $"-std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" -c \"{genericOutput}\" -o \"{genericObject}\"");
+if (!genericGenerated.Contains("Nullable object must have a value.", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("DND_EXCEPTION_INVALID_OPERATION", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("DND_TYPE_INT64", StringComparison.Ordinal))
+    throw new Exception("Nullable<T> lowering did not emit expected compact/value semantics.");
 var sharedDefinitions = genericGenerated.Split('\n')
     .Count(line => line.Contains("Shared_1_Marker", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
 if (sharedDefinitions != 1)
@@ -36,6 +42,7 @@ if (identityDefinitions != 2)
     throw new Exception($"Expected one pointer-shared Identity body plus one wide-value specialization, found {identityDefinitions}.");
 if (!genericGenerated.Split('\n').Any(line => line.Contains("Program_Identity", StringComparison.Ordinal) && line.Contains("int64_t", StringComparison.Ordinal)))
     throw new Exception("Wide generic specialization did not emit a 64-bit ABI.");
+File.Delete(genericObject);
 File.Delete(genericOutput);
 Console.WriteLine("DolphinDotNet compiler integration test passed.");
 
