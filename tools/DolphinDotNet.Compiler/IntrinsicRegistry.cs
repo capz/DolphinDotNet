@@ -13,18 +13,19 @@ internal enum IntrinsicKind
     NullableConstructor,
     NullableHasValue,
     NullableValue,
-    NullableGetValueOrDefault
+    NullableGetValueOrDefault,
+    NullableGetValueOrDefaultValue
 }
 
 internal static class IntrinsicRegistry
 {
     public static IntrinsicKind Classify(MetadataReader md,EntityHandle handle)
     {
-        string? type=null;string? name=null;
+        string? type=null;string? name=null;var parameterCount=-1;
         if(handle.Kind==HandleKind.MemberReference)
         {
             var member=md.GetMemberReference((MemberReferenceHandle)handle);
-            type=MetadataLoader.ResolveTypeName(md,member.Parent);name=md.GetString(member.Name);
+            type=MetadataLoader.ResolveTypeName(md,member.Parent);name=md.GetString(member.Name);var sr=md.GetBlobReader(member.Signature);var sh=sr.ReadSignatureHeader();if(sh.IsGeneric)sr.ReadCompressedInteger();parameterCount=sr.ReadCompressedInteger();
         }
         else if(handle.Kind==HandleKind.MethodDefinition)
         {
@@ -40,6 +41,7 @@ internal static class IntrinsicRegistry
             ("System.Nullable`1",".ctor")=>IntrinsicKind.NullableConstructor,
             ("System.Nullable`1","get_HasValue")=>IntrinsicKind.NullableHasValue,
             ("System.Nullable`1","get_Value")=>IntrinsicKind.NullableValue,
+            ("System.Nullable`1","GetValueOrDefault") when parameterCount==1=>IntrinsicKind.NullableGetValueOrDefaultValue,
             ("System.Nullable`1","GetValueOrDefault")=>IntrinsicKind.NullableGetValueOrDefault,
             ("DolphinDotNet.GameCube.GameCube","WriteLine")=>IntrinsicKind.GameCubeWriteLine,
             ("DolphinDotNet.GameCube.GameCube","ReadButtonsDown")=>IntrinsicKind.GameCubeReadButtonsDown,
