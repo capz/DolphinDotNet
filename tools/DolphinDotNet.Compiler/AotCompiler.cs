@@ -143,8 +143,8 @@ internal static class AotCompiler
         var handle=MetadataTokens.EntityHandle(raw);
         if(handle.Kind==HandleKind.TypeSpecification)
         {
-            var args=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)handle,model);
-            return args.Count==1?Math.Max(1,args[0].Size):4;
+            var typeArgs=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)handle,model);
+            return typeArgs.Count==1?Math.Max(1,typeArgs[0].Size):4;
         }
         if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
         if(handle.Kind!=HandleKind.MemberReference)return 4;
