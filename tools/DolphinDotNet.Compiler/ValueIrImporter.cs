@@ -60,7 +60,7 @@ internal static class ValueIrImporter
                     }
                     case 0x11 or 0xfe0c:
                     {
-                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadLocal(v,index));stack.Add(v);break;
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));var v=New(localStorage[index]>0?CilStackKind.ManagedPointer:ResultKind(analysis,cil));instructions.Add(localStorage[index]>0?new ValueIrAddressOfLocal(v,index):new ValueIrLoadLocal(v,index));stack.Add(v);break;
                     }
                     case 0x13 or 0xfe0e:
                     {
@@ -68,7 +68,7 @@ internal static class ValueIrImporter
                     }
                     case >=0x06 and <=0x09:
                     {
-                        var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadLocal(v,cil.OpCode-0x06));stack.Add(v);break;
+                        var index=cil.OpCode-0x06;var v=New(localStorage[index]>0?CilStackKind.ManagedPointer:ResultKind(analysis,cil));instructions.Add(localStorage[index]>0?new ValueIrAddressOfLocal(v,index):new ValueIrLoadLocal(v,index));stack.Add(v);break;
                     }
                     case >=0x0a and <=0x0d:
                         instructions.Add(new ValueIrStoreLocal(cil.OpCode-0x0a,Pop(stack,cil)));break;
