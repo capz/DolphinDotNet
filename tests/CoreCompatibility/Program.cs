@@ -4,7 +4,7 @@ using DolphinDotNet.Compatibility;
 
 namespace DolphinDotNet.Core.Tests;
 
-internal readonly struct ComparableValue:IEquatable<ComparableValue>,IComparable<ComparableValue>
+internal readonly struct ComparableValue:ICompatEquatable<ComparableValue>,ICompatComparable<ComparableValue>
 {
     public ComparableValue(int value)=>Value=value;
     public int Value{get;}
