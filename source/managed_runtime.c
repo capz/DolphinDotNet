@@ -185,6 +185,48 @@ bool dnd_string_equals(const DndString *a, const DndString *b) {
     return memcmp(a->chars, b->chars, (size_t)a->length * sizeof(uint16_t)) == 0;
 }
 
+uint16_t dnd_string_char_at(const DndString *value, int32_t index) {
+    if (!value) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "String is null."); return 0; }
+    if (index < 0 || (uint32_t)index >= value->length) { dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE, "String index out of range."); return 0; }
+    return value->chars[index];
+}
+
+bool dnd_string_starts_with(const DndString *value, const DndString *prefix) {
+    if (!value) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "String is null."); return false; }
+    if (!prefix) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Prefix is null."); return false; }
+    return prefix->length <= value->length && memcmp(value->chars, prefix->chars, (size_t)prefix->length * sizeof(uint16_t)) == 0;
+}
+
+bool dnd_string_ends_with(const DndString *value, const DndString *suffix) {
+    if (!value) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "String is null."); return false; }
+    if (!suffix) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Suffix is null."); return false; }
+    return suffix->length <= value->length && memcmp(value->chars + value->length - suffix->length, suffix->chars, (size_t)suffix->length * sizeof(uint16_t)) == 0;
+}
+
+int32_t dnd_string_index_of(const DndString *value, const DndString *needle) {
+    if (!value) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "String is null."); return -1; }
+    if (!needle) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Search string is null."); return -1; }
+    if (needle->length == 0) return 0;
+    if (needle->length > value->length) return -1;
+    uint32_t last = value->length - needle->length;
+    for (uint32_t i = 0; i <= last; i++)
+        if (memcmp(value->chars + i, needle->chars, (size_t)needle->length * sizeof(uint16_t)) == 0) return (int32_t)i;
+    return -1;
+}
+
+DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, int32_t start, int32_t length) {
+    if (!value) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "String is null."); return NULL; }
+    if (start < 0 || length < 0 || (uint32_t)start > value->length || (uint32_t)length > value->length - (uint32_t)start) {
+        dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Substring range is invalid."); return NULL;
+    }
+    DndString *result = (DndString *)allocate(heap, &DND_TYPE_STRING, sizeof(DndString) + ((size_t)length + 1) * sizeof(uint16_t));
+    if (!result) return NULL;
+    result->length = (uint32_t)length;
+    if (length) memcpy(result->chars, value->chars + start, (size_t)length * sizeof(uint16_t));
+    result->chars[length] = 0;
+    return result;
+}
+
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length,
     uint32_t element_size, const DndType *element_type, bool references) {
     if (element_size && length > SIZE_MAX / element_size) {
