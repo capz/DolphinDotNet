@@ -180,6 +180,7 @@ void dnd_exception_rethrow_current(void);
 
 void dnd_exception_clear(void);
 void dnd_exception_throw(DndExceptionKind kind, const char *message);
+void dnd_exception_throw_object(DndObject *exception);
 DndExceptionKind dnd_exception_kind(void);
 const char *dnd_exception_message(void);
 #endif
