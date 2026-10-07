@@ -11,7 +11,7 @@ internal sealed record ExceptionRegionModel(int TryOffset,int TryLength,int Hand
  public int HandlerEnd=>HandlerOffset+HandlerLength;
  public bool ContainsTryOffset(int offset)=>offset>=TryOffset&&offset<TryEnd;
 }
-internal sealed record MethodModel(MethodKey Key,MethodDefinitionHandle Handle,bool IsStatic,int ParameterCount,bool ReturnsValue,string AssemblyName,bool IsVirtual=false,bool IsAbstract=false,bool IsNewSlot=false,bool DeclaringTypeIsInterface=false,bool DeclaringTypeIsDelegate=false);
+internal sealed record MethodModel(MethodKey Key,MethodDefinitionHandle Handle,bool IsStatic,int ParameterCount,bool ReturnsValue,string AssemblyName,bool IsVirtual=false,bool IsAbstract=false,bool IsNewSlot=false,bool DeclaringTypeIsInterface=false,bool DeclaringTypeIsDelegate=false,IReadOnlyList<string>? TypeArguments=null);
 internal sealed class AssemblyModel : IDisposable
 {
  public required string Name{get;init;} public required string Path{get;init;} public required FileStream Stream{get;init;} public required PEReader PE{get;init;} public required MetadataReader Metadata{get;init;}
