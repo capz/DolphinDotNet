@@ -78,8 +78,8 @@ internal static class ValueCBackend
         b.Append($"{ReturnCType(method,model)} {functionName}(");
         b.Append(Parameters(method,model));
         b.AppendLine(") {");
-        foreach(var v in values)b.AppendLine($"  intptr_t v{v.Id} = 0; (void)v{v.Id};");
-        foreach(var local in method.Locals)b.AppendLine($"  {CType(local.Kind)} l{local.Index} = 0;");
+        foreach(var v in values)b.AppendLine($"  {CType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
+        foreach(var local in method.Locals)b.AppendLine(local.StorageSize>0?$"  uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {CType(local.Kind)} l{local.Index} = 0;");
         var roots=values.Where(v=>v.Kind==IrValueKind.ObjectReference).Select(v=>$"(DndObject**)&v{v.Id}").ToList();
         roots.AddRange(method.Locals.Where(l=>l.Kind==IrValueKind.ObjectReference).Select(l=>$"(DndObject**)&l{l.Index}"));
         if(method.HasThis)roots.Add("(DndObject**)&a0");
@@ -102,6 +102,18 @@ internal static class ValueCBackend
                     case ValueIrLoadLocal x:b.AppendLine($"  v{x.Result.Id} = l{x.Index};");break;
                     case ValueIrStoreLocal x:b.AppendLine($"  l{x.Index} = v{x.Value.Id};");break;
                     case ValueIrAddressOfLocal x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&l{x.Index};");break;
+                    case ValueIrNullableInit x:
+                    {
+                        var ct=x.ValueSize==8?"int64_t":"int32_t";
+                        b.AppendLine($"  *(uint8_t*)v{x.Address.Id} = 1; *({ct}*)((uint8_t*)v{x.Address.Id}+4) = ({ct})v{x.Value.Id};");break;
+                    }
+                    case ValueIrNullableHasValue x:b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} != 0;");break;
+                    case ValueIrNullableGetValue x:
+                    {
+                        var ct=x.ValueSize==8?"int64_t":"int32_t";
+                        if(x.ThrowIfEmpty)b.AppendLine($"  if(!*(uint8_t*)v{x.Address.Id}) dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION, \"Nullable object must have a value.\");");
+                        b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? *({ct}*)((uint8_t*)v{x.Address.Id}+4) : 0;");break;
+                    }
                     case ValueIrAddressOfArgument x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&a{x.Index};");break;
                     case ValueIrStoreArgument x:b.AppendLine($"  a{x.Index} = v{x.Value.Id};");break;
                     case ValueIrLoadIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  v{x.Result.Id} = *({ct}*)v{x.Address.Id};");break;}
