@@ -305,6 +305,7 @@ internal static class ValueIrImporter
         foreach(var instruction in blocks.SelectMany(b=>b.Instructions))
         {
             if(instruction is ValueIrAddressOfLocal address)addresses[address.Result.Id]=address.Index;
+            else if(instruction is ValueIrInitObject init&&addresses.TryGetValue(init.Address.Id,out var ii)&&init.TypeName=="System.Nullable`1")storage[ii]=Math.Max(storage[ii],8);
             else if(instruction is ValueIrNullableInit nullable&&addresses.TryGetValue(nullable.Address.Id,out var li))storage[li]=Math.Max(storage[li],AlignNullable(nullable.ValueSize));
             else if(instruction is ValueIrNullableGetValue get&&addresses.TryGetValue(get.Address.Id,out var gi))storage[gi]=Math.Max(storage[gi],AlignNullable(get.ValueSize));
             else if(instruction is ValueIrNullableHasValue has&&addresses.TryGetValue(has.Address.Id,out var hi))storage[hi]=Math.Max(storage[hi],8);
