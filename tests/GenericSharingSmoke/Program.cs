@@ -33,6 +33,7 @@ internal static class Program
         stage2 = TestConcreteEnumeration(); if (stage2 != 0) return stage2;
         stage2 = TestGenericInterfaceEnumeration(); if (stage2 != 0) return stage2;
         stage2 = TestNonGenericInterfaceEnumeration(); if (stage2 != 0) return stage2;
+        stage2 = TestCollectionContracts(); if (stage2 != 0) return stage2;
         return 0;
     }
 
@@ -91,9 +92,54 @@ internal static class Program
         return sum == 13 ? 0 : 22;
     }
 
+
+    private static int TestCollectionContracts()
+    {
+        var list = new CompactList<int>();
+        ICollection<int> collection = list;
+        IList<int> indexed = list;
+        IReadOnlyCollection<int> readOnlyCollection = list;
+        IReadOnlyList<int> readOnlyList = list;
+        collection.Add(4); collection.Add(6);
+        if (collection.Count != 2 || readOnlyCollection.Count != 2) return 30;
+        if (indexed[0] != 4 || readOnlyList[1] != 6) return 31;
+        return 0;
+    }
+
     private static T Identity<T>(T value) => value;
 }
 
+
+
+internal sealed class CompactList<T> : IList<T>, IReadOnlyList<T>
+{
+    private T[] _items = new T[4];
+    private int _count;
+    public int Count => _count;
+    public bool IsReadOnly => false;
+    public T this[int index] { get => _items[index]; set => _items[index] = value; }
+    public void Add(T item) { _items[_count++] = item; }
+    public void Clear() => _count = 0;
+    public bool Contains(T item) => IndexOf(item) >= 0;
+    public void CopyTo(T[] array, int arrayIndex) { for (var i=0;i<_count;i++) array[arrayIndex+i]=_items[i]; }
+    public IEnumerator<T> GetEnumerator() => new CompactListEnumerator<T>(this);
+    public int IndexOf(T item) { for (var i=0;i<_count;i++) if (EqualityComparer<T>.Default.Equals(_items[i],item)) return i; return -1; }
+    public void Insert(int index,T item) { throw new NotSupportedException(); }
+    public bool Remove(T item) { throw new NotSupportedException(); }
+    public void RemoveAt(int index) { throw new NotSupportedException(); }
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+}
+
+internal sealed class CompactListEnumerator<T> : IEnumerator<T>
+{
+    private readonly CompactList<T> _list; private int _index=-1;
+    public CompactListEnumerator(CompactList<T> list)=>_list=list;
+    public T Current=>_list[_index];
+    object System.Collections.IEnumerator.Current=>Current!;
+    public bool MoveNext(){_index++;return _index<_list.Count;}
+    public void Reset()=>_index=-1;
+    public void Dispose(){}
+}
 
 internal sealed class IntEnumerable : IEnumerable<int>
 {
