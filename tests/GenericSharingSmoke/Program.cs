@@ -107,10 +107,10 @@ internal static class Program
         if (!value.EndsWith(".net") || value.EndsWith("dol")) return 5;
         if (!value.Contains("phin") || value.Contains("cube")) return 6;
         if (value.IndexOf("phin") != 3 || value.IndexOf("cube") != -1) return 7;
-        if (value.Substring(8) != "net") return 8;
-        if (value.Substring(0, 8) != "dolphin.") return 9;
-        if (string.Concat("game", "cube") != "gamecube") return 10;
-        if (string.Concat(null, "cube") != "cube") return 11;
+        if (!string.Equals(value.Substring(8), "net")) return 8;
+        if (!string.Equals(value.Substring(0, 8), "dolphin.")) return 9;
+        if (!string.Equals(string.Concat("game", "cube"), "gamecube")) return 10;
+        if (!string.Equals(string.Concat(null, "cube"), "cube")) return 11;
         string? missing = null;
         if (!string.Equals(missing, null) || string.Equals(missing, value)) return 12;
         var duplicate = "dolphin.net";
