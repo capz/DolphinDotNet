@@ -15,7 +15,7 @@ internal static class AotCompiler
         {
             var root=LoadAssembly(model,Path.GetFullPath(path));
             LoadDolphinDependencies(model,root);
-            EnsureEnumerationContracts(model);
+            EnsureEnumerationContracts(model); // collection contracts are synthesized here too
             var cor=root.PE.PEHeaders.CorHeader??throw new InvalidDataException("Missing CLI header.");
             if(cor.EntryPointTokenOrRelativeVirtualAddress==0)throw new InvalidDataException("Assembly has no managed entry point.");
             var entry=MetadataTokens.EntityHandle(cor.EntryPointTokenOrRelativeVirtualAddress);
