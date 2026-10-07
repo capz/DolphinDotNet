@@ -119,6 +119,7 @@ jobs:
           test -s DolphinDotNet.elf
           test -s DolphinDotNet.dol
           file DolphinDotNet.elf || true
+          "$DEVKITPPC/bin/powerpc-eabi-size" DolphinDotNet.elf
           ls -lh DolphinDotNet.elf DolphinDotNet.dol
       - uses: actions/upload-artifact@v4
         with:
