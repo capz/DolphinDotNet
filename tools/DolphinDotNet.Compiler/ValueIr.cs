@@ -23,7 +23,7 @@ internal sealed record ValueIrConstant(IrValue Result,long Value):ValueIrInstruc
 internal sealed record ValueIrLoadString(IrValue Result,string Value):ValueIrInstruction;
 internal sealed record ValueIrLoadArgument(IrValue Result,int Index):ValueIrInstruction;
 internal sealed record ValueIrLoadLocal(IrValue Result,int Index):ValueIrInstruction;
-internal sealed record ValueIrLocal(int Index,IrValueKind Kind,int StorageSize=0);
+internal sealed record ValueIrLocal(int Index,IrValueKind Kind,int StorageSize=0,IReadOnlyList<int>? ReferenceOffsets=null);
 internal sealed record ValueIrStoreLocal(int Index,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrStoreLocalStruct(int Index,IrValue SourceAddress,int Size):ValueIrInstruction;
 internal sealed record ValueIrAddressOfLocal(IrValue Result,int Index):ValueIrInstruction;
