@@ -105,6 +105,7 @@ internal static class Program
         if (indexed[0] != 4 || readOnlyList[1] != 6) return 31;
         indexed[1] = 7;
         if (readOnlyList[1] != 7) return 32;
+        if (collection.IsReadOnly) return 33;
         return 0;
     }
 
