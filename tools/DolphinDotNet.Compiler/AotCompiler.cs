@@ -94,22 +94,26 @@ internal static class AotCompiler
         }
     }
 
-    private static IReadOnlyList<int> ReadLocalStorage(AssemblyModel assembly,MethodModel method,CompilationModel model)
+    private static IReadOnlyList<LocalStorage> ReadLocalStorage(AssemblyModel assembly,MethodModel method,CompilationModel model)
     {
         var def=assembly.Metadata.GetMethodDefinition(method.Handle);var body=assembly.PE.GetMethodBody(def.RelativeVirtualAddress);
-        if(body.LocalSignature.IsNil)return Array.Empty<int>();
+        if(body.LocalSignature.IsNil)return Array.Empty<LocalStorage>();
         var signature=assembly.Metadata.GetStandaloneSignature(body.LocalSignature);var reader=assembly.Metadata.GetBlobReader(signature.Signature);reader.ReadSignatureHeader();
-        var count=reader.ReadCompressedInteger();var sizes=new int[count];
+        var count=reader.ReadCompressedInteger();var locals=new LocalStorage[count];
         for(var i=0;i<count;i++)
         {
             var start=reader.Offset;var code=reader.ReadSignatureTypeCode();
             if(code==SignatureTypeCode.GenericTypeInstance)
             {
-                reader.Offset=start;sizes[i]=GenericSharing.ReadGenericLocalStorage(assembly.Metadata,ref reader,model);
+                reader.Offset=start;var size=GenericSharing.ReadGenericLocalStorage(assembly.Metadata,ref reader,model);locals[i]=new LocalStorage(size,size>0?CilStackKind.ManagedPointer:CilStackKind.ObjectReference);
             }
-            else SkipLocalType(assembly.Metadata,ref reader,code,model);
+            else
+            {
+                SkipLocalType(assembly.Metadata,ref reader,code,model);
+                locals[i]=new LocalStorage(0,Kind(code));
+            }
         }
-        return sizes;
+        return locals;
     }
     private static void SkipLocalType(MetadataReader md,ref BlobReader reader,SignatureTypeCode code,CompilationModel model)
     {
