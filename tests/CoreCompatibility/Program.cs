@@ -11,6 +11,7 @@ internal readonly struct ComparableValue:ICompatEquatable<ComparableValue>,IComp
     public bool Equals(ComparableValue other)=>Value==other.Value;
     public override bool Equals(object? obj)=>obj is ComparableValue other&&Equals(other);
     public override int GetHashCode()=>Value*17;
+    public int GetCompatHashCode()=>Value*17;
     public int CompareTo(ComparableValue other)=>Value.CompareTo(other.Value);
 }
 
