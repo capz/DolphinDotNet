@@ -19,6 +19,8 @@ internal static class GenericTypeResolver
         return ReadType(md,model,ref reader,context);
     }
 
+    public static string? ReadSignatureType(MetadataReader md,CompilationModel model,ref BlobReader reader,MethodModel? context=null)=>ReadType(md,model,ref reader,context);
+
     private static string? ReadType(MetadataReader md,CompilationModel model,ref BlobReader reader,MethodModel? context)
     {
         var code=reader.ReadSignatureTypeCode();
