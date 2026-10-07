@@ -15,6 +15,7 @@ internal static class AotCompiler
         {
             var root=LoadAssembly(model,Path.GetFullPath(path));
             LoadDolphinDependencies(model,root);
+            EnsureEnumerationContracts(model);
             var cor=root.PE.PEHeaders.CorHeader??throw new InvalidDataException("Missing CLI header.");
             if(cor.EntryPointTokenOrRelativeVirtualAddress==0)throw new InvalidDataException("Assembly has no managed entry point.");
             var entry=MetadataTokens.EntityHandle(cor.EntryPointTokenOrRelativeVirtualAddress);
@@ -34,7 +35,7 @@ internal static class AotCompiler
                 var body=assembly.PE.GetMethodBody(assembly.Metadata.GetMethodDefinition(method.Handle).RelativeVirtualAddress);
                 var ilBytes=body.GetILBytes()??throw new InvalidDataException($"{method.Key} has no IL body.");
                 var cil=CilDecoder.Decode(ilBytes);
-                var cfg=CilControlFlowGraph.Build(cil);
+                var cfg=CilControlFlowGraph.Build(cil,body.ExceptionRegions);
                 CilStackAnalysis stackAnalysis;try{stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);}catch(Exception ex){throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex);}
                 var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
@@ -215,6 +216,10 @@ internal static class AotCompiler
         if(intrinsic==IntrinsicKind.ArraySegmentArray)return new CilCallStackEffect(1,CilStackKind.ObjectReference);
         if(intrinsic is IntrinsicKind.ArraySegmentOffset or IntrinsicKind.ArraySegmentCount)return new CilCallStackEffect(1,CilStackKind.I4);
         if(intrinsic==IntrinsicKind.ArraySegmentItem){var a=GenericArguments(md,model,i);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(2,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
+        if(intrinsic==IntrinsicKind.ArraySegmentGetEnumerator)return new CilCallStackEffect(1,CilStackKind.ManagedPointer);
+        if(intrinsic==IntrinsicKind.ArraySegmentEnumeratorMoveNext)return new CilCallStackEffect(1,CilStackKind.I4);
+        if(intrinsic==IntrinsicKind.ArraySegmentEnumeratorCurrent){var a=GenericArguments(md,model,i);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(1,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
+        if(intrinsic==IntrinsicKind.ArraySegmentEnumeratorDispose)return new CilCallStackEffect(1,null);
         var handle=MetadataTokens.EntityHandle(raw);
         if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
         if(handle.Kind==HandleKind.MemberReference)
@@ -254,6 +259,17 @@ internal static class AotCompiler
         var name=md.IsAssembly?md.GetString(md.GetAssemblyDefinition().Name):Path.GetFileNameWithoutExtension(path);
         var assembly=new AssemblyModel{Name=name,Path=path,Stream=stream,PE=pe,Metadata=md};
         model.Assemblies[name]=assembly;MetadataLoader.LoadInto(model,md,name);return assembly;
+    }
+
+    private static void EnsureEnumerationContracts(CompilationModel model)
+    {
+        void Type(string name,params string[] interfaces){if(model.Types.ContainsKey(name))return;var dot=name.LastIndexOf('.');model.Types[name]=new(dot<0?"":name[..dot],dot<0?name:name[(dot+1)..],name,null,0,true,false,interfaces);}
+        void Method(string type,string name,bool returnsValue){if(model.Methods.Values.Any(m=>m.Key.TypeName==type&&m.Key.Name==name))return;var key=new MethodKey(type,name,"<contracts>",name);var kind=!returnsValue?(CilStackKind?)null:name=="MoveNext"?CilStackKind.I4:CilStackKind.ObjectReference;model.Methods[key]=new(key,default,false,0,returnsValue,"<contracts>",true,true,true,true,Abi:new GenericAbi(Array.Empty<CilStackKind>(),kind));}
+        Type("System.IDisposable");Method("System.IDisposable","Dispose",false);
+        Type("System.Collections.IEnumerable");Method("System.Collections.IEnumerable","GetEnumerator",true);
+        Type("System.Collections.IEnumerator");Method("System.Collections.IEnumerator","get_Current",true);Method("System.Collections.IEnumerator","MoveNext",true);Method("System.Collections.IEnumerator","Reset",false);
+        Type("System.Collections.Generic.IEnumerable`1","System.Collections.IEnumerable");Method("System.Collections.Generic.IEnumerable`1","GetEnumerator",true);
+        Type("System.Collections.Generic.IEnumerator`1","System.IDisposable","System.Collections.IEnumerator");Method("System.Collections.Generic.IEnumerator`1","get_Current",true);
     }
 
     private static void LoadDolphinDependencies(CompilationModel model,AssemblyModel root)

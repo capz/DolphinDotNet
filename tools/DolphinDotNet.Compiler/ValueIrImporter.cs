@@ -31,6 +31,7 @@ internal static class ValueIrImporter
 
         foreach(var block in blocks)
         {
+            if(!analysis.EntryStates.ContainsKey(block.Id))continue;
             var instructions=new List<ValueIrInstruction>();
             var stack=new List<IrValue>();
             if(entryValues.TryGetValue(block.Id,out var incoming))stack.AddRange(incoming);
@@ -196,6 +197,10 @@ internal static class ValueIrImporter
                         if(ik==IntrinsicKind.ArraySegmentConstructor){var segmentCount=Pop(stack,cil);var offset=Pop(stack,cil);var array=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrStructStore(address,0,array,4,true));instructions.Add(new ValueIrStructStore(address,4,offset,4,false));instructions.Add(new ValueIrStructStore(address,8,segmentCount,4,false));break;}
                         if(ik is IntrinsicKind.ArraySegmentArray or IntrinsicKind.ArraySegmentOffset or IntrinsicKind.ArraySegmentCount){var address=Pop(stack,cil);var isArray=ik==IntrinsicKind.ArraySegmentArray;var offset=ik==IntrinsicKind.ArraySegmentOffset?4:ik==IntrinsicKind.ArraySegmentCount?8:0;var value=New(isArray?CilStackKind.ObjectReference:CilStackKind.I4);instructions.Add(new ValueIrStructLoad(value,address,offset,4,isArray));stack.Add(value);break;}
                         if(ik==IntrinsicKind.ArraySegmentItem){var a=genericArguments(cil);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var index=Pop(stack,cil);var address=Pop(stack,cil);var value=New(rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrArraySegmentItem(value,address,index,rep.Size,rep.ContainsReferences));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ArraySegmentGetEnumerator){var segment=Pop(stack,cil);var value=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrArraySegmentGetEnumerator(value,segment));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ArraySegmentEnumeratorMoveNext){var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrEnumeratorMoveNext(value,address));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ArraySegmentEnumeratorCurrent){var a=genericArguments(cil);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var address=Pop(stack,cil);var value=New(rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrEnumeratorCurrent(value,address,rep.Size,rep.ContainsReferences));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ArraySegmentEnumeratorDispose){Pop(stack,cil);break;}
                         if(ik==IntrinsicKind.GameCubeWriteLine){instructions.Add(new ValueIrConsoleWriteLine(Pop(stack,cil)));break;}
                         if(ik==IntrinsicKind.GameCubeReadButtonsDown){var port=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrReadButtonsDown(value,port));stack.Add(value);break;}
                         if(ik==IntrinsicKind.GameCubePresentDemoFrame){instructions.Add(new ValueIrPresentDemoFrame(Pop(stack,cil)));break;}
@@ -240,8 +245,10 @@ internal static class ValueIrImporter
                     {
                         var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrStoreStaticField(Pop(stack,cil),field.DeclaringType,field.Name));break;
                     }
-                    case 0x2b or 0x38:
+                    case 0x2b or 0x38 or 0xdc:
                         terminator=new ValueIrJump(Target(blocks,cil));break;
+                    case 0xdd or 0xde:
+                        stack.Clear();terminator=new ValueIrJump(Target(blocks,cil));break;
                     case 0x2c or 0x39:
                     {
                         var condition=Pop(stack,cil);var target=Target(blocks,cil);terminator=new ValueIrBranch(condition,null,ValueIrComparison.NonZero,false,Fallthrough(blocks,block,cil),target);break;
@@ -349,7 +356,7 @@ internal static class ValueIrImporter
     }
 
     private static IrValue Pop(List<IrValue>s,CilInstruction i){if(s.Count==0)throw new InvalidDataException($"Value IR stack underflow at IL_{i.Offset:x4}.");var v=s[^1];s.RemoveAt(s.Count-1);return v;}
-    private static int Target(IReadOnlyList<CilBasicBlock>b,CilInstruction i){var offset=(i.Operand as CilBranchTarget)?.Offset??throw new InvalidDataException("Missing branch target.");return b.Single(x=>x.StartOffset==offset).Id;}
+    private static int Target(IReadOnlyList<CilBasicBlock>b,CilInstruction i){var offset=(i.Operand as CilBranchTarget)?.Offset??throw new InvalidDataException($"Missing branch target for opcode 0x{i.OpCode:x4} at IL_{i.Offset:x4}.");return b.Single(x=>x.StartOffset==offset).Id;}
     private static int Fallthrough(IReadOnlyList<CilBasicBlock>b,CilBasicBlock current,CilInstruction i)=>b.Single(x=>x.StartOffset==i.EndOffset).Id;
     private static CilStackKind Merge(IrValueKind a,IrValueKind b)=>a==b?Unmap(a):CilStackKind.Unknown;
     private static IrValueKind Map(CilStackKind k)=>k switch{CilStackKind.I4=>IrValueKind.I4,CilStackKind.I8=>IrValueKind.I8,CilStackKind.NativeInt=>IrValueKind.NativeInt,CilStackKind.Float=>IrValueKind.R8,CilStackKind.ObjectReference=>IrValueKind.ObjectReference,CilStackKind.ManagedPointer=>IrValueKind.ManagedPointer,_=>IrValueKind.Unknown};

@@ -30,6 +30,9 @@ internal static class Program
         var stage2 = TestNullableEquality(present, empty); if (stage2 != 0) return stage2;
         stage2 = TestPairs(); if (stage2 != 0) return stage2;
         stage2 = TestSegment(); if (stage2 != 0) return stage2;
+        stage2 = TestConcreteEnumeration(); if (stage2 != 0) return stage2;
+        stage2 = TestGenericInterfaceEnumeration(); if (stage2 != 0) return stage2;
+        stage2 = TestNonGenericInterfaceEnumeration(); if (stage2 != 0) return stage2;
         return 0;
     }
 
@@ -61,7 +64,55 @@ internal static class Program
         return 0;
     }
 
+    private static int TestConcreteEnumeration()
+    {
+        var values = new int[3]; values[0] = 3; values[1] = 4; values[2] = 5;
+        var segment = new ArraySegment<int>(values, 1, 2);
+        var sum = 0;
+        foreach (var value in segment) sum += value;
+        return sum == 9 ? 0 : 20;
+    }
+
+    private static int TestGenericInterfaceEnumeration()
+    {
+        var data = new int[3]; data[0] = 2; data[1] = 3; data[2] = 4;
+        IEnumerable<int> values = new IntEnumerable(data);
+        var sum = 0;
+        foreach (var value in values) sum += value;
+        return sum == 9 ? 0 : 21;
+    }
+
+    private static int TestNonGenericInterfaceEnumeration()
+    {
+        var data = new int[2]; data[0] = 6; data[1] = 7;
+        System.Collections.IEnumerable values = new IntEnumerable(data);
+        var sum = 0;
+        foreach (int value in values) sum += value;
+        return sum == 13 ? 0 : 22;
+    }
+
     private static T Identity<T>(T value) => value;
+}
+
+
+internal sealed class IntEnumerable : IEnumerable<int>
+{
+    private readonly int[] _values;
+    public IntEnumerable(int[] values) => _values = values;
+    public IEnumerator<int> GetEnumerator() => new IntEnumerator(_values);
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+}
+
+internal sealed class IntEnumerator : IEnumerator<int>
+{
+    private readonly int[] _values;
+    private int _index = -1;
+    public IntEnumerator(int[] values) => _values = values;
+    public int Current => _values[_index];
+    object System.Collections.IEnumerator.Current => Current;
+    public bool MoveNext() { _index++; return _index < _values.Length; }
+    public void Reset() => _index = -1;
+    public void Dispose() { }
 }
 
 internal static class Shared<T>

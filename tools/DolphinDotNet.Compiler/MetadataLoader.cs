@@ -9,7 +9,7 @@ internal static class MetadataLoader
   foreach(var th in md.TypeDefinitions)
   {
    var type=md.GetTypeDefinition(th);var ns=md.GetString(type.Namespace);var name=md.GetString(type.Name);if(name=="<Module>")continue;
-   var full=Full(ns,name);var baseType=ResolveTypeName(md,type.BaseType);var isInterface=(type.Attributes&TypeAttributes.Interface)!=0;
+   var full=DefinitionFullName(md,th);var baseType=ResolveTypeName(md,type.BaseType);var isInterface=(type.Attributes&TypeAttributes.Interface)!=0;
    var interfaces=type.GetInterfaceImplementations().Select(h=>ResolveTypeName(md,md.GetInterfaceImplementation(h).Interface)).Where(x=>x is not null).Cast<string>().ToArray();
    pending.Add((th,ns,name,full,baseType,isInterface,baseType=="System.ValueType"||baseType=="System.Enum",interfaces));
   }
@@ -80,5 +80,7 @@ internal static class MetadataLoader
  }
  private static (int Size,bool Reference) ReadTypeHandleLayout(MetadataReader md,ref BlobReader r,CompilationModel model){var h=r.ReadTypeHandle();var name=ResolveTypeName(md,h);return name is not null&&model.Types.TryGetValue(name,out var t)&&t.IsValueType?(Math.Max(1,t.InstanceSize),false):(4,true);}
  private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
+ private static string DefinitionFullName(MetadataReader md,TypeDefinitionHandle handle){var t=md.GetTypeDefinition(handle);var name=md.GetString(t.Name);var declaring=t.GetDeclaringType();return declaring.IsNil?Full(md.GetString(t.Namespace),name):DefinitionFullName(md,declaring)+"+"+name;}
+ private static string ReferenceFullName(MetadataReader md,TypeReferenceHandle handle){var t=md.GetTypeReference(handle);var name=md.GetString(t.Name);return t.ResolutionScope.Kind==HandleKind.TypeReference?ReferenceFullName(md,(TypeReferenceHandle)t.ResolutionScope)+"+"+name:Full(md.GetString(t.Namespace),name);}
  private static string Full(string ns,string name)=>string.IsNullOrEmpty(ns)?name:ns+"."+name;
 }

@@ -26,7 +26,11 @@ internal enum IntrinsicKind
     ArraySegmentArray,
     ArraySegmentOffset,
     ArraySegmentCount,
-    ArraySegmentItem
+    ArraySegmentItem,
+    ArraySegmentGetEnumerator,
+    ArraySegmentEnumeratorMoveNext,
+    ArraySegmentEnumeratorCurrent,
+    ArraySegmentEnumeratorDispose
 }
 
 internal static class IntrinsicRegistry
@@ -67,9 +71,20 @@ internal static class IntrinsicRegistry
             ("System.ArraySegment`1","get_Offset")=>IntrinsicKind.ArraySegmentOffset,
             ("System.ArraySegment`1","get_Count")=>IntrinsicKind.ArraySegmentCount,
             ("System.ArraySegment`1","get_Item")=>IntrinsicKind.ArraySegmentItem,
+            ("System.ArraySegment`1","GetEnumerator")=>IntrinsicKind.ArraySegmentGetEnumerator,
+            ("System.ArraySegment`1+Enumerator","MoveNext")=>IntrinsicKind.ArraySegmentEnumeratorMoveNext,
+            ("System.ArraySegment`1+Enumerator","get_Current")=>IntrinsicKind.ArraySegmentEnumeratorCurrent,
+            ("System.ArraySegment`1+Enumerator","Dispose")=>IntrinsicKind.ArraySegmentEnumeratorDispose,
             ("DolphinDotNet.GameCube.GameCube","WriteLine")=>IntrinsicKind.GameCubeWriteLine,
             ("DolphinDotNet.GameCube.GameCube","ReadButtonsDown")=>IntrinsicKind.GameCubeReadButtonsDown,
             ("DolphinDotNet.GameCube.GameCube","PresentDemoFrame")=>IntrinsicKind.GameCubePresentDemoFrame,
+            (_, "GetEnumerator") when type?.Contains("ArraySegment",StringComparison.Ordinal)==true=>IntrinsicKind.ArraySegmentGetEnumerator,
+            (_, "MoveNext") when type?.Contains("ArraySegment",StringComparison.Ordinal)==true&&type.Contains("Enumerator",StringComparison.Ordinal)=>IntrinsicKind.ArraySegmentEnumeratorMoveNext,
+            (_, "get_Current") when type?.Contains("ArraySegment",StringComparison.Ordinal)==true&&type.Contains("Enumerator",StringComparison.Ordinal)=>IntrinsicKind.ArraySegmentEnumeratorCurrent,
+            (_, "Dispose") when type?.Contains("ArraySegment",StringComparison.Ordinal)==true&&type.Contains("Enumerator",StringComparison.Ordinal)=>IntrinsicKind.ArraySegmentEnumeratorDispose,
+            (_, "MoveNext") when type is "Enumerator" or "System.Enumerator"=>IntrinsicKind.ArraySegmentEnumeratorMoveNext,
+            (_, "get_Current") when type is "Enumerator" or "System.Enumerator"=>IntrinsicKind.ArraySegmentEnumeratorCurrent,
+            (_, "Dispose") when type is "Enumerator" or "System.Enumerator"=>IntrinsicKind.ArraySegmentEnumeratorDispose,
             _=>IntrinsicKind.None
         };
     }
