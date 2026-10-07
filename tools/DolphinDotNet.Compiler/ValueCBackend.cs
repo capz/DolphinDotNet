@@ -375,7 +375,9 @@ internal static class ValueCBackend
                 implementation=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==current&&m.Key.Name==contract.Key.Name&&m.Key.Signature==contract.Key.Signature&&compiled.Contains(m.Key));
                 if(implementation is null&&iface.Contains('[',StringComparison.Ordinal))
                 {
-                    var compatible=model.Methods.Values.Where(m=>m.Key.TypeName==current&&m.Key.Name==contract.Key.Name&&m.ParameterCount==contract.ParameterCount&&compiled.Contains(m.Key)).ToArray();
+                    var contractParameters=ParameterTypes(contract,model);
+                    var compatible=model.Methods.Values.Where(m=>m.Key.TypeName==current&&m.Key.Name==contract.Key.Name&&m.ParameterCount==contract.ParameterCount&&compiled.Contains(m.Key))
+                        .Where(m=>ParameterTypes(m,model).SequenceEqual(contractParameters,StringComparer.Ordinal)).ToArray();
                     if(compatible.Length==1)implementation=compatible[0];
                 }
                 if(implementation is not null)break;
@@ -384,6 +386,18 @@ internal static class ValueCBackend
         }
         return result;
     }
+    private static IReadOnlyList<string> ParameterTypes(MethodModel method,CompilationModel model)
+    {
+        var assembly=model.Assemblies[method.AssemblyName];var def=assembly.Metadata.GetMethodDefinition(method.Handle);
+        var reader=assembly.Metadata.GetBlobReader(def.Signature);var header=reader.ReadSignatureHeader();
+        if(header.IsGeneric)reader.ReadCompressedInteger();
+        var count=reader.ReadCompressedInteger();
+        _=GenericTypeResolver.ReadSignatureType(assembly.Metadata,model,ref reader,method);
+        var result=new string[count];
+        for(var i=0;i<count;i++)result[i]=GenericTypeResolver.ReadSignatureType(assembly.Metadata,model,ref reader,method)??"?";
+        return result;
+    }
+
     private static bool IsDispatchTarget(MethodKey key,CompilationModel model)
     {
         if(model.Methods.TryGetValue(key,out var m)&&m.IsVirtual)return true;
