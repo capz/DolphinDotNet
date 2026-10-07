@@ -50,7 +50,7 @@ internal static class MetadataLoader
   var code=r.ReadSignatureTypeCode();
   if(code!=SignatureTypeCode.GenericTypeInstance)return null;
   var kind=r.ReadSignatureTypeCode();
-  if(kind is not (SignatureTypeCode.Class or SignatureTypeCode.ValueType))return null;
+  if(kind!=SignatureTypeCode.TypeHandle)return null;
   return ResolveTypeName(md,r.ReadTypeHandle());
  }
  private static (int Parameters,bool ReturnsValue) ReadMethodSignature(MetadataReader md,BlobHandle sig){var r=md.GetBlobReader(sig);var h=r.ReadSignatureHeader();if(h.IsGeneric)r.ReadCompressedInteger();int p=r.ReadCompressedInteger();var ret=r.ReadSignatureTypeCode();return(p,ret!=SignatureTypeCode.Void);}
