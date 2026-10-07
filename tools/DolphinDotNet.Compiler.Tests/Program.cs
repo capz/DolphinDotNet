@@ -34,6 +34,24 @@ if (!genericGenerated.Contains("DND_EXCEPTION_INVALID_OPERATION", StringComparis
 if (!genericGenerated.Contains("DND_TYPE_INT64", StringComparison.Ordinal)) throw new Exception("Wide nullable boxing missing.");
 if (!genericGenerated.Contains("dnd_managed_array_at", StringComparison.Ordinal)) throw new Exception("ArraySegment indexer lowering missing.");
 if (!genericGenerated.Contains("(DndObject**)(l", StringComparison.Ordinal)) throw new Exception("Embedded generic value GC roots missing.");
+if (!genericGenerated.Contains("uint8_t enum_", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("int32_t *cur=", StringComparison.Ordinal))
+    throw new Exception("Concrete ArraySegment<T> struct enumerator lowering missing.");
+if (!genericGenerated.Contains("dnd_interface_resolve", StringComparison.Ordinal))
+    throw new Exception("Interface enumeration dispatch lowering missing.");
+if (!genericGenerated.Contains("dnd_type_System_Collections_Generic_IEnumerable_1", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_type_System_Collections_Generic_IEnumerator_1", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_type_System_Collections_IEnumerable", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_type_System_Collections_IEnumerator", StringComparison.Ordinal))
+    throw new Exception("Generic/non-generic enumeration interface metadata missing.");
+var concreteEnumerationStart = genericGenerated.IndexOf("Program_TestConcreteEnumeration", StringComparison.Ordinal);
+var genericInterfaceStart = genericGenerated.IndexOf("Program_TestGenericInterfaceEnumeration", StringComparison.Ordinal);
+if (concreteEnumerationStart < 0 || genericInterfaceStart <= concreteEnumerationStart)
+    throw new Exception("Enumeration test bodies missing from AOT output.");
+var concreteEnumerationBody = genericGenerated[concreteEnumerationStart..genericInterfaceStart];
+if (concreteEnumerationBody.Contains("dnd_object_new", StringComparison.Ordinal) ||
+    concreteEnumerationBody.Contains("dnd_box_", StringComparison.Ordinal))
+    throw new Exception("Concrete foreach unexpectedly allocates or boxes.");
 var sharedDefinitions = genericGenerated.Split('\n')
     .Count(line => line.Contains("Shared_1_Marker", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
 if (sharedDefinitions != 1)
