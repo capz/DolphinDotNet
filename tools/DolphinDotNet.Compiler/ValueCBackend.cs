@@ -78,6 +78,7 @@ internal static class ValueCBackend
         b.Append($"{ReturnCType(method,model)} {functionName}(");
         b.Append(Parameters(method,model));
         b.AppendLine(") {");
+        for(var ai=0;ai<method.ParameterCount+(method.HasThis?1:0);ai++)b.AppendLine($"  (void)a{ai};");
         foreach(var v in values)b.AppendLine($"  {ValueStorageCType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
         foreach(var local in method.Locals){b.AppendLine(local.StorageSize>0?$"  uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {CType(local.Kind)} l{local.Index} = 0;");b.AppendLine($"  (void)l{local.Index};");}
         var roots=values.Where(v=>v.Kind==IrValueKind.ObjectReference).Select(v=>$"(DndObject**)&v{v.Id}").ToList();
@@ -124,6 +125,16 @@ internal static class ValueCBackend
                     case ValueIrCopyObject x:b.AppendLine($"  memcpy((void*)v{x.Destination.Id}, (void*)v{x.Source.Id}, {ValueTypeSize(x.TypeName,model)}u);");break;
                     case ValueIrConvert x:b.AppendLine($"  v{x.Result.Id} = ({CType(x.Result.Kind)})v{x.Value.Id};");break;
                     case ValueIrBinary x:{var unsigned=x.Operation.EndsWith(".un",StringComparison.Ordinal);var op=Op(x.Operation);var l=unsigned?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";var r=unsigned?$"(uintptr_t)v{x.Right.Id}":$"v{x.Right.Id}";b.AppendLine($"  v{x.Result.Id} = {l} {op} {r};");break;}
+                    case ValueIrObjectEquals x:
+                    {
+                        b.AppendLine($"  if (v{x.Left.Id} == v{x.Right.Id}) v{x.Result.Id}=1;");
+                        b.AppendLine($"  else if (!v{x.Left.Id} || !v{x.Right.Id}) v{x.Result.Id}=0;");
+                        b.AppendLine($"  else if (((DndObject*)v{x.Left.Id})->type != ((DndObject*)v{x.Right.Id})->type) v{x.Result.Id}=0;");
+                        b.AppendLine($"  else if (((DndObject*)v{x.Left.Id})->type == &DND_TYPE_BOXED_INT32) v{x.Result.Id}=dnd_unbox_i32((DndObject*)v{x.Left.Id})==dnd_unbox_i32((DndObject*)v{x.Right.Id});");
+                        b.AppendLine($"  else if (((DndObject*)v{x.Left.Id})->type == &DND_TYPE_INT64) v{x.Result.Id}=dnd_unbox_scalar((DndObject*)v{x.Left.Id},&DND_TYPE_INT64,8u)==dnd_unbox_scalar((DndObject*)v{x.Right.Id},&DND_TYPE_INT64,8u);");
+                        b.AppendLine($"  else v{x.Result.Id}=0;");
+                        break;
+                    }
                     case ValueIrLoadFunction x:
                         if(x.Virtual&&x.Object is { } functionObject){var slot=VirtualSlot(x.Target,model);b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_virtual_resolve((DndObject*)v{functionObject.Id}, {slot}u);");}
                         else b.AppendLine($"  v{x.Result.Id} = (intptr_t){WrapperSymbol(x.Target)};");
@@ -200,7 +211,7 @@ internal static class ValueCBackend
                         else if(IsScalarBoxType(x.TypeName))b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_unbox_scalar((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)}, {ValueTypeSize(x.TypeName,model)}u);");
                         else throw new NotSupportedException($"Unboxing {x.TypeName} is not implemented.");
                         break;
-                    case ValueIrNewArray x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_array_new_typed(dnd_value_heap, (uint32_t)v{x.Length.Id}, {x.ElementSize}u, {TypeExpr(x.ElementType)}, {(x.ElementsAreReferences?"true":"false")});");break;
+                    case ValueIrNewArray x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_array_new_typed(dnd_value_heap, (uint32_t)v{x.Length.Id}, {x.ElementSize}u, {(x.ElementType=="$generic"?(x.ElementsAreReferences?"&DND_TYPE_OBJECT":"NULL"):TypeExpr(x.ElementType))}, {(x.ElementsAreReferences?"true":"false")});");break;
                     case ValueIrArrayElementAddress x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_array_element_address((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id});");break;
                     case ValueIrArrayLength x:b.AppendLine($"  v{x.Result.Id} = dnd_array_length((DndArray*)v{x.Array.Id});");break;
                     case ValueIrLoadElement x:b.AppendLine(x.Reference?$"  v{x.Result.Id} = (intptr_t)dnd_array_load_ref((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id});":$"  v{x.Result.Id} = dnd_array_load_i32((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id});");break;
@@ -287,7 +298,9 @@ internal static class ValueCBackend
     private static int InterfaceSlot(MethodKey target,CompilationModel model)
     {
         var methods=model.Methods.Values.Where(m=>m.Key.TypeName==target.TypeName&&m.IsVirtual&&!m.Key.Signature.Contains("|contract:",StringComparison.Ordinal)).OrderBy(m=>m.Handle.GetHashCode()).ToList();
-        var slot=methods.FindIndex(m=>m.Key.Name==target.Name&&m.ParameterCount==(model.Methods.TryGetValue(target,out var contract)?contract.ParameterCount:0));
+        var parameterCount=model.Methods.TryGetValue(target,out var contract)?contract.ParameterCount:0;
+        var slot=methods.FindIndex(m=>m.Key.Name==target.Name&&m.ParameterCount==parameterCount);
+        if(slot<0&&target.Signature.Contains("|contract:",StringComparison.Ordinal))slot=methods.FindIndex(m=>m.Key.Name==target.Name);
         if(slot<0)throw new NotSupportedException($"No interface slot for {target}.");return slot;
     }
     private static int VirtualSlot(MethodKey target,CompilationModel model)

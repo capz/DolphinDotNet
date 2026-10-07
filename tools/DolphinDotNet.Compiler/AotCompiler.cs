@@ -15,7 +15,7 @@ internal static class AotCompiler
         {
             var root=LoadAssembly(model,Path.GetFullPath(path));
             LoadDolphinDependencies(model,root);
-            EnsureEnumerationContracts(model);
+            EnsureEnumerationContracts(model); // collection contracts are synthesized here too
             var cor=root.PE.PEHeaders.CorHeader??throw new InvalidDataException("Missing CLI header.");
             if(cor.EntryPointTokenOrRelativeVirtualAddress==0)throw new InvalidDataException("Assembly has no managed entry point.");
             var entry=MetadataTokens.EntityHandle(cor.EntryPointTokenOrRelativeVirtualAddress);
@@ -37,7 +37,7 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil,body.ExceptionRegions);
                 CilStackAnalysis stackAnalysis;try{stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);}catch(Exception ex){throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex);}
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),i=>ResolveGenericTypeParameter(assembly.Metadata,model,method,i));
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
@@ -134,6 +134,21 @@ internal static class AotCompiler
     {
         if(i.Operand is not CilMetadataToken { Token: var raw })return null;
         try{return MetadataLoader.ResolveTypeName(md,MetadataTokens.EntityHandle(raw));}catch{return null;}
+    }
+
+    private static GenericRepresentation? ResolveGenericTypeParameter(MetadataReader md,CompilationModel model,MethodModel method,CilInstruction i)
+    {
+        if(i.Operand is not CilMetadataToken { Token: var raw })return null;
+        var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind!=HandleKind.TypeSpecification)return null;
+        var reader=md.GetBlobReader(md.GetTypeSpecification((TypeSpecificationHandle)handle).Signature);
+        if(reader.ReadSignatureTypeCode()!=SignatureTypeCode.GenericTypeParameter)return null;
+        var index=reader.ReadCompressedInteger();
+        var marker="|g:";var pos=method.Key.Signature.IndexOf(marker,StringComparison.Ordinal);
+        if(pos<0)return new GenericRepresentation(GenericRepresentationKind.PointerSized,4);
+        var keys=method.Key.Signature[(pos+marker.Length)..].Split(',');
+        if(index>=keys.Length)return null;
+        return keys[index]=="v8"?new GenericRepresentation(GenericRepresentationKind.ValueType,8):new GenericRepresentation(GenericRepresentationKind.PointerSized,4);
     }
 
     private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i)
@@ -270,6 +285,10 @@ internal static class AotCompiler
         Type("System.Collections.IEnumerator");Method("System.Collections.IEnumerator","get_Current",true);Method("System.Collections.IEnumerator","MoveNext",true);Method("System.Collections.IEnumerator","Reset",false);
         Type("System.Collections.Generic.IEnumerable`1","System.Collections.IEnumerable");Method("System.Collections.Generic.IEnumerable`1","GetEnumerator",true);
         Type("System.Collections.Generic.IEnumerator`1","System.IDisposable","System.Collections.IEnumerator");Method("System.Collections.Generic.IEnumerator`1","get_Current",true);
+        Type("System.Collections.Generic.ICollection`1","System.Collections.Generic.IEnumerable`1");Method("System.Collections.Generic.ICollection`1","get_Count",true);Method("System.Collections.Generic.ICollection`1","get_IsReadOnly",true);Method("System.Collections.Generic.ICollection`1","Add",false);Method("System.Collections.Generic.ICollection`1","Clear",false);Method("System.Collections.Generic.ICollection`1","Contains",true);Method("System.Collections.Generic.ICollection`1","CopyTo",false);Method("System.Collections.Generic.ICollection`1","Remove",true);
+        Type("System.Collections.Generic.IList`1","System.Collections.Generic.ICollection`1");Method("System.Collections.Generic.IList`1","get_Item",true);Method("System.Collections.Generic.IList`1","set_Item",false);Method("System.Collections.Generic.IList`1","IndexOf",true);Method("System.Collections.Generic.IList`1","Insert",false);Method("System.Collections.Generic.IList`1","RemoveAt",false);
+        Type("System.Collections.Generic.IReadOnlyCollection`1","System.Collections.Generic.IEnumerable`1");Method("System.Collections.Generic.IReadOnlyCollection`1","get_Count",true);
+        Type("System.Collections.Generic.IReadOnlyList`1","System.Collections.Generic.IReadOnlyCollection`1");Method("System.Collections.Generic.IReadOnlyList`1","get_Item",true);
     }
 
     private static void LoadDolphinDependencies(CompilationModel model,AssemblyModel root)

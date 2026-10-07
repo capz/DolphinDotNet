@@ -15,7 +15,8 @@ internal static class ValueIrImporter
         Func<CilInstruction,IReadOnlyList<GenericRepresentation>> genericArguments,
         Func<CilInstruction,string?> resolveString,
         Func<CilInstruction,FieldModel?> resolveField,
-        Func<CilInstruction,string?> resolveType)
+        Func<CilInstruction,string?> resolveType,
+        Func<CilInstruction,GenericRepresentation?> resolveGenericTypeParameter)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -103,7 +104,13 @@ internal static class ValueIrImporter
                     }
                     case 0x8c:
                     {
-                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);if(type=="System.Nullable`1")instructions.Add(new ValueIrBoxNullable(result,input,nullableValueSize(cil)));else instructions.Add(new ValueIrBox(result,input,type));stack.Add(result);break;
+                        var type=resolveType(cil);var generic=type is null?resolveGenericTypeParameter(cil):null;var input=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);
+                        if(generic is { ContainsReferences:true })instructions.Add(new ValueIrConvert(result,input));
+                        else if(generic is { } rep)instructions.Add(new ValueIrBox(result,input,rep.Size==8?"System.Int64":"System.Int32"));
+                        else if(type=="System.Nullable`1")instructions.Add(new ValueIrBoxNullable(result,input,nullableValueSize(cil)));
+                        else if(type is not null)instructions.Add(new ValueIrBox(result,input,type));
+                        else throw new NotSupportedException($"Unable to resolve boxed type at IL_{cil.Offset:x4}.");
+                        stack.Add(result);break;
                     }
                     case 0xa5:
                     {
@@ -111,9 +118,11 @@ internal static class ValueIrImporter
                     }
                     case 0x8d:
                     {
-                        var length=Pop(stack,cil);var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve array element type at IL_{cil.Offset:x4}.");
-                        var reference=IsReferenceType(type);var result=New(CilStackKind.ObjectReference);
-                        instructions.Add(new ValueIrNewArray(result,length,type,reference,ElementSize(type)));stack.Add(result);break;
+                        var length=Pop(stack,cil);var type=resolveType(cil);var generic=type is null?resolveGenericTypeParameter(cil):null;
+                        if(type is null&&generic is null)throw new NotSupportedException($"Unable to resolve array element type at IL_{cil.Offset:x4}.");
+                        var reference=generic?.ContainsReferences??(type is not null&&IsReferenceType(type));var result=New(CilStackKind.ObjectReference);
+                        var elementType=type??"$generic";var elementSize=generic is { } g?(uint)g.Size:ElementSize(type!);
+                        instructions.Add(new ValueIrNewArray(result,length,elementType,reference,elementSize));stack.Add(result);break;
                     }
                     case 0x8e:
                     {
@@ -132,9 +141,24 @@ internal static class ValueIrImporter
                     {
                         var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);instructions.Add(new ValueIrStoreElement(array,index,value,cil.OpCode==0xa2));break;
                     }
+                    case 0xa3:
+                    {
+                        var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array load at IL_{cil.Offset:x4}.");var index=Pop(stack,cil);var array=Pop(stack,cil);
+                        var kind=rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4;var result=New(kind);
+                        instructions.Add(new ValueIrLoadElement(result,array,index,rep.ContainsReferences));stack.Add(result);break;
+                    }
+                    case 0xa4:
+                    {
+                        var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array store at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);
+                        instructions.Add(new ValueIrStoreElement(array,index,value,rep.ContainsReferences));break;
+                    }
                     case 0xfe15:
                     {
-                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve initobj type at IL_{cil.Offset:x4}.");instructions.Add(new ValueIrInitObject(Pop(stack,cil),type));break;
+                        var type=resolveType(cil);var generic=type is null?resolveGenericTypeParameter(cil):null;
+                        if(type is null&&generic is null)throw new NotSupportedException($"Unable to resolve initobj type at IL_{cil.Offset:x4}.");
+                        var address=Pop(stack,cil);
+                        if(generic is { } rep){var zero=New(rep.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrConstant(zero,0));instructions.Add(new ValueIrStoreIndirect(address,zero,rep.Size,rep.ContainsReferences));}
+                        else instructions.Add(new ValueIrInitObject(address,type!));break;
                     }
                     case 0x70:
                     {
@@ -184,7 +208,7 @@ internal static class ValueIrImporter
                     {
                         var ik=intrinsic(cil);
                         if(ik==IntrinsicKind.ObjectGetHashCode){var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableHash(value,input,4));else instructions.Add(new ValueIrOpaqueStackEffect(1,new[]{value},cil.OpCode));stack.Add(value);break;}
-                        if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,4));else instructions.Add(new ValueIrOpaqueStackEffect(2,new[]{value},cil.OpCode));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,4));else instructions.Add(new ValueIrObjectEquals(value,input,other));stack.Add(value);break;}
                         if(ik==IntrinsicKind.StringLength){var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringLength(value,str));stack.Add(value);break;}
                         if(ik==IntrinsicKind.NullableConstructor){var size=nullableValueSize(cil);var value=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrNullableInit(address,value,size));break;}
                         if(ik==IntrinsicKind.NullableHasValue){var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrNullableHasValue(value,address));stack.Add(value);break;}

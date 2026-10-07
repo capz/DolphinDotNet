@@ -33,6 +33,7 @@ internal static class Program
         stage2 = TestConcreteEnumeration(); if (stage2 != 0) return stage2;
         stage2 = TestGenericInterfaceEnumeration(); if (stage2 != 0) return stage2;
         stage2 = TestNonGenericInterfaceEnumeration(); if (stage2 != 0) return stage2;
+        stage2 = TestCollectionContracts(); if (stage2 != 0) return stage2;
         return 0;
     }
 
@@ -91,9 +92,69 @@ internal static class Program
         return sum == 13 ? 0 : 22;
     }
 
+
+    private static int TestCollectionContracts()
+    {
+        var list = new CompactList<int>();
+        ICollection<int> collection = list;
+        IList<int> indexed = list;
+        IReadOnlyCollection<int> readOnlyCollection = list;
+        IReadOnlyList<int> readOnlyList = list;
+        collection.Add(4); collection.Add(6);
+        if (collection.Count != 2 || readOnlyCollection.Count != 2) return 30;
+        if (indexed[0] != 4 || readOnlyList[1] != 6) return 31;
+        indexed[1] = 7;
+        if (readOnlyList[1] != 7) return 32;
+        if (collection.IsReadOnly) return 33;
+        if (!collection.Contains(4) || collection.Contains(99) || indexed.IndexOf(7) != 1 || indexed.IndexOf(99) != -1) return 34;
+        indexed.Insert(1, 5);
+        if (indexed.Count != 3 || indexed[1] != 5 || indexed[2] != 7) return 35;
+        indexed.RemoveAt(0);
+        if (indexed.Count != 2 || indexed[0] != 5) return 36;
+        if (!collection.Remove(5) || collection.Remove(99) || collection.Count != 1 || indexed[0] != 7) return 37;
+        var copy = new int[2]; indexed.CopyTo(copy,0); if (copy[0] != 7) return 41;
+        collection.Clear();
+        if (collection.Count != 0) return 38;
+        var refs = new CompactList<string>(); refs.Add("a"); refs.Insert(0,"b");
+        if (!refs.Contains("a") || refs.IndexOf("b") != 0 || !refs.Remove("a") || refs.Count != 1) return 39;
+        refs.Clear(); if (refs.Count != 0) return 40;
+        return 0;
+    }
+
     private static T Identity<T>(T value) => value;
 }
 
+
+
+internal sealed class CompactList<T> : IList<T>, IReadOnlyList<T>
+{
+    private T[] _items = new T[4];
+    private int _count;
+    public int Count => _count;
+    public bool IsReadOnly => false;
+    public T this[int index] { get => _items[index]; set => _items[index] = value; }
+    public void Add(T item) { _items[_count++] = item; }
+    public void Clear() { for (var i=0;i<_count;i++) _items[i]=default!; _count = 0; }
+    public bool Contains(T item) => IndexOf(item) >= 0;
+    public void CopyTo(T[] array, int arrayIndex) { for (var i=0;i<_count;i++) array[arrayIndex+i]=_items[i]; }
+    public IEnumerator<T> GetEnumerator() => new CompactListEnumerator<T>(this);
+    public int IndexOf(T item) { for(var i=0;i<_count;i++) if (object.Equals(_items[i],item)) return i; return -1; }
+    public void Insert(int index,T item) { for (var i=_count;i>index;i--) _items[i]=_items[i-1]; _items[index]=item; _count++; }
+    public bool Remove(T item) { var index=IndexOf(item); if(index<0)return false; RemoveAt(index); return true; }
+    public void RemoveAt(int index) { _count--; for(var i=index;i<_count;i++) _items[i]=_items[i+1]; _items[_count]=default!; }
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+}
+
+internal sealed class CompactListEnumerator<T> : IEnumerator<T>
+{
+    private readonly CompactList<T> _list; private int _index=-1;
+    public CompactListEnumerator(CompactList<T> list)=>_list=list;
+    public T Current=>_list[_index];
+    object System.Collections.IEnumerator.Current=>Current!;
+    public bool MoveNext(){_index++;return _index<_list.Count;}
+    public void Reset()=>_index=-1;
+    public void Dispose(){}
+}
 
 internal sealed class IntEnumerable : IEnumerable<int>
 {

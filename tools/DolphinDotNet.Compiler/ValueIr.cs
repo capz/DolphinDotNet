@@ -48,6 +48,7 @@ internal sealed record ValueIrInitObject(IrValue Address,string TypeName):ValueI
 internal sealed record ValueIrCopyObject(IrValue Destination,IrValue Source,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrConvert(IrValue Result,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrBinary(IrValue Result,string Operation,IrValue Left,IrValue Right):ValueIrInstruction;
+internal sealed record ValueIrObjectEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
 internal sealed record ValueIrLoadFunction(IrValue Result,MethodKey Target,bool Virtual,IrValue? Object):ValueIrInstruction;
 internal sealed record ValueIrNewDelegate(IrValue Result,IrValue? Target,IrValue Function):ValueIrInstruction;
 internal sealed record ValueIrDelegateInvoke(IrValue? Result,IrValue Delegate,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
