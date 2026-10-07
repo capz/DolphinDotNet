@@ -266,7 +266,12 @@ internal static class ValueCBackend
                         else if(IsScalarBoxType(x.TypeName))b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_unbox_scalar((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)}, {ValueTypeSize(x.TypeName,model)}u);");
                         else throw new NotSupportedException($"Unboxing {x.TypeName} is not implemented.");
                         break;
-                    case ValueIrNewArray x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_array_new_typed(dnd_value_heap, (uint32_t)v{x.Length.Id}, {x.ElementSize}u, {(x.ElementType=="$generic"?(x.ElementsAreReferences?"&DND_TYPE_OBJECT":"NULL"):TypeExpr(x.ElementType))}, {(x.ElementsAreReferences?"true":"false")});");break;
+                    case ValueIrNewArray x:
+                    {
+                        var refs=x.ElementReferenceOffsets??Array.Empty<int>();var refName=$"dnd_array_refs_{x.Result.Id}";
+                        if(refs.Count>0)b.AppendLine($"  static const uint32_t {refName}[] = {{ {string.Join(", ",refs.Select(r=>$"{r}u"))} }};");
+                        b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_array_new_layout(dnd_value_heap, (uint32_t)v{x.Length.Id}, {x.ElementSize}u, {(x.ElementType=="$generic"?(x.ElementsAreReferences?"&DND_TYPE_OBJECT":"NULL"):TypeExpr(x.ElementType))}, {(x.ElementsAreReferences?"true":"false")}, {refs.Count}u, {(refs.Count>0?refName:"NULL")});");break;
+                    }
                     case ValueIrArrayElementAddress x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_array_element_address((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id});");break;
                     case ValueIrArrayLength x:b.AppendLine($"  v{x.Result.Id} = dnd_array_length((DndArray*)v{x.Array.Id});");break;
                     case ValueIrLoadElement x:b.AppendLine(x.Reference?$"  v{x.Result.Id} = (intptr_t)dnd_array_load_ref((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id});":$"  v{x.Result.Id} = ({CType(x.Result.Kind)})dnd_array_load_scalar((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id}, {x.Size}u, {(x.Signed?"true":"false")});");break;
