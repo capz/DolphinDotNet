@@ -149,16 +149,19 @@ internal static class AotCompiler
     private static string? ResolveType(MetadataReader md,CilInstruction i)
     {
         if(i.Operand is not CilMetadataToken { Token: var raw })return null;
-        try{return MetadataLoader.ResolveTypeName(md,MetadataTokens.EntityHandle(raw));}catch{return null;}
+        try {
+            var handle=MetadataTokens.EntityHandle(raw);
+            if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
+            if(handle.Kind==HandleKind.MemberReference)return MetadataLoader.ResolveTypeName(md,md.GetMemberReference((MemberReferenceHandle)handle).Parent);
+            if(handle.Kind==HandleKind.MethodDefinition)return MetadataLoader.ResolveTypeName(md,md.GetMethodDefinition((MethodDefinitionHandle)handle).GetDeclaringType());
+            return MetadataLoader.ResolveTypeName(md,handle);
+        } catch{return null;}
     }
 
     private static GenericRepresentation? ResolveGenericTypeParameter(MetadataReader md,CompilationModel model,MethodModel method,CilInstruction i)
     {
         if(i.Operand is not CilMetadataToken { Token: var raw })return null;
         var handle=MetadataTokens.EntityHandle(raw);
-        if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
-        if(handle.Kind==HandleKind.MemberReference)return MetadataLoader.ResolveTypeName(md,md.GetMemberReference((MemberReferenceHandle)handle).Parent);
-        if(handle.Kind==HandleKind.MethodDefinition){var def=md.GetMethodDefinition((MethodDefinitionHandle)handle);return MetadataLoader.ResolveTypeName(md,def.GetDeclaringType());}
         if(handle.Kind!=HandleKind.TypeSpecification)return null;
         var reader=md.GetBlobReader(md.GetTypeSpecification((TypeSpecificationHandle)handle).Signature);
         if(reader.ReadSignatureTypeCode()!=SignatureTypeCode.GenericTypeParameter)return null;
