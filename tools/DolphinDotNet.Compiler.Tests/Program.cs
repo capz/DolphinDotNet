@@ -25,8 +25,10 @@ var genericDll = Path.Combine(root, "tests/GenericSharingSmoke/bin/Release/net8.
 var genericOutput = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.c");
 Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{genericDll}\" \"{genericOutput}\"");
 var genericGenerated = File.ReadAllText(genericOutput);
-if (CountOccurrences(genericGenerated, "Shared generic AOT body.") != 1)
-    throw new Exception("Closed generic instantiations did not share one AOT generic body/data instance.");
+var sharedDefinitions = genericGenerated.Split('\n')
+    .Count(line => line.Contains("Shared_1_Marker", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
+if (sharedDefinitions != 1)
+    throw new Exception($"Expected one shared generic method body, found {sharedDefinitions}.");
 File.Delete(genericOutput);
 Console.WriteLine("DolphinDotNet compiler integration test passed.");
 
