@@ -4,9 +4,10 @@ namespace DolphinDotNet.Compiler;
 
 internal enum GenericRepresentationKind { PointerSized, ValueType }
 
-internal readonly record struct GenericRepresentation(GenericRepresentationKind Kind,int Size)
+internal readonly record struct GenericRepresentation(GenericRepresentationKind Kind,int Size,IReadOnlyList<int>? ReferenceOffsets=null)
 {
     public bool RequiresSpecialization=>Kind==GenericRepresentationKind.ValueType&&Size>4;
+    public bool ContainsReferences=>ReferenceOffsets is { Count: >0 };
     public string Key=>RequiresSpecialization?$"v{Size}":"p";
 }
 
@@ -32,7 +33,7 @@ internal static class GenericSharing
             SignatureTypeCode.Char or SignatureTypeCode.Int16 or SignatureTypeCode.UInt16=>new(GenericRepresentationKind.PointerSized,2),
             SignatureTypeCode.Int32 or SignatureTypeCode.UInt32 or SignatureTypeCode.Single or SignatureTypeCode.IntPtr or SignatureTypeCode.UIntPtr=>new(GenericRepresentationKind.PointerSized,4),
             SignatureTypeCode.Int64 or SignatureTypeCode.UInt64 or SignatureTypeCode.Double=>new(GenericRepresentationKind.ValueType,8),
-            SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>new(GenericRepresentationKind.PointerSized,4),
+            SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>new(GenericRepresentationKind.PointerSized,4,new[]{0}),
             SignatureTypeCode.TypeHandle=>FromTypeHandle(md,reader.ReadTypeHandle(),model),
             SignatureTypeCode.GenericTypeInstance=>ReadGenericInstance(md,ref reader,model),
             _=>new(GenericRepresentationKind.PointerSized,4)
@@ -44,10 +45,28 @@ internal static class GenericSharing
         if(reader.ReadSignatureTypeCode()!=SignatureTypeCode.GenericTypeInstance||reader.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)return 0;
         var definition=MetadataLoader.ResolveTypeName(md,reader.ReadTypeHandle());var count=reader.ReadCompressedInteger();
         var args=new GenericRepresentation[count];for(var i=0;i<count;i++)args[i]=ReadRepresentation(md,ref reader,model);
-        if(definition=="System.Nullable`1"&&args.Length==1)return 4+((args[0].Size+3)&~3);
+        if(definition=="System.Nullable`1"&&args.Length==1)return NullableLayout(args[0]).Size;
+        if(definition=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2)return PairLayout(args[0],args[1]).Size;
+        if(definition=="System.ArraySegment`1"&&args.Length==1)return 12;
         if(definition is not null&&model.Types.TryGetValue(definition,out var type)&&type.IsValueType)return Math.Max(1,type.InstanceSize);
         return 0;
     }
+
+    public static (int Size,IReadOnlyList<int> References) ReadGenericLocalLayout(MetadataReader md,ref BlobReader reader,CompilationModel model)
+    {
+        if(reader.ReadSignatureTypeCode()!=SignatureTypeCode.GenericTypeInstance||reader.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)return (0,Array.Empty<int>());
+        var definition=MetadataLoader.ResolveTypeName(md,reader.ReadTypeHandle());var count=reader.ReadCompressedInteger();var args=new GenericRepresentation[count];for(var i=0;i<count;i++)args[i]=ReadRepresentation(md,ref reader,model);
+        if(definition=="System.Nullable`1"&&args.Length==1)return NullableLayout(args[0]);
+        if(definition=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2)return PairLayout(args[0],args[1]);
+        if(definition=="System.ArraySegment`1"&&args.Length==1)return (12,new[]{0});
+        if(definition is not null&&model.Types.TryGetValue(definition,out var type)&&type.IsValueType)return (Math.Max(1,type.InstanceSize),model.Fields.Values.Where(f=>f.DeclaringType==definition&&f.IsReference&&!f.IsStatic).Select(f=>f.Offset).ToArray());
+        return (0,Array.Empty<int>());
+    }
+
+    private static (int Size,IReadOnlyList<int> References) NullableLayout(GenericRepresentation arg)=> (4+Align4(arg.Size), (arg.ReferenceOffsets??Array.Empty<int>()).Select(x=>4+x).ToArray());
+    private static (int Size,IReadOnlyList<int> References) PairLayout(GenericRepresentation a,GenericRepresentation b){var second=Align(a.Size,Math.Min(Math.Max(b.Size,1),4));var refs=(a.ReferenceOffsets??Array.Empty<int>()).Concat((b.ReferenceOffsets??Array.Empty<int>()).Select(x=>second+x)).ToArray();return(second+b.Size,refs);}
+    private static int Align4(int value)=>(value+3)&~3;
+    private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
 
     public static string SpecializationSuffix(IReadOnlyList<GenericRepresentation> typeArgs,IReadOnlyList<GenericRepresentation> methodArgs)
     {
@@ -96,7 +115,7 @@ internal static class GenericSharing
     private static GenericRepresentation FromTypeHandle(MetadataReader md,EntityHandle handle,CompilationModel model)
     {
         var name=MetadataLoader.ResolveTypeName(md,handle);
-        if(name is null||!model.Types.TryGetValue(name,out var type)||!type.IsValueType)return new(GenericRepresentationKind.PointerSized,4);
+        if(name is null||!model.Types.TryGetValue(name,out var type)||!type.IsValueType)return new(GenericRepresentationKind.PointerSized,4,new[]{0});
         var size=Math.Max(1,type.InstanceSize);
         return size<=4?new(GenericRepresentationKind.PointerSized,size):new(GenericRepresentationKind.ValueType,size);
     }
@@ -107,7 +126,10 @@ internal static class GenericSharing
         var definition=reader.ReadTypeHandle();var name=MetadataLoader.ResolveTypeName(md,definition);
         var isValue=name is not null&&model.Types.TryGetValue(name,out var type)&&type.IsValueType;
         var count=reader.ReadCompressedInteger();
-        for(var i=0;i<count;i++)ReadRepresentation(md,ref reader,model);
-        return isValue?new(GenericRepresentationKind.ValueType,Math.Max(1,model.Types[name!].InstanceSize)):new(GenericRepresentationKind.PointerSized,4);
+        var args=new GenericRepresentation[count];for(var i=0;i<count;i++)args[i]=ReadRepresentation(md,ref reader,model);
+        if(name=="System.Nullable`1"&&args.Length==1){var l=NullableLayout(args[0]);return new(GenericRepresentationKind.ValueType,l.Size,l.References);}
+        if(name=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2){var l=PairLayout(args[0],args[1]);return new(GenericRepresentationKind.ValueType,l.Size,l.References);}
+        if(name=="System.ArraySegment`1"&&args.Length==1)return new(GenericRepresentationKind.ValueType,12,new[]{0});
+        return isValue?new(GenericRepresentationKind.ValueType,Math.Max(1,model.Types[name!].InstanceSize)):new(GenericRepresentationKind.PointerSized,4,new[]{0});
     }
 }

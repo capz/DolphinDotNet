@@ -1,4 +1,6 @@
 #nullable enable
+using System;
+using System.Collections.Generic;
 internal static class Program
 {
     private static int Main()
@@ -24,6 +26,38 @@ internal static class Program
         if (boxedEmpty is not null || boxedPresent is not int || (int)boxedPresent != 42) return 5;
         object? boxedWide = wide;
         if (boxedWide is null) return 6;
+
+        var stage2 = TestNullableEquality(present, empty); if (stage2 != 0) return stage2;
+        stage2 = TestPairs(); if (stage2 != 0) return stage2;
+        stage2 = TestSegment(); if (stage2 != 0) return stage2;
+        return 0;
+    }
+
+    private static int TestNullableEquality(int? present, int? empty)
+    {
+        if (empty.GetHashCode() != 0) return 8;
+        if (present.GetHashCode() != 42) return 16;
+        if (!present.Equals(42)) return 12;
+        if (present.Equals(43)) return 13;
+        if (!empty.Equals(null)) return 14;
+        if (empty.Equals(42)) return 15;
+        return 0;
+    }
+
+    private static int TestPairs()
+    {
+        var pair = new KeyValuePair<string, string>("key", "value");
+        if (pair.Key.Length != 3 || pair.Value.Length != 5) return 9;
+        var widePair = new KeyValuePair<long, int>(0x100000002L, 7);
+        if (widePair.Key != 0x100000002L || widePair.Value != 7) return 10;
+        return 0;
+    }
+
+    private static int TestSegment()
+    {
+        var values = new[] { "zero", "one", "two" };
+        var segment = new ArraySegment<string>(values, 1, 2);
+        if (segment.Array is null || segment.Array.Length != 3 || segment.Offset != 1 || segment.Count != 2 || segment[0].Length != 3) return 11;
         return 0;
     }
 

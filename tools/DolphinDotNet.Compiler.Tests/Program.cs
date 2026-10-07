@@ -23,15 +23,17 @@ File.Delete(temp);
 var genericProject = Path.Combine(root, "tests/GenericSharingSmoke/GenericSharingSmoke.csproj");
 Run("dotnet", $"build \"{genericProject}\" -c Release");
 var genericDll = Path.Combine(root, "tests/GenericSharingSmoke/bin/Release/net8.0/GenericSharingSmoke.dll");
+Run("dotnet", $"\"{genericDll}\"");
 var genericOutput = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.c");
 Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{genericDll}\" \"{genericOutput}\"");
 var genericGenerated = File.ReadAllText(genericOutput);
 var genericObject = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.o");
 Run("cc", $"-std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" -c \"{genericOutput}\" -o \"{genericObject}\"");
-if (!genericGenerated.Contains("Nullable object must have a value.", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("DND_EXCEPTION_INVALID_OPERATION", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("DND_TYPE_INT64", StringComparison.Ordinal))
-    throw new Exception("Nullable<T> lowering did not emit expected compact/value semantics.");
+if (!genericGenerated.Contains("Nullable object must have a value.", StringComparison.Ordinal)) throw new Exception("Nullable Value guard missing.");
+if (!genericGenerated.Contains("DND_EXCEPTION_INVALID_OPERATION", StringComparison.Ordinal)) throw new Exception("Nullable exception category missing.");
+if (!genericGenerated.Contains("DND_TYPE_INT64", StringComparison.Ordinal)) throw new Exception("Wide nullable boxing missing.");
+if (!genericGenerated.Contains("dnd_managed_array_at", StringComparison.Ordinal)) throw new Exception("ArraySegment indexer lowering missing.");
+if (!genericGenerated.Contains("(DndObject**)(l", StringComparison.Ordinal)) throw new Exception("Embedded generic value GC roots missing.");
 var sharedDefinitions = genericGenerated.Split('\n')
     .Count(line => line.Contains("Shared_1_Marker", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
 if (sharedDefinitions != 1)
