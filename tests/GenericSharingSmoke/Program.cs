@@ -66,7 +66,7 @@ internal static class Program
 
     private static int TestConcreteEnumeration()
     {
-        var values = new[] { 3, 4, 5 };
+        var values = new int[3]; values[0] = 3; values[1] = 4; values[2] = 5;
         var segment = new ArraySegment<int>(values, 1, 2);
         var sum = 0;
         foreach (var value in segment) sum += value;
@@ -75,7 +75,8 @@ internal static class Program
 
     private static int TestGenericInterfaceEnumeration()
     {
-        IEnumerable<int> values = new IntEnumerable(new[] { 2, 3, 4 });
+        var data = new int[3]; data[0] = 2; data[1] = 3; data[2] = 4;
+        IEnumerable<int> values = new IntEnumerable(data);
         var sum = 0;
         foreach (var value in values) sum += value;
         return sum == 9 ? 0 : 21;
@@ -83,7 +84,8 @@ internal static class Program
 
     private static int TestNonGenericInterfaceEnumeration()
     {
-        System.Collections.IEnumerable values = new IntEnumerable(new[] { 6, 7 });
+        var data = new int[2]; data[0] = 6; data[1] = 7;
+        System.Collections.IEnumerable values = new IntEnumerable(data);
         var sum = 0;
         foreach (int value in values) sum += value;
         return sum == 13 ? 0 : 22;
