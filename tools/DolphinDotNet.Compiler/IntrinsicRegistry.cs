@@ -9,7 +9,11 @@ internal enum IntrinsicKind
     StringLength,
     GameCubeWriteLine,
     GameCubeReadButtonsDown,
-    GameCubePresentDemoFrame
+    GameCubePresentDemoFrame,
+    NullableConstructor,
+    NullableHasValue,
+    NullableValue,
+    NullableGetValueOrDefault
 }
 
 internal static class IntrinsicRegistry
@@ -33,6 +37,10 @@ internal static class IntrinsicRegistry
         {
             ("System.Object",".ctor")=>IntrinsicKind.ObjectConstructor,
             ("System.String","get_Length")=>IntrinsicKind.StringLength,
+            ("System.Nullable`1",".ctor")=>IntrinsicKind.NullableConstructor,
+            ("System.Nullable`1","get_HasValue")=>IntrinsicKind.NullableHasValue,
+            ("System.Nullable`1","get_Value")=>IntrinsicKind.NullableValue,
+            ("System.Nullable`1","GetValueOrDefault")=>IntrinsicKind.NullableGetValueOrDefault,
             ("DolphinDotNet.GameCube.GameCube","WriteLine")=>IntrinsicKind.GameCubeWriteLine,
             ("DolphinDotNet.GameCube.GameCube","ReadButtonsDown")=>IntrinsicKind.GameCubeReadButtonsDown,
             ("DolphinDotNet.GameCube.GameCube","PresentDemoFrame")=>IntrinsicKind.GameCubePresentDemoFrame,
