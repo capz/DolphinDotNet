@@ -73,11 +73,11 @@ internal static class ValueIrImporter
                         instructions.Add(new ValueIrStoreLocal(cil.OpCode-0x0a,Pop(stack,cil)));break;
                     case >=0x02 and <=0x05:
                     {
-                        var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadArgument(v,cil.OpCode-0x02));stack.Add(v);break;
+                        var v=New(ArgumentKind(method,cil.OpCode-0x02,analysis,cil));instructions.Add(new ValueIrLoadArgument(v,cil.OpCode-0x02));stack.Add(v);break;
                     }
                     case 0x0e or 0xfe09:
                     {
-                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));var v=New(ResultKind(analysis,cil));instructions.Add(new ValueIrLoadArgument(v,index));stack.Add(v);break;
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing argument index at IL_{cil.Offset:x4}."));var v=New(ArgumentKind(method,index,analysis,cil));instructions.Add(new ValueIrLoadArgument(v,index));stack.Add(v);break;
                     }
                     case 0x10 or 0xfe0b:
                     {
@@ -280,6 +280,13 @@ internal static class ValueIrImporter
         }
         var locals=InferLocals(output,localCount);
         return new ValueIrMethod(method.Key,output,locals,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
+    }
+
+    private static CilStackKind ArgumentKind(MethodModel method,int index,CilStackAnalysis analysis,CilInstruction instruction)
+    {
+        if(method.Abi is not { } abi)return ResultKind(analysis,instruction);
+        if(!method.IsStatic){if(index==0)return CilStackKind.ObjectReference;index--;}
+        return index>=0&&index<abi.Parameters.Count?abi.Parameters[index]:ResultKind(analysis,instruction);
     }
 
     private static IReadOnlyList<ValueIrLocal> InferLocals(IReadOnlyList<ValueIrBlock> blocks,int count)
