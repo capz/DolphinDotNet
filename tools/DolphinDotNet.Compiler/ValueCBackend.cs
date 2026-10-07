@@ -287,7 +287,9 @@ internal static class ValueCBackend
     private static int InterfaceSlot(MethodKey target,CompilationModel model)
     {
         var methods=model.Methods.Values.Where(m=>m.Key.TypeName==target.TypeName&&m.IsVirtual&&!m.Key.Signature.Contains("|contract:",StringComparison.Ordinal)).OrderBy(m=>m.Handle.GetHashCode()).ToList();
-        var slot=methods.FindIndex(m=>m.Key.Name==target.Name&&m.ParameterCount==(model.Methods.TryGetValue(target,out var contract)?contract.ParameterCount:0));
+        var parameterCount=model.Methods.TryGetValue(target,out var contract)?contract.ParameterCount:0;
+        var slot=methods.FindIndex(m=>m.Key.Name==target.Name&&m.ParameterCount==parameterCount);
+        if(slot<0&&target.Signature.Contains("|contract:",StringComparison.Ordinal))slot=methods.FindIndex(m=>m.Key.Name==target.Name);
         if(slot<0)throw new NotSupportedException($"No interface slot for {target}.");return slot;
     }
     private static int VirtualSlot(MethodKey target,CompilationModel model)
