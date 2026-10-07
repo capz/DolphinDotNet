@@ -19,19 +19,31 @@ public static class Foundation
     public static void Copy<T>(T[] source,T[] target,int count)=>Array.Copy(source,target,count);
 }
 
-public sealed class CompatList<T>:IEnumerable<T>
+public sealed class CompatList<T>:IEnumerable<T>,IReadOnlyList<T>
 {
     private T[] items; public int Count{get;private set;}
-    public CompatList(int capacity=4)=>items=new T[Math.Max(1,capacity)];
+    public CompatList(int capacity=4)=>items=new T[capacity<1?1:capacity];
     public T this[int index]{get{Check(index);return items[index];}set{Check(index);items[index]=value;}}
     public void Add(T value){Ensure(Count+1);items[Count++]=value;}
     public bool Contains(T value){var eq=CompatEqualityComparer<T>.Default;for(var i=0;i<Count;i++)if(eq.Equals(items[i],value))return true;return false;}
-    public bool Remove(T value){var eq=EqualityComparer<T>.Default;for(var i=0;i<Count;i++)if(eq.Equals(items[i],value)){for(var j=i+1;j<Count;j++)items[j-1]=items[j];items[--Count]=default!;return true;}return false;}
+    public bool Remove(T value){var eq=CompatEqualityComparer<T>.Default;for(var i=0;i<Count;i++)if(eq.Equals(items[i],value)){for(var j=i+1;j<Count;j++)items[j-1]=items[j];items[--Count]=default!;return true;}return false;}
     public void Clear(){Array.Clear(items,0,Count);Count=0;}
-    public IEnumerator<T> GetEnumerator(){for(var i=0;i<Count;i++)yield return items[i];}
-    IEnumerator IEnumerable.GetEnumerator()=>GetEnumerator();
+    public Enumerator GetEnumerator()=>new(this);
+    IEnumerator<T> IEnumerable<T>.GetEnumerator()=>new Enumerator(this);
+    IEnumerator IEnumerable.GetEnumerator()=>new Enumerator(this);
     private void Check(int index){if((uint)index>=(uint)Count)throw new ArgumentOutOfRangeException(nameof(index));}
     private void Ensure(int count){if(count<=items.Length)return;var next=new T[items.Length*2];Array.Copy(items,next,Count);items=next;}
+
+    public struct Enumerator:IEnumerator<T>
+    {
+        private readonly CompatList<T> list; private int index;
+        internal Enumerator(CompatList<T> list){this.list=list;index=-1;}
+        public T Current=>list.items[index];
+        object? IEnumerator.Current=>Current;
+        public bool MoveNext(){var next=index+1;if(next>=list.Count)return false;index=next;return true;}
+        public void Reset()=>index=-1;
+        public void Dispose(){}
+    }
 }
 
 public sealed class CompatDictionary<TKey,TValue> where TKey:notnull
