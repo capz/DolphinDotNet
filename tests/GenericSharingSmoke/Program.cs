@@ -112,11 +112,11 @@ internal static class Program
         indexed.RemoveAt(0);
         if (indexed.Count != 2 || indexed[0] != 5) return 36;
         indexed.RemoveAt(0); if (collection.Count != 1 || indexed[0] != 7) return 37;
+        var copy = new int[2]; indexed.CopyTo(copy,0); if (copy[0] != 7) return 41;
         collection.Clear();
         if (collection.Count != 0) return 38;
         var refs = new CompactList<string>(); refs.Add("a"); refs.Insert(0,"b"); refs.RemoveAt(1); refs.Clear();
         if (refs.Count != 0) return 39;
-        var copy = new int[2]; indexed.CopyTo(copy,0); if (copy[0] != 7) return 41;
         return 0;
     }
 
