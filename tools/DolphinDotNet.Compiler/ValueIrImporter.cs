@@ -6,7 +6,7 @@ internal static class ValueIrImporter
         MethodModel method,
         IReadOnlyList<CilBasicBlock> blocks,
         CilStackAnalysis analysis,
-        IReadOnlyList<int> localStorage,
+        IReadOnlyList<LocalStorage> localStorage,
         Func<CilInstruction,MethodModel?> resolveCall,
         Func<CilInstruction,CilCallStackEffect?> resolveCallEffect,
         Func<CilInstruction,bool> ignoreCall,
@@ -65,11 +65,11 @@ internal static class ValueIrImporter
                     }
                     case 0x11 or 0xfe0c:
                     {
-                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));var v=New(localStorage[index]>0?CilStackKind.ManagedPointer:ResultKind(analysis,cil));instructions.Add(localStorage[index]>0?new ValueIrAddressOfLocal(v,index):new ValueIrLoadLocal(v,index));stack.Add(v);break;
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));var v=New(localStorage[index].Size>0?CilStackKind.ManagedPointer:localStorage[index].Kind);instructions.Add(localStorage[index].Size>0?new ValueIrAddressOfLocal(v,index):new ValueIrLoadLocal(v,index));stack.Add(v);break;
                     }
                     case 0x13 or 0xfe0e:
                     {
-                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));var value=Pop(stack,cil);instructions.Add(localStorage[index]>0?new ValueIrStoreLocalStruct(index,value,localStorage[index]):new ValueIrStoreLocal(index,value));break;
+                        var index=(int)((cil.Operand as CilInteger)?.Value??throw new InvalidDataException($"Missing local index at IL_{cil.Offset:x4}."));var value=Pop(stack,cil);instructions.Add(localStorage[index].Size>0?new ValueIrStoreLocalStruct(index,value,localStorage[index].Size):new ValueIrStoreLocal(index,value));break;
                     }
                     case >=0x06 and <=0x09:
                     {
@@ -303,15 +303,15 @@ internal static class ValueIrImporter
         return index>=0&&index<abi.Parameters.Count?abi.Parameters[index]:ResultKind(analysis,instruction);
     }
 
-    private static IReadOnlyList<ValueIrLocal> InferLocals(IReadOnlyList<ValueIrBlock> blocks,IReadOnlyList<int> declaredStorage)
+    private static IReadOnlyList<ValueIrLocal> InferLocals(IReadOnlyList<ValueIrBlock> blocks,IReadOnlyList<LocalStorage> declaredStorage)
     {
-        var count=declaredStorage.Count;var kinds=Enumerable.Repeat(IrValueKind.Unknown,count).ToArray();
+        var count=declaredStorage.Count;var kinds=declaredStorage.Select(x=>Map(x.Kind)).ToArray();
         foreach(var instruction in blocks.SelectMany(b=>b.Instructions))
         {
             if(instruction is ValueIrStoreLocal store&&store.Index<count)kinds[store.Index]=MergeLocal(kinds[store.Index],store.Value.Kind);
             else if(instruction is ValueIrLoadLocal load&&load.Index<count)kinds[load.Index]=MergeLocal(kinds[load.Index],load.Result.Kind);
         }
-        var storage=declaredStorage.ToArray();var addresses=new Dictionary<int,int>();
+        var storage=declaredStorage.Select(x=>x.Size).ToArray();var addresses=new Dictionary<int,int>();
         foreach(var instruction in blocks.SelectMany(b=>b.Instructions))
         {
             if(instruction is ValueIrAddressOfLocal address)addresses[address.Result.Id]=address.Index;
