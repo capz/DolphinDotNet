@@ -64,7 +64,7 @@ internal static class CilStackAnalyzer
             case 0x22 or 0x23: Push(s,CilStackKind.Float); break;
             case 0x25: if(s.Count==0)Underflow(i); Push(s,s[^1]); break;
             case 0x26: Pop(s,i); break;
-            case 0x2b or 0x38: break;
+            case 0x2b or 0x38 or 0xdd or 0xde or 0xdc: break;
             case 0x45: Pop(s,i); break;
             case 0x2c or 0x2d or 0x39 or 0x3a: Pop(s,i); break;
             case >=0x2e and <=0x37 or >=0x3b and <=0x44: Pop(s,i);Pop(s,i);break;
