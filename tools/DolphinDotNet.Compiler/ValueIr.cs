@@ -74,6 +74,15 @@ internal sealed record ValueIrPresentDemoFrame(IrValue Rotation):ValueIrInstruct
 internal sealed record ValueIrOpaqueStackEffect(int PopCount,IReadOnlyList<IrValue> Results,ushort OpCode):ValueIrInstruction;
 internal sealed record ValueIrPhi(IrValue Result,IReadOnlyDictionary<int,IrValue> Inputs):ValueIrInstruction;
 internal sealed record ValueIrIncomingStack(IReadOnlyList<IrValue> Values);
+internal enum ValueIrExceptionRegionKind { Catch, Finally, Fault, Filter }
+internal sealed record ValueIrExceptionRegion(
+    ValueIrExceptionRegionKind Kind,
+    int TryOffset,
+    int TryLength,
+    int HandlerOffset,
+    int HandlerLength,
+    int FilterOffset,
+    string? CatchType);
 
 internal abstract record ValueIrTerminator;
 internal sealed record ValueIrJump(int TargetBlock):ValueIrTerminator;
@@ -99,4 +108,5 @@ internal sealed record ValueIrMethod(
     bool ReturnsValue)
 {
     public int LocalCount=>Locals.Count;
+    public IReadOnlyList<ValueIrExceptionRegion> ExceptionRegions { get; init; } = Array.Empty<ValueIrExceptionRegion>();
 }
