@@ -54,16 +54,33 @@ internal static class MetadataLoader
   if(h.Kind==HandleKind.TypeSpecification)
   {
    var spec=md.GetTypeSpecification((TypeSpecificationHandle)h);var r=md.GetBlobReader(spec.Signature);
-   var code=r.ReadSignatureTypeCode();
-   if(code==SignatureTypeCode.GenericTypeInstance)
-   {
-    var kind=r.ReadSignatureTypeCode();
-    if(kind!=SignatureTypeCode.TypeHandle)return null;
-    return ResolveTypeName(md,r.ReadTypeHandle());
-   }
-   if(code==SignatureTypeCode.TypeHandle)return ResolveTypeName(md,r.ReadTypeHandle());
+   return ReadTypeName(md,ref r);
   }
   return null;
+ }
+ private static string? ReadTypeName(MetadataReader md,ref BlobReader r)
+ {
+  var code=r.ReadSignatureTypeCode();
+  if(code==SignatureTypeCode.TypeHandle)return ResolveTypeName(md,r.ReadTypeHandle());
+  if(code==SignatureTypeCode.GenericTypeInstance)
+  {
+   if(r.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)return null;
+   var definition=ResolveTypeName(md,r.ReadTypeHandle());if(definition is null)return null;
+   var count=r.ReadCompressedInteger();var args=new string[count];var complete=true;
+   for(var i=0;i<count;i++){var arg=ReadTypeName(md,ref r);if(arg is null){complete=false;args[i]="?";}else args[i]=arg;}
+   return complete?definition+"["+string.Join(",",args)+"]":definition;
+  }
+  if(code==SignatureTypeCode.SZArray){var element=ReadTypeName(md,ref r);return element is null?null:element+"[]";}
+  if(code is SignatureTypeCode.GenericTypeParameter or SignatureTypeCode.GenericMethodParameter){r.ReadCompressedInteger();return null;}
+  return code switch
+  {
+   SignatureTypeCode.Boolean=>"System.Boolean",SignatureTypeCode.Byte=>"System.Byte",SignatureTypeCode.SByte=>"System.SByte",
+   SignatureTypeCode.Char=>"System.Char",SignatureTypeCode.Int16=>"System.Int16",SignatureTypeCode.UInt16=>"System.UInt16",
+   SignatureTypeCode.Int32=>"System.Int32",SignatureTypeCode.UInt32=>"System.UInt32",SignatureTypeCode.Int64=>"System.Int64",
+   SignatureTypeCode.UInt64=>"System.UInt64",SignatureTypeCode.Single=>"System.Single",SignatureTypeCode.Double=>"System.Double",
+   SignatureTypeCode.IntPtr=>"System.IntPtr",SignatureTypeCode.UIntPtr=>"System.UIntPtr",SignatureTypeCode.String=>"System.String",
+   SignatureTypeCode.Object=>"System.Object",_=>null
+  };
  }
  private static (int Parameters,bool ReturnsValue) ReadMethodSignature(MetadataReader md,BlobHandle sig){var r=md.GetBlobReader(sig);var h=r.ReadSignatureHeader();if(h.IsGeneric)r.ReadCompressedInteger();int p=r.ReadCompressedInteger();var ret=r.ReadSignatureTypeCode();return(p,ret!=SignatureTypeCode.Void);}
  private static(int Size,bool Reference)FieldLayout(MetadataReader md,BlobHandle sig,CompilationModel model){var r=md.GetBlobReader(sig);r.ReadSignatureHeader();return ReadFieldType(md,ref r,model);}
