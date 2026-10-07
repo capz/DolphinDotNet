@@ -250,6 +250,7 @@ internal static class AotCompiler
                 _=>new CilCallStackEffect(1,size==8?CilStackKind.I8:CilStackKind.I4)
             };
         }
+        if(intrinsic==IntrinsicKind.PrimitiveToString)return new CilCallStackEffect(1,CilStackKind.ObjectReference);
         if(intrinsic==IntrinsicKind.ObjectGetHashCode)return new CilCallStackEffect(1,CilStackKind.I4);
         if(intrinsic==IntrinsicKind.ObjectEquals)return new CilCallStackEffect(2,CilStackKind.I4);
         if(intrinsic is IntrinsicKind.KeyValuePairConstructor)return i.OpCode==0x73?new CilCallStackEffect(2,CilStackKind.ManagedPointer):new CilCallStackEffect(3,null);
