@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 
 var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 var sample = Path.Combine(root, "samples/HelloGameCube/HelloGameCube.csproj");
@@ -18,6 +19,18 @@ if (!generated.Contains("Hello from real C#!") ||
     throw new Exception("Compiler output did not contain expected strings/internal calls.");
 
 File.Delete(temp);
+
+var genericProject = Path.Combine(root, "tests/GenericSharingSmoke/GenericSharingSmoke.csproj");
+Run("dotnet", $"build \"{genericProject}\" -c Release");
+var genericDll = Path.Combine(root, "tests/GenericSharingSmoke/bin/Release/net8.0/GenericSharingSmoke.dll");
+var genericOutput = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.c");
+Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{genericDll}\" \"{genericOutput}\"");
+var genericGenerated = File.ReadAllText(genericOutput);
+var sharedDefinitions = genericGenerated.Split('\n')
+    .Count(line => line.Contains("Shared_1_Marker", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
+if (sharedDefinitions != 1)
+    throw new Exception($"Expected one shared generic method body, found {sharedDefinitions}.");
+File.Delete(genericOutput);
 Console.WriteLine("DolphinDotNet compiler integration test passed.");
 
 static void Run(string file, string args)

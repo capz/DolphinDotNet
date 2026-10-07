@@ -33,7 +33,34 @@ internal static class MetadataLoader
    if(!progress)throw new InvalidDataException("Unable to resolve type layout inheritance.");
   }
  }
- public static string? ResolveTypeName(MetadataReader md,EntityHandle h){if(h.IsNil)return null;if(h.Kind==HandleKind.TypeDefinition){var t=md.GetTypeDefinition((TypeDefinitionHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}if(h.Kind==HandleKind.TypeSpecification)return null;return null;}
+ public static string? ResolveTypeName(MetadataReader md,EntityHandle h)
+ {
+  if(h.IsNil)return null;
+  if(h.Kind==HandleKind.TypeDefinition){var t=md.GetTypeDefinition((TypeDefinitionHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}
+  if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}
+  if(h.Kind==HandleKind.TypeSpecification)return null;
+  return null;
+ }
+ public static string? ResolveMemberParentTypeName(MetadataReader md,EntityHandle h)
+ {
+  if(h.Kind!=HandleKind.TypeSpecification)return ResolveTypeName(md,h);
+  return ResolveTypeSpecificationName(md,(TypeSpecificationHandle)h);
+ }
+ private static string? ResolveTypeSpecificationName(MetadataReader md,TypeSpecificationHandle h)
+ {
+  // Phase 4 generic sharing: a closed generic type uses the metadata/layout and
+  // code of its generic definition.  We intentionally do not materialize a
+  // per-instantiation TypeModel here; that keeps AOT metadata/code growth flat.
+  var spec=md.GetTypeSpecification(h);var r=md.GetBlobReader(spec.Signature);
+  var code=r.ReadSignatureTypeCode();
+  if(code!=SignatureTypeCode.GenericTypeInstance)return null;
+  // ECMA-335 encodes the generic type after GENERICINST as CLASS (0x12) or
+  // VALUETYPE (0x11), followed by a TypeDefOrRef coded index. BlobReader's
+  // ReadSignatureTypeCode maps those bytes to TypeHandle, so the handle itself
+  // is the generic definition that all closed instantiations share.
+  if(r.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)return null;
+  return ResolveTypeName(md,r.ReadTypeHandle());
+ }
  private static (int Parameters,bool ReturnsValue) ReadMethodSignature(MetadataReader md,BlobHandle sig){var r=md.GetBlobReader(sig);var h=r.ReadSignatureHeader();if(h.IsGeneric)r.ReadCompressedInteger();int p=r.ReadCompressedInteger();var ret=r.ReadSignatureTypeCode();return(p,ret!=SignatureTypeCode.Void);}
  private static(int Size,bool Reference)FieldLayout(MetadataReader md,BlobHandle sig,CompilationModel model){var r=md.GetBlobReader(sig);r.ReadSignatureHeader();return ReadFieldType(md,ref r,model);}
  private static(int Size,bool Reference)ReadFieldType(MetadataReader md,ref BlobReader r,CompilationModel model)
