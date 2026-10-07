@@ -39,7 +39,7 @@ internal static class AotCompiler
                 CilStackAnalysis stackAnalysis;
                 try { stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue,regions); }
                 catch(Exception ex) { throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex); }
-                ValueIrMethod valueIr;try { valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),t=>model.Types.TryGetValue(t,out var tm)&&tm.IsInterface,t=>model.Types.TryGetValue(t,out var tm)&&tm.BaseType is "System.MulticastDelegate" or "System.Delegate",regions); } catch(Exception ex) { throw new InvalidDataException($"Value IR import failed for {method.Key}: {ex.Message}",ex); }
+                ValueIrMethod valueIr;try { valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i,method),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i,method),i=>ResolveType(assembly.Metadata,model,i,method),t=>model.Types.TryGetValue(t,out var tm)&&tm.IsInterface,t=>model.Types.TryGetValue(t,out var tm)&&tm.BaseType is "System.MulticastDelegate" or "System.Delegate",regions); } catch(Exception ex) { throw new InvalidDataException($"Value IR import failed for {method.Key}: {ex.Message}",ex); }
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
@@ -130,23 +130,23 @@ internal static class AotCompiler
         var reader=assembly.Metadata.GetBlobReader(signature.Signature);reader.ReadSignatureHeader();return reader.ReadCompressedInteger();
     }
 
-    private static MethodModel? ResolveCall(MetadataReader md,CompilationModel model,CilInstruction i)
+    private static MethodModel? ResolveCall(MetadataReader md,CompilationModel model,CilInstruction i,MethodModel? context=null)
     {
         if(i.OpCode is not (0x28 or 0x6f or 0x73 or 0xfe06 or 0xfe07)||i.Operand is not CilMetadataToken { Token: var raw })return null;
-        try{return IlImporter.ResolveMethod(md,model,MetadataTokens.EntityHandle(raw));}
+        try{return IlImporter.ResolveMethod(md,model,MetadataTokens.EntityHandle(raw),context);}
         catch(NotSupportedException){return null;}
     }
 
-    private static string? ResolveType(MetadataReader md,CilInstruction i)
+    private static string? ResolveType(MetadataReader md,CompilationModel model,CilInstruction i,MethodModel? context=null)
     {
         if(i.Operand is not CilMetadataToken { Token: var raw })return null;
-        try{return MetadataLoader.ResolveTypeName(md,MetadataTokens.EntityHandle(raw));}catch{return null;}
+        try{return GenericTypeResolver.Resolve(md,model,MetadataTokens.EntityHandle(raw),context);}catch{return null;}
     }
 
-    private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i)
+    private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i,MethodModel? context=null)
     {
         if(i.OpCode is not (0x7b or 0x7d or 0x7e or 0x80)||i.Operand is not CilMetadataToken { Token: var raw })return null;
-        try{return IlImporter.ResolveField(md,model,MetadataTokens.EntityHandle(raw));}catch(NotSupportedException){return null;}
+        try{return IlImporter.ResolveField(md,model,MetadataTokens.EntityHandle(raw),context);}catch(NotSupportedException){return null;}
     }
 
     private static IntrinsicKind ResolveIntrinsic(MetadataReader md,CilInstruction i)
