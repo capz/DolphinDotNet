@@ -73,11 +73,11 @@ internal static class ValueIrImporter
                     }
                     case >=0x06 and <=0x09:
                     {
-                        var index=cil.OpCode-0x06;var v=New(localStorage[index]>0?CilStackKind.ManagedPointer:ResultKind(analysis,cil));instructions.Add(localStorage[index]>0?new ValueIrAddressOfLocal(v,index):new ValueIrLoadLocal(v,index));stack.Add(v);break;
+                        var index=cil.OpCode-0x06;var v=New(localStorage[index].Size>0?CilStackKind.ManagedPointer:localStorage[index].Kind);instructions.Add(localStorage[index].Size>0?new ValueIrAddressOfLocal(v,index):new ValueIrLoadLocal(v,index));stack.Add(v);break;
                     }
                     case >=0x0a and <=0x0d:
                     {
-                        var index=cil.OpCode-0x0a;var value=Pop(stack,cil);instructions.Add(localStorage[index]>0?new ValueIrStoreLocalStruct(index,value,localStorage[index]):new ValueIrStoreLocal(index,value));break;
+                        var index=cil.OpCode-0x0a;var value=Pop(stack,cil);instructions.Add(localStorage[index].Size>0?new ValueIrStoreLocalStruct(index,value,localStorage[index].Size):new ValueIrStoreLocal(index,value));break;
                     }
                     case >=0x02 and <=0x05:
                     {
