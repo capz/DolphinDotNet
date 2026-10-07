@@ -9,8 +9,8 @@ internal static class MetadataLoader
   foreach(var th in md.TypeDefinitions)
   {
    var type=md.GetTypeDefinition(th);var ns=md.GetString(type.Namespace);var name=md.GetString(type.Name);if(name=="<Module>")continue;
-   var full=Full(ns,name);var baseType=ResolveTypeName(md,type.BaseType);var isInterface=(type.Attributes&TypeAttributes.Interface)!=0;
-   var interfaces=type.GetInterfaceImplementations().Select(h=>ResolveTypeName(md,md.GetInterfaceImplementation(h).Interface)).Where(x=>x is not null).Cast<string>().ToArray();
+   var full=Full(ns,name);var baseType=GenericTypeResolver.Resolve(md,model,type.BaseType);var isInterface=(type.Attributes&TypeAttributes.Interface)!=0;
+   var interfaces=type.GetInterfaceImplementations().Select(h=>GenericTypeResolver.Resolve(md,model,md.GetInterfaceImplementation(h).Interface)).Where(x=>x is not null).Cast<string>().ToArray();
    pending.Add((th,ns,name,full,baseType,isInterface,baseType=="System.ValueType"||baseType=="System.Enum",interfaces));
   }
   var unresolved=new HashSet<string>(pending.Select(x=>x.Full));
