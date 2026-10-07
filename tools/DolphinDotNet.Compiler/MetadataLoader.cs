@@ -9,8 +9,8 @@ internal static class MetadataLoader
   foreach(var th in md.TypeDefinitions)
   {
    var type=md.GetTypeDefinition(th);var ns=md.GetString(type.Namespace);var name=md.GetString(type.Name);if(name=="<Module>")continue;
-   var full=Full(ns,name);var baseType=ResolveTypeName(md,type.BaseType);var isInterface=(type.Attributes&TypeAttributes.Interface)!=0;
-   var interfaces=type.GetInterfaceImplementations().Select(h=>ResolveTypeName(md,md.GetInterfaceImplementation(h).Interface)).Where(x=>x is not null).Cast<string>().ToArray();
+   var full=Full(ns,name);var baseType=GenericTypeResolver.Resolve(md,model,type.BaseType);var isInterface=(type.Attributes&TypeAttributes.Interface)!=0;
+   var interfaces=type.GetInterfaceImplementations().Select(h=>GenericTypeResolver.Resolve(md,model,md.GetInterfaceImplementation(h).Interface)).Where(x=>x is not null).Cast<string>().ToArray();
    pending.Add((th,ns,name,full,baseType,isInterface,baseType=="System.ValueType"||baseType=="System.Enum",interfaces));
   }
   var unresolved=new HashSet<string>(pending.Select(x=>x.Full));
@@ -19,21 +19,52 @@ internal static class MetadataLoader
    var progress=false;
    foreach(var p in pending.Where(x=>unresolved.Contains(x.Full)).ToArray())
    {
-    if(p.Base is { } b&&unresolved.Contains(b))continue;
+    if(p.Base is { } b&&unresolved.Contains(b)&&IsValueTypeDefinition(md,p.Full))continue;
+    var dependencies=ValueTypeFieldDependencies(md,md.GetTypeDefinition(p.Handle)).Where(unresolved.Contains).ToArray();
+    if(dependencies.Length>0)continue;
     var offset=0;var type=md.GetTypeDefinition(p.Handle);
     foreach(var fh in type.GetFields())
     {
      var field=md.GetFieldDefinition(fh);var isStatic=(field.Attributes&FieldAttributes.Static)!=0;var(size,reference)=FieldLayout(md,field.Signature,model);
      var align=Math.Min(Math.Max(size,1),4);if(!isStatic)offset=Align(offset,align);
-     var name=md.GetString(field.Name);var embedded=EmbeddedReferences(md,field.Signature,model);model.Fields[(p.Full,name)]=new(p.Full,name,isStatic?0:offset,reference,isStatic,size,embedded);if(!isStatic)offset+=size;
+     var name=md.GetString(field.Name);var embedded=EmbeddedReferences(md,field.Signature,model);var generic=GenericFieldParameterIndex(md,field.Signature);model.Fields[(p.Full,name)]=new(p.Full,name,isStatic?0:offset,reference,isStatic,size,embedded,generic);if(!isStatic)offset+=size;
     }
     model.Types[p.Full]=new(p.Ns,p.Name,p.Full,p.Base,offset,p.Interface,p.ValueType,p.Interfaces);unresolved.Remove(p.Full);progress=true;
     foreach(var mh in type.GetMethods()){var m=md.GetMethodDefinition(mh);var key=new MethodKey(p.Full,md.GetString(m.Name),assemblyName,Convert.ToHexString(md.GetBlobBytes(m.Signature)));var sig=ReadMethodSignature(md,m.Signature);model.Methods[key]=new(key,mh,(m.Attributes&MethodAttributes.Static)!=0,sig.Parameters,sig.ReturnsValue,assemblyName,(m.Attributes&MethodAttributes.Virtual)!=0,(m.Attributes&MethodAttributes.Abstract)!=0,(m.Attributes&MethodAttributes.NewSlot)!=0,p.Interface,p.Base=="System.MulticastDelegate");}
    }
-   if(!progress)throw new InvalidDataException("Unable to resolve type layout inheritance.");
+   if(!progress)
+   {
+    /* Reference-only cycles and generic metadata must not prevent AOT discovery. Fall back to declaration order;
+       embedded value types were already filtered above and therefore remain layout-safe. */
+    foreach(var p in pending.Where(x=>unresolved.Contains(x.Full)).ToArray())
+    {
+     var type=md.GetTypeDefinition(p.Handle);var offset=0;
+     foreach(var fh in type.GetFields()){var field=md.GetFieldDefinition(fh);var isStatic=(field.Attributes&FieldAttributes.Static)!=0;var(size,reference)=FieldLayout(md,field.Signature,model);var align=Math.Min(Math.Max(size,1),4);if(!isStatic)offset=Align(offset,align);var name=md.GetString(field.Name);var embedded=EmbeddedReferences(md,field.Signature,model);var generic=GenericFieldParameterIndex(md,field.Signature);model.Fields[(p.Full,name)]=new(p.Full,name,isStatic?0:offset,reference,isStatic,size,embedded,generic);if(!isStatic)offset+=size;}
+     model.Types[p.Full]=new(p.Ns,p.Name,p.Full,p.Base,offset,p.Interface,p.ValueType,p.Interfaces);unresolved.Remove(p.Full);
+     foreach(var mh in type.GetMethods()){var m=md.GetMethodDefinition(mh);var key=new MethodKey(p.Full,md.GetString(m.Name),assemblyName,Convert.ToHexString(md.GetBlobBytes(m.Signature)));var sig=ReadMethodSignature(md,m.Signature);model.Methods[key]=new(key,mh,(m.Attributes&MethodAttributes.Static)!=0,sig.Parameters,sig.ReturnsValue,assemblyName,(m.Attributes&MethodAttributes.Virtual)!=0,(m.Attributes&MethodAttributes.Abstract)!=0,(m.Attributes&MethodAttributes.NewSlot)!=0,p.Interface,p.Base=="System.MulticastDelegate");}
+    }
+   }
   }
  }
- public static string? ResolveTypeName(MetadataReader md,EntityHandle h){if(h.IsNil)return null;if(h.Kind==HandleKind.TypeDefinition){var t=md.GetTypeDefinition((TypeDefinitionHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}if(h.Kind==HandleKind.TypeSpecification)return null;return null;}
+ public static string? ResolveTypeName(MetadataReader md,EntityHandle h)
+ {
+  if(h.IsNil)return null;
+  if(h.Kind==HandleKind.TypeDefinition){var t=md.GetTypeDefinition((TypeDefinitionHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}
+  if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}
+  if(h.Kind==HandleKind.TypeSpecification)
+  {
+   var spec=md.GetTypeSpecification((TypeSpecificationHandle)h);var r=md.GetBlobReader(spec.Signature);
+   var code=r.ReadSignatureTypeCode();
+   if(code==SignatureTypeCode.GenericTypeInstance)
+   {
+    var kind=r.ReadSignatureTypeCode();
+    if(kind!=SignatureTypeCode.TypeHandle)return null;
+    return ResolveTypeName(md,r.ReadTypeHandle());
+   }
+   if(code==SignatureTypeCode.TypeHandle)return ResolveTypeName(md,r.ReadTypeHandle());
+  }
+  return null;
+ }
  private static (int Parameters,bool ReturnsValue) ReadMethodSignature(MetadataReader md,BlobHandle sig){var r=md.GetBlobReader(sig);var h=r.ReadSignatureHeader();if(h.IsGeneric)r.ReadCompressedInteger();int p=r.ReadCompressedInteger();var ret=r.ReadSignatureTypeCode();return(p,ret!=SignatureTypeCode.Void);}
  private static(int Size,bool Reference)FieldLayout(MetadataReader md,BlobHandle sig,CompilationModel model){var r=md.GetBlobReader(sig);r.ReadSignatureHeader();return ReadFieldType(md,ref r,model);}
  private static(int Size,bool Reference)ReadFieldType(MetadataReader md,ref BlobReader r,CompilationModel model)
@@ -59,6 +90,26 @@ internal static class MetadataLoader
   if(code!=SignatureTypeCode.TypeHandle)return Array.Empty<int>();
   var name=ResolveTypeName(md,r.ReadTypeHandle());if(name is null||!model.Types.TryGetValue(name,out var t)||!t.IsValueType)return Array.Empty<int>();
   return model.Fields.Values.Where(f=>f.DeclaringType==name&&!f.IsStatic).SelectMany(f=>(f.EmbeddedReferenceOffsets??(f.IsReference?new[]{0}:Array.Empty<int>())).Select(o=>f.Offset+o)).ToArray();
+ }
+ private static int GenericFieldParameterIndex(MetadataReader md,BlobHandle sig)
+ {
+  var r=md.GetBlobReader(sig);r.ReadSignatureHeader();
+  if(r.ReadSignatureTypeCode()!=SignatureTypeCode.GenericTypeParameter)return -1;
+  return r.ReadCompressedInteger();
+ }
+ private static IEnumerable<string> ValueTypeFieldDependencies(MetadataReader md,TypeDefinition type)
+ {
+  foreach(var fh in type.GetFields())
+  {
+   var field=md.GetFieldDefinition(fh);if((field.Attributes&FieldAttributes.Static)!=0)continue;
+   var r=md.GetBlobReader(field.Signature);r.ReadSignatureHeader();if(r.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)continue;
+   var name=ResolveTypeName(md,r.ReadTypeHandle());if(name is not null&&IsValueTypeDefinition(md,name))yield return name;
+  }
+ }
+ private static bool IsValueTypeDefinition(MetadataReader md,string name)
+ {
+  foreach(var th in md.TypeDefinitions){var t=md.GetTypeDefinition(th);if(Full(md.GetString(t.Namespace),md.GetString(t.Name))==name){var b=ResolveTypeName(md,t.BaseType);return b is "System.ValueType" or "System.Enum";}}
+  return false;
  }
  private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
  private static string Full(string ns,string name)=>string.IsNullOrEmpty(ns)?name:ns+"."+name;

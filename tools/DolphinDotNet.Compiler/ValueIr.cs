@@ -42,12 +42,30 @@ internal sealed record ValueIrFunctionPointer(IrValue Result,MethodKey Target,Ir
 internal sealed record ValueIrNewDelegate(IrValue Result,string TypeName,IrValue Target,IrValue Function):ValueIrInstruction;
 internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments,bool Virtual=false,bool Interface=false):ValueIrInstruction;
 internal sealed record ValueIrNewObject(IrValue Result,string TypeName,MethodKey Constructor,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
+internal sealed record ValueIrNewRuntimeException(IrValue Result):ValueIrInstruction;
 internal sealed record ValueIrLoadField(IrValue Result,IrValue Object,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrStoreField(IrValue Object,IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrLoadStaticField(IrValue Result,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrStoreStaticField(IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrTypeTest(IrValue Result,IrValue Object,string TypeName,bool ThrowOnFailure):ValueIrInstruction;
 internal sealed record ValueIrStringLength(IrValue Result,IrValue String):ValueIrInstruction;
+internal sealed record ValueIrStringCharAt(IrValue Result,IrValue String,IrValue Index):ValueIrInstruction;
+internal sealed record ValueIrStringEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
+internal sealed record ValueIrStringConcat(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
+internal sealed record ValueIrStringStartsWith(IrValue Result,IrValue String,IrValue Prefix):ValueIrInstruction;
+internal sealed record ValueIrStringEndsWith(IrValue Result,IrValue String,IrValue Suffix):ValueIrInstruction;
+internal sealed record ValueIrStringContains(IrValue Result,IrValue String,IrValue Needle):ValueIrInstruction;
+internal sealed record ValueIrObjectReferenceEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
+internal sealed record ValueIrObjectEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
+internal sealed record ValueIrObjectToString(IrValue Result,IrValue Object):ValueIrInstruction;
+internal sealed record ValueIrObjectGetHashCode(IrValue Result,IrValue Object):ValueIrInstruction;
+internal sealed record ValueIrObjectGetType(IrValue Result,IrValue Object):ValueIrInstruction;
+internal sealed record ValueIrStringIndexOf(IrValue Result,IrValue String,IrValue Needle):ValueIrInstruction;
+internal sealed record ValueIrStringSubstring(IrValue Result,IrValue String,IrValue Start,IrValue? Length):ValueIrInstruction;
+internal sealed record ValueIrArrayRank(IrValue Result,IrValue Array):ValueIrInstruction;
+internal sealed record ValueIrArrayGetLength(IrValue Result,IrValue Array,IrValue Dimension):ValueIrInstruction;
+internal sealed record ValueIrArrayClear(IrValue Array,IrValue Index,IrValue Length):ValueIrInstruction;
+internal sealed record ValueIrArrayCopy(IrValue Source,IrValue SourceIndex,IrValue Destination,IrValue DestinationIndex,IrValue Length):ValueIrInstruction;
 internal sealed record ValueIrNewArray(IrValue Result,IrValue Length,string ElementType,bool ElementsAreReferences,uint ElementSize):ValueIrInstruction;
 internal sealed record ValueIrBox(IrValue Result,IrValue Value,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrUnboxAny(IrValue Result,IrValue Object,string TypeName):ValueIrInstruction;
@@ -67,6 +85,8 @@ internal sealed record ValueIrJump(int TargetBlock):ValueIrTerminator;
 internal enum ValueIrComparison { NonZero,Equal,NotEqual,GreaterThan,GreaterOrEqual,LessThan,LessOrEqual }
 internal sealed record ValueIrBranch(IrValue Left,IrValue? Right,ValueIrComparison Comparison,bool Unsigned,int TrueBlock,int FalseBlock):ValueIrTerminator;
 internal sealed record ValueIrSwitch(IrValue Value,IReadOnlyList<int> Targets,int DefaultBlock):ValueIrTerminator;
+internal sealed record ValueIrLeave(int TargetBlock,IReadOnlyList<int> FinallyBlocks):ValueIrTerminator;
+internal sealed record ValueIrEndFinally():ValueIrTerminator;
 internal sealed record ValueIrRethrow():ValueIrTerminator;
 internal sealed record ValueIrThrow(IrValue Exception):ValueIrTerminator;
 internal sealed record ValueIrReturn(IrValue? Value):ValueIrTerminator;
@@ -85,7 +105,8 @@ internal sealed record ValueIrMethod(
     IReadOnlyList<ValueIrLocal> Locals,
     int ParameterCount,
     bool HasThis,
-    bool ReturnsValue)
+    bool ReturnsValue,
+    IReadOnlyList<ExceptionRegionModel>? ExceptionRegions=null)
 {
     public int LocalCount=>Locals.Count;
 }

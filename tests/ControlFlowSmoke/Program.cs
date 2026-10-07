@@ -5,11 +5,22 @@ delegate int IntFn(int value);
 interface IValue { int GetValue(); }
 class VirtualBase { public int BaseField=4; public virtual int GetValue()=>3; }
 class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }
+class SmokeException : Exception { }
+interface ISmokeEquatable { bool Same(ComparableNode other); }
+interface ISmokeComparable { int Compare(ComparableNode other); }
+class ComparableNode : ISmokeEquatable, ISmokeComparable
+{
+    public ComparableNode(int value)=>Value=value;
+    public int Value;
+    public bool Same(ComparableNode other)=>Value==other.Value;
+    public int Compare(ComparableNode other)=>Value-other.Value;
+}
 
 public static class Program
 {
     static int StaticValue=4;
     static int DelegateTotal;
+    static int FinallyProbe;
     public static int Main()
     {
         var loop=LoopSum();
@@ -30,8 +41,69 @@ public static class Program
         var iface=InterfaceIdentityCase();
         var ifaceCall=InterfaceCallCase();
         var delegates=DelegateCase()+ReturningDelegateCase();
-        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates;
+        var exceptions=ExceptionCase()+FinallyCase()+NestedFinallyCase()+RethrowCase()+CatchThrowsCase()+ReturnFinallyCase()+RethrowIdentityCase()+TypedCatchCase();
+        var core=CorePrimitiveCase();
+        var comparison=ComparisonContractCase();
+        return loop+branches+nested+shortCircuit+mutated+switched+overloaded+arrays+statics+generic+boxing+virtuals+types+inherited+byref+iface+ifaceCall+delegates+exceptions+core+comparison;
     }
+
+    static int CorePrimitiveCase()=>ObjectPrimitiveCase()+StringPrimitiveCase()+ArrayPrimitiveCase();
+
+    static int ComparisonContractCase()
+    {
+        var a=new ComparableNode(3);var b=new ComparableNode(5);var same=new ComparableNode(3);var score=0;
+        ISmokeEquatable eq=a;ISmokeComparable cmp=a;
+        if(eq.Same(same))score+=1;
+        if(!eq.Same(b))score+=2;
+        if(cmp.Compare(b)<0)score+=4;
+        return score;
+    }
+
+    static int ObjectPrimitiveCase()
+    {
+        object same=new VirtualDerived();
+        var score=object.ReferenceEquals(same,same)?1:0;
+        if(!object.ReferenceEquals(same.GetType(),null))score+=2;
+        if(same.GetHashCode()==same.GetHashCode())score+=4;
+        if(same.Equals(same))score+=8;
+        if(same.ToString().Length>0)score+=16;
+        return score;
+    }
+
+    static int StringPrimitiveCase()
+    {
+        var text="hello";
+        var score=text.IndexOf("ell")+text.Substring(1,3).Length;
+        if(text[1]=='e')score+=4;
+        if(text.StartsWith("he"))score+=8;
+        if(text.EndsWith("lo"))score+=16;
+        if(text.Contains("ell"))score+=32;
+        if(("he"+"llo")==text)score+=64;
+        return score;
+    }
+
+    static int ArrayPrimitiveCase()
+    {
+        var source=new int[3];source[0]=1;source[1]=2;source[2]=3;var destination=new int[3];
+        Array.Copy(source,destination,3);Array.Clear(destination,1,1);
+        var score=destination[0]+destination[1]+destination[2];
+        if(source.Rank==1)score+=4;
+        if(source.GetLength(0)==3)score+=8;
+        foreach(var value in source)score+=value;
+        return score;
+    }
+
+    static int ExceptionCase(){try{ThrowHelper();return 0;}catch(Exception){return 7;}}
+    static void ThrowHelper(){throw new Exception();}
+    static int FinallyCase(){var value=1;try{value=2;}finally{value=value+3;}return value;}
+    static int NestedFinallyCase(){var value=0;try{try{value=1;ThrowHelper();}finally{value=value+2;}}catch(Exception){value=value+4;}return value;}
+    static int RethrowCase(){try{try{ThrowHelper();}catch(Exception){throw;}}catch(Exception){return 11;}return 0;}
+    static int CatchThrowsCase(){try{try{ThrowHelper();}catch(Exception){throw new Exception();}}catch(Exception){return 13;}return 0;}
+    static int ReturnFinallyCase(){FinallyProbe=0;var result=ReturnInsideTry();return result+FinallyProbe;}
+    static int ReturnInsideTry(){try{return 17;}finally{FinallyProbe=5;}}
+    static int RethrowIdentityCase(){Exception? captured=null;try{try{ThrowHelper();}catch(Exception ex){captured=ex;throw;}}catch(Exception ex){return object.ReferenceEquals(captured,ex)?19:0;}return 0;}
+    static int TypedCatchCase(){try{throw new SmokeException();}catch(SmokeException){return 23;}catch(Exception){return 0;}}
+
 
     static int DelegateCase(){IntSink sink=Sink;sink(6);return DelegateTotal;}
     static int ReturningDelegateCase(){var fn=new IntFn(AddOne);return fn(10);}

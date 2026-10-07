@@ -14,6 +14,8 @@ static intptr_t interface_method(intptr_t *args) { (void)args; return 30; }
 static const DndManagedMethod base_vtable[] = { virtual_base };
 static const DndManagedMethod derived_vtable[] = { virtual_derived };
 static const DndType INTERFACE_TYPE = { "ITest", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL };
+static const DndType CHILD_INTERFACE_TYPE = { "IChildTest", &DND_TYPE_OBJECT, sizeof(DndObject), 1, (const DndType *const[]){ &INTERFACE_TYPE }, 0, NULL, 0, 0, NULL, 0, NULL };
+static const DndType TRANSITIVE_TYPE = { "Transitive", &DND_TYPE_OBJECT, sizeof(DndObject), 1, (const DndType *const[]){ &CHILD_INTERFACE_TYPE }, 0, NULL, 0, 0, NULL, 0, NULL };
 static const DndManagedMethod iface_methods[] = { interface_method };
 static const DndInterfaceEntry iface_map[] = { { &INTERFACE_TYPE, 1, iface_methods } };
 static const DndType BASE_TYPE = { "Base", &DND_TYPE_OBJECT, sizeof(DndObject), 0, NULL, 0, NULL, 0, 1, base_vtable, 0, NULL };
@@ -41,6 +43,9 @@ int main(void) {
     DndString *hello2 = dnd_string_from_utf8(&heap, "Hello");
     assert(hello && hello->length == 5);
     assert(dnd_string_equals(hello, hello2));
+    assert(dnd_string_hash(hello)==dnd_string_hash(hello2));
+    DndString *ell=dnd_string_from_utf8(&heap,"ell"); assert(dnd_string_index_of(hello,ell)==1);
+    DndString *sub=dnd_string_substring(&heap,hello,1,3); assert(sub&&dnd_string_equals(sub,ell));
     DndString *left = dnd_string_concat(&heap, hello, space);
     DndString *sentence = dnd_string_concat(&heap, left, world);
     assert(sentence && sentence->length == 11);
@@ -48,6 +53,9 @@ int main(void) {
     DndArray *array = dnd_managed_array_new(&heap, 4, sizeof(int32_t));
     *(int32_t *)dnd_managed_array_at(array, 2) = 42;
     assert(*(int32_t *)dnd_managed_array_at(array, 2) == 42);
+    DndArray *copy_array=dnd_managed_array_new(&heap,4,sizeof(int32_t));assert(copy_array);
+    assert(dnd_array_copy(array,0,copy_array,0,4));assert(*(int32_t*)dnd_managed_array_at(copy_array,2)==42);
+    assert(dnd_array_clear(copy_array,1,2));assert(*(int32_t*)dnd_managed_array_at(copy_array,2)==0);
     assert(dnd_managed_array_at(array, 9) == NULL);
     assert(dnd_exception_kind() == DND_EXCEPTION_INDEX_OUT_OF_RANGE);
     dnd_exception_clear();
@@ -85,8 +93,14 @@ int main(void) {
     DndObject *dispatch = dnd_object_new(&heap, &DERIVED_TYPE); assert(dispatch); intptr_t dispatch_args[1] = { (intptr_t)dispatch };
     assert(dnd_virtual_resolve(dispatch, 0)(dispatch_args) == 20);
     assert(dnd_interface_resolve(dispatch, &INTERFACE_TYPE, 0)(dispatch_args) == 30);
+    assert(dnd_object_reference_equals(dispatch,dispatch));
+    assert(dnd_object_hash(dispatch)!=0);
+    assert(dnd_object_get_type(dispatch)==&DERIVED_TYPE);
     assert(dnd_type_is_assignable_from(&BASE_TYPE, dispatch->type));
     assert(dnd_type_is_assignable_from(&INTERFACE_TYPE, dispatch->type));
+    DndObject *transitive = dnd_object_new(&heap, &TRANSITIVE_TYPE);
+    assert(transitive && dnd_type_is_assignable_from(&INTERFACE_TYPE, transitive->type));
+    assert(!dnd_object_reference_equals(dispatch,transitive));
 
     assert(dnd_isinst(dispatch, &BASE_TYPE) == dispatch);
     assert(dnd_cast(dispatch, &BASE_TYPE) == dispatch);
@@ -124,6 +138,13 @@ int main(void) {
     dnd_gc_set_stress(false);
     assert(instance_delegate && dnd_managed_delegate_invoke(instance_delegate, managed_args, 1) == 42);
 
+    /* Pending managed exceptions are implicit GC roots across collection. */
+    DndExceptionObject *heap_exception = (DndExceptionObject *)dnd_object_new(&heap, &DND_TYPE_EXCEPTION);
+    assert(heap_exception); heap_exception->kind = DND_EXCEPTION_ARGUMENT;
+    dnd_exception_throw_object(heap_exception); dnd_gc_collect(&heap, NULL);
+    assert(dnd_exception_object() == heap_exception && heap_exception->object.type == &DND_TYPE_EXCEPTION);
+    dnd_exception_clear();
+
     DndObject *boxed = dnd_box_i32(&heap, 123);
     assert(boxed && dnd_unbox_i32(boxed) == 123);
 
@@ -156,6 +177,11 @@ int main(void) {
     parent->child = NULL; size_t before_collect = heap.used; dnd_gc_collect(&heap, &trace_roots);
     TestNode *replacement = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
     assert(replacement); assert(heap.used <= before_collect);
+
+    DndObject *managed_exception_object=dnd_object_new(&heap,&TRANSITIVE_TYPE);assert(managed_exception_object);dnd_throw(managed_exception_object);
+    assert(dnd_exception_kind()==DND_EXCEPTION_MANAGED);assert((DndObject*)dnd_exception_object()==managed_exception_object);dnd_exception_enter_handler();
+    assert(dnd_exception_kind()==DND_EXCEPTION_NONE);assert((DndObject*)dnd_exception_object()==managed_exception_object);dnd_throw((DndObject*)dnd_exception_object());
+    assert(dnd_exception_kind()==DND_EXCEPTION_MANAGED);assert((DndObject*)dnd_exception_object()==managed_exception_object);dnd_exception_clear();
 
     puts("managed runtime + core BCL tests passed");
     return 0;

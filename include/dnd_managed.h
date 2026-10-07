@@ -100,7 +100,8 @@ typedef enum {
     DND_EXCEPTION_INDEX_OUT_OF_RANGE,
     DND_EXCEPTION_INVALID_CAST,
     DND_EXCEPTION_OUT_OF_MEMORY,
-    DND_EXCEPTION_ARGUMENT
+    DND_EXCEPTION_ARGUMENT,
+    DND_EXCEPTION_MANAGED
 } DndExceptionKind;
 
 extern const DndType DND_TYPE_OBJECT;
@@ -115,15 +116,32 @@ DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type);
 DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text);
 DndString *dnd_string_concat(DndManagedHeap *heap, const DndString *a, const DndString *b);
 bool dnd_string_equals(const DndString *a, const DndString *b);
+uint16_t dnd_string_char_at(const DndString *value, uint32_t index);
+bool dnd_string_starts_with(const DndString *value, const DndString *prefix);
+bool dnd_string_ends_with(const DndString *value, const DndString *suffix);
+bool dnd_string_contains(const DndString *value, const DndString *needle);
+uint32_t dnd_string_length(const DndString *value);
+uint32_t dnd_string_hash(const DndString *value);
+int32_t dnd_string_index_of(const DndString *value, const DndString *needle);
+DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, uint32_t start, uint32_t length);
 DndArray *dnd_managed_array_new(DndManagedHeap *heap, uint32_t length, uint32_t element_size);
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length, uint32_t element_size, const DndType *element_type, bool elements_are_references);
 void *dnd_managed_array_at(DndArray *array, uint32_t index);
 uint32_t dnd_array_length(DndArray *array);
+uint32_t dnd_array_rank(DndArray *array);
+uint32_t dnd_array_get_length(DndArray *array, uint32_t dimension);
 void *dnd_array_element_address(DndArray *array, uint32_t index);
 int32_t dnd_array_load_i32(DndArray *array, uint32_t index);
 DndObject *dnd_array_load_ref(DndArray *array, uint32_t index);
 bool dnd_array_store_i32(DndArray *array, uint32_t index, int32_t value);
 bool dnd_array_store_ref(DndArray *array, uint32_t index, DndObject *value);
+bool dnd_array_clear(DndArray *array, uint32_t index, uint32_t length);
+bool dnd_array_copy(DndArray *source, uint32_t source_index, DndArray *destination, uint32_t destination_index, uint32_t length);
+bool dnd_object_reference_equals(const DndObject *a, const DndObject *b);
+bool dnd_object_equals(const DndObject *a, const DndObject *b);
+DndString *dnd_object_to_string(DndManagedHeap *heap, const DndObject *object);
+uint32_t dnd_object_hash(const DndObject *object);
+const DndType *dnd_object_get_type(const DndObject *object);
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual);
 DndObject *dnd_cast(DndObject *object, const DndType *target);
 DndObject *dnd_isinst(DndObject *object, const DndType *target);
@@ -157,6 +175,7 @@ void dnd_gc_frame_push(DndGcFrame *frame, DndObject ***slots, size_t count);
 void dnd_gc_frame_pop(DndGcFrame *frame);
 
 void dnd_exception_clear(void);
+void dnd_exception_enter_handler(void);
 void dnd_exception_throw(DndExceptionKind kind, const char *message);
 DndExceptionKind dnd_exception_kind(void);
 const char *dnd_exception_message(void);

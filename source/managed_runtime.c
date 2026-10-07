@@ -29,11 +29,15 @@ static size_t align8(size_t n) { return (n + 7u) & ~(size_t)7u; }
 static size_t block_header_size(void) { return align8(sizeof(DndHeapBlock)); }
 static DndHeapBlock *first_block(DndManagedHeap *heap) { return (DndHeapBlock *)heap->blocks; }
 static DndObject *block_object(DndHeapBlock *block) { return (DndObject *)((uint8_t *)block + block_header_size()); }
-static DndHeapBlock *object_block(DndObject *object) { return (DndHeapBlock *)((uint8_t *)object - block_header_size()); }
-
-static bool in_heap(const DndManagedHeap *heap, const DndObject *object) {
-    const uint8_t *p = (const uint8_t *)object;
-    return heap && p >= heap->start + block_header_size() && p < heap->start + heap->used;
+static DndHeapBlock *find_block_containing(const DndManagedHeap *heap, const void *pointer) {
+    if (!heap || !pointer) return NULL;
+    const uint8_t *p = (const uint8_t *)pointer;
+    for (DndHeapBlock *block = first_block((DndManagedHeap *)heap); block; block = block->next) {
+        const uint8_t *start = (const uint8_t *)block_object(block);
+        const uint8_t *end = start + block->size;
+        if (!block->free && p >= start && p < end) return block;
+    }
+    return NULL;
 }
 
 static void rebuild_free_list(DndManagedHeap *heap) {
@@ -162,6 +166,46 @@ bool dnd_string_equals(const DndString *a, const DndString *b) {
     return memcmp(a->chars, b->chars, (size_t)a->length * sizeof(uint16_t)) == 0;
 }
 
+uint16_t dnd_string_char_at(const DndString *value, uint32_t index) {
+    if(!value){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return 0;}
+    if(index>=value->length){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"String index out of range.");return 0;}
+    return value->chars[index];
+}
+bool dnd_string_starts_with(const DndString *value,const DndString *prefix) {
+    if(!value||!prefix){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return false;}
+    return prefix->length<=value->length&&memcmp(value->chars,prefix->chars,(size_t)prefix->length*sizeof(uint16_t))==0;
+}
+bool dnd_string_ends_with(const DndString *value,const DndString *suffix) {
+    if(!value||!suffix){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return false;}
+    return suffix->length<=value->length&&memcmp(value->chars+value->length-suffix->length,suffix->chars,(size_t)suffix->length*sizeof(uint16_t))==0;
+}
+bool dnd_string_contains(const DndString *value,const DndString *needle) { return dnd_string_index_of(value,needle)>=0; }
+uint32_t dnd_string_length(const DndString *value) { if(!value){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return 0;}return value->length; }
+uint32_t dnd_string_hash(const DndString *value) {
+    if (!value) return 0;
+    uint32_t hash=2166136261u;
+    for(uint32_t i=0;i<value->length;i++){hash^=value->chars[i];hash*=16777619u;}
+    return hash;
+}
+int32_t dnd_string_index_of(const DndString *value,const DndString *needle) {
+    if(!value||!needle){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return -1;}
+    if(needle->length==0)return 0;
+    if(needle->length>value->length)return -1;
+    for(uint32_t i=0;i<=value->length-needle->length;i++)
+        if(memcmp(value->chars+i,needle->chars,(size_t)needle->length*sizeof(uint16_t))==0)return (int32_t)i;
+    return -1;
+}
+DndString *dnd_string_substring(DndManagedHeap *heap,const DndString *value,uint32_t start,uint32_t length) {
+    if(!value){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return NULL;}
+    if(start>value->length||length>value->length-start){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Substring range is invalid.");return NULL;}
+    DndString *result=(DndString*)allocate(heap,&DND_TYPE_STRING,sizeof(DndString)+((size_t)length+1)*sizeof(uint16_t));
+    if(!result)return NULL;
+    result->length=length;
+    memcpy(result->chars,value->chars+start,(size_t)length*sizeof(uint16_t));
+    result->chars[length]=0;
+    return result;
+}
+
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length,
     uint32_t element_size, const DndType *element_type, bool references) {
     if (element_size && length > SIZE_MAX / element_size) {
@@ -196,6 +240,8 @@ void *dnd_managed_array_at(DndArray *array, uint32_t index) {
 
 void *dnd_array_element_address(DndArray *array, uint32_t index) { return dnd_managed_array_at(array, index); }
 
+uint32_t dnd_array_rank(DndArray *array){if(!array){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return 0;}return 1;}
+uint32_t dnd_array_get_length(DndArray *array,uint32_t dimension){if(!array){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return 0;}if(dimension!=0){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array dimension out of range.");return 0;}return array->length;}
 uint32_t dnd_array_length(DndArray *array) {
     if (!array) {
         dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Array is null.");
@@ -228,14 +274,27 @@ bool dnd_array_store_ref(DndArray *array, uint32_t index, DndObject *value) {
     return true;
 }
 
+static bool type_reaches(const DndType *actual, const DndType *target, unsigned depth) {
+    if (!actual || !target || depth > 64) return false;
+    if (actual == target) return true;
+    for (uint16_t i = 0; i < actual->interface_count; i++)
+        if (type_reaches(actual->interfaces[i], target, depth + 1)) return true;
+    return actual->base_type ? type_reaches(actual->base_type, target, depth + 1) : false;
+}
+
+bool dnd_object_equals(const DndObject *a,const DndObject *b){return a==b;}
+DndString *dnd_object_to_string(DndManagedHeap *heap,const DndObject *object){
+    if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Object is null.");return NULL;}
+    return dnd_string_from_utf8(heap,object->type&&object->type->name?object->type->name:"System.Object");
+}
+bool dnd_object_reference_equals(const DndObject *a,const DndObject *b){return a==b;}
+uint32_t dnd_object_hash(const DndObject *object){if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Object is null.");return 0;}uintptr_t v=(uintptr_t)object;return (uint32_t)(v^(v>>32));}
+const DndType *dnd_object_get_type(const DndObject *object){if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Object is null.");return NULL;}return object->type;}
+bool dnd_array_clear(DndArray *array,uint32_t index,uint32_t length){if(!array){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return false;}if(index>array->length||length>array->length-index){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array range out of bounds.");return false;}memset(array->data+(size_t)index*array->element_size,0,(size_t)length*array->element_size);return true;}
+bool dnd_array_copy(DndArray *source,uint32_t source_index,DndArray *destination,uint32_t destination_index,uint32_t length){if(!source||!destination){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return false;}if(source->element_size!=destination->element_size||source->elements_are_references!=destination->elements_are_references){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Array element types are incompatible.");return false;}if(source_index>source->length||length>source->length-source_index||destination_index>destination->length||length>destination->length-destination_index){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array range out of bounds.");return false;}memmove(destination->data+(size_t)destination_index*destination->element_size,source->data+(size_t)source_index*source->element_size,(size_t)length*source->element_size);return true;}
+
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual) {
-    if (!target || !actual) return false;
-    for (const DndType *type = actual; type; type = type->base_type)
-        if (type == target) return true;
-    for (const DndType *type = actual; type; type = type->base_type)
-        for (uint16_t i = 0; i < type->interface_count; i++)
-            if (type->interfaces[i] == target) return true;
-    return false;
+    return type_reaches(actual, target, 0);
 }
 
 DndObject *dnd_isinst(DndObject *object, const DndType *target) {
@@ -451,8 +510,10 @@ void dnd_gc_frame_pop(DndGcFrame *frame) {
 }
 
 static void mark_object(DndManagedHeap *heap, DndObject *object) {
-    if (!object || !in_heap(heap, object)) return;
-    DndHeapBlock *block = object_block(object);
+    if (!object) return;
+    DndHeapBlock *block = find_block_containing(heap, object);
+    if (!block) return;
+    object = block_object(block);
     if (block->free || block->marked || !object->type) return;
     block->marked = 1;
     const DndType *type = object->type;
@@ -463,16 +524,22 @@ static void mark_object(DndManagedHeap *heap, DndObject *object) {
                 mark_object(heap, *(DndObject **)((uint8_t *)object + offset));
         }
     }
-    if (type == &DND_TYPE_ARRAY) {
+    if ((type->flags & DND_TYPE_FLAG_ARRAY) != 0) {
         DndArray *array = (DndArray *)object;
         if (array->elements_are_references) {
             for (uint32_t i = 0; i < array->length; i++)
                 mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size));
-        } else if (array->element_type && array->element_type->reference_count) {
-            for (uint32_t i = 0; i < array->length; i++)
-                for (uint16_t r = 0; r < array->element_type->reference_count; r++)
-                    mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size +
-                        array->element_type->reference_offsets[r] - ((array->element_type->flags & DND_TYPE_FLAG_VALUE_TYPE) ? sizeof(DndObject) : 0)));
+        } else if (array->element_type) {
+            for (uint32_t i = 0; i < array->length; i++) {
+                uint8_t *element = array->data + (size_t)i * array->element_size;
+                for (const DndType *current = array->element_type; current; current = current->base_type)
+                    for (uint16_t r = 0; r < current->reference_count; r++) {
+                        uint32_t offset = current->reference_offsets[r];
+                        if ((array->element_type->flags & DND_TYPE_FLAG_VALUE_TYPE) && offset >= sizeof(DndObject)) offset -= sizeof(DndObject);
+                        if (offset + sizeof(void *) <= array->element_size)
+                            mark_object(heap, *(DndObject **)(element + offset));
+                    }
+            }
         }
     }
 }
@@ -486,6 +553,7 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     if (roots)
         for (size_t i = 0; i < roots->count; i++)
             if (roots->slots[i]) mark_object(heap, *roots->slots[i]);
+    if (exception_object) mark_object(heap, (DndObject *)exception_object);
     for (DndGcFrame *frame = gc_frames; frame; frame = frame->previous)
         for (size_t i = 0; i < frame->count; i++)
             if (frame->slots[i]) mark_object(heap, *frame->slots[i]);
@@ -510,8 +578,9 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
 }
 
 void dnd_exception_clear(void) { exception_kind = DND_EXCEPTION_NONE; exception_text = NULL; exception_object = NULL; }
+void dnd_exception_enter_handler(void) { exception_kind = DND_EXCEPTION_NONE; exception_text = NULL; }
 void dnd_exception_throw(DndExceptionKind kind, const char *message) { exception_kind = kind; exception_text = message; exception_object = NULL; }
-void dnd_throw(DndObject *exception) { if (!exception) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Thrown exception is null."); return; } dnd_exception_throw_object((DndExceptionObject *)exception); }
+void dnd_throw(DndObject *exception) { if (!exception) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Thrown exception is null."); return; } if (exception->type == &DND_TYPE_EXCEPTION) { dnd_exception_throw_object((DndExceptionObject *)exception); return; } exception_object=(DndExceptionObject *)exception; exception_kind=DND_EXCEPTION_MANAGED; exception_text=NULL; }
 void dnd_exception_throw_object(DndExceptionObject *exception) { exception_object=exception; exception_kind=exception?(DndExceptionKind)exception->kind:DND_EXCEPTION_NONE; exception_text=NULL; }
 DndExceptionObject *dnd_exception_object(void) { return exception_object; }
 DndExceptionKind dnd_exception_kind(void) { return exception_kind; }

@@ -14,9 +14,9 @@ LIBS := -lopengx -logc -lm
 LIBOGC ?= $(DEVKITPRO)/libogc
 LIBDIRS := $(PORTLIBS) $(LIBOGC)
 LIBPATHS_EXTRA := -L$(LIBOGC)/lib/cube
-CFLAGS := -g -O2 -Wall -Wextra $(MACHDEP) $(INCLUDE)
+CFLAGS := -g -O2 -ffunction-sections -fdata-sections -Wall -Wextra $(MACHDEP) $(INCLUDE)
 CXXFLAGS := $(CFLAGS)
-LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map
+LDFLAGS := -g $(MACHDEP) -Wl,--gc-sections -Wl,-Map,$(notdir $@).map
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 export OUTPUT := $(CURDIR)/$(TARGET)
 export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))

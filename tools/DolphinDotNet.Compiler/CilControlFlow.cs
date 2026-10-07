@@ -1,6 +1,6 @@
 namespace DolphinDotNet.Compiler;
 
-internal enum CilFlowKind { Next, Branch, ConditionalBranch, Switch, Return }
+internal enum CilFlowKind { Next, Branch, ConditionalBranch, Switch, Return, Leave, EndFinally }
 
 internal abstract record CilOperand;
 internal sealed record CilBranchTarget(int Offset):CilOperand;
@@ -36,6 +36,9 @@ internal static class CilDecoder
                 case 0x2a: flow=CilFlowKind.Return; break;
                 case 0x7a: flow=CilFlowKind.Return; break;
                 case 0xfe1a: flow=CilFlowKind.Return; break;
+                case 0xdc: flow=CilFlowKind.EndFinally; break;
+                case 0xde: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.Leave; break;
+                case 0xdd: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.Leave; break;
                 case 0x2b: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
                 case >=0x2c and <=0x37: operand=new CilBranchTarget(ShortTarget(il,ref p,start)); flow=CilFlowKind.ConditionalBranch; break;
                 case 0x38: operand=new CilBranchTarget(LongTarget(il,ref p,start)); flow=CilFlowKind.Branch; break;
@@ -50,7 +53,7 @@ internal static class CilDecoder
                     else if(op==0x23)operand=new CilFloat(BitConverter.ToDouble(il,p));
                     else if(op is 0x0e or 0x0f or 0x10 or 0x11 or 0x12 or 0x13)operand=new CilInteger(il[p]);
                     else if(op is 0xfe09 or 0xfe0a or 0xfe0b or 0xfe0c or 0xfe0d or 0xfe0e)operand=new CilInteger(BitConverter.ToUInt16(il,p));
-                    else if(op is 0x28 or 0x6f or 0x72 or 0x73 or 0x7b or 0x7d or 0x7e or 0x80 or 0x8c or 0x8d or 0x8f or 0xa3 or 0xa4 or 0xa5 or 0x74 or 0x75 or 0x70 or 0x71 or 0x81 or 0xfe06 or 0xfe07 or 0xfe15)operand=new CilMetadataToken(BitConverter.ToInt32(il,p));
+                    else if(op is 0x28 or 0x6f or 0x72 or 0x73 or 0x7b or 0x7d or 0x7e or 0x80 or 0x8c or 0x8d or 0x8f or 0xa3 or 0xa4 or 0xa5 or 0x74 or 0x75 or 0x70 or 0x71 or 0x81 or 0xfe06 or 0xfe07 or 0xfe15 or 0xfe16)operand=new CilMetadataToken(BitConverter.ToInt32(il,p));
                     p += operandSize; break;
             }
             result.Add(new CilInstruction(start,p-start,op,operand,flow));
@@ -66,7 +69,7 @@ internal static class CilDecoder
     {
         var size=op switch {
             0x0e or 0x0f or 0x10 or 0x11 or 0x12 or 0x13 or 0x1f => 1,
-            0x20 or 0x22 or 0x28 or 0x6f or 0x70 or 0x71 or 0x72 or 0x74 or 0x75 or 0x73 or 0x7b or 0x7c or 0x7d or 0x7e or 0x7f or 0x80 or 0x81 or 0x8c or 0x8d or 0xa3 or 0xa4 or 0xa5 or 0xfe06 or 0xfe07 or 0xfe15 => 4,
+            0x20 or 0x22 or 0x28 or 0x6f or 0x70 or 0x71 or 0x72 or 0x74 or 0x75 or 0x73 or 0x7b or 0x7c or 0x7d or 0x7e or 0x7f or 0x80 or 0x81 or 0x8c or 0x8d or 0xa3 or 0xa4 or 0xa5 or 0xfe06 or 0xfe07 or 0xfe15 or 0xfe16 => 4,
             0x21 or 0x23 => 8,
             0xfe09 or 0xfe0a or 0xfe0b or 0xfe0c or 0xfe0d or 0xfe0e => 2,
             0x45 => SwitchSize(il,p,start),
@@ -82,15 +85,22 @@ internal sealed record CilBasicBlock(int Id,int StartOffset,List<CilInstruction>
 
 internal static class CilControlFlowGraph
 {
-    public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions)
+    public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<ExceptionRegionModel>? regions=null)
     {
         if(instructions.Count==0)return [];
         var starts=new HashSet<int>{instructions[0].Offset};
+        foreach(var region in regions??Array.Empty<ExceptionRegionModel>())
+        {
+            starts.Add(region.TryOffset); starts.Add(region.HandlerOffset);
+            if(region.TryEnd<instructions[^1].EndOffset)starts.Add(region.TryEnd);
+            if(region.HandlerEnd<instructions[^1].EndOffset)starts.Add(region.HandlerEnd);
+            if(region.FilterOffset>=0)starts.Add(region.FilterOffset);
+        }
         foreach(var i in instructions)
         {
             if(i.Operand is CilBranchTarget { Offset: var target })starts.Add(target);
             if(i.Operand is CilSwitchTargets sw)foreach(var switchTarget in sw.Offsets)starts.Add(switchTarget);
-            if(i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Switch or CilFlowKind.Return && i!=instructions[^1])starts.Add(i.EndOffset);
+            if(i!=instructions[^1] && i.Flow is CilFlowKind.Branch or CilFlowKind.ConditionalBranch or CilFlowKind.Switch or CilFlowKind.Return or CilFlowKind.Leave or CilFlowKind.EndFinally)starts.Add(i.EndOffset);
         }
         var ordered=starts.OrderBy(x=>x).ToArray();
         var byStart=ordered.Select((x,n)=>(x,n)).ToDictionary(x=>x.x,x=>x.n);
