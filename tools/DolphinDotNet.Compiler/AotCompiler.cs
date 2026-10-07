@@ -110,7 +110,7 @@ internal static class AotCompiler
             else
             {
                 SkipLocalType(assembly.Metadata,ref reader,code,model);
-                locals[i]=new LocalStorage(0,Kind(code));
+                locals[i]=new LocalStorage(0,code==SignatureTypeCode.TypeHandle?CilStackKind.NativeInt:Kind(code));
             }
         }
         return locals;
