@@ -99,7 +99,7 @@ internal static class CilControlFlowGraph
         return rewritten;
     }
 
-    public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions)
+    public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion>? exceptionRegions=null)
     {
         if(instructions.Count==0)return [];
         var starts=new HashSet<int>{instructions[0].Offset};
