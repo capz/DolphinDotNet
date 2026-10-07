@@ -11,8 +11,22 @@ internal static class Program
         return value;
     }
 
+    private static int CatchProbe()
+    {
+        try
+        {
+            int? value = null;
+            return value.Value;
+        }
+        catch
+        {
+            return 11;
+        }
+    }
+
     private static int Main()
     {
+        if (CatchProbe() != 11) return 91;
         if (FinallyProbe() != 7) return 90;
         _ = Shared<int>.Marker();
         _ = Shared<string>.Marker();
