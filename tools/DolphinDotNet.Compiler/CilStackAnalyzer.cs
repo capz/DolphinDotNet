@@ -17,14 +17,20 @@ internal sealed record CilCallStackEffect(int PopCount,CilStackKind? PushKind);
 
 internal static class CilStackAnalyzer
 {
-    public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks,Func<CilInstruction,CilCallStackEffect?>? resolveCall=null,bool returnsValue=false)
+    public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks,Func<CilInstruction,CilCallStackEffect?>? resolveCall=null,bool returnsValue=false,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion>? exceptionRegions=null)
     {
         if(blocks.Count==0)return new CilStackAnalysis(new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>());
         var entry=new Dictionary<int,CilStackState>{{blocks[0].Id,CilStackState.Empty}};
+        var regions=exceptionRegions??Array.Empty<System.Reflection.Metadata.ExceptionRegion>();
+        foreach(var region in regions) {
+            var handler=blocks.FirstOrDefault(b=>b.StartOffset==region.HandlerOffset);
+            if(handler is not null) entry[handler.Id]=region.Kind==System.Reflection.Metadata.ExceptionRegionKind.Catch
+                ?new CilStackState(new[]{CilStackKind.ObjectReference}):CilStackState.Empty;
+        }
         var exit=new Dictionary<int,CilStackState>();
         var instructionEntry=new Dictionary<int,CilStackState>();
         var instructionExit=new Dictionary<int,CilStackState>();
-        var queue=new Queue<int>();queue.Enqueue(blocks[0].Id);
+        var queue=new Queue<int>();foreach(var id in entry.Keys)queue.Enqueue(id);
         while(queue.Count>0)
         {
             var id=queue.Dequeue();var block=blocks[id];
