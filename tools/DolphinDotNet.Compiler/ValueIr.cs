@@ -39,6 +39,9 @@ internal sealed record ValueIrNewStruct(IrValue Result,int Size,IReadOnlyList<(i
 internal sealed record ValueIrStructStore(IrValue Address,int Offset,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrStructLoad(IrValue Result,IrValue Address,int Offset,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrArraySegmentItem(IrValue Result,IrValue Address,IrValue Index,int ElementSize,bool Reference):ValueIrInstruction;
+internal sealed record ValueIrArraySegmentGetEnumerator(IrValue Result,IrValue Segment):ValueIrInstruction;
+internal sealed record ValueIrEnumeratorMoveNext(IrValue Result,IrValue Address):ValueIrInstruction;
+internal sealed record ValueIrEnumeratorCurrent(IrValue Result,IrValue Address,int ElementSize,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrLoadIndirect(IrValue Result,IrValue Address,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrStoreIndirect(IrValue Address,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrInitObject(IrValue Address,string TypeName):ValueIrInstruction;
