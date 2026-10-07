@@ -61,7 +61,9 @@ struct DndArray {
     uint32_t element_size;
     const DndType *element_type;
     uint8_t elements_are_references;
-    uint8_t reserved[3];
+    uint8_t reserved;
+    uint16_t element_reference_count;
+    const uint32_t *element_reference_offsets;
     uint8_t data[];
 };
 
@@ -140,6 +142,7 @@ int32_t dnd_string_index_of(const DndString *value, const DndString *needle);
 DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, int32_t start, int32_t length);
 DndArray *dnd_managed_array_new(DndManagedHeap *heap, uint32_t length, uint32_t element_size);
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length, uint32_t element_size, const DndType *element_type, bool elements_are_references);
+DndArray *dnd_managed_array_new_layout(DndManagedHeap *heap, uint32_t length, uint32_t element_size, const DndType *element_type, bool elements_are_references, uint16_t element_reference_count, const uint32_t *element_reference_offsets);
 void *dnd_managed_array_at(DndArray *array, uint32_t index);
 uint32_t dnd_array_length(DndArray *array);
 void *dnd_array_element_address(DndArray *array, uint32_t index);
