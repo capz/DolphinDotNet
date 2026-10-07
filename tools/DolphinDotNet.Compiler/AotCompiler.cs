@@ -36,7 +36,7 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil);
                 var stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue);
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalCount(assembly,method),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i));
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
@@ -122,6 +122,18 @@ internal static class AotCompiler
         try{return IlImporter.ResolveField(md,model,MetadataTokens.EntityHandle(raw));}catch(NotSupportedException){return null;}
     }
 
+    private static int NullableValueSize(MetadataReader md,CompilationModel model,CilInstruction i)
+    {
+        if(i.Operand is not CilMetadataToken { Token: var raw })return 4;
+        var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
+        if(handle.Kind!=HandleKind.MemberReference)return 4;
+        var member=md.GetMemberReference((MemberReferenceHandle)handle);
+        if(member.Parent.Kind!=HandleKind.TypeSpecification)return 4;
+        var args=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)member.Parent,model);
+        return args.Count==1?Math.Max(1,args[0].Size):4;
+    }
+
     private static IntrinsicKind ResolveIntrinsic(MetadataReader md,CilInstruction i)
     {
         if(i.OpCode is not (0x28 or 0x6f)||i.Operand is not CilMetadataToken { Token: var raw })return IntrinsicKind.None;
@@ -148,6 +160,17 @@ internal static class AotCompiler
         {
             var pop=resolved.ParameterCount+(resolved.IsStatic||i.OpCode==0x73?0:1);
             return new CilCallStackEffect(pop,i.OpCode==0x73?CilStackKind.ObjectReference:abi.Return);
+        }
+        var intrinsic=ResolveIntrinsic(md,i);
+        if(intrinsic is IntrinsicKind.NullableConstructor or IntrinsicKind.NullableHasValue or IntrinsicKind.NullableValue or IntrinsicKind.NullableGetValueOrDefault)
+        {
+            var size=NullableValueSize(md,model,i);
+            return intrinsic switch
+            {
+                IntrinsicKind.NullableConstructor=>new CilCallStackEffect(2,null),
+                IntrinsicKind.NullableHasValue=>new CilCallStackEffect(1,CilStackKind.I4),
+                _=>new CilCallStackEffect(1,size==8?CilStackKind.I8:CilStackKind.I4)
+            };
         }
         var handle=MetadataTokens.EntityHandle(raw);
         if(handle.Kind==HandleKind.MethodSpecification)handle=md.GetMethodSpecification((MethodSpecificationHandle)handle).Method;
