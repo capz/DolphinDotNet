@@ -41,7 +41,12 @@ internal static class MetadataLoader
   if(h.Kind==HandleKind.TypeSpecification)return null;
   return null;
  }
- public static string? ResolveMemberParentTypeName(MetadataReader md,EntityHandle h)\n {\n  if(h.Kind!=HandleKind.TypeSpecification)return ResolveTypeName(md,h);\n  return ResolveTypeSpecificationName(md,(TypeSpecificationHandle)h);\n }\n private static string? ResolveTypeSpecificationName(MetadataReader md,TypeSpecificationHandle h)
+ public static string? ResolveMemberParentTypeName(MetadataReader md,EntityHandle h)
+ {
+  if(h.Kind!=HandleKind.TypeSpecification)return ResolveTypeName(md,h);
+  return ResolveTypeSpecificationName(md,(TypeSpecificationHandle)h);
+ }
+ private static string? ResolveTypeSpecificationName(MetadataReader md,TypeSpecificationHandle h)
  {
   // Phase 4 generic sharing: a closed generic type uses the metadata/layout and
   // code of its generic definition.  We intentionally do not materialize a
