@@ -38,7 +38,7 @@ internal static class AotCompiler
                 var cil=CilDecoder.Decode(ilBytes);
                 var cfg=CilControlFlowGraph.Build(cil,body.ExceptionRegions);
                 CilStackAnalysis stackAnalysis;try{stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i),method.ReturnsValue,body.ExceptionRegions);}catch(Exception ex){throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex);}
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),i=>ResolveGenericTypeParameter(assembly.Metadata,model,method,i))
+                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,ReadLocalStorage(assembly,method,model),i=>ResolveCall(assembly.Metadata,model,i),i=>ResolveCallEffect(assembly.Metadata,model,i),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i),i=>ResolveType(assembly.Metadata,i),i=>ResolveGenericTypeParameter(assembly.Metadata,model,method,i),t=>ResolveTypeRepresentation(model,t))
                     with { ExceptionRegions = ReadExceptionRegions(assembly.Metadata,body.ExceptionRegions) };
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
@@ -171,6 +171,17 @@ internal static class AotCompiler
         var keys=method.Key.Signature[(pos+marker.Length)..].Split(',');
         if(index>=keys.Length)return null;
         return keys[index]=="v8"?new GenericRepresentation(GenericRepresentationKind.ValueType,8):new GenericRepresentation(GenericRepresentationKind.PointerSized,4);
+    }
+
+    private static GenericRepresentation? ResolveTypeRepresentation(CompilationModel model,string type)
+    {
+        if(type is "System.Boolean" or "System.Byte" or "System.SByte") return new(GenericRepresentationKind.ValueType,1);
+        if(type is "System.Char" or "System.Int16" or "System.UInt16") return new(GenericRepresentationKind.ValueType,2);
+        if(type is "System.Int64" or "System.UInt64" or "System.Double") return new(GenericRepresentationKind.ValueType,8);
+        if(type is "System.Int32" or "System.UInt32" or "System.Single" or "System.IntPtr" or "System.UIntPtr") return new(GenericRepresentationKind.ValueType,4);
+        if(!model.Types.TryGetValue(type,out var tm)||!tm.IsValueType)return null;
+        var refs=model.Fields.Values.Where(f=>f.DeclaringType==type&&f.IsReference&&!f.IsStatic).Select(f=>f.Offset).ToArray();
+        return new(GenericRepresentationKind.ValueType,Math.Max(1,tm.InstanceSize),refs);
     }
 
     private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i)
