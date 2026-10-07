@@ -1,11 +1,11 @@
 using System;
 using DolphinDotNet.Compatibility;
 
-internal readonly struct Score:ICompatEquatable<Score>,ICompatComparable<Score>
+internal sealed class Score:ICompatEquatable<Score>,ICompatComparable<Score>
 {
     public Score(int value)=>Value=value;
-    public int Value{get;}
-    public bool Equals(Score other)=>Value==other.Value;
+    public int Value;
+    public bool Equals(Score other)=>other!=null&&Value==other.Value;
     public override bool Equals(object? obj)=>obj is Score other&&Equals(other);
     public override int GetHashCode()=>Value*31;
     public int GetCompatHashCode()=>Value*31;
@@ -39,9 +39,15 @@ public static class Program
         return score;
     }
 
+    public static int NullableDefaultCase()
+    {
+        var value=default(CompatNullable<int>);
+        return !value.HasValue&&value.GetValueOrDefault()==0&&value.GetValueOrDefault(7)==7?64:0;
+    }
+
     public static int Main()
     {
-        var score=EqualityCase()+HashCase()+CompareCase();
-        return score==63?0:score;
+        var score=EqualityCase()+HashCase()+CompareCase()+NullableDefaultCase();
+        return score==127?0:score;
     }
 }
