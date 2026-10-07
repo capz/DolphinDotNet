@@ -274,12 +274,12 @@ internal static class ValueCBackend
                         var a=x.Arguments;
                         switch(x.Operation)
                         {
-                            case "ArrayLength": b.AppendLine($"  v{x.Result!.Id} = dnd_array_length((DndArray*)v{a[0].Id});"); break;
-                            case "ArrayLongLength": b.AppendLine($"  v{x.Result!.Id} = dnd_array_long_length((DndArray*)v{a[0].Id});"); break;
-                            case "ArrayRank": b.AppendLine($"  (void)dnd_array_length((DndArray*)v{a[0].Id}); v{x.Result!.Id} = 1;"); break;
-                            case "ArrayGetLength": b.AppendLine($"  v{x.Result!.Id} = dnd_array_get_length((DndArray*)v{a[0].Id}, (int32_t)v{a[1].Id});"); break;
-                            case "ArrayGetLowerBound": b.AppendLine($"  v{x.Result!.Id} = dnd_array_get_lower_bound((DndArray*)v{a[0].Id}, (int32_t)v{a[1].Id});"); break;
-                            case "ArrayGetUpperBound": b.AppendLine($"  v{x.Result!.Id} = dnd_array_get_upper_bound((DndArray*)v{a[0].Id}, (int32_t)v{a[1].Id});"); break;
+                            case "ArrayLength": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_length((DndArray*)v{a[0].Id});"); break;
+                            case "ArrayLongLength": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_long_length((DndArray*)v{a[0].Id});"); break;
+                            case "ArrayRank": b.AppendLine($"  (void)dnd_array_length((DndArray*)v{a[0].Id}); v{x.Result.Value.Id} = 1;"); break;
+                            case "ArrayGetLength": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_get_length((DndArray*)v{a[0].Id}, (int32_t)v{a[1].Id});"); break;
+                            case "ArrayGetLowerBound": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_get_lower_bound((DndArray*)v{a[0].Id}, (int32_t)v{a[1].Id});"); break;
+                            case "ArrayGetUpperBound": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_get_upper_bound((DndArray*)v{a[0].Id}, (int32_t)v{a[1].Id});"); break;
                             case "ArrayClear": b.AppendLine($"  (void)dnd_array_clear((DndArray*)v{a[0].Id}, (int32_t)v{a[1].Id}, (int32_t)v{a[2].Id});"); break;
                             case "ArrayCopy":
                                 if(a.Count==3)b.AppendLine($"  (void)dnd_array_copy((DndArray*)v{a[0].Id}, 0, (DndArray*)v{a[1].Id}, 0, (int32_t)v{a[2].Id});");
@@ -289,7 +289,7 @@ internal static class ValueCBackend
                             {
                                 var start=a.Count>2?$"(int32_t)v{a[2].Id}":"0";
                                 var count=a.Count>3?$"(int32_t)v{a[3].Id}":$"(int32_t)dnd_array_length((DndArray*)v{a[0].Id}) - ({start})";
-                                b.AppendLine($"  v{x.Result!.Id} = dnd_array_index_of((DndArray*)v{a[0].Id}, (uint64_t)v{a[1].Id}, {x.ElementSize}u, {(x.Reference?"true":"false")}, {start}, {count});");
+                                b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_index_of((DndArray*)v{a[0].Id}, (uint64_t)v{a[1].Id}, {x.ElementSize}u, {(x.Reference?"true":"false")}, {start}, {count});");
                                 break;
                             }
                         }
