@@ -286,7 +286,9 @@ internal static class ValueIrImporter
         return new ValueIrMethod(method.Key,output,locals,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
     }
 
-    private static int AlignNullable(int valueSize)=>4+((valueSize+3)&~3);\n\n    private static CilStackKind ArgumentKind(MethodModel method,int index,CilStackAnalysis analysis,CilInstruction instruction)
+    private static int AlignNullable(int valueSize)=>4+((valueSize+3)&~3);
+
+    private static CilStackKind ArgumentKind(MethodModel method,int index,CilStackAnalysis analysis,CilInstruction instruction)
     {
         if(method.Abi is not { } abi)return ResultKind(analysis,instruction);
         if(!method.IsStatic){if(index==0)return CilStackKind.ObjectReference;index--;}
