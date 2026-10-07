@@ -41,7 +41,7 @@ internal static class ValueIrImporter
                 var beforeCount=stack.Count;
                 switch(cil.OpCode)
                 {
-                    case 0x00: break;
+                    case 0x00 or 0xfe16: break;
                     case >=0x16 and <=0x1e:
                     {
                         var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,cil.OpCode-0x16));stack.Add(v);break;
