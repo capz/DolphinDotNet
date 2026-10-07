@@ -227,8 +227,9 @@ DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, in
     return result;
 }
 
-DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length,
-    uint32_t element_size, const DndType *element_type, bool references) {
+DndArray *dnd_managed_array_new_layout(DndManagedHeap *heap, uint32_t length,
+    uint32_t element_size, const DndType *element_type, bool references,
+    uint16_t element_reference_count, const uint32_t *element_reference_offsets) {
     if (element_size && length > SIZE_MAX / element_size) {
         dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY, "Array size overflow.");
         return NULL;
@@ -240,7 +241,14 @@ DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length,
     array->element_size = element_size;
     array->element_type = element_type;
     array->elements_are_references = references ? 1 : 0;
+    array->element_reference_count = element_reference_count;
+    array->element_reference_offsets = element_reference_offsets;
     return array;
+}
+
+DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length,
+    uint32_t element_size, const DndType *element_type, bool references) {
+    return dnd_managed_array_new_layout(heap, length, element_size, element_type, references, 0, NULL);
 }
 
 DndArray *dnd_managed_array_new(DndManagedHeap *heap, uint32_t length, uint32_t element_size) {
@@ -485,11 +493,11 @@ static void mark_object(DndManagedHeap *heap, DndObject *object) {
         if (array->elements_are_references) {
             for (uint32_t i = 0; i < array->length; i++)
                 mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size));
-        } else if (array->element_type && array->element_type->reference_count) {
+        } else if (array->element_reference_count) {
             for (uint32_t i = 0; i < array->length; i++)
-                for (uint16_t r = 0; r < array->element_type->reference_count; r++)
+                for (uint16_t r = 0; r < array->element_reference_count; r++)
                     mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size +
-                        array->element_type->reference_offsets[r] - sizeof(DndObject)));
+                        array->element_reference_offsets[r]));
         }
     }
 }
