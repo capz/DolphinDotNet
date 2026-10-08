@@ -88,6 +88,9 @@ internal static class ValueCBackend
         for(var ai=0;ai<method.ParameterCount+(method.HasThis?1:0);ai++)b.AppendLine($"  (void)a{ai};");
         foreach(var v in values)b.AppendLine($"  {ValueStorageCType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
         foreach(var local in method.Locals){b.AppendLine(local.StorageSize>0?$"  uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {CType(local.Kind)} l{local.Index} = 0;");b.AppendLine($"  (void)l{local.Index};");}
+        var leavePaths=method.Blocks.Where(x=>x.Terminator is ValueIrLeave)
+            .Select((x,index)=>(Block:x,Leave:(ValueIrLeave)x.Terminator!,Id:index)).ToArray();
+        if(leavePaths.Length>0)b.AppendLine("  volatile int32_t dnd_leave_id = -1; volatile int32_t dnd_leave_step = 0;");
         var roots=values.Where(v=>v.Kind==IrValueKind.ObjectReference).Select(v=>$"(DndObject**)&v{v.Id}").ToList();
         roots.AddRange(method.Locals.Where(l=>l.Kind==IrValueKind.ObjectReference).Select(l=>$"(DndObject**)&l{l.Index}"));
         roots.AddRange(method.Locals.SelectMany(l=>(l.ReferenceOffsets??Array.Empty<int>()).Select(offset=>$"(DndObject**)(l{l.Index}+{offset})")));
@@ -328,13 +331,13 @@ internal static class ValueCBackend
                     case ValueIrPhi: break; // Assigned on predecessor edges.
                 }
             }
-            EmitTerminator(b,method,block,model);
+            EmitTerminator(b,method,block,model,leavePaths.Select(x=>(x.Block.Id,x.Leave,x.Id)).ToArray());
         }
         b.AppendLine("}");
         return b.ToString();
     }
 
-    private static void EmitTerminator(StringBuilder b,ValueIrMethod method,ValueIrBlock block,CompilationModel model)
+    private static void EmitTerminator(StringBuilder b,ValueIrMethod method,ValueIrBlock block,CompilationModel model,IReadOnlyList<(int BlockId,ValueIrLeave Leave,int Id)> leavePaths)
     {
         switch(block.Terminator)
         {
@@ -350,9 +353,40 @@ internal static class ValueCBackend
                 if(r.Value is { } v){b.AppendLine($"  {{ intptr_t return_value = v{v.Id};");if(method.ExceptionRegions.Count>0)b.AppendLine("    if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
                 else {if(method.ExceptionRegions.Count>0)b.AppendLine("  if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
                 break;
+            case ValueIrLeave leave:
+            {
+                var id=leavePaths.Single(x=>x.BlockId==block.Id).Id;
+                if(leave.FinallyHandlers.Count==0){Edge(b,method,block.Id,leave.TargetBlock);b.AppendLine($"  goto block_{leave.TargetBlock};");}
+                else
+                {
+                    var handler=method.Blocks.Single(x=>x.CilOffset==leave.FinallyHandlers[0]);
+                    b.AppendLine($"  dnd_leave_id = {id}; dnd_leave_step = 0; goto block_{handler.Id};");
+                }
+                break;
+            }
             case ValueIrEndFinally ef:
-                b.AppendLine("  if (dnd_exception_pending()) { dnd_exception_rethrow(); return 0; }");
-                Edge(b,method,block.Id,ef.NormalTargetBlock);b.AppendLine($"  goto block_{ef.NormalTargetBlock};");
+                b.AppendLine("  if (dnd_exception_pending()) { dnd_leave_id = -1; dnd_exception_rethrow(); return 0; }");
+                b.AppendLine("  switch (dnd_leave_id) {");
+                foreach(var path in leavePaths.Where(x=>x.Leave.FinallyHandlers.Contains(ef.HandlerOffset)))
+                {
+                    var step=path.Leave.FinallyHandlers.ToList().IndexOf(ef.HandlerOffset);
+                    b.AppendLine($"    case {path.Id}:");
+                    b.AppendLine($"      if (dnd_leave_step != {step}) break;");
+                    if(step+1<path.Leave.FinallyHandlers.Count)
+                    {
+                        var next=method.Blocks.Single(x=>x.CilOffset==path.Leave.FinallyHandlers[step+1]);
+                        b.AppendLine($"      dnd_leave_step++; goto block_{next.Id};");
+                    }
+                    else
+                    {
+                        b.AppendLine("      dnd_leave_id = -1;");
+                        Edge(b,method,block.Id,path.Leave.TargetBlock,"      ");
+                        b.AppendLine($"      goto block_{path.Leave.TargetBlock};");
+                    }
+                }
+                b.AppendLine("    default: break;");
+                b.AppendLine("  }");
+                b.AppendLine("  dnd_exception_rethrow(); return 0;");
                 break;
             case ValueIrThrow t:
                 if(t.Exception is { } ex)b.AppendLine($"  dnd_exception_throw_object((DndObject*)v{ex.Id});");
