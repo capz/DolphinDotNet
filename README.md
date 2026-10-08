@@ -15,7 +15,7 @@ DolphinDotNet compiles ordinary .NET assemblies into native C through a typed in
 | Memory management | Nonmoving mark/sweep GC, explicit roots and compiler-generated shadow-stack support, reusable free blocks, stress mode |
 | GameCube platform | libogc DOL, OpenGX 3D/overlay, PAD input, nonblocking UDP, console overlay |
 | Integration | Compiler, portable native-runtime, and GameCube build CI; broader C# runtime semantics still being verified |
-| Phase 7 runtime completeness | **In progress** — see [Phase 7 acceptance gates](docs/phase7-runtime.md) |
+| Phase 7 runtime completeness | **Acceptance gates satisfied** — target execution is separate; see [Phase 7 acceptance gates](docs/phase7-runtime.md) |
 
 The native runtime implementing a feature does **not** automatically mean all corresponding C# constructs are fully supported by the AOT compiler.
 

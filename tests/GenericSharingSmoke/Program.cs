@@ -354,7 +354,7 @@ internal static class Program
         _ = Identity(7);
         _ = Identity("reference");
         _ = Identity((object)"reference");
-        _ = Identity(9L);
+        if (Identity(0x400000005L) != 0x400000005L) return 49;
 
         int? empty = null;
         int? present = 42;
@@ -370,7 +370,7 @@ internal static class Program
         object? boxedPresent = present;
         if (boxedEmpty is not null || boxedPresent is not int || (int)boxedPresent != 42) return 5;
         object? boxedWide = wide;
-        if (boxedWide is null) return 6;
+        if (boxedWide is null || (long)boxedWide != 0x100000002L) return 6;
 
         var stage2 = TestNullableEquality(present, empty); if (stage2 != 0) return 800 + stage2;
         stage2 = TestNullableArgumentCopies(present, empty, wide); if (stage2 != 0) return 820 + stage2;

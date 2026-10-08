@@ -117,7 +117,9 @@ internal static class ValueIrImporter
                     }
                     case 0xa5:
                     {
-                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve unboxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrUnboxAny(result,input,type));stack.Add(result);break;
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve unboxed type at IL_{cil.Offset:x4}.");
+                        var input=Pop(stack,cil);var result=New(ElementSize(type)==8?CilStackKind.I8:CilStackKind.I4);
+                        instructions.Add(new ValueIrUnboxAny(result,input,type));stack.Add(result);break;
                     }
                     case 0x8d:
                     {

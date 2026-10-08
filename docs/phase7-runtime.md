@@ -1,6 +1,6 @@
 # Phase 7 — Runtime completeness
 
-Status: **in progress — target execution verification pending**. Runtime completeness means the constrained C# execution model needed for GameCube games, **not** complete desktop .NET compatibility.
+Status: **acceptance gates satisfied — target execution remains separate**. Runtime completeness means the constrained C# execution model needed for GameCube games, **not** complete desktop .NET compatibility.
 
 ## Permanent exclusions
 
@@ -47,15 +47,17 @@ The acceptance tests exercise generated C, rather than checking only the availab
 | Portable integration | Normal, GC-stress and optimized ASan/UBSan execution; additional 32-bit host execution to validate pointer-width assumptions |
 | GameCube build/footprint | ELF/DOL build; ELF sections, symbol sizes, and compiler stack-usage files included in the CI artifact |
 
+CI run [995](https://github.com/capz/DolphinDotNet/actions/runs/37862251760) passed all three jobs, including optimized 32-bit normal and GC-stress execution. Subsequent changes strengthen wide-return/unboxing regressions; their final CI result is recorded in PR #37.
+
 The nullable argument ABI copies aggregate parameters into callee storage. Signature decoding preserves parameter kinds and embedded root offsets; taking an argument’s address never guesses its representation from its consumers. Generic reference fields reserve eight-byte slots so their layouts remain valid on both the portable 64-bit host and GameCube. Reference arrays use native pointer-width elements.
 
 `setjmp`-protected scalar state is volatile. Every active catch retains its own rooted exception object, so an inner catch cannot replace the exception rethrown by an enclosing catch.
 
-### Target verification still required
+### Separate target verification
 
-Hardware or Dolphin execution has not been performed in this work environment. A successful DOL build and 32-bit host run do not verify PowerPC execution, graphics/input/network integration, or total runtime stack high-water usage. Phase 7 stays in progress and PR #37 stays unmerged until target execution evidence is recorded. Dolphin emulator CI remains deferred as below.
+Hardware or Dolphin execution has not been performed in this work environment. A successful DOL build and 32-bit host run do not verify PowerPC execution, graphics/input/network integration, or total runtime stack high-water usage. The eight Phase 7 acceptance gates above cover compiled host integration, a DOL build and measured static footprint. Hardware/emulator execution remains a separate verification gate; Dolphin emulator CI remains deferred as below. PR #37 has not been merged.
 
-The footprint artifact reports per-function compiler stack usage, not an end-to-end stack bound. The configured GameCube managed heap is 256 KiB. For build `c0b17d6`, the linked sample reports text/data/BSS of 219130/46676/496736 bytes; the largest emitted sample frame is 336 bytes and the largest native managed-runtime static frame is 80 bytes. These figures include the linked platform dependencies and must be rechecked after build changes.
+The footprint artifact reports per-function compiler stack usage, not an end-to-end stack bound. The configured GameCube managed heap is 256 KiB. For build `0940fb7`, the linked sample reports text/data/BSS of 219130/46676/496736 bytes; the largest emitted sample frame is 336 bytes and the largest native managed-runtime static frame is 80 bytes. These figures include the linked platform dependencies and must be rechecked after build changes.
 
 ## Quality gate
 
