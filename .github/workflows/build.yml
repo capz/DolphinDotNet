@@ -48,6 +48,11 @@ jobs:
         run: dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/AotSmoke/bin/Release/net8.0/AotSmoke.dll /tmp/aot_smoke.c
       - name: Compile generated AOT C
         run: cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/aot_smoke.c -o /tmp/aot_smoke.o
+      - name: Compile and execute generic sharing integration smoke
+        run: |
+          dotnet build tests/GenericSharingSmoke/GenericSharingSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot tests/GenericSharingSmoke/bin/Release/net8.0/GenericSharingSmoke.dll /tmp/generic_sharing_value.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/generic_sharing_value.c -o /tmp/generic_sharing_value.o
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
       - name: Verify generated source
