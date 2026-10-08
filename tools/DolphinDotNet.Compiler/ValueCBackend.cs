@@ -90,7 +90,7 @@ internal static class ValueCBackend
         foreach(var local in method.Locals){b.AppendLine(local.StorageSize>0?$"  uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {CType(local.Kind)} l{local.Index} = 0;");b.AppendLine($"  (void)l{local.Index};");}
         var leavePaths=method.Blocks.Where(x=>x.Terminator is ValueIrLeave)
             .Select((x,index)=>(Block:x,Leave:(ValueIrLeave)x.Terminator!,Id:index)).ToArray();
-        if(leavePaths.Length>0)b.AppendLine("  volatile int32_t dnd_leave_id = -1; volatile int32_t dnd_leave_step = 0;");
+        if(leavePaths.Length>0 || method.Blocks.Any(x=>x.Terminator is ValueIrEndFinally))b.AppendLine("  volatile int32_t dnd_leave_id = -1; volatile int32_t dnd_leave_step = 0;");
         var roots=values.Where(v=>v.Kind==IrValueKind.ObjectReference).Select(v=>$"(DndObject**)&v{v.Id}").ToList();
         roots.AddRange(method.Locals.Where(l=>l.Kind==IrValueKind.ObjectReference).Select(l=>$"(DndObject**)&l{l.Index}"));
         roots.AddRange(method.Locals.SelectMany(l=>(l.ReferenceOffsets??Array.Empty<int>()).Select(offset=>$"(DndObject**)(l{l.Index}+{offset})")));
