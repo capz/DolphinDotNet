@@ -4,7 +4,7 @@ dol="${1:?Usage: test-dolphin.sh path/to/program.dol}"
 test -s "$dol"
 mkdir -p emulator-logs
 dol="$(realpath "$dol")"
-/usr/games/dolphin-emu --version > emulator-logs/dolphin-version.txt 2>&1
+QT_QPA_PLATFORM=offscreen /usr/games/dolphin-emu --version > emulator-logs/dolphin-version.txt 2>&1
 # --batch closes the emulator when emulation ends. A timeout is a failure,
 # not a pass: a DOL that hangs must not satisfy the smoke test.
 set +e
