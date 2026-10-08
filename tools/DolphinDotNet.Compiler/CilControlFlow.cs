@@ -87,7 +87,7 @@ internal static class CilControlFlowGraph
             var tryEnd=region.TryOffset+region.TryLength;var handlerEnd=region.HandlerOffset+region.HandlerLength;
             var leaves=instructions.Where(i=>i.Offset>=region.TryOffset&&i.Offset<tryEnd&&i.OpCode is 0xdd or 0xde&&i.Operand is CilBranchTarget t&&(t.Offset<region.TryOffset||t.Offset>=tryEnd)).ToArray();
             var continuations=leaves.Select(i=>((CilBranchTarget)i.Operand!).Offset).Distinct().ToArray();
-            if(continuations.Length>1)throw new NotSupportedException("Finally regions with multiple leave continuations are not yet supported.");
+            if(continuations.Length>1)throw new NotSupportedException($"Finally handler IL_{region.HandlerOffset:x4} has {continuations.Length} leave continuations ({string.Join(", ",continuations.Select(offset=>$"IL_{offset:x4}"))}); continuation-state lowering is required.");
             if(continuations.Length==0)continue;
             var continuation=continuations[0];
             for(var n=0;n<rewritten.Length;n++)
