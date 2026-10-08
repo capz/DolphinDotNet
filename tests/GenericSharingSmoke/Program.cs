@@ -81,7 +81,10 @@ internal static class Program
             try
             {
                 var values = new CompactList<int>();
+                if (values.BackingLength != 4) return -11;
                 values.Add(3);
+                if (values.Count != 1) return -12;
+                if (values.BackingLength != 4) return -13;
                 if (!values.Contains(3)) return -1;
                 int? missing = null;
                 return missing.Value;
@@ -448,6 +451,7 @@ internal sealed class CompactList<T> : IList<T>, IReadOnlyList<T>
     private T[] _items = new T[4];
     private int _count;
     public int Count => _count;
+    public int BackingLength => _items.Length;
     public bool IsReadOnly => false;
     public T this[int index] { get => _items[index]; set => _items[index] = value; }
     public void Add(T item) { _items[_count++] = item; }
