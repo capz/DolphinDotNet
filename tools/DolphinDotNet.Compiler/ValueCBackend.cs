@@ -220,12 +220,27 @@ internal static class ValueCBackend
                     case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
                     case ValueIrStringLength x:b.AppendLine($"  v{x.Result.Id} = ((DndString*)v{x.String.Id})->length;");break;
                     case ValueIrPrimitiveToString x:
+                    {
+                        // Primitive instance ToString receives a managed address (ldloca/ldarga),
+                        // not the numeric value itself. Dereference with the primitive's width.
+                        var raw=$"v{x.Value.Id}";
+                        var pointer=x.Value.Kind==CilStackKind.ManagedPointer;
+                        var signed=x.TypeName is "System.SByte" or "System.Int16" or "System.Int32" or "System.Int64";
+                        var width=x.TypeName switch {
+                            "System.Boolean" or "System.Byte" or "System.SByte"=>8,
+                            "System.Char" or "System.Int16" or "System.UInt16"=>16,
+                            "System.Int64" or "System.UInt64"=>64,
+                            _=>32
+                        };
+                        var numeric=pointer?$"(*({(signed?"int":"uint")}{width}_t*)(intptr_t){raw})":raw;
                         b.AppendLine(x.TypeName switch {
-                            "System.Boolean"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_bool(dnd_value_heap, v{x.Value.Id} != 0);",
-                            "System.Char"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_char(dnd_value_heap, (uint16_t)v{x.Value.Id});",
-                            "System.UInt32" or "System.UInt64"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_u64(dnd_value_heap, (uint64_t)v{x.Value.Id});",
-                            _=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_i64(dnd_value_heap, (int64_t)v{x.Value.Id});"
-                        });break;
+                            "System.Boolean"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_bool(dnd_value_heap, {numeric} != 0);",
+                            "System.Char"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_char(dnd_value_heap, (uint16_t){numeric});",
+                            "System.UInt32" or "System.UInt64" or "System.Byte" or "System.UInt16"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_u64(dnd_value_heap, (uint64_t){numeric});",
+                            _=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_i64(dnd_value_heap, (int64_t){numeric});"
+                        });
+                        break;
+                    }
                     case ValueIrStringOperation x:
                     {
                         var a=x.Arguments;
