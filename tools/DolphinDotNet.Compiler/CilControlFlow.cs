@@ -85,7 +85,14 @@ internal static class CilControlFlowGraph
         foreach(var region in regions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally))
         {
             var tryEnd=region.TryOffset+region.TryLength;var handlerEnd=region.HandlerOffset+region.HandlerLength;
-            var leaves=instructions.Where(i=>i.Offset>=region.TryOffset&&i.Offset<tryEnd&&i.OpCode is 0xdd or 0xde&&i.Operand is CilBranchTarget t&&(t.Offset<region.TryOffset||t.Offset>=tryEnd)).ToArray();
+            // A leave from a nested try may exit several enclosing finally regions.
+            // Use the lexical source and destination to determine which handlers
+            // actually need to run, rather than treating every branch as a leave.
+            var leaves=instructions.Where(i=>
+                i.Offset>=region.TryOffset && i.Offset<tryEnd &&
+                i.OpCode is 0xdd or 0xde &&
+                i.Operand is CilBranchTarget t &&
+                (t.Offset<region.TryOffset || t.Offset>=tryEnd)).ToArray();
             var continuations=leaves.Select(i=>((CilBranchTarget)i.Operand!).Offset).Distinct().ToArray();
             if(continuations.Length>1)throw new NotSupportedException($"Finally handler IL_{region.HandlerOffset:x4} has {continuations.Length} leave continuations ({string.Join(", ",continuations.Select(offset=>$"IL_{offset:x4}"))}); continuation-state lowering is required.");
             if(continuations.Length==0)continue;
