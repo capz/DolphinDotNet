@@ -128,7 +128,7 @@ internal static class CilControlFlowGraph
             if(last.Operand is CilSwitchTargets sw)foreach(var switchTarget in sw.Offsets)successors.Add(byStart[switchTarget]);
             if(last.Flow==CilFlowKind.Switch && byStart.TryGetValue(last.EndOffset,out var switchFall))successors.Add(switchFall);
             else if(last.Flow==CilFlowKind.ConditionalBranch && byStart.TryGetValue(last.EndOffset,out var fall))successors.Add(fall);
-            else if(last.Flow==CilFlowKind.Next && byStart.TryGetValue(last.EndOffset,out var next))successors.Add(next);
+            else if(last.Flow==CilFlowKind.Next && last.OpCode!=0xdc && byStart.TryGetValue(last.EndOffset,out var next))successors.Add(next);
             blocks.Add(new CilBasicBlock(n,start,body,successors,new List<int>()));
         }
         foreach(var block in blocks)foreach(var successor in block.Successors)blocks[successor].Predecessors.Add(block.Id);
