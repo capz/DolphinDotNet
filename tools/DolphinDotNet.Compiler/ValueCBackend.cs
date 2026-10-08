@@ -123,6 +123,7 @@ internal static class ValueCBackend
                 }
             }
             b.AppendLine("    if (dnd_eh_active) { dnd_eh_pop(&dnd_eh_frame); dnd_eh_active = 0; }");
+            if(roots.Count>0)b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");
             b.AppendLine("    dnd_exception_rethrow(); return 0;");
             b.AppendLine("  }");
         }
