@@ -4,13 +4,13 @@ dol="${1:?Usage: test-dolphin.sh path/to/program.dol}"
 test -s "$dol"
 mkdir -p emulator-logs
 dol="$(realpath "$dol")"
-command -v dolphin-emu >/dev/null || { echo "Dolphin emulator missing" >&2; exit 1; }
+flatpak info --user org.DolphinEmu.dolphin-emu > emulator-logs/dolphin-version.txt
 # --batch closes the emulator when emulation ends. A timeout is a failure,
 # not a pass: a DOL that hangs must not satisfy the smoke test.
 set +e
 timeout --signal=TERM --kill-after=10s 90s \
   xvfb-run -a -s '-screen 0 1280x720x24' \
-  dolphin-emu --batch --exec="$dol" > emulator-logs/stdout.log 2> emulator-logs/stderr.log
+  flatpak run --user --filesystem="$PWD":ro --env=LIBGL_ALWAYS_SOFTWARE=1 org.DolphinEmu.dolphin-emu --batch --exec="$dol" > emulator-logs/stdout.log 2> emulator-logs/stderr.log
 status=$?
 set -e
 cat emulator-logs/stdout.log
