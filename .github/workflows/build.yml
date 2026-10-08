@@ -75,7 +75,8 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth libgl1-mesa-dri ca-certificates
-          dpkg -L dolphin-emu | grep -E '/(bin|games)/|\.desktop
+          test -x /usr/games/dolphin-emu
+          /usr/games/dolphin-emu --version
       - name: Execute DOL in Dolphin
         run: bash scripts/test-dolphin.sh emulator-artifacts/DolphinDotNet.dol
       - name: Upload emulator diagnostics
