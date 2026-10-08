@@ -136,15 +136,15 @@ internal static class ValueIrImporter
                     case >=0x90 and <=0x9a:
                     {
                         var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0x9a;
-                        var size=cil.OpCode switch { 0x90 or 0x91 or 0x92=>1, 0x93 or 0x94=>2, 0x96 or 0x97 or 0x99=>8, _=>4 };
-                        var signed=cil.OpCode is 0x90 or 0x92 or 0x93 or 0x95 or 0x97;
+                        var size=cil.OpCode switch { 0x90 or 0x91=>1, 0x92 or 0x93=>2, 0x96 or 0x99=>8, _=>4 };
+                        var signed=cil.OpCode is 0x90 or 0x92 or 0x94 or 0x96 or 0x97;
                         var kind=reference?CilStackKind.ObjectReference:size==8?CilStackKind.I8:CilStackKind.I4;var result=New(kind);
                         instructions.Add(new ValueIrLoadElement(result,array,index,size,reference,signed));stack.Add(result);break;
                     }
                     case >=0x9b and <=0xa2:
                     {
                         var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0xa2;
-                        var size=cil.OpCode switch { 0x9b=>1, 0x9c=>2, 0x9f or 0xa0=>8, _=>4 };
+                        var size=cil.OpCode switch { 0x9c=>1, 0x9d=>2, 0x9f or 0xa1=>8, _=>4 };
                         instructions.Add(new ValueIrStoreElement(array,index,value,size,reference));break;
                     }
                     case 0xa3:
