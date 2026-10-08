@@ -135,6 +135,9 @@ internal static class CilControlFlowGraph
                             (destination<r.TryOffset || destination>=r.TryOffset+r.TryLength) && r.TryLength>handler.TryLength)
                             .OrderBy(r=>r.TryLength).FirstOrDefault();
                         var nextOffset=next.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally?next.HandlerOffset:destination;
+                        // Exception handlers are entered by dispatch, never by a normal leave.
+                        // Exclude catch/filter entry blocks from synthetic endfinally edges.
+                        if(regions.Any(r=>r.Kind is System.Reflection.Metadata.ExceptionRegionKind.Catch or System.Reflection.Metadata.ExceptionRegionKind.Filter && r.HandlerOffset==nextOffset))continue;
                         if(!successors.Contains(byStart[nextOffset]))successors.Add(byStart[nextOffset]);
                     }
                 }
