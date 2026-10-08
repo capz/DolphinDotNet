@@ -108,7 +108,7 @@ internal static class ValueCBackend
             b.AppendLine("  volatile int32_t dnd_eh_site = -1; volatile int dnd_eh_active = 1; DndEhFrame dnd_eh_frame;");
             b.AppendLine("  dnd_eh_push(&dnd_eh_frame);");
             b.AppendLine("  if (setjmp(dnd_eh_frame.environment) != 0) {");
-            foreach(var region in method.ExceptionRegions.OrderBy(r=>r.TryLength))
+            foreach(var region in method.ExceptionRegions.OrderBy(r=>r.TryLength).ThenBy(r=>r.Kind==ValueIrExceptionRegionKind.Catch?0:1))
             {
                 var handler=method.Blocks.FirstOrDefault(x=>x.CilOffset==region.HandlerOffset);
                 if(handler is null)continue;
