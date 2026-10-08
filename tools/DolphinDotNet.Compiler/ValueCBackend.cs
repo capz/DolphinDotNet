@@ -328,13 +328,13 @@ internal static class ValueCBackend
                     case ValueIrPhi: break; // Assigned on predecessor edges.
                 }
             }
-            EmitTerminator(b,method,block);
+            EmitTerminator(b,method,block,model);
         }
         b.AppendLine("}");
         return b.ToString();
     }
 
-    private static void EmitTerminator(StringBuilder b,ValueIrMethod method,ValueIrBlock block)
+    private static void EmitTerminator(StringBuilder b,ValueIrMethod method,ValueIrBlock block,CompilationModel model)
     {
         switch(block.Terminator)
         {
