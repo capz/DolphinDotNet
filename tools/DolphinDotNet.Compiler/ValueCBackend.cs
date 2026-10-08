@@ -108,7 +108,7 @@ internal static class ValueCBackend
         }
         if(method.ExceptionRegions.Count>0)
         {
-            b.AppendLine("  volatile int32_t dnd_eh_site = -1; volatile int dnd_eh_active = 1; DndEhFrame dnd_eh_frame;");
+            b.AppendLine("  volatile int32_t dnd_eh_site = -1; volatile int32_t dnd_eh_unwind_finally_length = -1; volatile int dnd_eh_active = 1; DndEhFrame dnd_eh_frame;");
             b.AppendLine("  dnd_eh_push(&dnd_eh_frame);");
             b.AppendLine("  if (setjmp(dnd_eh_frame.environment) != 0) {");
             foreach(var region in method.ExceptionRegions.OrderBy(r=>r.TryLength).ThenBy(r=>r.Kind==ValueIrExceptionRegionKind.Catch?0:1))
@@ -116,7 +116,7 @@ internal static class ValueCBackend
                 var handler=method.Blocks.FirstOrDefault(x=>x.CilOffset==region.HandlerOffset);
                 if(handler is null)continue;
                 if(region.Kind==ValueIrExceptionRegionKind.Finally)
-                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength}) {{ dnd_eh_push(&dnd_eh_frame); goto block_{handler.Id}; }}");
+                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength} && dnd_eh_unwind_finally_length < {region.TryLength}) {{ dnd_eh_unwind_finally_length = {region.TryLength}; dnd_eh_push(&dnd_eh_frame); goto block_{handler.Id}; }}");
                 else if(region.Kind==ValueIrExceptionRegionKind.Catch)
                 {
                     var exceptionValue=handler.EntryStack.Values.FirstOrDefault();
