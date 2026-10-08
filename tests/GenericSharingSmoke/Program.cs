@@ -233,6 +233,17 @@ internal static class Program
         return -2;
     }
 
+    private static int ThrowFromCatchProbe()
+    {
+        try
+        {
+            try { throw new ArgumentException("first"); }
+            catch (ArgumentException) { throw new InvalidOperationException("second"); }
+        }
+        catch (InvalidOperationException) { return 20; }
+        return -1;
+    }
+
     private static int Main()
     {
         var formatting = FormattingProbe(); if (formatting != 0) return 180 + formatting;
@@ -243,6 +254,7 @@ internal static class Program
         if (EhIntegrationProbe() != 16) return 95;
         if (CrossMethodExceptionProbe() != 17) return 96;
         if (NestedTypedCatchProbe() != 18) return 97;
+        if (ThrowFromCatchProbe() != 20) return 99;
         if (ExplicitExceptionProbe() != 15) return 94;
         if (RethrowProbe() != 14) return 93;
         if (TypedCatchProbe() != 13) return 92;
