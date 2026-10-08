@@ -216,6 +216,25 @@ int main(void) {
     assert(dnd_exception_kind() == DND_EXCEPTION_OUT_OF_MEMORY);
     dnd_exception_clear();
 
+    /* Input references to allocating runtime helpers must be rooted even when
+       the caller has not installed a separate shadow-stack frame. */
+    dnd_gc_set_stress(false);
+    DndString *gc_left = dnd_string_from_utf8(&heap, "Left");
+    DndString *gc_right = dnd_string_from_utf8(&heap, "Right");
+    assert(gc_left && gc_right);
+    dnd_gc_set_stress(true);
+    DndString *gc_joined = dnd_string_concat(&heap, gc_left, gc_right);
+    assert(gc_joined && gc_joined->length == 9);
+    assert(gc_joined->chars[0] == 'L' && gc_joined->chars[8] == 't');
+    dnd_gc_set_stress(false);
+    DndString *gc_message = dnd_string_from_utf8(&heap, "Survives");
+    assert(gc_message);
+    dnd_gc_set_stress(true);
+    DndException *gc_exception = dnd_exception_new(&heap, &DND_TYPE_EXCEPTION, gc_message);
+    assert(gc_exception && gc_exception->message == gc_message);
+    assert(gc_exception->message->length == 8);
+    dnd_gc_set_stress(false);
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }

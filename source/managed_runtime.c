@@ -228,8 +228,14 @@ DndString *dnd_string_concat(DndManagedHeap *heap, const DndString *a, const Dnd
         dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY, "String concatenation size overflow.");
         return NULL;
     }
+    /* Allocation may collect: keep both input strings alive while it runs. */
+    DndObject *left_root = (DndObject *)a, *right_root = (DndObject *)b;
+    DndObject **root_slots[] = { &left_root, &right_root };
+    DndGcFrame roots;
+    dnd_gc_frame_push(&roots, root_slots, 2);
     DndString *string = (DndString *)allocate(heap, &DND_TYPE_STRING,
         sizeof(DndString) + ((size_t)a_length + b_length + 1) * sizeof(uint16_t));
+    dnd_gc_frame_pop(&roots);
     if (!string) return NULL;
     string->length = a_length + b_length;
     if (a) memcpy(string->chars, a->chars, (size_t)a_length * sizeof(uint16_t));
@@ -691,8 +697,14 @@ void dnd_eh_pop(DndEhFrame *frame) {
 bool dnd_exception_pending(void) { return exception_is_pending; }
 DndObject *dnd_exception_object(void) { return exception_object; }
 DndException *dnd_exception_new(DndManagedHeap *heap, const DndType *type, DndString *message) {
+    /* The message is a managed allocation input and must survive GC stress. */
+    DndObject *message_root = (DndObject *)message;
+    DndObject **root_slots[] = { &message_root };
+    DndGcFrame roots;
+    dnd_gc_frame_push(&roots, root_slots, 1);
     DndException *exception=(DndException *)allocate(heap,type?type:&DND_TYPE_EXCEPTION,sizeof(DndException));
     if(exception) exception->message=message;
+    dnd_gc_frame_pop(&roots);
     return exception;
 }
 DndString *dnd_exception_get_message(DndException *exception) { return exception?exception->message:NULL; }
