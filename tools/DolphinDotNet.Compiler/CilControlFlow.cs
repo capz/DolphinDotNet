@@ -78,39 +78,9 @@ internal sealed record CilBasicBlock(int Id,int StartOffset,List<CilInstruction>
 
 internal static class CilControlFlowGraph
 {
-    private static IReadOnlyList<CilInstruction> RewriteFinallyControlFlow(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion> regions)
-    {
-        if(regions.Count==0)return instructions;
-        var rewritten=instructions.ToArray();
-        foreach(var region in regions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally))
-        {
-            var tryEnd=region.TryOffset+region.TryLength;var handlerEnd=region.HandlerOffset+region.HandlerLength;
-            // A leave from a nested try may exit several enclosing finally regions.
-            // Use the lexical source and destination to determine which handlers
-            // actually need to run, rather than treating every branch as a leave.
-            var leaves=instructions.Where(i=>
-                i.Offset>=region.TryOffset && i.Offset<tryEnd &&
-                i.OpCode is 0xdd or 0xde &&
-                i.Operand is CilBranchTarget t &&
-                (t.Offset<region.TryOffset || t.Offset>=tryEnd)).ToArray();
-            var continuations=leaves.Select(i=>((CilBranchTarget)i.Operand!).Offset).Distinct().ToArray();
-            if(continuations.Length>1)throw new NotSupportedException($"Finally handler IL_{region.HandlerOffset:x4} has {continuations.Length} leave continuations ({string.Join(", ",continuations.Select(offset=>$"IL_{offset:x4}"))}); continuation-state lowering is required.");
-            if(continuations.Length==0)continue;
-            var continuation=continuations[0];
-            for(var n=0;n<rewritten.Length;n++)
-            {
-                var i=rewritten[n];
-                if(leaves.Any(l=>l.Offset==i.Offset))rewritten[n]=i with { Operand=new CilBranchTarget(region.HandlerOffset),Flow=CilFlowKind.Branch };
-                else if(i.Offset>=region.HandlerOffset&&i.Offset<handlerEnd&&i.OpCode==0xdc)rewritten[n]=i with { Operand=new CilBranchTarget(continuation),Flow=CilFlowKind.Branch };
-            }
-        }
-        return rewritten;
-    }
-
     public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion>? exceptionRegions=null)
     {
         var regions=exceptionRegions??Array.Empty<System.Reflection.Metadata.ExceptionRegion>();
-        instructions=RewriteFinallyControlFlow(instructions,regions);
         if(instructions.Count==0)return [];
         var starts=new HashSet<int>{instructions[0].Offset};
         foreach(var region in regions) {
@@ -133,7 +103,42 @@ internal static class CilControlFlowGraph
             var body=instructions.Where(i=>i.Offset>=start&&i.Offset<end).ToList();
             if(body.Count==0)throw new InvalidDataException($"Branch target IL_{start:x4} is not an instruction boundary.");
             var last=body[^1];var successors=new List<int>();
-            if(last.Operand is CilBranchTarget { Offset: var target })successors.Add(byStart[target]);
+            if(last.Operand is CilBranchTarget { Offset: var target })
+            {
+                if(last.OpCode is 0xdd or 0xde)
+                {
+                    // Keep the original leave target; the outgoing edge first enters
+                    // the innermost finally that is exited by this leave.
+                    var handler=regions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally &&
+                        last.Offset>=r.TryOffset && last.Offset<r.TryOffset+r.TryLength &&
+                        (target<r.TryOffset || target>=r.TryOffset+r.TryLength))
+                        .OrderBy(r=>r.TryLength).FirstOrDefault();
+                    successors.Add(byStart[handler.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally?handler.HandlerOffset:target]);
+                }
+                else successors.Add(byStart[target]);
+            }
+            if(last.OpCode==0xdc)
+            {
+                var handler=regions.FirstOrDefault(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally &&
+                    last.Offset>=r.HandlerOffset && last.Offset<r.HandlerOffset+r.HandlerLength);
+                if(handler.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally)
+                {
+                    foreach(var leave in instructions.Where(i=>i.OpCode is 0xdd or 0xde &&
+                        i.Operand is CilBranchTarget t &&
+                        i.Offset>=handler.TryOffset && i.Offset<handler.TryOffset+handler.TryLength &&
+                        (t.Offset<handler.TryOffset || t.Offset>=handler.TryOffset+handler.TryLength)))
+                    {
+                        var destination=((CilBranchTarget)leave.Operand!).Offset;
+                        var next=regions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally &&
+                            r.HandlerOffset!=handler.HandlerOffset &&
+                            leave.Offset>=r.TryOffset && leave.Offset<r.TryOffset+r.TryLength &&
+                            (destination<r.TryOffset || destination>=r.TryOffset+r.TryLength) && r.TryLength>handler.TryLength)
+                            .OrderBy(r=>r.TryLength).FirstOrDefault();
+                        var nextOffset=next.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally?next.HandlerOffset:destination;
+                        if(!successors.Contains(byStart[nextOffset]))successors.Add(byStart[nextOffset]);
+                    }
+                }
+            }
             if(last.Operand is CilSwitchTargets sw)foreach(var switchTarget in sw.Offsets)successors.Add(byStart[switchTarget]);
             if(last.Flow==CilFlowKind.Switch && byStart.TryGetValue(last.EndOffset,out var switchFall))successors.Add(switchFall);
             else if(last.Flow==CilFlowKind.ConditionalBranch && byStart.TryGetValue(last.EndOffset,out var fall))successors.Add(fall);
