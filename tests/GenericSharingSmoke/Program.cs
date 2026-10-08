@@ -82,6 +82,7 @@ internal static class Program
             {
                 var values = new CompactList<int>();
                 if (values.BackingLength != 4) return -11;
+                if (values.Count != 0) return -14;
                 values.Add(3);
                 if (values.Count != 1) return -12;
                 if (values.BackingLength != 4) return -13;
