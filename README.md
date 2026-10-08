@@ -1,85 +1,65 @@
 # DolphinDotNet
 
-DolphinDotNet is an experimental tiny managed runtime and C# toolchain for Nintendo GameCube, built on devkitPPC/libogc.
+**Experimental closed-world C# AOT toolchain and managed runtime for Nintendo GameCube.**
 
-## Current milestone: real C# input
+DolphinDotNet compiles ordinary .NET assemblies into native C through a typed intermediate representation, then uses devkitPPC/libogc to produce a GameCube DOL. It does **not** embed CoreCLR or claim general .NET compatibility.
 
-The repository now accepts an ordinary compiled .NET assembly for a deliberately small C# subset. The host-side `dndc` compiler reads PE/CLI metadata and CIL using `System.Reflection.Metadata`, translates the managed entry point to DolphinDotNet bytecode, and emits a C header embedded into the GameCube executable.
+## Current state (October 2026)
 
-The included sample is ordinary C#:
+| Area | Status |
+| --- | --- |
+| Managed assembly / CIL import | Implemented for a growing, deliberately constrained subset |
+| Production compiler | Typed Value IR, control-flow/stack analysis, native C AOT (`--aot`) |
+| Legacy bytecode VM | Retained as a bootstrap/reference path |
+| Managed runtime | Objects, type metadata, fields, virtual/interface dispatch primitives, strings, arrays, delegates, boxing, exception state |
+| Memory management | Nonmoving mark/sweep GC, explicit roots and compiler-generated shadow-stack support, reusable free blocks, stress mode |
+| GameCube platform | libogc DOL, OpenGX 3D/overlay, PAD input, nonblocking UDP, console overlay |
+| Integration | Compiler, portable native-runtime, and GameCube build CI; broader C# runtime semantics still being verified |
+| Phase 7 runtime completeness | **In progress** — see [Phase 7 acceptance gates](docs/phase7-runtime.md) |
 
-```csharp
-Console.WriteLine("Hello from real C#!");
-Console.WriteLine("Running through DolphinDotNet.");
-Console.WriteLine(40 + 2);
+The native runtime implementing a feature does **not** automatically mean all corresponding C# constructs are fully supported by the AOT compiler.
+
+## Build pipeline
+
+```text
+C# source -> Roslyn / .NET assembly -> CIL + metadata
+  -> CFG / stack analysis -> typed Value IR -> generated native C
+  -> devkitPPC + libogc -> ELF -> DolphinDotNet.dol
 ```
 
-The pipeline is:
+`--aot` is the production compiler path; `--value-aot` is its explicit alias. `--legacy-aot` is retained for regression characterization. The original bytecode compiler is not the production target.
 
-```
-C# -> dotnet/Roslyn -> .NET DLL -> dndc -> DND bytecode/C data
-   -> devkitPPC + libogc -> DolphinDotNet.dol
-```
+## Try the compiler
 
-This is **not yet a conforming .NET Standard implementation**. It is the first vertical slice proving that normal C# compiler output can feed the GameCube runtime.
-
-## Supported CIL subset
-
-- `nop`
-- `ldstr`
-- `ldc.i4.m1`, `ldc.i4.0` ... `ldc.i4.8`, `ldc.i4.s`, `ldc.i4`
-- `add`, `sub`, `mul`, `div`
-- `pop`
-- `ret`
-- `call System.Console.WriteLine(string)`
-- `call System.Console.WriteLine(int)`
-
-Unsupported opcodes and calls fail during compilation with the CIL offset rather than silently producing a broken DOL.
-
-## Compile the C# sample
-
-Requires .NET 8:
+Requires the .NET SDK (see project target frameworks) and, for DOL builds, devkitPro with devkitPPC, libogc and the GameCube OpenGX port.
 
 ```sh
-sh scripts/compile-sample.sh
-```
-
-This builds `samples/HelloGameCube` and regenerates `generated/generated_program.h`.
-
-## Build for GameCube
-
-Install devkitPro with the GameCube development packages and make sure `DEVKITPPC` is set:
-
-```sh
+dotnet run --project tools/DolphinDotNet.Compiler -- --aot path/to/Managed.dll generated/generated_program.c
 make
 ```
 
-The output is `DolphinDotNet.dol`.
+The output is `DolphinDotNet.dol`. The repository also contains `samples/HelloGameCube`, `samples/ManagedGameCube`, and `scripts/compile-sample.sh`.
 
-## Runtime
+## Tests and CI
 
-The GameCube side currently provides:
+- `tests/managed_runtime_tests.c` covers native managed-runtime mechanisms, GC, UTF-16 strings, arrays, type checks and exceptions.
+- `tools/DolphinDotNet.Compiler.Tests` exercises compiler lowering.
+- GitHub Actions builds managed samples, portable native runtime tests and the GameCube target.
+- Automated Dolphin emulator smoke testing (former Phase 6 Stage 11) is **deferred**; a green build does not establish successful execution on emulator or hardware.
 
-- compact object headers/type IDs
-- 256 KiB prototype managed heap
-- managed UTF-8 strings
-- one-dimensional managed arrays
-- compact stack VM
-- native/internal-call bridge to libogc
-- GameCube console output and controller exit handling
+## API and architecture rules
 
-The portable runtime has desktop-hosted C tests, while CI separately compiles the real C# sample and verifies its generated source.
+GameCube-specific managed APIs belong under the **`Dolphin` namespace** (for example `Dolphin.Graphics`, `Dolphin.Input`, `Dolphin.Network`). Existing `DolphinDotNet.GameCube` API code is legacy and requires migration with compiler intrinsic mapping updates. Standard-library-compatible APIs retain `System.*` names.
 
-## Next milestones
+The managed/native split keeps game code independent of GX, PAD, libogc and native socket details. The native GameCube backend owns hardware resources.
 
-1. Locals and arguments
-2. Conditional/unconditional branches and loops
-3. Calls between user-defined managed methods
-4. Static/instance fields and constructors
-5. Arrays and richer strings from C#
-6. Offline type layout/metadata tables
-7. Replace bytecode interpretation with PowerPC AOT
-8. Exceptions and a simple tracing/mark-sweep GC
-9. Grow a small useful BCL surface
+**Permanently out of scope:** full reflection and dynamic assembly loading. Closed-world static metadata and explicitly supported type checks are allowed.
 
-See `docs/architecture.md` for the longer-term design.
+## Roadmap
+
+1. **Phase 7 — runtime completeness:** validate compiled C# object lifecycle, precise GC roots, exceptions/finally, strings/arrays, type system, generics and integrated GameCube constraints.
+2. **Phase 8 — managed platform APIs:** Game, graphics, input, network and diagnostics under `Dolphin.*`.
+3. **Phase 9 — integrated demo:** textured 3D, controller interaction, UDP and diagnostic overlay, compiled from C# to a DOL.
+4. **Hardware validation:** test the actual DOL on Dolphin and GameCube; emulator CI remains a separate deferred task.
+
+See [architecture](docs/architecture.md), [managed runtime architecture](docs/managed-runtime-architecture.md), [runtime levels](docs/runtime-levels.md) and [platform roadmap](docs/platform-roadmap.md).
