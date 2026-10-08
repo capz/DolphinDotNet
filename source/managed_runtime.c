@@ -166,6 +166,36 @@ DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text) {
     return string;
 }
 
+static DndString *string_from_ascii_buffer(DndManagedHeap *heap, const char *buffer, uint32_t length) {
+    DndString *result=(DndString *)allocate(heap,&DND_TYPE_STRING,sizeof(DndString)+(size_t)(length+1)*sizeof(uint16_t));
+    if (!result) return NULL;
+    result->length=length;
+    for(uint32_t i=0;i<length;i++) result->chars[i]=(uint8_t)buffer[i];
+    result->chars[length]=0;
+    return result;
+}
+DndString *dnd_string_from_u64(DndManagedHeap *heap, uint64_t value) {
+    char buffer[21]; uint32_t p=21; do { buffer[--p]=(char)('0'+value%10); value/=10; } while(value);
+    return string_from_ascii_buffer(heap,buffer+p,21-p);
+}
+DndString *dnd_string_from_i64(DndManagedHeap *heap, int64_t value) {
+    char buffer[21]; uint32_t p=21; uint64_t magnitude=value<0?(uint64_t)(-(value+1))+1u:(uint64_t)value;
+    do { buffer[--p]=(char)('0'+magnitude%10); magnitude/=10; } while(magnitude);
+    if(value<0) buffer[--p]='-';
+    return string_from_ascii_buffer(heap,buffer+p,21-p);
+}
+DndString *dnd_string_from_bool(DndManagedHeap *heap, bool value) {
+    return string_from_ascii_buffer(heap,value?"True":"False",value?4u:5u);
+}
+DndString *dnd_string_from_char(DndManagedHeap *heap, uint16_t value) {
+    DndString *result=(DndString *)allocate(heap,&DND_TYPE_STRING,sizeof(DndString)+2*sizeof(uint16_t));
+    if (!result) return NULL;
+    result->length=1;
+    result->chars[0]=value;
+    result->chars[1]=0;
+    return result;
+}
+
 DndString *dnd_string_concat(DndManagedHeap *heap, const DndString *a, const DndString *b) {
     uint32_t a_length = a ? a->length : 0;
     uint32_t b_length = b ? b->length : 0;
