@@ -256,6 +256,52 @@ internal static class Program
         finally { cleanup++; }
     }
 
+    private static int NestedFinallyUnwindProbe(int choice)
+    {
+        var trace = 0;
+        try
+        {
+            try
+            {
+                if (choice == 1) return 11;
+                if (choice == 2) return 22;
+                trace += 1;
+            }
+            finally { trace += 2; }
+        }
+        finally { trace += 4; }
+        return trace;
+    }
+
+    private static int ExceptionDuringFinallyProbe()
+    {
+        var trace = 0;
+        try
+        {
+            try { throw new ArgumentException("original"); }
+            finally
+            {
+                trace += 2;
+                throw new InvalidOperationException("replacement");
+            }
+        }
+        catch (InvalidOperationException) { return trace == 2 ? 42 : -1; }
+        catch (ArgumentException) { return -2; }
+    }
+
+    private static int CatchFinallyInteractionProbe()
+    {
+        var trace = 0;
+        try
+        {
+            try { throw new InvalidOperationException("inner"); }
+            catch (ArgumentException) { return -1; }
+            finally { trace += 3; }
+        }
+        catch (InvalidOperationException) { return trace == 3 ? 43 : -2; }
+        return -3;
+    }
+
     private static int Main()
     {
         var formatting = FormattingProbe(); if (formatting != 0) return 180 + formatting;
@@ -268,6 +314,9 @@ internal static class Program
         if (NestedTypedCatchProbe() != 18) return 97;
         if (ThrowFromCatchProbe() != 20) return 99;
         if (MultipleFinallyLeavesProbe(1) != 10 || MultipleFinallyLeavesProbe(2) != 20 || MultipleFinallyLeavesProbe(3) != 30) return 100;
+        if (NestedFinallyUnwindProbe(0) != 7 || NestedFinallyUnwindProbe(1) != 11 || NestedFinallyUnwindProbe(2) != 22) return 101;
+        if (ExceptionDuringFinallyProbe() != 42) return 102;
+        if (CatchFinallyInteractionProbe() != 43) return 103;
         if (ExplicitExceptionProbe() != 15) return 94;
         if (RethrowProbe() != 14) return 93;
         if (TypedCatchProbe() != 13) return 92;
