@@ -73,7 +73,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y flatpak xvfb mesa-utils libgl1-mesa-dri
+          flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak remote-add --if-not-exists --user dolphin https://flatpak.dolphin-emu.org/releases.flatpakrepo
+          flatpak install --user --noninteractive -y flathub org.kde.Platform//6.11
           flatpak install --user --noninteractive -y dolphin org.DolphinEmu.dolphin-emu
           flatpak run --user org.DolphinEmu.dolphin-emu --version
       - name: Execute DOL in Dolphin
