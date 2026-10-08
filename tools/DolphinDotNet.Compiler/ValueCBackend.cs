@@ -92,6 +92,12 @@ internal static class ValueCBackend
         roots.AddRange(method.Locals.Where(l=>l.Kind==IrValueKind.ObjectReference).Select(l=>$"(DndObject**)&l{l.Index}"));
         roots.AddRange(method.Locals.SelectMany(l=>(l.ReferenceOffsets??Array.Empty<int>()).Select(offset=>$"(DndObject**)(l{l.Index}+{offset})")));
         if(method.HasThis)roots.Add("(DndObject**)&a0");
+        /* Incoming managed references must remain roots even before their first
+           IL load. Callees can allocate while the argument is still live. */
+        if(model.Methods.TryGetValue(method.Key,out var rootMethod) && rootMethod.Abi is { } rootAbi)
+            for(var pi=0;pi<method.ParameterCount && pi<rootAbi.Parameters.Count;pi++)
+                if(rootAbi.Parameters[pi]==CilStackKind.ObjectReference)
+                    roots.Add($"(DndObject**)&a{pi+(method.HasThis?1:0)}");
         if(roots.Count>0)
         {
             b.AppendLine($"  DndObject **gc_slots[{roots.Count}] = {{ {string.Join(", ",roots)} }};");
@@ -340,8 +346,8 @@ internal static class ValueCBackend
             case ValueIrSwitch x:
                 b.AppendLine($"  switch ((int32_t)v{x.Value.Id}) {{");for(var i=0;i<x.Targets.Count;i++){b.AppendLine($"    case {i}:");Edge(b,method,block.Id,x.Targets[i],"      ");b.AppendLine($"      goto block_{x.Targets[i]};");}b.AppendLine("    default:");Edge(b,method,block.Id,x.DefaultBlock,"      ");b.AppendLine($"      goto block_{x.DefaultBlock};");b.AppendLine("  }");break;
             case ValueIrReturn r:
-                if(r.Value is { } v){b.AppendLine($"  {{ intptr_t return_value = v{v.Id};");if(method.ExceptionRegions.Count>0)b.AppendLine("    if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
-                else {if(method.ExceptionRegions.Count>0)b.AppendLine("  if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
+                if(r.Value is { } v){b.AppendLine($"  {{ intptr_t return_value = v{v.Id};");if(method.ExceptionRegions.Count>0)b.AppendLine("    if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
+                else {if(method.ExceptionRegions.Count>0)b.AppendLine("  if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
                 break;
             case ValueIrEndFinally ef:
                 b.AppendLine("  if (dnd_exception_pending()) { dnd_exception_rethrow(); return 0; }");
@@ -439,7 +445,7 @@ internal static class ValueCBackend
     private static string AbiCType(CilStackKind kind)=>kind switch{CilStackKind.I8=>"int64_t",CilStackKind.Float=>"double",_=>"intptr_t"};
     private static string Id(string s)=>new(s.Select(ch=>char.IsLetterOrDigit(ch)?ch:'_').ToArray());
     private static string Escape(string s)=>s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n").Replace("\r","\\r").Replace("\t","\\t");
-    private static bool HasRoots(ValueIrMethod m)=>Collect(m).Any(v=>v.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>l.Kind==IrValueKind.ObjectReference)||m.HasThis;
+    private static bool HasRoots(ValueIrMethod m,CompilationModel model)=>Collect(m).Any(v=>v.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>l.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>(l.ReferenceOffsets?.Count??0)>0)||m.HasThis||(model.Methods.TryGetValue(m.Key,out var mm)&&mm.Abi is { } abi&&abi.Parameters.Any(k=>k==CilStackKind.ObjectReference));
     private static string ValueStorageCType(IrValueKind kind)=>kind==IrValueKind.I8?"int64_t":"intptr_t";
     private static string CType(IrValueKind kind)=>kind switch
     {
