@@ -148,22 +148,41 @@ DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type) {
     return allocate(heap, type, size);
 }
 
-static size_t utf8_ascii_length(const char *text) {
-    size_t length = 0;
-    while (text && *text++) length++;
-    return length;
+/* Invalid UTF-8 sequences consume one byte and become U+FFFD. */
+static uint32_t utf8_next(const unsigned char **cursor) {
+    const unsigned char *p=*cursor;
+    uint32_t c=*p++;
+    if(c<0x80) { *cursor=p; return c; }
+    uint32_t cp=0, min=0; int extra=0;
+    if(c>=0xc2 && c<=0xdf) {cp=c&31u;min=0x80;extra=1;}
+    else if(c>=0xe0 && c<=0xef) {cp=c&15u;min=0x800;extra=2;}
+    else if(c>=0xf0 && c<=0xf4) {cp=c&7u;min=0x10000;extra=3;}
+    else { *cursor=p;return 0xfffd; }
+    const unsigned char *q=p;
+    for(int i=0;i<extra;i++) {
+        if(!*q || (*q&0xc0)!=0x80) { *cursor=p;return 0xfffd; }
+        cp=(cp<<6)|(*q++&63u);
+    }
+    if(cp<min || cp>0x10ffff || (cp>=0xd800 && cp<=0xdfff)) { *cursor=p;return 0xfffd; }
+    *cursor=q;return cp;
 }
-
 DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text) {
-    if (!text) return NULL;
-    size_t length = utf8_ascii_length(text);
-    DndString *string = (DndString *)allocate(heap, &DND_TYPE_STRING,
-        sizeof(DndString) + (length + 1) * sizeof(uint16_t));
-    if (!string) return NULL;
-    string->length = (uint32_t)length;
-    for (size_t i = 0; i < length; i++) string->chars[i] = (uint8_t)text[i];
-    string->chars[length] = 0;
-    return string;
+    if(!text)return NULL;
+    const unsigned char *p=(const unsigned char *)text;
+    size_t units=0;
+    while(*p) {uint32_t cp=utf8_next(&p);units+=cp>0xffff?2u:1u;}
+    if(units>UINT32_MAX)return NULL;
+    DndString *result=(DndString *)allocate(heap,&DND_TYPE_STRING,sizeof(DndString)+(units+1)*sizeof(uint16_t));
+    if(!result)return NULL;
+    result->length=(uint32_t)units;
+    p=(const unsigned char *)text;
+    size_t i=0;
+    while(*p) {
+        uint32_t cp=utf8_next(&p);
+        if(cp<=0xffff)result->chars[i++]=(uint16_t)cp;
+        else {cp-=0x10000;result->chars[i++]=(uint16_t)(0xd800+(cp>>10));result->chars[i++]=(uint16_t)(0xdc00+(cp&1023));}
+    }
+    result->chars[i]=0;return result;
 }
 
 static DndString *string_from_ascii_buffer(DndManagedHeap *heap, const char *buffer, uint32_t length) {
