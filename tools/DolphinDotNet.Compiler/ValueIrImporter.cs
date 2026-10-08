@@ -257,8 +257,9 @@ internal static class ValueIrImporter
                         if(ik==IntrinsicKind.StringLength){var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringLength(value,str));stack.Add(value);break;}
                         if(ik==IntrinsicKind.PrimitiveToString)
                         {
-                            var input=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);var formatMethod=resolveCall(cil);
-                            instructions.Add(new ValueIrPrimitiveToString(value,input,formatMethod?.Key.TypeName??"System.Int32"));stack.Add(value);break;
+                            var input=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);
+                            var primitiveType=resolveType(cil)??resolveCall(cil)?.Key.TypeName??throw new InvalidDataException($"Cannot resolve primitive ToString receiver at IL_{cil.Offset:x4}.");
+                            instructions.Add(new ValueIrPrimitiveToString(value,input,primitiveType));stack.Add(value);break;
                         }
                         if(ik==IntrinsicKind.StringCharAt){var index=Pop(stack,cil);var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringOperation(value,"charAt",new[]{str,index}));stack.Add(value);break;}
                         if(ik is IntrinsicKind.StringEquals or IntrinsicKind.StringStartsWith or IntrinsicKind.StringEndsWith or IntrinsicKind.StringContains or IntrinsicKind.StringIndexOf or IntrinsicKind.StringConcat)
