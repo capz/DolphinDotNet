@@ -258,6 +258,16 @@ int main(void) {
     assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
     dnd_exception_clear();
 
+    /* Substring must preserve its source across an allocation-triggered GC. */
+    dnd_gc_set_stress(false);
+    DndString *substring_source = dnd_string_from_utf8(&heap, "abcdef");
+    assert(substring_source);
+    dnd_gc_set_stress(true);
+    DndString *substring_stress = dnd_string_substring(&heap, substring_source, 2, 3);
+    assert(substring_stress && substring_stress->length == 3);
+    assert(substring_stress->chars[0] == 'c' && substring_stress->chars[2] == 'e');
+    dnd_gc_set_stress(false);
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }
