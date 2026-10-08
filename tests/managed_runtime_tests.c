@@ -235,6 +235,14 @@ int main(void) {
     assert(gc_exception->message->length == 8);
     dnd_gc_set_stress(false);
 
+    /* A reference store into scalar storage must fail, even if the stride
+       happens to match a native pointer width. */
+    DndArray *scalar_pointer_width = dnd_managed_array_new(&heap, 1, sizeof(void *));
+    assert(scalar_pointer_width);
+    assert(!dnd_array_store_ref(scalar_pointer_width, 0, NULL));
+    assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
+    dnd_exception_clear();
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }
