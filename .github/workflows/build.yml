@@ -58,6 +58,31 @@ jobs:
       - name: Verify generated source
         run: git diff --exit-code -- generated/generated_program.h
 
+  dolphin-emulator:
+    name: Dolphin emulator smoke
+    runs-on: ubuntu-24.04
+    needs: gamecube
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: DolphinDotNet-gamecube
+          path: emulator-artifacts
+      - name: Install Dolphin and virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dolphin-emu xvfb
+      - name: Execute DOL in Dolphin
+        run: bash scripts/test-dolphin.sh emulator-artifacts/DolphinDotNet.dol
+      - name: Upload emulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dolphin-emulator-diagnostics
+          path: emulator-logs/
+          if-no-files-found: warn
+
   portable-runtime:
     name: Portable runtime
     runs-on: ubuntu-latest
