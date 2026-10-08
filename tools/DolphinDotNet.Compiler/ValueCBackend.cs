@@ -224,7 +224,7 @@ internal static class ValueCBackend
                         // Primitive instance ToString receives a managed address (ldloca/ldarga),
                         // not the numeric value itself. Dereference with the primitive's width.
                         var raw=$"v{x.Value.Id}";
-                        var pointer=x.Value.Kind==CilStackKind.ManagedPointer;
+                        var pointer=x.Value.Kind==IrValueKind.ManagedPointer;
                         var signed=x.TypeName is "System.SByte" or "System.Int16" or "System.Int32" or "System.Int64";
                         var width=x.TypeName switch {
                             "System.Boolean" or "System.Byte" or "System.SByte"=>8,
