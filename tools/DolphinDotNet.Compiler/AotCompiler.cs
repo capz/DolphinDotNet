@@ -16,6 +16,8 @@ internal static class AotCompiler
         {
             var root=LoadAssembly(model,Path.GetFullPath(path));
             LoadDolphinDependencies(model,root);
+            foreach(var mm in model.Methods.Values.ToArray())
+                model.Methods[mm.Key]=mm with { Abi=SignatureAbi.Decode(model.Assemblies[mm.AssemblyName].Metadata,mm,model,Array.Empty<GenericRepresentation>(),Array.Empty<GenericRepresentation>()) };
             EnsureEnumerationContracts(model); // collection contracts are synthesized here too
             var cor=root.PE.PEHeaders.CorHeader??throw new InvalidDataException("Missing CLI header.");
             if(cor.EntryPointTokenOrRelativeVirtualAddress==0)throw new InvalidDataException("Assembly has no managed entry point.");
@@ -94,6 +96,7 @@ internal static class AotCompiler
         {
             switch(instruction)
             {
+                case ValueIrArrayOperation { InterfaceTarget: { } target }: graph.AddType(target.TypeName);break;
                 case ValueIrLoadFunction fn: graph.AddMethod(fn.Target);graph.AddType(fn.Target.TypeName);break;
                 case ValueIrCall call: if(!model.Methods.TryGetValue(call.Target,out var called)||!called.IsAbstract)graph.AddMethod(call.Target);graph.AddType(call.Target.TypeName);AddTypeClosure(call.Target.TypeName,model,graph);break;
                 case ValueIrNewDelegate: break;
@@ -242,7 +245,7 @@ internal static class AotCompiler
             var size=NullableValueSize(md,model,i);
             return intrinsic switch
             {
-                IntrinsicKind.NullableConstructor=>new CilCallStackEffect(2,null),
+                IntrinsicKind.NullableConstructor=>i.OpCode==0x73?new CilCallStackEffect(1,CilStackKind.ManagedPointer):new CilCallStackEffect(2,null),
                 IntrinsicKind.NullableHasValue=>new CilCallStackEffect(1,CilStackKind.I4),
                 IntrinsicKind.NullableGetValueOrDefaultValue=>new CilCallStackEffect(2,size==8?CilStackKind.I8:CilStackKind.I4),
                 IntrinsicKind.NullableEquals=>new CilCallStackEffect(2,CilStackKind.I4),
@@ -307,7 +310,8 @@ internal static class AotCompiler
     private static void EnsureEnumerationContracts(CompilationModel model)
     {
         void Type(string name,params string[] interfaces){if(model.Types.ContainsKey(name))return;var dot=name.LastIndexOf('.');model.Types[name]=new(dot<0?"":name[..dot],dot<0?name:name[(dot+1)..],name,null,0,true,false,interfaces);}
-        void Method(string type,string name,bool returnsValue){if(model.Methods.Values.Any(m=>m.Key.TypeName==type&&m.Key.Name==name))return;var key=new MethodKey(type,name,"<contracts>",name);var kind=!returnsValue?(CilStackKind?)null:name=="MoveNext"?CilStackKind.I4:CilStackKind.ObjectReference;model.Methods[key]=new(key,default,false,0,returnsValue,"<contracts>",true,true,true,true,Abi:new GenericAbi(Array.Empty<CilStackKind>(),kind));}
+        void Method(string type,string name,bool returnsValue){if(model.Methods.Values.Any(m=>m.Key.TypeName==type&&m.Key.Name==name))return;var key=new MethodKey(type,name,"<contracts>",name);var kind=!returnsValue?(CilStackKind?)null:name=="MoveNext"?CilStackKind.I4:CilStackKind.ObjectReference;var count=name switch { "Add" or "Contains" or "Remove" or "get_Item" or "IndexOf" or "RemoveAt"=>1,"CopyTo" or "set_Item" or "Insert"=>2,_=>0 };
+            model.Methods[key]=new(key,default,false,count,returnsValue,"<contracts>",true,true,true,true,Abi:new GenericAbi(Enumerable.Repeat(CilStackKind.NativeInt,count).ToArray(),kind));}
         Type("System.IDisposable");Method("System.IDisposable","Dispose",false);
         Type("System.Collections.IEnumerable");Method("System.Collections.IEnumerable","GetEnumerator",true);
         Type("System.Collections.IEnumerator");Method("System.Collections.IEnumerator","get_Current",true);Method("System.Collections.IEnumerator","MoveNext",true);Method("System.Collections.IEnumerator","Reset",false);

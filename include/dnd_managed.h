@@ -62,7 +62,7 @@ struct DndArray {
     const DndType *element_type;
     uint8_t elements_are_references;
     uint8_t reserved[3];
-    uint8_t data[];
+    _Alignas(sizeof(void *)) uint8_t data[];
 };
 
 struct DndException {

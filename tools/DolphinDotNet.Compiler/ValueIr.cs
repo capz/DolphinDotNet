@@ -45,7 +45,7 @@ internal sealed record ValueIrEnumeratorCurrent(IrValue Result,IrValue Address,i
 internal sealed record ValueIrLoadIndirect(IrValue Result,IrValue Address,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrStoreIndirect(IrValue Address,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrInitObject(IrValue Address,string TypeName):ValueIrInstruction;
-internal sealed record ValueIrCopyObject(IrValue Destination,IrValue Source,string TypeName):ValueIrInstruction;
+internal sealed record ValueIrCopyObject(IrValue Destination,IrValue Source,string TypeName,int Size=0):ValueIrInstruction;
 internal sealed record ValueIrConvert(IrValue Result,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrBinary(IrValue Result,string Operation,IrValue Left,IrValue Right):ValueIrInstruction;
 internal sealed record ValueIrObjectEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
@@ -70,7 +70,7 @@ internal sealed record ValueIrBoxNullable(IrValue Result,IrValue Address,int Val
 internal sealed record ValueIrUnboxAny(IrValue Result,IrValue Object,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrArrayElementAddress(IrValue Result,IrValue Array,IrValue Index,string ElementType):ValueIrInstruction;
 internal sealed record ValueIrArrayLength(IrValue Result,IrValue Array):ValueIrInstruction;
-internal sealed record ValueIrArrayOperation(IrValue? Result,string Operation,IReadOnlyList<IrValue> Arguments,int ElementSize=0,bool Reference=false):ValueIrInstruction;
+internal sealed record ValueIrArrayOperation(IrValue? Result,string Operation,IReadOnlyList<IrValue> Arguments,int ElementSize=0,bool Reference=false,MethodKey? InterfaceTarget=null):ValueIrInstruction;
 internal sealed record ValueIrLoadElement(IrValue Result,IrValue Array,IrValue Index,int Size,bool Reference,bool Signed=false):ValueIrInstruction;
 internal sealed record ValueIrStoreElement(IrValue Array,IrValue Index,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrConsoleWriteLine(IrValue String):ValueIrInstruction;

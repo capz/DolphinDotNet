@@ -33,7 +33,7 @@ internal static class GenericSharing
             SignatureTypeCode.Char or SignatureTypeCode.Int16 or SignatureTypeCode.UInt16=>new(GenericRepresentationKind.PointerSized,2),
             SignatureTypeCode.Int32 or SignatureTypeCode.UInt32 or SignatureTypeCode.Single or SignatureTypeCode.IntPtr or SignatureTypeCode.UIntPtr=>new(GenericRepresentationKind.PointerSized,4),
             SignatureTypeCode.Int64 or SignatureTypeCode.UInt64 or SignatureTypeCode.Double=>new(GenericRepresentationKind.ValueType,8),
-            SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>new(GenericRepresentationKind.PointerSized,4,new[]{0}),
+            SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>new(GenericRepresentationKind.PointerSized,8,new[]{0}),
             SignatureTypeCode.TypeHandle=>FromTypeHandle(md,reader.ReadTypeHandle(),model),
             SignatureTypeCode.GenericTypeInstance=>ReadGenericInstance(md,ref reader,model),
             _=>new(GenericRepresentationKind.PointerSized,4)
@@ -47,8 +47,8 @@ internal static class GenericSharing
         var args=new GenericRepresentation[count];for(var i=0;i<count;i++)args[i]=ReadRepresentation(md,ref reader,model);
         if(definition=="System.Nullable`1"&&args.Length==1)return NullableLayout(args[0]).Size;
         if(definition=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2)return PairLayout(args[0],args[1]).Size;
-        if(definition=="System.ArraySegment`1"&&args.Length==1)return 12;
-        if(definition=="System.ArraySegment`1+Enumerator"&&args.Length==1)return 16;
+        if(definition=="System.ArraySegment`1"&&args.Length==1)return 16;
+        if(definition=="System.ArraySegment`1+Enumerator"&&args.Length==1)return 24;
         if(definition is not null&&model.Types.TryGetValue(definition,out var type)&&type.IsValueType)return Math.Max(1,type.InstanceSize);
         return 0;
     }
@@ -59,8 +59,8 @@ internal static class GenericSharing
         var definition=MetadataLoader.ResolveTypeName(md,reader.ReadTypeHandle());var count=reader.ReadCompressedInteger();var args=new GenericRepresentation[count];for(var i=0;i<count;i++)args[i]=ReadRepresentation(md,ref reader,model);
         if(definition=="System.Nullable`1"&&args.Length==1)return NullableLayout(args[0]);
         if(definition=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2)return PairLayout(args[0],args[1]);
-        if(definition=="System.ArraySegment`1"&&args.Length==1)return (12,new[]{0});
-        if(definition=="System.ArraySegment`1+Enumerator"&&args.Length==1)return (16,new[]{0});
+        if(definition=="System.ArraySegment`1"&&args.Length==1)return (16,new[]{0});
+        if(definition=="System.ArraySegment`1+Enumerator"&&args.Length==1)return (24,new[]{0});
         if(definition is not null&&model.Types.TryGetValue(definition,out var type)&&type.IsValueType)return (Math.Max(1,type.InstanceSize),model.Fields.Values.Where(f=>f.DeclaringType==definition&&f.IsReference&&!f.IsStatic).Select(f=>f.Offset).ToArray());
         return (0,Array.Empty<int>());
     }
@@ -85,39 +85,15 @@ internal static class GenericSharing
         return result;
     }
 
-    public static GenericAbi BuildAbi(MetadataReader md,MethodModel definition,IReadOnlyList<GenericRepresentation> typeArgs,IReadOnlyList<GenericRepresentation> methodArgs)
+    public static GenericAbi BuildAbi(MetadataReader md,MethodModel definition,IReadOnlyList<GenericRepresentation> typeArgs,IReadOnlyList<GenericRepresentation> methodArgs,CompilationModel model)
     {
-        var method=md.GetMethodDefinition(definition.Handle);var reader=md.GetBlobReader(method.Signature);var header=reader.ReadSignatureHeader();
-        if(header.IsGeneric)reader.ReadCompressedInteger();var count=reader.ReadCompressedInteger();
-        var ret=ReadAbiKind(md,ref reader,typeArgs,methodArgs);var parameters=new CilStackKind[count];
-        for(var i=0;i<count;i++)parameters[i]=ReadAbiKind(md,ref reader,typeArgs,methodArgs)??CilStackKind.Unknown;
-        return new GenericAbi(parameters,ret);
+        return SignatureAbi.Decode(md,definition,model,typeArgs,methodArgs);
     }
-
-    private static CilStackKind? ReadAbiKind(MetadataReader md,ref BlobReader reader,IReadOnlyList<GenericRepresentation> typeArgs,IReadOnlyList<GenericRepresentation> methodArgs)
-    {
-        var code=reader.ReadSignatureTypeCode();
-        if(code==SignatureTypeCode.Void)return null;
-        if(code==SignatureTypeCode.GenericMethodParameter){var i=reader.ReadCompressedInteger();return AbiKind(methodArgs[i]);}
-        if(code==SignatureTypeCode.GenericTypeParameter){var i=reader.ReadCompressedInteger();return AbiKind(typeArgs[i]);}
-        return code switch
-        {
-            SignatureTypeCode.Int64 or SignatureTypeCode.UInt64=>CilStackKind.I8,
-            SignatureTypeCode.Single or SignatureTypeCode.Double=>CilStackKind.Float,
-            SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>CilStackKind.ObjectReference,
-            SignatureTypeCode.IntPtr or SignatureTypeCode.UIntPtr=>CilStackKind.NativeInt,
-            SignatureTypeCode.ByReference or SignatureTypeCode.Pointer=>CilStackKind.ManagedPointer,
-            _=>CilStackKind.I4
-        };
-    }
-
-    private static CilStackKind AbiKind(GenericRepresentation representation)
-        =>representation.RequiresSpecialization&&representation.Size==8?CilStackKind.I8:CilStackKind.NativeInt;
 
     private static GenericRepresentation FromTypeHandle(MetadataReader md,EntityHandle handle,CompilationModel model)
     {
         var name=MetadataLoader.ResolveTypeName(md,handle);
-        if(name is null||!model.Types.TryGetValue(name,out var type)||!type.IsValueType)return new(GenericRepresentationKind.PointerSized,4,new[]{0});
+        if(name is null||!model.Types.TryGetValue(name,out var type)||!type.IsValueType)return new(GenericRepresentationKind.PointerSized,8,new[]{0});
         var size=Math.Max(1,type.InstanceSize);
         return size<=4?new(GenericRepresentationKind.PointerSized,size):new(GenericRepresentationKind.ValueType,size);
     }
@@ -131,8 +107,8 @@ internal static class GenericSharing
         var args=new GenericRepresentation[count];for(var i=0;i<count;i++)args[i]=ReadRepresentation(md,ref reader,model);
         if(name=="System.Nullable`1"&&args.Length==1){var l=NullableLayout(args[0]);return new(GenericRepresentationKind.ValueType,l.Size,l.References);}
         if(name=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2){var l=PairLayout(args[0],args[1]);return new(GenericRepresentationKind.ValueType,l.Size,l.References);}
-        if(name=="System.ArraySegment`1"&&args.Length==1)return new(GenericRepresentationKind.ValueType,12,new[]{0});
-        if(name=="System.ArraySegment`1+Enumerator"&&args.Length==1)return new(GenericRepresentationKind.ValueType,16,new[]{0});
-        return isValue?new(GenericRepresentationKind.ValueType,Math.Max(1,model.Types[name!].InstanceSize)):new(GenericRepresentationKind.PointerSized,4,new[]{0});
+        if(name=="System.ArraySegment`1"&&args.Length==1)return new(GenericRepresentationKind.ValueType,16,new[]{0});
+        if(name=="System.ArraySegment`1+Enumerator"&&args.Length==1)return new(GenericRepresentationKind.ValueType,24,new[]{0});
+        return isValue?new(GenericRepresentationKind.ValueType,Math.Max(1,model.Types[name!].InstanceSize)):new(GenericRepresentationKind.PointerSized,8,new[]{0});
     }
 }

@@ -349,6 +349,7 @@ internal static class Program
         if (boxedWide is null) return 6;
 
         var stage2 = TestNullableEquality(present, empty); if (stage2 != 0) return 800 + stage2;
+        stage2 = TestNullableArgumentCopies(present, empty, wide); if (stage2 != 0) return 820 + stage2;
         stage2 = TestPairs(); if (stage2 != 0) return stage2;
         stage2 = TestSegment(); if (stage2 != 0) return stage2;
         stage2 = TestConcreteEnumeration(); if (stage2 != 0) return stage2;
@@ -368,6 +369,23 @@ internal static class Program
         if (empty.Equals(42)) return 15;
         return 0;
     }
+
+    private static int TestNullableArgumentCopies(int? present, int? empty, long? wide)
+    {
+        if (empty.GetHashCode() != 0 || present.GetHashCode() != 42 || wide.GetHashCode() != 3) return 1;
+        if (!wide.Equals(0x100000002L) || wide.Equals(2L)) return 2;
+        if (ReadMixedArguments(new int[1], "mixed", wide, present) != 42) return 3;
+        if (MutateNullableCopy(present) != 73 || present.Value != 42) return 4;
+        ReplaceNullable(ref present);
+        if (present.Value != 91) return 5;
+        return 0;
+    }
+
+    private static int ReadMixedArguments(int[] array, string label, long? wide, int? value)
+        => array.Length == 1 && label.Length == 5 && wide.Value == 0x100000002L ? value.Value : -1;
+
+    private static int MutateNullableCopy(int? value) { value = 73; return value.Value; }
+    private static void ReplaceNullable(ref int? value) { value = 91; }
 
     private static int TestPairs()
     {

@@ -3,3 +3,7 @@ build/
 *.elf
 *.map
 tests/runtime_tests
+
+**/bin/
+**/obj/
+tests/managed_runtime_tests
