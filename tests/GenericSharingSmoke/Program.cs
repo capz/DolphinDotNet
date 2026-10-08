@@ -202,6 +202,26 @@ internal static class Program
         return 0;
     }
 
+    private static void ThrowAcrossMethodBoundary()
+    {
+        throw new InvalidOperationException("cross-method");
+    }
+
+    private static int CrossMethodExceptionProbe()
+    {
+        var cleanup = 0;
+        try
+        {
+            try { ThrowAcrossMethodBoundary(); }
+            finally { cleanup += 7; }
+        }
+        catch (InvalidOperationException)
+        {
+            return cleanup == 7 ? 17 : -1;
+        }
+        return -2;
+    }
+
     private static int Main()
     {
         var formatting = FormattingProbe(); if (formatting != 0) return 180 + formatting;
@@ -210,6 +230,7 @@ internal static class Program
         var stringStage = StringPrimitiveProbe(); if (stringStage != 0) return 120 + stringStage;
         var primitiveStage = PrimitiveRepresentationProbe(); if (primitiveStage != 0) return 100 + primitiveStage;
         if (EhIntegrationProbe() != 16) return 95;
+        if (CrossMethodExceptionProbe() != 17) return 96;
         if (ExplicitExceptionProbe() != 15) return 94;
         if (RethrowProbe() != 14) return 93;
         if (TypedCatchProbe() != 13) return 92;
