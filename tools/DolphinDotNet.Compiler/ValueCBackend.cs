@@ -122,7 +122,7 @@ internal static class ValueCBackend
                     var exceptionValue=handler.EntryStack.Values.FirstOrDefault();
                     var assign=handler.EntryStack.Values.Count>0?$"v{exceptionValue.Id} = (intptr_t)dnd_exception_object(); ":"";
                     var match=region.CatchType is null?"true":$"dnd_exception_matches({TypeExpr(region.CatchType)})";
-                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength} && {match}) {{ {assign}dnd_exception_begin_catch(); goto block_{handler.Id}; }}");
+                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength} && {match}) {{ {assign}dnd_exception_begin_catch(); dnd_eh_site = {region.HandlerOffset}; dnd_eh_push(&dnd_eh_frame); goto block_{handler.Id}; }}");
                 }
             }
             b.AppendLine("    if (dnd_eh_active) { dnd_eh_pop(&dnd_eh_frame); dnd_eh_active = 0; }");
