@@ -244,6 +244,18 @@ internal static class Program
         return -1;
     }
 
+    private static int MultipleFinallyLeavesProbe(int value)
+    {
+        var cleanup=0;
+        try
+        {
+            if(value==1)return 10;
+            if(value==2)return 20;
+            return 30;
+        }
+        finally { cleanup++; }
+    }
+
     private static int Main()
     {
         var formatting = FormattingProbe(); if (formatting != 0) return 180 + formatting;
@@ -255,6 +267,7 @@ internal static class Program
         if (CrossMethodExceptionProbe() != 17) return 96;
         if (NestedTypedCatchProbe() != 18) return 97;
         if (ThrowFromCatchProbe() != 20) return 99;
+        if (MultipleFinallyLeavesProbe(1) != 10 || MultipleFinallyLeavesProbe(2) != 20 || MultipleFinallyLeavesProbe(3) != 30) return 100;
         if (ExplicitExceptionProbe() != 15) return 94;
         if (RethrowProbe() != 14) return 93;
         if (TypedCatchProbe() != 13) return 92;
