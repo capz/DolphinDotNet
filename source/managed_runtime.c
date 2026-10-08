@@ -148,6 +148,7 @@ void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size) {
 }
 
 DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type) {
+    if (!type) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Object type is null."); return NULL; }
     size_t size = type->instance_size < sizeof(DndObject) ? sizeof(DndObject) : type->instance_size;
     return allocate(heap, type, size);
 }
@@ -286,6 +287,14 @@ DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, in
 
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length,
     uint32_t element_size, const DndType *element_type, bool references) {
+    if (references && element_size != sizeof(DndObject *)) {
+        dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Reference array element size must match pointer size.");
+        return NULL;
+    }
+    if (element_size == 0 && length != 0) {
+        dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Nonempty array requires a nonzero element size.");
+        return NULL;
+    }
     if (element_size && ((size_t)length > (SIZE_MAX - sizeof(DndArray)) / element_size ||
         (size_t)length > (UINT32_MAX - sizeof(DndArray) - 7u) / element_size)) {
         dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY, "Array size overflow.");

@@ -196,6 +196,17 @@ int main(void) {
     assert(dnd_exception_kind() == DND_EXCEPTION_OUT_OF_MEMORY);
     dnd_exception_clear();
 
+    /* Malformed metadata must not corrupt precise reference-array tracing. */
+    assert(dnd_object_new(&heap, NULL) == NULL);
+    assert(dnd_exception_kind() == DND_EXCEPTION_ARGUMENT);
+    dnd_exception_clear();
+    assert(dnd_managed_array_new_typed(&heap, 2, 1, &NODE_TYPE, true) == NULL);
+    assert(dnd_exception_kind() == DND_EXCEPTION_ARGUMENT);
+    dnd_exception_clear();
+    assert(dnd_managed_array_new(&heap, 1, 0) == NULL);
+    assert(dnd_exception_kind() == DND_EXCEPTION_ARGUMENT);
+    dnd_exception_clear();
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }
