@@ -243,6 +243,21 @@ int main(void) {
     assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
     dnd_exception_clear();
 
+    /* Scalar and reference accessors must never reinterpret each other's
+       storage: doing so can hide pointers from precise tracing. */
+    DndArray *access_scalars = dnd_managed_array_new(&heap, 1, sizeof(void *));
+    DndArray *access_refs = dnd_managed_array_new_typed(&heap, 1, sizeof(DndObject *), &DND_TYPE_OBJECT, true);
+    assert(access_scalars && access_refs);
+    assert(dnd_array_load_ref(access_scalars, 0) == NULL);
+    assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
+    dnd_exception_clear();
+    assert(dnd_array_load_scalar(access_refs, 0, 4, false) == 0);
+    assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
+    dnd_exception_clear();
+    assert(!dnd_array_store_scalar(access_refs, 0, 42, 4));
+    assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
+    dnd_exception_clear();
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }
