@@ -268,6 +268,36 @@ int main(void) {
     assert(substring_stress->chars[0] == 'c' && substring_stress->chars[2] == 'e');
     dnd_gc_set_stress(false);
 
+    /* Iterative marking must retain deep linked graphs and terminate on cycles.
+       Collection is deliberately triggered with only the head rooted. */
+    dnd_exception_clear();
+    dnd_gc_collect(&heap, NULL);
+    TestNode *deep_head = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    assert(deep_head);
+    DndObject *deep_root = (DndObject *)deep_head;
+    DndObject **deep_slots[] = { &deep_root };
+    DndGcFrame deep_frame;
+    dnd_gc_frame_push(&deep_frame, deep_slots, 1);
+    TestNode *deep_tail = deep_head;
+    for (int i = 1; i < 120; i++) {
+        TestNode *next = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+        assert(next);
+        deep_tail->child = (DndObject *)next;
+        deep_tail = next;
+    }
+    deep_tail->value = 12345;
+    deep_tail->child = deep_root;
+    dnd_gc_collect(&heap, NULL);
+    TestNode *walk = (TestNode *)deep_root;
+    for (int i = 1; i < 120; i++) {
+        assert(walk && walk->object.type == &NODE_TYPE);
+        walk = (TestNode *)walk->child;
+    }
+    assert(walk == deep_tail && walk->value == 12345 && walk->child == deep_root);
+    deep_tail->child = NULL;
+    dnd_gc_frame_pop(&deep_frame);
+    dnd_gc_collect(&heap, NULL);
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }
