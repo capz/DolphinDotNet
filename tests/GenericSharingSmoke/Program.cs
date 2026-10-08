@@ -312,7 +312,7 @@ internal static class Program
         var arrayStage = SystemArrayProbe(); if (arrayStage != 0) return 140 + arrayStage;
         var stringStage = StringPrimitiveProbe(); if (stringStage != 0) return 120 + stringStage;
         var primitiveStage = PrimitiveRepresentationProbe(); if (primitiveStage != 0) return 300 + primitiveStage;
-        if (EhIntegrationProbe() != 16) return 95;
+        var ehResult = EhIntegrationProbe(); if (ehResult != 16) return ehResult < 0 ? 600 - ehResult : 700 + ehResult;
         if (CrossMethodExceptionProbe() != 17) return 96;
         if (NestedTypedCatchProbe() != 18) return 97;
         if (ThrowFromCatchProbe() != 20) return 99;
