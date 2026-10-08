@@ -258,8 +258,12 @@ int32_t dnd_string_index_of(const DndString *value, const DndString *needle) {
     if (needle->length == 0) return 0;
     if (needle->length > value->length) return -1;
     uint32_t last = value->length - needle->length;
-    for (uint32_t i = 0; i <= last; i++)
-        if (memcmp(value->chars + i, needle->chars, (size_t)needle->length * sizeof(uint16_t)) == 0) return (int32_t)i;
+    const uint16_t first = needle->chars[0];
+    for (uint32_t i = 0; i <= last; i++) {
+        if (value->chars[i] != first) continue;
+        if (needle->length == 1 || memcmp(value->chars + i + 1, needle->chars + 1,
+            (size_t)(needle->length - 1) * sizeof(uint16_t)) == 0) return (int32_t)i;
+    }
     return -1;
 }
 
