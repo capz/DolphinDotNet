@@ -116,7 +116,7 @@ internal static class ValueCBackend
                 var handler=method.Blocks.FirstOrDefault(x=>x.CilOffset==region.HandlerOffset);
                 if(handler is null)continue;
                 if(region.Kind==ValueIrExceptionRegionKind.Finally)
-                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength}) goto block_{handler.Id};");
+                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength}) {{ dnd_eh_push(&dnd_eh_frame); goto block_{handler.Id}; }}");
                 else if(region.Kind==ValueIrExceptionRegionKind.Catch)
                 {
                     var exceptionValue=handler.EntryStack.Values.FirstOrDefault();
@@ -137,7 +137,7 @@ internal static class ValueCBackend
             if(method.ExceptionRegions.Count>0)
             {
                 var protectedHere=method.ExceptionRegions.Any(r=>block.CilOffset>=r.TryOffset&&block.CilOffset<r.TryOffset+r.TryLength);
-                b.AppendLine(protectedHere?$"  dnd_eh_site = {block.CilOffset};":"  dnd_eh_site = -1;");
+                b.AppendLine(protectedHere?$"  if (!dnd_exception_pending()) dnd_eh_site = {block.CilOffset};":"  if (!dnd_exception_pending()) dnd_eh_site = -1;");
             }
             foreach(var i in block.Instructions)
             {
