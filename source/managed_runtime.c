@@ -348,6 +348,10 @@ uint32_t dnd_array_length(DndArray *array) {
 }
 
 uint64_t dnd_array_load_scalar(DndArray *array, uint32_t index, uint32_t size, bool sign_extend) {
+    if (array && array->elements_are_references) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Cannot read object references as scalar values.");
+        return 0;
+    }
     void *address = dnd_managed_array_at(array, index);
     if (!address || size == 0 || size > 8 || size > array->element_size) return 0;
     switch (size) {
@@ -364,11 +368,19 @@ int32_t dnd_array_load_i32(DndArray *array, uint32_t index) {
 }
 
 DndObject *dnd_array_load_ref(DndArray *array, uint32_t index) {
+    if (array && !array->elements_are_references) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Cannot read scalar values as object references.");
+        return NULL;
+    }
     void *address = dnd_managed_array_at(array, index);
     return address ? *(DndObject **)address : NULL;
 }
 
 bool dnd_array_store_scalar(DndArray *array, uint32_t index, uint64_t value, uint32_t size) {
+    if (array && array->elements_are_references) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Cannot overwrite object references with scalar values.");
+        return false;
+    }
     void *address = dnd_managed_array_at(array, index);
     if (!address || size == 0 || size > 8 || size > array->element_size) return false;
     switch (size) {
