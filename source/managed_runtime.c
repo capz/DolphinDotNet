@@ -176,7 +176,10 @@ DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text) {
     const unsigned char *p=(const unsigned char *)text;
     size_t units=0;
     while(*p) {uint32_t cp=utf8_next(&p);units+=cp>0xffff?2u:1u;}
-    if(units>UINT32_MAX)return NULL;
+    if (units > (UINT32_MAX - sizeof(DndString) - 7u) / sizeof(uint16_t) - 1u) {
+        dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY, "UTF-16 string allocation size overflow.");
+        return NULL;
+    }
     DndString *result=(DndString *)allocate(heap,&DND_TYPE_STRING,sizeof(DndString)+(units+1)*sizeof(uint16_t));
     if(!result)return NULL;
     result->length=(uint32_t)units;
@@ -288,7 +291,13 @@ DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, in
     if (start < 0 || length < 0 || (uint32_t)start > value->length || (uint32_t)length > value->length - (uint32_t)start) {
         dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Substring range is invalid."); return NULL;
     }
+    /* Collection during allocation must not reclaim the source string. */
+    DndObject *source_root = (DndObject *)value;
+    DndObject **root_slots[] = { &source_root };
+    DndGcFrame roots;
+    dnd_gc_frame_push(&roots, root_slots, 1);
     DndString *result = (DndString *)allocate(heap, &DND_TYPE_STRING, sizeof(DndString) + ((size_t)length + 1) * sizeof(uint16_t));
+    dnd_gc_frame_pop(&roots);
     if (!result) return NULL;
     result->length = (uint32_t)length;
     if (length) memcpy(result->chars, value->chars + start, (size_t)length * sizeof(uint16_t));
