@@ -386,6 +386,10 @@ bool dnd_array_store_i32(DndArray *array, uint32_t index, int32_t value) {
 }
 
 bool dnd_array_store_ref(DndArray *array, uint32_t index, DndObject *value) {
+    if (array && !array->elements_are_references) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Cannot store object reference in scalar array.");
+        return false;
+    }
     void *address = dnd_managed_array_at(array, index);
     if (!address) return false;
     if (value && array->element_type && !dnd_type_is_assignable_from(array->element_type, value->type)) {
