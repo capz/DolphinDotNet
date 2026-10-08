@@ -16,7 +16,8 @@ internal static class ValueIrImporter
         Func<CilInstruction,string?> resolveString,
         Func<CilInstruction,FieldModel?> resolveField,
         Func<CilInstruction,string?> resolveType,
-        Func<CilInstruction,GenericRepresentation?> resolveGenericTypeParameter)
+        Func<CilInstruction,GenericRepresentation?> resolveGenericTypeParameter,
+        IReadOnlyList<System.Reflection.Metadata.ExceptionRegion> exceptionRegions)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -342,9 +343,19 @@ internal static class ValueIrImporter
                     case 0x2b or 0x38:
                         terminator=new ValueIrJump(Target(blocks,cil));break;
                     case 0xdc:
-                        terminator=new ValueIrEndFinally(Target(blocks,cil));break;
+                    {
+                        var region=exceptionRegions.FirstOrDefault(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally && cil.Offset>=r.HandlerOffset && cil.Offset<r.HandlerOffset+r.HandlerLength);
+                        if(region.Kind!=System.Reflection.Metadata.ExceptionRegionKind.Finally)throw new InvalidDataException($"endfinally outside finally at IL_{cil.Offset:x4}.");
+                        terminator=new ValueIrEndFinally(region.HandlerOffset);break;
+                    }
                     case 0xdd or 0xde:
-                        stack.Clear();terminator=new ValueIrJump(Target(blocks,cil));break;
+                    {
+                        stack.Clear();
+                        var destination=((CilBranchTarget)cil.Operand!).Offset;
+                        var handlers=exceptionRegions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally && cil.Offset>=r.TryOffset && cil.Offset<r.TryOffset+r.TryLength && (destination<r.TryOffset || destination>=r.TryOffset+r.TryLength))
+                            .OrderBy(r=>r.TryLength).Select(r=>r.HandlerOffset).ToArray();
+                        terminator=new ValueIrLeave(Target(blocks,cil),handlers);break;
+                    }
                     case 0x2c or 0x39:
                     {
                         var condition=Pop(stack,cil);var target=Target(blocks,cil);terminator=new ValueIrBranch(condition,null,ValueIrComparison.NonZero,false,Fallthrough(blocks,block,cil),target);break;
