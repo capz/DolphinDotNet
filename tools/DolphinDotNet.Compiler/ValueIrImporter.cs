@@ -352,7 +352,7 @@ internal static class ValueIrImporter
                     {
                         stack.Clear();
                         var destination=((CilBranchTarget)cil.Operand!).Offset;
-                        var handlers=exceptionRegions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally && cil.Offset>=r.TryOffset && cil.Offset<r.TryOffset+r.TryLength && (destination<r.TryOffset || destination>=r.TryOffset+r.TryLength))
+                        var handlers=exceptionRegions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally && (cil.Offset>=r.TryOffset && cil.Offset<r.TryOffset+r.TryLength || exceptionRegions.Any(c=>c.Kind==System.Reflection.Metadata.ExceptionRegionKind.Catch && c.TryOffset==r.TryOffset && c.TryLength==r.TryLength && cil.Offset>=c.HandlerOffset && cil.Offset<c.HandlerOffset+c.HandlerLength)) && (destination<r.TryOffset || destination>=r.TryOffset+r.TryLength))
                             .OrderBy(r=>r.TryLength).Select(r=>r.HandlerOffset).ToArray();
                         terminator=new ValueIrLeave(Target(blocks,cil),handlers);break;
                     }
