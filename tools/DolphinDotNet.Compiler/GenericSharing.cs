@@ -8,23 +8,23 @@ internal readonly record struct GenericRepresentation(GenericRepresentationKind 
 {
     public bool RequiresSpecialization=>Kind==GenericRepresentationKind.ValueType&&Size>4;
     public bool ContainsReferences=>ReferenceOffsets is { Count: >0 };
-    public string Key=>RequiresSpecialization?$"v{Size}":"p";
+    public string Key=>ContainsReferences?"r":RequiresSpecialization?$"v{Size}":"p";
 }
 
 // GameCube is 32-bit: only representations wider than one machine word need a distinct body.
 internal static class GenericSharing
 {
-    public static IReadOnlyList<GenericRepresentation> ReadMethodArguments(MetadataReader md,MethodSpecificationHandle handle,CompilationModel model)
+    public static IReadOnlyList<GenericRepresentation> ReadMethodArguments(MetadataReader md,MethodSpecificationHandle handle,CompilationModel model,MethodModel? context=null)
     {
         var spec=md.GetMethodSpecification(handle);var reader=md.GetBlobReader(spec.Signature);
         var header=reader.ReadSignatureHeader();
         if(header.Kind!=SignatureKind.MethodSpecification)throw new InvalidDataException("Invalid generic method specification.");
         var count=reader.ReadCompressedInteger();var result=new GenericRepresentation[count];
-        for(var i=0;i<count;i++)result[i]=ReadRepresentation(md,ref reader,model);
+        for(var i=0;i<count;i++)result[i]=ReadRepresentation(md,ref reader,model,context);
         return result;
     }
 
-    public static GenericRepresentation ReadRepresentation(MetadataReader md,ref BlobReader reader,CompilationModel model)
+    public static GenericRepresentation ReadRepresentation(MetadataReader md,ref BlobReader reader,CompilationModel model,MethodModel? context=null)
     {
         var code=reader.ReadSignatureTypeCode();
         return code switch
@@ -33,9 +33,12 @@ internal static class GenericSharing
             SignatureTypeCode.Char or SignatureTypeCode.Int16 or SignatureTypeCode.UInt16=>new(GenericRepresentationKind.PointerSized,2),
             SignatureTypeCode.Int32 or SignatureTypeCode.UInt32 or SignatureTypeCode.Single or SignatureTypeCode.IntPtr or SignatureTypeCode.UIntPtr=>new(GenericRepresentationKind.PointerSized,4),
             SignatureTypeCode.Int64 or SignatureTypeCode.UInt64 or SignatureTypeCode.Double=>new(GenericRepresentationKind.ValueType,8),
-            SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>new(GenericRepresentationKind.PointerSized,8,new[]{0}),
+            SignatureTypeCode.String or SignatureTypeCode.Object=>new(GenericRepresentationKind.PointerSized,8,new[]{0}),
+            SignatureTypeCode.SZArray=>ReadArray(md,ref reader,model,context),
             SignatureTypeCode.TypeHandle=>FromTypeHandle(md,reader.ReadTypeHandle(),model),
-            SignatureTypeCode.GenericTypeInstance=>ReadGenericInstance(md,ref reader,model),
+            SignatureTypeCode.GenericTypeInstance=>ReadGenericInstance(md,ref reader,model,context),
+            SignatureTypeCode.GenericTypeParameter=>ContextArgument(context?.TypeArguments,reader.ReadCompressedInteger()),
+            SignatureTypeCode.GenericMethodParameter=>ContextArgument(context?.MethodArguments,reader.ReadCompressedInteger()),
             _=>new(GenericRepresentationKind.PointerSized,4)
         };
     }
@@ -66,22 +69,22 @@ internal static class GenericSharing
     }
 
     private static (int Size,IReadOnlyList<int> References) NullableLayout(GenericRepresentation arg)=> (4+Align4(arg.Size), (arg.ReferenceOffsets??Array.Empty<int>()).Select(x=>4+x).ToArray());
-    private static (int Size,IReadOnlyList<int> References) PairLayout(GenericRepresentation a,GenericRepresentation b){var second=Align(a.Size,Math.Min(Math.Max(b.Size,1),4));var refs=(a.ReferenceOffsets??Array.Empty<int>()).Concat((b.ReferenceOffsets??Array.Empty<int>()).Select(x=>second+x)).ToArray();return(second+b.Size,refs);}
+    private static (int Size,IReadOnlyList<int> References) PairLayout(GenericRepresentation a,GenericRepresentation b){var second=Align(a.Size,Math.Min(Math.Max(b.Size,1),8));var refs=(a.ReferenceOffsets??Array.Empty<int>()).Concat((b.ReferenceOffsets??Array.Empty<int>()).Select(x=>second+x)).ToArray();return(second+b.Size,refs);}
     private static int Align4(int value)=>(value+3)&~3;
     private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
 
     public static string SpecializationSuffix(IReadOnlyList<GenericRepresentation> typeArgs,IReadOnlyList<GenericRepresentation> methodArgs)
     {
         var all=typeArgs.Concat(methodArgs).ToArray();
-        return all.Any(x=>x.RequiresSpecialization)?"|g:"+string.Join(",",all.Select(x=>x.Key)):string.Empty;
+        return all.Length>0?"|g:"+string.Join(",",all.Select(x=>x.Key)):string.Empty;
     }
 
-    public static IReadOnlyList<GenericRepresentation> ReadTypeArguments(MetadataReader md,TypeSpecificationHandle handle,CompilationModel model)
+    public static IReadOnlyList<GenericRepresentation> ReadTypeArguments(MetadataReader md,TypeSpecificationHandle handle,CompilationModel model,MethodModel? context=null)
     {
         var reader=md.GetBlobReader(md.GetTypeSpecification(handle).Signature);
         if(reader.ReadSignatureTypeCode()!=SignatureTypeCode.GenericTypeInstance||reader.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)return Array.Empty<GenericRepresentation>();
         reader.ReadTypeHandle();var count=reader.ReadCompressedInteger();var result=new GenericRepresentation[count];
-        for(var i=0;i<count;i++)result[i]=ReadRepresentation(md,ref reader,model);
+        for(var i=0;i<count;i++)result[i]=ReadRepresentation(md,ref reader,model,context);
         return result;
     }
 
@@ -89,6 +92,12 @@ internal static class GenericSharing
     {
         return SignatureAbi.Decode(md,definition,model,typeArgs,methodArgs);
     }
+
+    private static GenericRepresentation ReadArray(MetadataReader md,ref BlobReader reader,CompilationModel model,MethodModel? context)
+    { ReadRepresentation(md,ref reader,model,context);return new(GenericRepresentationKind.PointerSized,8,new[]{0}); }
+
+    private static GenericRepresentation ContextArgument(IReadOnlyList<GenericRepresentation>? args,int index)
+        =>args is not null&&index<args.Count?args[index]:new(GenericRepresentationKind.PointerSized,4);
 
     private static GenericRepresentation FromTypeHandle(MetadataReader md,EntityHandle handle,CompilationModel model)
     {
@@ -98,13 +107,13 @@ internal static class GenericSharing
         return size<=4?new(GenericRepresentationKind.PointerSized,size):new(GenericRepresentationKind.ValueType,size);
     }
 
-    private static GenericRepresentation ReadGenericInstance(MetadataReader md,ref BlobReader reader,CompilationModel model)
+    private static GenericRepresentation ReadGenericInstance(MetadataReader md,ref BlobReader reader,CompilationModel model,MethodModel? context=null)
     {
         if(reader.ReadSignatureTypeCode()!=SignatureTypeCode.TypeHandle)return new(GenericRepresentationKind.PointerSized,4);
         var definition=reader.ReadTypeHandle();var name=MetadataLoader.ResolveTypeName(md,definition);
         var isValue=name is not null&&model.Types.TryGetValue(name,out var type)&&type.IsValueType;
         var count=reader.ReadCompressedInteger();
-        var args=new GenericRepresentation[count];for(var i=0;i<count;i++)args[i]=ReadRepresentation(md,ref reader,model);
+        var args=new GenericRepresentation[count];for(var i=0;i<count;i++)args[i]=ReadRepresentation(md,ref reader,model,context);
         if(name=="System.Nullable`1"&&args.Length==1){var l=NullableLayout(args[0]);return new(GenericRepresentationKind.ValueType,l.Size,l.References);}
         if(name=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2){var l=PairLayout(args[0],args[1]);return new(GenericRepresentationKind.ValueType,l.Size,l.References);}
         if(name=="System.ArraySegment`1"&&args.Length==1)return new(GenericRepresentationKind.ValueType,16,new[]{0});

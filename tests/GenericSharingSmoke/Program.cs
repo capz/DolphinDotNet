@@ -308,6 +308,11 @@ internal static class Program
 
     private static int Main()
     {
+        var holder = new GenericHolder<string>(string.Concat("rooted", " value"));
+        var wideHolder = new GenericHolder<long>(0x300000004L);
+        if(holder.Value.Length!=12 || wideHolder.Value!=0x300000004L) return 880;
+        var lifecycle = LifecycleProbe(); if (lifecycle != 0) return 870 + lifecycle;
+        var embedded = EmbeddedValueProbe(); if (embedded != 0) return 850 + embedded;
         var formatting = FormattingProbe(); if (formatting != 0) return 180 + formatting;
         var arrayInterfaces = ArrayInterfaceProbe(); if (arrayInterfaces != 0) return 160 + arrayInterfaces;
         var arrayStage = SystemArrayProbe(); if (arrayStage != 0) return 140 + arrayStage;
@@ -330,6 +335,7 @@ internal static class Program
         _ = Shared<string>.Marker();
         _ = Identity(7);
         _ = Identity("reference");
+        _ = Identity((object)"reference");
         _ = Identity(9L);
 
         int? empty = null;
@@ -389,6 +395,8 @@ internal static class Program
 
     private static int TestPairs()
     {
+        var mixed = new KeyValuePair<int,string>(7,string.Concat("mixed", " value"));
+        if(mixed.Key!=7 || mixed.Value.Length!=11) return 49;
         var pair = new KeyValuePair<string, string>("key", "value");
         if (pair.Key.Length != 3 || pair.Value.Length != 5) return 9;
         var widePair = new KeyValuePair<long, int>(0x100000002L, 7);
@@ -456,7 +464,35 @@ internal static class Program
         if (collection.Count != 0) return 38;
         var refs = new CompactList<string>(); refs.Add("a"); refs.Insert(0,"b");
         if (!refs.Contains("a") || refs.IndexOf("b") != 0 || !refs.Remove("a") || refs.Count != 1) return 39;
+        if (refs[0].Length != 1) return 44;
+        IList<long> wideList = new CompactList<long>();
+        wideList.Add(0x100000002L);wideList[0]=0x200000003L;
+        if(wideList[0]!=0x200000003L || !wideList.Contains(0x200000003L)) return 47;
+        foreach(var number in wideList) { if(number!=0x200000003L) return 48; }
+        var dynamicValue = string.Concat("dynamic", " reference");
+        refs.Add(dynamicValue);
+        foreach (var text in refs) { if (text.Length == 0) return 45; }
+        if (refs[1].Length != 17) return 46;
         refs.Clear(); if (refs.Count != 0) return 40;
+        return 0;
+    }
+
+    private static int LifecycleProbe()
+    {
+        LifecycleBase item = new LifecycleDerived(7, string.Concat("derived", " name"));
+        ILifecycle reader = (ILifecycle)item;
+        if(item.Read()!=19 || reader.Read()!=19 || item.Value!=7) return 1;
+        if(item is not LifecycleDerived || (object)item is PairHolder) return 2;
+        if(LifecycleBase.Created!=1) return 3;
+        return 0;
+    }
+
+    private static int EmbeddedValueProbe()
+    {
+        var holder = new PairHolder();
+        holder.Pair = new KeyValuePair<string,string>(string.Concat("key", " data"),string.Concat("value", " data"));
+        var junk = string.Concat("force", " collection");
+        if (junk.Length != 16 || holder.Pair.Key.Length != 8 || holder.Pair.Value.Length != 10) return 1;
         return 0;
     }
 
@@ -520,3 +556,22 @@ internal static class Shared<T>
 {
     public static int Marker() => 42;
 }
+
+internal sealed class PairHolder { public KeyValuePair<string,string> Pair; }
+
+internal interface ILifecycle { int Read(); }
+internal class LifecycleBase
+{
+    public static int Created;
+    public int Value;
+    public LifecycleBase(int value) { Value=value; Created++; }
+    public virtual int Read() => Value;
+}
+internal sealed class LifecycleDerived : LifecycleBase, ILifecycle
+{
+    private string _name;
+    public LifecycleDerived(int value,string name):base(value) { _name=name; }
+    public override int Read() => Value+_name.Length;
+}
+
+internal sealed class GenericHolder<T> { public T Value; public GenericHolder(T value) { Value=value; } }

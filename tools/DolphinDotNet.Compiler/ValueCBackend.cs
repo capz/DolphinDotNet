@@ -29,8 +29,8 @@ internal static class ValueCBackend
         foreach(var tn in graph.Types.OrderBy(x=>x))
         {
             if(!model.Types.TryGetValue(tn,out var t))continue;
-            var refs=model.Fields.Values.Where(f=>f.DeclaringType==tn&&f.IsReference).OrderBy(f=>f.Offset).ToArray();
-            if(refs.Length>0)b.AppendLine($"static const uint32_t dnd_refs_{Id(tn)}[] = {{ {string.Join(", ",refs.Select(r=>$"sizeof(DndObject)+{BasePayloadSize(tn,model)}u+{r.Offset}u"))} }};");
+            var refs=model.Fields.Values.Where(f=>f.DeclaringType==tn&&!f.IsStatic).SelectMany(f=>f.IsReference?new[]{f.Offset}:(f.ReferenceOffsets??Array.Empty<int>()).Select(o=>f.Offset+o)).OrderBy(o=>o).ToArray();
+            if(refs.Length>0)b.AppendLine($"static const uint32_t dnd_refs_{Id(tn)}[] = {{ {string.Join(", ",refs.Select(r=>$"sizeof(DndObject)+{BasePayloadSize(tn,model)}u+{r}u"))} }};");
             var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";
             var totalSize=TotalInstanceSize(tn,model);
             var slots=VirtualSlots(tn,model,compiledKeys);
@@ -62,10 +62,12 @@ internal static class ValueCBackend
         foreach(var m in wrapperMethods)
         {
             var n=m.ParameterCount+(m.HasThis?1:0);
+            var abi=model.Methods[m.Key].Abi;
+            var wideReturn=abi?.Return==CilStackKind.I8;
             b.Append($"static intptr_t {WrapperSymbol(m.Key)}(intptr_t *args) {{ ");
-            if(m.ReturnsValue)b.Append("return ");else b.Append("(void)");
-            b.Append($"{Symbol(m.Key)}({string.Join(", ",Enumerable.Range(0,n).Select(i=>$"args[{i}]"))});");
-            if(!m.ReturnsValue)b.Append(" return 0;");
+            b.Append(wideReturn?$"*(int64_t*)args[{n}] = ":m.ReturnsValue?"return ":"(void)");
+            b.Append($"{Symbol(m.Key)}({string.Join(", ",Enumerable.Range(0,n).Select(i=>i>=(m.HasThis?1:0)&&abi?.Parameters[i-(m.HasThis?1:0)]==CilStackKind.I8?$"*(int64_t*)args[{i}]":$"args[{i}]"))});");
+            if(!m.ReturnsValue||wideReturn)b.Append(" return 0;");
             b.AppendLine(" }");
         }
         foreach(var group in methods.GroupBy(m=>(m.Key.TypeName,m.Key.Name)).Where(g=>g.Count()==1)){var m=group.Single();var alias=LegacySymbol(m.Key);if(alias==Symbol(m.Key))continue;b.Append($"{ReturnCType(m,model)} {alias}({Parameters(m,model)}) {{ return {Symbol(m.Key)}(");b.Append(string.Join(", ",Enumerable.Range(0,m.ParameterCount+(m.HasThis?1:0)).Select(i=>$"a{i}")));b.AppendLine("); }");}
@@ -215,17 +217,10 @@ internal static class ValueCBackend
                     case ValueIrCall x:
                     {
                         var args=string.Join(", ",x.Arguments.Select(a=>$"v{a.Id}"));
-                        if(x.Interface)
+                        if(x.Interface||x.Virtual)
                         {
-                            var slot=InterfaceSlot(x.Target,model);
-                            b.AppendLine($"  {{ intptr_t call_args[{Math.Max(1,x.Arguments.Count)}] = {{ {args} }}; DndManagedMethod target=dnd_interface_resolve((DndObject*)call_args[0], &dnd_type_{Id(x.Target.TypeName)}, {slot}u);");
-                            b.AppendLine(x.Result is { } ir?$"    v{ir.Id} = target ? target(call_args) : 0; }}":$"    if(target) (void)target(call_args); }}");
-                        }
-                        else if(x.Virtual)
-                        {
-                            var slot=VirtualSlot(x.Target,model);
-                            b.AppendLine($"  {{ intptr_t call_args[{Math.Max(1,x.Arguments.Count)}] = {{ {args} }}; DndManagedMethod target=dnd_virtual_resolve((DndObject*)call_args[0], {slot}u);");
-                            b.AppendLine(x.Result is { } vr?$"    v{vr.Id} = target ? target(call_args) : 0; }}":$"    if(target) (void)target(call_args); }}");
+                            var resolution=x.Interface?$"dnd_interface_resolve((DndObject*)call_args[0], &dnd_type_{Id(x.Target.TypeName)}, {InterfaceSlot(x.Target,model)}u)":$"dnd_virtual_resolve((DndObject*)call_args[0], {VirtualSlot(x.Target,model)}u)";
+                            EmitDispatch(b,x.Arguments,x.Result,resolution);
                         }
                         else b.AppendLine(x.Result is { } r?$"  v{r.Id} = {Symbol(x.Target)}({args});":$"  (void){Symbol(x.Target)}({args});");
                         break;
@@ -233,8 +228,18 @@ internal static class ValueCBackend
                     case ValueIrNewObject x:{var args=string.Join(", ",new[]{$"(intptr_t)v{x.Result.Id}"}.Concat(x.Arguments.Select(a=>$"v{a.Id}")));if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_new(dnd_value_heap, &dnd_type_{Id(x.TypeName)});");b.AppendLine($"  (void){Symbol(x.Constructor)}({args});");break;}
                     case ValueIrNewException x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_exception_new(dnd_value_heap, {TypeExpr(x.TypeName)}, {(x.Message is { } m?$"(DndString*)v{m.Id}":"NULL")});");break;
                     case ValueIrExceptionMessage x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_exception_get_message((DndException*)v{x.Exception.Id});");break;
-                    case ValueIrLoadField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.Object.Id})) v{x.Result.Id} = *({ct}*)((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset});");break;}
-                    case ValueIrStoreField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.Object.Id})) *({ct}*)((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset}) = ({ct})v{x.Value.Id};");break;}
+                    case ValueIrLoadField x:
+                    {
+                        var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);
+                        var address=$"((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset})";
+                        b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.Object.Id})) v{x.Result.Id} = {(x.Address||field.StorageSize>0?$"(intptr_t){address}":$"*({ct}*){address}")};");break;
+                    }
+                    case ValueIrStoreField x:
+                    {
+                        var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);
+                        var address=$"((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset})";
+                        b.AppendLine(field.StorageSize>0?$"  if(dnd_require_object((DndObject*)v{x.Object.Id})) memcpy({address},(void*)v{x.Value.Id},{field.StorageSize}u);":$"  if(dnd_require_object((DndObject*)v{x.Object.Id})) *({ct}*){address}=({ct})v{x.Value.Id};");break;
+                    }
                     case ValueIrLoadStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = {StaticSymbol(field)};");break;}
                     case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
                     case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
@@ -359,9 +364,9 @@ internal static class ValueCBackend
                         }
                         if(x.InterfaceTarget is { } targetKey)
                         {
-                            var slot=InterfaceSlot(targetKey,model);
-                            b.AppendLine($"  }} else {{ intptr_t call_args[{a.Count}] = {{ {string.Join(", ",a.Select(v=>$"v{v.Id}"))} }}; DndManagedMethod target=dnd_interface_resolve((DndObject*)call_args[0], &dnd_type_{Id(targetKey.TypeName)}, {slot}u);");
-                            b.AppendLine(x.Result is { } result?$"    v{result.Id}=target?target(call_args):0; }}":$"    if(target) (void)target(call_args); }}");
+                            b.AppendLine("  } else {");
+                            EmitDispatch(b,a,x.Result,$"dnd_interface_resolve((DndObject*)call_args[0], &dnd_type_{Id(targetKey.TypeName)}, {InterfaceSlot(targetKey,model)}u)");
+                            b.AppendLine("  }");
                         }
                         break;
                     }
@@ -378,6 +383,23 @@ internal static class ValueCBackend
         }
         b.AppendLine("}");
         return b.ToString();
+    }
+
+    // Dispatch slots are pointer-sized on GameCube. Wide values travel by
+    // address, and a hidden result slot preserves all 64 bits on a 32-bit ABI.
+    private static void EmitDispatch(StringBuilder b,IReadOnlyList<IrValue> arguments,IrValue? result,string resolution)
+    {
+        b.AppendLine("  {");
+        for(var i=0;i<arguments.Count;i++)
+            if(arguments[i].Kind==IrValueKind.I8)b.AppendLine($"    int64_t wide_arg_{i}=v{arguments[i].Id};");
+        var wide=result is { Kind:IrValueKind.I8 };
+        if(wide)b.AppendLine("    int64_t wide_result=0;");
+        var args=arguments.Select((v,i)=>v.Kind==IrValueKind.I8?$"(intptr_t)&wide_arg_{i}":$"v{v.Id}").ToList();
+        if(wide)args.Add("(intptr_t)&wide_result");
+        b.AppendLine($"    intptr_t call_args[{Math.Max(1,args.Count)}]={{ {string.Join(", ",args)} }}; DndManagedMethod target={resolution};");
+        if(wide){b.AppendLine("    if(target) (void)target(call_args);");b.AppendLine($"    v{result!.Value.Id}=wide_result;");}
+        else b.AppendLine(result is { } value?$"    v{value.Id}=target?target(call_args):0;":"    if(target) (void)target(call_args);");
+        b.AppendLine("  }");
     }
 
     private static void EmitTerminator(StringBuilder b,ValueIrMethod method,ValueIrBlock block,CompilationModel model,IReadOnlyList<(int BlockId,ValueIrLeave Leave,int Id)> leavePaths)
