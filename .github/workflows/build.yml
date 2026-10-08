@@ -61,6 +61,8 @@ jobs:
   dolphin-emulator:
     name: Dolphin emulator smoke
     runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:25.10
     needs: gamecube
     timeout-minutes: 15
     steps:
@@ -69,15 +71,11 @@ jobs:
         with:
           name: DolphinDotNet-gamecube
           path: emulator-artifacts
-      - name: Install Dolphin and virtual display
+      - name: Install native Dolphin and virtual display
         run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak xvfb mesa-utils libgl1-mesa-dri
-          flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak remote-add --if-not-exists --user dolphin https://flatpak.dolphin-emu.org/releases.flatpakrepo
-          flatpak install --user --noninteractive -y flathub org.kde.Platform//6.11
-          flatpak install --user --noninteractive -y dolphin org.DolphinEmu.dolphin-emu
-          flatpak run --user org.DolphinEmu.dolphin-emu --version
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth libgl1-mesa-dri ca-certificates
+          dolphin-emu --version
       - name: Execute DOL in Dolphin
         run: bash scripts/test-dolphin.sh emulator-artifacts/DolphinDotNet.dol
       - name: Upload emulator diagnostics
