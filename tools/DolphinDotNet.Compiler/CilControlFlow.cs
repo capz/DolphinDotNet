@@ -114,34 +114,17 @@ internal static class CilControlFlowGraph
                         (target<r.TryOffset || target>=r.TryOffset+r.TryLength))
                         .OrderBy(r=>r.TryLength).FirstOrDefault();
                     successors.Add(byStart[handler.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally?handler.HandlerOffset:target]);
+                    // Also make the normal destination reachable for stack analysis.
+                    // The backend executes the finally before transferring there.
+                    if(handler.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally &&
+                        !regions.Any(r=>r.HandlerOffset==target && r.Kind is System.Reflection.Metadata.ExceptionRegionKind.Catch or System.Reflection.Metadata.ExceptionRegionKind.Filter))
+                        successors.Add(byStart[target]);
                 }
                 else successors.Add(byStart[target]);
             }
-            if(last.OpCode==0xdc)
-            {
-                var handler=regions.FirstOrDefault(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally &&
-                    last.Offset>=r.HandlerOffset && last.Offset<r.HandlerOffset+r.HandlerLength);
-                if(handler.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally)
-                {
-                    foreach(var leave in instructions.Where(i=>i.OpCode is 0xdd or 0xde &&
-                        i.Operand is CilBranchTarget t &&
-                        i.Offset>=handler.TryOffset && i.Offset<handler.TryOffset+handler.TryLength &&
-                        (t.Offset<handler.TryOffset || t.Offset>=handler.TryOffset+handler.TryLength)))
-                    {
-                        var destination=((CilBranchTarget)leave.Operand!).Offset;
-                        var next=regions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally &&
-                            r.HandlerOffset!=handler.HandlerOffset &&
-                            leave.Offset>=r.TryOffset && leave.Offset<r.TryOffset+r.TryLength &&
-                            (destination<r.TryOffset || destination>=r.TryOffset+r.TryLength) && r.TryLength>handler.TryLength)
-                            .OrderBy(r=>r.TryLength).FirstOrDefault();
-                        var nextOffset=next.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally?next.HandlerOffset:destination;
-                        // Exception handlers are entered by dispatch, never by a normal leave.
-                        // Exclude catch/filter entry blocks from synthetic endfinally edges.
-                        if(regions.Any(r=>r.Kind is System.Reflection.Metadata.ExceptionRegionKind.Catch or System.Reflection.Metadata.ExceptionRegionKind.Filter && r.HandlerOffset==nextOffset))continue;
-                        if(!successors.Contains(byStart[nextOffset]))successors.Add(byStart[nextOffset]);
-                    }
-                }
-            }
+            // endfinally resumes a continuation chosen dynamically by the backend.
+            // It has no statically valid outgoing edge: adding one can merge a
+            // normal empty stack with a catch handler's exception-object stack.
             if(last.Operand is CilSwitchTargets sw)foreach(var switchTarget in sw.Offsets)successors.Add(byStart[switchTarget]);
             if(last.Flow==CilFlowKind.Switch && byStart.TryGetValue(last.EndOffset,out var switchFall))successors.Add(switchFall);
             else if(last.Flow==CilFlowKind.ConditionalBranch && byStart.TryGetValue(last.EndOffset,out var fall))successors.Add(fall);
