@@ -348,7 +348,7 @@ internal static class Program
         object? boxedWide = wide;
         if (boxedWide is null) return 6;
 
-        var stage2 = TestNullableEquality(present, empty); if (stage2 != 0) return stage2;
+        var stage2 = TestNullableEquality(present, empty); if (stage2 != 0) return 800 + stage2;
         stage2 = TestPairs(); if (stage2 != 0) return stage2;
         stage2 = TestSegment(); if (stage2 != 0) return stage2;
         stage2 = TestConcreteEnumeration(); if (stage2 != 0) return stage2;
