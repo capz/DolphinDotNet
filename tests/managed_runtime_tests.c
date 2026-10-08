@@ -36,6 +36,14 @@ int main(void) {
     assert(unicode->chars[2] == 0xd83d && unicode->chars[3] == 0xde00);
     DndString *invalid_utf8 = dnd_string_from_utf8(&heap, "\xFF");
     assert(invalid_utf8 && invalid_utf8->length == 1 && invalid_utf8->chars[0] == 0xfffd);
+    /* Phase 6 integration: ordinal UTF-16 search must operate on code units. */
+    DndString *emoji_needle = dnd_string_from_utf8(&heap, "\xF0\x9F\x98\x80");
+    assert(emoji_needle && dnd_string_index_of(unicode, emoji_needle) == 2);
+    assert(dnd_string_char_at(unicode, 2) == 0xd83d);
+    assert(dnd_string_char_at(unicode, 3) == 0xde00);
+    DndString *unicode_copy = dnd_string_substring(&heap, unicode, 1, 3);
+    assert(unicode_copy && unicode_copy->length == 3);
+    assert(dnd_string_index_of(unicode_copy, emoji_needle) == 1);
     DndString *hello = dnd_string_from_utf8(&heap, "Hello");
     DndString *space = dnd_string_from_utf8(&heap, " ");
     DndString *world = dnd_string_from_utf8(&heap, "World");
