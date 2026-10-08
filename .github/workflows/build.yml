@@ -52,6 +52,8 @@ jobs:
         run: |
           dotnet build tests/GenericSharingSmoke/GenericSharingSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot tests/GenericSharingSmoke/bin/Release/net8.0/GenericSharingSmoke.dll /tmp/generic_sharing_value.c
+          echo 'Primitive formatting calls in generated C:'
+          grep -n -E 'dnd_string_from_(u64|i64)' /tmp/generic_sharing_value.c | head -60 || true
           cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/generic_sharing_value
           /tmp/generic_sharing_value
       - name: Regenerate managed sample
