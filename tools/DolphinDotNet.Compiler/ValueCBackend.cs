@@ -323,7 +323,7 @@ internal static class ValueCBackend
                         break;
                     case ValueIrUnboxAny x:
                         if(x.TypeName=="System.Int32")b.AppendLine($"  v{x.Result.Id} = dnd_unbox_i32((DndObject*)v{x.Object.Id});");
-                        else if(IsScalarBoxType(x.TypeName))b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_unbox_scalar((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)}, {ValueTypeSize(x.TypeName,model)}u);");
+                        else if(IsScalarBoxType(x.TypeName))b.AppendLine($"  v{x.Result.Id} = ({CType(x.Result.Kind)})dnd_unbox_scalar((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)}, {ValueTypeSize(x.TypeName,model)}u);");
                         else throw new NotSupportedException($"Unboxing {x.TypeName} is not implemented.");
                         break;
                     case ValueIrNewArray x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_array_new_typed(dnd_value_heap, (uint32_t)v{x.Length.Id}, {(x.ElementsAreReferences?"sizeof(DndObject*)":$"{x.ElementSize}u")}, {(x.ElementType=="$generic"?(x.ElementsAreReferences?"&DND_TYPE_OBJECT":"NULL"):TypeExpr(x.ElementType))}, {(x.ElementsAreReferences?"true":"false")});");break;
@@ -418,7 +418,7 @@ internal static class ValueCBackend
             case ValueIrSwitch x:
                 b.AppendLine($"  switch ((int32_t)v{x.Value.Id}) {{");for(var i=0;i<x.Targets.Count;i++){b.AppendLine($"    case {i}:");Edge(b,method,block.Id,x.Targets[i],"      ");b.AppendLine($"      goto block_{x.Targets[i]};");}b.AppendLine("    default:");Edge(b,method,block.Id,x.DefaultBlock,"      ");b.AppendLine($"      goto block_{x.DefaultBlock};");b.AppendLine("  }");break;
             case ValueIrReturn r:
-                if(r.Value is { } v){b.AppendLine($"  {{ intptr_t return_value = v{v.Id};");if(method.ExceptionRegions.Count>0)b.AppendLine("    if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
+                if(r.Value is { } v){b.AppendLine($"  {{ {ReturnCType(method,model)} return_value = v{v.Id};");if(method.ExceptionRegions.Count>0)b.AppendLine("    if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
                 else {if(method.ExceptionRegions.Count>0)b.AppendLine("  if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
                 break;
             case ValueIrLeave leave:
