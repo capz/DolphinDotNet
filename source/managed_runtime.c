@@ -648,16 +648,22 @@ void dnd_gc_frame_pop(DndGcFrame *frame) {
     if (gc_frames == frame) gc_frames = frame->previous;
 }
 
+/* Marking is iterative: the GameCube stack must not grow with object graph depth.
+   State 1 is discovered; state 2 has had its outgoing references scanned. */
 static void mark_object(DndManagedHeap *heap, DndObject *object) {
     if (!object || !in_heap(heap, object)) return;
     DndHeapBlock *block = object_block(object);
     if (block->free || block->marked || !object->type) return;
     block->marked = 1;
+}
+
+static void scan_object_references(DndManagedHeap *heap, DndHeapBlock *block) {
+    DndObject *object = block_object(block);
     const DndType *type = object->type;
     for (const DndType *current = type; current; current = current->base_type) {
         for (uint16_t i = 0; i < current->reference_count; i++) {
             uint32_t offset = current->reference_offsets[i];
-            if (offset + sizeof(void *) <= block->size)
+            if ((size_t)offset <= block->size && sizeof(void *) <= block->size - offset)
                 mark_object(heap, *(DndObject **)((uint8_t *)object + offset));
         }
     }
@@ -668,9 +674,13 @@ static void mark_object(DndManagedHeap *heap, DndObject *object) {
                 mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size));
         } else if (array->element_type && array->element_type->reference_count) {
             for (uint32_t i = 0; i < array->length; i++)
-                for (uint16_t r = 0; r < array->element_type->reference_count; r++)
-                    mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size +
-                        array->element_type->reference_offsets[r] - sizeof(DndObject)));
+                for (uint16_t r = 0; r < array->element_type->reference_count; r++) {
+                    uint32_t offset = array->element_type->reference_offsets[r];
+                    if (offset >= sizeof(DndObject) &&
+                        (size_t)(offset - sizeof(DndObject)) <= array->element_size &&
+                        sizeof(void *) <= array->element_size - (offset - sizeof(DndObject)))
+                        mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size + offset - sizeof(DndObject)));
+                }
         }
     }
 }
@@ -689,6 +699,19 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     for (DndGcFrame *frame = gc_frames; frame; frame = frame->previous)
         for (size_t i = 0; i < frame->count; i++)
             if (frame->slots[i]) mark_object(heap, *frame->slots[i]);
+
+    /* No recursion and no allocations during collection. Each pass processes
+       every newly discovered object, including cyclic and deeply linked graphs. */
+    bool pending;
+    do {
+        pending = false;
+        for (DndHeapBlock *block = first_block(heap); block; block = block->next)
+            if (!block->free && block->marked == 1) {
+                block->marked = 2;
+                scan_object_references(heap, block);
+                pending = true;
+            }
+    } while (pending);
 
     for (DndHeapBlock *block = first_block(heap); block; block = block->next)
         if (!block->free && !block->marked) {
