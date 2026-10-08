@@ -30,6 +30,12 @@ int main(void) {
     DndManagedHeap heap;
     dnd_managed_heap_init(&heap, memory, sizeof(memory));
 
+    DndString *unicode = dnd_string_from_utf8(&heap, "A\\xC3\\xA9\\xF0\\x9F\\x98\\x80");
+    assert(unicode && unicode->length == 4);
+    assert(unicode->chars[0] == 'A' && unicode->chars[1] == 0x00e9);
+    assert(unicode->chars[2] == 0xd83d && unicode->chars[3] == 0xde00);
+    DndString *invalid_utf8 = dnd_string_from_utf8(&heap, "\\xFF");
+    assert(invalid_utf8 && invalid_utf8->length == 1 && invalid_utf8->chars[0] == 0xfffd);
     DndString *hello = dnd_string_from_utf8(&heap, "Hello");
     DndString *space = dnd_string_from_utf8(&heap, " ");
     DndString *world = dnd_string_from_utf8(&heap, "World");
