@@ -134,7 +134,7 @@ internal static class ValueCBackend
             if(method.ExceptionRegions.Count>0)
             {
                 var protectedHere=method.ExceptionRegions.Any(r=>block.CilOffset>=r.TryOffset&&block.CilOffset<r.TryOffset+r.TryLength);
-                if(protectedHere)b.AppendLine($"  dnd_eh_site = {block.CilOffset};");
+                b.AppendLine(protectedHere?$"  dnd_eh_site = {block.CilOffset};":"  dnd_eh_site = -1;");
             }
             foreach(var i in block.Instructions)
             {
