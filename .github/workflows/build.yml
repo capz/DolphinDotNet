@@ -74,9 +74,9 @@ jobs:
       - name: Install native Dolphin and virtual display
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth libgl1-mesa-dri ca-certificates
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth libxcb-cursor0 libgl1-mesa-dri ca-certificates
           test -x /usr/games/dolphin-emu
-          /usr/games/dolphin-emu --version
+          QT_QPA_PLATFORM=offscreen /usr/games/dolphin-emu --version
       - name: Execute DOL in Dolphin
         run: bash scripts/test-dolphin.sh emulator-artifacts/DolphinDotNet.dol
       - name: Upload emulator diagnostics
