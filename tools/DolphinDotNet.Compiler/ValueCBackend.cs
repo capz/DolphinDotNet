@@ -162,7 +162,23 @@ internal static class ValueCBackend
                         if(x.ThrowIfEmpty)b.AppendLine($"  if(!*(uint8_t*)v{x.Address.Id}) dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION, \"Nullable object must have a value.\");");
                         b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? *({ct}*)((uint8_t*)v{x.Address.Id}+4) : 0;");break;
                     }
-                    case ValueIrAddressOfArgument x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&a{x.Index};");break;
+                    case ValueIrAddressOfArgument x:
+                    {
+                        // Value-type parameters are passed as addresses by the value AOT ABI.
+                        // Taking the address of the pointer slot instead reads its bytes as
+                        // Nullable<T>.HasValue and corrupts subsequent nullable operations.
+                        var isValueParameter=method.Blocks.SelectMany(block=>block.Instructions).Any(i=>i switch
+                        {
+                            ValueIrNullableHasValue n=>n.Address.Id==x.Result.Id,
+                            ValueIrNullableGetValue n=>n.Address.Id==x.Result.Id,
+                            ValueIrNullableGetValueOrDefault n=>n.Address.Id==x.Result.Id,
+                            ValueIrNullableHash n=>n.Address.Id==x.Result.Id,
+                            ValueIrNullableEquals n=>n.Address.Id==x.Result.Id,
+                            _=>false
+                        });
+                        b.AppendLine(isValueParameter?$"  v{x.Result.Id} = a{x.Index};":$"  v{x.Result.Id} = (intptr_t)&a{x.Index};");
+                        break;
+                    }
                     case ValueIrStoreArgument x:b.AppendLine($"  a{x.Index} = v{x.Value.Id};");break;
                     case ValueIrLoadIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  v{x.Result.Id} = *({ct}*)v{x.Address.Id};");break;}
                     case ValueIrStoreIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  *({ct}*)v{x.Address.Id} = ({ct})v{x.Value.Id};");break;}
