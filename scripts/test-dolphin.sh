@@ -10,7 +10,7 @@ QT_QPA_PLATFORM=offscreen /usr/games/dolphin-emu --version > emulator-logs/dolph
 set +e
 timeout --signal=TERM --kill-after=10s 90s \
   xvfb-run -a -s '-screen 0 1280x720x24' \
-  env LIBGL_ALWAYS_SOFTWARE=1 QT_QPA_PLATFORM=xcb /usr/games/dolphin-emu --batch --exec="$dol" > emulator-logs/stdout.log 2> emulator-logs/stderr.log
+  env LIBGL_ALWAYS_SOFTWARE=1 QT_QPA_PLATFORM=xcb /usr/games/dolphin-emu --no-gui --batch --exec="$dol" > emulator-logs/stdout.log 2> emulator-logs/stderr.log
 status=$?
 set -e
 cat emulator-logs/stdout.log
