@@ -72,7 +72,10 @@ jobs:
       - name: Install Dolphin and virtual display
         run: |
           sudo apt-get update
-          sudo apt-get install -y dolphin-emu xvfb
+          sudo apt-get install -y flatpak xvfb mesa-utils libgl1-mesa-dri
+          flatpak remote-add --if-not-exists --user dolphin https://flatpak.dolphin-emu.org/releases.flatpakrepo
+          flatpak install --user --noninteractive -y dolphin org.DolphinEmu.dolphin-emu
+          flatpak run --user org.DolphinEmu.dolphin-emu --version
       - name: Execute DOL in Dolphin
         run: bash scripts/test-dolphin.sh emulator-artifacts/DolphinDotNet.dol
       - name: Upload emulator diagnostics
