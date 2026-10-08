@@ -232,7 +232,7 @@ internal static class ValueCBackend
                             "System.Int64" or "System.UInt64"=>64,
                             _=>32
                         };
-                        var numeric=pointer?$"(*({(signed?"int":"uint")}{width}_t*)(intptr_t){raw})":raw;
+                        var numeric=pointer?$"(*({(signed?"int":"uint")}{width}_t*)(intptr_t){raw})":$"({(signed?"int":"uint")}{width}_t){raw}";
                         b.AppendLine(x.TypeName switch {
                             "System.Boolean"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_bool(dnd_value_heap, {numeric} != 0);",
                             "System.Char"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_char(dnd_value_heap, (uint16_t){numeric});",
