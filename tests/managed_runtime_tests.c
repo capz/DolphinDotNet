@@ -179,6 +179,23 @@ int main(void) {
     TestNode *replacement = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
     assert(replacement); assert(heap.used <= before_collect);
 
+    /* Phase 7: pending exception objects must survive a collection even when
+       no managed stack frame currently contains a reference to them. */
+    dnd_exception_clear();
+    DndException *pending = dnd_exception_new(&heap, &DND_TYPE_EXCEPTION, NULL);
+    assert(pending);
+    dnd_exception_throw_object((DndObject *)pending);
+    assert(dnd_exception_pending() && dnd_exception_object() == (DndObject *)pending);
+    dnd_gc_collect(&heap, NULL);
+    assert(dnd_exception_object() == (DndObject *)pending);
+    assert(dnd_exception_object()->type == &DND_TYPE_EXCEPTION);
+    dnd_exception_clear();
+
+    /* Oversized requests must fail safely instead of wrapping the allocation. */
+    assert(dnd_managed_array_new(&heap, UINT32_MAX, UINT32_MAX) == NULL);
+    assert(dnd_exception_kind() == DND_EXCEPTION_OUT_OF_MEMORY);
+    dnd_exception_clear();
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }

@@ -105,6 +105,10 @@ static DndObject *allocate_from_free(DndManagedHeap *heap, const DndType *type, 
 
 static DndObject *allocate(DndManagedHeap *heap, const DndType *type, size_t bytes) {
     if (!heap || !type) return NULL;
+    if (bytes > SIZE_MAX - 7u || bytes > UINT32_MAX - 7u) {
+        dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY, "Managed allocation size overflow.");
+        return NULL;
+    }
     bytes = align8(bytes < sizeof(DndObject) ? sizeof(DndObject) : bytes);
     if (gc_stress && heap->blocks) dnd_gc_collect(heap, NULL);
     DndObject *reused = allocate_from_free(heap, type, bytes);
@@ -282,7 +286,8 @@ DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, in
 
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length,
     uint32_t element_size, const DndType *element_type, bool references) {
-    if (element_size && length > SIZE_MAX / element_size) {
+    if (element_size && ((size_t)length > (SIZE_MAX - sizeof(DndArray)) / element_size ||
+        (size_t)length > (UINT32_MAX - sizeof(DndArray) - 7u) / element_size)) {
         dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY, "Array size overflow.");
         return NULL;
     }
@@ -634,6 +639,8 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     if (roots)
         for (size_t i = 0; i < roots->count; i++)
             if (roots->slots[i]) mark_object(heap, *roots->slots[i]);
+    /* A pending managed exception is a live root during stack unwinding. */
+    if (exception_is_pending) mark_object(heap, exception_object);
     for (DndGcFrame *frame = gc_frames; frame; frame = frame->previous)
         for (size_t i = 0; i < frame->count; i++)
             if (frame->slots[i]) mark_object(heap, *frame->slots[i]);
