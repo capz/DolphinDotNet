@@ -6,7 +6,7 @@ Initial native primitives cover object/type metadata, inheritance/interface chec
 
 This is infrastructure rather than a claim of complete C# support. The compiler must still lower construction, fields, virtual/interface dispatch, generics, exception regions, delegates, arrays and roots into these primitives.
 
-The collector intentionally does not compact live objects or reclaim individual unreachable objects yet. Until compiler-emitted reference maps exist, it resets the bump heap only when no registered roots remain.
+The collector is non-moving mark/sweep: it reclaims individual unreachable objects, coalesces adjacent free blocks and reuses freed space. Precise tracing uses type reference-offset metadata and compiler-emitted shadow-stack frames. Root correctness under allocation stress remains an explicit Phase 7 acceptance gate.
 
 ## Level 2 - core BCL
 
@@ -20,4 +20,4 @@ Level 1 is complete when ordinary compiled C# exercises classes, structs, interf
 
 Level 2 is complete when managed implementations of collections, delegates, nullable, StringBuilder, basic LINQ, streams/readers/writers, Math and Random compile and execute through Level 1.
 
-Formal .NET Standard conformance is a later level.
+Selected .NET Standard API compatibility may be tracked, but full reflection and dynamic assembly loading are permanently out of scope. Formal full .NET Standard conformance is not a project goal.
