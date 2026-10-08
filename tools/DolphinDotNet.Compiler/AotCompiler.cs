@@ -191,8 +191,17 @@ internal static class AotCompiler
     private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i,MethodModel? context=null)
     {
         if(i.OpCode is not (0x7b or 0x7c or 0x7d or 0x7e or 0x80)||i.Operand is not CilMetadataToken { Token: var raw })return null;
-        try{var field=IlImporter.ResolveField(md,model,MetadataTokens.EntityHandle(raw));
-            return context is not null&&model.Types[context.Key.TypeName].GenericDefinition==field.DeclaringType?model.Fields[(context.Key.TypeName,field.Name)]:field;}catch(NotSupportedException){return null;}
+        try
+        {
+            var handle=MetadataTokens.EntityHandle(raw);var field=IlImporter.ResolveField(md,model,handle);
+            if(handle.Kind==HandleKind.MemberReference&&md.GetMemberReference((MemberReferenceHandle)handle).Parent is { Kind:HandleKind.TypeSpecification } parent)
+            {
+                var args=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)parent,model,context);
+                var closed=field.DeclaringType+GenericSharing.SpecializationSuffix(args,Array.Empty<GenericRepresentation>());
+                if(model.Fields.TryGetValue((closed,field.Name),out var specialized))return specialized;
+            }
+            return context is not null&&model.Types[context.Key.TypeName].GenericDefinition==field.DeclaringType?model.Fields[(context.Key.TypeName,field.Name)]:field;
+        }catch(NotSupportedException){return null;}
     }
 
     private static int NullableValueSize(MetadataReader md,CompilationModel model,CilInstruction i)

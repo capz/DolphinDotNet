@@ -31,7 +31,7 @@ var genericObject = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid
 Run("cc", $"-std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" -c \"{genericOutput}\" -o \"{genericObject}\"");
 if (!genericGenerated.Contains("setjmp(dnd_eh_frame.environment)", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_exception_matches", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("dnd_exception_rethrow_current", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_caught_", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_exception_new", StringComparison.Ordinal))
     throw new Exception("Exception handling lowering missing.");
 var literalDefinitions = genericGenerated.Split('\n').Count(line => line.Contains("dnd_string_literal_", StringComparison.Ordinal) && line.Contains("static const struct", StringComparison.Ordinal));

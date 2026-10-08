@@ -41,6 +41,22 @@ internal static class Program
         }
     }
 
+    private static int NestedCatchRethrowProbe()
+    {
+        try
+        {
+            try { throw new InvalidOperationException("outer"); }
+            catch (InvalidOperationException)
+            {
+                try { throw new ArgumentException("inner"); }
+                catch (ArgumentException) { var allocation=string.Concat("force", " gc"); if(allocation.Length!=8)return -2; }
+                throw;
+            }
+        }
+        catch (InvalidOperationException ex) { return ex.Message.Length==5?54:-1; }
+        catch (ArgumentException) { return -3; }
+    }
+
     private static int RethrowProbe()
     {
         try
@@ -308,6 +324,7 @@ internal static class Program
 
     private static int Main()
     {
+        if(AllocationAndNullProbe()!=0) return 900;
         var holder = new GenericHolder<string>(string.Concat("rooted", " value"));
         var wideHolder = new GenericHolder<long>(0x300000004L);
         if(holder.Value.Length!=12 || wideHolder.Value!=0x300000004L) return 880;
@@ -327,6 +344,7 @@ internal static class Program
         if (ExceptionDuringFinallyProbe() != 42) return 102;
         if (CatchFinallyInteractionProbe() != 43) return 103;
         if (ExplicitExceptionProbe() != 15) return 94;
+        if (NestedCatchRethrowProbe() != 54) return 890;
         if (RethrowProbe() != 14) return 93;
         if (TypedCatchProbe() != 13) return 92;
         if (CatchProbe() != 11) return 91;
@@ -477,13 +495,28 @@ internal static class Program
         return 0;
     }
 
+    private static int AllocationAndNullProbe()
+    {
+        var caught=0;
+        try { var tooLarge=new int[int.MaxValue]; return tooLarge.Length; }
+        catch(OutOfMemoryException) { caught++; }
+        var array=new int[1];
+        try { return array[1]; }
+        catch(IndexOutOfRangeException) { caught++; }
+        string? missing=null;
+        try { return missing!.Length; }
+        catch(NullReferenceException) { caught++; }
+        var unicode="A\u03a9\U0001f680";
+        return caught==3&&unicode.Length==4&&unicode[1]=='\u03a9'&&unicode[2]=='\ud83d'&&unicode[3]=='\ude80'?0:1;
+    }
+
     private static int LifecycleProbe()
     {
         LifecycleBase item = new LifecycleDerived(7, string.Concat("derived", " name"));
         ILifecycle reader = (ILifecycle)item;
         if(item.Read()!=19 || reader.Read()!=19 || item.Value!=7) return 1;
         if(item is not LifecycleDerived || (object)item is PairHolder) return 2;
-        if(LifecycleBase.Created!=1) return 3;
+        if(LifecycleBase.Created!=11) return 3;
         return 0;
     }
 
@@ -562,7 +595,7 @@ internal sealed class PairHolder { public KeyValuePair<string,string> Pair; }
 internal interface ILifecycle { int Read(); }
 internal class LifecycleBase
 {
-    public static int Created;
+    public static int Created=10;
     public int Value;
     public LifecycleBase(int value) { Value=value; Created++; }
     public virtual int Read() => Value;

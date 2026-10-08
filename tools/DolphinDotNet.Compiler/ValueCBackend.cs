@@ -99,6 +99,8 @@ internal static class ValueCBackend
             var ai=pi+(method.HasThis?1:0);
             b.AppendLine($"  _Alignas(8) uint8_t arg_{ai}[{storage.Size}]; memcpy(arg_{ai}, (void*)a{ai}, {storage.Size}u); a{ai}=(intptr_t)arg_{ai};");
         }
+        foreach(var region in method.ExceptionRegions.Where(r=>r.Kind==ValueIrExceptionRegionKind.Catch))
+            b.AppendLine($"  volatile intptr_t dnd_caught_{region.HandlerOffset}=0;");
         foreach(var v in values)b.AppendLine($"  {(method.ExceptionRegions.Count>0?"volatile ":"")}{ValueStorageCType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
         foreach(var local in method.Locals){b.AppendLine(local.StorageSize>0?$"  _Alignas(8) uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {(method.ExceptionRegions.Count>0?"volatile ":"")}{CType(local.Kind)} l{local.Index} = 0;");b.AppendLine($"  (void)l{local.Index};");}
         var leavePaths=method.Blocks.Where(x=>x.Terminator is ValueIrLeave)
@@ -107,6 +109,7 @@ internal static class ValueCBackend
         var roots=values.Where(v=>v.Kind==IrValueKind.ObjectReference).Select(v=>$"(DndObject**)&v{v.Id}").ToList();
         roots.AddRange(method.Locals.Where(l=>l.Kind==IrValueKind.ObjectReference).Select(l=>$"(DndObject**)&l{l.Index}"));
         roots.AddRange(method.Locals.SelectMany(l=>(l.ReferenceOffsets??Array.Empty<int>()).Select(offset=>$"(DndObject**)(l{l.Index}+{offset})")));
+        roots.AddRange(method.ExceptionRegions.Where(r=>r.Kind==ValueIrExceptionRegionKind.Catch).Select(r=>$"(DndObject**)&dnd_caught_{r.HandlerOffset}"));
         if(method.HasThis)roots.Add("(DndObject**)&a0");
         /* Incoming managed references must remain roots even before their first
            IL load. Callees can allocate while the argument is still live. */
@@ -139,7 +142,7 @@ internal static class ValueCBackend
                     var exceptionValue=handler.EntryStack.Values.FirstOrDefault();
                     var assign=handler.EntryStack.Values.Count>0?$"v{exceptionValue.Id} = (intptr_t)dnd_exception_object(); ":"";
                     var match=region.CatchType is null?"true":$"dnd_exception_matches({TypeExpr(region.CatchType)})";
-                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength} && {match}) {{ {assign}dnd_exception_begin_catch(); dnd_eh_site = {region.HandlerOffset}; dnd_eh_push(&dnd_eh_frame); goto block_{handler.Id}; }}");
+                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength} && {match}) {{ dnd_caught_{region.HandlerOffset}=(intptr_t)dnd_exception_object(); {assign}dnd_exception_begin_catch(); dnd_eh_site = {region.HandlerOffset}; dnd_eh_push(&dnd_eh_frame); goto block_{handler.Id}; }}");
                 }
             }
             b.AppendLine("    if (dnd_eh_active) { dnd_eh_pop(&dnd_eh_frame); dnd_eh_active = 0; }");
@@ -243,7 +246,7 @@ internal static class ValueCBackend
                     case ValueIrLoadStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = {StaticSymbol(field)};");break;}
                     case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
                     case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
-                    case ValueIrStringLength x:b.AppendLine($"  v{x.Result.Id} = ((DndString*)v{x.String.Id})->length;");break;
+                    case ValueIrStringLength x:b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.String.Id})) v{x.Result.Id} = ((DndString*)v{x.String.Id})->length;");break;
                     case ValueIrPrimitiveToString x:
                     {
                         // Primitive instance ToString receives a managed address (ldloca/ldarga),
@@ -455,7 +458,11 @@ internal static class ValueCBackend
                 break;
             case ValueIrThrow t:
                 if(t.Exception is { } ex)b.AppendLine($"  dnd_exception_throw_object((DndObject*)v{ex.Id});");
-                else b.AppendLine("  dnd_exception_rethrow_current();");
+                else
+                {
+                    var caught=method.ExceptionRegions.Where(r=>r.Kind==ValueIrExceptionRegionKind.Catch&&block.CilOffset>=r.HandlerOffset&&block.CilOffset<r.HandlerOffset+r.HandlerLength).OrderBy(r=>r.HandlerLength).FirstOrDefault();
+                    b.AppendLine(caught is not null?$"  dnd_exception_throw_object((DndObject*)dnd_caught_{caught.HandlerOffset});":"  dnd_exception_rethrow_current();");
+                }
                 b.AppendLine("  return 0;");
                 break;
             case null:b.AppendLine("  return 0;");break;
@@ -537,9 +544,9 @@ internal static class ValueCBackend
         var n=m.ParameterCount+(m.HasThis?1:0);if(n==0)return "void";
         model.Methods.TryGetValue(m.Key,out var mm);var abi=mm?.Abi;
         return string.Join(", ",Enumerable.Range(0,n).Select(i=>{
-            if(m.HasThis&&i==0)return $"intptr_t a{i}";
+            if(m.HasThis&&i==0)return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}intptr_t a{i}";
             var pi=i-(m.HasThis?1:0);var kind=abi is not null&&pi<abi.Parameters.Count?abi.Parameters[pi]:CilStackKind.NativeInt;
-            return $"{AbiCType(kind)} a{i}";
+            return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}{AbiCType(kind)} a{i}";
         }));
     }
     private static string ReturnCType(ValueIrMethod m,CompilationModel model)
@@ -547,7 +554,7 @@ internal static class ValueCBackend
     private static string AbiCType(CilStackKind kind)=>kind switch{CilStackKind.I8=>"int64_t",CilStackKind.Float=>"double",_=>"intptr_t"};
     private static string Id(string s)=>new(s.Select(ch=>char.IsLetterOrDigit(ch)?ch:'_').ToArray());
     private static string Escape(string s)=>s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n").Replace("\r","\\r").Replace("\t","\\t");
-    private static bool HasRoots(ValueIrMethod m,CompilationModel model)=>Collect(m).Any(v=>v.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>l.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>(l.ReferenceOffsets?.Count??0)>0)||m.HasThis||(model.Methods.TryGetValue(m.Key,out var mm)&&mm.Abi is { } abi&&abi.Parameters.Any(k=>k==CilStackKind.ObjectReference));
+    private static bool HasRoots(ValueIrMethod m,CompilationModel model)=>m.ExceptionRegions.Any(r=>r.Kind==ValueIrExceptionRegionKind.Catch)||Collect(m).Any(v=>v.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>l.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>(l.ReferenceOffsets?.Count??0)>0)||m.HasThis||(model.Methods.TryGetValue(m.Key,out var mm)&&mm.Abi is { } abi&&abi.Parameters.Any(k=>k==CilStackKind.ObjectReference));
     private static string ValueStorageCType(IrValueKind kind)=>kind==IrValueKind.I8?"int64_t":"intptr_t";
     private static string CType(IrValueKind kind)=>kind switch
     {
