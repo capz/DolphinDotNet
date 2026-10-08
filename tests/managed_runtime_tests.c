@@ -207,6 +207,15 @@ int main(void) {
     assert(dnd_exception_kind() == DND_EXCEPTION_ARGUMENT);
     dnd_exception_clear();
 
+    /* Length arithmetic must reject impossible UTF-16 concatenations before
+       reading either source buffer or attempting allocation. */
+    struct { DndObject object; uint32_t length; uint16_t chars[1]; } huge_string = {0};
+    huge_string.object.type = &DND_TYPE_STRING;
+    huge_string.length = UINT32_MAX;
+    assert(dnd_string_concat(&heap, (DndString *)&huge_string, hello) == NULL);
+    assert(dnd_exception_kind() == DND_EXCEPTION_OUT_OF_MEMORY);
+    dnd_exception_clear();
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }

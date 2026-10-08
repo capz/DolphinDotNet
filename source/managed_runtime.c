@@ -223,6 +223,11 @@ DndString *dnd_string_from_char(DndManagedHeap *heap, uint16_t value) {
 DndString *dnd_string_concat(DndManagedHeap *heap, const DndString *a, const DndString *b) {
     uint32_t a_length = a ? a->length : 0;
     uint32_t b_length = b ? b->length : 0;
+    if (a_length > UINT32_MAX - b_length ||
+        (uint64_t)a_length + b_length > (UINT32_MAX - sizeof(DndString) - 7u) / sizeof(uint16_t) - 1u) {
+        dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY, "String concatenation size overflow.");
+        return NULL;
+    }
     DndString *string = (DndString *)allocate(heap, &DND_TYPE_STRING,
         sizeof(DndString) + ((size_t)a_length + b_length + 1) * sizeof(uint16_t));
     if (!string) return NULL;
