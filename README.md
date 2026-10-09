@@ -53,7 +53,7 @@ The output is `DolphinDotNet.dol`. The repository also contains `samples/HelloGa
 
 ## API and architecture rules
 
-GameCube-specific managed APIs belong under the **`Dolphin` namespace** (for example `Dolphin.Graphics`, `Dolphin.Input`, `Dolphin.Network`). Existing `DolphinDotNet.GameCube` API code is legacy and requires migration with compiler intrinsic mapping updates. Standard-library-compatible APIs retain `System.*` names.
+GameCube-specific managed APIs belong under the **`Dolphin` namespace** (for example `Dolphin.Graphics`, `Dolphin.Input`, `Dolphin.Network`). The former `DolphinDotNet.GameCube.GameCube` facade is replaced by `Dolphin.Diagnostics.DebugOverlay`, `Dolphin.Input.Controller`, `Dolphin.Graphics.Renderer` and `Dolphin.Platform.Name`. The assembly/project name remains `DolphinDotNet.GameCube`. Standard-library-compatible APIs retain `System.*` names.
 
 The managed/native split keeps game code independent of GX, PAD, libogc and native socket details. The native GameCube backend owns hardware resources.
 
@@ -75,3 +75,13 @@ Further library work includes general equality/comparison, nullable coverage, st
 For ordinary .NET library development, see the [.NET Standard compatibility index](docs/dotnet-standard-status.md). It distinguishes compiled API subsets from native-only primitives and missing framework implementations. The [supported storage APIs](docs/storage-runtime.md) document usage and limits; the [File and Directory design](docs/system-io-design.md) describes the libogc2/libdvm storage backend and managed `System.IO` rollout.
 
 See [architecture](docs/architecture.md), [managed runtime architecture](docs/managed-runtime-architecture.md), [runtime levels](docs/runtime-levels.md) and [platform roadmap](docs/platform-roadmap.md).
+
+## Save icon preparation
+
+Convert a PNG to a 32×32 tiled RGB5A3 memory-card icon:
+
+```sh
+dotnet run --project tools/DolphinDotNet.SaveImage -- icon.png icon.rgb5a3
+```
+
+Pass `--banner` for 96×32 banners. See the [converter instructions](tools/DolphinDotNet.SaveImage/README.md) for resize modes, .NET tool installation and loading the bytes into `MemoryCardSaveOptions`.
