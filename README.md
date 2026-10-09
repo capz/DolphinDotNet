@@ -69,6 +69,8 @@ The managed/native split keeps game code independent of GX, PAD, libogc and nati
 
 The **0.1 milestone is still pending**. It requires the integrated managed demo to boot on Dolphin and real GameCube hardware, render a textured 3D object, respond to controller input, exchange UDP packets and display diagnostics without a desktop CLR. Static stack reports do not establish runtime stack high-water usage.
 
-The immediate priority is Phase 8: establish a consistent managed platform API over the existing native drivers, then use it to build the Phase 9 demo.
+The next library work is equality/comparison, nullable and generic enumerable/collection contracts. Phase 8 establishes a consistent managed platform API over the existing native drivers, followed by the Phase 9 demo.
+
+For ordinary .NET library development, see the [.NET Standard compatibility index](docs/dotnet-standard-status.md). It distinguishes compiled API subsets from native-only primitives and missing framework implementations. The proposed [File and Directory design](docs/system-io-design.md) describes the libogc2/libdvm storage backend and managed `System.IO` rollout.
 
 See [architecture](docs/architecture.md), [managed runtime architecture](docs/managed-runtime-architecture.md), [runtime levels](docs/runtime-levels.md) and [platform roadmap](docs/platform-roadmap.md).
