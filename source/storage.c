@@ -1044,7 +1044,6 @@ static int card_backend_write(int d, const char *name, const void *data,
 }
 #else
 #define card_backend_read dnd_gc_card_read
-#define card_backend_write dnd_gc_card_write
 #endif
 static uint32_t read_be32(const uint8_t *p) {
   return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |

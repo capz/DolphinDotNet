@@ -123,7 +123,7 @@ internal static class ValueIrImporter
                     case 0xa5:
                     {
                         var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve unboxed type at IL_{cil.Offset:x4}.");
-                        var input=Pop(stack,cil);var result=New(ElementSize(type)==8?CilStackKind.I8:CilStackKind.I4);
+                        var input=Pop(stack,cil);var result=New(type is "System.Single" or "System.Double"?CilStackKind.Float:ElementSize(type)==8?CilStackKind.I8:CilStackKind.I4);
                         instructions.Add(new ValueIrUnboxAny(result,input,type));stack.Add(result);break;
                     }
                     case 0x8d:
@@ -147,7 +147,7 @@ internal static class ValueIrImporter
                         var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0x9a;
                         var size=cil.OpCode switch { 0x90 or 0x91=>1, 0x92 or 0x93=>2, 0x96 or 0x99=>8, _=>4 };
                         var signed=cil.OpCode is 0x90 or 0x92 or 0x94 or 0x96 or 0x97;
-                        var kind=reference?CilStackKind.ObjectReference:size==8?CilStackKind.I8:CilStackKind.I4;var result=New(kind);
+                        var kind=reference?CilStackKind.ObjectReference:cil.OpCode is 0x98 or 0x99?CilStackKind.Float:size==8?CilStackKind.I8:CilStackKind.I4;var result=New(kind);
                         instructions.Add(new ValueIrLoadElement(result,array,index,size,reference,signed));stack.Add(result);break;
                     }
                     case >=0x9b and <=0xa2:
@@ -160,7 +160,7 @@ internal static class ValueIrImporter
                     {
                         var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array load at IL_{cil.Offset:x4}.");var index=Pop(stack,cil);var array=Pop(stack,cil);
                         var result=New(rep.StackKind);
-                        instructions.Add(rep.IsAggregate?new ValueIrAggregateElement(result,array,index,rep.Size):new ValueIrLoadElement(result,array,index,rep.Size,rep.IsReference));stack.Add(result);break;
+                        instructions.Add(rep.IsAggregate?new ValueIrAggregateElement(result,array,index,rep.Size):new ValueIrLoadElement(result,array,index,rep.Size,rep.IsReference,rep.TypeName is not ("System.Byte" or "System.Boolean" or "System.Char" or "System.UInt16" or "System.UInt32" or "System.UInt64")));stack.Add(result);break;
                     }
                     case 0xa4:
                     {
@@ -248,8 +248,27 @@ internal static class ValueIrImporter
                             instructions.Add(new ValueIrNativeStorage(storageResult,storageTarget.Key.Name,storageArgs));if(storageResult is {} value)stack.Add(value);break;
                         }
                         if(constraint is not null&&resolveType(constraint)=="System.ArraySegment`1+Enumerator"&&resolveCall(cil)?.Key.Name=="Dispose") { Pop(stack,cil);break; }
-                        if(ik==IntrinsicKind.ObjectGetHashCode){var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableHash(value,input,constraint is not null?nullableValueSize(constraint):4));else instructions.Add(new ValueIrOpaqueStackEffect(1,new[]{value},cil.OpCode));stack.Add(value);break;}
-                        if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,constraint is not null?nullableValueSize(constraint):4));else instructions.Add(new ValueIrObjectEquals(value,input,other));stack.Add(value);break;}
+                        if(ik is IntrinsicKind.ObjectGetHashCode or IntrinsicKind.ObjectEquals or IntrinsicKind.ObjectStaticEquals){
+                            var other=ik!=IntrinsicKind.ObjectGetHashCode?Pop(stack,cil):(IrValue?)null;
+                            var input=Pop(stack,cil);var value=New(CilStackKind.I4);var constrainedType=constraint is null?null:resolveType(constraint);
+                            if(input.Kind==IrValueKind.ManagedPointer&&constrainedType=="System.Nullable`1"){
+                                instructions.Add(other is {} o?new ValueIrNullableEquals(value,input,o,nullableValueSize(constraint!)):new ValueIrNullableHash(value,input,nullableValueSize(constraint!)));
+                            }else if(input.Kind==IrValueKind.ManagedPointer&&constraint is not null){
+                                var rep=resolveGenericTypeParameter(constraint);
+                                if(rep is null&&constrainedType is {} ct){var layout=valueLayout(ct);rep=new GenericRepresentation(layout.Size>0?GenericRepresentationKind.ValueType:IsReferenceType(ct)?GenericRepresentationKind.PointerSized:GenericRepresentationKind.ValueType,layout.Size>0?layout.Size:(int)ElementSize(ct),IsReferenceType(ct)&&layout.Size==0?new[]{0}:layout.References,ct);}
+                                if(rep is null)throw new NotSupportedException("Unresolved constrained object operation.");
+                                if(other is null&&(!rep.Value.IsReference)){
+                                    var data=input;if(!rep.Value.IsAggregate){data=New(rep.Value.StackKind);instructions.Add(new ValueIrLoadIndirect(data,input,rep.Value.Size,false));}
+                                    instructions.Add(new ValueIrDefaultComparison(value,"Hash",rep.Value,new[]{data}));
+                                }else{
+                                    var boxed=New(CilStackKind.ObjectReference);
+                                    if(rep.Value.IsReference)instructions.Add(new ValueIrLoadIndirect(boxed,input,rep.Value.Size,true));
+                                    else {var data=input;if(!rep.Value.IsAggregate){data=New(rep.Value.StackKind);instructions.Add(new ValueIrLoadIndirect(data,input,rep.Value.Size,false));}instructions.Add(new ValueIrBox(boxed,data,rep.Value.TypeName??"System.Int32"));}
+                                    instructions.Add(other is {} o?new ValueIrObjectEquals(value,boxed,o):new ValueIrObjectHash(value,boxed));
+                                }
+                            }else instructions.Add(other is {} o?new ValueIrObjectEquals(value,input,o,ik==IntrinsicKind.ObjectEquals,ik==IntrinsicKind.ObjectEquals&&cil.OpCode==0x28):new ValueIrObjectHash(value,input,cil.OpCode==0x28));
+                            stack.Add(value);break;
+                        }
                         if(ik is IntrinsicKind.ArrayLength or IntrinsicKind.ArrayLongLength or IntrinsicKind.ArrayRank)
                         {
                             var array=Pop(stack,cil);var value=New(ik==IntrinsicKind.ArrayLongLength?CilStackKind.I8:CilStackKind.I4);
@@ -375,7 +394,7 @@ internal static class ValueIrImporter
                     }
                     case 0x7b or 0x7c:
                     {
-                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field in {method.Key} at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(cil.OpCode==0x7c||field.StorageSize>0?CilStackKind.ManagedPointer:field.IsReference?CilStackKind.ObjectReference:field.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name,cil.OpCode==0x7c));stack.Add(value);break;
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field in {method.Key} at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(cil.OpCode==0x7c||field.StorageSize>0?CilStackKind.ManagedPointer:field.IsReference?CilStackKind.ObjectReference:field.Representation?.TypeName is "System.Single" or "System.Double"?CilStackKind.Float:field.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name,cil.OpCode==0x7c));stack.Add(value);break;
                     }
                     case 0x7d:
                     {
@@ -383,7 +402,7 @@ internal static class ValueIrImporter
                     }
                     case 0x7e:
                     {
-                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");var value=New(field.IsReference?CilStackKind.ObjectReference:field.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadStaticField(value,field.DeclaringType,field.Name));stack.Add(value);break;
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");var value=New(field.IsReference?CilStackKind.ObjectReference:field.Representation?.TypeName is "System.Single" or "System.Double"?CilStackKind.Float:field.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadStaticField(value,field.DeclaringType,field.Name));stack.Add(value);break;
                     }
                     case 0x80:
                     {

@@ -63,7 +63,7 @@ internal static class MetadataLoader
  {
   // Dependencies may be loaded after their callers. Decode fields only after
   // the complete model is available, including embedded generic value types.
-  for(var pass=0;pass<4;pass++)foreach(var assembly in model.Assemblies.Values)
+  for(var pass=0;pass<model.Types.Count*2+1;pass++){var changed=false;foreach(var assembly in model.Assemblies.Values)
   foreach(var handle in assembly.Metadata.TypeDefinitions)
   {
    var md=assembly.Metadata;var td=md.GetTypeDefinition(handle);if(td.GetGenericParameters().Count>0)continue;
@@ -73,10 +73,20 @@ internal static class MetadataLoader
     var f=md.GetFieldDefinition(fh);var value=f.DecodeSignature(new SignatureAbi(model),new SignatureAbi.Context(Array.Empty<GenericRepresentation>(),Array.Empty<GenericRepresentation>()));
     var reference=value.Kind==CilStackKind.ObjectReference;var size=value.Size>0?value.Size:reference?8:value.ScalarSize;
     var stat=(f.Attributes&FieldAttributes.Static)!=0;if(!stat)offset=Align(offset,Math.Min(Math.Max(size,1),8));
+    var oldField=model.Fields[(name,md.GetString(f.Name))];
+    if(oldField.Size!=size||oldField.StorageSize!=value.Size||oldField.IsReference!=reference||!(oldField.ReferenceOffsets??Array.Empty<int>()).SequenceEqual(value.References??Array.Empty<int>()))changed=true;
     model.Fields[(name,md.GetString(f.Name))]=new(name,md.GetString(f.Name),stat?0:offset,reference,stat,size,value.Size,value.References,value.Representation??new GenericRepresentation(reference?GenericRepresentationKind.PointerSized:GenericRepresentationKind.ValueType,size,value.References,value.Name));
     if(!stat)offset+=size;
    }
-   model.Types[name]=tm with {InstanceSize=tm.IsValueType?Math.Max(offset,td.GetLayout().Size):Align(offset,8)};
+   var finalSize=tm.IsValueType?Math.Max(offset,td.GetLayout().Size):Align(offset,8);
+   if(finalSize!=tm.InstanceSize)changed=true;
+   model.Types[name]=tm with {InstanceSize=finalSize};
+  }
+  foreach(var closed in model.Types.Values.Where(t=>t.GenericDefinition is not null&&t.TypeArguments is not null).ToArray()){
+   var definition=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==closed.GenericDefinition&&!m.Handle.IsNil);
+   if(definition is not null){var before=closed.InstanceSize;SpecializeFields(model,definition,closed.FullName,closed.TypeArguments!);if(before!=model.Types[closed.FullName].InstanceSize)changed=true;}
+  }
+  if(!changed)break;
   }
  }
  internal static void SpecializeFields(CompilationModel model,MethodModel definition,string typeName,IReadOnlyList<GenericRepresentation> args)
@@ -99,6 +109,12 @@ internal static class MetadataLoader
  }
 
  internal static string MapFrameworkType(string name)=>name switch {
+  "System.Runtime.CompilerServices.ConfiguredTaskAwaitable"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable",
+  "System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable`1",
+  "System.Runtime.CompilerServices.ConfiguredTaskAwaitable+ConfiguredTaskAwaiter"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable+ConfiguredTaskAwaiter",
+  "System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1+ConfiguredTaskAwaiter"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable`1+ConfiguredTaskAwaiter",
+
+  "System.StringComparer"=>"Dolphin.Collections.StringComparer",
   "System.Threading.CancellationToken"=>"Dolphin.Threading.CancellationToken",
   "System.Threading.CancellationTokenSource"=>"Dolphin.Threading.CancellationTokenSource",
   "System.Threading.Tasks.Task"=>"Dolphin.Threading.Tasks.Task",

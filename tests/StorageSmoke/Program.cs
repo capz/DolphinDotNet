@@ -32,6 +32,7 @@ internal static class Program
         var cancellation=new System.Threading.CancellationTokenSource();var cancelPath=Path.Combine(root,"cancel.bin");var canceledWrite=File.WriteAllBytesAsync(cancelPath,large,cancellation.Token);cancellation.Cancel();
         try{canceledWrite.GetAwaiter().GetResult();return 51;}catch(OperationCanceledException){}if(File.Exists(cancelPath)||!canceledWrite.IsCanceled)return 52;
         File.WriteAllTextAsync(textPath,"async \ud83d\ude00").GetAwaiter().GetResult();if(File.ReadAllTextAsync(textPath).GetAwaiter().GetResult()!="async \ud83d\ude00")return 53;
+        File.WriteAllLinesAsync(textPath,new[]{"one","two"}).GetAwaiter().GetResult();var asyncLines=File.ReadAllLinesAsync(textPath).GetAwaiter().GetResult();if(asyncLines.Length!=2||asyncLines[1]!="two")return 54;
         File.Delete(textPath);File.Delete(asyncPath);Directory.Delete(nested,true);
         File.WriteAllBytes(path,bytes);var read=File.ReadAllBytes(path);if(read.Length!=3 || read[1]!=8)return 5;
         if(!File.Exists(path) || File.Exists(root) || !Directory.Exists(root) || File.Exists(null!))return 6;

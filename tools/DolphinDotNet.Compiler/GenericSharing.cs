@@ -123,6 +123,14 @@ internal static class GenericSharing
         if(name=="System.Collections.Generic.KeyValuePair`2"&&args.Length==2){var l=PairLayout(args[0],args[1]);return new(GenericRepresentationKind.ValueType,l.Size,l.References,name,args);}
         if(name=="System.ArraySegment`1"&&args.Length==1)return new(GenericRepresentationKind.ValueType,16,new[]{0});
         if(name=="System.ArraySegment`1+Enumerator"&&args.Length==1)return new(GenericRepresentationKind.ValueType,24,new[]{0});
+        if(name is not null&&model.Types.TryGetValue(name,out var tm)&&!tm.IsInterface){
+            var method=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==name&&!m.Handle.IsNil);
+            if(method is not null){
+                var closed=IlImporter.Specialize(md,model,method,args,Array.Empty<GenericRepresentation>()).Key.TypeName;
+                var layout=model.Types[closed];var refs=model.Fields.Values.Where(f=>f.DeclaringType==closed&&!f.IsStatic).SelectMany(f=>f.IsReference?new[]{f.Offset}:(f.ReferenceOffsets??Array.Empty<int>()).Select(o=>f.Offset+o)).ToArray();
+                return isValue?new(GenericRepresentationKind.ValueType,Math.Max(1,layout.InstanceSize),refs,closed,args):new(GenericRepresentationKind.PointerSized,8,new[]{0},closed,args);
+            }
+        }
         return isValue?new(GenericRepresentationKind.ValueType,Math.Max(1,model.Types[name!].InstanceSize),null,name,args):new(GenericRepresentationKind.PointerSized,8,new[]{0},name,args);
     }
 }

@@ -10,6 +10,16 @@ public abstract class TextReader : IDisposable
     public int ReadBlock(char[] buffer,int index,int count){var total=0;while(total<count){var n=Read(buffer,index+total,count-total);if(n==0)break;total+=n;}return total;}
     public virtual string ReadToEnd(){var chars=new char[1024];var count=0;int c;while((c=Read())>=0){if(count==chars.Length){var next=new char[chars.Length*2];Array.Copy(chars,0,next,0,count);chars=next;}chars[count++]=(char)c;}return NativeText.FromChars(chars,0,count);}
     public virtual string? ReadLine(){if(Peek()<0)return null;var chars=new char[128];var count=0;int c;while((c=Read())>=0){if(c=='\n')break;if(c=='\r'){if(Peek()=='\n')Read();break;}if(count==chars.Length){var next=new char[chars.Length*2];Array.Copy(chars,0,next,0,count);chars=next;}chars[count++]=(char)c;}return NativeText.FromChars(chars,0,count);}
+    public virtual Dolphin.Threading.Tasks.Task<int> ReadAsync(char[] buffer,int index,int count){if(buffer==null)throw new ArgumentNullException("buffer");if(index<0||count<0||index>buffer.Length-count)throw new ArgumentOutOfRangeException();return Dolphin.Threading.Tasks.Task.Run(()=>Read(buffer,index,count>1024?1024:count));}
+    public virtual Dolphin.Threading.Tasks.Task<string?> ReadLineAsync(){var work=new ReadWork(this,true);Dolphin.Threading.Tasks.Scheduler.Post(work.Step);return work.Completion.Task;}
+    public virtual Dolphin.Threading.Tasks.Task<string> ReadToEndAsync(){var work=new ReadWork(this,false);Dolphin.Threading.Tasks.Scheduler.Post(work.Step);return work.Completion.Task!;}
+    private sealed class ReadWork
+    {
+        private readonly TextReader reader;private readonly bool line;private string text="";private bool any;
+        internal readonly Dolphin.Threading.Tasks.TaskCompletionSource<string?> Completion=new Dolphin.Threading.Tasks.TaskCompletionSource<string?>();
+        internal ReadWork(TextReader reader,bool line){this.reader=reader;this.line=line;}
+        internal void Step(){try{var chars=new char[1024];var n=0;var done=false;while(n<chars.Length){var c=reader.Read();if(c<0){done=true;break;}any=true;if(line&&(c==10||c==13)){if(c==13&&reader.Peek()==10)reader.Read();done=true;break;}chars[n++]=(char)c;}text=string.Concat(text,NativeText.FromChars(chars,0,n));if(done)Completion.SetResult(line&&!any?null:text);else Dolphin.Threading.Tasks.Scheduler.Post(Step);}catch(Exception error){Completion.SetException(error);}}
+    }
     public virtual void Close()=>Dispose();
     public virtual void Dispose(){}
 }
@@ -25,6 +35,21 @@ public abstract class TextWriter : IDisposable
     public virtual void WriteLine(string? value){Write(value);WriteLine();}
     public virtual void WriteLine(char value){Write(value);WriteLine();}
     public virtual void Flush(){}
+    public virtual Dolphin.Threading.Tasks.Task WriteAsync(char value)=>WriteAsync(NativeText.FromChars(new[]{value},0,1));
+    public virtual Dolphin.Threading.Tasks.Task WriteAsync(string? value){var work=new WriteWork(this,value??"",false);Dolphin.Threading.Tasks.Scheduler.Post(work.Step);return work.Completion.Task;}
+    public virtual Dolphin.Threading.Tasks.Task WriteAsync(char[] buffer,int index,int count)=>WriteAsync(NativeText.FromChars(buffer,index,count));
+    public virtual Dolphin.Threading.Tasks.Task WriteLineAsync()=>WriteLineAsync("");
+    public virtual Dolphin.Threading.Tasks.Task WriteLineAsync(char value)=>WriteLineAsync(NativeText.FromChars(new[]{value},0,1));
+    public virtual Dolphin.Threading.Tasks.Task WriteLineAsync(string? value){var work=new WriteWork(this,value??"",true);Dolphin.Threading.Tasks.Scheduler.Post(work.Step);return work.Completion.Task;}
+    public virtual Dolphin.Threading.Tasks.Task WriteLineAsync(char[] buffer,int index,int count)=>WriteLineAsync(NativeText.FromChars(buffer,index,count));
+    public virtual Dolphin.Threading.Tasks.Task FlushAsync()=>Dolphin.Threading.Tasks.Task.Run(Flush);
+    private sealed class WriteWork
+    {
+        private readonly TextWriter writer;private readonly string text;private readonly bool line;private int offset;
+        internal readonly Dolphin.Threading.Tasks.TaskCompletionSource<int> Completion=new Dolphin.Threading.Tasks.TaskCompletionSource<int>();
+        internal WriteWork(TextWriter writer,string text,bool line){this.writer=writer;this.text=text;this.line=line;}
+        internal void Step(){try{var n=text.Length-offset;if(n>1024)n=1024;writer.Write(text.Substring(offset,n));offset+=n;if(offset<text.Length){Dolphin.Threading.Tasks.Scheduler.Post(Step);return;}if(line)writer.WriteLine();Completion.SetResult(0);}catch(Exception error){Completion.SetException(error);}}
+    }
     public virtual void Close()=>Dispose();
     public virtual void Dispose(){}
 }

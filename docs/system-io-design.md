@@ -128,7 +128,7 @@ libdvm's FAT errno mapping collapses both missing file and missing path into `EN
 4. Record successful mounted volumes/capabilities and cache/native memory use separately from the managed heap. No device is required for graphics-only execution.
 5. Close streams/cursors and synchronize writable media before orderly unmount/reset. Handle removal during an operation as an error; unmount must not invalidate a live handle silently.
 
-The initial optical backend uses read-only ISO9660. Native memory-card saves use `Dolphin.Storage.MemoryCard`, separate from directory paths. Original GameCube disc FST access remains follow-up work.
+The initial optical backend uses read-only ISO9660. Native memory-card saves use `Dolphin.Storage.MemoryCard`, separate from directory paths. Original GameCube disc FST access is explicitly selectable with Storage.MountDisc; ISO9660 remains the default. Text, cooperative async, pattern searches and native-card resize recovery are implemented in the scoped [storage runtime](storage-runtime.md).
 
 ## Legacy native helpers
 

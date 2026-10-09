@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 internal static class Program
 {
+    private static int GenericHash<T>(T value)=>value!.GetHashCode();
+    private static bool GenericEquals<T>(T value,object other)=>value!.Equals(other);
     private static int asyncValue;
-    private static async System.Threading.Tasks.Task<int> AsyncProbe(){await System.Threading.Tasks.Task.Yield();asyncValue=17;var value=await System.Threading.Tasks.Task.Run(()=>25);return value+asyncValue;}
+    private static async System.Threading.Tasks.Task<int> AsyncProbe(){await System.Threading.Tasks.Task.Yield();asyncValue=17;var value=await System.Threading.Tasks.Task.Run(()=>25).ConfigureAwait(false);return value+asyncValue;}
     private static bool IsThree(int value)=>value==3;
     private static int Descending(int x,int y)=>y-x;
     private static int Main()
@@ -56,6 +58,25 @@ internal static class Program
         if(!EqualityComparer<Small>.Default.Equals(new Small(1,2),new Small(1,2))||EqualityComparer<Small>.Default.Equals(new Small(1,2),new Small(1,3)))return 34;
         if(!EqualityComparer<Nested>.Default.Equals(new Nested(new Pair(4,"x")),new Nested(new Pair(4,"x"))))return 35;
         if(Comparer<Unsigned>.Default.Compare(Unsigned.Large,Unsigned.Small)<=0)return 36;
+        var faulted=System.Threading.Tasks.Task.Run(()=>{throw new InvalidOperationException("async fault");});
+        try{faulted.GetAwaiter().GetResult();return 37;}catch(InvalidOperationException){}if(!faulted.IsFaulted)return 38;
+        var copiedMemory=new System.IO.MemoryStream();textMemory.Position=0;var copyTask=textMemory.CopyToAsync(copiedMemory,2);if(copyTask.IsCompleted)return 39;copyTask.GetAwaiter().GetResult();if(copiedMemory.Length!=textMemory.Length)return 40;
+        try{new System.Text.UTF8Encoding(false,true).GetString(new byte[]{0xff});return 41;}catch(System.Text.DecoderFallbackException){}
+        if(EqualityComparer<object>.Default.Equals(new Item(1),new Item(1)))return 42;
+        if(!StringComparer.OrdinalIgnoreCase.Equals("\u03c2","\u03a3")||StringComparer.OrdinalIgnoreCase.GetHashCode("aBC")!=StringComparer.OrdinalIgnoreCase.GetHashCode("Abc"))return 43;
+        if(StringComparer.Ordinal.Equals("a","A")||StringComparer.Ordinal.Compare("a","b")>=0)return 44;
+        object boxedPair=new Pair(9,"boxed");if(!boxedPair.Equals(new Pair(9,"boxed"))||boxedPair.GetHashCode()!=9)return 45;
+        var overrideObject=new OverrideEquals(2);if(!EqualityComparer<object>.Default.Equals(overrideObject,new OverrideEquals(2))||overrideObject.GetHashCode()!=2)return 46;
+        if(GenericHash(new Pair(7,"hash"))!=7||!GenericEquals(new Pair(7,"eq"),new Pair(7,"eq")))return 47;
+        if(GenericHash("text")!=EqualityComparer<string>.Default.GetHashCode("text"))return 48;
+        var doubles=new List<double>();doubles.Add(0.6);doubles.Add(0.5);doubles.Sort();if(doubles[0]!=0.5||!doubles.Contains(0.6))return 49;
+        object doubleBox=0.5;if(!doubleBox.Equals((object)0.5)||doubleBox.Equals((object)0.6)||(double)doubleBox!=0.5)return 50;
+        IEnumerable<double> doubleEnumerable=doubles;var doubleSum=0.0;foreach(var value in doubleEnumerable)doubleSum+=value;if(doubleSum!=1.1)return 51;
+        if(!EqualityComparer<GenericBox<long>>.Default.Equals(new GenericBox<long>(0x100000003L),new GenericBox<long>(0x100000003L)))return 52;
+        var genericStructs=new List<GenericBox<string>>();genericStructs.Add(new GenericBox<string>("generic"));if(!genericStructs.Contains(new GenericBox<string>("generic")))return 53;
+        var allA=System.Threading.Tasks.Task.Run(()=>asyncValue=1);var allB=System.Threading.Tasks.Task.Run(()=>asyncValue=2);var all=System.Threading.Tasks.Task.WhenAll(new System.Threading.Tasks.Task[]{allA,allB});if(all.IsCompleted)return 54;all.GetAwaiter().GetResult();if(!allA.IsCompleted||!allB.IsCompleted)return 55;
+        var byteList=new List<byte>();byteList.Add(255);if(byteList[0]!=255)return 56;
+        object signedBox=(sbyte)-1;if((sbyte)signedBox!=-1)return 57;
         return 0;
     }
 }
@@ -75,3 +96,7 @@ internal struct Pair : IEquatable<Pair> { public int Number;public string Text; 
 internal struct Small {public byte A;public short B;public Small(byte a,short b){A=a;B=b;}}
 internal struct Nested {public Pair Pair;public Nested(Pair pair){Pair=pair;}}
 internal enum Unsigned:uint {Small=1,Large=0xffffffffu}
+
+internal sealed class OverrideEquals {private readonly int n;public OverrideEquals(int n){this.n=n;}public override bool Equals(object? other)=>other is OverrideEquals item&&n==item.n;public override int GetHashCode()=>n;}
+
+internal struct GenericBox<T>{public T Value;public GenericBox(T value){Value=value;}}

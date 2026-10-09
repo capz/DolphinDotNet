@@ -102,7 +102,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build and test runtime
-        run: make -C tests test
+        run: |
+          make -C tests test
+          make -C tests clean
+          make -C tests test CFLAGS='-O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -I../include'
 
   gamecube:
     name: GameCube DOL

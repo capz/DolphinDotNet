@@ -17,6 +17,9 @@ DND_SCALAR_TYPE(DND_TYPE_INT16,"System.Int16",2);
 DND_SCALAR_TYPE(DND_TYPE_UINT16,"System.UInt16",2);
 DND_SCALAR_TYPE(DND_TYPE_UINT32,"System.UInt32",4);
 DND_SCALAR_TYPE(DND_TYPE_INT64,"System.Int64",8);
+DND_SCALAR_TYPE(DND_TYPE_UINT64,"System.UInt64",8);
+DND_SCALAR_TYPE(DND_TYPE_SINGLE,"System.Single",4);
+DND_SCALAR_TYPE(DND_TYPE_DOUBLE,"System.Double",8);
 
 static const uint32_t exception_refs[] = {(uint32_t)offsetof(DndException, message)};
 const DndType DND_TYPE_EXCEPTION = {"System.Exception", &DND_TYPE_OBJECT, sizeof(DndException), 0, NULL, 1, exception_refs, 0, 0, NULL, 0, NULL};
@@ -564,7 +567,8 @@ DndObject *dnd_box_scalar(DndManagedHeap *heap, const DndType *type, uint64_t va
     if (!type || size == 0 || size > 8) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Unsupported scalar box size."); return NULL; }
     DndObject *object = allocate(heap, type, sizeof(DndObject) + size);
     if (!object) return NULL;
-    memcpy((uint8_t *)object + sizeof(DndObject), &value, size);
+    void *payload=(uint8_t*)object+sizeof(DndObject);
+    switch(size){case 1:{uint8_t v=(uint8_t)value;memcpy(payload,&v,1);break;}case 2:{uint16_t v=(uint16_t)value;memcpy(payload,&v,2);break;}case 4:{uint32_t v=(uint32_t)value;memcpy(payload,&v,4);break;}case 8:memcpy(payload,&value,8);break;default:dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Unsupported scalar size.");return NULL;}
     return object;
 }
 
@@ -572,8 +576,8 @@ uint64_t dnd_unbox_scalar(DndObject *object, const DndType *type, uint32_t size)
     uint64_t value = 0;
     if (!object) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Cannot unbox null."); return 0; }
     if (object->type != type || size == 0 || size > 8) { dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Boxed scalar type mismatch."); return 0; }
-    memcpy(&value, (uint8_t *)object + sizeof(DndObject), size);
-    return value;
+    const void *payload=(uint8_t*)object+sizeof(DndObject);
+    switch(size){case 1:{uint8_t v;memcpy(&v,payload,1);return v;}case 2:{uint16_t v;memcpy(&v,payload,2);return v;}case 4:{uint32_t v;memcpy(&v,payload,4);return v;}case 8:memcpy(&value,payload,8);return value;default:dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Unsupported scalar size.");return 0;}
 }
 
 DndManagedMethod dnd_virtual_resolve(const DndObject *object, uint16_t slot) {

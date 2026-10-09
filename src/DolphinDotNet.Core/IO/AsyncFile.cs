@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Dolphin.Threading;
 using Dolphin.Threading.Tasks;
 using Dolphin.Text;
@@ -21,6 +22,36 @@ public static partial class File
     public static Task AppendAllTextAsync(string path,string? contents,CancellationToken token)=>WriteText(path,contents,new UTF8Encoding(false),true,token);
     public static Task AppendAllTextAsync(string path,string? contents,Encoding encoding)=>WriteText(path,contents,encoding,true,default);
     public static Task AppendAllTextAsync(string path,string? contents,Encoding encoding,CancellationToken token)=>WriteText(path,contents,encoding,true,token);
+    public static Task<string[]> ReadAllLinesAsync(string path)=>ReadAllLinesAsync(path,Encoding.UTF8,default);
+    public static Task<string[]> ReadAllLinesAsync(string path,CancellationToken token)=>ReadAllLinesAsync(path,Encoding.UTF8,token);
+    public static Task<string[]> ReadAllLinesAsync(string path,Encoding encoding)=>ReadAllLinesAsync(path,encoding,default);
+    public static Task<string[]> ReadAllLinesAsync(string path,Encoding encoding,CancellationToken token){if(path==null)throw new ArgumentNullException("path");if(encoding==null)throw new ArgumentNullException("encoding");var work=new ReadLinesWork(path,encoding,token);TasksPost(work.Step);return work.Completion.Task;}
+    public static Task WriteAllLinesAsync(string path,IEnumerable<string> contents)=>WriteLines(path,contents,new UTF8Encoding(false),false,default);
+    public static Task WriteAllLinesAsync(string path,IEnumerable<string> contents,CancellationToken token)=>WriteLines(path,contents,new UTF8Encoding(false),false,token);
+    public static Task WriteAllLinesAsync(string path,IEnumerable<string> contents,Encoding encoding)=>WriteLines(path,contents,encoding,false,default);
+    public static Task WriteAllLinesAsync(string path,IEnumerable<string> contents,Encoding encoding,CancellationToken token)=>WriteLines(path,contents,encoding,false,token);
+    public static Task AppendAllLinesAsync(string path,IEnumerable<string> contents)=>WriteLines(path,contents,new UTF8Encoding(false),true,default);
+    public static Task AppendAllLinesAsync(string path,IEnumerable<string> contents,CancellationToken token)=>WriteLines(path,contents,new UTF8Encoding(false),true,token);
+    public static Task AppendAllLinesAsync(string path,IEnumerable<string> contents,Encoding encoding)=>WriteLines(path,contents,encoding,true,default);
+    public static Task AppendAllLinesAsync(string path,IEnumerable<string> contents,Encoding encoding,CancellationToken token)=>WriteLines(path,contents,encoding,true,token);
+    private static Task WriteLines(string path,IEnumerable<string> contents,Encoding encoding,bool append,CancellationToken token){if(path==null)throw new ArgumentNullException("path");if(contents==null)throw new ArgumentNullException("contents");if(encoding==null)throw new ArgumentNullException("encoding");var work=new WriteLinesWork(path,contents,encoding,append,token);TasksPost(work.Step);return work.Completion.Task;}
+    private sealed class ReadLinesWork
+    {
+        private readonly string path;private readonly Encoding encoding;private readonly CancellationToken token;private StreamReader? reader;private Task<string?>? pending;private readonly List<string> lines=new List<string>();
+        internal readonly TaskCompletionSource<string[]> Completion=new TaskCompletionSource<string[]>();
+        internal ReadLinesWork(string path,Encoding encoding,CancellationToken token){this.path=path;this.encoding=encoding;this.token=token;}
+        internal void Step(){try{token.ThrowIfCancellationRequested();if(reader==null)reader=new StreamReader(path,encoding);pending=reader.ReadLineAsync();pending.Continue(Consume);}catch(Exception error){Fail(error);}}
+        private void Consume(){try{token.ThrowIfCancellationRequested();var line=pending!.Result;if(line==null){reader!.Dispose();Completion.SetResult(lines.ToArray());}else{lines.Add(line);TasksPost(Step);}}catch(Exception error){Fail(error);}}
+        private void Fail(Exception error){if(reader!=null)reader.Dispose();Completion.SetException(error);}
+    }
+    private sealed class WriteLinesWork
+    {
+        private readonly string path;private readonly IEnumerable<string> contents;private readonly Encoding encoding;private readonly bool append;private readonly CancellationToken token;private StreamWriter? writer;private IEnumerator<string>? iterator;private string? line;private int offset;
+        internal readonly TaskCompletionSource<int> Completion=new TaskCompletionSource<int>();
+        internal WriteLinesWork(string path,IEnumerable<string> contents,Encoding encoding,bool append,CancellationToken token){this.path=path;this.contents=contents;this.encoding=encoding;this.append=append;this.token=token;}
+        private void Close(){try{if(iterator!=null)iterator.Dispose();}finally{if(writer!=null)writer.Dispose();}}
+        internal void Step(){try{token.ThrowIfCancellationRequested();if(writer==null){writer=new StreamWriter(path,append,encoding);iterator=contents.GetEnumerator();}if(line==null){if(!iterator!.MoveNext()){Close();Completion.SetResult(0);return;}line=iterator.Current??"";offset=0;}var n=line.Length-offset;if(n>1024)n=1024;writer.Write(line.Substring(offset,n));offset+=n;if(offset==line.Length){writer.WriteLine();line=null;}TasksPost(Step);}catch(Exception error){try{Close();}catch(Exception closeError){error=closeError;}Completion.SetException(error);}}
+    }
     private static Task WriteText(string path,string? contents,Encoding encoding,bool append,CancellationToken token){if(path==null)throw new ArgumentNullException("path");if(encoding==null)throw new ArgumentNullException("encoding");var work=new WriteTextWork(path,contents??"",encoding,append,token);TasksPost(work.Step);return work.Completion.Task;}
     private static void TasksPost(Action action)=>Scheduler.Post(action);
     private sealed class ReadWork

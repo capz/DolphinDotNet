@@ -1,6 +1,6 @@
-#include "dnd_storage.h"
-#include "dnd_fst.h"
 #include "dnd_card_transaction.h"
+#include "dnd_fst.h"
+#include "dnd_storage.h"
 #ifdef DND_GAMECUBE_STORAGE
 #include <dvm.h>
 #include <errno.h>
@@ -48,9 +48,12 @@ static int card_errno(int rc) {
 }
 bool dnd_gc_mount_disc(int format) {
   DVD_Init();
-  if(DVD_Mount()<0)return false;
-  bool result=format==1?ISO9660_Mount("dvd", &__io_gcdvd):dnd_gc_fst_mount();
-  if(result)disc_format=format;
+  if (DVD_Mount() < 0)
+    return false;
+  bool result =
+      format == 1 ? ISO9660_Mount("dvd", &__io_gcdvd) : dnd_gc_fst_mount();
+  if (result)
+    disc_format = format;
   return result;
 }
 bool dnd_gc_mount(int device) {
@@ -84,7 +87,10 @@ bool dnd_gc_mount(int device) {
 }
 void dnd_gc_unmount(int device) {
   if (device == 3) {
-    if(disc_format==1)ISO9660_Unmount("dvd");else dnd_gc_fst_unmount();
+    if (disc_format == 1)
+      ISO9660_Unmount("dvd");
+    else
+      dnd_gc_fst_unmount();
     return;
   }
   if (device >= 0 && device < 3) {
@@ -120,7 +126,12 @@ bool dnd_gc_card_mount(int device, const char *game, const char *company) {
   workareas[slot] = area;
   strcpy(games[slot], game);
   strcpy(companies[slot], company);
-  if(dnd_gc_card_recover(device)<0){CARD_Unmount(slot);free(area);workareas[slot]=NULL;return false;}
+  if (dnd_gc_card_recover(device) < 0) {
+    CARD_Unmount(slot);
+    free(area);
+    workareas[slot] = NULL;
+    return false;
+  }
   return true;
 }
 int dnd_gc_card_read(int device, const char *name, void *data, int capacity) {
@@ -155,7 +166,7 @@ int dnd_gc_card_read(int device, const char *name, void *data, int capacity) {
   return rc < 0 ? card_errno(rc) : close_rc < 0 ? card_errno(close_rc) : done;
 }
 static int card_write_raw(int device, const char *name, const void *data,
-                      int length) {
+                          int length) {
   int slot = device - 4;
   identity(slot);
   u32 sector;
@@ -217,13 +228,67 @@ int dnd_gc_card_metadata(int device, const char *name, bool metadata,
   int close_rc = CARD_Close(&file);
   return rc < 0 ? card_errno(rc) : card_errno(close_rc);
 }
-static int txn_read(void *context,const char *name,void *data,int length){return dnd_gc_card_read((int)(intptr_t)context,name,data,length);}
-static int txn_write(void *context,const char *name,const void *data,int length){return card_write_raw((int)(intptr_t)context,name,data,length);}
-static int txn_delete(void *context,const char *name){int slot=(int)(intptr_t)context-4;identity(slot);return card_errno(CARD_Delete(slot,name));}
-static int txn_metadata(void *context,const char *name,bool metadata,bool banner,bool icon){return dnd_gc_card_metadata((int)(intptr_t)context,name,metadata,banner,icon);}
-static DndCardTransaction transaction(int device){DndCardTransaction result={(void*)(intptr_t)device,txn_read,txn_write,txn_delete,txn_metadata};return result;}
-int dnd_gc_card_recover(int device){DndCardTransaction t=transaction(device);return dnd_card_recover(&t);}
-int dnd_gc_card_write_save(int device,const char *name,const void *data,int length,bool metadata,bool banner,bool icon){DndCardTransaction t=transaction(device);return dnd_card_replace(&t,name,data,length,metadata,banner,icon);}
+static int txn_read(void *context, const char *name, void *data, int length) {
+  return dnd_gc_card_read((int)(intptr_t)context, name, data, length);
+}
+static int txn_write(void *context, const char *name, const void *data,
+                     int length) {
+  return card_write_raw((int)(intptr_t)context, name, data, length);
+}
+static int txn_delete(void *context, const char *name) {
+  int slot = (int)(intptr_t)context - 4;
+  identity(slot);
+  return card_errno(CARD_Delete(slot, name));
+}
+static int txn_metadata(void *context, const char *name, bool metadata,
+                        bool banner, bool icon) {
+  return dnd_gc_card_metadata((int)(intptr_t)context, name, metadata, banner,
+                              icon);
+}
+static int txn_ready(void *context, bool mark) {
+  int slot = (int)(intptr_t)context - 4;
+  identity(slot);
+  card_file file;
+  card_stat status;
+  int rc = CARD_Open(slot, DND_CARD_JOURNAL, &file);
+  if (rc < 0)
+    return card_errno(rc);
+  rc = CARD_GetStatus(slot, file.filenum, &status);
+  int ready = 0;
+  if (rc >= 0) {
+    ready = status.comment_addr == 0;
+    if (mark) {
+      /* Fresh/deleted directory entries have comment_addr == UINT32_MAX.
+         CARD_SetStatus commits through libogc's redundant directory update. */
+      status.comment_addr = 0;
+      rc = CARD_SetStatus(slot, file.filenum, &status);
+    }
+  }
+  int close_rc = CARD_Close(&file);
+  if (rc < 0)
+    return card_errno(rc);
+  if (close_rc < 0)
+    return card_errno(close_rc);
+  return mark ? 0 : ready;
+}
+static DndCardTransaction transaction(int device) {
+  DndCardTransaction result = {(void *)(intptr_t)device,
+                               txn_read,
+                               txn_write,
+                               txn_delete,
+                               txn_ready,
+                               txn_metadata};
+  return result;
+}
+int dnd_gc_card_recover(int device) {
+  DndCardTransaction t = transaction(device);
+  return dnd_card_recover(&t);
+}
+int dnd_gc_card_write_save(int device, const char *name, const void *data,
+                           int length, bool metadata, bool banner, bool icon) {
+  DndCardTransaction t = transaction(device);
+  return dnd_card_replace(&t, name, data, length, metadata, banner, icon);
+}
 int dnd_gc_card_delete(int device, const char *name) {
   int slot = device - 4;
   identity(slot);

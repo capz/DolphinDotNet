@@ -2,6 +2,8 @@ using System;
 namespace Dolphin.Text;
 internal static class NativeText
 {
+    internal static int TextCompare(string? a,string? b,bool ignoreCase)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int TextHash(string text,bool ignoreCase)=>throw new NotSupportedException("AOT intrinsic");
     internal static byte[] Encode(string text,int codePage,bool strict)=>throw new NotSupportedException("AOT intrinsic");
     internal static string Decode(byte[] data,int offset,int count,int codePage,bool strict)=>throw new NotSupportedException("AOT intrinsic");
     internal static string FromChars(char[] chars,int offset,int count)=>throw new NotSupportedException("AOT intrinsic");

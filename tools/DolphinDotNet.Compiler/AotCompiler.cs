@@ -155,7 +155,8 @@ internal static class AotCompiler
         var h=MetadataTokens.EntityHandle(raw);var type=MetadataLoader.ResolveTypeName(md,h);
         if(type is null)type=ResolveGenericTypeParameter(md,model,context,constraint)?.TypeName;
         if(type is null||!model.Types.TryGetValue(type,out var tm)||!tm.IsValueType)return null;
-        var definition=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==type&&(m.Key.Name==name||m.ExplicitContracts?.Any(c=>c.Method==name)==true)&&!m.Key.Signature.Contains("|g:",StringComparison.Ordinal));
+        var original=tm.GenericDefinition??type;
+        var definition=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==original&&(m.Key.Name==name||m.ExplicitContracts?.Any(c=>c.Method==name)==true)&&!m.Key.Signature.Contains("|g:",StringComparison.Ordinal));
         if(definition is null)return null;
         var arguments=tm.TypeArguments??(h.Kind==HandleKind.TypeSpecification?GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)h,model,context):Array.Empty<GenericRepresentation>());
         return arguments.Count>0?IlImporter.Specialize(md,model,definition,arguments,Array.Empty<GenericRepresentation>()):definition;
@@ -294,7 +295,7 @@ internal static class AotCompiler
         }
         if(intrinsic==IntrinsicKind.PrimitiveToString)return new CilCallStackEffect(1,CilStackKind.ObjectReference);
         if(intrinsic==IntrinsicKind.ObjectGetHashCode)return new CilCallStackEffect(1,CilStackKind.I4);
-        if(intrinsic==IntrinsicKind.ObjectEquals)return new CilCallStackEffect(2,CilStackKind.I4);
+        if(intrinsic is IntrinsicKind.ObjectEquals or IntrinsicKind.ObjectStaticEquals)return new CilCallStackEffect(2,CilStackKind.I4);
         if(intrinsic is IntrinsicKind.KeyValuePairConstructor)return i.OpCode==0x73?new CilCallStackEffect(2,CilStackKind.ManagedPointer):new CilCallStackEffect(3,null);
         if(intrinsic is IntrinsicKind.KeyValuePairKey or IntrinsicKind.KeyValuePairValue){var a=GenericArguments(md,model,i,context);var index=intrinsic==IntrinsicKind.KeyValuePairKey?0:1;var rep=a.Count>index?a[index]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);return new CilCallStackEffect(1,rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);}
         if(intrinsic==IntrinsicKind.ArraySegmentConstructor)return i.OpCode==0x73?new CilCallStackEffect(3,CilStackKind.ManagedPointer):new CilCallStackEffect(4,null);
