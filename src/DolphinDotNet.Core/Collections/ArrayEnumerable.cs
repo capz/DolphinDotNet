@@ -8,6 +8,7 @@ public sealed class ArrayEnumerable<T> : IEnumerable<T>
     private readonly T[] items;
     public ArrayEnumerable(T[] items){if(items==null)throw new ArgumentNullException("items");this.items=items;}
     public IEnumerator<T> GetEnumerator()=>new Enumerator(items);
+    public static IEnumerator<T> Enumerate(T[] items)=>new Enumerator(items);
     IEnumerator IEnumerable.GetEnumerator()=>GetEnumerator();
     private sealed class Enumerator : IEnumerator<T>
     {

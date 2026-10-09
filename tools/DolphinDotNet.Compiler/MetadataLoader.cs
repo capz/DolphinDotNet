@@ -30,7 +30,7 @@ internal static class MetadataLoader
      if(fieldCode==SignatureTypeCode.GenericTypeInstance) { fieldReader.Offset--;var layout=GenericSharing.ReadGenericLocalLayout(md,ref fieldReader,model);aggregateSize=layout.Size;embedded=layout.References; }
      model.Fields[(p.Full,name)]=new(p.Full,name,isStatic?0:offset,reference,isStatic,size,aggregateSize,embedded);if(!isStatic)offset+=size;
     }
-    model.Types[p.Full]=new(p.Ns,p.Name,p.Full,p.Base,p.ValueType?offset:Align(offset,8),p.Interface,p.ValueType,p.Interfaces);unresolved.Remove(p.Full);progress=true;
+    model.Types[p.Full]=new(p.Ns,p.Name,p.Full,p.Base,p.ValueType?Math.Max(offset,type.GetLayout().Size):Align(offset,8),p.Interface,p.ValueType,p.Interfaces);unresolved.Remove(p.Full);progress=true;
     foreach(var mh in type.GetMethods()){var m=md.GetMethodDefinition(mh);var key=new MethodKey(p.Full,md.GetString(m.Name),assemblyName,Convert.ToHexString(md.GetBlobBytes(m.Signature)));var sig=ReadMethodSignature(md,m.Signature);model.Methods[key]=new(key,mh,(m.Attributes&MethodAttributes.Static)!=0,sig.Parameters,sig.ReturnsValue,assemblyName,(m.Attributes&MethodAttributes.Virtual)!=0,(m.Attributes&MethodAttributes.Abstract)!=0,(m.Attributes&MethodAttributes.NewSlot)!=0,p.Interface,p.Base=="System.MulticastDelegate");}
    }
    if(!progress)throw new InvalidDataException("Unable to resolve type layout inheritance.");
@@ -59,6 +59,26 @@ internal static class MetadataLoader
    model.Methods[body.Key]=body with { ExplicitContracts=(body.ExplicitContracts??Array.Empty<(string Interface,string Method)>()).Append((iface,name)).ToArray() };
   }
  }
+ internal static void RefreshLayouts(CompilationModel model)
+ {
+  // Dependencies may be loaded after their callers. Decode fields only after
+  // the complete model is available, including embedded generic value types.
+  for(var pass=0;pass<4;pass++)foreach(var assembly in model.Assemblies.Values)
+  foreach(var handle in assembly.Metadata.TypeDefinitions)
+  {
+   var md=assembly.Metadata;var td=md.GetTypeDefinition(handle);if(td.GetGenericParameters().Count>0)continue;
+   var name=ResolveTypeName(md,handle);if(name is null||!model.Types.TryGetValue(name,out var tm))continue;
+   var offset=0;foreach(var fh in td.GetFields())
+   {
+    var f=md.GetFieldDefinition(fh);var value=f.DecodeSignature(new SignatureAbi(model),new SignatureAbi.Context(Array.Empty<GenericRepresentation>(),Array.Empty<GenericRepresentation>()));
+    var reference=value.Kind==CilStackKind.ObjectReference;var size=value.Size>0?value.Size:reference?8:value.ScalarSize;
+    var stat=(f.Attributes&FieldAttributes.Static)!=0;if(!stat)offset=Align(offset,Math.Min(Math.Max(size,1),8));
+    model.Fields[(name,md.GetString(f.Name))]=new(name,md.GetString(f.Name),stat?0:offset,reference,stat,size,value.Size,value.References,value.Representation??new GenericRepresentation(reference?GenericRepresentationKind.PointerSized:GenericRepresentationKind.ValueType,size,value.References,value.Name));
+    if(!stat)offset+=size;
+   }
+   model.Types[name]=tm with {InstanceSize=tm.IsValueType?Math.Max(offset,td.GetLayout().Size):Align(offset,8)};
+  }
+ }
  internal static void SpecializeFields(CompilationModel model,MethodModel definition,string typeName,IReadOnlyList<GenericRepresentation> args)
  {
   var md=model.Assemblies[definition.AssemblyName].Metadata;
@@ -72,17 +92,41 @@ internal static class MetadataLoader
    var original=model.Fields[(model.Types[typeName].GenericDefinition!,name)];
    if(original.Size<4&&decoded.Size==0&&!reference)size=original.Size;
    if(!isStatic)offset=Align(offset,Math.Min(size,8));
-   model.Fields[(typeName,name)]=new(typeName,name,isStatic?0:offset,reference,isStatic,size,decoded.Size,decoded.References);
+   model.Fields[(typeName,name)]=new(typeName,name,isStatic?0:offset,reference,isStatic,size,decoded.Size,decoded.References,decoded.Representation??new GenericRepresentation(reference?GenericRepresentationKind.PointerSized:GenericRepresentationKind.ValueType,size,decoded.References,decoded.Name));
    if(!isStatic)offset+=size;
   }
   model.Types[typeName]=model.Types[typeName] with { InstanceSize=Align(offset,8) };
  }
 
+ internal static string MapFrameworkType(string name)=>name switch {
+  "System.Threading.CancellationToken"=>"Dolphin.Threading.CancellationToken",
+  "System.Threading.CancellationTokenSource"=>"Dolphin.Threading.CancellationTokenSource",
+  "System.Threading.Tasks.Task"=>"Dolphin.Threading.Tasks.Task",
+  "System.Threading.Tasks.Task`1"=>"Dolphin.Threading.Tasks.Task`1",
+  "System.Threading.Tasks.TaskCompletionSource`1"=>"Dolphin.Threading.Tasks.TaskCompletionSource`1",
+  "System.Runtime.CompilerServices.TaskAwaiter"=>"Dolphin.Runtime.CompilerServices.TaskAwaiter",
+  "System.Runtime.CompilerServices.TaskAwaiter`1"=>"Dolphin.Runtime.CompilerServices.TaskAwaiter`1",
+  "System.Runtime.CompilerServices.AsyncTaskMethodBuilder"=>"Dolphin.Runtime.CompilerServices.AsyncTaskMethodBuilder",
+  "System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1"=>"Dolphin.Runtime.CompilerServices.AsyncTaskMethodBuilder`1",
+  "System.Runtime.CompilerServices.IAsyncStateMachine"=>"Dolphin.Runtime.CompilerServices.IAsyncStateMachine",
+  "System.Runtime.CompilerServices.INotifyCompletion"=>"Dolphin.Runtime.CompilerServices.INotifyCompletion",
+  "System.Runtime.CompilerServices.ICriticalNotifyCompletion"=>"Dolphin.Runtime.CompilerServices.ICriticalNotifyCompletion",
+  "System.Runtime.CompilerServices.YieldAwaitable"=>"Dolphin.Runtime.CompilerServices.YieldAwaitable",
+  "System.Runtime.CompilerServices.YieldAwaitable+YieldAwaiter"=>"Dolphin.Runtime.CompilerServices.YieldAwaitable+YieldAwaiter",
+
+  "System.Text.Encoding"=>"Dolphin.Text.Encoding", "System.Text.UTF8Encoding"=>"Dolphin.Text.UTF8Encoding", "System.Text.UnicodeEncoding"=>"Dolphin.Text.UnicodeEncoding",
+  "System.IO.TextReader"=>"Dolphin.IO.TextReader", "System.IO.TextWriter"=>"Dolphin.IO.TextWriter", "System.IO.StreamReader"=>"Dolphin.IO.StreamReader", "System.IO.StreamWriter"=>"Dolphin.IO.StreamWriter",
+  "System.IO.Stream"=>"Dolphin.IO.Stream", "System.IO.MemoryStream"=>"Dolphin.IO.MemoryStream", "System.IO.FileStream"=>"Dolphin.IO.FileStream",
+  "System.Collections.Generic.List`1"=>"Dolphin.Collections.List`1",
+  "System.Collections.Generic.List`1+Enumerator"=>"Dolphin.Collections.List`1+Enumerator",
+  "System.Collections.Generic.EqualityComparer`1"=>"Dolphin.Collections.EqualityComparer`1",
+  "System.Collections.Generic.Comparer`1"=>"Dolphin.Collections.Comparer`1",
+  _=>name };
  public static string? ResolveTypeName(MetadataReader md,EntityHandle h)
  {
   if(h.IsNil)return null;
   if(h.Kind==HandleKind.TypeDefinition){var t=md.GetTypeDefinition((TypeDefinitionHandle)h);return DefinitionFullName(md,(TypeDefinitionHandle)h);}
-  if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return ReferenceFullName(md,(TypeReferenceHandle)h);}
+  if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return MapFrameworkType(ReferenceFullName(md,(TypeReferenceHandle)h));}
   if(h.Kind==HandleKind.TypeSpecification)return ResolveTypeSpecificationName(md,(TypeSpecificationHandle)h);
   return null;
  }
@@ -126,7 +170,7 @@ internal static class MetadataLoader
  }
  private static (int Size,bool Reference) ReadGenericFieldLayout(MetadataReader md,ref BlobReader reader,CompilationModel model)
  { reader.Offset--;var layout=GenericSharing.ReadGenericLocalLayout(md,ref reader,model);return layout.Size>0?(layout.Size,false):(8,true); }
- private static (int Size,bool Reference) ReadTypeHandleLayout(MetadataReader md,ref BlobReader r,CompilationModel model){var h=r.ReadTypeHandle();var name=ResolveTypeName(md,h);return name is "System.IO.FileMode" or "System.IO.FileAccess" or "System.IO.FileShare" or "System.IO.SeekOrigin"?(4,false):name is not null&&model.Types.TryGetValue(name,out var t)&&t.IsValueType?(Math.Max(1,t.InstanceSize),false):(8,true);}
+ private static (int Size,bool Reference) ReadTypeHandleLayout(MetadataReader md,ref BlobReader r,CompilationModel model){var h=r.ReadTypeHandle();var name=ResolveTypeName(md,h);return name is "System.IO.FileMode" or "System.IO.FileAccess" or "System.IO.FileShare" or "System.IO.SeekOrigin" or "System.IO.SearchOption"?(4,false):name is not null&&model.Types.TryGetValue(name,out var t)&&t.IsValueType?(Math.Max(1,t.InstanceSize),false):(8,true);}
  private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
  private static string DefinitionFullName(MetadataReader md,TypeDefinitionHandle handle){var t=md.GetTypeDefinition(handle);var name=md.GetString(t.Name);var declaring=t.GetDeclaringType();return declaring.IsNil?Full(md.GetString(t.Namespace),name):DefinitionFullName(md,declaring)+"+"+name;}
  private static string ReferenceFullName(MetadataReader md,TypeReferenceHandle handle){var t=md.GetTypeReference(handle);var name=md.GetString(t.Name);return t.ResolutionScope.Kind==HandleKind.TypeReference?ReferenceFullName(md,(TypeReferenceHandle)t.ResolutionScope)+"+"+name:Full(md.GetString(t.Namespace),name);}

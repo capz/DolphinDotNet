@@ -97,8 +97,8 @@ if (sharedDefinitions != 2)
     throw new Exception($"Expected scalar and reference-shared generic method bodies, found {sharedDefinitions}.");
 var identityDefinitions = genericGenerated.Split('\n')
     .Count(line => line.Contains("Program_Identity", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
-if (identityDefinitions != 3)
-    throw new Exception($"Expected reference-shared Identity plus scalar and wide-value specializations, found {identityDefinitions}.");
+if (identityDefinitions != 4)
+    throw new Exception($"Expected type-aware Identity specializations, found {identityDefinitions}.");
 if (!genericGenerated.Split('\n').Any(line => line.Contains("Program_Identity", StringComparison.Ordinal) && line.Contains("int64_t", StringComparison.Ordinal)))
     throw new Exception("Wide generic specialization did not emit a 64-bit ABI.");
 File.Delete(genericObject);

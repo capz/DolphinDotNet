@@ -10,7 +10,7 @@ internal static class Program
         var list=new Dolphin.Collections.List<long>();ICollection<long> values=list;
         for(var i=0;i<40;i++)values.Add(0x100000000L+i);
         var total=0L;foreach(var value in list)total+=value;if(total!=40*0x100000000L+780)return 2;
-        var initial=list.GetEnumerator();try{var unused=initial.Current;return 21;}catch(InvalidOperationException){}finally{initial.Dispose();}
+        var initial=list.GetEnumerator();try{if(initial.Current!=0)return 21;var unused=((System.Collections.IEnumerator)initial).Current;return 21;}catch(InvalidOperationException){}finally{initial.Dispose();}
         var adapted=new Dolphin.Collections.List<long>(new Dolphin.Collections.ArrayEnumerable<long>(list.ToArray()));if(adapted.Count!=40 || adapted[39]!=0x100000027L)return 22;
         System.Collections.IEnumerable boxedValues=adapted;var boxedTotal=0L;
         foreach(var value in boxedValues)boxedTotal+=(long)value;if(boxedTotal!=total)return 44;
@@ -20,6 +20,19 @@ internal static class Program
         var strings=new Dolphin.Collections.List<string>();strings.Add(string.Concat("same"," value"));if(!strings.Contains(string.Concat("same ","value")))return 4;
         var root=Storage.GetPath(StorageDevice.SdSerialPort2,"test");Directory.CreateDirectory(root);
         var path=Path.Combine(root,"data.bin");var bytes=new byte[3];bytes[0]=9;bytes[1]=8;bytes[2]=7;
+        var textPath=Path.Combine(root,"text.txt");
+        File.WriteAllText(textPath,"first\r\nsecond\n\u20ac");File.AppendAllText(textPath," tail");
+        if(File.ReadAllLines(textPath).Length!=3||File.ReadAllText(textPath)!="first\r\nsecond\n\u20ac tail")return 45;
+        foreach(var line in File.ReadLines(textPath)){if(line!="first")return 46;break;}
+        var nested=Path.Combine(root,"nested");Directory.CreateDirectory(nested);File.WriteAllText(Path.Combine(nested,"match.txt"),"nested");
+        if(Directory.GetFiles(root,"*.txt",SearchOption.AllDirectories).Length!=2||Directory.GetFiles(root,"match.txt").Length!=0)return 47;
+        var large=new byte[9000];large[8999]=123;var asyncPath=Path.Combine(root,"async.bin");
+        var pendingWrite=File.WriteAllBytesAsync(asyncPath,large);if(pendingWrite.IsCompleted||File.Exists(asyncPath))return 48;pendingWrite.GetAwaiter().GetResult();
+        var pendingRead=File.ReadAllBytesAsync(asyncPath);if(pendingRead.IsCompleted)return 49;var asyncBytes=pendingRead.GetAwaiter().GetResult();if(asyncBytes.Length!=9000||asyncBytes[8999]!=123)return 50;
+        var cancellation=new System.Threading.CancellationTokenSource();var cancelPath=Path.Combine(root,"cancel.bin");var canceledWrite=File.WriteAllBytesAsync(cancelPath,large,cancellation.Token);cancellation.Cancel();
+        try{canceledWrite.GetAwaiter().GetResult();return 51;}catch(OperationCanceledException){}if(File.Exists(cancelPath)||!canceledWrite.IsCanceled)return 52;
+        File.WriteAllTextAsync(textPath,"async \ud83d\ude00").GetAwaiter().GetResult();if(File.ReadAllTextAsync(textPath).GetAwaiter().GetResult()!="async \ud83d\ude00")return 53;
+        File.Delete(textPath);File.Delete(asyncPath);Directory.Delete(nested,true);
         File.WriteAllBytes(path,bytes);var read=File.ReadAllBytes(path);if(read.Length!=3 || read[1]!=8)return 5;
         if(!File.Exists(path) || File.Exists(root) || !Directory.Exists(root) || File.Exists(null!))return 6;
         using(var stream=File.Open(path,FileMode.Open,FileAccess.ReadWrite,FileShare.None))

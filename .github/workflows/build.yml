@@ -67,15 +67,26 @@ jobs:
           cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/generic_sharing_32
           timeout 30s /tmp/generic_sharing_32
           timeout 30s /tmp/generic_sharing_32 --gc-stress
+      - name: Validate standard List, comparers, streams, text and async state machines
+        timeout-minutes: 4
+        run: |
+          dotnet build tests/LibrarySmoke/LibrarySmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/LibrarySmoke/bin/Release/net8.0/LibrarySmoke.dll /tmp/library.c
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/library.c tests/generic_sharing_value_host.c source/managed_runtime.c source/text.c -o /tmp/library
+          timeout 30s /tmp/library
+          timeout 30s /tmp/library --gc-stress
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/library.c tests/generic_sharing_value_host.c source/managed_runtime.c source/text.c -o /tmp/library_32
+          timeout 30s /tmp/library_32
+          timeout 30s /tmp/library_32 --gc-stress
       - name: Validate collections and storage I/O
         timeout-minutes: 3
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/StorageSmoke/bin/Release/net8.0/StorageSmoke.dll /tmp/storage.c
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/storage.c -o /tmp/storage
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/storage.c source/text.c -o /tmp/storage
           timeout 30s /tmp/storage
           timeout 30s /tmp/storage --gc-stress
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/storage.c -o /tmp/storage32
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/storage.c source/text.c -o /tmp/storage32
           timeout 30s /tmp/storage32
           timeout 30s /tmp/storage32 --gc-stress
           cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Iinclude tests/storage_faults.c source/managed_runtime.c source/storage.c -Wl,--wrap=read,--wrap=write,--wrap=close -o /tmp/storage_faults
@@ -131,6 +142,11 @@ jobs:
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/StorageSmoke/bin/Release/net8.0/StorageSmoke.dll /tmp/storage_smoke.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/storage_smoke.c -o /tmp/storage_smoke.o
+      - name: Compile standard library ABI for PowerPC
+        run: |
+          dotnet build tests/LibrarySmoke/LibrarySmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/LibrarySmoke/bin/Release/net8.0/LibrarySmoke.dll /tmp/library.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/library.c -o /tmp/library.o
       - name: Build ELF and DOL
         run: make V=1
       - name: Report GameCube runtime footprint

@@ -6,6 +6,9 @@ internal enum IntrinsicKind
 {
     None,
     NativeStorage,
+    NativeComparison,
+    InitializeArray,
+    StringFromChars,
     ObjectConstructor,
     ObjectGetHashCode,
     ObjectEquals,
@@ -81,7 +84,11 @@ internal static class IntrinsicRegistry
         }
         return (type,name) switch
         {
+            ("Dolphin.Text.NativeText",_)=>IntrinsicKind.NativeStorage,
+            ("System.String",".ctor") when parameterCount is 1 or 3=>IntrinsicKind.StringFromChars,
             ("Dolphin.Storage.NativeStorage",_)=>IntrinsicKind.NativeStorage,
+            ("Dolphin.Collections.NativeComparison",_)=>IntrinsicKind.NativeComparison,
+            ("System.Runtime.CompilerServices.RuntimeHelpers","InitializeArray")=>IntrinsicKind.InitializeArray,
             ("System.Object",".ctor")=>IntrinsicKind.ObjectConstructor,
             ("System.Object","GetHashCode")=>IntrinsicKind.ObjectGetHashCode,
             ("System.Object","Equals")=>IntrinsicKind.ObjectEquals,

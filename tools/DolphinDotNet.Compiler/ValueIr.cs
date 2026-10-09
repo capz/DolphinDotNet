@@ -19,6 +19,7 @@ internal readonly record struct IrValue(int Id,IrValueKind Kind)
 }
 
 internal abstract record ValueIrInstruction;
+internal sealed record ValueIrFloatConstant(IrValue Result,long Bits,bool Single):ValueIrInstruction;
 internal sealed record ValueIrConstant(IrValue Result,long Value):ValueIrInstruction;
 internal sealed record ValueIrLoadString(IrValue Result,string Value):ValueIrInstruction;
 internal sealed record ValueIrLoadArgument(IrValue Result,int Index):ValueIrInstruction;
@@ -46,14 +47,14 @@ internal sealed record ValueIrLoadIndirect(IrValue Result,IrValue Address,int Si
 internal sealed record ValueIrStoreIndirect(IrValue Address,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrInitObject(IrValue Address,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrCopyObject(IrValue Destination,IrValue Source,string TypeName,int Size=0):ValueIrInstruction;
-internal sealed record ValueIrConvert(IrValue Result,IrValue Value):ValueIrInstruction;
+internal sealed record ValueIrConvert(IrValue Result,IrValue Value,int Opcode=0):ValueIrInstruction;
 internal sealed record ValueIrBinary(IrValue Result,string Operation,IrValue Left,IrValue Right):ValueIrInstruction;
 internal sealed record ValueIrObjectEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
 internal sealed record ValueIrLoadFunction(IrValue Result,MethodKey Target,bool Virtual,IrValue? Object):ValueIrInstruction;
 internal sealed record ValueIrNewDelegate(IrValue Result,IrValue? Target,IrValue Function):ValueIrInstruction;
 internal sealed record ValueIrDelegateInvoke(IrValue? Result,IrValue Delegate,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
 internal sealed record ValueIrNativeStorage(IrValue? Result,string Operation,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
-internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments,bool Virtual=false,bool Interface=false):ValueIrInstruction;
+internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments,bool Virtual=false,bool Interface=false,MethodKey? ArrayFallback=null):ValueIrInstruction;
 internal sealed record ValueIrNewObject(IrValue Result,string TypeName,MethodKey Constructor,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
 internal sealed record ValueIrNewException(IrValue Result,string TypeName,IrValue? Message):ValueIrInstruction;
 internal sealed record ValueIrExceptionMessage(IrValue Result,IrValue Exception):ValueIrInstruction;
@@ -119,3 +120,14 @@ internal sealed record ValueIrMethod(
     public int LocalCount=>Locals.Count;
     public IReadOnlyList<ValueIrExceptionRegion> ExceptionRegions { get; init; } = Array.Empty<ValueIrExceptionRegion>();
 }
+
+internal sealed record ValueIrDefaultComparison(IrValue Result,string Operation,GenericRepresentation Type,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
+
+internal sealed record ValueIrValueConstructor(IrValue Result,string TypeName,MethodKey Constructor,IReadOnlyList<IrValue> Arguments,int Size,IReadOnlyList<int>? References):ValueIrInstruction;
+internal sealed record ValueIrAggregateElement(IrValue Result,IrValue Array,IrValue Index,int Size):ValueIrInstruction;
+internal sealed record ValueIrStoreAggregateElement(IrValue Array,IrValue Index,IrValue Value,int Size):ValueIrInstruction;
+
+internal sealed record ValueIrUnary(IrValue Result,string Operation,IrValue Value):ValueIrInstruction;
+
+internal sealed record ValueIrDataToken(IrValue Result,byte[] Data):ValueIrInstruction;
+internal sealed record ValueIrInitializeArray(IrValue Array,IrValue Data):ValueIrInstruction;

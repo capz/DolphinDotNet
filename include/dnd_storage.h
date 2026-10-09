@@ -2,6 +2,7 @@
 #define DND_STORAGE_H
 #include "dnd_managed.h"
 bool dnd_storage_mount(int device);
+bool dnd_storage_mount_disc(int format);
 void dnd_storage_unmount(int device);
 bool dnd_storage_is_mounted(int device);
 DndString *dnd_storage_path(DndManagedHeap *, int device, DndString *path);

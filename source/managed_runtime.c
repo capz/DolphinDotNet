@@ -23,6 +23,9 @@ const DndType DND_TYPE_EXCEPTION = {"System.Exception", &DND_TYPE_OBJECT, sizeof
 const DndType DND_TYPE_SYSTEM_EXCEPTION = {"System.SystemException", &DND_TYPE_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_INVALID_OPERATION_EXCEPTION = {"System.InvalidOperationException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_ARGUMENT_EXCEPTION = {"System.ArgumentException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_OPERATION_CANCELED_EXCEPTION = {"System.OperationCanceledException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_ENCODER_FALLBACK_EXCEPTION = {"System.Text.EncoderFallbackException", &DND_TYPE_ARGUMENT_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_DECODER_FALLBACK_EXCEPTION = {"System.Text.DecoderFallbackException", &DND_TYPE_ARGUMENT_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_ARGUMENT_NULL_EXCEPTION = {"System.ArgumentNullException", &DND_TYPE_ARGUMENT_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION = {"System.ArgumentOutOfRangeException", &DND_TYPE_ARGUMENT_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION = {"System.IndexOutOfRangeException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
@@ -178,6 +181,11 @@ static uint32_t utf8_next(const unsigned char **cursor) {
     }
     if(cp<min || cp>0x10ffff || (cp>=0xd800 && cp<=0xdfff)) { *cursor=p;return 0xfffd; }
     *cursor=q;return cp;
+}
+DndString *dnd_string_from_utf16(DndManagedHeap *heap,const uint16_t *chars,uint32_t length) {
+    if(length>(UINT32_MAX-sizeof(DndString)-7u)/2u-1u){dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY,"String is too large.");return NULL;}
+    DndString *s=(DndString*)allocate(heap,&DND_TYPE_STRING,sizeof(DndString)+((size_t)length+1)*2);
+    if(s){s->length=length;if(length)memcpy(s->chars,chars,(size_t)length*2);s->chars[length]=0;}return s;
 }
 DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text) {
     if(!text)return NULL;
@@ -808,6 +816,9 @@ void dnd_exception_throw(DndExceptionKind kind, const char *message) {
         kind==DND_EXCEPTION_ARGUMENT_NULL?&DND_TYPE_ARGUMENT_NULL_EXCEPTION:
         kind==DND_EXCEPTION_ARGUMENT_OUT_OF_RANGE?&DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION:
         kind==DND_EXCEPTION_OBJECT_DISPOSED?&DND_TYPE_OBJECT_DISPOSED_EXCEPTION:
+        kind==DND_EXCEPTION_OPERATION_CANCELED?&DND_TYPE_OPERATION_CANCELED_EXCEPTION:
+        kind==DND_EXCEPTION_ENCODER_FALLBACK?&DND_TYPE_ENCODER_FALLBACK_EXCEPTION:
+        kind==DND_EXCEPTION_DECODER_FALLBACK?&DND_TYPE_DECODER_FALLBACK_EXCEPTION:
         kind==DND_EXCEPTION_NOT_SUPPORTED?&DND_TYPE_NOT_SUPPORTED_EXCEPTION:
         &DND_TYPE_EXCEPTION;
     DndException *builtin = &builtin_exceptions[(unsigned)kind <= DND_EXCEPTION_NOT_SUPPORTED ? (unsigned)kind : 0];

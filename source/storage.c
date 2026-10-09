@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "dnd_storage.h"
+#include "dnd_card_transaction.h"
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -33,13 +34,14 @@ static DirectoryHandle directories[HANDLE_CAP];
 static int next_token = 1;
 #ifdef DND_GAMECUBE_STORAGE
 bool dnd_gc_mount(int device);
+bool dnd_gc_mount_disc(int format);
 void dnd_gc_unmount(int device);
 bool dnd_gc_card_mount(int device, const char *game, const char *company);
 int dnd_gc_card_metadata(int device, const char *name, bool metadata,
                          bool banner, bool icon);
 int dnd_gc_card_read(int device, const char *name, void *data, int capacity);
-int dnd_gc_card_write(int device, const char *name, const void *data,
-                      int length);
+int dnd_gc_card_write_save(int device,const char *name,const void *data,int length,bool metadata,bool banner,bool icon);
+int dnd_gc_card_recover(int device);
 int dnd_gc_card_delete(int device, const char *name);
 int dnd_gc_card_entries(int device, char names[127][33]);
 #endif
@@ -248,6 +250,16 @@ bool dnd_storage_mount(int d) {
   mounted[d] = stat(roots[d], &st) == 0 && S_ISDIR(st.st_mode);
 #endif
   return mounted[d];
+}
+bool dnd_storage_mount_disc(int format) {
+  if(format!=1&&format!=2){fail(EINVAL,"Invalid disc format.");return false;}
+  if(mounted[3]){fail(EBUSY,"Unmount the disc before selecting a format.");return false;}
+#ifdef DND_GAMECUBE_STORAGE
+  mounted[3]=dnd_gc_mount_disc(format);return mounted[3];
+#else
+  if(format==2){fail(ENOSYS,"Use the portable FST image harness on a host.");return false;}
+  return dnd_storage_mount(3);
+#endif
 }
 int dnd_fs_open_handles(void) {
   int n = 0;
@@ -886,10 +898,13 @@ static bool card_arguments(int d, DndString *name, char out[PATH_CAP]) {
     fail(ENODEV, "Memory card is not mounted.");
     return false;
   }
+#ifdef DND_GAMECUBE_STORAGE
+  int recovery=dnd_gc_card_recover(d);if(recovery<0){fail(-recovery,"Memory card recovery failed.");return false;}
+#endif
   if (!utf8(name, out))
     return false;
   size_t n = strlen(out);
-  if (!n || n > 32) {
+  if (!n || n > 32 || !strcmp(out,DND_CARD_JOURNAL)) {
     fail(EINVAL, "Save name must contain 1 to 32 ASCII characters.");
     return false;
   }
@@ -1136,12 +1151,12 @@ static void write_save(int d, DndString *name, DndArray *data, DndString *title,
       memcpy(container + image, icon->data, 2048);
   }
   memcpy(container + offset, data->data, data->length);
-  int rc = card_backend_write(d, n, container, (int)length);
-  free(container);
 #ifdef DND_GAMECUBE_STORAGE
-  if (rc >= 0)
-    rc = dnd_gc_card_metadata(d, n, metadata, banner != NULL, icon != NULL);
+  int rc=dnd_gc_card_write_save(d,n,container,(int)length,metadata,banner!=NULL,icon!=NULL);
+#else
+  int rc=card_backend_write(d,n,container,(int)length);
 #endif
+  free(container);
   if (rc < 0)
     fail(-rc, "Memory card write failed.");
 }
@@ -1177,6 +1192,7 @@ DndArray *dnd_card_entries(DndManagedHeap *heap, int d) {
   char names[127][33];
   int count = 0, error = 0;
 #ifdef DND_GAMECUBE_STORAGE
+  int recovery=dnd_gc_card_recover(d);if(recovery<0){fail(-recovery,"Memory card recovery failed.");return NULL;}
   count = dnd_gc_card_entries(d, names);
   if (count < 0) {
     fail(-count, "Cannot enumerate saves.");

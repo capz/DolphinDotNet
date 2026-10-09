@@ -37,7 +37,7 @@ public static class Path
         return "";
     }
 }
-public sealed class FileStream : IDisposable
+public sealed class FileStream : Stream
 {
     private int handle;
     private readonly FileAccess access;
@@ -45,20 +45,20 @@ public sealed class FileStream : IDisposable
     public FileStream(string path,FileMode mode,FileAccess access):this(path,mode,access,FileShare.None){}
     public FileStream(string path,FileMode mode,FileAccess access,FileShare share){this.access=access;handle=NativeStorage.Open(path,(int)mode,(int)access,(int)share);}
     private void Check(){if(handle==0)throw new ObjectDisposedException("FileStream");}
-    public bool CanRead=>handle!=0 && access!=FileAccess.Write;
-    public bool CanWrite=>handle!=0 && access!=FileAccess.Read;
-    public bool CanSeek=>handle!=0;
-    public long Length {get {Check();return NativeStorage.Length(handle);}}
-    public long Position {get {Check();return NativeStorage.Seek(handle,0,1);}set {Seek(value,SeekOrigin.Begin);}}
-    public int Read(byte[] buffer,int offset,int count){Check();return NativeStorage.Read(handle,buffer,offset,count);}
-    public void Write(byte[] buffer,int offset,int count){Check();NativeStorage.Write(handle,buffer,offset,count);}
-    public long Seek(long offset,SeekOrigin origin){Check();return NativeStorage.Seek(handle,offset,(int)origin);}
-    public void SetLength(long length){Check();NativeStorage.SetLength(handle,length);}
-    public void Flush(){Check();NativeStorage.Flush(handle);}
-    public void Close()=>Dispose();
-    public void Dispose(){if(handle!=0){var h=handle;handle=0;NativeStorage.Close(h);}}
+    public override bool CanRead=>handle!=0 && access!=FileAccess.Write;
+    public override bool CanWrite=>handle!=0 && access!=FileAccess.Read;
+    public override bool CanSeek=>handle!=0;
+    public override long Length {get {Check();return NativeStorage.Length(handle);}}
+    public override long Position {get {Check();return NativeStorage.Seek(handle,0,1);}set {Seek(value,SeekOrigin.Begin);}}
+    public override int Read(byte[] buffer,int offset,int count){Check();return NativeStorage.Read(handle,buffer,offset,count);}
+    public override void Write(byte[] buffer,int offset,int count){Check();NativeStorage.Write(handle,buffer,offset,count);}
+    public override long Seek(long offset,SeekOrigin origin){Check();return NativeStorage.Seek(handle,offset,(int)origin);}
+    public override void SetLength(long length){Check();NativeStorage.SetLength(handle,length);}
+    public override void Flush(){Check();NativeStorage.Flush(handle);}
+    public override void Close()=>Dispose();
+    public override void Dispose(){if(handle!=0){var h=handle;handle=0;NativeStorage.Close(h);}}
 }
-public static class File
+public static partial class File
 {
     public static bool Exists(string path)=>NativeStorage.Exists(path,false);
     public static byte[] ReadAllBytes(string path)=>NativeStorage.ReadAllBytes(path);
@@ -126,15 +126,78 @@ public static class Directory
     public static void Move(string source,string destination)=>NativeStorage.Move(source,destination);
     public static string GetCurrentDirectory()=>NativeStorage.GetCurrentDirectory();
     public static void SetCurrentDirectory(string path)=>NativeStorage.SetCurrentDirectory(path);
-    public static IEnumerable<string> EnumerateFiles(string path)=>new DirectoryEnumerable(path,1);
-    public static IEnumerable<string> EnumerateDirectories(string path)=>new DirectoryEnumerable(path,2);
-    public static IEnumerable<string> EnumerateFileSystemEntries(string path)=>new DirectoryEnumerable(path,0);
+    public static IEnumerable<string> EnumerateFiles(string path)=>new SearchEnumerable(path,"*",SearchOption.TopDirectoryOnly,1);
+    public static IEnumerable<string> EnumerateDirectories(string path)=>new SearchEnumerable(path,"*",SearchOption.TopDirectoryOnly,2);
+    public static IEnumerable<string> EnumerateFileSystemEntries(string path)=>new SearchEnumerable(path,"*",SearchOption.TopDirectoryOnly,0);
     public static string[] GetFiles(string path)=>Materialize(EnumerateFiles(path));
     public static string[] GetDirectories(string path)=>Materialize(EnumerateDirectories(path));
     public static string[] GetFileSystemEntries(string path)=>Materialize(EnumerateFileSystemEntries(path));
+    public static IEnumerable<string> EnumerateFiles(string path,string pattern)=>EnumerateFiles(path,pattern,SearchOption.TopDirectoryOnly);
+    public static IEnumerable<string> EnumerateFiles(string path,string pattern,SearchOption option)=>new SearchEnumerable(path,pattern,option,1);
+    public static string[] GetFiles(string path,string pattern)=>Materialize(EnumerateFiles(path,pattern));
+    public static string[] GetFiles(string path,string pattern,SearchOption option)=>Materialize(EnumerateFiles(path,pattern,option));
+    public static IEnumerable<string> EnumerateDirectories(string path,string pattern)=>EnumerateDirectories(path,pattern,SearchOption.TopDirectoryOnly);
+    public static IEnumerable<string> EnumerateDirectories(string path,string pattern,SearchOption option)=>new SearchEnumerable(path,pattern,option,2);
+    public static string[] GetDirectories(string path,string pattern)=>Materialize(EnumerateDirectories(path,pattern));
+    public static string[] GetDirectories(string path,string pattern,SearchOption option)=>Materialize(EnumerateDirectories(path,pattern,option));
+    public static IEnumerable<string> EnumerateFileSystemEntries(string path,string pattern)=>EnumerateFileSystemEntries(path,pattern,SearchOption.TopDirectoryOnly);
+    public static IEnumerable<string> EnumerateFileSystemEntries(string path,string pattern,SearchOption option)=>new SearchEnumerable(path,pattern,option,0);
+    public static string[] GetFileSystemEntries(string path,string pattern)=>Materialize(EnumerateFileSystemEntries(path,pattern));
+    public static string[] GetFileSystemEntries(string path,string pattern,SearchOption option)=>Materialize(EnumerateFileSystemEntries(path,pattern,option));
     private static string[] Materialize(IEnumerable<string> source)
     {
         var items=new Dolphin.Collections.List<string>();foreach(var item in source)items.Add(item);return items.ToArray();
+    }
+    private sealed class SearchEnumerable : IEnumerable<string>
+    {
+        private readonly string path,pattern;private readonly SearchOption option;private readonly int kind;
+        public SearchEnumerable(string path,string pattern,SearchOption option,int kind)
+        {
+            if(pattern==null)throw new ArgumentNullException("searchPattern");
+            if(pattern.IndexOf("/")>=0||pattern.IndexOf("\\")>=0||pattern.IndexOf(":")>=0||pattern.IndexOf("\0")>=0)throw new ArgumentException("Pattern must be a file name.");
+            if(option!=SearchOption.TopDirectoryOnly&&option!=SearchOption.AllDirectories)throw new ArgumentOutOfRangeException("searchOption");
+            this.path=Path.GetFullPath(path);this.pattern=pattern=="*.*"?"*":pattern;this.option=option;this.kind=kind;
+        }
+        public IEnumerator<string> GetEnumerator()=>new SearchEnumerator(path,pattern,option,kind);
+        IEnumerator IEnumerable.GetEnumerator()=>GetEnumerator();
+    }
+    private sealed class SearchEnumerator : IEnumerator<string>
+    {
+        private readonly string pattern;private readonly SearchOption option;private readonly int kind;
+        private readonly Dolphin.Collections.List<string> pending=new Dolphin.Collections.List<string>();
+        private IEnumerator<string>? cursor;private string? current;
+        private bool disposed;
+        public SearchEnumerator(string path,string pattern,SearchOption option,int kind){this.pattern=pattern;this.option=option;this.kind=kind;cursor=new DirectoryEnumerable(path,0).GetEnumerator();}
+        public string Current=>current??throw new InvalidOperationException("Enumerator is not positioned.");
+        object IEnumerator.Current=>Current;
+        public bool MoveNext()
+        {
+            if(disposed)return false;
+            try
+            {
+                while(true)
+                {
+                    while(cursor!=null&&cursor.MoveNext())
+                    {
+                        var path=cursor.Current;var directory=Directory.Exists(path);
+                        if(directory&&option==SearchOption.AllDirectories)pending.Add(path);
+                        if((kind==0||kind==1&&!directory||kind==2&&directory)&&Match(Path.GetFileName(path),pattern)){current=path;return true;}
+                    }
+                    if(cursor!=null){cursor.Dispose();cursor=null;}
+                    if(pending.Count==0){Dispose();return false;}
+                    var next=pending[pending.Count-1];pending.RemoveAt(pending.Count-1);cursor=new DirectoryEnumerable(next,0).GetEnumerator();
+                }
+            }
+            catch{Dispose();throw;}
+        }
+        private static bool Match(string name,string pattern)
+        {
+            var n=0;var p=0;var star=-1;var retry=0;
+            while(n<name.Length){if(p<pattern.Length&&(pattern[p]=='?'||pattern[p]==name[n])){n++;p++;}else if(p<pattern.Length&&pattern[p]=='*'){star=p++;retry=n;}else if(star>=0){p=star+1;n=++retry;}else return false;}
+            while(p<pattern.Length&&pattern[p]=='*')p++;return p==pattern.Length;
+        }
+        public void Reset()=>throw new NotSupportedException();
+        public void Dispose(){if(disposed)return;disposed=true;current=null;pending.Clear();if(cursor!=null){var c=cursor;cursor=null;c.Dispose();}}
     }
     private sealed class DirectoryEnumerable : IEnumerable<string>
     {

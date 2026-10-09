@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 namespace Dolphin.Storage;
 public enum StorageDevice { SdSlotA, SdSlotB, SdSerialPort2, DvdDrive, MemoryCardSlotA, MemoryCardSlotB }
+public enum DiscFormat { Iso9660=1, GameCubeFst=2 }
 public static class Storage
 {
     public static bool Mount(StorageDevice device)=>NativeStorage.Mount((int)device);
+    public static bool MountDisc(DiscFormat format)=>NativeStorage.MountDisc((int)format);
     public static bool IsMounted(StorageDevice device)=>NativeStorage.IsMounted((int)device);
     public static void Unmount(StorageDevice device)=>NativeStorage.Unmount((int)device);
     public static string GetPath(StorageDevice device,string path)=>NativeStorage.GetPath((int)device,path);

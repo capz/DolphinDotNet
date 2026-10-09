@@ -4,6 +4,7 @@ namespace Dolphin.Storage;
 internal static class NativeStorage
 {
     private static Exception Unsupported()=>new PlatformNotSupportedException("Requires DolphinDotNet AOT.");
+    internal static bool MountDisc(int format)=>throw Unsupported();
     internal static bool Mount(int device)=>throw Unsupported();
     internal static void Unmount(int device)=>throw Unsupported();
     internal static bool IsMounted(int device)=>throw Unsupported();
