@@ -35,6 +35,29 @@ internal static class MetadataLoader
    }
    if(!progress)throw new InvalidDataException("Unable to resolve type layout inheritance.");
   }
+  // MethodImpl metadata is authoritative: explicit generic method names use
+  // display names such as IEquatable<Foo>, not metadata names with arity.
+  foreach(var p in pending)
+  foreach(var handle in md.GetTypeDefinition(p.Handle).GetMethodImplementations())
+  {
+   var implementation=md.GetMethodImplementation(handle);
+   if(implementation.MethodBody.Kind!=HandleKind.MethodDefinition)continue;
+   string? iface;string name;
+   if(implementation.MethodDeclaration.Kind==HandleKind.MemberReference)
+   {
+    var declaration=md.GetMemberReference((MemberReferenceHandle)implementation.MethodDeclaration);
+    iface=ResolveMemberParentTypeName(md,declaration.Parent);name=md.GetString(declaration.Name);
+   }
+   else if(implementation.MethodDeclaration.Kind==HandleKind.MethodDefinition)
+   {
+    var declaration=md.GetMethodDefinition((MethodDefinitionHandle)implementation.MethodDeclaration);
+    iface=ResolveTypeName(md,declaration.GetDeclaringType());name=md.GetString(declaration.Name);
+   }
+   else continue;
+   if(iface is null)continue;
+   var body=model.Methods.Values.Single(m=>m.AssemblyName==assemblyName&&m.Handle==(MethodDefinitionHandle)implementation.MethodBody);
+   model.Methods[body.Key]=body with { ExplicitContracts=(body.ExplicitContracts??Array.Empty<(string Interface,string Method)>()).Append((iface,name)).ToArray() };
+  }
  }
  internal static void SpecializeFields(CompilationModel model,MethodModel definition,string typeName,IReadOnlyList<GenericRepresentation> args)
  {

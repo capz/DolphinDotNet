@@ -332,8 +332,13 @@ internal static class AotCompiler
     private static void EnsureEnumerationContracts(CompilationModel model)
     {
         void Type(string name,params string[] interfaces){if(model.Types.ContainsKey(name))return;var dot=name.LastIndexOf('.');model.Types[name]=new(dot<0?"":name[..dot],dot<0?name:name[(dot+1)..],name,null,0,true,false,interfaces);}
-        void Method(string type,string name,bool returnsValue){if(model.Methods.Values.Any(m=>m.Key.TypeName==type&&m.Key.Name==name))return;var key=new MethodKey(type,name,"<contracts>",name);var kind=!returnsValue?(CilStackKind?)null:name=="MoveNext"?CilStackKind.I4:CilStackKind.ObjectReference;var count=name switch { "Add" or "Contains" or "Remove" or "get_Item" or "IndexOf" or "RemoveAt"=>1,"CopyTo" or "set_Item" or "Insert"=>2,_=>0 };
-            model.Methods[key]=new(key,default,false,count,returnsValue,"<contracts>",true,true,true,true,Abi:new GenericAbi(Enumerable.Repeat(CilStackKind.NativeInt,count).ToArray(),kind));}
+        void Method(string type,string name,bool returnsValue){if(model.Methods.Values.Any(m=>m.Key.TypeName==type&&m.Key.Name==name))return;var key=new MethodKey(type,name,"<contracts>",name);var kind=!returnsValue?(CilStackKind?)null:name is "MoveNext" or "CompareTo" or "Compare" or "Equals" or "GetHashCode"?CilStackKind.I4:CilStackKind.ObjectReference;var count=name switch { "Add" or "Contains" or "Remove" or "get_Item" or "IndexOf" or "RemoveAt" or "CompareTo" or "GetHashCode"=>1,"CopyTo" or "set_Item" or "Insert" or "Compare"=>2,"Equals"=>type=="System.Collections.Generic.IEqualityComparer`1"?2:1,_=>0 };
+            model.Methods[key]=new(key,default,false,count,returnsValue,"<contracts>",true,true,true,true,Abi:new GenericAbi(Enumerable.Repeat(type=="System.IComparable"?CilStackKind.ObjectReference:CilStackKind.NativeInt,count).ToArray(),kind));}
+        Type("System.IComparable");Method("System.IComparable","CompareTo",true);
+        Type("System.IComparable`1");Method("System.IComparable`1","CompareTo",true);
+        Type("System.IEquatable`1");Method("System.IEquatable`1","Equals",true);
+        Type("System.Collections.Generic.IComparer`1");Method("System.Collections.Generic.IComparer`1","Compare",true);
+        Type("System.Collections.Generic.IEqualityComparer`1");Method("System.Collections.Generic.IEqualityComparer`1","Equals",true);Method("System.Collections.Generic.IEqualityComparer`1","GetHashCode",true);
         Type("System.IDisposable");Method("System.IDisposable","Dispose",false);
         Type("System.Collections.IEnumerable");Method("System.Collections.IEnumerable","GetEnumerator",true);
         Type("System.Collections.IEnumerator");Method("System.Collections.IEnumerator","get_Current",true);Method("System.Collections.IEnumerator","MoveNext",true);Method("System.Collections.IEnumerator","Reset",false);

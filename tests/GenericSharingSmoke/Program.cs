@@ -322,8 +322,29 @@ internal static class Program
         return -3;
     }
 
+    private static int ComparisonContractsProbe()
+    {
+        var item = new ComparableItem(7);
+        IEquatable<ComparableItem> equality = item;
+        IComparable<ComparableItem> ordering = item;
+        IComparable untyped = item;
+        if (!equality.Equals(new ComparableItem(7)) || equality.Equals(null)) return 1;
+        if (ordering.CompareTo(new ComparableItem(9)) >= 0 || ordering.CompareTo(null) <= 0) return 2;
+        if (untyped.CompareTo(new ComparableItem(3)) <= 0) return 3;
+        IEqualityComparer<long> wideEquality = new WideComparer();
+        IComparer<long> wideOrdering = new WideComparer();
+        if (!wideEquality.Equals(0x100000002L,0x100000002L) || wideEquality.Equals(2L,0x100000002L)) return 4;
+        if (wideEquality.GetHashCode(0x100000002L)!=2 || wideOrdering.Compare(0x100000002L,2L)<=0) return 5;
+        IEqualityComparer<string> referenceEquality = new TextLengthComparer();
+        IComparer<string> referenceOrdering = new TextLengthComparer();
+        if (!referenceEquality.Equals("ab","cd") || referenceEquality.Equals("ab",null)) return 6;
+        if (referenceEquality.GetHashCode("abc")!=3 || referenceOrdering.Compare(null,"a")>=0) return 7;
+        return 0;
+    }
+
     private static int Main()
     {
+        var comparisonContracts = ComparisonContractsProbe(); if(comparisonContracts!=0)return 950+comparisonContracts;
         if(AllocationAndNullProbe()!=0) return 900;
         var holder = new GenericHolder<string>(string.Concat("rooted", " value"));
         var wideHolder = new GenericHolder<long>(0x300000004L);
@@ -608,3 +629,24 @@ internal sealed class LifecycleDerived : LifecycleBase, ILifecycle
 }
 
 internal sealed class GenericHolder<T> { public T Value; public GenericHolder(T value) { Value=value; } }
+
+internal sealed class ComparableItem : IEquatable<ComparableItem>, IComparable<ComparableItem>, IComparable
+{
+    private readonly int value;
+    public ComparableItem(int value) { this.value=value; }
+    bool IEquatable<ComparableItem>.Equals(ComparableItem? other) => other!=null && value==other.value;
+    int IComparable<ComparableItem>.CompareTo(ComparableItem? other) => other==null?1:value-other.value;
+    int IComparable.CompareTo(object? other) => other==null?1:value-((ComparableItem)other).value;
+}
+internal sealed class WideComparer : IEqualityComparer<long>, IComparer<long>
+{
+    public bool Equals(long x,long y)=>x==y;
+    public int GetHashCode(long value)=>(int)value;
+    public int Compare(long x,long y)=>x<y?-1:x>y?1:0;
+}
+internal sealed class TextLengthComparer : IEqualityComparer<string>, IComparer<string>
+{
+    public bool Equals(string? x,string? y)=>x==null?y==null:y!=null && x.Length==y.Length;
+    public int GetHashCode(string value)=>value==null?0:value.Length;
+    public int Compare(string? x,string? y)=>x==null?(y==null?0:-1):y==null?1:x.Length-y.Length;
+}

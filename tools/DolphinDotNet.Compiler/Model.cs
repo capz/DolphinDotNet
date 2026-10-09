@@ -6,7 +6,7 @@ internal sealed record TypeModel(string Namespace,string Name,string FullName,st
 internal sealed record FieldModel(string DeclaringType,string Name,int Offset,bool IsReference,bool IsStatic=false,int Size=4,int StorageSize=0,IReadOnlyList<int>? ReferenceOffsets=null);
 internal readonly record struct LocalStorage(int Size,CilStackKind Kind,IReadOnlyList<int>? ReferenceOffsets=null);
 internal sealed record GenericAbi(IReadOnlyList<CilStackKind> Parameters,CilStackKind? Return,IReadOnlyList<LocalStorage>? ParameterStorage=null);
-internal sealed record MethodModel(MethodKey Key,MethodDefinitionHandle Handle,bool IsStatic,int ParameterCount,bool ReturnsValue,string AssemblyName,bool IsVirtual=false,bool IsAbstract=false,bool IsNewSlot=false,bool DeclaringTypeIsInterface=false,bool DeclaringTypeIsDelegate=false,GenericAbi? Abi=null,IReadOnlyList<GenericRepresentation>? TypeArguments=null,IReadOnlyList<GenericRepresentation>? MethodArguments=null);
+internal sealed record MethodModel(MethodKey Key,MethodDefinitionHandle Handle,bool IsStatic,int ParameterCount,bool ReturnsValue,string AssemblyName,bool IsVirtual=false,bool IsAbstract=false,bool IsNewSlot=false,bool DeclaringTypeIsInterface=false,bool DeclaringTypeIsDelegate=false,GenericAbi? Abi=null,IReadOnlyList<GenericRepresentation>? TypeArguments=null,IReadOnlyList<GenericRepresentation>? MethodArguments=null,IReadOnlyList<(string Interface,string Method)>? ExplicitContracts=null);
 internal sealed class AssemblyModel : IDisposable
 {
  public required string Name{get;init;} public required string Path{get;init;} public required FileStream Stream{get;init;} public required PEReader PE{get;init;} public required MetadataReader Metadata{get;init;}

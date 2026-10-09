@@ -510,7 +510,8 @@ internal static class ValueCBackend
             while(model.Types.ContainsKey(current))
             {
                 var candidates=model.Methods.Values.Where(m=>m.Key.TypeName==current&&!m.IsAbstract&&compiled.Contains(m.Key)&&m.ParameterCount==contract.ParameterCount);
-                implementation=candidates.FirstOrDefault(m=>m.Key.Name==iface+"."+contract.Key.Name)
+                implementation=candidates.FirstOrDefault(m=>m.ExplicitContracts?.Any(c=>c.Interface==iface&&c.Method==contract.Key.Name)==true)
+                    ??candidates.FirstOrDefault(m=>m.Key.Name==iface+"."+contract.Key.Name)
                     ??candidates.FirstOrDefault(m=>m.Key.Name==contract.Key.Name);
                 if(implementation is not null)break;
                 current=model.Types[current].BaseType??"";
