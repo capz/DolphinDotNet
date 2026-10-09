@@ -11,11 +11,11 @@ DolphinDotNet compiles ordinary .NET assemblies into native C through a typed in
 | Managed assembly / CIL import | Implemented for a growing, deliberately constrained subset |
 | Production compiler | Typed Value IR, control-flow/stack analysis, native C AOT (`--aot`) |
 | Legacy bytecode VM | Retained as a bootstrap/reference path |
-| Managed runtime | Objects, type metadata, fields, virtual/interface dispatch primitives, strings, arrays, delegates, boxing, exception state |
+| Managed runtime | Compiled object lifecycle, fields, virtual/interface dispatch, strings, arrays, delegates, boxing, typed exceptions, rethrow and finally |
 | Memory management | Nonmoving mark/sweep GC, explicit roots and compiler-generated shadow-stack support, reusable free blocks, stress mode |
 | GameCube platform | libogc DOL, OpenGX 3D/overlay, PAD input, nonblocking UDP, console overlay |
-| Integration | Compiler, portable native-runtime, and GameCube build CI; broader C# runtime semantics still being verified |
-| Phase 7 runtime completeness | **Acceptance gates satisfied** — target execution is separate; see [Phase 7 acceptance gates](docs/phase7-runtime.md) |
+| Integration | Compiler and native runtime tests; 32/64-bit managed smoke execution, GC stress, ASan/UBSan and GameCube build CI |
+| Phase 7 runtime completeness | **Acceptance gates satisfied and merged** in [PR #37](https://github.com/capz/DolphinDotNet/pull/37); target execution remains separate |
 
 The native runtime implementing a feature does **not** automatically mean all corresponding C# constructs are fully supported by the AOT compiler.
 
@@ -44,7 +44,10 @@ The output is `DolphinDotNet.dol`. The repository also contains `samples/HelloGa
 
 - `tests/managed_runtime_tests.c` covers native managed-runtime mechanisms, GC, UTF-16 strings, arrays, type checks and exceptions.
 - `tools/DolphinDotNet.Compiler.Tests` exercises compiler lowering.
-- GitHub Actions builds managed samples, portable native runtime tests and the GameCube target.
+- `tests/ControlFlowSmoke` and `tests/GenericSharingSmoke` validate compiled managed behavior, including lifecycle, nullable values, generic dispatch, embedded reference fields, exceptions and finally.
+- GitHub Actions runs managed integration on 32-bit and 64-bit hosts, collects before every allocation in GC-stress runs, and executes optimized ASan/UBSan checks.
+- GameCube CI builds ELF/DOL/map artifacts and publishes section sizes, symbol sizes and per-function static stack usage.
+- [Phase 7 CI run 996](https://github.com/capz/DolphinDotNet/actions/runs/37862418540) passed all three jobs before PR #37 merged. See [acceptance evidence](docs/phase7-runtime.md) for coverage and footprint details.
 - Automated Dolphin emulator smoke testing (former Phase 6 Stage 11) is **deferred**; a green build does not establish successful execution on emulator or hardware.
 
 ## API and architecture rules
@@ -57,9 +60,15 @@ The managed/native split keeps game code independent of GX, PAD, libogc and nati
 
 ## Roadmap
 
-1. **Phase 7 — runtime completeness:** validate compiled C# object lifecycle, precise GC roots, exceptions/finally, strings/arrays, type system, generics and integrated GameCube constraints.
-2. **Phase 8 — managed platform APIs:** Game, graphics, input, network and diagnostics under `Dolphin.*`.
-3. **Phase 9 — integrated demo:** textured 3D, controller interaction, UDP and diagnostic overlay, compiled from C# to a DOL.
-4. **Hardware validation:** test the actual DOL on Dolphin and GameCube; emulator CI remains a separate deferred task.
+| Stage | Status | Scope |
+| --- | --- | --- |
+| Phase 7 — runtime completeness | Acceptance gates satisfied; merged | Compiled lifecycle, precise GC roots, exceptions/finally, strings/arrays, type operations, generics, portable integration and GameCube build/static footprint |
+| Phase 8 — managed platform APIs | Next | Game, graphics, input, networking and diagnostics under `Dolphin.*`; migrate legacy APIs and replace compiler special cases with native-call metadata |
+| Phase 9 — integrated managed demo | Planned | Textured 3D, controller interaction, UDP and diagnostic overlay, driven from C# and compiled to a DOL |
+| Dolphin / hardware validation | Pending; emulator CI deferred | Verify boot, rendering, input, networking, stability and runtime heap/stack usage on the target |
+
+The **0.1 milestone is still pending**. It requires the integrated managed demo to boot on Dolphin and real GameCube hardware, render a textured 3D object, respond to controller input, exchange UDP packets and display diagnostics without a desktop CLR. Static stack reports do not establish runtime stack high-water usage.
+
+The immediate priority is Phase 8: establish a consistent managed platform API over the existing native drivers, then use it to build the Phase 9 demo.
 
 See [architecture](docs/architecture.md), [managed runtime architecture](docs/managed-runtime-architecture.md), [runtime levels](docs/runtime-levels.md) and [platform roadmap](docs/platform-roadmap.md).
