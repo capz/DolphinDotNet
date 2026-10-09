@@ -41,4 +41,4 @@ dotnet tool install DolphinDotNet.SaveImage --version 0.1.0 --add-source artifac
 .tools/dnd-save-image player.png player.rgb5a3
 ```
 
-The PNG decoder/resizer dependency is SixLabors.ImageSharp 4.1.2, licensed under the [Six Labors Split License](https://github.com/SixLabors/ImageSharp/blob/v4.1.2/LICENSE). Its dependency remains confined to the desktop converter; managed GameCube applications do not reference it.
+The PNG decoder/resizer dependency is SixLabors.ImageSharp 3.1.12, licensed under the [Six Labors Split License](https://github.com/SixLabors/ImageSharp/blob/v3.1.12/LICENSE). Its dependency remains confined to the desktop converter; managed GameCube applications do not reference it.
