@@ -1,6 +1,6 @@
 # .NET Standard compatibility index
 
-Audit date: 2026-10-09. Implementation baseline: `c84a3d1`, after Phase 7 merged. This index describes ordinary compiled C# development; it is not a full .NET Standard conformance report.
+Audit date: 2026-10-09. Implementation baseline: Phase 7 plus the initial managed collections/storage slice. This index describes ordinary compiled C# development; it is not a full .NET Standard conformance report.
 
 The managed Core project targets `netstandard2.0`, while the compiler smoke applications target `net8.0`. A target framework supplies compile-time references; it does not make every referenced API available in the generated GameCube program. .NET Standard 2.0 is the initial API inventory baseline, not a claim that DolphinDotNet implements its whole contract.
 
@@ -39,13 +39,13 @@ The managed Core project targets `netstandard2.0`, while the compiler smoke appl
 | CL01 | `IEnumerable<T>`, `IEnumerator<T>`, nongeneric counterparts, `IDisposable` | Compiled subset | Custom class enumeration, explicit nongeneric Current and cleanup paths; standard array-as-interface enumeration and all variance cases not established |
 | CL02 | `ICollection<T>`, `IList<T>`, `IReadOnlyCollection<T>`, `IReadOnlyList<T>` | Compiled subset | Synthetic contracts, selected array calls and custom collection dispatch; contract semantics need fuller regression coverage |
 | CL03 | `KeyValuePair<TKey,TValue>`, `ArraySegment<T>` | Compiled subset | Construction/accessors, selected enumerator paths, embedded reference-field tracing; full interface surface not established |
-| CL04 | `List<T>` | Native only | C `DndList` storage exists; smoke `CompactList<T>` is a fixed-capacity test class, not `System.Collections.Generic.List<T>` |
+| CL04 | Growable list and array enumerable | Compiled subset | `Dolphin.Collections.List<T>` implements standard generic collection contracts; `ArrayEnumerable<T>` adapts arrays. Standard `System.Collections.Generic.List<T>` mapping and comparer-based equality remain follow-up work |
 | CL05 | `Dictionary`, `HashSet`, `Queue`, `Stack`, sorted/read-only collections | Missing | Equality/hash/order infrastructure is a prerequisite; no standard implementations found |
 | CL06 | Iterator blocks (`yield return`) | Unverified | Generated state-machine semantics not established by manually authored enumerator tests |
 | LQ01 | `System.Linq.Enumerable` | Missing | Select/Where/Any/All/Count/ToArray/etc. need managed implementation plus enumerable/delegate support |
-| IO01 | `File.Exists`, `ReadAllBytes`, `WriteAllBytes` | Native only | `source/system.c` helpers; no normal managed File binding, mounted-device initialization or complete error/cleanup behavior |
-| IO02 | `Directory`, `FileStream`, `Stream`, `MemoryStream`, readers/writers | Missing | [Proposed filesystem design](system-io-design.md); no implementation yet |
-| IO03 | `Path` helpers, `Guid`, `AppContext` | Native only | Selected C helpers; normal managed mapping and complete .NET semantics absent |
+| IO01 | Binary `System.IO.File` | Compiled subset | Normal compiled File calls map to managed facade/native backend; selected Open/Copy/Move/Delete and byte-array operations. See [exact scope](storage-runtime.md) |
+| IO02 | Directory and FileStream | Compiled subset | Basic disposable binary FileStream, lazy Directory enumeration/materialization, recursive deletion and DirectoryInfo. General Stream inheritance, MemoryStream and readers/writers remain missing |
+| IO03 | Path helpers | Compiled subset | Selected normal Path calls use console device-prefix grammar. Guid/AppContext and full desktop path semantics remain missing |
 | IO04 | Console | Partial integration | GameCube WriteLine intrinsic and native overlay exist; general `System.Console` overload family is not registered in production intrinsic table |
 | NM01 | `Math`, `Random` | Native only | Integer Abs/Min/Max and PRNG primitives; normal managed APIs not wired up |
 | NM02 | Floating point, Decimal, BigInteger, Convert/Parse families | Missing/unverified broad support | IR kind names and signature recognition do not establish numeric semantics or library coverage |
@@ -59,7 +59,7 @@ The managed Core project targets `netstandard2.0`, while the compiler smoke appl
 
 Small, explicitly tested C# programs using the supported object/control-flow/runtime subset can compile through AOT. Custom collection/algorithm code can work when all reachable calls and emitted CIL are supported. Ordinary .NET library use still requires inspecting its complete reachable dependency graph; a successful Roslyn build is insufficient.
 
-LINQ, Dictionary/List, streams, async and common formatting-heavy NuGet libraries are not currently a drop-in development surface. Phase 7 acceptance validates a constrained execution model, not the whole Base Class Library.
+LINQ, Dictionary, standard List, general streams, async and common formatting-heavy NuGet libraries are not currently a drop-in development surface. Basic binary files/streams and Dolphin collections now have compiled smoke coverage. Phase 7 acceptance validates a constrained execution model, not the whole Base Class Library.
 
 ## Evidence
 
@@ -90,3 +90,5 @@ A reproducible contract report needs: pinned reference assembly/version; normali
 ## Reference
 
 [Microsoft's .NET Standard overview](https://learn.microsoft.com/en-us/dotnet/standard/net-standard) defines the API contract. Project-specific unsupported areas and permanent exclusions remain explicit rather than being counted as implementation.
+
+Storage evidence: `tests/StorageSmoke`, `tests/storage_host.c`, `source/storage.c`, `source/storage_gamecube.c`, and the collections/storage CI step. Hardware execution and filesystem fault injection remain separate acceptance work.

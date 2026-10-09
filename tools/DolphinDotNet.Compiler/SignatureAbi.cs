@@ -31,6 +31,7 @@ internal sealed class SignatureAbi(CompilationModel model) : ISignatureTypeProvi
     public Type GetTypeFromReference(MetadataReader md,TypeReferenceHandle h,byte raw)=>Named(MetadataLoader.ResolveTypeName(md,h),raw);
     private Type Named(string? name,byte raw)
     {
+        if(name is "System.IO.FileMode" or "System.IO.FileAccess" or "System.IO.FileShare" or "System.IO.SeekOrigin" || name is not null && model.Types.TryGetValue(name,out var enumType)&&enumType.BaseType=="System.Enum")return new(CilStackKind.I4,Name:name);
         if(raw==0x11 && name is not null && model.Types.TryGetValue(name,out var t))
             return new(CilStackKind.ManagedPointer,Math.Max(1,t.InstanceSize),model.Fields.Values.Where(f=>f.DeclaringType==name&&!f.IsStatic&&f.IsReference).Select(f=>f.Offset).ToArray(),name);
         return Reference with { Name=name };

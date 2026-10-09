@@ -30,6 +30,13 @@ const DndType DND_TYPE_NULL_REFERENCE_EXCEPTION = {"System.NullReferenceExceptio
 const DndType DND_TYPE_INVALID_CAST_EXCEPTION = {"System.InvalidCastException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_NOT_SUPPORTED_EXCEPTION = {"System.NotSupportedException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_OUT_OF_MEMORY_EXCEPTION = {"System.OutOfMemoryException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_IO_EXCEPTION = {"System.IO.IOException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_FILE_NOT_FOUND_EXCEPTION = {"System.IO.FileNotFoundException", &DND_TYPE_IO_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_DIRECTORY_NOT_FOUND_EXCEPTION = {"System.IO.DirectoryNotFoundException", &DND_TYPE_IO_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_UNAUTHORIZED_EXCEPTION = {"System.UnauthorizedAccessException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_DRIVE_NOT_FOUND_EXCEPTION = {"System.IO.DriveNotFoundException", &DND_TYPE_IO_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_PATH_TOO_LONG_EXCEPTION = {"System.IO.PathTooLongException", &DND_TYPE_IO_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_OBJECT_DISPOSED_EXCEPTION = {"System.ObjectDisposedException", &DND_TYPE_INVALID_OPERATION_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 static DndException builtin_exception = {{ &DND_TYPE_EXCEPTION, 0 }, NULL};
 
 typedef struct DndHeapBlock {
@@ -790,7 +797,18 @@ void dnd_exception_throw(DndExceptionKind kind, const char *message) {
         kind==DND_EXCEPTION_INVALID_CAST?&DND_TYPE_INVALID_CAST_EXCEPTION:
         kind==DND_EXCEPTION_OUT_OF_MEMORY?&DND_TYPE_OUT_OF_MEMORY_EXCEPTION:
         kind==DND_EXCEPTION_ARGUMENT?&DND_TYPE_ARGUMENT_EXCEPTION:
-        kind==DND_EXCEPTION_INVALID_OPERATION?&DND_TYPE_INVALID_OPERATION_EXCEPTION:&DND_TYPE_EXCEPTION;
+        kind==DND_EXCEPTION_INVALID_OPERATION?&DND_TYPE_INVALID_OPERATION_EXCEPTION:
+        kind==DND_EXCEPTION_IO?&DND_TYPE_IO_EXCEPTION:
+        kind==DND_EXCEPTION_FILE_NOT_FOUND?&DND_TYPE_FILE_NOT_FOUND_EXCEPTION:
+        kind==DND_EXCEPTION_DIRECTORY_NOT_FOUND?&DND_TYPE_DIRECTORY_NOT_FOUND_EXCEPTION:
+        kind==DND_EXCEPTION_UNAUTHORIZED?&DND_TYPE_UNAUTHORIZED_EXCEPTION:
+        kind==DND_EXCEPTION_DRIVE_NOT_FOUND?&DND_TYPE_DRIVE_NOT_FOUND_EXCEPTION:
+        kind==DND_EXCEPTION_PATH_TOO_LONG?&DND_TYPE_PATH_TOO_LONG_EXCEPTION:
+        kind==DND_EXCEPTION_ARGUMENT_NULL?&DND_TYPE_ARGUMENT_NULL_EXCEPTION:
+        kind==DND_EXCEPTION_ARGUMENT_OUT_OF_RANGE?&DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION:
+        kind==DND_EXCEPTION_OBJECT_DISPOSED?&DND_TYPE_OBJECT_DISPOSED_EXCEPTION:
+        kind==DND_EXCEPTION_NOT_SUPPORTED?&DND_TYPE_NOT_SUPPORTED_EXCEPTION:
+        &DND_TYPE_EXCEPTION;
     builtin_exception.object.type = type;
     builtin_exception.message = NULL;
     exception_object = (DndObject *)&builtin_exception;

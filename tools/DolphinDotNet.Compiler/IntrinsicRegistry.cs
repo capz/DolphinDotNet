@@ -5,12 +5,14 @@ namespace DolphinDotNet.Compiler;
 internal enum IntrinsicKind
 {
     None,
+    NativeStorage,
     ObjectConstructor,
     ObjectGetHashCode,
     ObjectEquals,
     StringLength,
     StringCharAt,
     StringEquals,
+    StringNotEquals,
     StringStartsWith,
     StringEndsWith,
     StringContains,
@@ -79,6 +81,7 @@ internal static class IntrinsicRegistry
         }
         return (type,name) switch
         {
+            ("Dolphin.Storage.NativeStorage",_)=>IntrinsicKind.NativeStorage,
             ("System.Object",".ctor")=>IntrinsicKind.ObjectConstructor,
             ("System.Object","GetHashCode")=>IntrinsicKind.ObjectGetHashCode,
             ("System.Object","Equals")=>IntrinsicKind.ObjectEquals,
@@ -86,6 +89,7 @@ internal static class IntrinsicRegistry
             ("System.String","get_Chars")=>IntrinsicKind.StringCharAt,
             ("System.String","Equals")=>IntrinsicKind.StringEquals,
             ("System.String","op_Equality")=>IntrinsicKind.StringEquals,
+            ("System.String","op_Inequality")=>IntrinsicKind.StringNotEquals,
             ("System.String","StartsWith") when parameterCount==1=>IntrinsicKind.StringStartsWith,
             ("System.String","EndsWith") when parameterCount==1=>IntrinsicKind.StringEndsWith,
             ("System.String","Contains") when parameterCount==1=>IntrinsicKind.StringContains,

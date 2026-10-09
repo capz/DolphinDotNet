@@ -52,6 +52,7 @@ internal sealed record ValueIrObjectEquals(IrValue Result,IrValue Left,IrValue R
 internal sealed record ValueIrLoadFunction(IrValue Result,MethodKey Target,bool Virtual,IrValue? Object):ValueIrInstruction;
 internal sealed record ValueIrNewDelegate(IrValue Result,IrValue? Target,IrValue Function):ValueIrInstruction;
 internal sealed record ValueIrDelegateInvoke(IrValue? Result,IrValue Delegate,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
+internal sealed record ValueIrNativeStorage(IrValue? Result,string Operation,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
 internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyList<IrValue> Arguments,bool Virtual=false,bool Interface=false):ValueIrInstruction;
 internal sealed record ValueIrNewObject(IrValue Result,string TypeName,MethodKey Constructor,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
 internal sealed record ValueIrNewException(IrValue Result,string TypeName,IrValue? Message):ValueIrInstruction;

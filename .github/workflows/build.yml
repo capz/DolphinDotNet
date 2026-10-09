@@ -67,6 +67,17 @@ jobs:
           cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/generic_sharing_32
           timeout 30s /tmp/generic_sharing_32
           timeout 30s /tmp/generic_sharing_32 --gc-stress
+      - name: Validate collections and storage I/O
+        timeout-minutes: 3
+        run: |
+          dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/StorageSmoke/bin/Release/net8.0/StorageSmoke.dll /tmp/storage.c
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/storage.c -o /tmp/storage
+          timeout 30s /tmp/storage
+          timeout 30s /tmp/storage --gc-stress
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/storage.c -o /tmp/storage32
+          timeout 30s /tmp/storage32
+          timeout 30s /tmp/storage32 --gc-stress
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
       - name: Verify generated source
@@ -84,17 +95,20 @@ jobs:
     name: GameCube DOL
     runs-on: ubuntu-latest
     container:
-      image: devkitpro/devkitppc:latest
+      image: ghcr.io/extremscorner/libogc2:20260805
     steps:
       - uses: actions/checkout@v4
-      - name: Install OpenGX
-        run: dkp-pacman -S --needed --noconfirm gamecube-dev gamecube-opengx libogc
+      - name: Verify libogc2 storage and OpenGX packages
+        run: |
+          test -f "$DEVKITPRO/libogc2/gamecube/include/fat.h"
+          test -f "$DEVKITPRO/libogc2/gamecube/lib/libopengx.a"
+          dkp-pacman -Q | grep -E 'libogc2|devkitPPC'
       - name: Locate libogc installation
         run: |
           find "$DEVKITPRO" -name gccore.h -print
           find "$DEVKITPRO" -name 'libogc.a' -print
-          test -f "$DEVKITPRO/libogc/include/gccore.h"
-          test -f "$DEVKITPRO/libogc/lib/cube/libogc.a"
+          test -f "$DEVKITPRO/libogc2/gamecube/include/gccore.h"
+          test -f "$DEVKITPRO/libogc2/gamecube/lib/libogc.a"
           find "$DEVKITPRO" -name 'libbba.a' -o -name 'liblwip.a' -o -name 'libnetwork*.a' -print
       - name: Show toolchain
         run: |
@@ -102,7 +116,7 @@ jobs:
           echo "DEVKITPPC=$DEVKITPPC"
           test -x "$DEVKITPPC/bin/powerpc-eabi-gcc"
           "$DEVKITPPC/bin/powerpc-eabi-gcc" --version
-          test -f "$DEVKITPRO/portlibs/gamecube/lib/libopengx.a"
+          test -f "$DEVKITPRO/libogc2/gamecube/lib/libopengx.a"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'

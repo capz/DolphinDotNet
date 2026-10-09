@@ -218,6 +218,13 @@ internal static class ValueIrImporter
                     {
                         var ik=intrinsic(cil);
                         var constraint=constrained; constrained=null;
+                        if(ik==IntrinsicKind.NativeStorage)
+                        {
+                            var storageTarget=resolveCall(cil)??throw new NotSupportedException("Native storage binding is unresolved.");
+                            var storageArgs=new List<IrValue>();for(var n=0;n<storageTarget.ParameterCount;n++)storageArgs.Add(Pop(stack,cil));storageArgs.Reverse();
+                            IrValue? storageResult=storageTarget.ReturnsValue?New(storageTarget.Abi?.Return??CilStackKind.NativeInt):null;
+                            instructions.Add(new ValueIrNativeStorage(storageResult,storageTarget.Key.Name,storageArgs));if(storageResult is {} value)stack.Add(value);break;
+                        }
                         if(constraint is not null&&resolveType(constraint)=="System.ArraySegment`1+Enumerator"&&resolveCall(cil)?.Key.Name=="Dispose") { Pop(stack,cil);break; }
                         if(ik==IntrinsicKind.ObjectGetHashCode){var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableHash(value,input,constraint is not null?nullableValueSize(constraint):4));else instructions.Add(new ValueIrOpaqueStackEffect(1,new[]{value},cil.OpCode));stack.Add(value);break;}
                         if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,constraint is not null?nullableValueSize(constraint):4));else instructions.Add(new ValueIrObjectEquals(value,input,other));stack.Add(value);break;}
@@ -268,7 +275,7 @@ internal static class ValueIrImporter
                             instructions.Add(new ValueIrPrimitiveToString(value,input,primitiveType));stack.Add(value);break;
                         }
                         if(ik==IntrinsicKind.StringCharAt){var index=Pop(stack,cil);var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringOperation(value,"charAt",new[]{str,index}));stack.Add(value);break;}
-                        if(ik is IntrinsicKind.StringEquals or IntrinsicKind.StringStartsWith or IntrinsicKind.StringEndsWith or IntrinsicKind.StringContains or IntrinsicKind.StringIndexOf or IntrinsicKind.StringConcat)
+                        if(ik is IntrinsicKind.StringEquals or IntrinsicKind.StringNotEquals or IntrinsicKind.StringStartsWith or IntrinsicKind.StringEndsWith or IntrinsicKind.StringContains or IntrinsicKind.StringIndexOf or IntrinsicKind.StringConcat)
                         {
                             var right=Pop(stack,cil);var left=Pop(stack,cil);var kind=ik==IntrinsicKind.StringConcat?CilStackKind.ObjectReference:CilStackKind.I4;var value=New(kind);
                             instructions.Add(new ValueIrStringOperation(value,ik.ToString(),new[]{left,right}));stack.Add(value);break;
@@ -339,11 +346,11 @@ internal static class ValueIrImporter
                     }
                     case 0x7b or 0x7c:
                     {
-                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(cil.OpCode==0x7c||field.StorageSize>0?CilStackKind.ManagedPointer:field.IsReference?CilStackKind.ObjectReference:field.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name,cil.OpCode==0x7c));stack.Add(value);break;
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field in {method.Key} at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(cil.OpCode==0x7c||field.StorageSize>0?CilStackKind.ManagedPointer:field.IsReference?CilStackKind.ObjectReference:field.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name,cil.OpCode==0x7c));stack.Add(value);break;
                     }
                     case 0x7d:
                     {
-                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var obj=Pop(stack,cil);instructions.Add(new ValueIrStoreField(obj,value,field.DeclaringType,field.Name));break;
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field in {method.Key} at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var obj=Pop(stack,cil);instructions.Add(new ValueIrStoreField(obj,value,field.DeclaringType,field.Name));break;
                     }
                     case 0x7e:
                     {
