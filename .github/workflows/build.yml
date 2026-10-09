@@ -49,10 +49,24 @@ jobs:
       - name: Compile generated AOT C
         run: cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/aot_smoke.c -o /tmp/aot_smoke.o
       - name: Compile and execute generic sharing integration smoke
+        timeout-minutes: 3
         run: |
           dotnet build tests/GenericSharingSmoke/GenericSharingSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot tests/GenericSharingSmoke/bin/Release/net8.0/GenericSharingSmoke.dll /tmp/generic_sharing_value.c
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/generic_sharing_value.c -o /tmp/generic_sharing_value.o
+          echo 'Primitive formatting calls in generated C:'
+          grep -n -E 'dnd_string_from_(u64|i64)' /tmp/generic_sharing_value.c | head -60 || true
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/generic_sharing_value
+          timeout 30s /tmp/generic_sharing_value
+          timeout 30s /tmp/generic_sharing_value --gc-stress
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/generic_sharing_sanitized
+          timeout 30s /tmp/generic_sharing_sanitized --gc-stress
+      - name: Validate 32-bit managed dispatch and GC
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y gcc-multilib
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/generic_sharing_32
+          timeout 30s /tmp/generic_sharing_32
+          timeout 30s /tmp/generic_sharing_32 --gc-stress
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
       - name: Verify generated source
@@ -98,6 +112,16 @@ jobs:
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll generated/managed_gamecube.c
       - name: Build ELF and DOL
         run: make V=1
+      - name: Report GameCube runtime footprint
+        run: |
+          mkdir -p footprint
+          "$DEVKITPPC/bin/powerpc-eabi-size" DolphinDotNet.elf > footprint/elf-size.txt
+          "$DEVKITPPC/bin/powerpc-eabi-nm" -S --size-sort DolphinDotNet.elf > footprint/symbol-sizes.txt
+          cat footprint/elf-size.txt
+          grep managed_heap_memory footprint/symbol-sizes.txt
+          find build -name '*.su' -exec cat {} + > footprint/stack-usage.txt
+          test -s footprint/stack-usage.txt
+          cat footprint/stack-usage.txt
       - name: Verify outputs
         run: |
           test -s DolphinDotNet.elf
@@ -111,4 +135,5 @@ jobs:
             DolphinDotNet.elf
             DolphinDotNet.dol
             DolphinDotNet.map
+            footprint/
           if-no-files-found: error

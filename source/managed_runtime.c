@@ -176,7 +176,10 @@ DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text) {
     const unsigned char *p=(const unsigned char *)text;
     size_t units=0;
     while(*p) {uint32_t cp=utf8_next(&p);units+=cp>0xffff?2u:1u;}
-    if(units>UINT32_MAX)return NULL;
+    if (units > (UINT32_MAX - sizeof(DndString) - 7u) / sizeof(uint16_t) - 1u) {
+        dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY, "UTF-16 string allocation size overflow.");
+        return NULL;
+    }
     DndString *result=(DndString *)allocate(heap,&DND_TYPE_STRING,sizeof(DndString)+(units+1)*sizeof(uint16_t));
     if(!result)return NULL;
     result->length=(uint32_t)units;
@@ -288,7 +291,13 @@ DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, in
     if (start < 0 || length < 0 || (uint32_t)start > value->length || (uint32_t)length > value->length - (uint32_t)start) {
         dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Substring range is invalid."); return NULL;
     }
+    /* Collection during allocation must not reclaim the source string. */
+    DndObject *source_root = (DndObject *)value;
+    DndObject **root_slots[] = { &source_root };
+    DndGcFrame roots;
+    dnd_gc_frame_push(&roots, root_slots, 1);
     DndString *result = (DndString *)allocate(heap, &DND_TYPE_STRING, sizeof(DndString) + ((size_t)length + 1) * sizeof(uint16_t));
+    dnd_gc_frame_pop(&roots);
     if (!result) return NULL;
     result->length = (uint32_t)length;
     if (length) memcpy(result->chars, value->chars + start, (size_t)length * sizeof(uint16_t));
@@ -348,6 +357,10 @@ uint32_t dnd_array_length(DndArray *array) {
 }
 
 uint64_t dnd_array_load_scalar(DndArray *array, uint32_t index, uint32_t size, bool sign_extend) {
+    if (array && array->elements_are_references) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Cannot read object references as scalar values.");
+        return 0;
+    }
     void *address = dnd_managed_array_at(array, index);
     if (!address || size == 0 || size > 8 || size > array->element_size) return 0;
     switch (size) {
@@ -364,11 +377,19 @@ int32_t dnd_array_load_i32(DndArray *array, uint32_t index) {
 }
 
 DndObject *dnd_array_load_ref(DndArray *array, uint32_t index) {
+    if (array && !array->elements_are_references) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Cannot read scalar values as object references.");
+        return NULL;
+    }
     void *address = dnd_managed_array_at(array, index);
     return address ? *(DndObject **)address : NULL;
 }
 
 bool dnd_array_store_scalar(DndArray *array, uint32_t index, uint64_t value, uint32_t size) {
+    if (array && array->elements_are_references) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Cannot overwrite object references with scalar values.");
+        return false;
+    }
     void *address = dnd_managed_array_at(array, index);
     if (!address || size == 0 || size > 8 || size > array->element_size) return false;
     switch (size) {
@@ -627,16 +648,22 @@ void dnd_gc_frame_pop(DndGcFrame *frame) {
     if (gc_frames == frame) gc_frames = frame->previous;
 }
 
+/* Marking is iterative: the GameCube stack must not grow with object graph depth.
+   State 1 is discovered; state 2 has had its outgoing references scanned. */
 static void mark_object(DndManagedHeap *heap, DndObject *object) {
     if (!object || !in_heap(heap, object)) return;
     DndHeapBlock *block = object_block(object);
     if (block->free || block->marked || !object->type) return;
     block->marked = 1;
+}
+
+static void scan_object_references(DndManagedHeap *heap, DndHeapBlock *block) {
+    DndObject *object = block_object(block);
     const DndType *type = object->type;
     for (const DndType *current = type; current; current = current->base_type) {
         for (uint16_t i = 0; i < current->reference_count; i++) {
             uint32_t offset = current->reference_offsets[i];
-            if (offset + sizeof(void *) <= block->size)
+            if ((size_t)offset <= block->size && sizeof(void *) <= block->size - offset)
                 mark_object(heap, *(DndObject **)((uint8_t *)object + offset));
         }
     }
@@ -647,9 +674,13 @@ static void mark_object(DndManagedHeap *heap, DndObject *object) {
                 mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size));
         } else if (array->element_type && array->element_type->reference_count) {
             for (uint32_t i = 0; i < array->length; i++)
-                for (uint16_t r = 0; r < array->element_type->reference_count; r++)
-                    mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size +
-                        array->element_type->reference_offsets[r] - sizeof(DndObject)));
+                for (uint16_t r = 0; r < array->element_type->reference_count; r++) {
+                    uint32_t offset = array->element_type->reference_offsets[r];
+                    if (offset >= sizeof(DndObject) &&
+                        (size_t)(offset - sizeof(DndObject)) <= array->element_size &&
+                        sizeof(void *) <= array->element_size - (offset - sizeof(DndObject)))
+                        mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size + offset - sizeof(DndObject)));
+                }
         }
     }
 }
@@ -668,6 +699,19 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     for (DndGcFrame *frame = gc_frames; frame; frame = frame->previous)
         for (size_t i = 0; i < frame->count; i++)
             if (frame->slots[i]) mark_object(heap, *frame->slots[i]);
+
+    /* No recursion and no allocations during collection. Each pass processes
+       every newly discovered object, including cyclic and deeply linked graphs. */
+    bool pending;
+    do {
+        pending = false;
+        for (DndHeapBlock *block = first_block(heap); block; block = block->next)
+            if (!block->free && block->marked == 1) {
+                block->marked = 2;
+                scan_object_references(heap, block);
+                pending = true;
+            }
+    } while (pending);
 
     for (DndHeapBlock *block = first_block(heap); block; block = block->next)
         if (!block->free && !block->marked) {

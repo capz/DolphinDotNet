@@ -24,20 +24,42 @@ internal static class MetadataLoader
     foreach(var fh in type.GetFields())
     {
      var field=md.GetFieldDefinition(fh);var isStatic=(field.Attributes&FieldAttributes.Static)!=0;var(size,reference)=FieldLayout(md,field.Signature,model);
-     var align=Math.Min(Math.Max(size,1),4);if(!isStatic)offset=Align(offset,align);
-     var name=md.GetString(field.Name);model.Fields[(p.Full,name)]=new(p.Full,name,isStatic?0:offset,reference,isStatic,size);if(!isStatic)offset+=size;
+     var align=Math.Min(Math.Max(size,1),8);if(!isStatic)offset=Align(offset,align);
+     var name=md.GetString(field.Name);var fieldReader=md.GetBlobReader(field.Signature);fieldReader.ReadSignatureHeader();
+     var fieldCode=fieldReader.ReadSignatureTypeCode();var aggregateSize=0;IReadOnlyList<int>? embedded=null;
+     if(fieldCode==SignatureTypeCode.GenericTypeInstance) { fieldReader.Offset--;var layout=GenericSharing.ReadGenericLocalLayout(md,ref fieldReader,model);aggregateSize=layout.Size;embedded=layout.References; }
+     model.Fields[(p.Full,name)]=new(p.Full,name,isStatic?0:offset,reference,isStatic,size,aggregateSize,embedded);if(!isStatic)offset+=size;
     }
-    model.Types[p.Full]=new(p.Ns,p.Name,p.Full,p.Base,offset,p.Interface,p.ValueType,p.Interfaces);unresolved.Remove(p.Full);progress=true;
+    model.Types[p.Full]=new(p.Ns,p.Name,p.Full,p.Base,p.ValueType?offset:Align(offset,8),p.Interface,p.ValueType,p.Interfaces);unresolved.Remove(p.Full);progress=true;
     foreach(var mh in type.GetMethods()){var m=md.GetMethodDefinition(mh);var key=new MethodKey(p.Full,md.GetString(m.Name),assemblyName,Convert.ToHexString(md.GetBlobBytes(m.Signature)));var sig=ReadMethodSignature(md,m.Signature);model.Methods[key]=new(key,mh,(m.Attributes&MethodAttributes.Static)!=0,sig.Parameters,sig.ReturnsValue,assemblyName,(m.Attributes&MethodAttributes.Virtual)!=0,(m.Attributes&MethodAttributes.Abstract)!=0,(m.Attributes&MethodAttributes.NewSlot)!=0,p.Interface,p.Base=="System.MulticastDelegate");}
    }
    if(!progress)throw new InvalidDataException("Unable to resolve type layout inheritance.");
   }
  }
+ internal static void SpecializeFields(CompilationModel model,MethodModel definition,string typeName,IReadOnlyList<GenericRepresentation> args)
+ {
+  var md=model.Assemblies[definition.AssemblyName].Metadata;
+  var type=md.GetTypeDefinition(md.GetMethodDefinition(definition.Handle).GetDeclaringType());
+  var provider=new SignatureAbi(model);var context=new SignatureAbi.Context(args,Array.Empty<GenericRepresentation>());var offset=0;
+  foreach(var handle in type.GetFields())
+  {
+   var field=md.GetFieldDefinition(handle);var name=md.GetString(field.Name);var decoded=field.DecodeSignature(provider,context);
+   var isStatic=(field.Attributes&FieldAttributes.Static)!=0;var reference=decoded.Kind==CilStackKind.ObjectReference;
+   var size=decoded.Size>0?decoded.Size:reference||decoded.Kind==CilStackKind.I8?8:4;
+   var original=model.Fields[(model.Types[typeName].GenericDefinition!,name)];
+   if(original.Size<4&&decoded.Size==0&&!reference)size=original.Size;
+   if(!isStatic)offset=Align(offset,Math.Min(size,8));
+   model.Fields[(typeName,name)]=new(typeName,name,isStatic?0:offset,reference,isStatic,size,decoded.Size,decoded.References);
+   if(!isStatic)offset+=size;
+  }
+  model.Types[typeName]=model.Types[typeName] with { InstanceSize=Align(offset,8) };
+ }
+
  public static string? ResolveTypeName(MetadataReader md,EntityHandle h)
  {
   if(h.IsNil)return null;
-  if(h.Kind==HandleKind.TypeDefinition){var t=md.GetTypeDefinition((TypeDefinitionHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}
-  if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return Full(md.GetString(t.Namespace),md.GetString(t.Name));}
+  if(h.Kind==HandleKind.TypeDefinition){var t=md.GetTypeDefinition((TypeDefinitionHandle)h);return DefinitionFullName(md,(TypeDefinitionHandle)h);}
+  if(h.Kind==HandleKind.TypeReference){var t=md.GetTypeReference((TypeReferenceHandle)h);return ReferenceFullName(md,(TypeReferenceHandle)h);}
   if(h.Kind==HandleKind.TypeSpecification)return ResolveTypeSpecificationName(md,(TypeSpecificationHandle)h);
   return null;
  }
@@ -73,12 +95,15 @@ internal static class MetadataLoader
    SignatureTypeCode.Int64 or SignatureTypeCode.UInt64 or SignatureTypeCode.Double=>(8,false),
    SignatureTypeCode.Single or SignatureTypeCode.Int32 or SignatureTypeCode.UInt32=>(4,false),
    SignatureTypeCode.IntPtr or SignatureTypeCode.UIntPtr=>(4,false),
-   SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>(4,true),
+   SignatureTypeCode.String or SignatureTypeCode.Object or SignatureTypeCode.SZArray or SignatureTypeCode.Array=>(8,true),
    SignatureTypeCode.TypeHandle=>ReadTypeHandleLayout(md,ref r,model),
-   _=>(4,false)
+   SignatureTypeCode.GenericTypeInstance=>ReadGenericFieldLayout(md,ref r,model),
+   _=>(8,false)
   };
  }
- private static (int Size,bool Reference) ReadTypeHandleLayout(MetadataReader md,ref BlobReader r,CompilationModel model){var h=r.ReadTypeHandle();var name=ResolveTypeName(md,h);return name is not null&&model.Types.TryGetValue(name,out var t)&&t.IsValueType?(Math.Max(1,t.InstanceSize),false):(4,true);}
+ private static (int Size,bool Reference) ReadGenericFieldLayout(MetadataReader md,ref BlobReader reader,CompilationModel model)
+ { reader.Offset--;var layout=GenericSharing.ReadGenericLocalLayout(md,ref reader,model);return layout.Size>0?(layout.Size,false):(8,true); }
+ private static (int Size,bool Reference) ReadTypeHandleLayout(MetadataReader md,ref BlobReader r,CompilationModel model){var h=r.ReadTypeHandle();var name=ResolveTypeName(md,h);return name is not null&&model.Types.TryGetValue(name,out var t)&&t.IsValueType?(Math.Max(1,t.InstanceSize),false):(8,true);}
  private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
  private static string DefinitionFullName(MetadataReader md,TypeDefinitionHandle handle){var t=md.GetTypeDefinition(handle);var name=md.GetString(t.Name);var declaring=t.GetDeclaringType();return declaring.IsNil?Full(md.GetString(t.Namespace),name):DefinitionFullName(md,declaring)+"+"+name;}
  private static string ReferenceFullName(MetadataReader md,TypeReferenceHandle handle){var t=md.GetTypeReference(handle);var name=md.GetString(t.Name);return t.ResolutionScope.Kind==HandleKind.TypeReference?ReferenceFullName(md,(TypeReferenceHandle)t.ResolutionScope)+"+"+name:Full(md.GetString(t.Namespace),name);}

@@ -6,6 +6,7 @@ internal static class ValueCBackend
     public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry,CompilationModel model,DependencyGraph graph)
     {
         var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\nstatic DndManagedHeap *dnd_value_heap;");
+        b.AppendLine("static inline int32_t dnd_read_i32(const void *p) { int32_t v; memcpy(&v,p,sizeof(v)); return v; }\nstatic inline int64_t dnd_read_i64(const void *p) { int64_t v; memcpy(&v,p,sizeof(v)); return v; }");
         var stringLiterals=methods.SelectMany(m=>m.Blocks).SelectMany(block=>block.Instructions).OfType<ValueIrLoadString>().Select(x=>x.Value).Distinct(StringComparer.Ordinal).OrderBy(x=>x,StringComparer.Ordinal).ToArray();
         var stringIds=stringLiterals.Select((value,index)=>(value,index)).ToDictionary(x=>x.value,x=>x.index,StringComparer.Ordinal);
         foreach(var literal in stringLiterals)
@@ -28,8 +29,8 @@ internal static class ValueCBackend
         foreach(var tn in graph.Types.OrderBy(x=>x))
         {
             if(!model.Types.TryGetValue(tn,out var t))continue;
-            var refs=model.Fields.Values.Where(f=>f.DeclaringType==tn&&f.IsReference).OrderBy(f=>f.Offset).ToArray();
-            if(refs.Length>0)b.AppendLine($"static const uint32_t dnd_refs_{Id(tn)}[] = {{ {string.Join(", ",refs.Select(r=>$"sizeof(DndObject)+{BasePayloadSize(tn,model)}u+{r.Offset}u"))} }};");
+            var refs=model.Fields.Values.Where(f=>f.DeclaringType==tn&&!f.IsStatic).SelectMany(f=>f.IsReference?new[]{f.Offset}:(f.ReferenceOffsets??Array.Empty<int>()).Select(o=>f.Offset+o)).OrderBy(o=>o).ToArray();
+            if(refs.Length>0)b.AppendLine($"static const uint32_t dnd_refs_{Id(tn)}[] = {{ {string.Join(", ",refs.Select(r=>$"sizeof(DndObject)+{BasePayloadSize(tn,model)}u+{r}u"))} }};");
             var parent=t.BaseType!=null&&graph.Types.Contains(t.BaseType)&&model.Types.ContainsKey(t.BaseType)?$"&dnd_type_{Id(t.BaseType)}":"&DND_TYPE_OBJECT";
             var totalSize=TotalInstanceSize(tn,model);
             var slots=VirtualSlots(tn,model,compiledKeys);
@@ -61,10 +62,12 @@ internal static class ValueCBackend
         foreach(var m in wrapperMethods)
         {
             var n=m.ParameterCount+(m.HasThis?1:0);
+            var abi=model.Methods[m.Key].Abi;
+            var wideReturn=abi?.Return==CilStackKind.I8;
             b.Append($"static intptr_t {WrapperSymbol(m.Key)}(intptr_t *args) {{ ");
-            if(m.ReturnsValue)b.Append("return ");else b.Append("(void)");
-            b.Append($"{Symbol(m.Key)}({string.Join(", ",Enumerable.Range(0,n).Select(i=>$"args[{i}]"))});");
-            if(!m.ReturnsValue)b.Append(" return 0;");
+            b.Append(wideReturn?$"*(int64_t*)args[{n}] = ":m.ReturnsValue?"return ":"(void)");
+            b.Append($"{Symbol(m.Key)}({string.Join(", ",Enumerable.Range(0,n).Select(i=>i>=(m.HasThis?1:0)&&abi?.Parameters[i-(m.HasThis?1:0)]==CilStackKind.I8?$"*(int64_t*)args[{i}]":$"args[{i}]"))});");
+            if(!m.ReturnsValue||wideReturn)b.Append(" return 0;");
             b.AppendLine(" }");
         }
         foreach(var group in methods.GroupBy(m=>(m.Key.TypeName,m.Key.Name)).Where(g=>g.Count()==1)){var m=group.Single();var alias=LegacySymbol(m.Key);if(alias==Symbol(m.Key))continue;b.Append($"{ReturnCType(m,model)} {alias}({Parameters(m,model)}) {{ return {Symbol(m.Key)}(");b.Append(string.Join(", ",Enumerable.Range(0,m.ParameterCount+(m.HasThis?1:0)).Select(i=>$"a{i}")));b.AppendLine("); }");}
@@ -86,12 +89,38 @@ internal static class ValueCBackend
         b.Append(Parameters(method,model));
         b.AppendLine(") {");
         for(var ai=0;ai<method.ParameterCount+(method.HasThis?1:0);ai++)b.AppendLine($"  (void)a{ai};");
-        foreach(var v in values)b.AppendLine($"  {ValueStorageCType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
-        foreach(var local in method.Locals){b.AppendLine(local.StorageSize>0?$"  uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {CType(local.Kind)} l{local.Index} = 0;");b.AppendLine($"  (void)l{local.Index};");}
+        // Struct arguments travel as addresses, but are private value copies in
+        // the callee. ldarga must address the copy, never the ABI pointer slot.
+        var argumentStorage=model.Methods.TryGetValue(method.Key,out var signatureMethod)
+            ?signatureMethod.Abi?.ParameterStorage:null;
+        for(var pi=0;pi<(argumentStorage?.Count??0);pi++)
+        {
+            var storage=argumentStorage![pi]; if(storage.Size==0)continue;
+            var ai=pi+(method.HasThis?1:0);
+            b.AppendLine($"  _Alignas(8) uint8_t arg_{ai}[{storage.Size}]; memcpy(arg_{ai}, (void*)a{ai}, {storage.Size}u); a{ai}=(intptr_t)arg_{ai};");
+        }
+        foreach(var region in method.ExceptionRegions.Where(r=>r.Kind==ValueIrExceptionRegionKind.Catch))
+            b.AppendLine($"  volatile intptr_t dnd_caught_{region.HandlerOffset}=0;");
+        foreach(var v in values)b.AppendLine($"  {(method.ExceptionRegions.Count>0?"volatile ":"")}{ValueStorageCType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
+        foreach(var local in method.Locals){b.AppendLine(local.StorageSize>0?$"  _Alignas(8) uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {(method.ExceptionRegions.Count>0?"volatile ":"")}{CType(local.Kind)} l{local.Index} = 0;");b.AppendLine($"  (void)l{local.Index};");}
+        var leavePaths=method.Blocks.Where(x=>x.Terminator is ValueIrLeave)
+            .Select((x,index)=>(Block:x,Leave:(ValueIrLeave)x.Terminator!,Id:index)).ToArray();
+        if(leavePaths.Length>0 || method.Blocks.Any(x=>x.Terminator is ValueIrEndFinally))b.AppendLine("  volatile int32_t dnd_leave_id = -1; volatile int32_t dnd_leave_step = 0; (void)dnd_leave_id; (void)dnd_leave_step;");
         var roots=values.Where(v=>v.Kind==IrValueKind.ObjectReference).Select(v=>$"(DndObject**)&v{v.Id}").ToList();
         roots.AddRange(method.Locals.Where(l=>l.Kind==IrValueKind.ObjectReference).Select(l=>$"(DndObject**)&l{l.Index}"));
         roots.AddRange(method.Locals.SelectMany(l=>(l.ReferenceOffsets??Array.Empty<int>()).Select(offset=>$"(DndObject**)(l{l.Index}+{offset})")));
+        roots.AddRange(method.ExceptionRegions.Where(r=>r.Kind==ValueIrExceptionRegionKind.Catch).Select(r=>$"(DndObject**)&dnd_caught_{r.HandlerOffset}"));
         if(method.HasThis)roots.Add("(DndObject**)&a0");
+        /* Incoming managed references must remain roots even before their first
+           IL load. Callees can allocate while the argument is still live. */
+        if(model.Methods.TryGetValue(method.Key,out var rootMethod) && rootMethod.Abi is { } rootAbi)
+            for(var pi=0;pi<method.ParameterCount && pi<rootAbi.Parameters.Count;pi++)
+                if(rootAbi.Parameters[pi]==CilStackKind.ObjectReference)
+                    roots.Add($"(DndObject**)&a{pi+(method.HasThis?1:0)}");
+        if(argumentStorage is not null)
+            for(var pi=0;pi<argumentStorage.Count;pi++)
+                foreach(var offset in argumentStorage[pi].ReferenceOffsets??Array.Empty<int>())
+                    roots.Add($"(DndObject**)(arg_{pi+(method.HasThis?1:0)}+{offset})");
         if(roots.Count>0)
         {
             b.AppendLine($"  DndObject **gc_slots[{roots.Count}] = {{ {string.Join(", ",roots)} }};");
@@ -99,24 +128,25 @@ internal static class ValueCBackend
         }
         if(method.ExceptionRegions.Count>0)
         {
-            b.AppendLine("  volatile int32_t dnd_eh_site = -1; volatile int dnd_eh_active = 1; DndEhFrame dnd_eh_frame;");
+            b.AppendLine("  volatile int32_t dnd_eh_site = -1; volatile int32_t dnd_eh_unwind_finally_length = -1; volatile int dnd_eh_active = 1; DndEhFrame dnd_eh_frame; (void)dnd_eh_unwind_finally_length;");
             b.AppendLine("  dnd_eh_push(&dnd_eh_frame);");
             b.AppendLine("  if (setjmp(dnd_eh_frame.environment) != 0) {");
-            foreach(var region in method.ExceptionRegions.OrderBy(r=>r.TryLength))
+            foreach(var region in method.ExceptionRegions.OrderBy(r=>r.TryLength).ThenBy(r=>r.Kind==ValueIrExceptionRegionKind.Catch?0:1))
             {
                 var handler=method.Blocks.FirstOrDefault(x=>x.CilOffset==region.HandlerOffset);
                 if(handler is null)continue;
                 if(region.Kind==ValueIrExceptionRegionKind.Finally)
-                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength}) goto block_{handler.Id};");
+                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength} && dnd_eh_unwind_finally_length < {region.TryLength}) {{ dnd_eh_unwind_finally_length = {region.TryLength}; dnd_eh_push(&dnd_eh_frame); goto block_{handler.Id}; }}");
                 else if(region.Kind==ValueIrExceptionRegionKind.Catch)
                 {
                     var exceptionValue=handler.EntryStack.Values.FirstOrDefault();
                     var assign=handler.EntryStack.Values.Count>0?$"v{exceptionValue.Id} = (intptr_t)dnd_exception_object(); ":"";
                     var match=region.CatchType is null?"true":$"dnd_exception_matches({TypeExpr(region.CatchType)})";
-                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength} && {match}) {{ {assign}dnd_exception_begin_catch(); goto block_{handler.Id}; }}");
+                    b.AppendLine($"    if (dnd_eh_site >= {region.TryOffset} && dnd_eh_site < {region.TryOffset+region.TryLength} && {match}) {{ dnd_caught_{region.HandlerOffset}=(intptr_t)dnd_exception_object(); {assign}dnd_exception_begin_catch(); dnd_eh_site = {region.HandlerOffset}; dnd_eh_push(&dnd_eh_frame); goto block_{handler.Id}; }}");
                 }
             }
             b.AppendLine("    if (dnd_eh_active) { dnd_eh_pop(&dnd_eh_frame); dnd_eh_active = 0; }");
+            if(roots.Count>0)b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");
             b.AppendLine("    dnd_exception_rethrow(); return 0;");
             b.AppendLine("  }");
         }
@@ -127,7 +157,7 @@ internal static class ValueCBackend
             if(method.ExceptionRegions.Count>0)
             {
                 var protectedHere=method.ExceptionRegions.Any(r=>block.CilOffset>=r.TryOffset&&block.CilOffset<r.TryOffset+r.TryLength);
-                if(protectedHere)b.AppendLine($"  dnd_eh_site = {block.CilOffset};");
+                b.AppendLine(protectedHere?$"  if (!dnd_exception_pending()) dnd_eh_site = {block.CilOffset};":"  if (!dnd_exception_pending()) dnd_eh_site = -1;");
             }
             foreach(var i in block.Instructions)
             {
@@ -143,21 +173,26 @@ internal static class ValueCBackend
                     case ValueIrNullableInit x:
                     {
                         var ct=x.ValueSize==8?"int64_t":"int32_t";
-                        b.AppendLine($"  *(uint8_t*)v{x.Address.Id} = 1; *({ct}*)((uint8_t*)v{x.Address.Id}+4) = ({ct})v{x.Value.Id};");break;
+                        b.AppendLine($"  *(uint8_t*)v{x.Address.Id} = 1; {{ {ct} value=({ct})v{x.Value.Id}; memcpy((uint8_t*)v{x.Address.Id}+4,&value,sizeof(value)); }}");break;
                     }
                     case ValueIrNullableHasValue x:b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} != 0;");break;
                     case ValueIrNullableGetValue x:
                     {
                         var ct=x.ValueSize==8?"int64_t":"int32_t";
                         if(x.ThrowIfEmpty)b.AppendLine($"  if(!*(uint8_t*)v{x.Address.Id}) dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION, \"Nullable object must have a value.\");");
-                        b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? *({ct}*)((uint8_t*)v{x.Address.Id}+4) : 0;");break;
+                        b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? {(x.ValueSize==8?"dnd_read_i64":"dnd_read_i32")}((uint8_t*)v{x.Address.Id}+4) : 0;");break;
                     }
-                    case ValueIrAddressOfArgument x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&a{x.Index};");break;
+                    case ValueIrAddressOfArgument x:
+                    {
+                        var pi=x.Index-(method.HasThis?1:0);
+                        var aggregate=argumentStorage is not null&&pi>=0&&pi<argumentStorage.Count&&argumentStorage[pi].Size>0;
+                        b.AppendLine(aggregate?$"  v{x.Result.Id} = a{x.Index};":$"  v{x.Result.Id} = (intptr_t)&a{x.Index};");break;
+                    }
                     case ValueIrStoreArgument x:b.AppendLine($"  a{x.Index} = v{x.Value.Id};");break;
                     case ValueIrLoadIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  v{x.Result.Id} = *({ct}*)v{x.Address.Id};");break;}
                     case ValueIrStoreIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  *({ct}*)v{x.Address.Id} = ({ct})v{x.Value.Id};");break;}
                     case ValueIrInitObject x:b.AppendLine($"  memset((void*)v{x.Address.Id}, 0, {ValueTypeSize(x.TypeName,model)}u);");break;
-                    case ValueIrCopyObject x:b.AppendLine($"  memcpy((void*)v{x.Destination.Id}, (void*)v{x.Source.Id}, {ValueTypeSize(x.TypeName,model)}u);");break;
+                    case ValueIrCopyObject x:b.AppendLine($"  memcpy((void*)v{x.Destination.Id}, (void*)v{x.Source.Id}, {(x.Size>0?x.Size:ValueTypeSize(x.TypeName,model))}u);");break;
                     case ValueIrConvert x:b.AppendLine($"  v{x.Result.Id} = ({CType(x.Result.Kind)})v{x.Value.Id};");break;
                     case ValueIrBinary x:{var unsigned=x.Operation.EndsWith(".un",StringComparison.Ordinal);var op=Op(x.Operation);var l=unsigned?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";var r=unsigned?$"(uintptr_t)v{x.Right.Id}":$"v{x.Right.Id}";b.AppendLine($"  v{x.Result.Id} = {l} {op} {r};");break;}
                     case ValueIrObjectEquals x:
@@ -185,17 +220,10 @@ internal static class ValueCBackend
                     case ValueIrCall x:
                     {
                         var args=string.Join(", ",x.Arguments.Select(a=>$"v{a.Id}"));
-                        if(x.Interface)
+                        if(x.Interface||x.Virtual)
                         {
-                            var slot=InterfaceSlot(x.Target,model);
-                            b.AppendLine($"  {{ intptr_t call_args[{Math.Max(1,x.Arguments.Count)}] = {{ {args} }}; DndManagedMethod target=dnd_interface_resolve((DndObject*)call_args[0], &dnd_type_{Id(x.Target.TypeName)}, {slot}u);");
-                            b.AppendLine(x.Result is { } ir?$"    v{ir.Id} = target ? target(call_args) : 0; }}":$"    if(target) (void)target(call_args); }}");
-                        }
-                        else if(x.Virtual)
-                        {
-                            var slot=VirtualSlot(x.Target,model);
-                            b.AppendLine($"  {{ intptr_t call_args[{Math.Max(1,x.Arguments.Count)}] = {{ {args} }}; DndManagedMethod target=dnd_virtual_resolve((DndObject*)call_args[0], {slot}u);");
-                            b.AppendLine(x.Result is { } vr?$"    v{vr.Id} = target ? target(call_args) : 0; }}":$"    if(target) (void)target(call_args); }}");
+                            var resolution=x.Interface?$"dnd_interface_resolve((DndObject*)call_args[0], &dnd_type_{Id(x.Target.TypeName)}, {InterfaceSlot(x.Target,model)}u)":$"dnd_virtual_resolve((DndObject*)call_args[0], {VirtualSlot(x.Target,model)}u)";
+                            EmitDispatch(b,x.Arguments,x.Result,resolution);
                         }
                         else b.AppendLine(x.Result is { } r?$"  v{r.Id} = {Symbol(x.Target)}({args});":$"  (void){Symbol(x.Target)}({args});");
                         break;
@@ -203,19 +231,44 @@ internal static class ValueCBackend
                     case ValueIrNewObject x:{var args=string.Join(", ",new[]{$"(intptr_t)v{x.Result.Id}"}.Concat(x.Arguments.Select(a=>$"v{a.Id}")));if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_object_new(dnd_value_heap, &dnd_type_{Id(x.TypeName)});");b.AppendLine($"  (void){Symbol(x.Constructor)}({args});");break;}
                     case ValueIrNewException x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_exception_new(dnd_value_heap, {TypeExpr(x.TypeName)}, {(x.Message is { } m?$"(DndString*)v{m.Id}":"NULL")});");break;
                     case ValueIrExceptionMessage x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_exception_get_message((DndException*)v{x.Exception.Id});");break;
-                    case ValueIrLoadField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.Object.Id})) v{x.Result.Id} = *({ct}*)((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset});");break;}
-                    case ValueIrStoreField x:{var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.Object.Id})) *({ct}*)((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset}) = ({ct})v{x.Value.Id};");break;}
+                    case ValueIrLoadField x:
+                    {
+                        var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);
+                        var address=$"((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset})";
+                        b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.Object.Id})) v{x.Result.Id} = {(x.Address||field.StorageSize>0?$"(intptr_t){address}":$"*({ct}*){address}")};");break;
+                    }
+                    case ValueIrStoreField x:
+                    {
+                        var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);
+                        var address=$"((uint8_t*)v{x.Object.Id}+sizeof(DndObject)+{BasePayloadSize(x.TypeName,model)}+{field.Offset})";
+                        b.AppendLine(field.StorageSize>0?$"  if(dnd_require_object((DndObject*)v{x.Object.Id})) memcpy({address},(void*)v{x.Value.Id},{field.StorageSize}u);":$"  if(dnd_require_object((DndObject*)v{x.Object.Id})) *({ct}*){address}=({ct})v{x.Value.Id};");break;
+                    }
                     case ValueIrLoadStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = {StaticSymbol(field)};");break;}
                     case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
                     case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
-                    case ValueIrStringLength x:b.AppendLine($"  v{x.Result.Id} = ((DndString*)v{x.String.Id})->length;");break;
+                    case ValueIrStringLength x:b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.String.Id})) v{x.Result.Id} = ((DndString*)v{x.String.Id})->length;");break;
                     case ValueIrPrimitiveToString x:
+                    {
+                        // Primitive instance ToString receives a managed address (ldloca/ldarga),
+                        // not the numeric value itself. Dereference with the primitive's width.
+                        var raw=$"v{x.Value.Id}";
+                        var pointer=x.Value.Kind==IrValueKind.ManagedPointer;
+                        var signed=x.TypeName is "System.SByte" or "System.Int16" or "System.Int32" or "System.Int64";
+                        var width=x.TypeName switch {
+                            "System.Boolean" or "System.Byte" or "System.SByte"=>8,
+                            "System.Char" or "System.Int16" or "System.UInt16"=>16,
+                            "System.Int64" or "System.UInt64"=>64,
+                            _=>32
+                        };
+                        var numeric=pointer?$"(*({(signed?"int":"uint")}{width}_t*)(intptr_t){raw})":$"({(signed?"int":"uint")}{width}_t){raw}";
                         b.AppendLine(x.TypeName switch {
-                            "System.Boolean"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_bool(dnd_value_heap, v{x.Value.Id} != 0);",
-                            "System.Char"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_char(dnd_value_heap, (uint16_t)v{x.Value.Id});",
-                            "System.UInt32" or "System.UInt64"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_u64(dnd_value_heap, (uint64_t)v{x.Value.Id});",
-                            _=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_i64(dnd_value_heap, (int64_t)v{x.Value.Id});"
-                        });break;
+                            "System.Boolean"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_bool(dnd_value_heap, {numeric} != 0);",
+                            "System.Char"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_char(dnd_value_heap, (uint16_t){numeric});",
+                            "System.UInt32" or "System.UInt64" or "System.Byte" or "System.UInt16"=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_u64(dnd_value_heap, (uint64_t){numeric});",
+                            _=>$"  v{x.Result.Id} = (intptr_t)dnd_string_from_i64(dnd_value_heap, (int64_t){numeric});"
+                        });
+                        break;
+                    }
                     case ValueIrStringOperation x:
                     {
                         var a=x.Arguments;
@@ -237,48 +290,50 @@ internal static class ValueCBackend
                     case ValueIrNullableGetValueOrDefault x:
                     {
                         var ct=x.ValueSize==8?"int64_t":"int32_t";
-                        b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? *({ct}*)((uint8_t*)v{x.Address.Id}+4) : ({ct})v{x.DefaultValue.Id};");break;
+                        b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? {(x.ValueSize==8?"dnd_read_i64":"dnd_read_i32")}((uint8_t*)v{x.Address.Id}+4) : ({ct})v{x.DefaultValue.Id};");break;
                     }
                     case ValueIrNullableEquals x:
                     {
                         var type=x.ValueSize==8?"&DND_TYPE_INT64":"&DND_TYPE_BOXED_INT32";var ct=x.ValueSize==8?"int64_t":"int32_t";
-                        b.AppendLine($"  v{x.Result.Id} = !*(uint8_t*)v{x.Address.Id} ? (v{x.Other.Id}==0) : (v{x.Other.Id}!=0 && ((DndObject*)v{x.Other.Id})->type=={type} && *({ct}*)((uint8_t*)v{x.Address.Id}+4)==({ct})dnd_unbox_scalar((DndObject*)v{x.Other.Id},{type},{x.ValueSize}u));");break;
+                        b.AppendLine($"  v{x.Result.Id} = !*(uint8_t*)v{x.Address.Id} ? (v{x.Other.Id}==0) : (v{x.Other.Id}!=0 && ((DndObject*)v{x.Other.Id})->type=={type} && {(x.ValueSize==8?"dnd_read_i64":"dnd_read_i32")}((uint8_t*)v{x.Address.Id}+4)==({ct})dnd_unbox_scalar((DndObject*)v{x.Other.Id},{type},{x.ValueSize}u));");break;
                     }
                     case ValueIrNullableHash x:
                     {
-                        if(x.ValueSize==8)b.AppendLine($"  {{ uint64_t h=*(uint8_t*)v{x.Address.Id}?(uint64_t)*(int64_t*)((uint8_t*)v{x.Address.Id}+4):0; v{x.Result.Id}=(int32_t)(h^(h>>32)); }}");
-                        else b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? *(int32_t*)((uint8_t*)v{x.Address.Id}+4) : 0;");
+                        if(x.ValueSize==8)b.AppendLine($"  {{ uint64_t h=*(uint8_t*)v{x.Address.Id}?(uint64_t)dnd_read_i64((uint8_t*)v{x.Address.Id}+4):0; v{x.Result.Id}=(int32_t)(h^(h>>32)); }}");
+                        else b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? dnd_read_i32((uint8_t*)v{x.Address.Id}+4) : 0;");
                         break;
                     }
-                    case ValueIrNewStruct x:{b.AppendLine($"  uint8_t struct_{x.Result.Id}[{x.Size}]={{0}}; v{x.Result.Id}=(intptr_t)struct_{x.Result.Id};");foreach(var f in x.Fields){var ct=f.Reference?"intptr_t":f.Size==8?"int64_t":f.Size==2?"int16_t":f.Size==1?"int8_t":"int32_t";b.AppendLine($"  *({ct}*)(struct_{x.Result.Id}+{f.Offset})=({ct})v{f.Value.Id};");}break;}
+                    case ValueIrNewStruct x:{b.AppendLine($"  _Alignas(8) uint8_t struct_{x.Result.Id}[{x.Size}]={{0}}; v{x.Result.Id}=(intptr_t)struct_{x.Result.Id};");foreach(var f in x.Fields){var ct=f.Reference?"intptr_t":f.Size==8?"int64_t":f.Size==2?"int16_t":f.Size==1?"int8_t":"int32_t";b.AppendLine($"  {{ {ct} value=({ct})v{f.Value.Id}; memcpy(struct_{x.Result.Id}+{f.Offset},&value,sizeof(value)); }}");}break;}
                     case ValueIrStructStore x:{var ct=x.Reference?"intptr_t":x.Size==8?"int64_t":x.Size==2?"int16_t":x.Size==1?"int8_t":"int32_t";b.AppendLine($"  *({ct}*)((uint8_t*)v{x.Address.Id}+{x.Offset})=({ct})v{x.Value.Id};");break;}
                     case ValueIrStructLoad x:{var ct=x.Reference?"intptr_t":x.Size==8?"int64_t":x.Size==2?"int16_t":x.Size==1?"int8_t":"int32_t";b.AppendLine($"  v{x.Result.Id}=*({ct}*)((uint8_t*)v{x.Address.Id}+{x.Offset});");break;}
-                    case ValueIrArraySegmentItem x:{var ct=x.Reference?"intptr_t":x.ElementSize==8?"int64_t":x.ElementSize==2?"int16_t":x.ElementSize==1?"int8_t":"int32_t";b.AppendLine($"  {{ DndArray *a=*(DndArray**)v{x.Address.Id}; int32_t base=*(int32_t*)((uint8_t*)v{x.Address.Id}+4); v{x.Result.Id}=*({ct}*)dnd_managed_array_at(a,(uint32_t)(base+(int32_t)v{x.Index.Id})); }}");break;}
-                    case ValueIrArraySegmentGetEnumerator x:b.AppendLine($"  {{ uint8_t enum_{x.Result.Id}[16]={{0}}; DndArray *a=*(DndArray**)v{x.Segment.Id}; int32_t start=*(int32_t*)((uint8_t*)v{x.Segment.Id}+4); int32_t count=*(int32_t*)((uint8_t*)v{x.Segment.Id}+8); *(DndArray**)enum_{x.Result.Id}=a; *(int32_t*)(enum_{x.Result.Id}+4)=start; *(int32_t*)(enum_{x.Result.Id}+8)=start+count; *(int32_t*)(enum_{x.Result.Id}+12)=start-1; v{x.Result.Id}=(intptr_t)enum_{x.Result.Id}; }}");break;
-                    case ValueIrEnumeratorMoveNext x:b.AppendLine($"  {{ int32_t *cur=(int32_t*)((uint8_t*)v{x.Address.Id}+12); int32_t end=*(int32_t*)((uint8_t*)v{x.Address.Id}+8); if(*cur < end) (*cur)++; v{x.Result.Id}=*cur < end; }}");break;
-                    case ValueIrEnumeratorCurrent x:{var ct=x.Reference?"intptr_t":x.ElementSize==8?"int64_t":x.ElementSize==2?"int16_t":x.ElementSize==1?"int8_t":"int32_t";b.AppendLine($"  {{ DndArray *a=*(DndArray**)v{x.Address.Id}; int32_t cur=*(int32_t*)((uint8_t*)v{x.Address.Id}+12); v{x.Result.Id}=*({ct}*)dnd_managed_array_at(a,(uint32_t)cur); }}");break;}
+                    case ValueIrArraySegmentItem x:{var ct=x.Reference?"intptr_t":x.ElementSize==8?"int64_t":x.ElementSize==2?"int16_t":x.ElementSize==1?"int8_t":"int32_t";b.AppendLine($"  {{ DndArray *a=*(DndArray**)v{x.Address.Id}; int32_t base=*(int32_t*)((uint8_t*)v{x.Address.Id}+8); v{x.Result.Id}=*({ct}*)dnd_managed_array_at(a,(uint32_t)(base+(int32_t)v{x.Index.Id})); }}");break;}
+                    case ValueIrArraySegmentGetEnumerator x:b.AppendLine($"  _Alignas(8) uint8_t enum_{x.Result.Id}[24]={{0}}; DndArray *a=*(DndArray**)v{x.Segment.Id}; int32_t start=*(int32_t*)((uint8_t*)v{x.Segment.Id}+8); int32_t count=*(int32_t*)((uint8_t*)v{x.Segment.Id}+12); *(DndArray**)enum_{x.Result.Id}=a; *(int32_t*)(enum_{x.Result.Id}+8)=start; *(int32_t*)(enum_{x.Result.Id}+12)=start+count; *(int32_t*)(enum_{x.Result.Id}+16)=start-1; v{x.Result.Id}=(intptr_t)enum_{x.Result.Id};");break;
+                    case ValueIrEnumeratorMoveNext x:b.AppendLine($"  {{ int32_t *cur=(int32_t*)((uint8_t*)v{x.Address.Id}+16); int32_t end=*(int32_t*)((uint8_t*)v{x.Address.Id}+12); if(*cur < end) (*cur)++; v{x.Result.Id}=*cur < end; }}");break;
+                    case ValueIrEnumeratorCurrent x:{var ct=x.Reference?"intptr_t":x.ElementSize==8?"int64_t":x.ElementSize==2?"int16_t":x.ElementSize==1?"int8_t":"int32_t";b.AppendLine($"  {{ DndArray *a=*(DndArray**)v{x.Address.Id}; int32_t cur=*(int32_t*)((uint8_t*)v{x.Address.Id}+16); v{x.Result.Id}=*({ct}*)dnd_managed_array_at(a,(uint32_t)cur); }}");break;}
                     case ValueIrBoxNullable x:
                     {
                         var type=x.ValueSize==8?"&DND_TYPE_INT64":"&DND_TYPE_BOXED_INT32";
-                        b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? (intptr_t)dnd_box_scalar(dnd_value_heap, {type}, (uint64_t){(x.ValueSize==8?"*(int64_t*)":"*(int32_t*)")}((uint8_t*)v{x.Address.Id}+4), {x.ValueSize}u) : 0;");
+                        b.AppendLine($"  v{x.Result.Id} = *(uint8_t*)v{x.Address.Id} ? (intptr_t)dnd_box_scalar(dnd_value_heap, {type}, (uint64_t){(x.ValueSize==8?"dnd_read_i64":"dnd_read_i32")}((uint8_t*)v{x.Address.Id}+4), {x.ValueSize}u) : 0;");
                         break;
                     }
                     case ValueIrBox x:
                         if(x.TypeName=="System.Int32")b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_box_i32(dnd_value_heap, (int32_t)v{x.Value.Id});");
-                        else if(IsScalarBoxType(x.TypeName))b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_box_scalar(dnd_value_heap, {TypeExpr(x.TypeName)}, (uint32_t)v{x.Value.Id}, {ValueTypeSize(x.TypeName,model)}u);");
+                        else if(IsScalarBoxType(x.TypeName))b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_box_scalar(dnd_value_heap, {TypeExpr(x.TypeName)}, (uint64_t)v{x.Value.Id}, {ValueTypeSize(x.TypeName,model)}u);");
                         else throw new NotSupportedException($"Boxing {x.TypeName} is not implemented.");
                         break;
                     case ValueIrUnboxAny x:
                         if(x.TypeName=="System.Int32")b.AppendLine($"  v{x.Result.Id} = dnd_unbox_i32((DndObject*)v{x.Object.Id});");
-                        else if(IsScalarBoxType(x.TypeName))b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_unbox_scalar((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)}, {ValueTypeSize(x.TypeName,model)}u);");
+                        else if(IsScalarBoxType(x.TypeName))b.AppendLine($"  v{x.Result.Id} = ({CType(x.Result.Kind)})dnd_unbox_scalar((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)}, {ValueTypeSize(x.TypeName,model)}u);");
                         else throw new NotSupportedException($"Unboxing {x.TypeName} is not implemented.");
                         break;
-                    case ValueIrNewArray x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_array_new_typed(dnd_value_heap, (uint32_t)v{x.Length.Id}, {x.ElementSize}u, {(x.ElementType=="$generic"?(x.ElementsAreReferences?"&DND_TYPE_OBJECT":"NULL"):TypeExpr(x.ElementType))}, {(x.ElementsAreReferences?"true":"false")});");break;
+                    case ValueIrNewArray x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_array_new_typed(dnd_value_heap, (uint32_t)v{x.Length.Id}, {(x.ElementsAreReferences?"sizeof(DndObject*)":$"{x.ElementSize}u")}, {(x.ElementType=="$generic"?(x.ElementsAreReferences?"&DND_TYPE_OBJECT":"NULL"):TypeExpr(x.ElementType))}, {(x.ElementsAreReferences?"true":"false")});");break;
                     case ValueIrArrayElementAddress x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_array_element_address((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id});");break;
                     case ValueIrArrayLength x:b.AppendLine($"  v{x.Result.Id} = dnd_array_length((DndArray*)v{x.Array.Id});");break;
                     case ValueIrArrayOperation x:
                     {
                         var a=x.Arguments;
+                        if(x.InterfaceTarget is not null)
+                            b.AppendLine($"  if(v{a[0].Id} && ((DndObject*)v{a[0].Id})->type==&DND_TYPE_ARRAY) {{");
                         switch(x.Operation)
                         {
                             case "ArrayLength": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_length((DndArray*)v{a[0].Id});"); break;
@@ -310,6 +365,12 @@ internal static class ValueCBackend
                                 break;
                             }
                         }
+                        if(x.InterfaceTarget is { } targetKey)
+                        {
+                            b.AppendLine("  } else {");
+                            EmitDispatch(b,a,x.Result,$"dnd_interface_resolve((DndObject*)call_args[0], &dnd_type_{Id(targetKey.TypeName)}, {InterfaceSlot(targetKey,model)}u)");
+                            b.AppendLine("  }");
+                        }
                         break;
                     }
 
@@ -321,13 +382,30 @@ internal static class ValueCBackend
                     case ValueIrPhi: break; // Assigned on predecessor edges.
                 }
             }
-            EmitTerminator(b,method,block);
+            EmitTerminator(b,method,block,model,leavePaths.Select(x=>(x.Block.Id,x.Leave,x.Id)).ToArray());
         }
         b.AppendLine("}");
         return b.ToString();
     }
 
-    private static void EmitTerminator(StringBuilder b,ValueIrMethod method,ValueIrBlock block)
+    // Dispatch slots are pointer-sized on GameCube. Wide values travel by
+    // address, and a hidden result slot preserves all 64 bits on a 32-bit ABI.
+    private static void EmitDispatch(StringBuilder b,IReadOnlyList<IrValue> arguments,IrValue? result,string resolution)
+    {
+        b.AppendLine("  {");
+        for(var i=0;i<arguments.Count;i++)
+            if(arguments[i].Kind==IrValueKind.I8)b.AppendLine($"    int64_t wide_arg_{i}=v{arguments[i].Id};");
+        var wide=result is { Kind:IrValueKind.I8 };
+        if(wide)b.AppendLine("    int64_t wide_result=0;");
+        var args=arguments.Select((v,i)=>v.Kind==IrValueKind.I8?$"(intptr_t)&wide_arg_{i}":$"v{v.Id}").ToList();
+        if(wide)args.Add("(intptr_t)&wide_result");
+        b.AppendLine($"    intptr_t call_args[{Math.Max(1,args.Count)}]={{ {string.Join(", ",args)} }}; DndManagedMethod target={resolution};");
+        if(wide){b.AppendLine("    if(target) (void)target(call_args);");b.AppendLine($"    v{result!.Value.Id}=wide_result;");}
+        else b.AppendLine(result is { } value?$"    v{value.Id}=target?target(call_args):0;":"    if(target) (void)target(call_args);");
+        b.AppendLine("  }");
+    }
+
+    private static void EmitTerminator(StringBuilder b,ValueIrMethod method,ValueIrBlock block,CompilationModel model,IReadOnlyList<(int BlockId,ValueIrLeave Leave,int Id)> leavePaths)
     {
         switch(block.Terminator)
         {
@@ -340,16 +418,51 @@ internal static class ValueCBackend
             case ValueIrSwitch x:
                 b.AppendLine($"  switch ((int32_t)v{x.Value.Id}) {{");for(var i=0;i<x.Targets.Count;i++){b.AppendLine($"    case {i}:");Edge(b,method,block.Id,x.Targets[i],"      ");b.AppendLine($"      goto block_{x.Targets[i]};");}b.AppendLine("    default:");Edge(b,method,block.Id,x.DefaultBlock,"      ");b.AppendLine($"      goto block_{x.DefaultBlock};");b.AppendLine("  }");break;
             case ValueIrReturn r:
-                if(r.Value is { } v){b.AppendLine($"  {{ intptr_t return_value = v{v.Id};");if(method.ExceptionRegions.Count>0)b.AppendLine("    if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
-                else {if(method.ExceptionRegions.Count>0)b.AppendLine("  if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
+                if(r.Value is { } v){b.AppendLine($"  {{ {ReturnCType(method,model)} return_value = v{v.Id};");if(method.ExceptionRegions.Count>0)b.AppendLine("    if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
+                else {if(method.ExceptionRegions.Count>0)b.AppendLine("  if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
                 break;
+            case ValueIrLeave leave:
+            {
+                var id=leavePaths.Single(x=>x.BlockId==block.Id).Id;
+                if(leave.FinallyHandlers.Count==0){Edge(b,method,block.Id,leave.TargetBlock);b.AppendLine($"  goto block_{leave.TargetBlock};");}
+                else
+                {
+                    var handler=method.Blocks.Single(x=>x.CilOffset==leave.FinallyHandlers[0]);
+                    b.AppendLine($"  dnd_leave_id = {id}; dnd_leave_step = 0; goto block_{handler.Id};");
+                }
+                break;
+            }
             case ValueIrEndFinally ef:
-                b.AppendLine("  if (dnd_exception_pending()) { dnd_exception_rethrow(); return 0; }");
-                Edge(b,method,block.Id,ef.NormalTargetBlock);b.AppendLine($"  goto block_{ef.NormalTargetBlock};");
+                b.AppendLine("  if (dnd_exception_pending()) { dnd_leave_id = -1; dnd_exception_rethrow(); return 0; }");
+                b.AppendLine("  switch (dnd_leave_id) {");
+                foreach(var path in leavePaths.Where(x=>x.Leave.FinallyHandlers.Contains(ef.HandlerOffset)))
+                {
+                    var step=path.Leave.FinallyHandlers.ToList().IndexOf(ef.HandlerOffset);
+                    b.AppendLine($"    case {path.Id}:");
+                    b.AppendLine($"      if (dnd_leave_step != {step}) break;");
+                    if(step+1<path.Leave.FinallyHandlers.Count)
+                    {
+                        var next=method.Blocks.Single(x=>x.CilOffset==path.Leave.FinallyHandlers[step+1]);
+                        b.AppendLine($"      dnd_leave_step++; goto block_{next.Id};");
+                    }
+                    else
+                    {
+                        b.AppendLine("      dnd_leave_id = -1;");
+                        Edge(b,method,block.Id,path.Leave.TargetBlock,"      ");
+                        b.AppendLine($"      goto block_{path.Leave.TargetBlock};");
+                    }
+                }
+                b.AppendLine("    default: break;");
+                b.AppendLine("  }");
+                b.AppendLine("  dnd_exception_rethrow(); return 0;");
                 break;
             case ValueIrThrow t:
                 if(t.Exception is { } ex)b.AppendLine($"  dnd_exception_throw_object((DndObject*)v{ex.Id});");
-                else b.AppendLine("  dnd_exception_rethrow_current();");
+                else
+                {
+                    var caught=method.ExceptionRegions.Where(r=>r.Kind==ValueIrExceptionRegionKind.Catch&&block.CilOffset>=r.HandlerOffset&&block.CilOffset<r.HandlerOffset+r.HandlerLength).OrderBy(r=>r.HandlerLength).FirstOrDefault();
+                    b.AppendLine(caught is not null?$"  dnd_exception_throw_object((DndObject*)dnd_caught_{caught.HandlerOffset});":"  dnd_exception_rethrow_current();");
+                }
                 b.AppendLine("  return 0;");
                 break;
             case null:b.AppendLine("  return 0;");break;
@@ -394,7 +507,9 @@ internal static class ValueCBackend
             MethodModel? implementation=null;var current=type;
             while(model.Types.ContainsKey(current))
             {
-                implementation=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==current&&!m.IsAbstract&&compiled.Contains(m.Key)&&(m.Key.Name==contract.Key.Name||m.Key.Name.EndsWith("."+contract.Key.Name,StringComparison.Ordinal))&&m.ParameterCount==contract.ParameterCount);
+                var candidates=model.Methods.Values.Where(m=>m.Key.TypeName==current&&!m.IsAbstract&&compiled.Contains(m.Key)&&m.ParameterCount==contract.ParameterCount);
+                implementation=candidates.FirstOrDefault(m=>m.Key.Name==iface+"."+contract.Key.Name)
+                    ??candidates.FirstOrDefault(m=>m.Key.Name==contract.Key.Name);
                 if(implementation is not null)break;
                 current=model.Types[current].BaseType??"";
             }
@@ -420,8 +535,8 @@ internal static class ValueCBackend
     private static string WrapperSymbol(MethodKey k)=>"dnd_wrap_"+Id(k.AssemblyName)+"_"+Id(k.TypeName)+"_"+Id(k.Name)+"_"+StableId(k.Signature);
     private static string FieldCType(FieldModel f)=>f.Size switch{1=>"int8_t",2=>"int16_t",8=>"int64_t",_=>"int32_t"};
     private static string StaticSymbol(FieldModel f)=>"dnd_static_"+Id(f.DeclaringType)+"_"+Id(f.Name);
-    private static bool IsScalarBoxType(string type)=>type is "System.Boolean" or "System.Byte" or "System.SByte" or "System.Char" or "System.Int16" or "System.UInt16" or "System.UInt32";
-    private static string TypeExpr(string type)=>type switch{"System.String"=>"&DND_TYPE_STRING","System.Object"=>"&DND_TYPE_OBJECT","System.Int32"=>"&DND_TYPE_BOXED_INT32","System.Boolean"=>"&DND_TYPE_BOOLEAN","System.Byte"=>"&DND_TYPE_BYTE","System.SByte"=>"&DND_TYPE_SBYTE","System.Char"=>"&DND_TYPE_CHAR","System.Int16"=>"&DND_TYPE_INT16","System.UInt16"=>"&DND_TYPE_UINT16","System.UInt32"=>"&DND_TYPE_UINT32","System.Exception"=>"&DND_TYPE_EXCEPTION","System.SystemException"=>"&DND_TYPE_SYSTEM_EXCEPTION","System.InvalidOperationException"=>"&DND_TYPE_INVALID_OPERATION_EXCEPTION","System.ArgumentException"=>"&DND_TYPE_ARGUMENT_EXCEPTION","System.ArgumentNullException"=>"&DND_TYPE_ARGUMENT_NULL_EXCEPTION","System.ArgumentOutOfRangeException"=>"&DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION","System.IndexOutOfRangeException"=>"&DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION","System.NullReferenceException"=>"&DND_TYPE_NULL_REFERENCE_EXCEPTION","System.InvalidCastException"=>"&DND_TYPE_INVALID_CAST_EXCEPTION","System.NotSupportedException"=>"&DND_TYPE_NOT_SUPPORTED_EXCEPTION","System.OutOfMemoryException"=>"&DND_TYPE_OUT_OF_MEMORY_EXCEPTION",_ when type.StartsWith("System.",StringComparison.Ordinal)=>"NULL",_=>$"&dnd_type_{Id(type)}"};
+    private static bool IsScalarBoxType(string type)=>type is "System.Boolean" or "System.Byte" or "System.SByte" or "System.Char" or "System.Int16" or "System.UInt16" or "System.UInt32" or "System.Int64";
+    private static string TypeExpr(string type)=>type switch{"System.String"=>"&DND_TYPE_STRING","System.Object"=>"&DND_TYPE_OBJECT","System.Int32"=>"&DND_TYPE_BOXED_INT32","System.Int64"=>"&DND_TYPE_INT64","System.Boolean"=>"&DND_TYPE_BOOLEAN","System.Byte"=>"&DND_TYPE_BYTE","System.SByte"=>"&DND_TYPE_SBYTE","System.Char"=>"&DND_TYPE_CHAR","System.Int16"=>"&DND_TYPE_INT16","System.UInt16"=>"&DND_TYPE_UINT16","System.UInt32"=>"&DND_TYPE_UINT32","System.Exception"=>"&DND_TYPE_EXCEPTION","System.SystemException"=>"&DND_TYPE_SYSTEM_EXCEPTION","System.InvalidOperationException"=>"&DND_TYPE_INVALID_OPERATION_EXCEPTION","System.ArgumentException"=>"&DND_TYPE_ARGUMENT_EXCEPTION","System.ArgumentNullException"=>"&DND_TYPE_ARGUMENT_NULL_EXCEPTION","System.ArgumentOutOfRangeException"=>"&DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION","System.IndexOutOfRangeException"=>"&DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION","System.NullReferenceException"=>"&DND_TYPE_NULL_REFERENCE_EXCEPTION","System.InvalidCastException"=>"&DND_TYPE_INVALID_CAST_EXCEPTION","System.NotSupportedException"=>"&DND_TYPE_NOT_SUPPORTED_EXCEPTION","System.OutOfMemoryException"=>"&DND_TYPE_OUT_OF_MEMORY_EXCEPTION",_ when type.StartsWith("System.",StringComparison.Ordinal)=>"NULL",_=>$"&dnd_type_{Id(type)}"};
     private static string LegacySymbol(MethodKey k)=>"dnd_value_"+Id(k.TypeName)+"_"+Id(k.Name);
     private static string StableId(string s){uint h=2166136261;foreach(var ch in s){h^=ch;h*=16777619;}return h.ToString("x8");}
     private static string Parameters(ValueIrMethod m,CompilationModel model)
@@ -429,9 +544,9 @@ internal static class ValueCBackend
         var n=m.ParameterCount+(m.HasThis?1:0);if(n==0)return "void";
         model.Methods.TryGetValue(m.Key,out var mm);var abi=mm?.Abi;
         return string.Join(", ",Enumerable.Range(0,n).Select(i=>{
-            if(m.HasThis&&i==0)return $"intptr_t a{i}";
+            if(m.HasThis&&i==0)return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}intptr_t a{i}";
             var pi=i-(m.HasThis?1:0);var kind=abi is not null&&pi<abi.Parameters.Count?abi.Parameters[pi]:CilStackKind.NativeInt;
-            return $"{AbiCType(kind)} a{i}";
+            return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}{AbiCType(kind)} a{i}";
         }));
     }
     private static string ReturnCType(ValueIrMethod m,CompilationModel model)
@@ -439,7 +554,7 @@ internal static class ValueCBackend
     private static string AbiCType(CilStackKind kind)=>kind switch{CilStackKind.I8=>"int64_t",CilStackKind.Float=>"double",_=>"intptr_t"};
     private static string Id(string s)=>new(s.Select(ch=>char.IsLetterOrDigit(ch)?ch:'_').ToArray());
     private static string Escape(string s)=>s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n").Replace("\r","\\r").Replace("\t","\\t");
-    private static bool HasRoots(ValueIrMethod m)=>Collect(m).Any(v=>v.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>l.Kind==IrValueKind.ObjectReference)||m.HasThis;
+    private static bool HasRoots(ValueIrMethod m,CompilationModel model)=>m.ExceptionRegions.Any(r=>r.Kind==ValueIrExceptionRegionKind.Catch)||Collect(m).Any(v=>v.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>l.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>(l.ReferenceOffsets?.Count??0)>0)||m.HasThis||(model.Methods.TryGetValue(m.Key,out var mm)&&mm.Abi is { } abi&&abi.Parameters.Any(k=>k==CilStackKind.ObjectReference));
     private static string ValueStorageCType(IrValueKind kind)=>kind==IrValueKind.I8?"int64_t":"intptr_t";
     private static string CType(IrValueKind kind)=>kind switch
     {

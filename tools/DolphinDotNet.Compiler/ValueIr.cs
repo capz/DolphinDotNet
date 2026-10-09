@@ -45,7 +45,7 @@ internal sealed record ValueIrEnumeratorCurrent(IrValue Result,IrValue Address,i
 internal sealed record ValueIrLoadIndirect(IrValue Result,IrValue Address,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrStoreIndirect(IrValue Address,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrInitObject(IrValue Address,string TypeName):ValueIrInstruction;
-internal sealed record ValueIrCopyObject(IrValue Destination,IrValue Source,string TypeName):ValueIrInstruction;
+internal sealed record ValueIrCopyObject(IrValue Destination,IrValue Source,string TypeName,int Size=0):ValueIrInstruction;
 internal sealed record ValueIrConvert(IrValue Result,IrValue Value):ValueIrInstruction;
 internal sealed record ValueIrBinary(IrValue Result,string Operation,IrValue Left,IrValue Right):ValueIrInstruction;
 internal sealed record ValueIrObjectEquals(IrValue Result,IrValue Left,IrValue Right):ValueIrInstruction;
@@ -56,7 +56,7 @@ internal sealed record ValueIrCall(IrValue? Result,MethodKey Target,IReadOnlyLis
 internal sealed record ValueIrNewObject(IrValue Result,string TypeName,MethodKey Constructor,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
 internal sealed record ValueIrNewException(IrValue Result,string TypeName,IrValue? Message):ValueIrInstruction;
 internal sealed record ValueIrExceptionMessage(IrValue Result,IrValue Exception):ValueIrInstruction;
-internal sealed record ValueIrLoadField(IrValue Result,IrValue Object,string TypeName,string FieldName):ValueIrInstruction;
+internal sealed record ValueIrLoadField(IrValue Result,IrValue Object,string TypeName,string FieldName,bool Address=false):ValueIrInstruction;
 internal sealed record ValueIrStoreField(IrValue Object,IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrLoadStaticField(IrValue Result,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrStoreStaticField(IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
@@ -70,7 +70,7 @@ internal sealed record ValueIrBoxNullable(IrValue Result,IrValue Address,int Val
 internal sealed record ValueIrUnboxAny(IrValue Result,IrValue Object,string TypeName):ValueIrInstruction;
 internal sealed record ValueIrArrayElementAddress(IrValue Result,IrValue Array,IrValue Index,string ElementType):ValueIrInstruction;
 internal sealed record ValueIrArrayLength(IrValue Result,IrValue Array):ValueIrInstruction;
-internal sealed record ValueIrArrayOperation(IrValue? Result,string Operation,IReadOnlyList<IrValue> Arguments,int ElementSize=0,bool Reference=false):ValueIrInstruction;
+internal sealed record ValueIrArrayOperation(IrValue? Result,string Operation,IReadOnlyList<IrValue> Arguments,int ElementSize=0,bool Reference=false,MethodKey? InterfaceTarget=null):ValueIrInstruction;
 internal sealed record ValueIrLoadElement(IrValue Result,IrValue Array,IrValue Index,int Size,bool Reference,bool Signed=false):ValueIrInstruction;
 internal sealed record ValueIrStoreElement(IrValue Array,IrValue Index,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrConsoleWriteLine(IrValue String):ValueIrInstruction;
@@ -95,7 +95,8 @@ internal enum ValueIrComparison { NonZero,Equal,NotEqual,GreaterThan,GreaterOrEq
 internal sealed record ValueIrBranch(IrValue Left,IrValue? Right,ValueIrComparison Comparison,bool Unsigned,int TrueBlock,int FalseBlock):ValueIrTerminator;
 internal sealed record ValueIrSwitch(IrValue Value,IReadOnlyList<int> Targets,int DefaultBlock):ValueIrTerminator;
 internal sealed record ValueIrReturn(IrValue? Value):ValueIrTerminator;
-internal sealed record ValueIrEndFinally(int NormalTargetBlock):ValueIrTerminator;
+internal sealed record ValueIrLeave(int TargetBlock, IReadOnlyList<int> FinallyHandlers):ValueIrTerminator;
+internal sealed record ValueIrEndFinally(int HandlerOffset):ValueIrTerminator;
 internal sealed record ValueIrThrow(IrValue? Exception):ValueIrTerminator;
 
 internal sealed record ValueIrBlock(

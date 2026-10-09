@@ -14,7 +14,7 @@ LIBS := -lopengx -logc -lm
 LIBOGC ?= $(DEVKITPRO)/libogc
 LIBDIRS := $(PORTLIBS) $(LIBOGC)
 LIBPATHS_EXTRA := -L$(LIBOGC)/lib/cube
-CFLAGS := -g -O2 -Wall -Wextra $(MACHDEP) $(INCLUDE)
+CFLAGS := -g -O2 -fstack-usage -Wall -Wextra $(MACHDEP) $(INCLUDE)
 CXXFLAGS := $(CFLAGS)
 LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map
 ifneq ($(BUILD),$(notdir $(CURDIR)))

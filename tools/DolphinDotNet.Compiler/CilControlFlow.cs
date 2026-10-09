@@ -46,7 +46,7 @@ internal static class CilDecoder
                     else if(op==0x21)operand=new CilInteger(BitConverter.ToInt64(il,p));
                     else if(op is 0x0e or 0x0f or 0x10 or 0x11 or 0x12 or 0x13)operand=new CilInteger(il[p]);
                     else if(op is 0xfe09 or 0xfe0a or 0xfe0b or 0xfe0c or 0xfe0d or 0xfe0e)operand=new CilInteger(BitConverter.ToUInt16(il,p));
-                    else if(op is 0x28 or 0x6f or 0x72 or 0x73 or 0x7b or 0x7d or 0x7e or 0x80 or 0x8c or 0x8d or 0x8f or 0xa3 or 0xa4 or 0xa5 or 0x74 or 0x75 or 0x70 or 0x71 or 0x81 or 0xfe06 or 0xfe07 or 0xfe15 or 0xfe16)operand=new CilMetadataToken(BitConverter.ToInt32(il,p));
+                    else if(op is 0x28 or 0x6f or 0x72 or 0x73 or 0x7b or 0x7c or 0x7d or 0x7e or 0x80 or 0x8c or 0x8d or 0x8f or 0xa3 or 0xa4 or 0xa5 or 0x74 or 0x75 or 0x70 or 0x71 or 0x81 or 0xfe06 or 0xfe07 or 0xfe15 or 0xfe16)operand=new CilMetadataToken(BitConverter.ToInt32(il,p));
                     p += operandSize; break;
             }
             result.Add(new CilInstruction(start,p-start,op,operand,flow));
@@ -78,32 +78,9 @@ internal sealed record CilBasicBlock(int Id,int StartOffset,List<CilInstruction>
 
 internal static class CilControlFlowGraph
 {
-    private static IReadOnlyList<CilInstruction> RewriteFinallyControlFlow(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion> regions)
-    {
-        if(regions.Count==0)return instructions;
-        var rewritten=instructions.ToArray();
-        foreach(var region in regions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally))
-        {
-            var tryEnd=region.TryOffset+region.TryLength;var handlerEnd=region.HandlerOffset+region.HandlerLength;
-            var leaves=instructions.Where(i=>i.Offset>=region.TryOffset&&i.Offset<tryEnd&&i.OpCode is 0xdd or 0xde&&i.Operand is CilBranchTarget t&&(t.Offset<region.TryOffset||t.Offset>=tryEnd)).ToArray();
-            var continuations=leaves.Select(i=>((CilBranchTarget)i.Operand!).Offset).Distinct().ToArray();
-            if(continuations.Length>1)throw new NotSupportedException("Finally regions with multiple leave continuations are not yet supported.");
-            if(continuations.Length==0)continue;
-            var continuation=continuations[0];
-            for(var n=0;n<rewritten.Length;n++)
-            {
-                var i=rewritten[n];
-                if(leaves.Any(l=>l.Offset==i.Offset))rewritten[n]=i with { Operand=new CilBranchTarget(region.HandlerOffset),Flow=CilFlowKind.Branch };
-                else if(i.Offset>=region.HandlerOffset&&i.Offset<handlerEnd&&i.OpCode==0xdc)rewritten[n]=i with { Operand=new CilBranchTarget(continuation),Flow=CilFlowKind.Branch };
-            }
-        }
-        return rewritten;
-    }
-
     public static List<CilBasicBlock> Build(IReadOnlyList<CilInstruction> instructions,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion>? exceptionRegions=null)
     {
         var regions=exceptionRegions??Array.Empty<System.Reflection.Metadata.ExceptionRegion>();
-        instructions=RewriteFinallyControlFlow(instructions,regions);
         if(instructions.Count==0)return [];
         var starts=new HashSet<int>{instructions[0].Offset};
         foreach(var region in regions) {
@@ -126,11 +103,32 @@ internal static class CilControlFlowGraph
             var body=instructions.Where(i=>i.Offset>=start&&i.Offset<end).ToList();
             if(body.Count==0)throw new InvalidDataException($"Branch target IL_{start:x4} is not an instruction boundary.");
             var last=body[^1];var successors=new List<int>();
-            if(last.Operand is CilBranchTarget { Offset: var target })successors.Add(byStart[target]);
+            if(last.Operand is CilBranchTarget { Offset: var target })
+            {
+                if(last.OpCode is 0xdd or 0xde)
+                {
+                    // Keep the original leave target; the outgoing edge first enters
+                    // the innermost finally that is exited by this leave.
+                    var handler=regions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally &&
+                        last.Offset>=r.TryOffset && last.Offset<r.TryOffset+r.TryLength &&
+                        (target<r.TryOffset || target>=r.TryOffset+r.TryLength))
+                        .OrderBy(r=>r.TryLength).FirstOrDefault();
+                    successors.Add(byStart[handler.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally?handler.HandlerOffset:target]);
+                    // Also make the normal destination reachable for stack analysis.
+                    // The backend executes the finally before transferring there.
+                    if(handler.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally &&
+                        !regions.Any(r=>r.HandlerOffset==target && r.Kind is System.Reflection.Metadata.ExceptionRegionKind.Catch or System.Reflection.Metadata.ExceptionRegionKind.Filter))
+                        successors.Add(byStart[target]);
+                }
+                else successors.Add(byStart[target]);
+            }
+            // endfinally resumes a continuation chosen dynamically by the backend.
+            // It has no statically valid outgoing edge: adding one can merge a
+            // normal empty stack with a catch handler's exception-object stack.
             if(last.Operand is CilSwitchTargets sw)foreach(var switchTarget in sw.Offsets)successors.Add(byStart[switchTarget]);
             if(last.Flow==CilFlowKind.Switch && byStart.TryGetValue(last.EndOffset,out var switchFall))successors.Add(switchFall);
             else if(last.Flow==CilFlowKind.ConditionalBranch && byStart.TryGetValue(last.EndOffset,out var fall))successors.Add(fall);
-            else if(last.Flow==CilFlowKind.Next && byStart.TryGetValue(last.EndOffset,out var next))successors.Add(next);
+            else if(last.Flow==CilFlowKind.Next && last.OpCode!=0xdc && byStart.TryGetValue(last.EndOffset,out var next))successors.Add(next);
             blocks.Add(new CilBasicBlock(n,start,body,successors,new List<int>()));
         }
         foreach(var block in blocks)foreach(var successor in block.Successors)blocks[successor].Predecessors.Add(block.Id);

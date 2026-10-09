@@ -31,7 +31,7 @@ var genericObject = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid
 Run("cc", $"-std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" -c \"{genericOutput}\" -o \"{genericObject}\"");
 if (!genericGenerated.Contains("setjmp(dnd_eh_frame.environment)", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_exception_matches", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("dnd_exception_rethrow_current", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("dnd_caught_", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_exception_new", StringComparison.Ordinal))
     throw new Exception("Exception handling lowering missing.");
 var literalDefinitions = genericGenerated.Split('\n').Count(line => line.Contains("dnd_string_literal_", StringComparison.Ordinal) && line.Contains("static const struct", StringComparison.Ordinal));
@@ -77,9 +77,9 @@ if (!genericGenerated.Contains("dnd_type_System_Collections_Generic_ICollection_
     !genericGenerated.Contains("dnd_type_System_Collections_Generic_IReadOnlyCollection_1", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_type_System_Collections_Generic_IReadOnlyList_1", StringComparison.Ordinal))
     throw new Exception("Generic collection interface metadata missing.");
-if (!genericGenerated.Contains("CompactList_1_Insert", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("CompactList_1_RemoveAt", StringComparison.Ordinal) ||
-    !genericGenerated.Contains("CompactList_1_CopyTo", StringComparison.Ordinal))
+if (!genericGenerated.Contains("CompactList_1_g_p_Insert", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("CompactList_1_g_p_RemoveAt", StringComparison.Ordinal) ||
+    !genericGenerated.Contains("CompactList_1_g_p_CopyTo", StringComparison.Ordinal))
     throw new Exception("Compact collection mutation lowering missing.");
 if (genericGenerated.Contains("dnd_type__generic", StringComparison.Ordinal))
     throw new Exception("Generic array emitted unresolved runtime type metadata.");
@@ -92,13 +92,13 @@ if (concreteEnumerationBody.Contains("dnd_object_new", StringComparison.Ordinal)
     concreteEnumerationBody.Contains("dnd_box_", StringComparison.Ordinal))
     throw new Exception("Concrete foreach unexpectedly allocates or boxes.");
 var sharedDefinitions = genericGenerated.Split('\n')
-    .Count(line => line.Contains("Shared_1_Marker", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
-if (sharedDefinitions != 1)
-    throw new Exception($"Expected one shared generic method body, found {sharedDefinitions}.");
+    .Count(line => line.Contains("Shared_1_g_", StringComparison.Ordinal) && line.Contains("_Marker_", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
+if (sharedDefinitions != 2)
+    throw new Exception($"Expected scalar and reference-shared generic method bodies, found {sharedDefinitions}.");
 var identityDefinitions = genericGenerated.Split('\n')
     .Count(line => line.Contains("Program_Identity", StringComparison.Ordinal) && line.TrimEnd().EndsWith("{", StringComparison.Ordinal));
-if (identityDefinitions != 2)
-    throw new Exception($"Expected one pointer-shared Identity body plus one wide-value specialization, found {identityDefinitions}.");
+if (identityDefinitions != 3)
+    throw new Exception($"Expected reference-shared Identity plus scalar and wide-value specializations, found {identityDefinitions}.");
 if (!genericGenerated.Split('\n').Any(line => line.Contains("Program_Identity", StringComparison.Ordinal) && line.Contains("int64_t", StringComparison.Ordinal)))
     throw new Exception("Wide generic specialization did not emit a 64-bit ABI.");
 File.Delete(genericObject);

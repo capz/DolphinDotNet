@@ -82,6 +82,7 @@ internal static class CilStackAnalyzer
             case 0x14 or 0x72: Push(s,CilStackKind.ObjectReference); break;
             case 0x74 or 0x75: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;
             case 0x7b: Pop(s,i);Push(s,CilStackKind.Unknown);break;
+            case 0x7c: Pop(s,i);Push(s,CilStackKind.ManagedPointer);break;
             case 0x7d: Pop(s,i);Pop(s,i);break;
             case 0x7e: Push(s,CilStackKind.Unknown);break;
             case 0x80: Pop(s,i);break;
@@ -89,7 +90,7 @@ internal static class CilStackAnalyzer
             case 0x8d: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;
             case 0x8e: Pop(s,i);Push(s,CilStackKind.NativeInt);break;
             case 0x8f: Pop(s,i);Pop(s,i);Push(s,CilStackKind.ManagedPointer);break;
-            case 0x70: Pop(s,i);Pop(s,i);break;
+            case 0x70 or 0x81: Pop(s,i);Pop(s,i);break;
             case 0xfe15: Pop(s,i);break;
             case 0xfe06: Push(s,CilStackKind.NativeInt);break;
             case 0xfe07: Pop(s,i);Push(s,CilStackKind.NativeInt);break;

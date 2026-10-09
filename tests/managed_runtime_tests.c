@@ -243,6 +243,61 @@ int main(void) {
     assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
     dnd_exception_clear();
 
+    /* Scalar and reference accessors must never reinterpret each other's
+       storage: doing so can hide pointers from precise tracing. */
+    DndArray *access_scalars = dnd_managed_array_new(&heap, 1, sizeof(void *));
+    DndArray *access_refs = dnd_managed_array_new_typed(&heap, 1, sizeof(DndObject *), &DND_TYPE_OBJECT, true);
+    assert(access_scalars && access_refs);
+    assert(dnd_array_load_ref(access_scalars, 0) == NULL);
+    assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
+    dnd_exception_clear();
+    assert(dnd_array_load_scalar(access_refs, 0, 4, false) == 0);
+    assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
+    dnd_exception_clear();
+    assert(!dnd_array_store_scalar(access_refs, 0, 42, 4));
+    assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_CAST);
+    dnd_exception_clear();
+
+    /* Substring must preserve its source across an allocation-triggered GC. */
+    dnd_gc_set_stress(false);
+    DndString *substring_source = dnd_string_from_utf8(&heap, "abcdef");
+    assert(substring_source);
+    dnd_gc_set_stress(true);
+    DndString *substring_stress = dnd_string_substring(&heap, substring_source, 2, 3);
+    assert(substring_stress && substring_stress->length == 3);
+    assert(substring_stress->chars[0] == 'c' && substring_stress->chars[2] == 'e');
+    dnd_gc_set_stress(false);
+
+    /* Iterative marking must retain deep linked graphs and terminate on cycles.
+       Collection is deliberately triggered with only the head rooted. */
+    dnd_exception_clear();
+    dnd_gc_collect(&heap, NULL);
+    TestNode *deep_head = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    assert(deep_head);
+    DndObject *deep_root = (DndObject *)deep_head;
+    DndObject **deep_slots[] = { &deep_root };
+    DndGcFrame deep_frame;
+    dnd_gc_frame_push(&deep_frame, deep_slots, 1);
+    TestNode *deep_tail = deep_head;
+    for (int i = 1; i < 120; i++) {
+        TestNode *next = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+        assert(next);
+        deep_tail->child = (DndObject *)next;
+        deep_tail = next;
+    }
+    deep_tail->value = 12345;
+    deep_tail->child = deep_root;
+    dnd_gc_collect(&heap, NULL);
+    TestNode *walk = (TestNode *)deep_root;
+    for (int i = 1; i < 120; i++) {
+        assert(walk && walk->object.type == &NODE_TYPE);
+        walk = (TestNode *)walk->child;
+    }
+    assert(walk == deep_tail && walk->value == 12345 && walk->child == deep_root);
+    deep_tail->child = NULL;
+    dnd_gc_frame_pop(&deep_frame);
+    dnd_gc_collect(&heap, NULL);
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }

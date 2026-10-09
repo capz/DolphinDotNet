@@ -41,6 +41,22 @@ internal static class Program
         }
     }
 
+    private static int NestedCatchRethrowProbe()
+    {
+        try
+        {
+            try { throw new InvalidOperationException("outer"); }
+            catch (InvalidOperationException)
+            {
+                try { throw new ArgumentException("inner"); }
+                catch (ArgumentException) { var allocation=string.Concat("force", " gc"); if(allocation.Length!=8)return -2; }
+                throw;
+            }
+        }
+        catch (InvalidOperationException ex) { return ex.Message.Length==5?54:-1; }
+        catch (ArgumentException) { return -3; }
+    }
+
     private static int RethrowProbe()
     {
         try
@@ -81,7 +97,11 @@ internal static class Program
             try
             {
                 var values = new CompactList<int>();
+                if (values.BackingLength != 4) return -11;
+                if (values.Count != 0) return -14;
                 values.Add(3);
+                if (values.Count != 1) return -12;
+                if (values.BackingLength != 4) return -13;
                 if (!values.Contains(3)) return -1;
                 int? missing = null;
                 return missing.Value;
@@ -202,15 +222,129 @@ internal static class Program
         return 0;
     }
 
+    private static void ThrowAcrossMethodBoundary()
+    {
+        throw new InvalidOperationException("cross-method");
+    }
+
+    private static int CrossMethodExceptionProbe()
+    {
+        var cleanup = 0;
+        try
+        {
+            try { ThrowAcrossMethodBoundary(); }
+            finally { cleanup += 7; }
+        }
+        catch (InvalidOperationException)
+        {
+            return cleanup == 7 ? 17 : -1;
+        }
+        return -2;
+    }
+
+    private static int NestedTypedCatchProbe()
+    {
+        try
+        {
+            try { ThrowAcrossMethodBoundary(); }
+            catch (ArgumentException) { return -1; }
+        }
+        catch (InvalidOperationException) { return 18; }
+        return -2;
+    }
+
+    private static int ThrowFromCatchProbe()
+    {
+        try
+        {
+            try { throw new ArgumentException("first"); }
+            catch (ArgumentException) { throw new InvalidOperationException("second"); }
+        }
+        catch (InvalidOperationException) { return 20; }
+        return -1;
+    }
+
+    private static int MultipleFinallyLeavesProbe(int value)
+    {
+        var cleanup=0;
+        try
+        {
+            if(value==1)return 10;
+            if(value==2)return 20;
+            return 30;
+        }
+        finally { cleanup++; }
+    }
+
+    private static int NestedFinallyUnwindProbe(int choice)
+    {
+        var trace = 0;
+        try
+        {
+            try
+            {
+                if (choice == 1) return 11;
+                if (choice == 2) return 22;
+                trace += 1;
+            }
+            finally { trace += 2; }
+        }
+        finally { trace += 4; }
+        return trace;
+    }
+
+    private static int ExceptionDuringFinallyProbe()
+    {
+        var trace = 0;
+        try
+        {
+            try { throw new ArgumentException("original"); }
+            finally
+            {
+                trace += 2;
+                throw new InvalidOperationException("replacement");
+            }
+        }
+        catch (InvalidOperationException) { return trace == 2 ? 42 : -1; }
+        catch (ArgumentException) { return -2; }
+    }
+
+    private static int CatchFinallyInteractionProbe()
+    {
+        var trace = 0;
+        try
+        {
+            try { throw new InvalidOperationException("inner"); }
+            catch (ArgumentException) { return -1; }
+            finally { trace += 3; }
+        }
+        catch (InvalidOperationException) { return trace == 3 ? 43 : -2; }
+        return -3;
+    }
+
     private static int Main()
     {
+        if(AllocationAndNullProbe()!=0) return 900;
+        var holder = new GenericHolder<string>(string.Concat("rooted", " value"));
+        var wideHolder = new GenericHolder<long>(0x300000004L);
+        if(holder.Value.Length!=12 || wideHolder.Value!=0x300000004L) return 880;
+        var lifecycle = LifecycleProbe(); if (lifecycle != 0) return 870 + lifecycle;
+        var embedded = EmbeddedValueProbe(); if (embedded != 0) return 850 + embedded;
         var formatting = FormattingProbe(); if (formatting != 0) return 180 + formatting;
         var arrayInterfaces = ArrayInterfaceProbe(); if (arrayInterfaces != 0) return 160 + arrayInterfaces;
         var arrayStage = SystemArrayProbe(); if (arrayStage != 0) return 140 + arrayStage;
         var stringStage = StringPrimitiveProbe(); if (stringStage != 0) return 120 + stringStage;
-        var primitiveStage = PrimitiveRepresentationProbe(); if (primitiveStage != 0) return 100 + primitiveStage;
-        if (EhIntegrationProbe() != 16) return 95;
+        var primitiveStage = PrimitiveRepresentationProbe(); if (primitiveStage != 0) return 300 + primitiveStage;
+        var ehResult = EhIntegrationProbe(); if (ehResult != 16) return ehResult < 0 ? 600 - ehResult : 700 + ehResult;
+        if (CrossMethodExceptionProbe() != 17) return 96;
+        if (NestedTypedCatchProbe() != 18) return 97;
+        if (ThrowFromCatchProbe() != 20) return 99;
+        if (MultipleFinallyLeavesProbe(1) != 10 || MultipleFinallyLeavesProbe(2) != 20 || MultipleFinallyLeavesProbe(3) != 30) return 100;
+        if (NestedFinallyUnwindProbe(0) != 7 || NestedFinallyUnwindProbe(1) != 11 || NestedFinallyUnwindProbe(2) != 22) return 101;
+        if (ExceptionDuringFinallyProbe() != 42) return 102;
+        if (CatchFinallyInteractionProbe() != 43) return 103;
         if (ExplicitExceptionProbe() != 15) return 94;
+        if (NestedCatchRethrowProbe() != 54) return 890;
         if (RethrowProbe() != 14) return 93;
         if (TypedCatchProbe() != 13) return 92;
         if (CatchProbe() != 11) return 91;
@@ -219,7 +353,8 @@ internal static class Program
         _ = Shared<string>.Marker();
         _ = Identity(7);
         _ = Identity("reference");
-        _ = Identity(9L);
+        _ = Identity((object)"reference");
+        if (Identity(0x400000005L) != 0x400000005L) return 49;
 
         int? empty = null;
         int? present = 42;
@@ -235,9 +370,10 @@ internal static class Program
         object? boxedPresent = present;
         if (boxedEmpty is not null || boxedPresent is not int || (int)boxedPresent != 42) return 5;
         object? boxedWide = wide;
-        if (boxedWide is null) return 6;
+        if (boxedWide is null || (long)boxedWide != 0x100000002L) return 6;
 
-        var stage2 = TestNullableEquality(present, empty); if (stage2 != 0) return stage2;
+        var stage2 = TestNullableEquality(present, empty); if (stage2 != 0) return 800 + stage2;
+        stage2 = TestNullableArgumentCopies(present, empty, wide); if (stage2 != 0) return 820 + stage2;
         stage2 = TestPairs(); if (stage2 != 0) return stage2;
         stage2 = TestSegment(); if (stage2 != 0) return stage2;
         stage2 = TestConcreteEnumeration(); if (stage2 != 0) return stage2;
@@ -258,8 +394,27 @@ internal static class Program
         return 0;
     }
 
+    private static int TestNullableArgumentCopies(int? present, int? empty, long? wide)
+    {
+        if (empty.GetHashCode() != 0 || present.GetHashCode() != 42 || wide.GetHashCode() != 3) return 1;
+        if (!wide.Equals(0x100000002L) || wide.Equals(2L)) return 2;
+        if (ReadMixedArguments(new int[1], "mixed", wide, present) != 42) return 3;
+        if (MutateNullableCopy(present) != 73 || present.Value != 42) return 4;
+        ReplaceNullable(ref present);
+        if (present.Value != 91) return 5;
+        return 0;
+    }
+
+    private static int ReadMixedArguments(int[] array, string label, long? wide, int? value)
+        => array.Length == 1 && label.Length == 5 && wide.Value == 0x100000002L ? value.Value : -1;
+
+    private static int MutateNullableCopy(int? value) { value = 73; return value.Value; }
+    private static void ReplaceNullable(ref int? value) { value = 91; }
+
     private static int TestPairs()
     {
+        var mixed = new KeyValuePair<int,string>(7,string.Concat("mixed", " value"));
+        if(mixed.Key!=7 || mixed.Value.Length!=11) return 49;
         var pair = new KeyValuePair<string, string>("key", "value");
         if (pair.Key.Length != 3 || pair.Value.Length != 5) return 9;
         var widePair = new KeyValuePair<long, int>(0x100000002L, 7);
@@ -327,7 +482,50 @@ internal static class Program
         if (collection.Count != 0) return 38;
         var refs = new CompactList<string>(); refs.Add("a"); refs.Insert(0,"b");
         if (!refs.Contains("a") || refs.IndexOf("b") != 0 || !refs.Remove("a") || refs.Count != 1) return 39;
+        if (refs[0].Length != 1) return 44;
+        IList<long> wideList = new CompactList<long>();
+        wideList.Add(0x100000002L);wideList[0]=0x200000003L;
+        if(wideList[0]!=0x200000003L || !wideList.Contains(0x200000003L)) return 47;
+        foreach(var number in wideList) { if(number!=0x200000003L) return 48; }
+        var dynamicValue = string.Concat("dynamic", " reference");
+        refs.Add(dynamicValue);
+        foreach (var text in refs) { if (text.Length == 0) return 45; }
+        if (refs[1].Length != 17) return 46;
         refs.Clear(); if (refs.Count != 0) return 40;
+        return 0;
+    }
+
+    private static int AllocationAndNullProbe()
+    {
+        var caught=0;
+        try { var tooLarge=new int[int.MaxValue]; return tooLarge.Length; }
+        catch(OutOfMemoryException) { caught++; }
+        var array=new int[1];
+        try { return array[1]; }
+        catch(IndexOutOfRangeException) { caught++; }
+        string? missing=null;
+        try { return missing!.Length; }
+        catch(NullReferenceException) { caught++; }
+        var unicode="A\u03a9\U0001f680";
+        return caught==3&&unicode.Length==4&&unicode[1]=='\u03a9'&&unicode[2]=='\ud83d'&&unicode[3]=='\ude80'?0:1;
+    }
+
+    private static int LifecycleProbe()
+    {
+        LifecycleBase item = new LifecycleDerived(7, string.Concat("derived", " name"));
+        ILifecycle reader = (ILifecycle)item;
+        if(item.Read()!=19 || reader.Read()!=19 || item.Value!=7) return 1;
+        if(item is not LifecycleDerived || (object)item is PairHolder) return 2;
+        if(LifecycleBase.Created!=11) return 3;
+        return 0;
+    }
+
+    private static int EmbeddedValueProbe()
+    {
+        var holder = new PairHolder();
+        holder.Pair = new KeyValuePair<string,string>(string.Concat("key", " data"),string.Concat("value", " data"));
+        var junk = string.Concat("force", " collection");
+        if (junk.Length != 16 || holder.Pair.Key.Length != 8 || holder.Pair.Value.Length != 10) return 1;
         return 0;
     }
 
@@ -341,6 +539,7 @@ internal sealed class CompactList<T> : IList<T>, IReadOnlyList<T>
     private T[] _items = new T[4];
     private int _count;
     public int Count => _count;
+    public int BackingLength => _items.Length;
     public bool IsReadOnly => false;
     public T this[int index] { get => _items[index]; set => _items[index] = value; }
     public void Add(T item) { _items[_count++] = item; }
@@ -390,3 +589,22 @@ internal static class Shared<T>
 {
     public static int Marker() => 42;
 }
+
+internal sealed class PairHolder { public KeyValuePair<string,string> Pair; }
+
+internal interface ILifecycle { int Read(); }
+internal class LifecycleBase
+{
+    public static int Created=10;
+    public int Value;
+    public LifecycleBase(int value) { Value=value; Created++; }
+    public virtual int Read() => Value;
+}
+internal sealed class LifecycleDerived : LifecycleBase, ILifecycle
+{
+    private string _name;
+    public LifecycleDerived(int value,string name):base(value) { _name=name; }
+    public override int Read() => Value+_name.Length;
+}
+
+internal sealed class GenericHolder<T> { public T Value; public GenericHolder(T value) { Value=value; } }

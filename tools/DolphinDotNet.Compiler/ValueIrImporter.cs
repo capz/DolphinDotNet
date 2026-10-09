@@ -16,7 +16,8 @@ internal static class ValueIrImporter
         Func<CilInstruction,string?> resolveString,
         Func<CilInstruction,FieldModel?> resolveField,
         Func<CilInstruction,string?> resolveType,
-        Func<CilInstruction,GenericRepresentation?> resolveGenericTypeParameter)
+        Func<CilInstruction,GenericRepresentation?> resolveGenericTypeParameter,
+        IReadOnlyList<System.Reflection.Metadata.ExceptionRegion> exceptionRegions)
     {
         var nextValue=0;
         IrValue New(CilStackKind kind)=>new(nextValue++,Map(kind));
@@ -38,12 +39,14 @@ internal static class ValueIrImporter
             if(entryValues.TryGetValue(block.Id,out var incoming))stack.AddRange(incoming);
 
             ValueIrTerminator? terminator=null;
+            CilInstruction? constrained=null;
             foreach(var cil in block.Instructions)
             {
                 var beforeCount=stack.Count;
                 switch(cil.OpCode)
                 {
-                    case 0x00 or 0xfe16: break;
+                    case 0x00: break;
+                    case 0xfe16: constrained=cil;break;
                     case >=0x16 and <=0x1e:
                     {
                         var v=New(CilStackKind.I4);instructions.Add(new ValueIrConstant(v,cil.OpCode-0x16));stack.Add(v);break;
@@ -114,7 +117,9 @@ internal static class ValueIrImporter
                     }
                     case 0xa5:
                     {
-                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve unboxed type at IL_{cil.Offset:x4}.");var input=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrUnboxAny(result,input,type));stack.Add(result);break;
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve unboxed type at IL_{cil.Offset:x4}.");
+                        var input=Pop(stack,cil);var result=New(ElementSize(type)==8?CilStackKind.I8:CilStackKind.I4);
+                        instructions.Add(new ValueIrUnboxAny(result,input,type));stack.Add(result);break;
                     }
                     case 0x8d:
                     {
@@ -135,15 +140,15 @@ internal static class ValueIrImporter
                     case >=0x90 and <=0x9a:
                     {
                         var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0x9a;
-                        var size=cil.OpCode switch { 0x90 or 0x91 or 0x92=>1, 0x93 or 0x94=>2, 0x96 or 0x97 or 0x99=>8, _=>4 };
-                        var signed=cil.OpCode is 0x90 or 0x92 or 0x93 or 0x95 or 0x97;
+                        var size=cil.OpCode switch { 0x90 or 0x91=>1, 0x92 or 0x93=>2, 0x96 or 0x99=>8, _=>4 };
+                        var signed=cil.OpCode is 0x90 or 0x92 or 0x94 or 0x96 or 0x97;
                         var kind=reference?CilStackKind.ObjectReference:size==8?CilStackKind.I8:CilStackKind.I4;var result=New(kind);
                         instructions.Add(new ValueIrLoadElement(result,array,index,size,reference,signed));stack.Add(result);break;
                     }
                     case >=0x9b and <=0xa2:
                     {
                         var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);var reference=cil.OpCode==0xa2;
-                        var size=cil.OpCode switch { 0x9b=>1, 0x9c=>2, 0x9f or 0xa0=>8, _=>4 };
+                        var size=cil.OpCode switch { 0x9c=>1, 0x9d=>2, 0x9f or 0xa1=>8, _=>4 };
                         instructions.Add(new ValueIrStoreElement(array,index,value,size,reference));break;
                     }
                     case 0xa3:
@@ -165,9 +170,9 @@ internal static class ValueIrImporter
                         if(generic is { } rep){var zero=New(rep.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrConstant(zero,0));instructions.Add(new ValueIrStoreIndirect(address,zero,rep.Size,rep.ContainsReferences));}
                         else instructions.Add(new ValueIrInitObject(address,type!));break;
                     }
-                    case 0x70:
+                    case 0x70 or 0x81:
                     {
-                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve cpobj type at IL_{cil.Offset:x4}.");var source=Pop(stack,cil);var destination=Pop(stack,cil);instructions.Add(new ValueIrCopyObject(destination,source,type));break;
+                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve cpobj type at IL_{cil.Offset:x4}.");var source=Pop(stack,cil);var destination=Pop(stack,cil);instructions.Add(new ValueIrCopyObject(destination,source,type,type=="System.Nullable`1"?AlignNullable(nullableValueSize(cil)):0));break;
                     }
                     case >=0x46 and <=0x4a or 0x4c or 0x50:
                     {
@@ -212,8 +217,10 @@ internal static class ValueIrImporter
                     case 0x28 or 0x6f:
                     {
                         var ik=intrinsic(cil);
-                        if(ik==IntrinsicKind.ObjectGetHashCode){var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableHash(value,input,4));else instructions.Add(new ValueIrOpaqueStackEffect(1,new[]{value},cil.OpCode));stack.Add(value);break;}
-                        if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,4));else instructions.Add(new ValueIrObjectEquals(value,input,other));stack.Add(value);break;}
+                        var constraint=constrained; constrained=null;
+                        if(constraint is not null&&resolveType(constraint)=="System.ArraySegment`1+Enumerator"&&resolveCall(cil)?.Key.Name=="Dispose") { Pop(stack,cil);break; }
+                        if(ik==IntrinsicKind.ObjectGetHashCode){var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableHash(value,input,constraint is not null?nullableValueSize(constraint):4));else instructions.Add(new ValueIrOpaqueStackEffect(1,new[]{value},cil.OpCode));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ObjectEquals){var other=Pop(stack,cil);var input=Pop(stack,cil);var value=New(CilStackKind.I4);if(input.Kind==IrValueKind.ManagedPointer)instructions.Add(new ValueIrNullableEquals(value,input,other,constraint is not null?nullableValueSize(constraint):4));else instructions.Add(new ValueIrObjectEquals(value,input,other));stack.Add(value);break;}
                         if(ik is IntrinsicKind.ArrayLength or IntrinsicKind.ArrayLongLength or IntrinsicKind.ArrayRank)
                         {
                             var array=Pop(stack,cil);var value=New(ik==IntrinsicKind.ArrayLongLength?CilStackKind.I8:CilStackKind.I4);
@@ -233,18 +240,18 @@ internal static class ValueIrImporter
                         if(ik is IntrinsicKind.ArrayInterfaceCount or IntrinsicKind.ArrayInterfaceIsReadOnly)
                         {
                             var array=Pop(stack,cil);var value=New(CilStackKind.I4);
-                            instructions.Add(new ValueIrArrayOperation(value,ik.ToString(),new[]{array}));stack.Add(value);break;
+                            instructions.Add(new ValueIrArrayOperation(value,ik.ToString(),new[]{array},InterfaceTarget:resolveCall(cil)?.Key));stack.Add(value);break;
                         }
                         if(ik is IntrinsicKind.ArrayInterfaceItemGet or IntrinsicKind.ArrayInterfaceContains or IntrinsicKind.ArrayInterfaceIndexOf)
                         {
                             var arg=Pop(stack,cil);var array=Pop(stack,cil);var ga=genericArguments(cil);var rep=ga.Count>0?ga[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);
                             var value=New(ik==IntrinsicKind.ArrayInterfaceItemGet?(rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4):CilStackKind.I4);
-                            instructions.Add(new ValueIrArrayOperation(value,ik.ToString(),new[]{array,arg},rep.Size,rep.ContainsReferences));stack.Add(value);break;
+                            instructions.Add(new ValueIrArrayOperation(value,ik.ToString(),new[]{array,arg},rep.Size,rep.ContainsReferences,resolveCall(cil)?.Key));stack.Add(value);break;
                         }
                         if(ik==IntrinsicKind.ArrayInterfaceItemSet)
                         {
                             var valueArg=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);var ga=genericArguments(cil);var rep=ga.Count>0?ga[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);
-                            instructions.Add(new ValueIrArrayOperation(null,ik.ToString(),new[]{array,index,valueArg},rep.Size,rep.ContainsReferences));break;
+                            instructions.Add(new ValueIrArrayOperation(null,ik.ToString(),new[]{array,index,valueArg},rep.Size,rep.ContainsReferences,resolveCall(cil)?.Key));break;
                         }
                         if(ik==IntrinsicKind.ArrayIndexOf)
                         {
@@ -256,8 +263,9 @@ internal static class ValueIrImporter
                         if(ik==IntrinsicKind.StringLength){var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringLength(value,str));stack.Add(value);break;}
                         if(ik==IntrinsicKind.PrimitiveToString)
                         {
-                            var input=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);var formatMethod=resolveCall(cil);
-                            instructions.Add(new ValueIrPrimitiveToString(value,input,formatMethod?.Key.TypeName??"System.Int32"));stack.Add(value);break;
+                            var input=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);
+                            var primitiveType=resolveType(cil)??resolveCall(cil)?.Key.TypeName??throw new InvalidDataException($"Cannot resolve primitive ToString receiver at IL_{cil.Offset:x4}.");
+                            instructions.Add(new ValueIrPrimitiveToString(value,input,primitiveType));stack.Add(value);break;
                         }
                         if(ik==IntrinsicKind.StringCharAt){var index=Pop(stack,cil);var str=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrStringOperation(value,"charAt",new[]{str,index}));stack.Add(value);break;}
                         if(ik is IntrinsicKind.StringEquals or IntrinsicKind.StringStartsWith or IntrinsicKind.StringEndsWith or IntrinsicKind.StringContains or IntrinsicKind.StringIndexOf or IntrinsicKind.StringConcat)
@@ -278,10 +286,10 @@ internal static class ValueIrImporter
                         if(ik==IntrinsicKind.NullableGetValueOrDefaultValue){var size=nullableValueSize(cil);var fallback=Pop(stack,cil);var address=Pop(stack,cil);var value=New(size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrNullableGetValueOrDefault(value,address,fallback,size));stack.Add(value);break;}
                         if(ik==IntrinsicKind.NullableEquals){var size=nullableValueSize(cil);var other=Pop(stack,cil);var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrNullableEquals(value,address,other,size));stack.Add(value);break;}
                         if(ik==IntrinsicKind.NullableGetHashCode){var size=nullableValueSize(cil);var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrNullableHash(value,address,size));stack.Add(value);break;}
-                        if(ik==IntrinsicKind.KeyValuePairConstructor){var a=genericArguments(cil);var second=Pop(stack,cil);var first=Pop(stack,cil);var address=Pop(stack,cil);var a0=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var a1=a.Count>1?a[1]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var secondOffset=Align(a0.Size,Math.Min(Math.Max(a1.Size,1),4));instructions.Add(new ValueIrStructStore(address,0,first,a0.Size,a0.ContainsReferences));instructions.Add(new ValueIrStructStore(address,secondOffset,second,a1.Size,a1.ContainsReferences));break;}
-                        if(ik is IntrinsicKind.KeyValuePairKey or IntrinsicKind.KeyValuePairValue){var a=genericArguments(cil);var index=ik==IntrinsicKind.KeyValuePairKey?0:1;var rep=a.Count>index?a[index]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var offset=index==0?0:Align(a[0].Size,Math.Min(Math.Max(rep.Size,1),4));var address=Pop(stack,cil);var value=New(rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrStructLoad(value,address,offset,rep.Size,rep.ContainsReferences));stack.Add(value);break;}
-                        if(ik==IntrinsicKind.ArraySegmentConstructor){var segmentCount=Pop(stack,cil);var offset=Pop(stack,cil);var array=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrStructStore(address,0,array,4,true));instructions.Add(new ValueIrStructStore(address,4,offset,4,false));instructions.Add(new ValueIrStructStore(address,8,segmentCount,4,false));break;}
-                        if(ik is IntrinsicKind.ArraySegmentArray or IntrinsicKind.ArraySegmentOffset or IntrinsicKind.ArraySegmentCount){var address=Pop(stack,cil);var isArray=ik==IntrinsicKind.ArraySegmentArray;var offset=ik==IntrinsicKind.ArraySegmentOffset?4:ik==IntrinsicKind.ArraySegmentCount?8:0;var value=New(isArray?CilStackKind.ObjectReference:CilStackKind.I4);instructions.Add(new ValueIrStructLoad(value,address,offset,4,isArray));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.KeyValuePairConstructor){var a=genericArguments(cil);var second=Pop(stack,cil);var first=Pop(stack,cil);var address=Pop(stack,cil);var a0=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var a1=a.Count>1?a[1]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var secondOffset=Align(a0.Size,Math.Min(Math.Max(a1.Size,1),8));instructions.Add(new ValueIrStructStore(address,0,first,a0.Size,a0.ContainsReferences));instructions.Add(new ValueIrStructStore(address,secondOffset,second,a1.Size,a1.ContainsReferences));break;}
+                        if(ik is IntrinsicKind.KeyValuePairKey or IntrinsicKind.KeyValuePairValue){var a=genericArguments(cil);var index=ik==IntrinsicKind.KeyValuePairKey?0:1;var rep=a.Count>index?a[index]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var offset=index==0?0:Align(a[0].Size,Math.Min(Math.Max(rep.Size,1),8));var address=Pop(stack,cil);var value=New(rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrStructLoad(value,address,offset,rep.Size,rep.ContainsReferences));stack.Add(value);break;}
+                        if(ik==IntrinsicKind.ArraySegmentConstructor){var segmentCount=Pop(stack,cil);var offset=Pop(stack,cil);var array=Pop(stack,cil);var address=Pop(stack,cil);instructions.Add(new ValueIrStructStore(address,0,array,8,true));instructions.Add(new ValueIrStructStore(address,8,offset,4,false));instructions.Add(new ValueIrStructStore(address,12,segmentCount,4,false));break;}
+                        if(ik is IntrinsicKind.ArraySegmentArray or IntrinsicKind.ArraySegmentOffset or IntrinsicKind.ArraySegmentCount){var address=Pop(stack,cil);var isArray=ik==IntrinsicKind.ArraySegmentArray;var offset=ik==IntrinsicKind.ArraySegmentOffset?8:ik==IntrinsicKind.ArraySegmentCount?12:0;var value=New(isArray?CilStackKind.ObjectReference:CilStackKind.I4);instructions.Add(new ValueIrStructLoad(value,address,offset,4,isArray));stack.Add(value);break;}
                         if(ik==IntrinsicKind.ArraySegmentItem){var a=genericArguments(cil);var rep=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var index=Pop(stack,cil);var address=Pop(stack,cil);var value=New(rep.ContainsReferences?CilStackKind.ObjectReference:rep.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrArraySegmentItem(value,address,index,rep.Size,rep.ContainsReferences));stack.Add(value);break;}
                         if(ik==IntrinsicKind.ArraySegmentGetEnumerator){var segment=Pop(stack,cil);var value=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrArraySegmentGetEnumerator(value,segment));stack.Add(value);break;}
                         if(ik==IntrinsicKind.ArraySegmentEnumeratorMoveNext){var address=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrEnumeratorMoveNext(value,address));stack.Add(value);break;}
@@ -308,6 +316,12 @@ internal static class ValueIrImporter
                     case 0x73:
                     {
                         var ik=intrinsic(cil);
+                        if(ik==IntrinsicKind.NullableConstructor)
+                        {
+                            var size=nullableValueSize(cil);var input=Pop(stack,cil);var hasValue=New(CilStackKind.I4);
+                            instructions.Add(new ValueIrConstant(hasValue,1));var nullableValue=New(CilStackKind.ManagedPointer);
+                            instructions.Add(new ValueIrNewStruct(nullableValue,AlignNullable(size),new[]{(0,hasValue,1,false),(4,input,size,false)}));stack.Add(nullableValue);break;
+                        }
                         if(ik==IntrinsicKind.ExceptionConstructor)
                         {
                             var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing exception constructor signature at IL_{cil.Offset:x4}.");
@@ -316,16 +330,16 @@ internal static class ValueIrImporter
                             var type=resolveType(cil)??"System.Exception";var exceptionValue=New(CilStackKind.ObjectReference);
                             instructions.Add(new ValueIrNewException(exceptionValue,type,message));stack.Add(exceptionValue);break;
                         }
-                        if(ik==IntrinsicKind.KeyValuePairConstructor){var a=genericArguments(cil);var second=Pop(stack,cil);var first=Pop(stack,cil);var a0=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var a1=a.Count>1?a[1]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var secondOffset=Align(a0.Size,Math.Min(Math.Max(a1.Size,1),4));var pairValue=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrNewStruct(pairValue,secondOffset+a1.Size,new[]{(0,first,a0.Size,a0.ContainsReferences),(secondOffset,second,a1.Size,a1.ContainsReferences)}));stack.Add(pairValue);break;}
-                        if(ik==IntrinsicKind.ArraySegmentConstructor){var segmentCount=Pop(stack,cil);var offset=Pop(stack,cil);var array=Pop(stack,cil);var segmentValue=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrNewStruct(segmentValue,12,new[]{(0,array,4,true),(4,offset,4,false),(8,segmentCount,4,false)}));stack.Add(segmentValue);break;}
+                        if(ik==IntrinsicKind.KeyValuePairConstructor){var a=genericArguments(cil);var second=Pop(stack,cil);var first=Pop(stack,cil);var a0=a.Count>0?a[0]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var a1=a.Count>1?a[1]:new GenericRepresentation(GenericRepresentationKind.PointerSized,4);var secondOffset=Align(a0.Size,Math.Min(Math.Max(a1.Size,1),8));var pairValue=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrNewStruct(pairValue,secondOffset+a1.Size,new[]{(0,first,a0.Size,a0.ContainsReferences),(secondOffset,second,a1.Size,a1.ContainsReferences)}));stack.Add(pairValue);break;}
+                        if(ik==IntrinsicKind.ArraySegmentConstructor){var segmentCount=Pop(stack,cil);var offset=Pop(stack,cil);var array=Pop(stack,cil);var segmentValue=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrNewStruct(segmentValue,16,new[]{(0,array,8,true),(8,offset,4,false),(12,segmentCount,4,false)}));stack.Add(segmentValue);break;}
                         var target=resolveCall(cil)??throw new NotSupportedException($"Unresolved constructor at IL_{cil.Offset:x4}.");var args=new IrValue[target.ParameterCount];for(var ai=args.Length-1;ai>=0;ai--)args[ai]=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);
                         if(target.DeclaringTypeIsDelegate&&args.Length==2)instructions.Add(new ValueIrNewDelegate(value,args[0],args[1]));
                         else instructions.Add(new ValueIrNewObject(value,target.Key.TypeName,target.Key,args));
                         stack.Add(value);break;
                     }
-                    case 0x7b:
+                    case 0x7b or 0x7c:
                     {
-                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(field.IsReference?CilStackKind.ObjectReference:ResultKind(analysis,cil));instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name));stack.Add(value);break;
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved field at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var value=New(cil.OpCode==0x7c||field.StorageSize>0?CilStackKind.ManagedPointer:field.IsReference?CilStackKind.ObjectReference:field.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadField(value,obj,field.DeclaringType,field.Name,cil.OpCode==0x7c));stack.Add(value);break;
                     }
                     case 0x7d:
                     {
@@ -333,7 +347,7 @@ internal static class ValueIrImporter
                     }
                     case 0x7e:
                     {
-                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");var value=New(field.IsReference?CilStackKind.ObjectReference:ResultKind(analysis,cil));instructions.Add(new ValueIrLoadStaticField(value,field.DeclaringType,field.Name));stack.Add(value);break;
+                        var field=resolveField(cil)??throw new NotSupportedException($"Unresolved static field at IL_{cil.Offset:x4}.");var value=New(field.IsReference?CilStackKind.ObjectReference:field.Size==8?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadStaticField(value,field.DeclaringType,field.Name));stack.Add(value);break;
                     }
                     case 0x80:
                     {
@@ -342,9 +356,19 @@ internal static class ValueIrImporter
                     case 0x2b or 0x38:
                         terminator=new ValueIrJump(Target(blocks,cil));break;
                     case 0xdc:
-                        terminator=new ValueIrEndFinally(Target(blocks,cil));break;
+                    {
+                        var region=exceptionRegions.FirstOrDefault(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally && cil.Offset>=r.HandlerOffset && cil.Offset<r.HandlerOffset+r.HandlerLength);
+                        if(region.Kind!=System.Reflection.Metadata.ExceptionRegionKind.Finally)throw new InvalidDataException($"endfinally outside finally at IL_{cil.Offset:x4}.");
+                        terminator=new ValueIrEndFinally(region.HandlerOffset);break;
+                    }
                     case 0xdd or 0xde:
-                        stack.Clear();terminator=new ValueIrJump(Target(blocks,cil));break;
+                    {
+                        stack.Clear();
+                        var destination=((CilBranchTarget)cil.Operand!).Offset;
+                        var handlers=exceptionRegions.Where(r=>r.Kind==System.Reflection.Metadata.ExceptionRegionKind.Finally && (cil.Offset>=r.TryOffset && cil.Offset<r.TryOffset+r.TryLength || exceptionRegions.Any(c=>c.Kind==System.Reflection.Metadata.ExceptionRegionKind.Catch && c.TryOffset==r.TryOffset && c.TryLength==r.TryLength && cil.Offset>=c.HandlerOffset && cil.Offset<c.HandlerOffset+c.HandlerLength)) && (destination<r.TryOffset || destination>=r.TryOffset+r.TryLength))
+                            .OrderBy(r=>r.TryLength).Select(r=>r.HandlerOffset).ToArray();
+                        terminator=new ValueIrLeave(Target(blocks,cil),handlers);break;
+                    }
                     case 0x2c or 0x39:
                     {
                         var condition=Pop(stack,cil);var target=Target(blocks,cil);terminator=new ValueIrBranch(condition,null,ValueIrComparison.NonZero,false,Fallthrough(blocks,block,cil),target);break;
