@@ -71,4 +71,4 @@ Native CARD reads use aligned 512-byte transfers and writes use aligned card sec
 
 ## Verification
 
-CI runs the compiled smoke on 32/64-bit hosts, optimized ASan/UBSan and GC stress, alongside the existing compiler/runtime regressions and GameCube DOL build. Host fixtures test API behavior, not physical hardware. The target build compiles the storage drivers but does not execute mounts or prove FAT encoding, ISO9660 media compatibility, card removal, DMA behavior or save-browser rendering. These remain target acceptance checks.
+CI runs the compiled smoke on 32/64-bit hosts, optimized ASan/UBSan, injected short I/O and failure cleanup, and GC stress, alongside the existing compiler/runtime regressions and GameCube DOL build. Host fixtures test API behavior, not physical hardware. The target build compiles the storage drivers but does not execute mounts or prove FAT encoding, ISO9660 media compatibility, card removal, DMA behavior or save-browser rendering. These remain target acceptance checks.

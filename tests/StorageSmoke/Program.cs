@@ -56,7 +56,7 @@ internal static class Program
             var entries=card.GetEntries();if(entries.Length!=1 || entries[0].Name!="Save01" || entries[0].Length!=3)return 18;
             using(var shared=MemoryCard.Mount(StorageDevice.MemoryCardSlotA,new MemoryCardIdentity("DDNT","01"))){if(shared.ReadAllBytes("Save01")[0]!=9)return 35;}
             try{card.WriteAllBytes("bad/name",bytes);return 36;}catch(ArgumentException){}
-            try{using(var conflicting=MemoryCard.Mount(StorageDevice.MemoryCardSlotA,new MemoryCardIdentity("OTHER","01"))){}return 37;}catch(ArgumentException){}
+            try{using(var conflicting=MemoryCard.Mount(StorageDevice.MemoryCardSlotA,new MemoryCardIdentity("OTHR","01"))){}return 37;}catch(IOException){}
             options.Icon=new byte[1];try{card.WriteSave("Save01",bytes,options);return 38;}catch(ArgumentException){}if(card.ReadAllBytes("Save01").Length!=3)return 39;
             card.Delete("Save01");if(card.GetEntries().Length!=0)return 19;
         }

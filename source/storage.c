@@ -576,7 +576,7 @@ DndArray *dnd_fs_read_all(DndManagedHeap *heap, DndString *path) {
     return NULL;
   struct stat st;
   if (stat(native, &st)) {
-    fail(errno, "Cannot stat file.");
+    fail(path_error(errno, native), "Cannot stat file.");
     return NULL;
   }
   if (!S_ISREG(st.st_mode)) {
@@ -814,6 +814,12 @@ DndString *dnd_fs_dir_next(DndManagedHeap *heap, int token, int kind) {
     }
 #endif
     struct stat st;
+#ifndef DND_GAMECUBE_STORAGE
+    if (lstat(native, &st) == 0 && S_ISLNK(st.st_mode)) {
+      fail(ENOSYS, "Symbolic links are unsupported.");
+      return NULL;
+    }
+#endif
     if (stat(native, &st)) {
       fail(errno, "Entry disappeared.");
       return NULL;

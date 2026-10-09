@@ -78,6 +78,8 @@ jobs:
           cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/storage.c -o /tmp/storage32
           timeout 30s /tmp/storage32
           timeout 30s /tmp/storage32 --gc-stress
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Iinclude tests/storage_faults.c source/managed_runtime.c source/storage.c -Wl,--wrap=read,--wrap=write,--wrap=close -o /tmp/storage_faults
+          timeout 30s /tmp/storage_faults
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
       - name: Verify generated source
@@ -124,6 +126,11 @@ jobs:
         run: |
           dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll generated/managed_gamecube.c
+      - name: Compile managed storage ABI for PowerPC
+        run: |
+          dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/StorageSmoke/bin/Release/net8.0/StorageSmoke.dll /tmp/storage_smoke.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/storage_smoke.c -o /tmp/storage_smoke.o
       - name: Build ELF and DOL
         run: make V=1
       - name: Report GameCube runtime footprint

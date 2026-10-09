@@ -12,7 +12,9 @@ int dnd_network_init(void){
  return 0;
 }
 int dnd_udp_open(uint16_t port){
- int s=net_socket(AF_INET,SOCK_DGRAM|SOCK_NONBLOCK,IPPROTO_IP); if(s<0)return s;
+ int s=net_socket(AF_INET,SOCK_DGRAM,IPPROTO_IP); if(s<0)return s;
+ unsigned long nonblocking=1;
+ if(net_ioctl(s,FIONBIO,&nonblocking)<0){int error=errno;net_close(s);errno=error;return -1;}
  if(port){struct sockaddr_in a;memset(&a,0,sizeof(a));a.sin_family=AF_INET;a.sin_port=htons(port);a.sin_addr.s_addr=INADDR_ANY;if(net_bind(s,(struct sockaddr*)&a,sizeof(a))<0){net_close(s);return -1;}}
  return s;
 }
