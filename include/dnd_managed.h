@@ -100,7 +100,20 @@ typedef enum {
     DND_EXCEPTION_INVALID_CAST,
     DND_EXCEPTION_OUT_OF_MEMORY,
     DND_EXCEPTION_ARGUMENT,
-    DND_EXCEPTION_INVALID_OPERATION
+    DND_EXCEPTION_INVALID_OPERATION,
+    DND_EXCEPTION_IO,
+    DND_EXCEPTION_FILE_NOT_FOUND,
+    DND_EXCEPTION_DIRECTORY_NOT_FOUND,
+    DND_EXCEPTION_UNAUTHORIZED,
+    DND_EXCEPTION_DRIVE_NOT_FOUND,
+    DND_EXCEPTION_PATH_TOO_LONG,
+    DND_EXCEPTION_ARGUMENT_NULL,
+    DND_EXCEPTION_ARGUMENT_OUT_OF_RANGE,
+    DND_EXCEPTION_OBJECT_DISPOSED,
+    DND_EXCEPTION_OPERATION_CANCELED,
+    DND_EXCEPTION_ENCODER_FALLBACK,
+    DND_EXCEPTION_DECODER_FALLBACK,
+    DND_EXCEPTION_NOT_SUPPORTED
 } DndExceptionKind;
 
 extern const DndType DND_TYPE_OBJECT;
@@ -116,9 +129,15 @@ extern const DndType DND_TYPE_INT16;
 extern const DndType DND_TYPE_UINT16;
 extern const DndType DND_TYPE_UINT32;
 extern const DndType DND_TYPE_INT64;
+extern const DndType DND_TYPE_UINT64;
+extern const DndType DND_TYPE_SINGLE;
+extern const DndType DND_TYPE_DOUBLE;
 extern const DndType DND_TYPE_EXCEPTION;
 extern const DndType DND_TYPE_SYSTEM_EXCEPTION;
 extern const DndType DND_TYPE_INVALID_OPERATION_EXCEPTION;
+extern const DndType DND_TYPE_OPERATION_CANCELED_EXCEPTION;
+extern const DndType DND_TYPE_ENCODER_FALLBACK_EXCEPTION;
+extern const DndType DND_TYPE_DECODER_FALLBACK_EXCEPTION;
 extern const DndType DND_TYPE_ARGUMENT_EXCEPTION;
 extern const DndType DND_TYPE_ARGUMENT_NULL_EXCEPTION;
 extern const DndType DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION;
@@ -128,8 +147,17 @@ extern const DndType DND_TYPE_INVALID_CAST_EXCEPTION;
 extern const DndType DND_TYPE_NOT_SUPPORTED_EXCEPTION;
 extern const DndType DND_TYPE_OUT_OF_MEMORY_EXCEPTION;
 
+extern const DndType DND_TYPE_IO_EXCEPTION;
+extern const DndType DND_TYPE_FILE_NOT_FOUND_EXCEPTION;
+extern const DndType DND_TYPE_DIRECTORY_NOT_FOUND_EXCEPTION;
+extern const DndType DND_TYPE_UNAUTHORIZED_EXCEPTION;
+extern const DndType DND_TYPE_DRIVE_NOT_FOUND_EXCEPTION;
+extern const DndType DND_TYPE_PATH_TOO_LONG_EXCEPTION;
+extern const DndType DND_TYPE_OBJECT_DISPOSED_EXCEPTION;
+
 void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size);
 DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type);
+DndString *dnd_string_from_utf16(DndManagedHeap *heap,const uint16_t *chars,uint32_t length);
 DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text);
 DndString *dnd_string_concat(DndManagedHeap *heap, const DndString *a, const DndString *b);
 DndString *dnd_string_from_i64(DndManagedHeap *heap, int64_t value);

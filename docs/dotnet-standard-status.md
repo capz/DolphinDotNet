@@ -1,6 +1,6 @@
 # .NET Standard compatibility index
 
-Audit date: 2026-10-09. Implementation baseline: `c84a3d1`, after Phase 7 merged. This index describes ordinary compiled C# development; it is not a full .NET Standard conformance report.
+Audit date: 2026-10-09. Implementation baseline: Phase 7 plus compiled collections, text, cooperative async, FST and recoverable save replacement. This index describes ordinary compiled C# development; it is not a full .NET Standard conformance report.
 
 The managed Core project targets `netstandard2.0`, while the compiler smoke applications target `net8.0`. A target framework supplies compile-time references; it does not make every referenced API available in the generated GameCube program. .NET Standard 2.0 is the initial API inventory baseline, not a claim that DolphinDotNet implements its whole contract.
 
@@ -18,18 +18,18 @@ The managed Core project targets `netstandard2.0`, while the compiler smoke appl
 | --- | --- | --- | --- |
 | RT01 | Classes, constructors, inheritance, instance/static fields | Compiled subset | Lifecycle/static initialization/inherited field probes; not every layout or initialization edge case |
 | RT02 | Virtual/interface calls, casts and type tests | Compiled subset | Managed lifecycle and collection dispatch; not all framework interfaces automatically materialize |
-| RT03 | Generics | Compiled subset | Reference sharing, scalar/wide specialization, closed generic fields and wide dispatch; arbitrary aggregate instantiations need separate verification |
+| RT03 | Generics | Compiled subset | Type-aware scalar/reference/aggregate specialization, embedded references and struct parameters/returns; framework-wide generic conformance remains unclaimed |
 | RT04 | Exceptions, typed catches, rethrow, finally | Compiled subset | Nested regions, cross-method throws, rethrow after inner catch, finally continuations and GC during unwinding; filters/fault coverage is not established |
 | RT05 | Managed allocation and GC | Compiled subset | Precise roots, embedded reference fields, pending exceptions, stress collection; native tests cover deep graphs/cycles/reuse/OOM |
-| RT06 | Scalar boxing/unboxing | Compiled subset | Integer/nullable paths and full-width Int64 regression; not arbitrary value-type boxing |
+| RT06 | Boxing/unboxing | Compiled subset | Scalar widths, floats, nullable primitives, aggregate boxing and boxed equality/hash; arbitrary aggregate unboxing remains outside the tested scope |
 | RT07 | Delegates / Action / Func foundation | Compiler support | Construction/invocation and target roots exist; multicast combine/remove and complete signature coverage remain gaps |
-| EQ01 | `Object.Equals` | Compiled subset | Identity, null and selected boxed integer paths; arbitrary overrides, string content through object dispatch and general value-type equality are not established |
-| EQ02 | `Object.GetHashCode` | Missing general lowering | A constrained managed-pointer path is treated as nullable hashing; the ordinary object path emits opaque IR rejected by the verifier |
-| EQ03 | `IEquatable<T>`, `IComparable<T>`, `IComparable` | Missing standard contract infrastructure | User-authored direct methods are not proof of normal framework interface/default-comparer behavior |
-| EQ04 | `EqualityComparer<T>`, `Comparer<T>`, `StringComparer` | Missing | Default selection, typed equality/hash/order, custom comparer dispatch and null semantics are next work |
+| EQ01 | `Object.Equals` | Compiled subset | Identity/null, boxed scalar/string/value equality and object overrides; generic typed equality is selected separately |
+| EQ02 | `Object.GetHashCode` | Compiled subset | Object overrides, identity fallback, boxed values and constrained generic hash paths; hash values are implementation-defined |
+| EQ03 | `IEquatable<T>`, `IComparable<T>`, `IComparable` | Compiled subset | MethodImpl-aware explicit contracts and typed default comparison; unsupported ordering throws rather than comparing addresses |
+| EQ04 | `EqualityComparer<T>`, `Comparer<T>`, `StringComparer` | Compiled subset | Defaults/custom/delegate comparers, scalar/nullable/value/reference cases; ordinal and Unicode ordinal-ignore-case strings. Culture comparers remain unavailable |
 | NU01 | `Nullable<T>` construction, `HasValue`, `Value`, `GetValueOrDefault` | Compiled subset | int/long tested, private parameter copies and byref replacement; arbitrary struct payloads not established |
 | NU02 | Nullable `Equals(object)`, `GetHashCode`, boxing | Compiled subset | Empty/present int/long equality/hash and boxing/unboxing paths; not full generic equality infrastructure |
-| NU03 | Static `Nullable.Equals<T>`, `Nullable.Compare<T>`, reflection helpers | Missing | No dedicated production intrinsic/managed implementation found |
+| NU03 | Static `Nullable.Equals<T>`, `Nullable.Compare<T>`, reflection helpers | Compiled subset | Static equality/comparison use the default generic comparers; int/long regressions covered. Reflection helpers remain unsupported |
 | AR01 | One-dimensional scalar/reference arrays | Compiled subset | Widths, allocation/bounds/null/overflow checks, references and native covariance tests; multidimensional arrays not established |
 | AR02 | `Array.Length`, `LongLength`, `Rank`, bounds queries, `Clear`, `Copy`, `IndexOf` | Compiled subset | Selected overloads and array interface paths; general comparer-driven searches and sorting not established |
 | ST01 | `String.Length`, indexer, equality, `Substring`, two-string `Concat` | Compiled subset | UTF-16 storage/characters, selected operations and GC protection; full overload/exception matrix not established |
@@ -39,18 +39,18 @@ The managed Core project targets `netstandard2.0`, while the compiler smoke appl
 | CL01 | `IEnumerable<T>`, `IEnumerator<T>`, nongeneric counterparts, `IDisposable` | Compiled subset | Custom class enumeration, explicit nongeneric Current and cleanup paths; standard array-as-interface enumeration and all variance cases not established |
 | CL02 | `ICollection<T>`, `IList<T>`, `IReadOnlyCollection<T>`, `IReadOnlyList<T>` | Compiled subset | Synthetic contracts, selected array calls and custom collection dispatch; contract semantics need fuller regression coverage |
 | CL03 | `KeyValuePair<TKey,TValue>`, `ArraySegment<T>` | Compiled subset | Construction/accessors, selected enumerator paths, embedded reference-field tracing; full interface surface not established |
-| CL04 | `List<T>` | Native only | C `DndList` storage exists; smoke `CompactList<T>` is a fixed-capacity test class, not `System.Collections.Generic.List<T>` |
+| CL04 | Standard growable list and array enumerable | Compiled subset | Standard List<T> maps to the managed implementation: arrays/enumerables, ranges, searches/predicates, sort/binary search and value-copy enumerators. Nongeneric IList remains unavailable |
 | CL05 | `Dictionary`, `HashSet`, `Queue`, `Stack`, sorted/read-only collections | Missing | Equality/hash/order infrastructure is a prerequisite; no standard implementations found |
 | CL06 | Iterator blocks (`yield return`) | Unverified | Generated state-machine semantics not established by manually authored enumerator tests |
 | LQ01 | `System.Linq.Enumerable` | Missing | Select/Where/Any/All/Count/ToArray/etc. need managed implementation plus enumerable/delegate support |
-| IO01 | `File.Exists`, `ReadAllBytes`, `WriteAllBytes` | Native only | `source/system.c` helpers; no normal managed File binding, mounted-device initialization or complete error/cleanup behavior |
-| IO02 | `Directory`, `FileStream`, `Stream`, `MemoryStream`, readers/writers | Missing | [Proposed filesystem design](system-io-design.md); no implementation yet |
-| IO03 | `Path` helpers, `Guid`, `AppContext` | Native only | Selected C helpers; normal managed mapping and complete .NET semantics absent |
+| IO01 | Binary `System.IO.File` | Compiled subset | Normal compiled File calls map to managed facade/native backend; selected Open/Copy/Move/Delete and byte-array operations. See [exact scope](storage-runtime.md) |
+| IO02 | Directory and streams/text IO | Compiled subset | Stream/FileStream/MemoryStream, readers/writers, text files, pattern/recursive enumeration and cooperative async overloads; exact overloads and limitations are in [storage scope](storage-runtime.md) |
+| IO03 | Path helpers | Compiled subset | Selected normal Path calls use console device-prefix grammar. Guid/AppContext and full desktop path semantics remain missing |
 | IO04 | Console | Partial integration | GameCube WriteLine intrinsic and native overlay exist; general `System.Console` overload family is not registered in production intrinsic table |
 | NM01 | `Math`, `Random` | Native only | Integer Abs/Min/Max and PRNG primitives; normal managed APIs not wired up |
 | NM02 | Floating point, Decimal, BigInteger, Convert/Parse families | Missing/unverified broad support | IR kind names and signature recognition do not establish numeric semantics or library coverage |
-| TX01 | `Encoding`, globalization, culture and time/date APIs | Missing | No normal end-to-end managed implementations found |
-| TH01 | Tasks, async/await, cancellation, Thread, locks/synchronization APIs | Missing | Native LWP availability does not supply .NET threading/task semantics |
+| TX01 | `Encoding`, globalization, culture and time/date APIs | Compiled subset; other families missing | UTF-8/UTF-16/ASCII/Latin-1 codecs, strict fallback exceptions and BOM/text buffering; globalization and time/date APIs remain absent |
+| TH01 | Tasks, async/await, cancellation, Thread and synchronization | Compiled cooperative subset | Task/Task<T>, builders/awaiters, completion sources, Yield/Run, WhenAll/WhenAny, ConfigureAwait, cancellation and chunked IO. No thread pool, Thread/locks, timers or synchronization contexts |
 | NW01 | `System.Net`, sockets, HttpClient | Native only / missing facade | Native nonblocking UDP foundation; ordinary .NET socket/HTTP API bindings absent |
 | SR01 | JSON/XML, Regex, serialization, compression | Missing | Framework/NuGet assemblies cannot be assumed to run through the AOT pipeline |
 | RF01 | Full reflection and dynamic assembly loading | Excluded | Static closed-world metadata and supported type checks remain allowed |
@@ -59,7 +59,7 @@ The managed Core project targets `netstandard2.0`, while the compiler smoke appl
 
 Small, explicitly tested C# programs using the supported object/control-flow/runtime subset can compile through AOT. Custom collection/algorithm code can work when all reachable calls and emitted CIL are supported. Ordinary .NET library use still requires inspecting its complete reachable dependency graph; a successful Roslyn build is insufficient.
 
-LINQ, Dictionary/List, streams, async and common formatting-heavy NuGet libraries are not currently a drop-in development surface. Phase 7 acceptance validates a constrained execution model, not the whole Base Class Library.
+Standard List, selected streams/text and cooperative async now have compiled smoke coverage. LINQ, Dictionary and common formatting-heavy NuGet libraries are not a drop-in development surface. Phase 7 acceptance validates a constrained execution model, not the whole Base Class Library.
 
 ## Evidence
 
@@ -90,3 +90,5 @@ A reproducible contract report needs: pinned reference assembly/version; normali
 ## Reference
 
 [Microsoft's .NET Standard overview](https://learn.microsoft.com/en-us/dotnet/standard/net-standard) defines the API contract. Project-specific unsupported areas and permanent exclusions remain explicit rather than being counted as implementation.
+
+Library evidence: `tests/LibrarySmoke`, including explicit deferred state-machine and GC-stress probes. Storage evidence: `tests/StorageSmoke`, `tests/storage_host.c`, `source/storage.c`, `source/storage_gamecube.c`, and the collections/storage CI step. Portable injected filesystem/transaction failures are tested. Hardware execution remains separate acceptance work.

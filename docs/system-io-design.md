@@ -1,13 +1,13 @@
 # System.IO File and Directory design
 
-Status: proposed; no new filesystem implementation is included in this document.
+Status: initial binary I/O and storage slice implemented; see [supported APIs and limits](storage-runtime.md). The remaining design below describes follow-up coverage, not a completed .NET contract.
 Source audit: 2026-10-09. Baseline public contract: .NET Standard 2.0, matching the managed Core project. Additional modern .NET overloads require separate coverage.
 
 ## Design decision
 
 Implement ordinary `System.IO` APIs as managed algorithms over a small native filesystem backend. Use libogc2-compatible libdvm to mount FAT/exFAT volumes and expose devoptab operations; use the devkitPPC C runtime for file descriptors and directory iteration. Keep hardware discovery and mounting under `Dolphin.Storage`, and keep game/application file code under `System.IO`.
 
-The current project still selects legacy libogc in `Makefile` and CI. It has no filesystem mount initialization or filesystem library in `LIBS`. A DOL loading successfully from Swiss does not establish that the application has mounted the same medium.
+The build now selects libogc2 and links libdvm/FAT and ISO9660. Applications explicitly mount devices through `Dolphin.Storage`; a DOL loading from Swiss does not establish that the application has mounted the same medium.
 
 ## Verified upstream building blocks
 
@@ -128,11 +128,11 @@ libdvm's FAT errno mapping collapses both missing file and missing path into `EN
 4. Record successful mounted volumes/capabilities and cache/native memory use separately from the managed heap. No device is required for graphics-only execution.
 5. Close streams/cursors and synchronize writable media before orderly unmount/reset. Handle removal during an operation as an error; unmount must not invalidate a live handle silently.
 
-Optical assets and native memory-card save support are follow-up backends. Native memory-card saves should initially use a dedicated `Dolphin.Storage.MemoryCard` API with explicit save identity and block rules.
+The initial optical backend uses read-only ISO9660. Native memory-card saves use `Dolphin.Storage.MemoryCard`, separate from directory paths. Original GameCube disc FST access is explicitly selectable with Storage.MountDisc; ISO9660 remains the default. Text, cooperative async, pattern searches and native-card resize recovery are implemented in the scoped [storage runtime](storage-runtime.md).
 
-## Existing implementation gaps
+## Legacy native helpers
 
-`source/system.c` has native `Exists`, `ReadAllBytes` and `WriteAllBytes` helpers, but they are not mapped as normal `System.IO` calls by `IntrinsicRegistry`. `Exists` opens the file instead of checking its kind; reads allocate outside the managed heap and collapse open failures to not-found; several seek/close failures are not reported; writes ignore close errors. `Path.Combine` also does not implement device-prefix semantics. Replace these helpers behind the new bridge rather than treating them as completed .NET APIs.
+`source/system.c` has native `Exists`, `ReadAllBytes` and `WriteAllBytes` helpers, but they are not mapped as normal `System.IO` calls by `IntrinsicRegistry`. `Exists` opens the file instead of checking its kind; reads allocate outside the managed heap and collapse open failures to not-found; several seek/close failures are not reported; writes ignore close errors. `Path.Combine` also does not implement device-prefix semantics. Ordinary compiled managed I/O now uses `source/storage.c`; these legacy helpers are not evidence for further managed API support.
 
 ## Verification and delivery order
 

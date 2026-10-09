@@ -4,17 +4,17 @@ endif
 ifeq ($(strip $(DEVKITPRO)),)
 $(error "Please set DEVKITPRO in your environment")
 endif
-include $(DEVKITPPC)/gamecube_rules
+include $(DEVKITPRO)/libogc2/gamecube_rules
 TARGET := DolphinDotNet
 BUILD := build
 SOURCES := source generated
 INCLUDES := include
-PORTLIBS := $(DEVKITPRO)/portlibs/gamecube
-LIBS := -lopengx -logc -lm
-LIBOGC ?= $(DEVKITPRO)/libogc
+PORTLIBS := $(DEVKITPRO)/libogc2/gamecube
+LIBS := -lopengx -lfat -ldvm -liso9660 -lbba -logc -lm
+LIBOGC ?= $(DEVKITPRO)/libogc2/gamecube
 LIBDIRS := $(PORTLIBS) $(LIBOGC)
-LIBPATHS_EXTRA := -L$(LIBOGC)/lib/cube
-CFLAGS := -g -O2 -fstack-usage -Wall -Wextra $(MACHDEP) $(INCLUDE)
+LIBPATHS_EXTRA := -L$(LIBOGC)/lib
+CFLAGS := -DDND_GAMECUBE_STORAGE -g -O2 -fstack-usage -Wall -Wextra $(MACHDEP) $(INCLUDE)
 CXXFLAGS := $(CFLAGS)
 LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map
 ifneq ($(BUILD),$(notdir $(CURDIR)))

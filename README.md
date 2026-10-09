@@ -2,7 +2,7 @@
 
 **Experimental closed-world C# AOT toolchain and managed runtime for Nintendo GameCube.**
 
-DolphinDotNet compiles ordinary .NET assemblies into native C through a typed intermediate representation, then uses devkitPPC/libogc to produce a GameCube DOL. It does **not** embed CoreCLR or claim general .NET compatibility.
+DolphinDotNet compiles ordinary .NET assemblies into native C through a typed intermediate representation, then uses devkitPPC/libogc2 to produce a GameCube DOL. It does **not** embed CoreCLR or claim general .NET compatibility.
 
 ## Current state (October 2026)
 
@@ -13,7 +13,8 @@ DolphinDotNet compiles ordinary .NET assemblies into native C through a typed in
 | Legacy bytecode VM | Retained as a bootstrap/reference path |
 | Managed runtime | Compiled object lifecycle, fields, virtual/interface dispatch, strings, arrays, delegates, boxing, typed exceptions, rethrow and finally |
 | Memory management | Nonmoving mark/sweep GC, explicit roots and compiler-generated shadow-stack support, reusable free blocks, stress mode |
-| GameCube platform | libogc DOL, OpenGX 3D/overlay, PAD input, nonblocking UDP, console overlay |
+| GameCube platform | libogc2 DOL, OpenGX 3D/overlay, PAD input, nonblocking UDP, console overlay |
+| Collections and storage | Growable Dolphin list, array enumerable, binary System.IO facade, lazy directory enumeration and enum-based SD/DVD mounting; separate memory-card saves |
 | Integration | Compiler and native runtime tests; 32/64-bit managed smoke execution, GC stress, ASan/UBSan and GameCube build CI |
 | Phase 7 runtime completeness | **Acceptance gates satisfied and merged** in [PR #37](https://github.com/capz/DolphinDotNet/pull/37); target execution remains separate |
 
@@ -24,14 +25,14 @@ The native runtime implementing a feature does **not** automatically mean all co
 ```text
 C# source -> Roslyn / .NET assembly -> CIL + metadata
   -> CFG / stack analysis -> typed Value IR -> generated native C
-  -> devkitPPC + libogc -> ELF -> DolphinDotNet.dol
+  -> devkitPPC + libogc2 -> ELF -> DolphinDotNet.dol
 ```
 
 `--aot` is the production compiler path; `--value-aot` is its explicit alias. `--legacy-aot` is retained for regression characterization. The original bytecode compiler is not the production target.
 
 ## Try the compiler
 
-Requires the .NET SDK (see project target frameworks) and, for DOL builds, devkitPro with devkitPPC, libogc and the GameCube OpenGX port.
+Requires the .NET SDK (see project target frameworks) and, for DOL builds, devkitPro with devkitPPC and the compatible libogc2 GameCube packages (OpenGX, FAT/libdvm and ISO9660). CI pins the toolchain image.
 
 ```sh
 dotnet run --project tools/DolphinDotNet.Compiler -- --aot path/to/Managed.dll generated/generated_program.c
@@ -69,8 +70,8 @@ The managed/native split keeps game code independent of GX, PAD, libogc and nati
 
 The **0.1 milestone is still pending**. It requires the integrated managed demo to boot on Dolphin and real GameCube hardware, render a textured 3D object, respond to controller input, exchange UDP packets and display diagnostics without a desktop CLR. Static stack reports do not establish runtime stack high-water usage.
 
-The next library work is equality/comparison, nullable and generic enumerable/collection contracts. Phase 8 establishes a consistent managed platform API over the existing native drivers, followed by the Phase 9 demo.
+Further library work includes general equality/comparison, nullable coverage, standard List mapping and broader collection implementations. Phase 8 establishes a consistent managed platform API over the existing native drivers, followed by the Phase 9 demo.
 
-For ordinary .NET library development, see the [.NET Standard compatibility index](docs/dotnet-standard-status.md). It distinguishes compiled API subsets from native-only primitives and missing framework implementations. The proposed [File and Directory design](docs/system-io-design.md) describes the libogc2/libdvm storage backend and managed `System.IO` rollout.
+For ordinary .NET library development, see the [.NET Standard compatibility index](docs/dotnet-standard-status.md). It distinguishes compiled API subsets from native-only primitives and missing framework implementations. The [supported storage APIs](docs/storage-runtime.md) document usage and limits; the [File and Directory design](docs/system-io-design.md) describes the libogc2/libdvm storage backend and managed `System.IO` rollout.
 
 See [architecture](docs/architecture.md), [managed runtime architecture](docs/managed-runtime-architecture.md), [runtime levels](docs/runtime-levels.md) and [platform roadmap](docs/platform-roadmap.md).
