@@ -422,8 +422,9 @@ int dnd_fs_open(DndString *path, int mode, int access, int share) {
     fail(path_error(errno, native), "Cannot open file.");
     return 0;
   }
-  if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
-    int e = errno;
+  int stat_error = fstat(fd, &st);
+  if (stat_error != 0 || !S_ISREG(st.st_mode)) {
+    int e = stat_error ? errno : EACCES;
     close(fd);
     fail(e ? e : EACCES, "Not a regular file.");
     return 0;
@@ -449,11 +450,15 @@ static bool range(DndArray *a, int offset, int count) {
     dnd_exception_throw(DND_EXCEPTION_ARGUMENT_NULL, "Buffer is null.");
     return false;
   }
-  if (a->element_size != 1 || a->elements_are_references || offset < 0 ||
-      count < 0 || (uint32_t)offset > a->length ||
-      (uint32_t)count > a->length - (uint32_t)offset) {
+  if (offset < 0 || count < 0) {
     dnd_exception_throw(DND_EXCEPTION_ARGUMENT_OUT_OF_RANGE,
-                        "Invalid buffer range.");
+                        "Negative buffer range.");
+    return false;
+  }
+  if (a->element_size != 1 || a->elements_are_references ||
+      (uint32_t)offset > a->length ||
+      (uint32_t)count > a->length - (uint32_t)offset) {
+    dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Invalid buffer range.");
     return false;
   }
   return true;
@@ -548,13 +553,28 @@ void dnd_fs_set_length(int token, int64_t length) {
   FileHandle *h = handle(token);
   if (!h)
     return;
-  if (!(h->access & 2) || length < 0 || (int64_t)(off_t)length != length ||
+  if (!(h->access & 2)) {
+    fail(ENOSYS, "Stream is not writable.");
+    return;
+  }
+  if (length < 0) {
+    dnd_exception_throw(DND_EXCEPTION_ARGUMENT_OUT_OF_RANGE,
+                        "Negative stream length.");
+    return;
+  }
+  if ((int64_t)(off_t)length != length ||
       (h->append_origin >= 0 && length < h->append_origin)) {
     fail(EINVAL, "Invalid stream length.");
     return;
   }
-  if (ftruncate(h->fd, (off_t)length))
+  if (ftruncate(h->fd, (off_t)length)) {
     fail(errno, "Truncate failed.");
+    return;
+  }
+  off_t current = lseek(h->fd, 0, SEEK_CUR);
+  if (current < 0 ||
+      (current > (off_t)length && lseek(h->fd, (off_t)length, SEEK_SET) < 0))
+    fail(errno, "Position update failed.");
 }
 void dnd_fs_flush(int token) {
   FileHandle *h = handle(token);

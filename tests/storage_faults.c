@@ -85,6 +85,15 @@ int main(void) {
   assert(dnd_exception_kind() == DND_EXCEPTION_IO &&
          dnd_fs_open_handles() == 0);
   dnd_exception_clear();
+  dnd_exception_throw(DND_EXCEPTION_IO, "Original read error");
+  DndObject *original = dnd_exception_object();
+  dnd_exception_begin_catch();
+  dnd_exception_throw(DND_EXCEPTION_UNAUTHORIZED, "Cleanup error");
+  assert(original->type == &DND_TYPE_IO_EXCEPTION);
+  dnd_exception_clear();
+  dnd_exception_throw_object(original);
+  assert(dnd_exception_matches(&DND_TYPE_IO_EXCEPTION));
+  dnd_exception_clear();
   dnd_fs_delete((DndString *)path, false);
   dnd_storage_unmount(2);
   dnd_gc_frame_pop(&frame);

@@ -12,6 +12,8 @@ internal static class Program
         var total=0L;foreach(var value in list)total+=value;if(total!=40*0x100000000L+780)return 2;
         var initial=list.GetEnumerator();try{var unused=initial.Current;return 21;}catch(InvalidOperationException){}finally{initial.Dispose();}
         var adapted=new Dolphin.Collections.List<long>(new Dolphin.Collections.ArrayEnumerable<long>(list.ToArray()));if(adapted.Count!=40 || adapted[39]!=0x100000027L)return 22;
+        System.Collections.IEnumerable boxedValues=adapted;var boxedTotal=0L;
+        foreach(var value in boxedValues)boxedTotal+=(long)value;if(boxedTotal!=total)return 44;
         list.Insert(0,5);list.RemoveAt(0);var destination=new long[41];list.CopyTo(destination,1);if(destination[40]!=0x100000027L)return 23;
         var versioned=list.GetEnumerator();list.Add(7);
         try { versioned.MoveNext();return 3; }catch(InvalidOperationException){}finally{versioned.Dispose();}
@@ -26,7 +28,9 @@ internal static class Program
             if(stream.Read(read,0,3)!=3 || read[1]!=7)return 8;
             try { File.OpenRead(path);return 9; }catch(IOException){}
             try { Storage.Unmount(StorageDevice.SdSerialPort2);return 10; }catch(IOException){}
-            stream.SetLength(2);stream.Flush();if(stream.Length!=2)return 11;
+            stream.SetLength(2);stream.Flush();if(stream.Length!=2 || stream.Position!=2)return 11;
+            try{stream.Read(bytes,-1,1);return 40;}catch(ArgumentOutOfRangeException){}
+            try{stream.Read(bytes,0,4);return 41;}catch(ArgumentException){}
         }
         using(var append=File.Open(path,FileMode.Append,FileAccess.Write))
         {
@@ -60,6 +64,8 @@ internal static class Program
             options.Icon=new byte[1];try{card.WriteSave("Save01",bytes,options);return 38;}catch(ArgumentException){}if(card.ReadAllBytes("Save01").Length!=3)return 39;
             card.Delete("Save01");if(card.GetEntries().Length!=0)return 19;
         }
+        Directory.SetCurrentDirectory(root);if(Directory.GetCurrentDirectory()!=root || Path.GetFullPath("data.bin")!=path)return 42;
+        Directory.SetCurrentDirectory("sd:/");if(Path.GetDirectoryName("sd:/")!=null || Path.GetExtension("file.")!="")return 43;
         Directory.Delete(root,true);if(Directory.Exists(root))return 20;
         Storage.Unmount(StorageDevice.DvdDrive);Storage.Unmount(StorageDevice.SdSerialPort2);return 0;
     }

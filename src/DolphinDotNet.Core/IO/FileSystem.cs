@@ -26,13 +26,14 @@ public static class Path
     public static string? GetDirectoryName(string path)
     {
         if(path==null)return null;
+        if(path.Length==0 || path=="/" || path=="\\" || path.Length>1 && path[path.Length-1]=='/' && path[path.Length-2]==':')return null;
         for(var i=path.Length-1;i>=0;i--)if(path[i]=='/' || path[i]=='\\')return i==0?"/":i>0 && path[i-1]==':'?path.Substring(0,i+1):path.Substring(0,i);
-        return null;
+        return "";
     }
     public static string GetExtension(string path)
     {
         var name=GetFileName(path);if(name==null)return null!;
-        for(var i=name.Length-1;i>=0;i--)if(name[i]=='.')return name.Substring(i);
+        for(var i=name.Length-1;i>=0;i--)if(name[i]=='.')return i==name.Length-1?"":name.Substring(i);
         return "";
     }
 }

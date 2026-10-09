@@ -37,7 +37,8 @@ const DndType DND_TYPE_UNAUTHORIZED_EXCEPTION = {"System.UnauthorizedAccessExcep
 const DndType DND_TYPE_DRIVE_NOT_FOUND_EXCEPTION = {"System.IO.DriveNotFoundException", &DND_TYPE_IO_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_PATH_TOO_LONG_EXCEPTION = {"System.IO.PathTooLongException", &DND_TYPE_IO_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_OBJECT_DISPOSED_EXCEPTION = {"System.ObjectDisposedException", &DND_TYPE_INVALID_OPERATION_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-static DndException builtin_exception = {{ &DND_TYPE_EXCEPTION, 0 }, NULL};
+// Keep caught native exception types stable across errors raised by cleanup.
+static DndException builtin_exceptions[DND_EXCEPTION_NOT_SUPPORTED + 1];
 
 typedef struct DndHeapBlock {
     uint32_t size;
@@ -809,9 +810,10 @@ void dnd_exception_throw(DndExceptionKind kind, const char *message) {
         kind==DND_EXCEPTION_OBJECT_DISPOSED?&DND_TYPE_OBJECT_DISPOSED_EXCEPTION:
         kind==DND_EXCEPTION_NOT_SUPPORTED?&DND_TYPE_NOT_SUPPORTED_EXCEPTION:
         &DND_TYPE_EXCEPTION;
-    builtin_exception.object.type = type;
-    builtin_exception.message = NULL;
-    exception_object = (DndObject *)&builtin_exception;
+    DndException *builtin = &builtin_exceptions[(unsigned)kind <= DND_EXCEPTION_NOT_SUPPORTED ? (unsigned)kind : 0];
+    builtin->object.type = type;
+    builtin->message = NULL;
+    exception_object = (DndObject *)builtin;
     exception_is_pending = true;
     dnd_exception_rethrow();
 }
