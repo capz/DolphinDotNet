@@ -26,6 +26,12 @@ jobs:
           dotnet build src/DolphinDotNet.Core/DolphinDotNet.Core.csproj -c Release
           dotnet build src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj -c Release
           dotnet build tools/DolphinDotNet.ApiCompat/DolphinDotNet.ApiCompat.csproj -c Release
+      - name: Test and package save-image command-line tool
+        run: |
+          dotnet run --project tests/SaveImageTests/SaveImageTests.csproj -c Release
+          dotnet pack tools/DolphinDotNet.SaveImage/DolphinDotNet.SaveImage.csproj -c Release -o /tmp/dnd-tools
+          dotnet tool install DolphinDotNet.SaveImage --version 0.1.0 --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
+          /tmp/dnd-tool-install/dnd-save-image --help
       - name: Build managed GameCube sample
         run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
       - name: Lower managed GameCube dependency graph
