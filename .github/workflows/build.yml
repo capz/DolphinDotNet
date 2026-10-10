@@ -28,7 +28,12 @@ jobs:
           dotnet build tools/DolphinDotNet.ApiCompat/DolphinDotNet.ApiCompat.csproj -c Release
       - name: Test and package save-image command-line tool
         run: |
-          dotnet run --project tests/SaveImageTests/SaveImageTests.csproj -c Release
+          dotnet run --project tests/SaveImageTests/SaveImageTests.csproj -c Release -- --emit-source /tmp/embedded-icon
+          dotnet run --project /tmp/embedded-icon/Embedded.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot /tmp/embedded-icon/bin/Release/net8.0/Embedded.dll /tmp/embedded-icon.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/embedded-icon.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/embedded-icon-test
+          /tmp/embedded-icon-test
+          /tmp/embedded-icon-test --gc-stress
           dotnet pack tools/DolphinDotNet.SaveImage/DolphinDotNet.SaveImage.csproj -c Release -o /tmp/dnd-tools
           dotnet tool install DolphinDotNet.SaveImage --version 0.1.0 --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
           /tmp/dnd-tool-install/dnd-save-image --help

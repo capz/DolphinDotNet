@@ -84,4 +84,4 @@ Convert a PNG to a 32×32 tiled RGB5A3 memory-card icon:
 dotnet run --project tools/DolphinDotNet.SaveImage -- icon.png icon.rgb5a3
 ```
 
-Pass `--banner` for 96×32 banners. See the [converter instructions](tools/DolphinDotNet.SaveImage/README.md) for resize modes, .NET tool installation and loading the bytes into `MemoryCardSaveOptions`.
+Pass `--source` to embed bytes in a generated C# file, `--banner` for 96×32 memory-card banners, or `--disc-banner` to generate a disc `opening.bnr` with game metadata. See the [converter instructions](tools/DolphinDotNet.SaveImage/README.md) for resize modes, .NET tool installation and loading the bytes into `MemoryCardSaveOptions`.
