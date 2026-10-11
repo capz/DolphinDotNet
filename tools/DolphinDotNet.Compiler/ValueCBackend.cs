@@ -451,12 +451,22 @@ internal static class ValueCBackend
         {
             case ValueIrJump j: Edge(b,method,block.Id,j.TargetBlock);b.AppendLine($"  goto block_{j.TargetBlock};");break;
             case ValueIrBranch x:
+            {
                 var floating = IsFloating(x.Left) || (x.Right is { } operand && IsFloating(operand));
-                var left=x.Unsigned&&!floating?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";
-                var right=x.Right is { } rv?(x.Unsigned&&!floating?$"(uintptr_t)v{rv.Id}":$"v{rv.Id}"):"0";
+                var unsignedInteger = x.Unsigned && !floating;
+                var left = unsignedInteger ? $"(uintptr_t)v{x.Left.Id}" : $"v{x.Left.Id}";
+                var right = x.Right is { } rv ? (unsignedInteger ? $"(uintptr_t)v{rv.Id}" : $"v{rv.Id}") : "0";
                 var op=x.Comparison switch{ValueIrComparison.NonZero=>"!=",ValueIrComparison.Equal=>"==",ValueIrComparison.NotEqual=>"!=",ValueIrComparison.GreaterThan=>">",ValueIrComparison.GreaterOrEqual=>">=",ValueIrComparison.LessThan=>"<",ValueIrComparison.LessOrEqual=>"<=",_=>throw new InvalidDataException()};
                 var condition = floating ? FloatingComparison(left, right, op, x.Unsigned) : $"{left} {op} {right}";
-                b.AppendLine($"  if ({condition}) {{");Edge(b,method,block.Id,x.TrueBlock,"    ");b.AppendLine($"    goto block_{x.TrueBlock};");b.AppendLine("  } else {");Edge(b,method,block.Id,x.FalseBlock,"    ");b.AppendLine($"    goto block_{x.FalseBlock};");b.AppendLine("  }");break;
+                b.AppendLine($"  if ({condition}) {{");
+                Edge(b, method, block.Id, x.TrueBlock, "    ");
+                b.AppendLine($"    goto block_{x.TrueBlock};");
+                b.AppendLine("  } else {");
+                Edge(b, method, block.Id, x.FalseBlock, "    ");
+                b.AppendLine($"    goto block_{x.FalseBlock};");
+                b.AppendLine("  }");
+                break;
+            }
             case ValueIrSwitch x:
                 b.AppendLine($"  switch ((int32_t)v{x.Value.Id}) {{");for(var i=0;i<x.Targets.Count;i++){b.AppendLine($"    case {i}:");Edge(b,method,block.Id,x.Targets[i],"      ");b.AppendLine($"      goto block_{x.Targets[i]};");}b.AppendLine("    default:");Edge(b,method,block.Id,x.DefaultBlock,"      ");b.AppendLine($"      goto block_{x.DefaultBlock};");b.AppendLine("  }");break;
             case ValueIrReturn r:
