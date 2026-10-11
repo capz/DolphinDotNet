@@ -4,6 +4,8 @@
 /* Application-thread API; DMA callbacks touch only a native completion flag. */
 bool dnd_aram_initialize(int reserved_bytes);
 bool dnd_aram_available(void);
+/* Committed ARAM: reserved lower region plus live rounded allocations. */
+bool dnd_aram_memory_usage(uint32_t *used,uint32_t *total);
 int dnd_aram_stat(int kind); /* 0 usable, 1 allocated, 2 free, 3 largest, 4 allocations */
 int dnd_aram_allocate(int length); /* 0 means exhausted; tokens never reused */
 int dnd_aram_retain(int token);

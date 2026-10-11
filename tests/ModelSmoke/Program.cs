@@ -13,6 +13,11 @@ class Program
     }
     static int Main()
     {
+        if(Dolphin.Diagnostics.DebugOverlay.PerformanceVisible)return 35;
+        Dolphin.Diagnostics.DebugOverlay.PerformanceVisible=true;
+        if(!Dolphin.Diagnostics.DebugOverlay.PerformanceVisible)return 36;
+        Dolphin.Diagnostics.DebugOverlay.PerformanceVisible=false;
+        if(Dolphin.Diagnostics.DebugOverlay.PerformanceVisible)return 37;
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 1;
         if(!Aram.Initialize())return 2;
         TransformChecks.Run();

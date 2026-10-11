@@ -48,6 +48,12 @@ bool dnd_aram_initialize(int reserved){
  first=base+(unsigned)reserved;end=size;initialized=true;return true;
 }
 bool dnd_aram_available(void){return initialized;}
+bool dnd_aram_memory_usage(uint32_t *used,uint32_t *total){
+ if(!initialized || !used || !total)return false;
+ unsigned allocated=first;
+ for(int i=0;i<SLOTS;i++)if(slots[i].token)allocated+=slots[i].size;
+ *used=allocated;*total=end;return true;
+}
 static int locate(int token){for(int i=0;i<SLOTS;i++)if(token>0 && slots[i].token==token)return i;return -1;}
 /* Walking occupied blocks in address order implicitly coalesces free holes. */
 static unsigned hole(unsigned need,unsigned *largest){

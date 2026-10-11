@@ -11,3 +11,4 @@ tests/managed_runtime_tests
 tests/aram_test
 tests/fst_test
 tests/card_transaction_test
+tests/overlay_test

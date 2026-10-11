@@ -1,4 +1,5 @@
 #include "dnd_graphics.h"
+#include "dnd_performance.h"
 #include "dnd_model_internal.h"
 #include <math.h>
 #include <string.h>
@@ -29,6 +30,7 @@ int dnd_model_frame_begin(DndArray *view, DndArray *projection) {
   GX_LoadProjectionMtx(p, GX_PERSPECTIVE);
 #endif
   dnd_model_frame_active = true;
+  dnd_performance_begin_frame();
   return 0;
 }
 int dnd_model_frame_end(void) {
@@ -60,6 +62,7 @@ int dnd_model_draw(int token, DndArray *transform) {
     dnd_model_multiply(mv, frame_view, object);
     if (!dnd_model_inverse(normal, mv))
       return -1;
+    dnd_performance_add_triangles(mesh->indices / 3);
 #ifdef DND_GAMECUBE_STORAGE
     Mtx matrix;
     for (int r = 0; r < 3; r++)

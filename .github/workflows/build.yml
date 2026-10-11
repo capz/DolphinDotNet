@@ -125,21 +125,21 @@ jobs:
           /tmp/dnd-tool-install/dnd-assets --help
           dotnet build /tmp/dnd-model-fixtures/Build.csproj -c Release -p:DndAssetsCommand=/tmp/dnd-tool-install/dnd-assets
           cmp /tmp/dnd-model-fixtures/sd/animated.dndmodel /tmp/dnd-model-fixtures/sd/built.dndmodel
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/storage.c source/model*.c -lm -o /tmp/model-native
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/storage.c source/model*.c source/performance.c -lm -o /tmp/model-native
           timeout 30s /tmp/model-native /tmp/dnd-model-fixtures
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/storage.c source/model*.c -lm -o /tmp/model-native32
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/storage.c source/model*.c source/performance.c -lm -o /tmp/model-native32
           timeout 30s /tmp/model-native32 /tmp/dnd-model-fixtures
       - name: Validate model AOT, transforms, animation and ARAM residency
         timeout-minutes: 5
         run: |
           dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/storage.c source/aram.c source/model*.c -lm -o /tmp/model-smoke
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/storage.c source/aram.c source/model*.c source/performance.c -lm -o /tmp/model-smoke
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures --gc-stress
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/storage.c source/aram.c source/model*.c -lm -o /tmp/model-smoke32
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/storage.c source/aram.c source/model*.c source/performance.c -lm -o /tmp/model-smoke32
           timeout 30s /tmp/model-smoke32 /tmp/dnd-model-fixtures --gc-stress
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
