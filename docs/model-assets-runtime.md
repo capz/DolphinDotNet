@@ -52,7 +52,7 @@ using var player = new GameObject(model.CreateInstance());
 player.Transform.Position = new Vector3(0, 0, 0);
 player.Transform.LocalScale = Vector3.One;
 if (model.TryGetAnimation("Walk", out var walk))
-    player.Model.Animator.Play(walk.Name, loop: true);
+    player.Model!.Animator.Play(walk.Name, loop: true);
 
 var camera = new Camera(fieldOfViewDegrees: 60, aspectRatio: 4f / 3f);
 camera.LookAt(new Vector3(0, 2, 5), Vector3.Zero, new Vector3(0, 1, 0));
@@ -65,7 +65,7 @@ renderer.Draw(player);
 renderer.EndFrame();
 ```
 
-`Model.Animations` is read-only metadata (`Name`, `DurationSeconds`), including while the model is cold. Names are case-sensitive and unknown names fail clearly. Static models expose an empty collection. Converter-generated names for unnamed/duplicate clips are reported. `ModelInstance` owns playback state independently of the shared `Model`. `GameObject` owns its supplied instance and disposes it; the shared model remains separately owned.
+`Model.Animations` is read-only metadata (`Name`, `DurationSeconds`), including while the model is cold. Names are case-sensitive and unknown names fail clearly. Static models expose an empty collection. Converter-generated names for unnamed/duplicate clips are reported. `ModelInstance` owns playback state independently of the shared `Model`. `GameObject` owns its optional supplied instance and disposes it; the shared model remains separately owned. `new GameObject()` creates an empty transform holder, useful as a parent. Its nullable `Model` property is null, `Update` is a no-op and `Renderer.Draw` submits no geometry. Disposed objects reject update/draw; repeated disposal is safe. Disposal rejected during an active frame leaves the object usable so it can be retried after `EndFrame`.
 
 Playback supports `Play`, `CrossFade`, `Pause`, `Resume`, `Stop`, `Seek` and `SetSpeed`. Speeds and time deltas must be nonnegative and finite. Crossfades blend two clips; starting a third while a fade is active fails. Missing channels use the rest pose; quaternion LINEAR tracks use shortest-path slerp, cubic tracks use the glTF Hermite/tangent rule followed by quaternion normalization. Root motion stays in the pose. `GetNodeName` and `ModelInstance.GetNodeTransform(index, float[16])` support bone/socket attachments; matrices are column-major, in model space. Multiply by the object's world matrix to obtain world coordinates. Stop restores the rest pose.
 
@@ -73,7 +73,7 @@ CPU skinning supports four influences per vertex, up to 256 joints per skin and 
 
 ## Transforms and lifetime
 
-`Transform.LocalPosition`, `LocalRotation` (quaternion), `LocalScale`, world `Position`, `Rotate(x,y,z)` (local XYZ Euler degrees), `Translate(offset, worldSpace: false)` and `Parent` supply a small scene hierarchy. Reparenting preserves local coordinates. Parent cycles and hierarchies exceeding 128 levels are rejected. `CopyWorldMatrix` copies to a caller-owned 16-float buffer. Clean transforms return a cached matrix in constant time; mutations dirty affected descendants, and matrix calculation occurs on next use. No per-draw transform allocations occur. This provides object placement and parenting, without Unity's component, physics or scene lifecycle systems. Rendering and skinning cost depends on vertex count and submitted passes; FPS claims require hardware measurements.
+`Transform.LocalPosition`, `LocalRotation` (quaternion), `LocalScale`, world `Position`, `Rotate(x,y,z)` (local XYZ Euler degrees), `Translate(offset, worldSpace: false)` and `Parent` supply a small scene hierarchy. Reparenting preserves local coordinates. Parent cycles and hierarchies exceeding 128 levels are rejected. `CopyWorldMatrix` copies to a caller-owned 16-float buffer. Clean transforms return a cached matrix in constant time; mutations dirty affected descendants, and matrix calculation occurs on next use. Reassigning identical local position, rotation or scale skips invalidation. No per-draw transform allocations occur. This provides object placement and parenting, without Unity's component, physics or scene lifecycle systems. Rendering and skinning cost depends on vertex count and submitted passes; FPS claims require hardware measurements.
 
 The lower-level `Renderer.BeginFrame(float[16] view, float[16] projection)` and `DrawModel(instance, float[16] world)` remain available. Raw projection matrices must follow GX's right-handed depth convention (near -1, far 0); the Camera helper builds this convention. `DrawModel(instance, Transform)` also accepts cached transforms.
 

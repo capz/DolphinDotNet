@@ -10,13 +10,14 @@ A desktop converter imports FBX, OBJ plus MTL/texture files, or glTF/GLB and emi
 dnd-assets model player.glb player.dndmodel --texture-limit 256
 ```
 
-Proposed runtime usage:
+Runtime usage:
 
 ```csharp
 using var model = await Model.LoadAsync("sd:/assets/player.dndmodel");
+using var instance = model.CreateInstance();
 
 renderer.BeginFrame(camera);
-renderer.DrawModel(model, transform);
+renderer.DrawModel(instance, transform);
 renderer.EndFrame();
 ```
 
