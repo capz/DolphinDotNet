@@ -42,11 +42,8 @@ void dnd_performance_presented(uint64_t now) {
   uint64_t elapsed = now - previous_present;
   previous_present = now;
   interval_sum -= intervals[interval_head];
-  if (elapsed > UINT64_MAX - interval_sum) {
-    reset_timing();
-    previous_present = now;
-    have_present = true;
-  }
+  // Consecutive monotonic intervals telescope to a duration no larger than now.
+  // A clock reset above clears the window, so this sum cannot overflow.
   intervals[interval_head] = elapsed;
   interval_sum += elapsed;
   interval_head = (interval_head + 1) % FRAME_WINDOW;

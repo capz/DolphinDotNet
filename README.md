@@ -93,3 +93,10 @@ Pass `--source` to embed bytes in a generated C# file, `--banner` for 96×32 mem
 ### Model assets, animation and residency
 
 `DolphinDotNet.Assets` compiles FBX, OBJ/MTL, glTF and GLB into self-contained GameCube model packages with GX textures, materials, bone weights and named animation clips. `Dolphin.Graphics.Model` loads cooperatively; independent `ModelInstance`/`GameObject` objects provide playback, cached transforms and one-call drawing. Models can unload their large buffers to ARAM and restore without rereading storage. See [model asset runtime](docs/model-assets-runtime.md) for usage, budgets, supported features and hardware validation limits.
+
+### Performance overlay
+
+Set `Dolphin.Diagnostics.DebugOverlay.PerformanceVisible = true` to show FPS, frame time,
+submitted scene triangles and main/auxiliary RAM use in the bottom-left corner. The panel
+uses light gray text on black, is disabled by default, and can be hidden at runtime by setting
+the property to `false`. See [debug overlay](docs/debug-overlay.md) for metric definitions.
