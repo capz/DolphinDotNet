@@ -14,9 +14,10 @@ Runtime usage:
 
 ```csharp
 using var model = await Model.LoadAsync("sd:/assets/player.dndmodel");
+using var instance = model.CreateInstance();
 
 renderer.BeginFrame(camera);
-renderer.DrawModel(model, transform);
+renderer.DrawModel(instance, transform);
 renderer.EndFrame();
 ```
 

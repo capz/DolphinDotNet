@@ -61,7 +61,7 @@ static class TransformChecks
         try { rejected.Parent = deepest; throw new InvalidOperationException("Excess depth accepted."); }
         catch (ArgumentException) { }
         Check(rejected.Parent == null, "Rejected depth preserves parent.");
-        try { child.Parent = deepest; throw new InvalidOperationException("Excess subtree depth accepted."); }
+        try { child.Parent = deepest.Parent; throw new InvalidOperationException("Excess subtree depth accepted."); }
         catch (ArgumentException) { }
         Check(child.Parent == null && leaf.Parent == child, "Rejected subtree move preserves links.");
 
