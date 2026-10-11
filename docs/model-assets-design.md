@@ -1,6 +1,6 @@
-# Model assets: proposed next phase
+# Model assets: architecture
 
-This document is a design, not an implemented loader or renderer API. ARAM storage/cache is implemented separately in `aram-runtime.md`.
+The converter, package loader, native GX renderer, animation playback/skinning, cached transforms and whole-model ARAM residency are implemented. See `model-assets-runtime.md` for the concrete API, supported subset and validation limits. This document retains the broader architecture; selective clip residency, compression, advanced materials, retargeting and LODs remain future work.
 
 ## Developer workflow
 

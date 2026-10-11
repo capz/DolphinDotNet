@@ -89,3 +89,7 @@ Pass `--source` to embed bytes in a generated C# file, `--banner` for 96×32 mem
 ## ARAM cold-asset storage
 
 `Dolphin.Memory.Aram` provides disposable binary allocations and cooperative queued transfers into auxiliary RAM. `AramAssetCache` adds priority/LRU eviction and range prefetch. Initialize ownership/reservations before other ARAM users; managed objects remain in main RAM. See [ARAM runtime](docs/aram-runtime.md) for lifecycle, budgets and hardware acceptance limits.
+
+### Model assets, animation and residency
+
+`DolphinDotNet.Assets` compiles FBX, OBJ/MTL, glTF and GLB into self-contained GameCube model packages with GX textures, materials, bone weights and named animation clips. `Dolphin.Graphics.Model` loads cooperatively; independent `ModelInstance`/`GameObject` objects provide playback, cached transforms and one-call drawing. Models can unload their large buffers to ARAM and restore without rereading storage. See [model asset runtime](docs/model-assets-runtime.md) for usage, budgets, supported features and hardware validation limits.

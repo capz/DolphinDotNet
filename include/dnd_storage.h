@@ -14,6 +14,8 @@ void dnd_fs_delete(DndString *path, bool directory);
 void dnd_fs_move(DndString *source, DndString *destination);
 void dnd_fs_mkdir(DndString *path);
 int dnd_fs_open(DndString *path, int mode, int access, int share);
+int64_t dnd_fs_length_native(int handle);
+int dnd_fs_read_native(int handle, void *data, int count);
 int dnd_fs_read(int handle, DndArray *data, int offset, int count);
 void dnd_fs_write(int handle, DndArray *data, int offset, int count);
 int64_t dnd_fs_seek(int handle, int64_t offset, int origin);

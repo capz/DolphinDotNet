@@ -15,7 +15,7 @@ permissions:
 jobs:
   managed:
     name: Managed compiler
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -114,6 +114,31 @@ jobs:
           timeout 30s /tmp/aram32 --gc-stress
           cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -DDND_ARAM_TEST -Iinclude tests/aram_test.c source/aram.c -o /tmp/aram-native32
           /tmp/aram-native32
+      - name: Convert, package and validate model assets
+        timeout-minutes: 5
+        run: |
+          sudo apt-get install -y assimp-utils
+          assimp version
+          dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures /usr/bin/assimp
+          dotnet pack tools/DolphinDotNet.Assets/DolphinDotNet.Assets.csproj -c Release -o /tmp/dnd-tools
+          dotnet tool install DolphinDotNet.Assets --version 0.1.0 --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
+          /tmp/dnd-tool-install/dnd-assets --help
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/storage.c source/model*.c -lm -o /tmp/model-native
+          timeout 30s /tmp/model-native /tmp/dnd-model-fixtures
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/storage.c source/model*.c -lm -o /tmp/model-native32
+          timeout 30s /tmp/model-native32 /tmp/dnd-model-fixtures
+      - name: Validate model AOT, transforms, animation and ARAM residency
+        timeout-minutes: 5
+        run: |
+          dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/storage.c source/aram.c source/model*.c -lm -o /tmp/model-smoke
+          timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures
+          dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
+          timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures --gc-stress
+          dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/storage.c source/aram.c source/model*.c -lm -o /tmp/model-smoke32
+          timeout 30s /tmp/model-smoke32 /tmp/dnd-model-fixtures --gc-stress
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
       - name: Verify generated source
@@ -178,6 +203,11 @@ jobs:
           dotnet build tests/AramSmoke/AramSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/AramSmoke/bin/Release/net8.0/AramSmoke.dll /tmp/aram.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/aram.c -o /tmp/aram.o
+      - name: Compile model and animation ABI for PowerPC
+        run: |
+          dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/model-smoke.c -o /tmp/model-smoke.o
       - name: Build ELF and DOL
         run: make V=1
       - name: Report GameCube runtime footprint
