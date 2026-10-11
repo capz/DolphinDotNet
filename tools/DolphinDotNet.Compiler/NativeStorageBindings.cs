@@ -9,7 +9,7 @@ internal static class NativeStorageBindings
         ["ModelBegin"]=("dnd_model_begin","si",false),["ModelStep"]=("dnd_model_step","i",false),["ModelDispose"]=("dnd_model_dispose","i",false),["ModelStat"]=("dnd_model_stat","ii",false),
         ["ModelName"]=("dnd_model_name","iii",true),["ModelDuration"]=("dnd_model_duration","ii",false),["ModelCopy"]=("dnd_model_copy","iiaii",false),
         ["ModelRestoreBegin"]=("dnd_model_restore_begin","i",false),["ModelRestoreEnd"]=("dnd_model_restore_end","ii",false),["ModelUnload"]=("dnd_model_unload","i",false),
-        ["ModelInstance"]=("dnd_model_instance","ii",false),["ModelInstanceDispose"]=("dnd_model_instance_dispose","i",false),["ModelPlay"]=("dnd_model_play","iiif",false),["ModelControl"]=("dnd_model_control","iif",false),
+        ["ModelInstance"]=("dnd_model_instance","ii",false),["ModelInstanceBytes"]=("dnd_model_instance_bytes","i",false),["ModelInstanceDispose"]=("dnd_model_instance_dispose","i",false),["ModelPlay"]=("dnd_model_play","iiif",false),["ModelControl"]=("dnd_model_control","iif",false),
         ["ModelNodeMatrix"]=("dnd_model_node_matrix","iia",false),["ModelDraw"]=("dnd_model_draw","ia",false),["ModelFrameBegin"]=("dnd_model_frame_begin","aa",false),["ModelFrameEnd"]=("dnd_model_frame_end","",false),
         ["AramInitialize"]=("dnd_aram_initialize","i",false),["AramAvailable"]=("dnd_aram_available","",false),["AramStat"]=("dnd_aram_stat","i",false),["AramAllocate"]=("dnd_aram_allocate","i",false),
         ["AramRetain"]=("dnd_aram_retain","i",false),["AramRelease"]=("dnd_aram_release","i",false),["AramDispose"]=("dnd_aram_dispose","i",false),["AramBegin"]=("dnd_aram_begin","iiaiii",false),["AramPoll"]=("dnd_aram_poll","ai",false),

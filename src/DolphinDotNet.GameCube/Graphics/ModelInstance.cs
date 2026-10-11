@@ -4,6 +4,7 @@ public sealed class ModelInstance : IDisposable
 {
     public Model Model {get;}
     public Animator Animator {get;}
+    public int NativeBytes {get{Check();return NativeModel.ModelInstanceBytes(Token);}}
     internal readonly int Token;
     private bool disposed;
     internal ModelInstance(Model model,int token){Model=model;Token=token;Animator=new Animator(this);}

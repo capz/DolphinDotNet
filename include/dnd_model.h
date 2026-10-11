@@ -22,6 +22,7 @@ int dnd_model_restore_begin(int token);
 int dnd_model_restore_end(int token, int commit);
 int dnd_model_unload(int token);
 int dnd_model_instance(int token, int budget);
+int dnd_model_instance_bytes(int token);
 int dnd_model_instance_dispose(int token);
 int dnd_model_play(int token, int clip, int loop, float fade);
 int dnd_model_control(

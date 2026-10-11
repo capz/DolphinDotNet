@@ -371,6 +371,8 @@ int dnd_model_control(int token, int op, float value) {
   if (!in->model->ready)
     return -1;
   if (op == 0) {
+    if (in->paused || value == 0 || (in->clip < 0 && in->next < 0))
+      return 0;
     if (!in->paused) {
       float delta = value * in->speed;
       if (!isfinite(delta))
@@ -429,4 +431,9 @@ int dnd_model_vertex(int token, int mesh, int vertex, float out[6]) {
       out[j] = dnd_model_f32(p + j * 4);
   }
   return 0;
+}
+
+int dnd_model_instance_bytes(int token) {
+  DndInstance *in = dnd_instance_find(token);
+  return in ? (int)in->bytes : -1;
 }

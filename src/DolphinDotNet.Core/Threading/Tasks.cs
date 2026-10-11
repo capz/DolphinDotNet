@@ -95,7 +95,7 @@ namespace Dolphin.Runtime.CompilerServices
     public interface INotifyCompletion {void OnCompleted(Action continuation);}
     public interface ICriticalNotifyCompletion : INotifyCompletion {void UnsafeOnCompleted(Action continuation);}
     public interface IAsyncStateMachine {void MoveNext();void SetStateMachine(IAsyncStateMachine stateMachine);}
-    public struct TaskAwaiter : ICriticalNotifyCompletion
+    public struct TaskAwaiter : ICriticalNotifyCompletion, System.Runtime.CompilerServices.ICriticalNotifyCompletion
     {
         private Dolphin.Threading.Tasks.Task task;
         internal TaskAwaiter(Dolphin.Threading.Tasks.Task task){this.task=task;}
@@ -104,7 +104,7 @@ namespace Dolphin.Runtime.CompilerServices
         public void OnCompleted(Action continuation)=>task.Continue(continuation);
         public void UnsafeOnCompleted(Action continuation)=>OnCompleted(continuation);
     }
-    public struct TaskAwaiter<T> : ICriticalNotifyCompletion
+    public struct TaskAwaiter<T> : ICriticalNotifyCompletion, System.Runtime.CompilerServices.ICriticalNotifyCompletion
     {
         private Dolphin.Threading.Tasks.Task<T> task;
         internal TaskAwaiter(Dolphin.Threading.Tasks.Task<T> task){this.task=task;}
@@ -118,7 +118,7 @@ namespace Dolphin.Runtime.CompilerServices
         private Dolphin.Threading.Tasks.Task task;
         internal ConfiguredTaskAwaitable(Dolphin.Threading.Tasks.Task task){this.task=task;}
         public ConfiguredTaskAwaiter GetAwaiter()=>new ConfiguredTaskAwaiter(task);
-        public struct ConfiguredTaskAwaiter : ICriticalNotifyCompletion
+        public struct ConfiguredTaskAwaiter : ICriticalNotifyCompletion, System.Runtime.CompilerServices.ICriticalNotifyCompletion
         {
             private TaskAwaiter awaiter;
             internal ConfiguredTaskAwaiter(Dolphin.Threading.Tasks.Task task){awaiter=task.GetAwaiter();}
@@ -133,7 +133,7 @@ namespace Dolphin.Runtime.CompilerServices
         private Dolphin.Threading.Tasks.Task<T> task;
         internal ConfiguredTaskAwaitable(Dolphin.Threading.Tasks.Task<T> task){this.task=task;}
         public ConfiguredTaskAwaiter GetAwaiter()=>new ConfiguredTaskAwaiter(task);
-        public struct ConfiguredTaskAwaiter : ICriticalNotifyCompletion
+        public struct ConfiguredTaskAwaiter : ICriticalNotifyCompletion, System.Runtime.CompilerServices.ICriticalNotifyCompletion
         {
             private TaskAwaiter<T> awaiter;
             internal ConfiguredTaskAwaiter(Dolphin.Threading.Tasks.Task<T> task){awaiter=task.GetAwaiter();}
@@ -146,7 +146,7 @@ namespace Dolphin.Runtime.CompilerServices
     public struct YieldAwaitable
     {
         public YieldAwaiter GetAwaiter()=>new YieldAwaiter();
-        public struct YieldAwaiter : ICriticalNotifyCompletion
+        public struct YieldAwaiter : ICriticalNotifyCompletion, System.Runtime.CompilerServices.ICriticalNotifyCompletion
         {
             public bool IsCompleted=>false;
             public void GetResult(){}

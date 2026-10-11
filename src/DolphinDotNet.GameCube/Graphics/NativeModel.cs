@@ -20,6 +20,7 @@ internal static class NativeModel
     internal static int ModelRestoreEnd(int token,int commit)=>throw Unsupported();
     internal static int ModelUnload(int token)=>throw Unsupported();
     internal static int ModelInstance(int token,int budget)=>throw Unsupported();
+    internal static int ModelInstanceBytes(int token)=>throw Unsupported();
     internal static int ModelInstanceDispose(int token)=>throw Unsupported();
     internal static int ModelPlay(int token,int clip,int loop,float fade)=>throw Unsupported();
     internal static int ModelControl(int token,int op,float value)=>throw Unsupported();

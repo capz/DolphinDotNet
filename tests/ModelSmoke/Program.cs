@@ -7,11 +7,16 @@ using Dolphin.Storage;
 class Program
 {
     static float[] Identity(){var a=new float[16];a[0]=a[5]=a[10]=a[15]=1;return a;}
+    static async System.Threading.Tasks.Task AwaitModel()
+    {
+        using(var model=await Model.LoadAsync("sd:/animated.dndmodel")){if(model.Animations.Count!=5)throw new InvalidOperationException("Awaited model metadata.");}
+    }
     static int Main()
     {
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 1;
         if(!Aram.Initialize())return 2;
         using(var canceled=new CancellationTokenSource()){canceled.Cancel();try{Model.LoadAsync("sd:/animated.dndmodel",canceled.Token).Wait();return 3;}catch(OperationCanceledException){}}
+        AwaitModel().GetAwaiter().GetResult();
         var task=Model.LoadAsync("sd:/cache.dndmodel");if(task.IsCompleted)return 4;var model=task.Result;
         if(model.Animations.Count!=5||!model.TryGetAnimation("Walk",out var clip)||clip.DurationSeconds!=1||model.TryGetAnimation("walk",out _))return 5;
         System.Collections.Generic.IReadOnlyList<AnimationClipInfo> metadata=model.Animations;if(metadata.Count!=5||metadata[0].Name!="Walk")return 30;
@@ -28,7 +33,7 @@ class Program
         try{parent.Parent=entity.Transform;return 24;}catch(ArgumentException){}
         var camera=new Camera();camera.LookAt(new Vector3(0,0,5),Vector3.Zero,new Vector3(0,1,0));
         var renderer=new Renderer();renderer.BeginFrame(camera);renderer.Draw(entity);renderer.EndFrame();renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(a,Identity());try{a.Update(0);return 10;}catch(InvalidOperationException){}renderer.EndFrame();
-        int memory=model.NativeBytes;a.Animator.SetSpeed(1);a.Animator.Play("Walk");a.Update(0.5f);model.UnloadToAramAsync().Wait();Dolphin.IO.File.Delete("sd:/cache.dndmodel");if(model.IsResident||model.NativeBytes>=memory||model.AramBytes==0)return 11;
+        int instanceMemory=a.NativeBytes;int memory=model.NativeBytes;a.Animator.SetSpeed(1);a.Animator.Play("Walk");a.Update(0.5f);model.UnloadToAramAsync().Wait();Dolphin.IO.File.Delete("sd:/cache.dndmodel");if(model.IsResident||model.NativeBytes>=memory||a.NativeBytes>=instanceMemory||model.AramBytes==0)return 11;
         try{a.Update(0);return 12;}catch(InvalidOperationException){}
         using(var canceled=new CancellationTokenSource()){canceled.Cancel();try{model.PrepareAsync(canceled.Token).Wait();return 13;}catch(OperationCanceledException){}}if(model.IsResident)return 14;
         model.PrepareAnimationAsync("Walk").Wait();if(!model.IsResident)return 15;a.GetNodeTransform(1,matrix);if(matrix[12]<0.99f||matrix[12]>1.01f)return 16;
