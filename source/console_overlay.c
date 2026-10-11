@@ -55,8 +55,12 @@ static const unsigned char *glyph(char c) {
 }
 static void newline(const char *s) {
   head = (head + 1) % ROWS;
-  strncpy(lines[head], s, COLS);
-  lines[head][COLS] = 0;
+  size_t length = 0;
+  while (length < COLS && s[length]) {
+    lines[head][length] = s[length];
+    length++;
+  }
+  lines[head][length] = 0;
   if (count < ROWS)
     count++;
 }
