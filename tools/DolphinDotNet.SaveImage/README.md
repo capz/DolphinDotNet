@@ -15,7 +15,7 @@ dotnet run --project tools/DolphinDotNet.SaveImage -- banner.png banner.rgb5a3 -
 
 `--banner` produces **96×32, 6,144 bytes**. `--fit pad|crop|stretch` applies to either size. `--force` allows replacing an existing output. The input is never overwritten; a failed conversion preserves the previous output. `--help` shows usage. Exit codes: 0 success/help, 1 conversion or file failure, 2 invalid arguments.
 
-Output has no header or palette. Pixels use RGB5A3, big-endian words, in GX 4×4 tile order (tiles left-to-right then top-to-bottom; pixels row-major within a tile). Fully opaque pixels use RGB555; other pixels use A3RGB444. Alpha/channel precision is reduced to the target format. Input must be a single-frame PNG; ImageSharp handles PNG decoding and bicubic resizing, including transparent padding. No animation is generated.
+Output has no header or palette. Pixels use RGB5A3, big-endian words, in GX 4×4 tile order (tiles left-to-right then top-to-bottom; pixels row-major within a tile). Fully opaque pixels use RGB555; other pixels use A3RGB444. Alpha/channel precision is reduced to the target format. Input must be a single-frame PNG; SkiaSharp handles PNG decoding and Mitchell cubic resizing, including transparent padding. No animation is generated.
 
 Load the output from a mounted filesystem:
 
@@ -41,7 +41,7 @@ dotnet tool install DolphinDotNet.SaveImage --version 0.1.0 --add-source artifac
 .tools/dnd-save-image player.png player.rgb5a3
 ```
 
-The PNG decoder/resizer dependency is SixLabors.ImageSharp 3.1.12, licensed under the [Six Labors Split License](https://github.com/SixLabors/ImageSharp/blob/v3.1.12/LICENSE). Its dependency remains confined to the desktop converter; managed GameCube applications do not reference it.
+The PNG decoder/resizer uses MIT-licensed [SkiaSharp](https://github.com/mono/SkiaSharp), with packaged native libraries for Windows, macOS and Linux. It requires no build-time license key. Images are limited to 16 megapixels and 64 MiB of encoded data. These dependencies remain confined to desktop tools; managed GameCube applications do not reference them.
 
 ## Embed save artwork as C# source
 

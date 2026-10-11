@@ -21,7 +21,15 @@ using (var fixture = new RasterImage(32, 32))
     Check(Word(bytes, 0) == 0xfc00 && Word(bytes, 1) == 0x83e0 && Word(bytes, 4) == 0x801f, "RGB555 / big endian");
     Check(Word(bytes, 2) == 0x4f00 && Word(bytes, 3) == 0, "Alpha / transparent pixel");
     Check(Word(bytes, 16) == 0xffff && Word(bytes, 128) == 0x8000, "4x4 tile order");
+    using var encoded = new MemoryStream();
+    fixture.SaveAsPng(encoded);
+    using var decoded = RasterImage.Load(encoded.ToArray(), pngOnly: true);
+    Check(decoded[2, 0] == fixture[2, 0], "Straight alpha survives PNG decoding");
+    try { _ = fixture[-1, 0]; throw new Exception("Invalid pixel accepted"); }
+    catch (ArgumentOutOfRangeException) { }
 }
+try { using var oversized = new RasterImage(4097, 4096); throw new Exception("Oversized image accepted"); }
+catch (InvalidDataException) { }
 var directory = Path.Combine(Path.GetTempPath(), "dnd-save-test-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(directory);
 try

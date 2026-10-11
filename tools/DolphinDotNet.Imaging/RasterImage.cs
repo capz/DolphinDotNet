@@ -10,7 +10,7 @@ public readonly record struct Rgba32(byte R, byte G, byte B, byte A);
 public sealed class RasterImage : IDisposable
 {
     private const long MaxPixels = 16 * 1024 * 1024;
-    private SKBitmap bitmap;
+    private readonly SKBitmap bitmap;
     public int Width => bitmap.Width;
     public int Height => bitmap.Height;
 
@@ -25,12 +25,14 @@ public sealed class RasterImage : IDisposable
 
     public Rgba32 this[int x, int y]
     {
-        get { var p = bitmap.GetPixel(x, y); return new(p.Red, p.Green, p.Blue, p.Alpha); }
-        set => bitmap.SetPixel(x, y, new SKColor(value.R, value.G, value.B, value.A));
+        get { ValidateCoordinates(x, y); var p = bitmap.GetPixel(x, y); return new(p.Red, p.Green, p.Blue, p.Alpha); }
+        set { ValidateCoordinates(x, y); bitmap.SetPixel(x, y, new SKColor(value.R, value.G, value.B, value.A)); }
     }
 
     public static RasterImage Load(byte[] data, bool pngOnly = false)
     {
+        ArgumentNullException.ThrowIfNull(data);
+        if (data.Length > 64 * 1024 * 1024) throw new InvalidDataException("Encoded image exceeds the 64-MiB budget.");
         using var encoded = SKData.CreateCopy(data);
         using var codec = SKCodec.Create(encoded) ?? throw new InvalidDataException("Invalid image.");
         if (pngOnly ? codec.EncodedFormat != SKEncodedImageFormat.Png :
@@ -49,6 +51,8 @@ public sealed class RasterImage : IDisposable
 
     public RasterImage Resized(int width, int height, ResizeMode mode = ResizeMode.Stretch)
     {
+        if (mode != ResizeMode.Pad && mode != ResizeMode.Crop && mode != ResizeMode.Stretch)
+            throw new ArgumentOutOfRangeException(nameof(mode));
         ValidateSize(width, height);
         if (width == Width && height == Height) return new RasterImage(bitmap.Copy());
         float scaleX = (float)width / Width, scaleY = (float)height / Height;
@@ -84,6 +88,12 @@ public sealed class RasterImage : IDisposable
     {
         if (width <= 0 || height <= 0 || (long)width * height > MaxPixels)
             throw new InvalidDataException("Image dimensions exceed the 16-megapixel budget.");
+    }
+
+    private void ValidateCoordinates(int x, int y)
+    {
+        if ((uint)x >= (uint)Width || (uint)y >= (uint)Height)
+            throw new ArgumentOutOfRangeException(nameof(x), "Pixel coordinates must lie inside the image.");
     }
 
     public void Dispose() => bitmap.Dispose();
