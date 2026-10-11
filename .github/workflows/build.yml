@@ -15,7 +15,7 @@ permissions:
 jobs:
   managed:
     name: Managed compiler
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -26,6 +26,17 @@ jobs:
           dotnet build src/DolphinDotNet.Core/DolphinDotNet.Core.csproj -c Release
           dotnet build src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj -c Release
           dotnet build tools/DolphinDotNet.ApiCompat/DolphinDotNet.ApiCompat.csproj -c Release
+      - name: Test and package save-image command-line tool
+        run: |
+          dotnet run --project tests/SaveImageTests/SaveImageTests.csproj -c Release -- --emit-source /tmp/embedded-icon
+          dotnet run --project /tmp/embedded-icon/Embedded.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot /tmp/embedded-icon/bin/Release/net8.0/Embedded.dll /tmp/embedded-icon.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/embedded-icon.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/embedded-icon-test
+          /tmp/embedded-icon-test
+          /tmp/embedded-icon-test --gc-stress
+          dotnet pack tools/DolphinDotNet.SaveImage/DolphinDotNet.SaveImage.csproj -c Release -o /tmp/dnd-tools
+          dotnet tool install DolphinDotNet.SaveImage --version 0.1.0 --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
+          /tmp/dnd-tool-install/dnd-save-image --help
       - name: Build managed GameCube sample
         run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
       - name: Lower managed GameCube dependency graph
@@ -91,6 +102,45 @@ jobs:
           timeout 30s /tmp/storage32 --gc-stress
           cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Iinclude tests/storage_faults.c source/managed_runtime.c source/storage.c -Wl,--wrap=read,--wrap=write,--wrap=close -o /tmp/storage_faults
           timeout 30s /tmp/storage_faults
+      - name: Validate ARAM transfers and asset cache
+        timeout-minutes: 4
+        run: |
+          dotnet build tests/AramSmoke/AramSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/AramSmoke/bin/Release/net8.0/AramSmoke.dll /tmp/aram.c
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/aram.c tests/aram_host.c source/managed_runtime.c source/aram.c -o /tmp/aram
+          timeout 30s /tmp/aram
+          timeout 30s /tmp/aram --gc-stress
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/aram.c tests/aram_host.c source/managed_runtime.c source/aram.c -o /tmp/aram32
+          timeout 30s /tmp/aram32 --gc-stress
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -DDND_ARAM_TEST -Iinclude tests/aram_test.c source/aram.c -o /tmp/aram-native32
+          /tmp/aram-native32
+      - name: Convert, package and validate model assets
+        timeout-minutes: 5
+        run: |
+          sudo apt-get install -y assimp-utils
+          assimp version
+          dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures /usr/bin/assimp
+          dotnet pack tools/DolphinDotNet.Assets/DolphinDotNet.Assets.csproj -c Release -o /tmp/dnd-tools
+          dotnet tool install DolphinDotNet.Assets --version 0.1.0 --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
+          /tmp/dnd-tool-install/dnd-assets --help
+          dotnet build /tmp/dnd-model-fixtures/Build.csproj -c Release -p:DndAssetsCommand=/tmp/dnd-tool-install/dnd-assets
+          cmp /tmp/dnd-model-fixtures/sd/animated.dndmodel /tmp/dnd-model-fixtures/sd/built.dndmodel
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/storage.c source/model*.c -lm -o /tmp/model-native
+          timeout 30s /tmp/model-native /tmp/dnd-model-fixtures
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/storage.c source/model*.c -lm -o /tmp/model-native32
+          timeout 30s /tmp/model-native32 /tmp/dnd-model-fixtures
+      - name: Validate model AOT, transforms, animation and ARAM residency
+        timeout-minutes: 5
+        run: |
+          dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/storage.c source/aram.c source/model*.c -lm -o /tmp/model-smoke
+          timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures
+          dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
+          timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures --gc-stress
+          dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/storage.c source/aram.c source/model*.c -lm -o /tmp/model-smoke32
+          timeout 30s /tmp/model-smoke32 /tmp/dnd-model-fixtures --gc-stress
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
       - name: Verify generated source
@@ -150,6 +200,16 @@ jobs:
           dotnet build tests/LibrarySmoke/LibrarySmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/LibrarySmoke/bin/Release/net8.0/LibrarySmoke.dll /tmp/library.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/library.c -o /tmp/library.o
+      - name: Compile managed ARAM ABI for PowerPC
+        run: |
+          dotnet build tests/AramSmoke/AramSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/AramSmoke/bin/Release/net8.0/AramSmoke.dll /tmp/aram.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/aram.c -o /tmp/aram.o
+      - name: Compile model and animation ABI for PowerPC
+        run: |
+          dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/model-smoke.c -o /tmp/model-smoke.o
       - name: Build ELF and DOL
         run: make V=1
       - name: Report GameCube runtime footprint

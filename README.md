@@ -53,7 +53,7 @@ The output is `DolphinDotNet.dol`. The repository also contains `samples/HelloGa
 
 ## API and architecture rules
 
-GameCube-specific managed APIs belong under the **`Dolphin` namespace** (for example `Dolphin.Graphics`, `Dolphin.Input`, `Dolphin.Network`). Existing `DolphinDotNet.GameCube` API code is legacy and requires migration with compiler intrinsic mapping updates. Standard-library-compatible APIs retain `System.*` names.
+GameCube-specific managed APIs belong under the **`Dolphin` namespace** (for example `Dolphin.Graphics`, `Dolphin.Input`, `Dolphin.Network`). The former `DolphinDotNet.GameCube.GameCube` facade is replaced by `Dolphin.Diagnostics.DebugOverlay`, `Dolphin.Input.Controller`, `Dolphin.Graphics.Renderer` and `Dolphin.Platform.Name`. The assembly/project name remains `DolphinDotNet.GameCube`. Standard-library-compatible APIs retain `System.*` names.
 
 The managed/native split keeps game code independent of GX, PAD, libogc and native socket details. The native GameCube backend owns hardware resources.
 
@@ -75,3 +75,21 @@ Further library work includes general equality/comparison, nullable coverage, st
 For ordinary .NET library development, see the [.NET Standard compatibility index](docs/dotnet-standard-status.md). It distinguishes compiled API subsets from native-only primitives and missing framework implementations. The [supported storage APIs](docs/storage-runtime.md) document usage and limits; the [File and Directory design](docs/system-io-design.md) describes the libogc2/libdvm storage backend and managed `System.IO` rollout.
 
 See [architecture](docs/architecture.md), [managed runtime architecture](docs/managed-runtime-architecture.md), [runtime levels](docs/runtime-levels.md) and [platform roadmap](docs/platform-roadmap.md).
+
+## Save icon preparation
+
+Convert a PNG to a 32×32 tiled RGB5A3 memory-card icon:
+
+```sh
+dotnet run --project tools/DolphinDotNet.SaveImage -- icon.png icon.rgb5a3
+```
+
+Pass `--source` to embed bytes in a generated C# file, `--banner` for 96×32 memory-card banners, or `--disc-banner` to generate a disc `opening.bnr` with game metadata. See the [converter instructions](tools/DolphinDotNet.SaveImage/README.md) for resize modes, .NET tool installation and loading the bytes into `MemoryCardSaveOptions`.
+
+## ARAM cold-asset storage
+
+`Dolphin.Memory.Aram` provides disposable binary allocations and cooperative queued transfers into auxiliary RAM. `AramAssetCache` adds priority/LRU eviction and range prefetch. Initialize ownership/reservations before other ARAM users; managed objects remain in main RAM. See [ARAM runtime](docs/aram-runtime.md) for lifecycle, budgets and hardware acceptance limits.
+
+### Model assets, animation and residency
+
+`DolphinDotNet.Assets` compiles FBX, OBJ/MTL, glTF and GLB into self-contained GameCube model packages with GX textures, materials, bone weights and named animation clips. `Dolphin.Graphics.Model` loads cooperatively; independent `ModelInstance`/`GameObject` objects provide playback, cached transforms and one-call drawing. Models can unload their large buffers to ARAM and restore without rereading storage. See [model asset runtime](docs/model-assets-runtime.md) for usage, budgets, supported features and hardware validation limits.

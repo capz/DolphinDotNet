@@ -493,6 +493,22 @@ int dnd_fs_read(int token, DndArray *data, int offset, int count) {
   }
   return (int)n;
 }
+/* Native asset streaming uses the same mounted paths, sharing and aligned I/O. */
+int64_t dnd_fs_length_native(int token) {
+  for (int i=0;i<HANDLE_CAP;i++) if(files[i].token==token && token>0) {
+    struct stat st;return fstat(files[i].fd,&st)==0?(int64_t)st.st_size:-1;
+  }
+  return -1;
+}
+int dnd_fs_read_native(int token, void *data, int count) {
+  FileHandle *h = handle(token);
+  if (!h) return -1;
+  if (!data || count < 0 || !(h->access & 1)) { fail(EINVAL, "Invalid native read."); return -1; }
+  ssize_t n;
+  do { n = aligned_read(h->fd, data, (size_t)count); } while (n < 0 && errno == EINTR);
+  if (n < 0) { fail(errno, "Read failed."); return -1; }
+  return (int)n;
+}
 void dnd_fs_write(int token, DndArray *data, int offset, int count) {
   FileHandle *h = handle(token);
   if (!h || !range(data, offset, count))

@@ -5,6 +5,14 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["ModelTrs"]=("dnd_model_trs","aa",false),["ModelMultiply"]=("dnd_model_multiply_arrays","aaa",false),["ModelPosition"]=("dnd_model_position","aafff",false),["ModelTranslate"]=("dnd_model_translate","afff",false),["ModelRotate"]=("dnd_model_rotate","afff",false),["ModelCamera"]=("dnd_model_camera","aaa",false),
+        ["ModelBegin"]=("dnd_model_begin","si",false),["ModelStep"]=("dnd_model_step","i",false),["ModelDispose"]=("dnd_model_dispose","i",false),["ModelStat"]=("dnd_model_stat","ii",false),
+        ["ModelName"]=("dnd_model_name","iii",true),["ModelDuration"]=("dnd_model_duration","ii",false),["ModelCopy"]=("dnd_model_copy","iiaii",false),
+        ["ModelRestoreBegin"]=("dnd_model_restore_begin","i",false),["ModelRestoreEnd"]=("dnd_model_restore_end","ii",false),["ModelUnload"]=("dnd_model_unload","i",false),
+        ["ModelInstance"]=("dnd_model_instance","ii",false),["ModelInstanceBytes"]=("dnd_model_instance_bytes","i",false),["ModelInstanceDispose"]=("dnd_model_instance_dispose","i",false),["ModelPlay"]=("dnd_model_play","iiif",false),["ModelControl"]=("dnd_model_control","iif",false),
+        ["ModelNodeMatrix"]=("dnd_model_node_matrix","iia",false),["ModelDraw"]=("dnd_model_draw","ia",false),["ModelFrameBegin"]=("dnd_model_frame_begin","aa",false),["ModelFrameEnd"]=("dnd_model_frame_end","",false),
+        ["AramInitialize"]=("dnd_aram_initialize","i",false),["AramAvailable"]=("dnd_aram_available","",false),["AramStat"]=("dnd_aram_stat","i",false),["AramAllocate"]=("dnd_aram_allocate","i",false),
+        ["AramRetain"]=("dnd_aram_retain","i",false),["AramRelease"]=("dnd_aram_release","i",false),["AramDispose"]=("dnd_aram_dispose","i",false),["AramBegin"]=("dnd_aram_begin","iiaiii",false),["AramPoll"]=("dnd_aram_poll","ai",false),
         ["TextCompare"]=("dnd_text_compare","ssi",false),["TextHash"]=("dnd_text_hash","si",false),["MountDisc"]=("dnd_storage_mount_disc","i",false),["Encode"]=("dnd_text_encode","sii",true),["Decode"]=("dnd_text_decode","aiiii",true),["FromChars"]=("dnd_text_from_chars","aii",true),
         ["Mount"]=("dnd_storage_mount","i",false),["Unmount"]=("dnd_storage_unmount","i",false),["IsMounted"]=("dnd_storage_is_mounted","i",false),
         ["GetPath"]=("dnd_storage_path","is",true),["FullPath"]=("dnd_fs_full_path","s",true),["Exists"]=("dnd_fs_exists","si",false),
@@ -21,7 +29,7 @@ internal static class NativeStorageBindings
     internal static void Emit(StringBuilder b,ValueIrNativeStorage call)
     {
         if(!Bindings.TryGetValue(call.Operation,out var binding)||binding.Types.Length!=call.Arguments.Count)throw new NotSupportedException($"Invalid native storage binding {call.Operation}.");
-        var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'l'=>"int64_t",_=>"int"})})v{arg.Id}").ToList();
+        var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'l'=>"int64_t",'f'=>"float",_=>"int"})})v{arg.Id}").ToList();
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";
         if(call.Result is {} result)b.AppendLine($"  v{result.Id} = {(result.Kind==IrValueKind.ObjectReference?"(intptr_t)":"")}{expression};");else b.AppendLine($"  {expression};");
