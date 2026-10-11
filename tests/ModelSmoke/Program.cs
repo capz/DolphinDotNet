@@ -15,6 +15,7 @@ class Program
     {
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 1;
         if(!Aram.Initialize())return 2;
+        TransformChecks.Run();
         using(var canceled=new CancellationTokenSource()){canceled.Cancel();try{Model.LoadAsync("sd:/animated.dndmodel",canceled.Token).Wait();return 3;}catch(OperationCanceledException){}}
         AwaitModel().GetAwaiter().GetResult();
         var task=Model.LoadAsync("sd:/cache.dndmodel");if(task.IsCompleted)return 4;var model=task.Result;
@@ -32,12 +33,18 @@ class Program
         entity.Transform.Translate(new Vector3(1,0,0));if(entity.Transform.LocalPosition.Y<0.99f||entity.Transform.LocalPosition.Y>1.01f)return 31;
         try{parent.Parent=entity.Transform;return 24;}catch(ArgumentException){}
         var camera=new Camera();camera.LookAt(new Vector3(0,0,5),Vector3.Zero,new Vector3(0,1,0));
-        var renderer=new Renderer();renderer.BeginFrame(camera);renderer.Draw(entity);renderer.EndFrame();renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(a,Identity());try{a.Update(0);return 10;}catch(InvalidOperationException){}renderer.EndFrame();
+        var renderer=new Renderer();renderer.BeginFrame(camera);renderer.Draw(entity);
+        try{entity.Dispose();return 32;}catch(InvalidOperationException){}
+        renderer.Draw(entity);renderer.EndFrame();entity.Update(0);
+        renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(a,Identity());try{a.Update(0);return 10;}catch(InvalidOperationException){}renderer.EndFrame();
         int instanceMemory=a.NativeBytes;int memory=model.NativeBytes;a.Animator.SetSpeed(1);a.Animator.Play("Walk");a.Update(0.5f);model.UnloadToAramAsync().Wait();Dolphin.IO.File.Delete("sd:/cache.dndmodel");if(model.IsResident||model.NativeBytes>=memory||a.NativeBytes>=instanceMemory||model.AramBytes==0)return 11;
         try{a.Update(0);return 12;}catch(InvalidOperationException){}
         using(var canceled=new CancellationTokenSource()){canceled.Cancel();try{model.PrepareAsync(canceled.Token).Wait();return 13;}catch(OperationCanceledException){}}if(model.IsResident)return 14;
         model.PrepareAnimationAsync("Walk").Wait();if(!model.IsResident)return 15;a.GetNodeTransform(1,matrix);if(matrix[12]<0.99f||matrix[12]>1.01f)return 16;
         renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(a,Identity());renderer.EndFrame();model.UnloadToAramAsync().Wait();model.PrepareAsync().Wait();
+        entity.Dispose();entity.Dispose();
+        try{a.Update(0);return 33;}catch(ObjectDisposedException){}
+        if(!model.IsResident)return 34;
         b.Dispose();a.Dispose();model.Dispose();
         try{Model.LoadAsync("sd:/corrupt.dndmodel").Wait();return 17;}catch(System.IO.IOException){}
         try{Model.LoadAsync("sd:/animated.dndmodel",default,1024).Wait();return 18;}catch(System.IO.IOException){}
