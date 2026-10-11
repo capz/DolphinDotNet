@@ -5,7 +5,7 @@ internal static class ValueCBackend
 {
     public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry,CompilationModel model,DependencyGraph graph)
     {
-        var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include <math.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\n#include \"dnd_storage.h\"\n#include \"dnd_text.h\"\nstatic DndManagedHeap *dnd_value_heap;");
+        var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include <math.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\n#include \"dnd_storage.h\"\n#include \"dnd_text.h\"\n#include \"dnd_aram.h\"\nstatic DndManagedHeap *dnd_value_heap;");
         b.AppendLine("static inline float dnd_read_float(const void *p) {float v;memcpy(&v,p,4);return v;}\nstatic inline double dnd_read_double(const void *p) {double v;memcpy(&v,p,8);return v;}\nstatic inline uint64_t dnd_float_bits(double v,bool single) {if(single){float f=(float)v;uint32_t bits;memcpy(&bits,&f,4);return bits;}uint64_t bits;memcpy(&bits,&v,8);return bits;}\nstatic inline double dnd_float_value(uint64_t bits,bool single) {if(single){uint32_t b=(uint32_t)bits;return dnd_read_float(&b);}return dnd_read_double(&bits);}");
         b.AppendLine("static inline uint16_t dnd_read_u16(const void *p) {uint16_t v;memcpy(&v,p,2);return v;}\nstatic inline int32_t dnd_read_i32(const void *p) { int32_t v; memcpy(&v,p,sizeof(v)); return v; }\nstatic inline int64_t dnd_read_i64(const void *p) { int64_t v; memcpy(&v,p,sizeof(v)); return v; }");
         var stringLiterals=methods.SelectMany(m=>m.Blocks).SelectMany(block=>block.Instructions).OfType<ValueIrLoadString>().Select(x=>x.Value).Distinct(StringComparer.Ordinal).OrderBy(x=>x,StringComparer.Ordinal).ToArray();
@@ -66,7 +66,7 @@ internal static class ValueCBackend
             var n=m.ParameterCount+(m.HasThis?1:0);
             var abi=model.Methods[m.Key].Abi;
             var wideReturn=abi?.Return is CilStackKind.I8 or CilStackKind.Float;
-            b.Append($"static intptr_t {WrapperSymbol(m.Key)}(intptr_t *args) {{ ");
+            b.Append($"static intptr_t {WrapperSymbol(m.Key)}(intptr_t *args) {{ (void)args; ");
             b.Append(wideReturn?$"*({(abi?.Return==CilStackKind.Float?"double":"int64_t")}*)args[{n}] = ":m.ReturnsValue?"return ":"(void)");
             b.Append($"{Symbol(m.Key)}({string.Join(", ",Enumerable.Range(0,n).Select(i=>i==0&&m.HasThis&&model.Types[m.Key.TypeName].IsValueType?"(args[0]+sizeof(DndObject))":i>=(m.HasThis?1:0)&&abi?.Parameters[i-(m.HasThis?1:0)] is CilStackKind.I8 or CilStackKind.Float?$"*({(abi.Parameters[i-(m.HasThis?1:0)]==CilStackKind.Float?"double":"int64_t")}*)args[{i}]":$"args[{i}]").Concat(ReturnSize(m.Key,model)>0?new[]{$"args[{n}]"}:Array.Empty<string>()))});");
             if(!m.ReturnsValue||wideReturn)b.Append(" return 0;");

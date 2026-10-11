@@ -87,6 +87,7 @@ internal static class IntrinsicRegistry
         {
             ("Dolphin.Text.NativeText",_)=>IntrinsicKind.NativeStorage,
             ("System.String",".ctor") when parameterCount is 1 or 3=>IntrinsicKind.StringFromChars,
+            ("Dolphin.Memory.NativeAram",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Storage.NativeStorage",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Collections.NativeComparison",_)=>IntrinsicKind.NativeComparison,
             ("System.Runtime.CompilerServices.RuntimeHelpers","InitializeArray")=>IntrinsicKind.InitializeArray,

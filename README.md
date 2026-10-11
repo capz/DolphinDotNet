@@ -85,3 +85,7 @@ dotnet run --project tools/DolphinDotNet.SaveImage -- icon.png icon.rgb5a3
 ```
 
 Pass `--source` to embed bytes in a generated C# file, `--banner` for 96×32 memory-card banners, or `--disc-banner` to generate a disc `opening.bnr` with game metadata. See the [converter instructions](tools/DolphinDotNet.SaveImage/README.md) for resize modes, .NET tool installation and loading the bytes into `MemoryCardSaveOptions`.
+
+## ARAM cold-asset storage
+
+`Dolphin.Memory.Aram` provides disposable binary allocations and cooperative queued transfers into auxiliary RAM. `AramAssetCache` adds priority/LRU eviction and range prefetch. Initialize ownership/reservations before other ARAM users; managed objects remain in main RAM. See [ARAM runtime](docs/aram-runtime.md) for lifecycle, budgets and hardware acceptance limits.

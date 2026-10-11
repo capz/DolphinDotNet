@@ -5,6 +5,8 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["AramInitialize"]=("dnd_aram_initialize","i",false),["AramAvailable"]=("dnd_aram_available","",false),["AramStat"]=("dnd_aram_stat","i",false),["AramAllocate"]=("dnd_aram_allocate","i",false),
+        ["AramRetain"]=("dnd_aram_retain","i",false),["AramRelease"]=("dnd_aram_release","i",false),["AramDispose"]=("dnd_aram_dispose","i",false),["AramBegin"]=("dnd_aram_begin","iiaiii",false),["AramPoll"]=("dnd_aram_poll","ai",false),
         ["TextCompare"]=("dnd_text_compare","ssi",false),["TextHash"]=("dnd_text_hash","si",false),["MountDisc"]=("dnd_storage_mount_disc","i",false),["Encode"]=("dnd_text_encode","sii",true),["Decode"]=("dnd_text_decode","aiiii",true),["FromChars"]=("dnd_text_from_chars","aii",true),
         ["Mount"]=("dnd_storage_mount","i",false),["Unmount"]=("dnd_storage_unmount","i",false),["IsMounted"]=("dnd_storage_is_mounted","i",false),
         ["GetPath"]=("dnd_storage_path","is",true),["FullPath"]=("dnd_fs_full_path","s",true),["Exists"]=("dnd_fs_exists","si",false),

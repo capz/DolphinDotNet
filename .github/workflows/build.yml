@@ -102,6 +102,18 @@ jobs:
           timeout 30s /tmp/storage32 --gc-stress
           cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Iinclude tests/storage_faults.c source/managed_runtime.c source/storage.c -Wl,--wrap=read,--wrap=write,--wrap=close -o /tmp/storage_faults
           timeout 30s /tmp/storage_faults
+      - name: Validate ARAM transfers and asset cache
+        timeout-minutes: 4
+        run: |
+          dotnet build tests/AramSmoke/AramSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/AramSmoke/bin/Release/net8.0/AramSmoke.dll /tmp/aram.c
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/aram.c tests/aram_host.c source/managed_runtime.c source/aram.c -o /tmp/aram
+          timeout 30s /tmp/aram
+          timeout 30s /tmp/aram --gc-stress
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/aram.c tests/aram_host.c source/managed_runtime.c source/aram.c -o /tmp/aram32
+          timeout 30s /tmp/aram32 --gc-stress
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -DDND_ARAM_TEST -Iinclude tests/aram_test.c source/aram.c -o /tmp/aram-native32
+          /tmp/aram-native32
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
       - name: Verify generated source
@@ -161,6 +173,11 @@ jobs:
           dotnet build tests/LibrarySmoke/LibrarySmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/LibrarySmoke/bin/Release/net8.0/LibrarySmoke.dll /tmp/library.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/library.c -o /tmp/library.o
+      - name: Compile managed ARAM ABI for PowerPC
+        run: |
+          dotnet build tests/AramSmoke/AramSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/AramSmoke/bin/Release/net8.0/AramSmoke.dll /tmp/aram.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/aram.c -o /tmp/aram.o
       - name: Build ELF and DOL
         run: make V=1
       - name: Report GameCube runtime footprint
