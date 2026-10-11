@@ -212,7 +212,20 @@ internal static class ValueCBackend
                     case ValueIrFloatConstant x:b.AppendLine(x.Single?$"  {{uint32_t bits=0x{unchecked((uint)x.Bits):x}u;float value;memcpy(&value,&bits,4);v{x.Result.Id}=value;}}":$"  {{uint64_t bits=UINT64_C(0x{unchecked((ulong)x.Bits):x});double value;memcpy(&value,&bits,8);v{x.Result.Id}=value;}}");break;
                     case ValueIrConvert x:var cast=x.Opcode switch {0x67=>"int8_t",0x68=>"int16_t",0x69=>"int32_t",0x6a=>"int64_t",0x6d=>"uint32_t",0x6e=>"uint64_t",0xd1=>"uint16_t",0xd2=>"uint8_t",_=>CType(x.Result.Kind)};b.AppendLine($"  v{x.Result.Id} = ({cast})v{x.Value.Id};");break;
                     case ValueIrUnary x:b.AppendLine($"  v{x.Result.Id}={(x.Operation=="not"?"~":"-")}v{x.Value.Id};");break;
-                    case ValueIrBinary x:{var unsigned=x.Operation.EndsWith(".un",StringComparison.Ordinal);var op=Op(x.Operation);var l=unsigned?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";var r=unsigned?$"(uintptr_t)v{x.Right.Id}":$"v{x.Right.Id}";b.AppendLine($"  v{x.Result.Id} = {l} {op} {r};");break;}
+                    case ValueIrBinary x:
+                    {
+                        var unsigned = x.Operation.EndsWith(".un", StringComparison.Ordinal);
+                        var op = Op(x.Operation);
+                        if (unsigned && (op == "<" || op == ">") && (IsFloating(x.Left) || IsFloating(x.Right)))
+                            b.AppendLine($"  v{x.Result.Id} = {FloatingComparison($"v{x.Left.Id}", $"v{x.Right.Id}", op, unsigned)};");
+                        else
+                        {
+                            var left = unsigned ? $"(uintptr_t)v{x.Left.Id}" : $"v{x.Left.Id}";
+                            var right = unsigned ? $"(uintptr_t)v{x.Right.Id}" : $"v{x.Right.Id}";
+                            b.AppendLine($"  v{x.Result.Id} = {left} {op} {right};");
+                        }
+                        break;
+                    }
                     case ValueIrObjectHash x:b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.Object.Id}))v{x.Result.Id}={(x.Identity?$"(int32_t)((uintptr_t)v{x.Object.Id}>>3)":$"dnd_comparison_object_hash((DndObject*)v{x.Object.Id})")};");break;
                     case ValueIrObjectEquals x:b.AppendLine($"  {(x.Instance?$"if(dnd_require_object((DndObject*)v{x.Left.Id}))":"")}v{x.Result.Id}={(x.Identity?$"v{x.Left.Id}==v{x.Right.Id}":$"dnd_comparison_object_equal((DndObject*)v{x.Left.Id},(DndObject*)v{x.Right.Id},false)")};");break;
                     case ValueIrLoadFunction x:
@@ -438,10 +451,12 @@ internal static class ValueCBackend
         {
             case ValueIrJump j: Edge(b,method,block.Id,j.TargetBlock);b.AppendLine($"  goto block_{j.TargetBlock};");break;
             case ValueIrBranch x:
-                var left=x.Unsigned?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";
-                var right=x.Right is { } rv?(x.Unsigned?$"(uintptr_t)v{rv.Id}":$"v{rv.Id}"):"0";
+                var floating = IsFloating(x.Left) || (x.Right is { } operand && IsFloating(operand));
+                var left=x.Unsigned&&!floating?$"(uintptr_t)v{x.Left.Id}":$"v{x.Left.Id}";
+                var right=x.Right is { } rv?(x.Unsigned&&!floating?$"(uintptr_t)v{rv.Id}":$"v{rv.Id}"):"0";
                 var op=x.Comparison switch{ValueIrComparison.NonZero=>"!=",ValueIrComparison.Equal=>"==",ValueIrComparison.NotEqual=>"!=",ValueIrComparison.GreaterThan=>">",ValueIrComparison.GreaterOrEqual=>">=",ValueIrComparison.LessThan=>"<",ValueIrComparison.LessOrEqual=>"<=",_=>throw new InvalidDataException()};
-                b.AppendLine($"  if ({left} {op} {right}) {{");Edge(b,method,block.Id,x.TrueBlock,"    ");b.AppendLine($"    goto block_{x.TrueBlock};");b.AppendLine("  } else {");Edge(b,method,block.Id,x.FalseBlock,"    ");b.AppendLine($"    goto block_{x.FalseBlock};");b.AppendLine("  }");break;
+                var condition = floating ? FloatingComparison(left, right, op, x.Unsigned) : $"{left} {op} {right}";
+                b.AppendLine($"  if ({condition}) {{");Edge(b,method,block.Id,x.TrueBlock,"    ");b.AppendLine($"    goto block_{x.TrueBlock};");b.AppendLine("  } else {");Edge(b,method,block.Id,x.FalseBlock,"    ");b.AppendLine($"    goto block_{x.FalseBlock};");b.AppendLine("  }");break;
             case ValueIrSwitch x:
                 b.AppendLine($"  switch ((int32_t)v{x.Value.Id}) {{");for(var i=0;i<x.Targets.Count;i++){b.AppendLine($"    case {i}:");Edge(b,method,block.Id,x.Targets[i],"      ");b.AppendLine($"      goto block_{x.Targets[i]};");}b.AppendLine("    default:");Edge(b,method,block.Id,x.DefaultBlock,"      ");b.AppendLine($"      goto block_{x.DefaultBlock};");b.AppendLine("  }");break;
             case ValueIrReturn r:
@@ -585,6 +600,19 @@ internal static class ValueCBackend
     private static string Escape(string s)=>s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n").Replace("\r","\\r").Replace("\t","\\t");
     private static bool HasRoots(ValueIrMethod m,CompilationModel model)=>m.ExceptionRegions.Any(r=>r.Kind==ValueIrExceptionRegionKind.Catch)||Collect(m).Any(v=>v.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>l.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>(l.ReferenceOffsets?.Count??0)>0)||m.HasThis||(model.Methods.TryGetValue(m.Key,out var mm)&&mm.Abi is { } abi&&(abi.Parameters.Any(k=>k==CilStackKind.ObjectReference)||abi.ParameterStorage?.Any(s=>(s.ReferenceOffsets?.Count??0)>0)==true))||m.Blocks.SelectMany(b=>b.Instructions).Any(i=>i is ValueIrValueConstructor v&&(v.References?.Count??0)>0||i is ValueIrCall c&&model.Methods.TryGetValue(c.Target,out var cm)&&(cm.Abi?.ReturnStorage?.ReferenceOffsets?.Count??0)>0);
     private static string ValueStorageCType(IrValueKind kind)=>kind is IrValueKind.R4 or IrValueKind.R8?"double":kind==IrValueKind.I8?"int64_t":"intptr_t";
+    private static bool IsFloating(IrValue value) => value.Kind is IrValueKind.R4 or IrValueKind.R8;
+
+    private static string FloatingComparison(string left, string right, string op, bool unordered)
+    {
+        // In floating-point CIL, .un means unordered (NaN), not an unsigned integer cast.
+        // Negating the complementary ordered comparison includes unordered operands.
+        if (unordered)
+        {
+            var complement = op switch { "<" => ">=", "<=" => ">", ">" => "<=", ">=" => "<", _ => null };
+            if (complement != null) return $"!({left} {complement} {right})";
+        }
+        return $"{left} {op} {right}";
+    }
     private static string CType(IrValueKind kind)=>kind switch
     {
         IrValueKind.R4=>"float",

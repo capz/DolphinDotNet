@@ -10,6 +10,11 @@ static class TransformChecks
 
     public static void Run()
     {
+        Check(InRange(3.0f, 2.999f, 3.001f) && InRange(-3.0f, -3.001f, -2.999f), "Float branch precision.");
+        Check(InRange(3.0, 2.999, 3.001) && InRange(-3.0, -3.001, -2.999), "Double branch precision.");
+        Check(!InRange(float.NaN, 0, 1) && !InRange(0, float.NaN, 1) && !InRange(0, -1, float.NaN), "Unordered float branches.");
+        Check(!InRange(double.NaN, 0, 1) && !InRange(0, double.NaN, 1) && !InRange(0, -1, double.NaN), "Unordered double branches.");
+        Check(NotAtLeast(float.NaN, 0) && NotAtMost(0, float.NaN), "Unordered comparison values.");
         var matrix = new float[16];
         var root = new Transform();
         root.LocalPosition = new Vector3(3, 0, 0);
@@ -84,4 +89,9 @@ static class TransformChecks
         try { renderer.Draw(empty); throw new InvalidOperationException("Disposed object draw accepted."); }
         catch (ObjectDisposedException) { }
     }
+
+    private static bool InRange(float value, float lower, float upper) => value > lower && value < upper;
+    private static bool InRange(double value, double lower, double upper) => value > lower && value < upper;
+    private static bool NotAtLeast(float value, float other) => !(value >= other);
+    private static bool NotAtMost(float value, float other) => !(value <= other);
 }

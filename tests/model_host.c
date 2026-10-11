@@ -21,6 +21,13 @@ int main(int argc, char **argv) {
             "ARAM=%d\n",
             (long)result, dnd_exception_kind(), dnd_exception_message(),
             dnd_model_live_handles(), dnd_fs_open_handles(), dnd_aram_stat(4));
+    DndString *detail = dnd_exception_get_message((DndException *)dnd_exception_object());
+    if (detail) {
+      fputs("Managed assertion: ", stderr);
+      for (uint32_t i = 0; i < detail->length; i++)
+        fputc(detail->chars[i] < 128 ? (char)detail->chars[i] : '?', stderr);
+      fputc('\n', stderr);
+    }
     return 1;
   }
   printf("Model AOT integration passed; heap high water=%zu collections=%zu\n",
