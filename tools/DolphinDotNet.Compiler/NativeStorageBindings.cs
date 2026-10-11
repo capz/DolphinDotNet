@@ -5,6 +5,8 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["PerformanceVisible"]=("dnd_performance_visible","",false),
+        ["PerformanceSetVisible"]=("dnd_performance_set_visible","i",false),
         ["ModelTrs"]=("dnd_model_trs","aa",false),["ModelMultiply"]=("dnd_model_multiply_arrays","aaa",false),["ModelPosition"]=("dnd_model_position","aafff",false),["ModelTranslate"]=("dnd_model_translate","afff",false),["ModelRotate"]=("dnd_model_rotate","afff",false),["ModelCamera"]=("dnd_model_camera","aaa",false),
         ["ModelBegin"]=("dnd_model_begin","si",false),["ModelStep"]=("dnd_model_step","i",false),["ModelDispose"]=("dnd_model_dispose","i",false),["ModelStat"]=("dnd_model_stat","ii",false),
         ["ModelName"]=("dnd_model_name","iii",true),["ModelDuration"]=("dnd_model_duration","ii",false),["ModelCopy"]=("dnd_model_copy","iiaii",false),

@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "dnd_model_internal.h"
+#include "dnd_performance.h"
 #include "dnd_storage.h"
 #include <assert.h>
 #include <math.h>
@@ -164,7 +165,13 @@ int main(int argc, char **argv) {
   dnd_model_identity(identity);
   memcpy(matrix->data, identity, 64);
   assert(dnd_model_frame_begin(matrix, matrix) == 0);
+  assert(dnd_performance_stats()->triangles == 0);
   assert(dnd_model_draw(a, matrix) == 0);
+  assert(dnd_performance_stats()->triangles == 1);
+  assert(dnd_model_draw(b, matrix) == 0);
+  assert(dnd_performance_stats()->triangles == 2);
+  assert(dnd_model_draw(0, matrix) < 0);
+  assert(dnd_performance_stats()->triangles == 2);
   assert(dnd_model_unload(m) < 0);
   assert(dnd_model_instance_dispose(a) < 0);
   assert(dnd_model_frame_end() == 0);

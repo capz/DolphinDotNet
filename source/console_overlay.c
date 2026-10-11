@@ -1,6 +1,6 @@
 #include "dnd_console.h"
 #include "dnd_graphics.h"
-#include <GL/gl.h>
+#include "dnd_performance.h"
 #include <stdio.h>
 #include <string.h>
 #define ROWS 10
@@ -87,17 +87,13 @@ void dnd_console_write(const char *s) {
 }
 void dnd_console_set_visible(int v) { visible = !!v; }
 int dnd_console_visible(void) { return visible; }
-void dnd_console_render(void) {
-  if (!visible)
-    return;
+static void render_text(const char *const *text, int rows, float left, float top,
+                        unsigned char shade) {
   const float scale = 1.35f, cw = 6 * scale, ch = 9 * scale;
-  dnd_graphics_overlay_rect(0, 0, (float)dnd_graphics_width(), count * ch + 8,
-                            0, 0, 0, .62f);
   unsigned quads = 0;
-  for (int row = 0; row < count; row++) {
-    int idx = (head - count + 1 + row + ROWS) % ROWS;
-    for (int col = 0; lines[idx][col]; col++) {
-      const unsigned char *g = glyph(lines[idx][col]);
+  for (int row = 0; row < rows; row++) {
+    for (int col = 0; text[row][col]; col++) {
+      const unsigned char *g = glyph(text[row][col]);
       if (g)
         for (int x = 0; x < 5; x++)
           for (int y = 0; y < 7; y++)
@@ -105,14 +101,14 @@ void dnd_console_render(void) {
               quads++;
     }
   }
-  dnd_graphics_overlay_glyph_begin(quads);
-  for (int row = 0; row < count; row++) {
-    int idx = (head - count + 1 + row + ROWS) % ROWS;
-    for (int col = 0; lines[idx][col]; col++) {
-      const unsigned char *g = glyph(lines[idx][col]);
+  if (!quads) return;
+  dnd_graphics_overlay_glyph_begin(quads, shade);
+  for (int row = 0; row < rows; row++) {
+    for (int col = 0; text[row][col]; col++) {
+      const unsigned char *g = glyph(text[row][col]);
       if (!g)
         continue;
-      float ox = 4 + col * cw, oy = 4 + row * ch;
+      float ox = left + col * cw, oy = top + row * ch;
       for (int x = 0; x < 5; x++)
         for (int y = 0; y < 7; y++)
           if (g[x] & (1u << y)) {
@@ -122,4 +118,33 @@ void dnd_console_render(void) {
     }
   }
   dnd_graphics_overlay_glyph_end();
+}
+
+void dnd_console_render(void) {
+  const float scale = 1.35f, cw = 6 * scale, ch = 9 * scale;
+  if (visible && count) {
+    const char *text[ROWS];
+    for (int row = 0; row < count; row++)
+      text[row] = lines[(head - count + 1 + row + ROWS) % ROWS];
+    dnd_graphics_overlay_rect(0, 0, (float)dnd_graphics_width(), count * ch + 8,
+                              0, 0, 0, .62f);
+    render_text(text, count, 4, 4, 255);
+  }
+  if (dnd_performance_visible()) {
+    char panel[DND_PERFORMANCE_ROWS][DND_PERFORMANCE_COLUMNS];
+    const char *text[DND_PERFORMANCE_ROWS];
+    size_t columns = 0;
+    dnd_performance_format(panel);
+    for (int row = 0; row < DND_PERFORMANCE_ROWS; row++) {
+      text[row] = panel[row];
+      size_t length = strlen(panel[row]);
+      if (length > columns) columns = length;
+    }
+    const float margin = 8, padding = 6;
+    float height = DND_PERFORMANCE_ROWS * ch + padding * 2;
+    float top = (float)dnd_graphics_height() - margin - height;
+    dnd_graphics_overlay_rect(margin, top, columns * cw + padding * 2,
+                              height, 0, 0, 0, 1);
+    render_text(text, DND_PERFORMANCE_ROWS, margin + padding, top + padding, 208);
+  }
 }

@@ -1,8 +1,11 @@
 #include "dnd_console.h"
 #include "dnd_graphics.h"
+#include "dnd_performance.h"
+#include "dnd_aram.h"
 #include <GL/gl.h>
 #include <gccore.h>
 #include <malloc.h>
+#include <ogc/timesupp.h>
 #include <string.h>
 
 static GXRModeObj *mode;
@@ -12,6 +15,26 @@ static void *fifo;
 static int first_frame = 1;
 static int native_model_frame;
 static unsigned glyph_quads, glyph_batch;
+static unsigned char glyph_shade;
+
+static void sample_performance_memory(void) {
+  if (!dnd_performance_visible()) return;
+  uint64_t now = ticks_to_microsecs(gettime());
+  if (!dnd_performance_memory_due(now)) return;
+  uint32_t total = SYS_GetPhysicalMem1Size();
+  struct mallinfo info = mallinfo();
+  // Count code, static storage, framebuffers, stacks and native heap allocations.
+  uint64_t free_bytes = (uint64_t)SYS_GetArena1Size() + info.fordblks;
+  uint32_t used = free_bytes < total ? total - (uint32_t)free_bytes : 0;
+  uint32_t aram_used = 0, aram_total = 0;
+  bool aram_available = dnd_aram_memory_usage(&aram_used, &aram_total);
+  dnd_performance_memory(now, used, total, aram_available, aram_used, aram_total);
+}
+
+static void performance_presented(void) {
+  if (dnd_performance_visible())
+    dnd_performance_presented(ticks_to_microsecs(gettime()));
+}
 
 void dnd_graphics_init(void) {
   VIDEO_Init();
@@ -42,6 +65,7 @@ void dnd_graphics_init(void) {
   glEnable(GL_DEPTH_TEST);
 }
 void dnd_graphics_begin_frame(float r, float g, float b, float a) {
+  dnd_performance_begin_frame();
   glViewport(0, 0, mode->fbWidth, mode->efbHeight);
   glClearColor(r, g, b, a);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -52,6 +76,7 @@ void dnd_graphics_begin_frame(float r, float g, float b, float a) {
   glLoadIdentity();
 }
 void dnd_graphics_draw_demo(float angle) {
+  dnd_performance_add_triangles(1);
   glPushMatrix();
   glTranslatef(0, 0, -4);
   glRotatef(angle, 0.4f, 1.0f, 0.2f);
@@ -66,6 +91,7 @@ void dnd_graphics_draw_demo(float angle) {
   glPopMatrix();
 }
 void dnd_graphics_begin_overlay(void) {
+  sample_performance_memory();
   if (native_model_frame) {
     Mtx44 projection;
     Mtx view;
@@ -147,6 +173,7 @@ void dnd_graphics_end_frame(void) {
   VIDEO_Flush();
   VIDEO_WaitVSync();
   fb ^= 1;
+  performance_presented();
 }
 int dnd_graphics_width(void) { return mode ? mode->fbWidth : 640; }
 int dnd_graphics_height(void) { return mode ? mode->efbHeight : 480; }
@@ -187,13 +214,16 @@ void dnd_graphics_model_end(void) {
   VIDEO_Flush();
   VIDEO_WaitVSync();
   fb ^= 1;
+  performance_presented();
 }
 
-void dnd_graphics_overlay_glyph_begin(unsigned quads) {
+void dnd_graphics_overlay_glyph_begin(unsigned quads, unsigned char shade) {
   glyph_quads = quads;
   glyph_batch = 0;
+  glyph_shade = shade;
   if (!native_model_frame) {
-    glColor4f(1, 1, 1, 1);
+    float gray = shade / 255.0f;
+    glColor4f(gray, gray, gray, 1);
     glBegin(GL_QUADS);
   }
 }
@@ -204,13 +234,13 @@ void dnd_graphics_overlay_glyph_quad(float x, float y, float size) {
       GX_Begin(GX_QUADS, GX_VTXFMT0, (u16)(glyph_batch * 4));
     }
     GX_Position2f32(x, y);
-    GX_Color4u8(255, 255, 255, 255);
+    GX_Color4u8(glyph_shade, glyph_shade, glyph_shade, 255);
     GX_Position2f32(x + size, y);
-    GX_Color4u8(255, 255, 255, 255);
+    GX_Color4u8(glyph_shade, glyph_shade, glyph_shade, 255);
     GX_Position2f32(x + size, y + size);
-    GX_Color4u8(255, 255, 255, 255);
+    GX_Color4u8(glyph_shade, glyph_shade, glyph_shade, 255);
     GX_Position2f32(x, y + size);
-    GX_Color4u8(255, 255, 255, 255);
+    GX_Color4u8(glyph_shade, glyph_shade, glyph_shade, 255);
     glyph_quads--;
     if (--glyph_batch == 0)
       GX_End();
