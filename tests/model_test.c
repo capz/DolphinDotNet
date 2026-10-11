@@ -18,6 +18,59 @@ static int load(const char *path) {
   return m;
 }
 static void near(float a, float b) { assert(fabsf(a - b) < 0.001f); }
+static void put(unsigned char *p, unsigned value) {
+  p[0] = (unsigned char)(value >> 24);
+  p[1] = (unsigned char)(value >> 16);
+  p[2] = (unsigned char)(value >> 8);
+  p[3] = (unsigned char)value;
+}
+static void corrupt_cases(const char *root, const unsigned char *original,
+                          unsigned length) {
+  unsigned char *data = malloc(length);
+  assert(data);
+  char path[1024];
+  snprintf(path, sizeof(path), "%s/sd/malformed.dndmodel", root);
+  for (int test = 0; test < 6; test++) {
+    memcpy(data, original, length);
+    unsigned section = test == 0   ? 0
+                       : test == 1 ? 1
+                       : test == 2 ? 4
+                       : test == 3 ? 5
+                       : test == 4 ? 3
+                                   : 1;
+    unsigned char *dir = data + 16 + section * 16;
+    unsigned off = dnd_model_u32(dir + 4), size = dnd_model_u32(dir + 8);
+    if (test == 0)
+      put(data + off + 4, 0); /* self-parent */
+    if (test == 1)
+      put(data + off + 4 + 44 + 48, 256); /* invalid vertex joint */
+    if (test == 2)
+      put(data + off + 8, 1024); /* invalid skin node */
+    if (test == 3)
+      put(data + off + 84, 3); /* unknown track property */
+    if (test == 4)
+      put(data + off + 4, 3); /* unsupported texture dimension */
+    if (test == 5)
+      put(dir + 4, 160); /* overlapping directory ranges */
+    else
+      put(dir + 12, dnd_model_hash(data + off, size));
+    FILE *f = fopen(path, "wb");
+    assert(f);
+    assert(fwrite(data, 1, length, f) == length);
+    assert(!fclose(f));
+    DndString *name = dnd_string_from_utf8(&heap, "sd:/malformed.dndmodel");
+    int token = dnd_model_begin(name, 8 * 1024 * 1024);
+    assert(token);
+    int result;
+    while ((result = dnd_model_step(token)) == 0) {
+    }
+    assert(result < 0);
+    assert(!dnd_model_dispose(token));
+    assert(!dnd_fs_open_handles());
+  }
+  remove(path);
+  free(data);
+}
 int main(int argc, char **argv) {
   assert(argc == 2);
   setenv("DND_STORAGE_ROOT", argv[1], 1);
@@ -104,6 +157,7 @@ int main(int argc, char **argv) {
   assert(dnd_model_restore_end(m, 1) == 0);
   assert(dnd_model_vertex(a, 0, 0, v) == 0);
   near(v[0], 0.5f);
+  corrupt_cases(argv[1], backup, length);
   free(backup);
   DndArray *matrix = dnd_managed_array_new(&heap, 16, 4);
   float identity[16];
