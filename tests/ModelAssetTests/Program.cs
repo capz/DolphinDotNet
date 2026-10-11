@@ -50,4 +50,9 @@ if(args.Length>1)
     ModelConverter.Convert(fbx,Path.Combine(output,"sd","fbx.dndmodel"),new(){Assimp=assimp,ApproximateMaterials=true});
     string obj=Path.Combine(output,"model.obj");File.WriteAllText(obj,"mtllib model.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\nusemtl Surface\nf 1/1 2/2 3/3 4/4\n");File.WriteAllText(Path.Combine(output,"model.mtl"),"newmtl Surface\nKd 1 1 1\nmap_Kd texture.png\n");ModelConverter.Convert(obj,Path.Combine(output,"sd","obj.dndmodel"),new(){Assimp=assimp,ApproximateMaterials=true});
 }
+var buildProject=new System.Xml.Linq.XElement("Project",new System.Xml.Linq.XAttribute("Sdk","Microsoft.NET.Sdk"),
+    new System.Xml.Linq.XElement("PropertyGroup",new System.Xml.Linq.XElement("TargetFramework","net8.0")),
+    new System.Xml.Linq.XElement("Import",new System.Xml.Linq.XAttribute("Project",Path.GetFullPath("tools/DolphinDotNet.Assets/msbuild/DolphinDotNet.Assets.targets"))),
+    new System.Xml.Linq.XElement("ItemGroup",new System.Xml.Linq.XElement("DndModel",new System.Xml.Linq.XAttribute("Include",gltf),new System.Xml.Linq.XElement("Output",Path.Combine(output,"sd","built.dndmodel")),new System.Xml.Linq.XElement("Options","--texture-limit 256"))));
+File.WriteAllText(Path.Combine(output,"Build.csproj"),buildProject.ToString());
 Console.WriteLine("Model converter fixtures passed: "+output);
