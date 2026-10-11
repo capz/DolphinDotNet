@@ -1,6 +1,5 @@
+using DolphinDotNet.Imaging;
 using DolphinDotNet.SaveImage;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 
 static void Check(bool condition, string message)
 {
@@ -9,7 +8,7 @@ static void Check(bool condition, string message)
 static ushort Word(byte[] bytes, int pixel) => (ushort)((bytes[pixel * 2] << 8) | bytes[pixel * 2 + 1]);
 static int Run(params string[] args) => Command.Run(args, new StringWriter(), new StringWriter());
 
-using (var fixture = new Image<Rgba32>(32, 32))
+using (var fixture = new RasterImage(32, 32))
 {
     fixture[0, 0] = new Rgba32(255, 0, 0, 255);
     fixture[1, 0] = new Rgba32(0, 255, 0, 255);
@@ -29,7 +28,7 @@ try
 {
     var input = Path.Combine(directory, "input.png");
     var output = Path.Combine(directory, "icon.rgb5a3");
-    using (var image = new Image<Rgba32>(64, 32, new Rgba32(255, 0, 0, 255))) image.SaveAsPng(input);
+    using (var image = new RasterImage(64, 32, new Rgba32(255, 0, 0, 255))) image.SaveAsPng(input);
     Check(Run(input, output) == 0, "PNG conversion");
     var bytes = File.ReadAllBytes(output);
     Check(bytes.Length == 2048 && Word(bytes, 0) == 0 && Word(bytes, 32 * 8) == 0xfc00, "Aspect preserving transparent padding");

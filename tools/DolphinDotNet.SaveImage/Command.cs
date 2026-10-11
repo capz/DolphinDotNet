@@ -1,7 +1,4 @@
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using DolphinDotNet.Imaging;
 
 namespace DolphinDotNet.SaveImage;
 
@@ -71,18 +68,10 @@ public static class Command
             if (string.Equals(input, destination, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                 throw new ArgumentException("Input and output must be different files.");
             if (!force && File.Exists(destination)) throw new IOException("Output exists; use --force to replace it.");
-            using var stream = File.OpenRead(input);
-            if (Image.DetectFormat(stream) is not PngFormat) throw new ArgumentException("Input must be a PNG image.");
-            stream.Position = 0;
-            using var image = Image.Load<Rgba32>(stream);
-            if (image.Frames.Count != 1) throw new ArgumentException("Animated PNG is unsupported; use a single frame.");
+            using var image = RasterImage.Load(File.ReadAllBytes(input), pngOnly: true);
             int width = banner || disc ? 96 : 32;
-            image.Mutate(x => x.Resize(new ResizeOptions
-            {
-                Size = new Size(width, 32), Mode = mode, Position = AnchorPositionMode.Center,
-                PadColor = Color.Transparent, Sampler = KnownResamplers.Bicubic
-            }));
-            var bytes = Rgb5A3.Encode(image);
+            using var resized = image.Resized(width, 32, mode);
+            var bytes = Rgb5A3.Encode(resized);
             if (disc) bytes = DiscBanner.Encode(bytes, bnr2, title, maker, longTitle, longMaker, description);
             if (source) bytes = System.Text.Encoding.UTF8.GetBytes(SourceOutput.Generate(bytes, ns, className, member));
             // Finish conversion before publishing the destination. Never truncate an existing output on failure.

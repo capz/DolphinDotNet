@@ -11,6 +11,6 @@
     <Description>Convert PNG images to GameCube memory-card RGB5A3 icons and banners.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.2.0" />
+    <ProjectReference Include="../DolphinDotNet.Imaging/DolphinDotNet.Imaging.csproj" />
   </ItemGroup>
 </Project>

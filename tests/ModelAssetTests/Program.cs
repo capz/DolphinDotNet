@@ -1,9 +1,8 @@
+using DolphinDotNet.Imaging;
 using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json.Nodes;
 using DolphinDotNet.Assets;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 
 string output=args.Length==0?Path.Combine(Path.GetTempPath(),"dnd-model-fixtures"):Path.GetFullPath(args[0]);Directory.CreateDirectory(output);Directory.CreateDirectory(Path.Combine(output,"sd"));
 var binary=new MemoryStream();var views=new JsonArray();var accessors=new JsonArray();
@@ -13,7 +12,7 @@ int Attribute(float[] values,string type,int components)
 }
 int Joints(ushort[] values){int offset=(int)binary.Position;foreach(ushort v in values)binary.Write(BitConverter.GetBytes(v));int view=views.Count;views.Add(new JsonObject{["buffer"]=0,["byteOffset"]=offset,["byteLength"]=values.Length*2});int index=accessors.Count;accessors.Add(new JsonObject{["bufferView"]=view,["componentType"]=5123,["count"]=values.Length/4,["type"]="VEC4"});return index;}
 int position=Attribute([0,0,0,1,0,0,0,1,0],"VEC3",3),normal=Attribute([0,0,1,0,0,1,0,0,1],"VEC3",3),uv=Attribute([0,0,1,0,0,1],"VEC2",2),joints=Joints([0,1,0,0,0,1,0,0,0,1,0,0]),weights=Attribute([0.5f,0.5f,0,0,0.5f,0.5f,0,0,0.5f,0.5f,0,0],"VEC4",4),inverse=Attribute([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],"MAT4",16),time=Attribute([0,1],"SCALAR",1),translation=Attribute([0,0,0,2,0,0],"VEC3",3),step=Attribute([0,0,0,4,0,0],"VEC3",3),cubic=Attribute([0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0],"VEC3",3),rot=Attribute([0,0,0,1,0,0,1,0],"VEC4",4);
-using var image=new Image<Rgba32>(4,4);for(int y=0;y<4;y++)for(int x=0;x<4;x++)image[x,y]=new Rgba32((byte)(x*30),(byte)(y*40),50,255);using var png=new MemoryStream();image.SaveAsPng(png);
+using var image=new RasterImage(4,4);for(int y=0;y<4;y++)for(int x=0;x<4;x++)image[x,y]=new Rgba32((byte)(x*30),(byte)(y*40),50,255);using var png=new MemoryStream();image.SaveAsPng(png);
 var root=new JsonObject{
  ["asset"]=new JsonObject{["version"]="2.0"},["scene"]=0,["scenes"]=new JsonArray(new JsonObject{["nodes"]=new JsonArray(0,2)}),
  ["buffers"]=new JsonArray(new JsonObject{["uri"]="data:application/octet-stream;base64,"+Convert.ToBase64String(binary.ToArray()),["byteLength"]=(int)binary.Length}),["bufferViews"]=views,["accessors"]=accessors,

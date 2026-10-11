@@ -1,12 +1,11 @@
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using DolphinDotNet.Imaging;
 
 namespace DolphinDotNet.SaveImage;
 
 public static class Rgb5A3
 {
     /// <summary>Encodes scanline pixels in GX 4x4 tile order, most significant byte first.</summary>
-    public static byte[] Encode(Image<Rgba32> image)
+    public static byte[] Encode(RasterImage image)
     {
         if ((image.Width != 32 && image.Width != 96) || image.Height != 32)
             throw new ArgumentException("Save images must be 32x32 (icon) or 96x32 (banner).", nameof(image));

@@ -1,10 +1,8 @@
+using DolphinDotNet.Imaging;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Numerics;
 using System.Text.Json;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
 namespace DolphinDotNet.Assets;
 
 public sealed class ImportOptions
