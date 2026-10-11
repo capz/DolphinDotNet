@@ -2,6 +2,6 @@
   <!-- Always convert so external buffers/textures participate in the build. -->
   <PropertyGroup><DndAssetsCommand Condition="'$(DndAssetsCommand)' == ''">dnd-assets</DndAssetsCommand></PropertyGroup>
   <Target Name="ConvertDndModels" BeforeTargets="BeforeBuild" Condition="'@(DndModel)' != ''">
-    <Exec Command="&quot;$(DndAssetsCommand)&quot; model &quot;%(DndModel.Identity)&quot; &quot;%(DndModel.Output)&quot; %(DndModel.Options)" />
+    <Exec Command="&quot;$(DndAssetsCommand)&quot; model &quot;%(DndModel.Identity)&quot; &quot;%(DndModel.DndOutput)&quot; %(DndModel.Options)" />
   </Target>
 </Project>

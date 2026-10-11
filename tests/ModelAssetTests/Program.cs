@@ -53,6 +53,6 @@ if(args.Length>1)
 var buildProject=new System.Xml.Linq.XElement("Project",new System.Xml.Linq.XAttribute("Sdk","Microsoft.NET.Sdk"),
     new System.Xml.Linq.XElement("PropertyGroup",new System.Xml.Linq.XElement("TargetFramework","net8.0")),
     new System.Xml.Linq.XElement("Import",new System.Xml.Linq.XAttribute("Project",Path.GetFullPath("tools/DolphinDotNet.Assets/msbuild/DolphinDotNet.Assets.targets"))),
-    new System.Xml.Linq.XElement("ItemGroup",new System.Xml.Linq.XElement("DndModel",new System.Xml.Linq.XAttribute("Include",gltf),new System.Xml.Linq.XElement("Output",Path.Combine(output,"sd","built.dndmodel")),new System.Xml.Linq.XElement("Options","--texture-limit 256"))));
+    new System.Xml.Linq.XElement("ItemGroup",new System.Xml.Linq.XElement("DndModel",new System.Xml.Linq.XAttribute("Include",gltf),new System.Xml.Linq.XElement("DndOutput",Path.Combine(output,"sd","built.dndmodel")),new System.Xml.Linq.XElement("Options","--texture-limit 256"))));
 File.WriteAllText(Path.Combine(output,"Build.csproj"),buildProject.ToString());
 Console.WriteLine("Model converter fixtures passed: "+output);

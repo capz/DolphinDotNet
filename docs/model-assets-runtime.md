@@ -22,7 +22,7 @@ Each conversion writes a `.deps.json` manifest with SHA-256 hashes of source fil
 <Import Project="path/to/DolphinDotNet.Assets.targets" />
 <ItemGroup>
   <DndModel Include="Assets/player.glb">
-    <Output>$(OutputPath)assets/player.dndmodel</Output>
+    <DndOutput>$(OutputPath)assets/player.dndmodel</DndOutput>
     <Options>--texture-limit 256</Options>
   </DndModel>
 </ItemGroup>
