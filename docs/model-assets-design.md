@@ -64,6 +64,10 @@ Separate immutable, shared `Model` resources from mutable `ModelInstance` pose a
 
 ```csharp
 using var model = await Model.LoadAsync("sd:/assets/player.dndmodel");
+// Inspect available clips before creating or playing an instance:
+foreach (var clip in model.Animations)
+    Console.WriteLine($"{clip.Name}: {clip.DurationSeconds}s");
+
 using var player = model.CreateInstance();
 player.Animator.Play("Walk", loop: true);
 
@@ -76,6 +80,8 @@ renderer.DrawModel(player, transform);
 // Optional transition:
 player.Animator.CrossFade("Idle", durationSeconds: 0.2f);
 ```
+
+`Model.Animations` is a read-only collection of `AnimationClipInfo` metadata with `Name` and `DurationSeconds`, available immediately after loading without sampling or prefetching clip payloads. Static models expose an empty collection. The converter assigns deterministic unique names to unnamed/duplicate source clips and reports the mapping. `model.TryGetAnimation(name, out AnimationClipInfo clip)` uses ordinal, case-sensitive names; `Play` and `CrossFade` use the same lookup and throw a clear argument error for unknown names. Applications can enumerate clips to build selection logic without guessing names. Metadata belongs to the shared model; playback state belongs to each instance.
 
 Playback includes clip enumeration, play/pause/stop, seek, speed, looping and a two-clip crossfade. Evaluate missing channels from the rest pose, interpolate rotations with appropriate quaternion handling, propagate parent transforms, then construct mesh-local skin matrices from joint transforms and inverse bind matrices. Define matrix multiplication conventions in the package specification and test bind-pose reconstruction before implementing rendering. Initially root motion stays in the animated pose; extracting it into gameplay movement must be an explicit later API to avoid applying it twice. Bone/socket attachment queries expose the current instance pose with a documented coordinate space. Layered/additive blending, retargeting and animation events are follow-up work.
 
