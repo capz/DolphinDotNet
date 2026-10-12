@@ -315,6 +315,23 @@ int main(void) {
     assert(!registration.registered);
     dnd_gc_collect(&heap, NULL);
 
+    /* Contexts keep pending exception state isolated when execution is
+       transferred sequentially at an EH-free boundary. */
+    dnd_exception_clear();
+    DndExecutionContext main_context = {0}, other_context = {0};
+    dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION, "main context");
+    assert(dnd_context_switch(&main_context, &other_context));
+    assert(!dnd_exception_pending());
+    dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "other context");
+    assert(dnd_exception_kind() == DND_EXCEPTION_ARGUMENT);
+    assert(dnd_context_switch(&other_context, &main_context));
+    assert(dnd_exception_kind() == DND_EXCEPTION_INVALID_OPERATION);
+    assert(dnd_context_switch(&main_context, &other_context));
+    assert(dnd_exception_kind() == DND_EXCEPTION_ARGUMENT);
+    assert(dnd_context_switch(&other_context, &main_context));
+    dnd_exception_clear();
+    assert(!dnd_context_switch(NULL, &other_context));
+    assert(!dnd_context_switch(&main_context, &main_context));
     puts("managed runtime + core BCL tests passed");
     return 0;
 }

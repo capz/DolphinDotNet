@@ -27,3 +27,9 @@ The worker foundation and host tests deliberately preserve the existing default 
 The managed runtime now supports `dnd_gc_register_roots` and `dnd_gc_unregister_roots`. Callers can register a `DndRootSet` whose rooted managed objects remain alive across GC collections, even when the immediate stack frame is no longer participating. Tests verify that a registered managed object remains live during an explicit collection.
 
 **Safety boundary:** The registration list and managed allocator remain unsynchronized. Registering/unregistering roots, allocating, and collecting must all happen under the existing single-managed-thread assumption. This is the GC *root-enumeration foundation*, not a declaration that managed workers or background continuations are safe. Before enabling cross-thread managed work, add a native thread registry, stop-the-world safepoints, per-thread exception/GC frames, and synchronized access to heap and scheduler state, then test nested exceptions and forced GC on multiple threads.
+
+## Sequential execution-context isolation
+
+`dnd_context_switch(from, to)` saves and restores managed GC-frame pointers and pending exception state, allowing separate *sequentially executed* managed contexts to retain independent exception information. It rejects null/same-context switches and switches while an exception handler is active, because jumping across native stacks is invalid. A host regression test verifies pending exception isolation across switches.
+
+This is **not managed multi-thread support**. There is no safe-point handshake or allocator locking, and concurrently executing managed code remains prohibited. Before collecting while another context is inactive, its live object slots and exception object must be explicitly included in registered GC roots; the sequential switch alone does not make inactive execution-context roots visible to the collector. Do not enable worker-thread managed callbacks based solely on this API.

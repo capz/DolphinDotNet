@@ -681,6 +681,22 @@ void dnd_gc_unregister_roots(DndGcRootRegistration *registration) {
     registration->next = NULL;
 }
 
+bool dnd_context_switch(DndExecutionContext *from, DndExecutionContext *to) {
+    /* A live exception handler may longjmp into the wrong context. */
+    if (!from || !to || from == to || eh_frames) return false;
+    from->gc_frames = gc_frames;
+    from->exception_object = exception_object;
+    from->exception_text = exception_text;
+    from->exception_kind = exception_kind;
+    from->exception_pending = exception_is_pending;
+    gc_frames = to->gc_frames;
+    exception_object = to->exception_object;
+    exception_text = to->exception_text;
+    exception_kind = to->exception_kind;
+    exception_is_pending = to->exception_pending;
+    return true;
+}
+
 void dnd_gc_frame_push(DndGcFrame *frame, DndObject ***slots, size_t count) {
     frame->slots = slots;
     frame->count = count;
