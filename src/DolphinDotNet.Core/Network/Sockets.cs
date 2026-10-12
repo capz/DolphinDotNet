@@ -1,6 +1,7 @@
 using System;
-using Dolphin.Threading;
-using Dolphin.Threading.Tasks;
+using System.Threading;
+using System.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 namespace Dolphin.Network;
 public enum AddressFamily { InterNetwork=2 }
 public enum SocketType { Stream=1,Dgram=2 }
@@ -117,8 +118,8 @@ public sealed class TcpClient : IDisposable
         private readonly TcpClient owner;private readonly string host;private readonly int port;private readonly CancellationToken token;private Task<IPAddress[]>? lookup;private Task? connect;private IPAddress[]? addresses;private int index;
         internal readonly TaskCompletionSource<int> Completion=new TaskCompletionSource<int>();
         internal HostConnect(TcpClient c,string h,int p,CancellationToken t){owner=c;host=h;port=p;token=t;}
-        internal void Start(){try{lookup=Dns.GetHostAddressesAsync(host,token);lookup.Continue(Step);}catch(Exception e){owner.Dispose();Completion.SetException(e);}}
-        private void Step(){try{token.ThrowIfCancellationRequested();if(addresses==null)addresses=lookup!.GetAwaiter().GetResult();if(connect!=null){try{connect.GetAwaiter().GetResult();Completion.SetResult(0);return;}catch{if(index>=addresses.Length)throw;owner.Client=new Socket(AddressFamily.InterNetwork,SocketType.Stream,ProtocolType.Tcp);}}if(index>=addresses.Length)throw new SocketException(0,-2);connect=owner.Client.ConnectAsync(new IPEndPoint(addresses[index++],port),token);connect.Continue(Step);}catch(Exception e){owner.Dispose();Completion.SetException(e);}}
+        internal void Start(){try{lookup=Dns.GetHostAddressesAsync(host,token);lookup.GetAwaiter().OnCompleted(Step);}catch(Exception e){owner.Dispose();Completion.SetException(e);}}
+        private void Step(){try{token.ThrowIfCancellationRequested();if(addresses==null)addresses=lookup!.GetAwaiter().GetResult();if(connect!=null){try{connect.GetAwaiter().GetResult();Completion.SetResult(0);return;}catch{if(index>=addresses.Length)throw;owner.Client=new Socket(AddressFamily.InterNetwork,SocketType.Stream,ProtocolType.Tcp);}}if(index>=addresses.Length)throw new SocketException(0,-2);connect=owner.Client.ConnectAsync(new IPEndPoint(addresses[index++],port),token);connect.GetAwaiter().OnCompleted(Step);}catch(Exception e){owner.Dispose();Completion.SetException(e);}}
     }
 }
 public sealed class TcpListener
@@ -136,7 +137,7 @@ public sealed class TcpListener
     {
         private readonly Task<Socket> accept;internal readonly TaskCompletionSource<TcpClient> Completion=new TaskCompletionSource<TcpClient>();
         internal AcceptClient(Task<Socket> task){accept=task;}
-        internal void Start()=>accept.Continue(Finish);
+        internal void Start()=>accept.GetAwaiter().OnCompleted(Finish);
         private void Finish(){try{Completion.SetResult(new TcpClient(accept.GetAwaiter().GetResult()));}catch(Exception e){Completion.SetException(e);}}
     }
 }
