@@ -1,11 +1,13 @@
 #define _POSIX_C_SOURCE 200809L
 #include "dnd_worker.h"
 #include <assert.h>
+#include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <time.h>
 
-static atomic_int started, gate, calls;
+static atomic_int started, gate, calls, ran_on_main;
+static pthread_t main_thread;
 
 static void nap(void) {
     struct timespec delay = {0, 1000000};
@@ -13,6 +15,7 @@ static void nap(void) {
 }
 
 static int blocking_job(void *data) {
+    if (pthread_equal(pthread_self(), main_thread)) atomic_store(&ran_on_main, 1);
     atomic_fetch_add(&started, 1);
     while (!atomic_load(&gate)) nap();
     atomic_fetch_add(&calls, 1);
@@ -20,6 +23,7 @@ static int blocking_job(void *data) {
 }
 
 int main(void) {
+    main_thread = pthread_self();
     assert(!dnd_worker_running());
     assert(dnd_worker_take(1, NULL) == -1);
     assert(dnd_worker_submit(blocking_job, NULL) == 0);
@@ -51,6 +55,7 @@ int main(void) {
         assert(dnd_worker_take(tickets[i], NULL) == -1);
     }
     assert(atomic_load(&calls) == 32);
+    assert(!atomic_load(&ran_on_main));
     assert(!dnd_worker_submit(NULL, NULL));
     dnd_worker_stop();
     assert(!dnd_worker_running());
