@@ -62,6 +62,21 @@ static DndGcFrame *gc_frames;
 static DndGcRootRegistration *registered_roots;
 static DndExecutionContext *registered_contexts;
 static bool gc_stress;
+static DndGcSafepointHook gc_safepoint_hook;
+static void *gc_safepoint_context;
+
+/* Hooks are installed during runtime startup, never concurrently with
+   managed execution. The hook itself may block but must not allocate or
+   raise a managed exception. */
+void dnd_gc_set_safepoint_hook(DndGcSafepointHook hook, void *context) {
+    gc_safepoint_context = context;
+    gc_safepoint_hook = hook;
+}
+
+void dnd_gc_safepoint(void) {
+    if (gc_safepoint_hook) gc_safepoint_hook(gc_safepoint_context);
+}
+
 static DndExceptionKind exception_kind;
 static bool exception_is_pending;
 static DndObject *exception_object;
