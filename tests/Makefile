@@ -16,8 +16,8 @@ test: runtime_tests managed_runtime_tests fst_test card_transaction_test aram_te
 runtime_tests: runtime_tests.c ../source/runtime.c
 	$(CC) $(CFLAGS) $^ -o $@
 
-managed_runtime_tests: managed_runtime_tests.c ../source/managed_runtime.c ../source/bcl.c
-	$(CC) $(CFLAGS) $^ -o $@
+managed_runtime_tests: managed_runtime_tests.c ../source/managed_runtime.c ../source/bcl.c ../source/stw.c ../source/gc_stw.c
+	$(CC) $(CFLAGS) -pthread $^ -o $@
 
 fst_test: fst_test.c ../source/fst.c
 	$(CC) $(CFLAGS) $^ -o $@
