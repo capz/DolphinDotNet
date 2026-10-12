@@ -1,5 +1,6 @@
 #include "dnd_managed.h"
 #include "dnd_bcl.h"
+#include "dnd_stw.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -391,6 +392,25 @@ int main(void) {
     dnd_gc_set_safepoint_hook(NULL, NULL);
     dnd_gc_safepoint();
     assert(safepoint_calls == 2);
+    /* The collector may run only while every registered mutator is stopped.
+       A one-thread rendezvous is also useful for validating API ownership. */
+    DndStwCoordinator *stw = dnd_stw_create();
+    assert(stw);
+    int collector_slot = dnd_stw_register(stw);
+    assert(collector_slot >= 0);
+    assert(!dnd_gc_collect_stopped(stw, collector_slot + 1, &heap, NULL));
+    DndObject *coordinated_root = dnd_object_new(&heap, &NODE_TYPE);
+    assert(coordinated_root);
+    DndObject **coordinated_slots[] = { &coordinated_root };
+    DndRootSet coordinated_roots;
+    dnd_roots_init(&coordinated_roots, coordinated_slots, 1);
+    assert(dnd_root_add(&coordinated_roots, &coordinated_root));
+    size_t collections_before = heap.collections;
+    assert(dnd_gc_collect_stopped(stw, collector_slot, &heap, &coordinated_roots));
+    assert(heap.collections == collections_before + 1);
+    assert(coordinated_root->type == &NODE_TYPE);
+    dnd_stw_unregister(stw, collector_slot);
+    dnd_stw_destroy(stw);
     puts("managed runtime + core BCL tests passed");
     return 0;
 }
