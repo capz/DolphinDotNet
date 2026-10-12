@@ -212,6 +212,19 @@ bool dnd_root_add(DndRootSet *roots, DndObject **slot);
 void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots);
 void dnd_gc_set_stress(bool enabled);
 
+/* Explicit root registrations for future managed thread contexts. The runtime
+ * is still single-managed-thread: registration and collection must be
+ * serialized by the caller until a stop-the-world protocol is implemented.
+ * A registration's root storage must outlive its registration. */
+typedef struct DndGcRootRegistration {
+    const DndRootSet *roots;
+    struct DndGcRootRegistration *next;
+    bool registered;
+} DndGcRootRegistration;
+bool dnd_gc_register_roots(DndGcRootRegistration *registration, const DndRootSet *roots);
+void dnd_gc_unregister_roots(DndGcRootRegistration *registration);
+
+
 typedef struct DndGcFrame {
     DndObject ***slots;
     size_t count;

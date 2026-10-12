@@ -59,6 +59,7 @@ typedef struct DndHeapBlock {
 } DndHeapBlock;
 
 static DndGcFrame *gc_frames;
+static DndGcRootRegistration *registered_roots;
 static bool gc_stress;
 static DndExceptionKind exception_kind;
 static bool exception_is_pending;
@@ -661,6 +662,25 @@ bool dnd_root_add(DndRootSet *roots, DndObject **slot) {
     return true;
 }
 
+bool dnd_gc_register_roots(DndGcRootRegistration *registration, const DndRootSet *roots) {
+    if (!registration || !roots || registration->registered) return false;
+    registration->roots = roots;
+    registration->next = registered_roots;
+    registration->registered = true;
+    registered_roots = registration;
+    return true;
+}
+
+void dnd_gc_unregister_roots(DndGcRootRegistration *registration) {
+    if (!registration || !registration->registered) return;
+    DndGcRootRegistration **entry = &registered_roots;
+    while (*entry && *entry != registration) entry = &(*entry)->next;
+    if (*entry == registration) *entry = registration->next;
+    registration->registered = false;
+    registration->roots = NULL;
+    registration->next = NULL;
+}
+
 void dnd_gc_frame_push(DndGcFrame *frame, DndObject ***slots, size_t count) {
     frame->slots = slots;
     frame->count = count;
@@ -718,6 +738,14 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     if (roots)
         for (size_t i = 0; i < roots->count; i++)
             if (roots->slots[i]) mark_object(heap, *roots->slots[i]);
+    /* Explicitly registered roots can outlive the immediate call stack.
+       Future per-thread contexts will register their root sets here. */
+    for (DndGcRootRegistration *registration = registered_roots;
+         registration; registration = registration->next)
+        if (registration->roots)
+            for (size_t i = 0; i < registration->roots->count; ++i)
+                if (registration->roots->slots[i])
+                    mark_object(heap, *registration->roots->slots[i]);
     /* A pending managed exception is a live root during stack unwinding. */
     if (exception_is_pending) mark_object(heap, exception_object);
     for (DndGcFrame *frame = gc_frames; frame; frame = frame->previous)
