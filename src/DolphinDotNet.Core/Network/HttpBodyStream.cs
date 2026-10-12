@@ -1,7 +1,8 @@
 using System;
 using System.IO;
-using Dolphin.Threading;
-using Dolphin.Threading.Tasks;
+using System.Threading;
+using System.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 namespace Dolphin.Network.Http;
 internal sealed class HttpBodyStream : Dolphin.IO.Stream
 {
