@@ -5,6 +5,7 @@ ifeq ($(strip $(DEVKITPRO)),)
 $(error "Please set DEVKITPRO in your environment")
 endif
 include $(DEVKITPRO)/libogc2/gamecube_rules
+.DELETE_ON_ERROR:
 PYTHON ?= python3
 TARGET := DolphinDotNet
 BUILD := build
@@ -37,8 +38,8 @@ clean:
 else
 DEPENDS := $(OFILES:.o=.d)
 $(OUTPUT).dol: $(OUTPUT).elf $(DOL_SECTIONS)
-	elf2dol $< $@
-	$(PYTHON) $(DOL_SECTIONS) --pad $@
+	elf2dol "$<" "$@"
+	$(PYTHON) "$(DOL_SECTIONS)" --pad "$@"
 $(OUTPUT).elf: $(OFILES)
 	$(CC) $^ $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@
 -include $(DEPENDS)

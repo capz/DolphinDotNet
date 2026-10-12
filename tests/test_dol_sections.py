@@ -55,6 +55,26 @@ class DolSectionsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'header'):
             dol.pad(bytes(255))
 
+    def test_offsets_are_realigned(self):
+        data = fixture()
+        data.insert(0x120, 0)
+        struct.pack_into('>I', data, 7 * 4, 0x121)
+        result = dol.pad(data)
+        self.assertEqual(struct.unpack_from('>I', result, 7 * 4)[0], 0x120)
+        self.assertEqual(result[0x120:0x141], b'D' * 33)
+
+    def test_address_overflow_is_rejected(self):
+        data = fixture()
+        struct.pack_into('>I', data, 0x48 + 7 * 4, 0xFFFFFFF0)
+        with self.assertRaisesRegex(ValueError, 'overflow'):
+            dol.pad(data)
+
+    def test_file_overlap_is_rejected(self):
+        data = fixture()
+        struct.pack_into('>I', data, 7 * 4, 0x110)
+        with self.assertRaisesRegex(ValueError, 'overlapping'):
+            dol.pad(data)
+
 
 if __name__ == '__main__':
     unittest.main()
