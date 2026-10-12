@@ -211,6 +211,14 @@ void dnd_roots_init(DndRootSet *roots, DndObject ***storage, size_t capacity);
 bool dnd_root_add(DndRootSet *roots, DndObject **slot);
 void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots);
 void dnd_gc_set_stress(bool enabled);
+/* Optional cooperative safepoint invoked from generated AOT basic blocks.
+ * Hooks must not allocate, collect or throw; they may park this registered
+ * mutator while another thread performs stop-the-world GC. Disabled by default.
+ * Install hooks only before managed threads are started or after all stop. */
+typedef void (*DndGcSafepointHook)(void *context);
+void dnd_gc_set_safepoint_hook(DndGcSafepointHook hook, void *context);
+void dnd_gc_safepoint(void);
+
 
 /* Explicit root registrations for future managed thread contexts. The runtime
  * is still single-managed-thread: registration and collection must be
