@@ -45,3 +45,7 @@ This is still **single-managed-thread-only**. Registration, context switching, a
 The follow-up regression test suspends a context with two nested GC frames, collects from another sequential context, and verifies both objects survive. Registration of a context pointing at the currently active GC frame stack is now rejected. This protects against accidentally representing a running context as suspended and tracing its mutable frames through the inactive-context registry.
 
 These checks do **not** make the collector thread-safe. The heap, global exception state, GC frame registry and managed scheduler are still single-threaded. Native worker jobs must remain native-only until explicit thread registration, stop-the-world synchronization and thread-safe managed scheduling are implemented and tested.
+
+### Active-frame registration safety
+
+Inactive root registration now refuses any execution context whose saved GC-frame chain overlaps the current active frame chain (not merely the head frame). This avoids accidentally traversing an active stack as though it were suspended. The nested-root regression verifies preservation across GC and rejection of both the top and an older active frame.
