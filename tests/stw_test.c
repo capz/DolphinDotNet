@@ -19,10 +19,12 @@ static void *mutator(void *unused) {
     (void)unused;
     worker_slot = dnd_stw_register(world);
     assert(worker_slot >= 0);
+    assert(dnd_stw_current_slot(world) == worker_slot);
+    assert(dnd_stw_register(world) == -1);
     atomic_store(&ready, 1);
     while (!atomic_load(&quit)) {
         atomic_fetch_add(&iterations, 1);
-        dnd_stw_safepoint(world, worker_slot);
+        dnd_stw_managed_hook(world);
     }
     dnd_stw_unregister(world, worker_slot);
     return NULL;
@@ -33,9 +35,14 @@ int main(void) {
     assert(world);
     int owner = dnd_stw_register(world);
     assert(owner >= 0);
+    assert(dnd_stw_current_slot(world) == owner);
+    assert(dnd_stw_register(world) == -1);
     pthread_t worker;
     assert(pthread_create(&worker, NULL, mutator, NULL) == 0);
     while (!atomic_load(&ready)) nap();
+    assert(dnd_stw_current_slot(world) == owner);
+    /* A thread cannot impersonate another registered mutator slot. */
+    dnd_stw_unregister(world, worker_slot);
     while (atomic_load(&iterations) < 10) nap();
 
     assert(dnd_stw_suspend_others(world, owner));
