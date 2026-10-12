@@ -62,6 +62,21 @@ static DndGcFrame *gc_frames;
 static DndGcRootRegistration *registered_roots;
 static DndExecutionContext *registered_contexts;
 static bool gc_stress;
+static DndGcSafepointHook gc_safepoint_hook;
+static void *gc_safepoint_context;
+
+/* Hooks are installed during runtime startup, never concurrently with
+   managed execution. The hook itself may block but must not allocate or
+   raise a managed exception. */
+void dnd_gc_set_safepoint_hook(DndGcSafepointHook hook, void *context) {
+    gc_safepoint_context = context;
+    gc_safepoint_hook = hook;
+}
+
+void dnd_gc_safepoint(void) {
+    if (gc_safepoint_hook) gc_safepoint_hook(gc_safepoint_context);
+}
+
 static DndExceptionKind exception_kind;
 static bool exception_is_pending;
 static DndObject *exception_object;
@@ -683,7 +698,13 @@ void dnd_gc_unregister_roots(DndGcRootRegistration *registration) {
 }
 
 bool dnd_context_register(DndExecutionContext *context) {
+    /* A context whose frames are currently active must not be registered as
+       suspended. In particular, a running context's frame stack will change
+       while the collector traverses it. */
     if (!context || context->registered) return false;
+    for (DndGcFrame *active = gc_frames; active; active = active->previous)
+        for (DndGcFrame *saved = context->gc_frames; saved; saved = saved->previous)
+            if (active == saved) return false;
     context->next_registered = registered_contexts;
     context->registered = true;
     registered_contexts = context;

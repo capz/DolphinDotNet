@@ -39,3 +39,27 @@ This is **not managed multi-thread support**. There is no safe-point handshake o
 The new `dnd_context_register` and `dnd_context_unregister` functions allow sequentially suspended managed contexts to be traced by GC. The collector now marks their pending exception objects and all objects referenced by saved GC frames; a regression test collects while a context holding an exception is inactive and checks that the exception survives. Callers must register inactive contexts before a collection can occur and unregister them before the context or its saved frame storage is destroyed.
 
 This is still **single-managed-thread-only**. Registration, context switching, allocation, and collections are not synchronized between threads. The next milestone is a thread registry, mutual exclusion for heap operations, per-thread root and exception handling, and stop-the-world safepoints before actually executing managed continuations on the native worker.
+
+## Nested root verification for suspended continuations
+
+The follow-up regression test suspends a context with two nested GC frames, collects from another sequential context, and verifies both objects survive. Registration of a context pointing at the currently active GC frame stack is now rejected. This protects against accidentally representing a running context as suspended and tracing its mutable frames through the inactive-context registry.
+
+These checks do **not** make the collector thread-safe. The heap, global exception state, GC frame registry and managed scheduler are still single-threaded. Native worker jobs must remain native-only until explicit thread registration, stop-the-world synchronization and thread-safe managed scheduling are implemented and tested.
+
+### Active-frame registration safety
+
+Inactive root registration now refuses any execution context whose saved GC-frame chain overlaps the current active frame chain (not merely the head frame). This avoids accidentally traversing an active stack as though it were suspended. The nested-root regression verifies preservation across GC and rejection of both the top and an older active frame.
+
+## Cooperative stop-the-world rendezvous primitive
+
+`include/dnd_stw.h` and `source/stw.c` introduce a native thread coordinator with up to eight registered thread slots. A collector calls `dnd_stw_suspend_others(world, slot)`; this waits until all other registered mutators explicitly reach `dnd_stw_safepoint` and park. After scanning and collection, `dnd_stw_resume_others` wakes the parked threads. The coordinator sleeps on condition variables rather than spin-polling. Host tests exercise repeated pause/resume cycles and check that a mutator cannot advance while parked.
+
+**This is an unintegrated safety primitive, not a complete GC solution.** Compiler-generated managed code still needs safepoints at method entries and backward branches, GC allocation must be synchronized, all native thread stacks/exception states must be registered and traversed, and workers blocked in I/O must have a path to reach the rendezvous. The coordinator must not be enabled for arbitrary managed worker callbacks before these conditions are met.
+
+### AOT safepoint insertion
+
+Both C compiler backends now emit `dnd_gc_safepoint()` at managed basic-block/label entries after establishing method GC roots. The hook defaults to a no-op; a startup-installed native callback may later rendezvous with the stop-the-world coordinator. This supplies loop-backedge opportunities for the collector to park active managed code. Installing the callback and registering mutators across real threads is **not yet enabled**: safe thread-local GC frame/exception state, heap synchronization and thread ownership must be implemented first. Until then the emitted checks preserve the existing cooperative execution model.
+
+### Native thread identity and safepoint callback
+
+Coordinator registrations now bind to the calling libogc LWP or POSIX thread. Duplicate registrations are rejected and the collector and unregister operations validate the native caller's ownership. `dnd_stw_current_slot` and `dnd_stw_safepoint_current` resolve the calling thread automatically. `dnd_stw_managed_hook` is compatible with the AOT `dnd_gc_set_safepoint_hook` callback signature, but **must not be installed yet**: multi-threaded managed frame/exception isolation, synchronized allocation and actual collector integration remain unfinished. Host tests exercise these ownership checks and invoke the hook while suspending the mutator.

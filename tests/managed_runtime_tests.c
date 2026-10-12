@@ -21,6 +21,8 @@ static const DndType DERIVED_TYPE = { "Derived", &BASE_TYPE, sizeof(DndObject), 
 
 static intptr_t managed_add(intptr_t *args) { return args[0]+1; }
 static int invoked;
+static int safepoint_calls;
+static void count_safepoint(void *ctx) { (*(int *)ctx)++; }
 static void callback(void *target, void *arg) {
     (void)target; invoked = *(int *)arg;
 }
@@ -348,6 +350,47 @@ int main(void) {
     dnd_context_unregister(&saved_context);
     assert(!saved_context.registered);
 
+    /* An inactive continuation may hold more than one nested GC frame.
+       Ensure collection from another sequential context preserves both. */
+    dnd_exception_clear();
+    dnd_gc_collect(&heap, NULL);
+    DndExecutionContext suspended = {0}, executing = {0};
+    DndObject *outer_root = dnd_object_new(&heap, &NODE_TYPE);
+    DndObject **outer_slots[] = { &outer_root };
+    DndGcFrame outer_frame;
+    dnd_gc_frame_push(&outer_frame, outer_slots, 1);
+    DndObject *inner_root = dnd_object_new(&heap, &NODE_TYPE);
+    DndObject **inner_slots[] = { &inner_root };
+    DndGcFrame inner_frame;
+    dnd_gc_frame_push(&inner_frame, inner_slots, 1);
+    assert(dnd_context_switch(&suspended, &executing));
+    assert(dnd_context_register(&suspended));
+    dnd_gc_collect(&heap, NULL);
+    assert(outer_root->type == &NODE_TYPE);
+    assert(inner_root->type == &NODE_TYPE);
+    assert(dnd_context_switch(&executing, &suspended));
+    /* Registration of currently active saved frames must be rejected. */
+    DndExecutionContext active_alias = {0};
+    active_alias.gc_frames = &inner_frame;
+    assert(!dnd_context_register(&active_alias));
+    active_alias.gc_frames = &outer_frame;
+    assert(!dnd_context_register(&active_alias));
+    dnd_gc_frame_pop(&inner_frame);
+    dnd_gc_frame_pop(&outer_frame);
+    dnd_context_unregister(&suspended);
+    dnd_gc_collect(&heap, NULL);
+
+    /* Managed basic block hook defaults to no-op; an installed native
+       rendezvous callback runs only when explicitly enabled at startup. */
+    dnd_gc_safepoint();
+    assert(safepoint_calls == 0);
+    dnd_gc_set_safepoint_hook(count_safepoint, &safepoint_calls);
+    dnd_gc_safepoint();
+    dnd_gc_safepoint();
+    assert(safepoint_calls == 2);
+    dnd_gc_set_safepoint_hook(NULL, NULL);
+    dnd_gc_safepoint();
+    assert(safepoint_calls == 2);
     puts("managed runtime + core BCL tests passed");
     return 0;
 }

@@ -11,7 +11,7 @@ internal static class CBackend{
   return b.ToString();
  }
  private static void EmitMethod(StringBuilder b,IrMethod m,CompilationModel model){
-  string fn=MethodSymbol(m.Key);b.AppendLine($"static intptr_t {fn}(DndManagedHeap *heap, intptr_t *args) {{");b.AppendLine("    (void)heap; (void)args;");b.AppendLine("    intptr_t stack[64]; int sp=0;");b.AppendLine($"    intptr_t locals[{Math.Max(1,m.LocalCount)}]; memset(locals,0,sizeof(locals));");b.AppendLine("    DndObject *gc_objects[32] = {0}; DndObject **gc_slots[32] = {0}; size_t gc_count=0; DndGcFrame gc_frame; (void)gc_count; dnd_gc_frame_push(&gc_frame,gc_slots,0);");
+  string fn=MethodSymbol(m.Key);b.AppendLine($"static intptr_t {fn}(DndManagedHeap *heap, intptr_t *args) {{");b.AppendLine("    (void)heap; (void)args;");b.AppendLine("    intptr_t stack[64]; int sp=0;");b.AppendLine($"    intptr_t locals[{Math.Max(1,m.LocalCount)}]; memset(locals,0,sizeof(locals));");b.AppendLine("    DndObject *gc_objects[32] = {0}; DndObject **gc_slots[32] = {0}; size_t gc_count=0; DndGcFrame gc_frame; (void)gc_count; dnd_gc_frame_push(&gc_frame,gc_slots,0); dnd_gc_safepoint();");
   var branchTargets=m.Instructions.OfType<IrBranch>().Select(x=>x.TargetOffset).Concat(m.Instructions.OfType<IrSwitch>().SelectMany(x=>x.TargetOffsets)).ToHashSet();
   foreach(var i in m.Instructions){if(i is IrLabel l&&!branchTargets.Contains(l.Offset))continue;Emit(b,i,model);}b.AppendLine("    dnd_gc_frame_pop(&gc_frame); return 0;\n}");
  }
@@ -40,7 +40,7 @@ internal static class CBackend{
    case IrPresentDemoFrame:b.AppendLine("    { float rotation=(float)stack[--sp]; dnd_graphics_begin_frame(0.025f,0.035f,0.06f,1.0f); dnd_graphics_draw_demo(rotation); dnd_graphics_begin_overlay(); dnd_console_render(); dnd_graphics_end_frame(); }");break;
    case IrCompareGreaterThan:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l>r?1:0; }");break;
    case IrCompareEqual:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l==r?1:0; }");break;
-   case IrLabel l:b.AppendLine($"dnd_il_{l.Offset:x4}: ;");break;
+   case IrLabel l:b.AppendLine($"dnd_il_{l.Offset:x4}: ; dnd_gc_safepoint();");break;
    case IrBranch br:{
     if(br.Condition==IrBranchCondition.Always){b.AppendLine($"    goto dnd_il_{br.TargetOffset:x4};");break;}
     if(br.Condition is IrBranchCondition.True or IrBranchCondition.False){
