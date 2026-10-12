@@ -5,6 +5,11 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["NetFailure"]=("dnd_net_failure","ii",true),["NetFailureCode"]=("dnd_net_failure_code","o",false),
+        ["NetStart"]=("dnd_net_start","iiii",false),["NetStatus"]=("dnd_net_status","",false),["NetTime"]=("dnd_net_time","",false),["NetError"]=("dnd_net_error","",false),
+        ["NetOpen"]=("dnd_net_open","i",false),["NetBind"]=("dnd_net_bind","iii",false),["NetListen"]=("dnd_net_listen","ii",false),["NetAccept"]=("dnd_net_accept","ia",false),
+        ["NetConnect"]=("dnd_net_connect","iii",false),["NetConnected"]=("dnd_net_connected","i",false),["NetRead"]=("dnd_net_read","iaiia",false),["NetWrite"]=("dnd_net_write","iaiiii",false),
+        ["NetEndpoint"]=("dnd_net_endpoint","iai",false),["NetOption"]=("dnd_net_option","iii",false),["NetClose"]=("dnd_net_close","i",false),["NetStop"]=("dnd_net_stop","",false),
         ["PerformanceVisible"]=("dnd_performance_visible","",false),
         ["PerformanceSetVisible"]=("dnd_performance_set_visible","i",false),
         ["ModelTrs"]=("dnd_model_trs","aa",false),["ModelMultiply"]=("dnd_model_multiply_arrays","aaa",false),["ModelPosition"]=("dnd_model_position","aafff",false),["ModelTranslate"]=("dnd_model_translate","afff",false),["ModelRotate"]=("dnd_model_rotate","afff",false),["ModelCamera"]=("dnd_model_camera","aaa",false),
@@ -31,7 +36,7 @@ internal static class NativeStorageBindings
     internal static void Emit(StringBuilder b,ValueIrNativeStorage call)
     {
         if(!Bindings.TryGetValue(call.Operation,out var binding)||binding.Types.Length!=call.Arguments.Count)throw new NotSupportedException($"Invalid native storage binding {call.Operation}.");
-        var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'l'=>"int64_t",'f'=>"float",_=>"int"})})v{arg.Id}").ToList();
+        var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'o'=>"DndObject*",'l'=>"int64_t",'f'=>"float",_=>"int"})})v{arg.Id}").ToList();
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";
         if(call.Result is {} result)b.AppendLine($"  v{result.Id} = {(result.Kind==IrValueKind.ObjectReference?"(intptr_t)":"")}{expression};");else b.AppendLine($"  {expression};");

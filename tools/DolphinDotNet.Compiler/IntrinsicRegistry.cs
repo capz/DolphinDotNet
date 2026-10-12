@@ -91,6 +91,7 @@ internal static class IntrinsicRegistry
             ("Dolphin.Diagnostics.NativeDiagnostics",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Memory.NativeAram",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Storage.NativeStorage",_)=>IntrinsicKind.NativeStorage,
+            ("Dolphin.Network.NativeNetwork",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Collections.NativeComparison",_)=>IntrinsicKind.NativeComparison,
             ("System.Runtime.CompilerServices.RuntimeHelpers","InitializeArray")=>IntrinsicKind.InitializeArray,
             ("System.Object",".ctor")=>IntrinsicKind.ObjectConstructor,

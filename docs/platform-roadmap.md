@@ -49,7 +49,7 @@ Planned managed surface:
 
 The native layer owns libogc initialization and descriptors. Managed code receives opaque socket handles. Game-loop networking is nonblocking; blocking convenience APIs, if added, must run on an LWP worker rather than the render/update thread.
 
-Order: UDP -> TCP -> hostname resolution -> selected System.Net.Sockets compatibility. HTTP/TLS are explicitly not 0.1 requirements.
+IPv4 UDP/TCP clients and listeners, DNS, selected standard bindings, streamed HTTP/1.1 and a bounded JSON reader are implemented. See [networking runtime](network-runtime.md) for exact signatures and validation. Verified TLS/HTTPS and target network execution remain separate milestones. HTTP/TLS are not original 0.1 requirements.
 
 ## Diagnostic console
 

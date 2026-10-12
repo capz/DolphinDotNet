@@ -116,6 +116,7 @@ internal static class AotCompiler
                 case ValueIrBox boxed:if(model.Types.ContainsKey(boxed.TypeName)){graph.AddType(boxed.TypeName);AddTypeClosure(boxed.TypeName,model,graph);}break;
                 case ValueIrValueConstructor value:graph.AddMethod(value.Constructor);graph.AddType(value.TypeName);break;
                 case ValueIrNewObject created: graph.AddMethod(created.Constructor);graph.AddType(created.TypeName);break;
+                case ValueIrNewException exception: if(model.Types.ContainsKey(exception.TypeName)){graph.AddType(exception.TypeName);AddTypeClosure(exception.TypeName,model,graph);}break;
                 case ValueIrLoadField field: graph.AddType(field.TypeName);break;
                 case ValueIrStoreField field: graph.AddType(field.TypeName);break;
                 case ValueIrLoadStaticField field: graph.AddType(field.TypeName);break;

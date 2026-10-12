@@ -109,6 +109,15 @@ internal static class MetadataLoader
  }
 
  internal static string MapFrameworkType(string name)=>name switch {
+  "System.Net.IPAddress"=>"Dolphin.Network.IPAddress", "System.Net.EndPoint"=>"Dolphin.Network.EndPoint", "System.Net.IPEndPoint"=>"Dolphin.Network.IPEndPoint", "System.Net.Dns"=>"Dolphin.Network.Dns", "System.Net.IPHostEntry"=>"Dolphin.Network.IPHostEntry",
+  "System.Net.Sockets.Socket"=>"Dolphin.Network.Socket", "System.Net.Sockets.SocketException"=>"Dolphin.Network.SocketException", "System.Net.Sockets.SocketFlags"=>"Dolphin.Network.SocketFlags",
+  "System.Runtime.InteropServices.ExternalException"=>"Dolphin.Network.ExternalException",
+  "System.Net.Sockets.AddressFamily"=>"Dolphin.Network.AddressFamily", "System.Net.Sockets.SocketType"=>"Dolphin.Network.SocketType", "System.Net.Sockets.ProtocolType"=>"Dolphin.Network.ProtocolType",
+  "System.Net.Sockets.UdpClient"=>"Dolphin.Network.UdpClient", "System.Net.Sockets.UdpReceiveResult"=>"Dolphin.Network.UdpReceiveResult",
+  "System.Net.Sockets.TcpClient"=>"Dolphin.Network.TcpClient", "System.Net.Sockets.TcpListener"=>"Dolphin.Network.TcpListener", "System.Net.Sockets.NetworkStream"=>"Dolphin.Network.NetworkStream",
+  "System.Net.Http.HttpClient"=>"Dolphin.Network.Http.HttpClient", "System.Net.Http.HttpRequestMessage"=>"Dolphin.Network.Http.HttpRequestMessage", "System.Net.Http.HttpResponseMessage"=>"Dolphin.Network.Http.HttpResponseMessage", "System.Net.Http.HttpMethod"=>"Dolphin.Network.Http.HttpMethod",
+  "System.Net.Http.HttpContent"=>"Dolphin.Network.Http.HttpContent", "System.Net.Http.ByteArrayContent"=>"Dolphin.Network.Http.ByteArrayContent", "System.Net.Http.StringContent"=>"Dolphin.Network.Http.StringContent", "System.Net.Http.HttpCompletionOption"=>"Dolphin.Network.Http.HttpCompletionOption",
+  "System.Net.Http.Headers.HttpHeaders"=>"Dolphin.Network.Http.HttpHeaders", "System.Net.Http.Headers.HttpRequestHeaders"=>"Dolphin.Network.Http.HttpHeaders", "System.Net.Http.Headers.HttpResponseHeaders"=>"Dolphin.Network.Http.HttpHeaders", "System.Net.Http.Headers.HttpContentHeaders"=>"Dolphin.Network.Http.HttpHeaders",
   "System.Runtime.CompilerServices.ConfiguredTaskAwaitable"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable",
   "System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable`1",
   "System.Runtime.CompilerServices.ConfiguredTaskAwaitable+ConfiguredTaskAwaiter"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable+ConfiguredTaskAwaiter",

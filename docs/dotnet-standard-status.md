@@ -51,8 +51,8 @@ The managed Core project targets `netstandard2.0`, while the compiler smoke appl
 | NM02 | Floating point, Decimal, BigInteger, Convert/Parse families | Missing/unverified broad support | IR kind names and signature recognition do not establish numeric semantics or library coverage |
 | TX01 | `Encoding`, globalization, culture and time/date APIs | Compiled subset; other families missing | UTF-8/UTF-16/ASCII/Latin-1 codecs, strict fallback exceptions and BOM/text buffering; globalization and time/date APIs remain absent |
 | TH01 | Tasks, async/await, cancellation, Thread and synchronization | Compiled cooperative subset | Task/Task<T>, builders/awaiters, completion sources, Yield/Run, WhenAll/WhenAny, ConfigureAwait, cancellation and chunked IO. No thread pool, Thread/locks, timers or synchronization contexts |
-| NW01 | `System.Net`, sockets, HttpClient | Native only / missing facade | Native nonblocking UDP foundation; ordinary .NET socket/HTTP API bindings absent |
-| SR01 | JSON/XML, Regex, serialization, compression | Missing | Framework/NuGet assemblies cannot be assumed to run through the AOT pipeline |
+| NW01 | `System.Net`, sockets, HttpClient | Compiled subset | IPv4 UDP/TCP client/server, DNS A/CNAME and TCP fallback, streamed HTTP/1.1 and selected standard bindings. [Exact networking scope](network-runtime.md); TLS/HTTPS and hardware acceptance remain pending |
+| SR01 | JSON/XML, Regex, serialization, compression | JSON pull reader subset; other families missing | Bounded reflection-free Dolphin JSON tokenizer and checked integer conversion; standard JSON serializers, XML, Regex and compression remain absent |
 | RF01 | Full reflection and dynamic assembly loading | Excluded | Static closed-world metadata and supported type checks remain allowed |
 
 ## What is practical today
