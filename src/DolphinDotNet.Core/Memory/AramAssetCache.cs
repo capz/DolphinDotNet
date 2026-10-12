@@ -31,7 +31,7 @@ public sealed class AramAssetCache : IDisposable
         Check();if(id==null)throw new ArgumentNullException("id");if(data==null)throw new ArgumentNullException("data");
         if(data.Length<=0 || data.Length>budget)throw new ArgumentOutOfRangeException("data");
         if(storing)throw new InvalidOperationException("Await the previous cache store before starting another.");
-        if(cancellationToken.IsCancellationRequested)return Task.FromCanceled(cancellationToken);
+        if(cancellationToken.IsCancellationRequested){ var canceled = new TaskCompletionSource<int>(); canceled.SetCanceled(); return canceled.Task; }
         var work=new StoreWork(this,id,data,cancellationToken,priority,evictable);storing=true;
         try{Scheduler.Post(work.Step);}catch{storing=false;throw;}
         return work.Completion.Task;
