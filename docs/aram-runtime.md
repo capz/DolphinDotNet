@@ -18,6 +18,33 @@ await stored.ReadAsync(0, chunk, 0, chunk.Length);
 
 Use `Dolphin.Threading.Tasks.Scheduler.Pump()` in the game loop. Each pump performs at most one chunk start/poll transition; a polling turn does not busy-wait for DMA. `Wait`/`GetResult` and `RunUntilIdle` intentionally pump to completion and can block rendering. For frame budgets, limit scheduler pumps per frame. Source arrays must remain unchanged during upload; destination arrays must not be concurrently consumed or modified during download. ARAM transfers are serialized in submission order across all allocations. The queue accepts up to 128 outstanding requests; additional submissions throw until queued work drains. Callbacks only publish a native completion flag; continuations execute on the application thread.
 
+
+## Seekable ARAM streams
+
+`Dolphin.IO.AramStream` supplies a fixed-capacity, disposable `Dolphin.IO.Stream` that owns an `AramBuffer`. It works with `Stream.CopyToAsync`, including HTTP response streams, and copies chunks through the existing 4 KiB staging transfer queue. It does not enable network-to-ARAM direct DMA.
+
+```csharp
+using Dolphin.IO;
+using Dolphin.Memory;
+using Dolphin.Threading.Tasks;
+
+Aram.Initialize(); // only once, before other ARAM owners
+using var download = new AramStream(8 * 1024 * 1024);
+await httpResponseStream.CopyToAsync(download, 4096);
+download.Position = 0;
+byte[] header = new byte[256];
+int count = await download.ReadAsync(header, 0, header.Length);
+// Pump Scheduler.Pump() in the game loop while transfers are pending.
+```
+
+The constructor capacity is fixed; logical stream length starts at zero. Appending writes advances the length, and seeking within already-written content permits overwrites. Sparse writes and growing `SetLength` are deliberately unsupported: newly allocated ARAM is uninitialized. `SetLength` can truncate. Writes exceeding capacity fail rather than expanding into main RAM. Only one operation may be pending on a stream at a time. Dispose must occur after any pending transfer has completed. Synchronous `Read` and `Write` pump cooperative tasks and therefore block the calling thread until DMA completes; use async operations in the frame loop. Cancellation may have transferred a partial chunk and does not guarantee transactional rollback.
+
+### Complete GameObject streaming: design boundary
+
+`Model.UnloadToAramAsync()` and `Model.PrepareAsync()` already page shared model packages and native geometry/texture data to and from ARAM. Existing `GameObject` and `ModelInstance` wrappers remain in MEM1, along with their transform and animation playback state; drawing requires `PrepareAsync()` first.
+
+For actual object destruction and reconstruction, define a **versioned object snapshot format** with stable model asset IDs, local transforms, hierarchy/parent identifiers and serialized gameplay-component data, plus animation clip, time, loop and crossfade state. Do not copy C# object memory or native pointers: their addresses, ownership and GC roots cannot be used after reload. A snapshot must be explicitly serialized to bytes, streamed into ARAM, read back, validated and reconstructed against loaded model dependencies; any references to other objects require stable IDs and a second-pass fixup. A future scene streaming layer should expose `UnloadGameObjectAsync` and `RestoreGameObjectAsync` with a registered codec per component type, lifecycle callbacks and atomic rollback. Current `GameObject` supports no generic components or animation-state readback, so full object destruction/restoration is **not** implemented by this stream.
+
 ## Ownership and memory bounds
 
 `Aram.Initialize(reservedBytes)` reserves a 32-byte-aligned lower user region, in addition to libogc's system area. It uses internal ARAM only, avoiding expansion/disk regions. Repeated initialization with the same reservation succeeds; changing it is refused. If AR or ARQ already belongs to another subsystem, initialization returns false instead of resetting it or guessing ownership. Integrations must coordinate startup and limit other owners to their reserved region. The service does not discover arbitrary third-party audio allocations or protect against outside raw ARAM access. No shutdown/reset is exposed.
