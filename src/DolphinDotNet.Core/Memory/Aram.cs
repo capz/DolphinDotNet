@@ -51,7 +51,7 @@ public sealed class AramBuffer : IDisposable
         if(disposed)throw new ObjectDisposedException("AramBuffer");
         if(array==null)throw new ArgumentNullException("array");
         if(arrayOffset<0 || offset<0 || count<0 || arrayOffset>array.Length || count>array.Length-arrayOffset || offset>Length || count>Length-offset)throw new ArgumentOutOfRangeException("count");
-        if(cancellation.IsCancellationRequested)return Task.FromCanceled(cancellation);
+        if(cancellation.IsCancellationRequested){ var canceled = new TaskCompletionSource<int>(); canceled.SetCanceled(); return canceled.Task; }
         if(count==0)return Task.CompletedTask;
         var work=new TransferWork(token,array,arrayOffset,offset,count,write,cancellation);
         if(NativeAram.AramRetain(token)<0)throw new InvalidOperationException("Invalid ARAM allocation.");
