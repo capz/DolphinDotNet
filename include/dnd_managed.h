@@ -233,6 +233,18 @@ typedef struct DndGcFrame {
 void dnd_gc_frame_push(DndGcFrame *frame, DndObject ***slots, size_t count);
 void dnd_gc_frame_pop(DndGcFrame *frame);
 
+/* Sequential managed execution contexts. Switch only at quiescent boundaries,
+ * with no active EH frames; NOT safe for concurrent managed threads yet. */
+typedef struct DndExecutionContext {
+    DndGcFrame *gc_frames;
+    DndObject *exception_object;
+    const char *exception_text;
+    DndExceptionKind exception_kind;
+    bool exception_pending;
+} DndExecutionContext;
+bool dnd_context_switch(DndExecutionContext *from, DndExecutionContext *to);
+
+
 typedef struct DndEhFrame {
     jmp_buf environment;
     struct DndEhFrame *previous;
