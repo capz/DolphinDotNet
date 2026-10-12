@@ -30,7 +30,6 @@ internal static class Program
         }
         catch (Exception error)
         {
-            Console.WriteLine(error.Message);
             return 1;
         }
         finally
@@ -73,7 +72,7 @@ internal static class Program
             signature[6] != 26 || signature[7] != 10)
             throw new InvalidOperationException("Downloaded data is not a PNG.");
 
-        Console.WriteLine("Stored Google logo PNG in ARAM: " + storedLength + " bytes.");
+        if (storedLength == 0) throw new InvalidOperationException("Empty logo.");
         // Keep destination alive for as long as the game needs the asset.
         // Disposing here demonstrates cleanup; move it to a long-lived owner
         // in a real game so it remains available for later ReadAsync calls.
