@@ -686,8 +686,10 @@ bool dnd_context_register(DndExecutionContext *context) {
     /* A context whose frames are currently active must not be registered as
        suspended. In particular, a running context's frame stack will change
        while the collector traverses it. */
-    if (!context || context->registered || (context->gc_frames && context->gc_frames == gc_frames))
-        return false;
+    if (!context || context->registered) return false;
+    for (DndGcFrame *active = gc_frames; active; active = active->previous)
+        for (DndGcFrame *saved = context->gc_frames; saved; saved = saved->previous)
+            if (active == saved) return false;
     context->next_registered = registered_contexts;
     context->registered = true;
     registered_contexts = context;
