@@ -152,6 +152,28 @@ int dnd_worker_take(uint32_t ticket, int *result) {
     return -1;
 }
 
+int dnd_worker_wait(uint32_t ticket, int *result) {
+    if (!running || !ticket) return -1;
+    mutex_lock(&mutex);
+    for (;;) {
+        WorkerJob *job = NULL;
+        for (unsigned i = 0; i < JOB_CAPACITY; ++i) {
+            if (jobs[i].ticket == ticket && jobs[i].state != 0) {
+                job = &jobs[i];
+                break;
+            }
+        }
+        if (!job) { mutex_unlock(&mutex); return -1; }
+        if (job->state == 3) {
+            if (result) *result = job->result;
+            memset(job, 0, sizeof(*job));
+            mutex_unlock(&mutex);
+            return 1;
+        }
+        cond_wait(&changed, &mutex);
+    }
+}
+
 void dnd_worker_stop(void) {
     if (!running) return;
     mutex_lock(&mutex);

@@ -18,6 +18,9 @@ uint32_t dnd_worker_submit(DndWorkerOperation operation, void *native_context);
 /* 0=pending, 1=completed and consumed, -1=unknown ticket.
  * A ticket's context can be freed only after 1 has been returned. */
 int dnd_worker_take(uint32_t ticket, int *result);
+/* Wait without busy-spinning. Returns 1 and consumes the result, or -1 for
+ * an unknown ticket. Do not call on the worker itself (would deadlock). */
+int dnd_worker_wait(uint32_t ticket, int *result);
 /* Drain queued work and join the worker before releasing any job contexts. */
 void dnd_worker_stop(void);
 

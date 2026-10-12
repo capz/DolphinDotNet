@@ -2,7 +2,7 @@
 
 This branch adds a **native-only** persistent I/O worker, started before the managed GameCube entry point and joined after that entry point returns. It is implemented with libogc LWP threads, mutexes, and a condition variable on GameCube, and POSIX threads in portable tests.
 
-The native worker sleeps when idle, executes one queued native operation at a time, and provides bounded 32-slot submission and completion-ticket polling. It drains queued jobs during shutdown. Native job contexts are owned by the caller and must stay valid until their completion ticket has been consumed (or until the worker has been joined).
+The native worker sleeps when idle, executes one queued native operation at a time, and provides bounded 32-slot submission and completion-ticket polling or condition-variable waiting with `dnd_worker_wait()` (no busy-spin). It drains queued jobs during shutdown. Native job contexts are owned by the caller and must stay valid until their completion ticket has been consumed (or until the worker has been joined).
 
 **This is a foundational part of the requested background async model, not completion of it.** It does **not** remove `NetworkRuntime.Pump()` or `Scheduler.Pump()` from application code, and it does not execute managed `Task` continuations on the native thread.
 
