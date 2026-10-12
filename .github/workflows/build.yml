@@ -145,6 +145,12 @@ jobs:
           cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-networking.c tests/network_host.c source/managed_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/async-networking
           python3 tests/network_fixtures.py /tmp/async-networking
           python3 tests/network_fixtures.py /tmp/async-networking --gc-stress
+      - name: Compile Google logo ARAM example through AOT
+        timeout-minutes: 4
+        run: |
+          dotnet build samples/GoogleLogoAram/GoogleLogoAram.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/GoogleLogoAram/bin/Release/net8.0/GoogleLogoAram.dll /tmp/google-logo-aram.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/google-logo-aram.c -o /tmp/google-logo-aram.o
       - name: Convert, package and validate model assets
         timeout-minutes: 5
         run: |
