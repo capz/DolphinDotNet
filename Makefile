@@ -5,6 +5,8 @@ ifeq ($(strip $(DEVKITPRO)),)
 $(error "Please set DEVKITPRO in your environment")
 endif
 include $(DEVKITPRO)/libogc2/gamecube_rules
+.DELETE_ON_ERROR:
+PYTHON ?= python3
 TARGET := DolphinDotNet
 BUILD := build
 SOURCES := source generated
@@ -18,6 +20,7 @@ CFLAGS := -DDND_GAMECUBE_STORAGE -g -O2 -fstack-usage -Wall -Wextra $(MACHDEP) $
 CXXFLAGS := $(CFLAGS)
 LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map
 ifneq ($(BUILD),$(notdir $(CURDIR)))
+export DOL_SECTIONS := $(CURDIR)/scripts/dol_sections.py
 export OUTPUT := $(CURDIR)/$(TARGET)
 export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
 export DEPSDIR := $(CURDIR)/$(BUILD)
@@ -34,7 +37,9 @@ clean:
 	@rm -fr $(BUILD) $(OUTPUT).elf $(OUTPUT).dol
 else
 DEPENDS := $(OFILES:.o=.d)
-$(OUTPUT).dol: $(OUTPUT).elf
+$(OUTPUT).dol: $(OUTPUT).elf $(DOL_SECTIONS)
+	elf2dol "$<" "$@"
+	$(PYTHON) "$(DOL_SECTIONS)" --pad "$@"
 $(OUTPUT).elf: $(OFILES)
 	$(CC) $^ $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@
 -include $(DEPENDS)
