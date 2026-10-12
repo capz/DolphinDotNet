@@ -683,7 +683,11 @@ void dnd_gc_unregister_roots(DndGcRootRegistration *registration) {
 }
 
 bool dnd_context_register(DndExecutionContext *context) {
-    if (!context || context->registered) return false;
+    /* A context whose frames are currently active must not be registered as
+       suspended. In particular, a running context's frame stack will change
+       while the collector traverses it. */
+    if (!context || context->registered || (context->gc_frames && context->gc_frames == gc_frames))
+        return false;
     context->next_registered = registered_contexts;
     context->registered = true;
     registered_contexts = context;
