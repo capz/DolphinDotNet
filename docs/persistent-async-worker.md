@@ -39,3 +39,9 @@ This is **not managed multi-thread support**. There is no safe-point handshake o
 The new `dnd_context_register` and `dnd_context_unregister` functions allow sequentially suspended managed contexts to be traced by GC. The collector now marks their pending exception objects and all objects referenced by saved GC frames; a regression test collects while a context holding an exception is inactive and checks that the exception survives. Callers must register inactive contexts before a collection can occur and unregister them before the context or its saved frame storage is destroyed.
 
 This is still **single-managed-thread-only**. Registration, context switching, allocation, and collections are not synchronized between threads. The next milestone is a thread registry, mutual exclusion for heap operations, per-thread root and exception handling, and stop-the-world safepoints before actually executing managed continuations on the native worker.
+
+## Nested root verification for suspended continuations
+
+The follow-up regression test suspends a context with two nested GC frames, collects from another sequential context, and verifies both objects survive. Registration of a context pointing at the currently active GC frame stack is now rejected. This protects against accidentally representing a running context as suspended and tracing its mutable frames through the inactive-context registry.
+
+These checks do **not** make the collector thread-safe. The heap, global exception state, GC frame registry and managed scheduler are still single-threaded. Native worker jobs must remain native-only until explicit thread registration, stop-the-world synchronization and thread-safe managed scheduling are implemented and tested.
