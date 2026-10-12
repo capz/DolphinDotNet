@@ -29,6 +29,7 @@ namespace Dolphin.Threading.Tasks
         private static readonly List<Action> queue=new List<Action>();
         public static void Post(Action action){if(action==null)throw new ArgumentNullException("action");queue.Add(action);}
         public static bool Pump(){if(queue.Count==0)return false;var action=queue[0];queue.RemoveAt(0);action();return true;}
+        public static int Pump(int maximumActions){if(maximumActions<1)throw new ArgumentOutOfRangeException("maximumActions");int available=queue.Count,count=0;while(count<maximumActions&&count<available&&Pump())count++;return count;}
         public static void RunUntilIdle(){while(Pump()){} }
     }
     public class Task

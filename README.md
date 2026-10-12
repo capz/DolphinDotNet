@@ -13,12 +13,14 @@ DolphinDotNet compiles ordinary .NET assemblies into native C through a typed in
 | Legacy bytecode VM | Retained as a bootstrap/reference path |
 | Managed runtime | Compiled object lifecycle, fields, virtual/interface dispatch, strings, arrays, delegates, boxing, typed exceptions, rethrow and finally |
 | Memory management | Nonmoving mark/sweep GC, explicit roots and compiler-generated shadow-stack support, reusable free blocks, stress mode |
-| GameCube platform | libogc2 DOL, OpenGX 3D/overlay, PAD input, nonblocking UDP, console overlay |
+| GameCube platform | libogc2 DOL, OpenGX 3D/overlay, PAD input, nonblocking UDP/TCP client/server, console overlay |
 | Collections and storage | Growable Dolphin list, array enumerable, binary System.IO facade, lazy directory enumeration and enum-based SD/DVD mounting; separate memory-card saves |
 | Integration | Compiler and native runtime tests; 32/64-bit managed smoke execution, GC stress, ASan/UBSan and GameCube build CI |
 | Phase 7 runtime completeness | **Acceptance gates satisfied and merged** in [PR #37](https://github.com/capz/DolphinDotNet/pull/37); target execution remains separate |
 
 The native runtime implementing a feature does **not** automatically mean all corresponding C# constructs are fully supported by the AOT compiler.
+
+The [networking runtime](docs/network-runtime.md) adds selected standard `System.Net`, socket and HTTP APIs, DNS, streamed HTTP/1.1 downloads and a bounded JSON reader. Networking and cooperative continuations must be pumped by the application. Verified HTTPS/TLS and hardware networking acceptance remain pending.
 
 ## Build pipeline
 

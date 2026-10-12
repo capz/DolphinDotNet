@@ -37,9 +37,10 @@ public abstract class Stream : IDisposable
     private sealed class CopyWork
     {
         private readonly Stream source,destination;private readonly byte[] buffer;private readonly Dolphin.Threading.CancellationToken token;
+        private Dolphin.Threading.Tasks.Task<int>? read;private Dolphin.Threading.Tasks.Task? write;
         internal readonly Dolphin.Threading.Tasks.TaskCompletionSource<int> Completion=new Dolphin.Threading.Tasks.TaskCompletionSource<int>();
         internal CopyWork(Stream source,Stream destination,int bufferSize,Dolphin.Threading.CancellationToken token){this.source=source;this.destination=destination;buffer=new byte[bufferSize>4096?4096:bufferSize];this.token=token;}
-        internal void Step(){try{token.ThrowIfCancellationRequested();var n=source.Read(buffer,0,buffer.Length);if(n==0)Completion.SetResult(0);else{destination.Write(buffer,0,n);Dolphin.Threading.Tasks.Scheduler.Post(Step);}}catch(Exception error){Completion.SetException(error);}}
+        internal void Step(){try{token.ThrowIfCancellationRequested();if(write!=null){write.GetAwaiter().GetResult();write=null;read=null;}if(read!=null){var n=read.GetAwaiter().GetResult();if(n==0){Completion.SetResult(0);return;}write=destination.WriteAsync(buffer,0,n,token);write.Continue(Step);return;}read=source.ReadAsync(buffer,0,buffer.Length,token);read.Continue(Step);}catch(Exception error){Completion.SetException(error);}}
     }
     public virtual void Close()=>Dispose();
     public virtual void Dispose(){}

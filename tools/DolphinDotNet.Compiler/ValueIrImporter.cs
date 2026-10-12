@@ -378,6 +378,10 @@ internal static class ValueIrImporter
                         }
                         if(ik==IntrinsicKind.ExceptionConstructor)
                         {
+                            if(resolveType(cil)=="Dolphin.Network.SocketException"){
+                                var nativeResult=Pop(stack,cil);var nativeError=Pop(stack,cil);var nativeException=New(CilStackKind.ObjectReference);
+                                instructions.Add(new ValueIrNativeStorage(nativeException,"NetFailure",new[]{nativeError,nativeResult}));stack.Add(nativeException);break;
+                            }
                             var effect=resolveCallEffect(cil)??throw new InvalidDataException($"Missing exception constructor signature at IL_{cil.Offset:x4}.");
                             IrValue? message=null;
                             for(var ai=effect.PopCount-1;ai>=0;ai--){var arg=Pop(stack,cil);if(ai==0&&arg.Kind==IrValueKind.ObjectReference)message=arg;}

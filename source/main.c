@@ -18,7 +18,8 @@ int main(void) {
     dnd_console_write_line("DOLPHINDOTNET");
     dnd_console_write_line("MANAGED C# AOT / OPENGX / PAD / NETWORK");
     network_status=dnd_network_init();
-    dnd_console_write_line(network_status>=0?"NETWORK: READY":"NETWORK: UNAVAILABLE");
+    network_status=network_status<0?-1:dnd_net_status();
+    dnd_console_write_line(network_status==1?"NETWORK: READY":network_status==0?"NETWORK: CONFIGURING":"NETWORK: UNAVAILABLE");
 
     intptr_t managed_result=dnd_aot_entry(&heap);
     dnd_console_write_line(managed_result==0?"MANAGED MAIN: OK":"MANAGED MAIN: FAILED");

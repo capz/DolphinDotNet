@@ -1,16 +1,9 @@
 #include "dnd_network.h"
+#include "dnd_network_platform.h"
 #include <network.h>
 #include <string.h>
 #include <errno.h>
-int dnd_network_init(void){
- /*
-  * Current libogc exposes the BSD-style net_* socket API but no longer
-  * provides the legacy net_init entry point for GameCube. Network-interface
-  * configuration is platform/application specific, so initialization is a
-  * successful no-op here; opening a socket remains the first native action.
-  */
- return 0;
-}
+int dnd_network_init(void){return dnd_np_start(0,0,0,1);}
 int dnd_udp_open(uint16_t port){
  int s=net_socket(AF_INET,SOCK_DGRAM,IPPROTO_IP); if(s<0)return s;
  unsigned long nonblocking=1;

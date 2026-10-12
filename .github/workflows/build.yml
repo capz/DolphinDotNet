@@ -103,6 +103,7 @@ jobs:
           cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Iinclude tests/storage_faults.c source/managed_runtime.c source/storage.c -Wl,--wrap=read,--wrap=write,--wrap=close -o /tmp/storage_faults
           timeout 30s /tmp/storage_faults
       - name: Validate ARAM transfers and asset cache
+        # Networking is tested through generated native code, not a desktop CLR facade.
         timeout-minutes: 4
         run: |
           dotnet build tests/AramSmoke/AramSmoke.csproj -c Release
@@ -114,6 +115,18 @@ jobs:
           timeout 30s /tmp/aram32 --gc-stress
           cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -DDND_ARAM_TEST -Iinclude tests/aram_test.c source/aram.c -o /tmp/aram-native32
           /tmp/aram-native32
+      - name: Validate managed networking, DNS, HTTP and JSON
+        timeout-minutes: 5
+        run: |
+          dotnet build tests/NetworkSmoke/NetworkSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/NetworkSmoke/bin/Release/net8.0/NetworkSmoke.dll /tmp/network-smoke.c
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/network-smoke.c tests/network_host.c source/managed_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/network-smoke
+          python3 tests/network_fixtures.py /tmp/network-smoke
+          python3 tests/network_fixtures.py /tmp/network-smoke --gc-stress
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/network-smoke.c tests/network_host.c source/managed_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/network-smoke32
+          python3 tests/network_fixtures.py /tmp/network-smoke32 --gc-stress
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/network_native_test.c source/managed_runtime.c source/network.c source/network_posix.c -o /tmp/network-native
+          /tmp/network-native
       - name: Convert, package and validate model assets
         timeout-minutes: 5
         run: |
@@ -212,6 +225,12 @@ jobs:
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/model-smoke.c -o /tmp/model-smoke.o
       - name: Build ELF and DOL
         run: make V=1
+      - name: Compile and link managed networking for GameCube
+        run: |
+          dotnet build tests/NetworkSmoke/NetworkSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/NetworkSmoke/bin/Release/net8.0/NetworkSmoke.dll /tmp/network-smoke.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/network-smoke.c -o /tmp/network-smoke.o
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -mogc /tmp/network-smoke.o build/managed_runtime.o build/text.o build/network.o build/network_gamecube_backend.o -L"$DEVKITPRO/libogc2/gamecube/lib" -lbba -logc -lm -o /tmp/network-smoke.elf
       - name: Report GameCube runtime footprint
         run: |
           mkdir -p footprint
