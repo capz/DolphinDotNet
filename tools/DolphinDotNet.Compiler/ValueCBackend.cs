@@ -167,6 +167,9 @@ internal static class ValueCBackend
         foreach(var block in method.Blocks)
         {
             b.AppendLine($"block_{block.Id}:");
+            // Every AOT block entry is a cooperative safepoint, including loop backedges.
+            // The hook is a no-op until the native runtime installs a coordinator.
+            b.AppendLine("  dnd_gc_safepoint();");
             if(method.ExceptionRegions.Count>0)
             {
                 var protectedHere=method.ExceptionRegions.Any(r=>block.CilOffset>=r.TryOffset&&block.CilOffset<r.TryOffset+r.TryLength);
