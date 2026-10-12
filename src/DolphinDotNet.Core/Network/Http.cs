@@ -92,17 +92,17 @@ public sealed class HttpClient : IDisposable
     private sealed class DownloadString
     {
         private readonly Task<HttpResponseMessage> task;internal readonly TaskCompletionSource<string> Completion=new TaskCompletionSource<string>();internal DownloadString(Task<HttpResponseMessage> t){task=t;}internal void Start()=>task.GetAwaiter().OnCompleted(Finish);
-        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(new UTF8Encoding(false,true).GetString(r.Content.Bytes!));r.Dispose();}catch(Exception e){if(task.IsCompletedSuccessfully)task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
+        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(new UTF8Encoding(false,true).GetString(r.Content.Bytes!));r.Dispose();}catch(Exception e){if((task.IsCompleted && !task.IsFaulted && !task.IsCanceled))task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
     }
     private sealed class DownloadBytes
     {
         private readonly Task<HttpResponseMessage> task;internal readonly TaskCompletionSource<byte[]> Completion=new TaskCompletionSource<byte[]>();internal DownloadBytes(Task<HttpResponseMessage> t){task=t;}internal void Start()=>task.GetAwaiter().OnCompleted(Finish);
-        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(r.Content.Bytes!);r.Dispose();}catch(Exception e){if(task.IsCompletedSuccessfully)task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
+        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(r.Content.Bytes!);r.Dispose();}catch(Exception e){if((task.IsCompleted && !task.IsFaulted && !task.IsCanceled))task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
     }
     private sealed class DownloadStream
     {
         private readonly Task<HttpResponseMessage> task;internal readonly TaskCompletionSource<Dolphin.IO.Stream> Completion=new TaskCompletionSource<Dolphin.IO.Stream>();internal DownloadStream(Task<HttpResponseMessage> t){task=t;}internal void Start()=>task.GetAwaiter().OnCompleted(Finish);
-        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(r.Content.Body!);}catch(Exception e){if(task.IsCompletedSuccessfully)task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
+        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(r.Content.Body!);}catch(Exception e){if((task.IsCompleted && !task.IsFaulted && !task.IsCanceled))task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
     }
     private sealed class RequestWork : Operation
     {
