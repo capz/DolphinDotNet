@@ -16,24 +16,38 @@ internal static class Program
 
     private static int Main()
     {
-        var task = DownloadLogoToAramAsync();
+        // Main is the application entry point. Starting an async method gives
+        // us a Task representing the download; it does not block on network I/O.
         try
         {
-            // Both queues must be serviced. On a real game, run these in
-            // your regular input/update/render loop with a bounded budget.
-            while (!task.IsCompleted)
+            var downloadTask = DownloadLogoToAramAsync();
+
+            // GameCube/DolphinDotNet uses cooperative I/O instead of a desktop
+            // background thread pool. Pending operations advance only when the
+            // application services both pumps:
+            //
+            // NetworkRuntime.Pump: advances DHCP, DNS, sockets and HTTP requests.
+            // Scheduler.Pump: runs async continuations and polls ARAM DMA work.
+            //
+            // The limits bound work per iteration; they are not a guaranteed
+            // frame-time budget. A game places these calls in its normal loop,
+            // alongside input, update and rendering, rather than spinning here.
+            while (!downloadTask.IsCompleted)
             {
                 NetworkRuntime.Pump(16, 1);
                 Scheduler.Pump(16);
             }
-            return task.GetAwaiter().GetResult();
+
+            // The Task is complete: observe any error and use its exit code.
+            return downloadTask.GetAwaiter().GetResult();
         }
-        catch (Exception error)
+        catch (Exception)
         {
-            return 1;
+            return 1; // Download, ARAM, or PNG verification failed.
         }
         finally
         {
+            // Release network resources even when the download fails.
             if (NetworkRuntime.IsReady) NetworkRuntime.Stop();
         }
     }
