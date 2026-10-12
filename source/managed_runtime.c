@@ -60,6 +60,7 @@ typedef struct DndHeapBlock {
 
 static DndGcFrame *gc_frames;
 static DndGcRootRegistration *registered_roots;
+static DndExecutionContext *registered_contexts;
 static bool gc_stress;
 static DndExceptionKind exception_kind;
 static bool exception_is_pending;
@@ -681,6 +682,23 @@ void dnd_gc_unregister_roots(DndGcRootRegistration *registration) {
     registration->next = NULL;
 }
 
+bool dnd_context_register(DndExecutionContext *context) {
+    if (!context || context->registered) return false;
+    context->next_registered = registered_contexts;
+    context->registered = true;
+    registered_contexts = context;
+    return true;
+}
+
+void dnd_context_unregister(DndExecutionContext *context) {
+    if (!context || !context->registered) return;
+    DndExecutionContext **cursor = &registered_contexts;
+    while (*cursor && *cursor != context) cursor = &(*cursor)->next_registered;
+    if (*cursor == context) *cursor = context->next_registered;
+    context->next_registered = NULL;
+    context->registered = false;
+}
+
 bool dnd_context_switch(DndExecutionContext *from, DndExecutionContext *to) {
     /* A live exception handler may longjmp into the wrong context. */
     if (!from || !to || from == to || eh_frames) return false;
@@ -762,6 +780,16 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
             for (size_t i = 0; i < registration->roots->count; ++i)
                 if (registration->roots->slots[i])
                     mark_object(heap, *registration->roots->slots[i]);
+    /* Inactive sequential contexts retain live frames and exception objects.
+       The owner must unregister them before frame storage goes out of scope.
+       Concurrent mutation is NOT supported without stop-the-world locking. */
+    for (DndExecutionContext *context = registered_contexts;
+         context; context = context->next_registered) {
+        if (context->exception_pending) mark_object(heap, context->exception_object);
+        for (DndGcFrame *frame = context->gc_frames; frame; frame = frame->previous)
+            for (size_t i = 0; i < frame->count; ++i)
+                if (frame->slots[i]) mark_object(heap, *frame->slots[i]);
+    }
     /* A pending managed exception is a live root during stack unwinding. */
     if (exception_is_pending) mark_object(heap, exception_object);
     for (DndGcFrame *frame = gc_frames; frame; frame = frame->previous)
