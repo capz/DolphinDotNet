@@ -49,3 +49,9 @@ These checks do **not** make the collector thread-safe. The heap, global excepti
 ### Active-frame registration safety
 
 Inactive root registration now refuses any execution context whose saved GC-frame chain overlaps the current active frame chain (not merely the head frame). This avoids accidentally traversing an active stack as though it were suspended. The nested-root regression verifies preservation across GC and rejection of both the top and an older active frame.
+
+## Cooperative stop-the-world rendezvous primitive
+
+`include/dnd_stw.h` and `source/stw.c` introduce a native thread coordinator with up to eight registered thread slots. A collector calls `dnd_stw_suspend_others(world, slot)`; this waits until all other registered mutators explicitly reach `dnd_stw_safepoint` and park. After scanning and collection, `dnd_stw_resume_others` wakes the parked threads. The coordinator sleeps on condition variables rather than spin-polling. Host tests exercise repeated pause/resume cycles and check that a mutator cannot advance while parked.
+
+**This is an unintegrated safety primitive, not a complete GC solution.** Compiler-generated managed code still needs safepoints at method entries and backward branches, GC allocation must be synchronized, all native thread stacks/exception states must be registered and traversed, and workers blocked in I/O must have a path to reach the rendezvous. The coordinator must not be enabled for arbitrary managed worker callbacks before these conditions are met.
