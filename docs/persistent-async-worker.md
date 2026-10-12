@@ -33,3 +33,9 @@ The managed runtime now supports `dnd_gc_register_roots` and `dnd_gc_unregister_
 `dnd_context_switch(from, to)` saves and restores managed GC-frame pointers and pending exception state, allowing separate *sequentially executed* managed contexts to retain independent exception information. It rejects null/same-context switches and switches while an exception handler is active, because jumping across native stacks is invalid. A host regression test verifies pending exception isolation across switches.
 
 This is **not managed multi-thread support**. There is no safe-point handshake or allocator locking, and concurrently executing managed code remains prohibited. Before collecting while another context is inactive, its live object slots and exception object must be explicitly included in registered GC roots; the sequential switch alone does not make inactive execution-context roots visible to the collector. Do not enable worker-thread managed callbacks based solely on this API.
+
+## Inactive execution contexts are GC roots
+
+The new `dnd_context_register` and `dnd_context_unregister` functions allow sequentially suspended managed contexts to be traced by GC. The collector now marks their pending exception objects and all objects referenced by saved GC frames; a regression test collects while a context holding an exception is inactive and checks that the exception survives. Callers must register inactive contexts before a collection can occur and unregister them before the context or its saved frame storage is destroyed.
+
+This is still **single-managed-thread-only**. Registration, context switching, allocation, and collections are not synchronized between threads. The next milestone is a thread registry, mutual exclusion for heap operations, per-thread root and exception handling, and stop-the-world safepoints before actually executing managed continuations on the native worker.
