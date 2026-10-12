@@ -332,6 +332,22 @@ int main(void) {
     dnd_exception_clear();
     assert(!dnd_context_switch(NULL, &other_context));
     assert(!dnd_context_switch(&main_context, &main_context));
+    /* Pending exceptions in suspended contexts survive a collection. */
+    DndObject *saved_exception = dnd_object_new(&heap, &DND_TYPE_EXCEPTION);
+    assert(saved_exception);
+    DndExecutionContext saved_context = {0}, working_context = {0};
+    dnd_exception_throw_object(saved_exception);
+    assert(dnd_context_switch(&saved_context, &working_context));
+    assert(dnd_context_register(&saved_context));
+    assert(!dnd_context_register(&saved_context));
+    dnd_gc_collect(&heap, NULL);
+    assert(saved_exception->type == &DND_TYPE_EXCEPTION);
+    assert(dnd_context_switch(&working_context, &saved_context));
+    assert(dnd_exception_object() == saved_exception);
+    dnd_exception_clear();
+    dnd_context_unregister(&saved_context);
+    assert(!saved_context.registered);
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }
