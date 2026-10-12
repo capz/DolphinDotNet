@@ -66,7 +66,9 @@ public sealed class AramStream : Stream
         CheckIdle();
         Validate(destination, offset, count);
         if (token.IsCancellationRequested) { var canceled = new TaskCompletionSource<int>(); canceled.SetCanceled(); return canceled.Task; }
-        int size = Math.Min(count, Math.Max(0, length - position));
+        int available = length - position;
+        if (available < 0) available = 0;
+        int size = count < available ? count : available;
         if (size == 0) return Task.FromResult(0);
         busy = true;
         var result = new TaskCompletionSource<int>();
