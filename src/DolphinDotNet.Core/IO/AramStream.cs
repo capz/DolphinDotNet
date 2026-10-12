@@ -1,8 +1,9 @@
 using System;
 using System.IO;
 using Dolphin.Memory;
-using Dolphin.Threading;
-using Dolphin.Threading.Tasks;
+using System.Threading;
+using System.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 
 namespace Dolphin.IO;
 
