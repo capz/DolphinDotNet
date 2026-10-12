@@ -241,8 +241,13 @@ typedef struct DndExecutionContext {
     const char *exception_text;
     DndExceptionKind exception_kind;
     bool exception_pending;
+    struct DndExecutionContext *next_registered;
+    bool registered;
 } DndExecutionContext;
 bool dnd_context_switch(DndExecutionContext *from, DndExecutionContext *to);
+/* Keep inactive sequential contexts visible to GC while their frames remain valid. */
+bool dnd_context_register(DndExecutionContext *context);
+void dnd_context_unregister(DndExecutionContext *context);
 
 
 typedef struct DndEhFrame {
