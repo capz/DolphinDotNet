@@ -59,3 +59,7 @@ Inactive root registration now refuses any execution context whose saved GC-fram
 ### AOT safepoint insertion
 
 Both C compiler backends now emit `dnd_gc_safepoint()` at managed basic-block/label entries after establishing method GC roots. The hook defaults to a no-op; a startup-installed native callback may later rendezvous with the stop-the-world coordinator. This supplies loop-backedge opportunities for the collector to park active managed code. Installing the callback and registering mutators across real threads is **not yet enabled**: safe thread-local GC frame/exception state, heap synchronization and thread ownership must be implemented first. Until then the emitted checks preserve the existing cooperative execution model.
+
+### Native thread identity and safepoint callback
+
+Coordinator registrations now bind to the calling libogc LWP or POSIX thread. Duplicate registrations are rejected and the collector and unregister operations validate the native caller's ownership. `dnd_stw_current_slot` and `dnd_stw_safepoint_current` resolve the calling thread automatically. `dnd_stw_managed_hook` is compatible with the AOT `dnd_gc_set_safepoint_hook` callback signature, but **must not be installed yet**: multi-threaded managed frame/exception isolation, synchronized allocation and actual collector integration remain unfinished. Host tests exercise these ownership checks and invoke the hook while suspending the mutator.
