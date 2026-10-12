@@ -18,29 +18,29 @@ public abstract class Stream : IDisposable
     public void CopyTo(Stream destination)=>CopyTo(destination,4096);
     public void CopyTo(Stream destination,int bufferSize){if(destination==null)throw new ArgumentNullException("destination");if(bufferSize<=0)throw new ArgumentOutOfRangeException("bufferSize");if(!CanRead||!destination.CanWrite)throw new NotSupportedException();var buffer=new byte[bufferSize];int n;while((n=Read(buffer,0,buffer.Length))>0)destination.Write(buffer,0,n);}
     protected static void Validate(byte[] buffer,int offset,int count){if(buffer==null)throw new ArgumentNullException("buffer");if(offset<0||count<0)throw new ArgumentOutOfRangeException();if(offset>buffer.Length-count)throw new ArgumentException("Invalid buffer range.");}
-    public virtual Dolphin.Threading.Tasks.Task<int> ReadAsync(byte[] buffer,int offset,int count)=>ReadAsync(buffer,offset,count,default);
-    public virtual Dolphin.Threading.Tasks.Task<int> ReadAsync(byte[] buffer,int offset,int count,Dolphin.Threading.CancellationToken token){Validate(buffer,offset,count);return Dolphin.Threading.Tasks.Task.Run(()=>Read(buffer,offset,count>4096?4096:count),token);}
-    public virtual Dolphin.Threading.Tasks.Task WriteAsync(byte[] buffer,int offset,int count)=>WriteAsync(buffer,offset,count,default);
-    public virtual Dolphin.Threading.Tasks.Task WriteAsync(byte[] buffer,int offset,int count,Dolphin.Threading.CancellationToken token){Validate(buffer,offset,count);var work=new WriteWork(this,buffer,offset,count,token);Dolphin.Threading.Tasks.Scheduler.Post(work.Step);return work.Completion.Task;}
-    public virtual Dolphin.Threading.Tasks.Task FlushAsync()=>FlushAsync(default);
-    public virtual Dolphin.Threading.Tasks.Task FlushAsync(Dolphin.Threading.CancellationToken token)=>Dolphin.Threading.Tasks.Task.Run(Flush,token);
-    public Dolphin.Threading.Tasks.Task CopyToAsync(Stream destination)=>CopyToAsync(destination,4096,default);
-    public Dolphin.Threading.Tasks.Task CopyToAsync(Stream destination,int bufferSize)=>CopyToAsync(destination,bufferSize,default);
-    public Dolphin.Threading.Tasks.Task CopyToAsync(Stream destination,int bufferSize,Dolphin.Threading.CancellationToken token){if(destination==null)throw new ArgumentNullException("destination");if(bufferSize<=0)throw new ArgumentOutOfRangeException("bufferSize");var work=new CopyWork(this,destination,bufferSize,token);Dolphin.Threading.Tasks.Scheduler.Post(work.Step);return work.Completion.Task;}
+    public virtual System.Threading.Tasks.Task<int> ReadAsync(byte[] buffer,int offset,int count)=>ReadAsync(buffer,offset,count,default);
+    public virtual System.Threading.Tasks.Task<int> ReadAsync(byte[] buffer,int offset,int count,System.Threading.CancellationToken token){Validate(buffer,offset,count);return System.Threading.Tasks.Task.Run(()=>Read(buffer,offset,count>4096?4096:count),token);}
+    public virtual System.Threading.Tasks.Task WriteAsync(byte[] buffer,int offset,int count)=>WriteAsync(buffer,offset,count,default);
+    public virtual System.Threading.Tasks.Task WriteAsync(byte[] buffer,int offset,int count,System.Threading.CancellationToken token){Validate(buffer,offset,count);var work=new WriteWork(this,buffer,offset,count,token);Dolphin.Threading.Tasks.Scheduler.Post(work.Step);return work.Completion.Task;}
+    public virtual System.Threading.Tasks.Task FlushAsync()=>FlushAsync(default);
+    public virtual System.Threading.Tasks.Task FlushAsync(System.Threading.CancellationToken token)=>System.Threading.Tasks.Task.Run(Flush,token);
+    public System.Threading.Tasks.Task CopyToAsync(Stream destination)=>CopyToAsync(destination,4096,default);
+    public System.Threading.Tasks.Task CopyToAsync(Stream destination,int bufferSize)=>CopyToAsync(destination,bufferSize,default);
+    public System.Threading.Tasks.Task CopyToAsync(Stream destination,int bufferSize,System.Threading.CancellationToken token){if(destination==null)throw new ArgumentNullException("destination");if(bufferSize<=0)throw new ArgumentOutOfRangeException("bufferSize");var work=new CopyWork(this,destination,bufferSize,token);Dolphin.Threading.Tasks.Scheduler.Post(work.Step);return work.Completion.Task;}
     private sealed class WriteWork
     {
-        private readonly Stream stream;private readonly byte[] buffer;private int offset,count;private readonly Dolphin.Threading.CancellationToken token;
-        internal readonly Dolphin.Threading.Tasks.TaskCompletionSource<int> Completion=new Dolphin.Threading.Tasks.TaskCompletionSource<int>();
-        internal WriteWork(Stream stream,byte[] buffer,int offset,int count,Dolphin.Threading.CancellationToken token){this.stream=stream;this.buffer=buffer;this.offset=offset;this.count=count;this.token=token;}
+        private readonly Stream stream;private readonly byte[] buffer;private int offset,count;private readonly System.Threading.CancellationToken token;
+        internal readonly System.Threading.Tasks.TaskCompletionSource<int> Completion=new System.Threading.Tasks.TaskCompletionSource<int>();
+        internal WriteWork(Stream stream,byte[] buffer,int offset,int count,System.Threading.CancellationToken token){this.stream=stream;this.buffer=buffer;this.offset=offset;this.count=count;this.token=token;}
         internal void Step(){try{token.ThrowIfCancellationRequested();var n=count>4096?4096:count;stream.Write(buffer,offset,n);offset+=n;count-=n;if(count==0)Completion.SetResult(0);else Dolphin.Threading.Tasks.Scheduler.Post(Step);}catch(Exception error){Completion.SetException(error);}}
     }
     private sealed class CopyWork
     {
-        private readonly Stream source,destination;private readonly byte[] buffer;private readonly Dolphin.Threading.CancellationToken token;
-        private Dolphin.Threading.Tasks.Task<int>? read;private Dolphin.Threading.Tasks.Task? write;
-        internal readonly Dolphin.Threading.Tasks.TaskCompletionSource<int> Completion=new Dolphin.Threading.Tasks.TaskCompletionSource<int>();
-        internal CopyWork(Stream source,Stream destination,int bufferSize,Dolphin.Threading.CancellationToken token){this.source=source;this.destination=destination;buffer=new byte[bufferSize>4096?4096:bufferSize];this.token=token;}
-        internal void Step(){try{token.ThrowIfCancellationRequested();if(write!=null){write.GetAwaiter().GetResult();write=null;read=null;}if(read!=null){var n=read.GetAwaiter().GetResult();if(n==0){Completion.SetResult(0);return;}write=destination.WriteAsync(buffer,0,n,token);write.Continue(Step);return;}read=source.ReadAsync(buffer,0,buffer.Length,token);read.Continue(Step);}catch(Exception error){Completion.SetException(error);}}
+        private readonly Stream source,destination;private readonly byte[] buffer;private readonly System.Threading.CancellationToken token;
+        private System.Threading.Tasks.Task<int>? read;private System.Threading.Tasks.Task? write;
+        internal readonly System.Threading.Tasks.TaskCompletionSource<int> Completion=new System.Threading.Tasks.TaskCompletionSource<int>();
+        internal CopyWork(Stream source,Stream destination,int bufferSize,System.Threading.CancellationToken token){this.source=source;this.destination=destination;buffer=new byte[bufferSize>4096?4096:bufferSize];this.token=token;}
+        internal void Step(){try{token.ThrowIfCancellationRequested();if(write!=null){write.GetAwaiter().GetResult();write=null;read=null;}if(read!=null){var n=read.GetAwaiter().GetResult();if(n==0){Completion.SetResult(0);return;}write=destination.WriteAsync(buffer,0,n,token);write.GetAwaiter().OnCompleted(Step);return;}read=source.ReadAsync(buffer,0,buffer.Length,token);read.GetAwaiter().OnCompleted(Step);}catch(Exception error){Completion.SetException(error);}}
     }
     public virtual void Close()=>Dispose();
     public virtual void Dispose(){}

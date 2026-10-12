@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using NetworkRuntime = Dolphin.Network.NetworkRuntime;
 using NetworkOptions = Dolphin.Network.NetworkOptions;
-using NativeTask = Dolphin.Threading.Tasks.Task;
+using NativeTask = System.Threading.Tasks.Task;
 using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 using IPAddress=System.Net.IPAddress;
 using IPEndPoint=System.Net.IPEndPoint;
@@ -34,7 +34,7 @@ internal static class Program
         phase=5;var responseTask=http.GetAsync("http://config.test:18081/json",System.Net.Http.HttpCompletionOption.ResponseHeadersRead);Wait(responseTask,responseTask);using var response=responseTask.GetAwaiter().GetResult();var body=response.Content.ReadAsStreamAsync();Wait(body,body);using var memory=new System.IO.MemoryStream();var copy=body.GetAwaiter().GetResult().CopyToAsync(memory);Wait(copy,copy);if(memory.ToArray().Length!=json.Length)return 11;
         var truncated=http.GetStringAsync("http://config.test:18081/truncated");try{Wait(truncated,truncated);return 12;}catch(System.IO.IOException){}
         var ambiguous=http.GetStringAsync("http://config.test:18081/ambiguous");try{Wait(ambiguous,ambiguous);return 13;}catch(FormatException){}
-        var cancel=new Dolphin.Threading.CancellationTokenSource();using var canceledSocket=new Dolphin.Network.UdpClient(0);var canceled=canceledSocket.ReceiveAsync(cancel.Token);cancel.Cancel();try{Complete(canceled);return 14;}catch(OperationCanceledException){}if(!canceled.IsCanceled)return 15;
+        var cancel=new System.Threading.CancellationTokenSource();using var canceledSocket=new Dolphin.Network.UdpClient(0);var canceled=canceledSocket.ReceiveAsync(cancel.Token);cancel.Cancel();try{Complete(canceled);return 14;}catch(OperationCanceledException){}if(!canceled.IsCanceled)return 15;
         try{var bad=new JsonReader("{\"bad\":[1,]}");while(bad.Read()){}return 16;}catch(FormatException){}
         var oversized=server.ReceiveAsync();var large=client.SendAsync(new byte[1201],1201,(IPEndPoint)server.Client.LocalEndPoint!);Wait(large,large);try{Wait(oversized,oversized);return 17;}catch(System.Net.Sockets.SocketException error){if(error.ErrorCode!=0)return 18;}
         NetworkRuntime.Stop();return 0;

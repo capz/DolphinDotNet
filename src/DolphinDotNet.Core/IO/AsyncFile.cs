@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
-using Dolphin.Threading;
-using Dolphin.Threading.Tasks;
+using System.Threading;
+using System.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 using Dolphin.Text;
 namespace Dolphin.IO;
 public static partial class File
@@ -40,7 +41,7 @@ public static partial class File
         private readonly string path;private readonly Encoding encoding;private readonly CancellationToken token;private StreamReader? reader;private Task<string?>? pending;private readonly List<string> lines=new List<string>();
         internal readonly TaskCompletionSource<string[]> Completion=new TaskCompletionSource<string[]>();
         internal ReadLinesWork(string path,Encoding encoding,CancellationToken token){this.path=path;this.encoding=encoding;this.token=token;}
-        internal void Step(){try{token.ThrowIfCancellationRequested();if(reader==null)reader=new StreamReader(path,encoding);pending=reader.ReadLineAsync();pending.Continue(Consume);}catch(Exception error){Fail(error);}}
+        internal void Step(){try{token.ThrowIfCancellationRequested();if(reader==null)reader=new StreamReader(path,encoding);pending=reader.ReadLineAsync();pending.GetAwaiter().OnCompleted(Consume);}catch(Exception error){Fail(error);}}
         private void Consume(){try{token.ThrowIfCancellationRequested();var line=pending!.Result;if(line==null){reader!.Dispose();Completion.SetResult(lines.ToArray());}else{lines.Add(line);TasksPost(Step);}}catch(Exception error){Fail(error);}}
         private void Fail(Exception error){if(reader!=null)reader.Dispose();Completion.SetException(error);}
     }

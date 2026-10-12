@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Dolphin.Threading;
-using Dolphin.Threading.Tasks;
+using System.Threading;
+using System.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 using Dolphin.Text;
 namespace Dolphin.Network.Http;
 public sealed class HttpMethod
@@ -54,7 +55,7 @@ public class HttpContent : IDisposable
     {
         private readonly Task<byte[]> bytes;internal readonly TaskCompletionSource<string> Completion=new TaskCompletionSource<string>();
         internal StringWork(Task<byte[]> b){bytes=b;}
-        internal void Start()=>bytes.Continue(Finish);
+        internal void Start()=>bytes.GetAwaiter().OnCompleted(Finish);
         private void Finish(){try{Completion.SetResult(new UTF8Encoding(false,true).GetString(bytes.GetAwaiter().GetResult()));}catch(Exception e){Completion.SetException(e);}}
     }
     private sealed class BufferWork
@@ -62,7 +63,7 @@ public class HttpContent : IDisposable
         private readonly HttpContent content;private readonly byte[] chunk=new byte[4096];private readonly Dolphin.IO.MemoryStream memory=new Dolphin.IO.MemoryStream();private Task<int>? read;
         internal readonly TaskCompletionSource<byte[]> Completion=new TaskCompletionSource<byte[]>();
         internal BufferWork(HttpContent c){content=c;}
-        internal void Step(){try{if(read!=null){int n=read.GetAwaiter().GetResult();if(n==0){content.Bytes=memory.ToArray();content.Body!.Dispose();content.Body=new Dolphin.IO.MemoryStream(content.Bytes,false);Completion.SetResult(content.Bytes);return;}if(memory.Length>content.Limit-n)throw new IOException("HTTP body exceeds buffer limit; use streaming.");memory.Write(chunk,0,n);}read=content.Body!.ReadAsync(chunk,0,chunk.Length);read.Continue(Step);}catch(Exception e){content.Dispose();Completion.SetException(e);}}
+        internal void Step(){try{if(read!=null){int n=read.GetAwaiter().GetResult();if(n==0){content.Bytes=memory.ToArray();content.Body!.Dispose();content.Body=new Dolphin.IO.MemoryStream(content.Bytes,false);Completion.SetResult(content.Bytes);return;}if(memory.Length>content.Limit-n)throw new IOException("HTTP body exceeds buffer limit; use streaming.");memory.Write(chunk,0,n);}read=content.Body!.ReadAsync(chunk,0,chunk.Length);read.GetAwaiter().OnCompleted(Step);}catch(Exception e){content.Dispose();Completion.SetException(e);}}
     }
 }
 public sealed class ByteArrayContent : HttpContent {public ByteArrayContent(byte[] bytes){Bytes=bytes??throw new ArgumentNullException("bytes");}}
@@ -90,18 +91,18 @@ public sealed class HttpClient : IDisposable
     public void Dispose(){disposed=true;while(active.Count>0)active[0].Abort();}
     private sealed class DownloadString
     {
-        private readonly Task<HttpResponseMessage> task;internal readonly TaskCompletionSource<string> Completion=new TaskCompletionSource<string>();internal DownloadString(Task<HttpResponseMessage> t){task=t;}internal void Start()=>task.Continue(Finish);
-        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(new UTF8Encoding(false,true).GetString(r.Content.Bytes!));r.Dispose();}catch(Exception e){if(task.IsCompletedSuccessfully)task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
+        private readonly Task<HttpResponseMessage> task;internal readonly TaskCompletionSource<string> Completion=new TaskCompletionSource<string>();internal DownloadString(Task<HttpResponseMessage> t){task=t;}internal void Start()=>task.GetAwaiter().OnCompleted(Finish);
+        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(new UTF8Encoding(false,true).GetString(r.Content.Bytes!));r.Dispose();}catch(Exception e){if((task.IsCompleted && !task.IsFaulted && !task.IsCanceled))task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
     }
     private sealed class DownloadBytes
     {
-        private readonly Task<HttpResponseMessage> task;internal readonly TaskCompletionSource<byte[]> Completion=new TaskCompletionSource<byte[]>();internal DownloadBytes(Task<HttpResponseMessage> t){task=t;}internal void Start()=>task.Continue(Finish);
-        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(r.Content.Bytes!);r.Dispose();}catch(Exception e){if(task.IsCompletedSuccessfully)task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
+        private readonly Task<HttpResponseMessage> task;internal readonly TaskCompletionSource<byte[]> Completion=new TaskCompletionSource<byte[]>();internal DownloadBytes(Task<HttpResponseMessage> t){task=t;}internal void Start()=>task.GetAwaiter().OnCompleted(Finish);
+        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(r.Content.Bytes!);r.Dispose();}catch(Exception e){if((task.IsCompleted && !task.IsFaulted && !task.IsCanceled))task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
     }
     private sealed class DownloadStream
     {
-        private readonly Task<HttpResponseMessage> task;internal readonly TaskCompletionSource<Dolphin.IO.Stream> Completion=new TaskCompletionSource<Dolphin.IO.Stream>();internal DownloadStream(Task<HttpResponseMessage> t){task=t;}internal void Start()=>task.Continue(Finish);
-        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(r.Content.Body!);}catch(Exception e){if(task.IsCompletedSuccessfully)task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
+        private readonly Task<HttpResponseMessage> task;internal readonly TaskCompletionSource<Dolphin.IO.Stream> Completion=new TaskCompletionSource<Dolphin.IO.Stream>();internal DownloadStream(Task<HttpResponseMessage> t){task=t;}internal void Start()=>task.GetAwaiter().OnCompleted(Finish);
+        private void Finish(){try{var r=task.GetAwaiter().GetResult();r.EnsureSuccessStatusCode();Completion.SetResult(r.Content.Body!);}catch(Exception e){if((task.IsCompleted && !task.IsFaulted && !task.IsCanceled))task.GetAwaiter().GetResult().Dispose();Completion.SetException(e);}}
     }
     private sealed class RequestWork : Operation
     {
