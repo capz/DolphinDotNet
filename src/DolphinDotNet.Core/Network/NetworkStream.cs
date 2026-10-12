@@ -1,7 +1,8 @@
 using System;
 using System.IO;
-using Dolphin.Threading;
-using Dolphin.Threading.Tasks;
+using System.Threading;
+using System.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 namespace Dolphin.Network;
 public sealed class NetworkStream : Dolphin.IO.Stream
 {
@@ -28,6 +29,6 @@ public sealed class NetworkStream : Dolphin.IO.Stream
         internal readonly TaskCompletionSource<int> Completion=new TaskCompletionSource<int>();
         internal WriteAll(Socket s,byte[] b,int o,int n,CancellationToken t){socket=s;buffer=b;offset=o;count=n;token=t;}
         internal void Start()=>Step();
-        private void Step(){try{token.ThrowIfCancellationRequested();if(write!=null){int n=write.GetAwaiter().GetResult();if(n==0&&count!=0)throw new SocketException(0,-2);offset+=n;count-=n;}if(count==0){Completion.SetResult(0);return;}write=socket.SendAsync(buffer,offset,count,SocketFlags.None,token);write.Continue(Step);}catch(Exception e){socket.Dispose();Completion.SetException(e);}}
+        private void Step(){try{token.ThrowIfCancellationRequested();if(write!=null){int n=write.GetAwaiter().GetResult();if(n==0&&count!=0)throw new SocketException(0,-2);offset+=n;count-=n;}if(count==0){Completion.SetResult(0);return;}write=socket.SendAsync(buffer,offset,count,SocketFlags.None,token);write.GetAwaiter().OnCompleted(Step);}catch(Exception e){socket.Dispose();Completion.SetException(e);}}
     }
 }
