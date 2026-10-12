@@ -1,8 +1,9 @@
 using System;
 using Dolphin.Graphics;
 using Dolphin.Memory;
-using Dolphin.Threading;
-using Dolphin.Threading.Tasks;
+using System.Threading;
+using System.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 using Dolphin.Storage;
 class Program
 {
