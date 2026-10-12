@@ -21,6 +21,8 @@ static const DndType DERIVED_TYPE = { "Derived", &BASE_TYPE, sizeof(DndObject), 
 
 static intptr_t managed_add(intptr_t *args) { return args[0]+1; }
 static int invoked;
+static int safepoint_calls;
+static void count_safepoint(void *ctx) { (*(int *)ctx)++; }
 static void callback(void *target, void *arg) {
     (void)target; invoked = *(int *)arg;
 }
@@ -378,6 +380,17 @@ int main(void) {
     dnd_context_unregister(&suspended);
     dnd_gc_collect(&heap, NULL);
 
+    /* Managed basic block hook defaults to no-op; an installed native
+       rendezvous callback runs only when explicitly enabled at startup. */
+    dnd_gc_safepoint();
+    assert(safepoint_calls == 0);
+    dnd_gc_set_safepoint_hook(count_safepoint, &safepoint_calls);
+    dnd_gc_safepoint();
+    dnd_gc_safepoint();
+    assert(safepoint_calls == 2);
+    dnd_gc_set_safepoint_hook(NULL, NULL);
+    dnd_gc_safepoint();
+    assert(safepoint_calls == 2);
     puts("managed runtime + core BCL tests passed");
     return 0;
 }
