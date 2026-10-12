@@ -14,7 +14,7 @@ Reference `DolphinDotNet.Core` for the runtime implementations; graphics/input a
 | Standard `System.IO`, `System.Net`, `System.Net.Sockets`, `System.Net.Http` calls | Selected signatures map to `Dolphin.IO`, `Dolphin.Network` and `Dolphin.Network.Http` |
 | Queue pumping | `Dolphin.Threading.Tasks.Scheduler` (no standard .NET equivalent) |
 | Network startup/pumping/options | `Dolphin.Network.NetworkRuntime`, `NetworkOptions` |
-| Direct model/ARAM APIs | `Dolphin.Graphics`, `Dolphin.Memory`; return Dolphin task types and accept Dolphin cancellation tokens |
+| Direct model/ARAM APIs | `Dolphin.Graphics`, `Dolphin.Memory`; expose standard `System.Threading.Tasks.Task` and `System.Threading.CancellationToken` |
 
 Use `using System.Threading.Tasks;` for normal async method return types. Alias the scheduler instead of importing both Task namespaces:
 
@@ -24,9 +24,9 @@ using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 using NetworkRuntime = Dolphin.Network.NetworkRuntime;
 ```
 
-The desktop CLR sees System and Dolphin tasks/tokens/addresses as separate types. Do not assign or cast between them. Direct Dolphin APIs must receive their declared Dolphin types; awaiting a Dolphin task inside an ordinary `async Task` method is supported and tested. AOT redirection supplies the standard API compatibility on the target. Running a platform sample with `dotnet run` does not substitute for native AOT execution; platform internal calls require the native backend.
+The public I/O, ARAM, networking and model APIs now use standard Task and cancellation signatures. The desktop CLR still sees the Dolphin task implementation as a separate type: do not cast between task types. The AOT compiler rewrites standard task, awaiter and cancellation metadata to the cooperative runtime equivalents. AOT redirection supplies the standard API compatibility on the target. Running a platform sample with `dotnet run` does not substitute for native AOT execution; platform internal calls require the native backend.
 
-Dolphin task types are awaitable, but custom async-method builders are not advertised for declaring `async Dolphin.Threading.Tasks.Task` methods. Use the standard Task return type. The legacy `DolphinDotNet.Runtime` information facade is separate from compiler-generated `Dolphin.Runtime.CompilerServices`; game platform information is exposed through `Dolphin.Platform`.
+Custom Dolphin tasks remain internal runtime plumbing and are not the public application contract; custom async-method builders are not advertised for declaring `async Dolphin.Threading.Tasks.Task` methods. Use the standard Task return type. The legacy `DolphinDotNet.Runtime` information facade is separate from compiler-generated `Dolphin.Runtime.CompilerServices`; game platform information is exposed through `Dolphin.Platform`.
 
 ## Established Task subset
 
