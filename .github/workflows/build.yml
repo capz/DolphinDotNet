@@ -230,7 +230,7 @@ jobs:
           dotnet build tests/NetworkSmoke/NetworkSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/NetworkSmoke/bin/Release/net8.0/NetworkSmoke.dll /tmp/network-smoke.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/network-smoke.c -o /tmp/network-smoke.o
-          "$DEVKITPPC/bin/powerpc-eabi-gcc" -mogc /tmp/network-smoke.o build/managed_runtime.o build/text.o build/network.o build/network_gamecube_backend.o -L"$DEVKITPRO/libogc2/gamecube/lib" -lbba -logc -lm -o /tmp/network-smoke.elf
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -mogc -Iinclude tests/network_gamecube_entry.c /tmp/network-smoke.o build/managed_runtime.o build/text.o build/network.o build/network_gamecube_backend.o -L"$DEVKITPRO/libogc2/gamecube/lib" -lbba -logc -lm -o /tmp/network-smoke.elf
       - name: Report GameCube runtime footprint
         run: |
           mkdir -p footprint
