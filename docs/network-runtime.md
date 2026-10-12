@@ -4,6 +4,8 @@ IPv4 UDP/TCP client and server sockets, DNS, bounded HTTP/1.1 and a reflection-f
 
 ## Startup and pumping
 
+See [async runtime and namespace rules](async-runtime.md) and the complete [AsyncNetworking sample](../samples/AsyncNetworking/Program.cs). Use standard `System.Net`/`System.Net.Sockets`/`System.Net.Http` APIs for the compatible subset. Alias platform helpers such as `NetworkRuntime`, `NetworkOptions` and `Scheduler` rather than importing both competing task/socket namespaces. `NetworkOptions.DnsServers` specifically requires `Dolphin.Network.IPAddress[]`.
+
 Start through `Dolphin.Network.NetworkRuntime.StartAsync(NetworkOptions, CancellationToken)`. Defaults use DHCP; static IPv4 configuration is also available. Configure DNS server addresses explicitly: this backend does not assume that the gateway provides DNS or that DHCP exposes its resolver addresses. Initialization runs on a native LWP worker on GameCube. Its records and stack contain no managed pointers.
 
 An application must call `NetworkRuntime.Pump()` and `Dolphin.Threading.Tasks.Scheduler.Pump(16)` each frame. Pump services at most 32 registered operation steps and has a 1 ms soft elapsed-time target by default. IO steps transfer at most 4 KiB, except atomic UDP datagrams. Game updates, input and graphics remain owned by the application. Headless servers can run the same services without rendering.

@@ -89,6 +89,16 @@ jobs:
           cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/library.c tests/generic_sharing_value_host.c source/managed_runtime.c source/text.c -o /tmp/library_32
           timeout 30s /tmp/library_32
           timeout 30s /tmp/library_32 --gc-stress
+      - name: Validate cooperative async and namespace interoperability
+        timeout-minutes: 4
+        run: |
+          dotnet build tests/AsyncSmoke/AsyncSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/AsyncSmoke/bin/Release/net8.0/AsyncSmoke.dll /tmp/async-smoke.c
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-smoke.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/async-smoke
+          timeout 30s /tmp/async-smoke
+          timeout 30s /tmp/async-smoke --gc-stress
+          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-smoke.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/async-smoke32
+          timeout 30s /tmp/async-smoke32 --gc-stress
       - name: Validate collections and storage I/O
         timeout-minutes: 3
         run: |
@@ -127,6 +137,14 @@ jobs:
           python3 tests/network_fixtures.py /tmp/network-smoke32 --gc-stress
           cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/network_native_test.c source/managed_runtime.c source/network.c source/network_posix.c -o /tmp/network-native
           /tmp/network-native
+      - name: Validate documented async networking example
+        timeout-minutes: 4
+        run: |
+          dotnet build samples/AsyncNetworking/AsyncNetworking.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/AsyncNetworking/bin/Release/net8.0/AsyncNetworking.dll /tmp/async-networking.c
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-networking.c tests/network_host.c source/managed_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/async-networking
+          python3 tests/network_fixtures.py /tmp/async-networking
+          python3 tests/network_fixtures.py /tmp/async-networking --gc-stress
       - name: Convert, package and validate model assets
         timeout-minutes: 5
         run: |

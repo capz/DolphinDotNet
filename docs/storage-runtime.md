@@ -81,6 +81,8 @@ The journal is reserved and never appears as a logical save. Replacement needs e
 
 ## Cooperative async
 
+See [async runtime and namespace rules](async-runtime.md) for the exact Task subset and a complete pump-driven networking example. Use `System.IO`/`System.Threading.Tasks` for supported standard calls and an alias for `Dolphin.Threading.Tasks.Scheduler`.
+
 Tasks and compiled async/await run on one application thread. `Task.Run`, completion sources, Yield, WhenAll/WhenAny, awaiters/builders and cancellation feed `Dolphin.Threading.Tasks.Scheduler`. Call `Scheduler.Pump()` per frame or RunUntilIdle to advance queued work; waiting/GetResult also pumps until completion. A wait with no runnable completion path throws rather than spinning forever. ConfigureAwait has no synchronization context to capture.
 
 Stream/file writes and copies schedule bounded transfers (up to 4 KiB) between queue turns; text operations use bounded character chunks. Cancellation is checked before opening and between chunks, and faults/cancellation are stored in the returned task. Native descriptor operations remain synchronous within each chunk: this is cooperative scheduling, not a thread pool or interrupt-driven descriptor API. Concurrent operations on the same stream must be serialized by the application. Dispose streams only after their pending operations complete. Thread, locks, timers, async void, ValueTask and full TPL scheduling/context behavior are not supplied.
