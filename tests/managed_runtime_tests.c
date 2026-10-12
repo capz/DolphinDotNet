@@ -371,6 +371,8 @@ int main(void) {
     DndExecutionContext active_alias = {0};
     active_alias.gc_frames = &inner_frame;
     assert(!dnd_context_register(&active_alias));
+    active_alias.gc_frames = &outer_frame;
+    assert(!dnd_context_register(&active_alias));
     dnd_gc_frame_pop(&inner_frame);
     dnd_gc_frame_pop(&outer_frame);
     dnd_context_unregister(&suspended);
