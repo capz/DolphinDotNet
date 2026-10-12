@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
-using Dolphin.Threading;
-using Dolphin.Threading.Tasks;
+using System.Threading;
+using System.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 namespace Dolphin.Memory;
 
 /// <summary>Bounded cold-asset cache. Lower-priority, least-recently-used recoverable entries are evicted first.</summary>
