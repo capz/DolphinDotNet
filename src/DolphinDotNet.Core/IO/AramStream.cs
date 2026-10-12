@@ -73,7 +73,7 @@ public sealed class AramStream : Stream
         Task transfer;
         try { transfer = buffer.ReadAsync(position, destination, offset, size, token); }
         catch { busy = false; throw; }
-        transfer.Continue(() =>
+        transfer.GetAwaiter().OnCompleted(() =>
         {
             try
             {
@@ -104,7 +104,7 @@ public sealed class AramStream : Stream
         Task transfer;
         try { transfer = buffer.WriteAsync(source, offset, position, count, token); }
         catch { busy = false; throw; }
-        transfer.Continue(() =>
+        transfer.GetAwaiter().OnCompleted(() =>
         {
             try
             {
