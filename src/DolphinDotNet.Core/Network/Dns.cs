@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
-using Dolphin.Threading;
-using Dolphin.Threading.Tasks;
+using System.Threading;
+using System.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 namespace Dolphin.Network;
 public static class Dns
 {
@@ -22,7 +23,7 @@ public static class Dns
     {
         private readonly string host;private readonly Task<IPAddress[]> lookup;internal readonly TaskCompletionSource<IPHostEntry> Completion=new TaskCompletionSource<IPHostEntry>();
         internal EntryWork(string h,Task<IPAddress[]> t){host=h;lookup=t;}
-        internal void Start()=>lookup.Continue(Finish);
+        internal void Start()=>lookup.GetAwaiter().OnCompleted(Finish);
         private void Finish(){try{Completion.SetResult(new IPHostEntry{HostName=host,AddressList=lookup.GetAwaiter().GetResult()});}catch(Exception e){Completion.SetException(e);}}
     }
     private static IPAddress[] Copy(IPAddress[] source){var result=new IPAddress[source.Length];Array.Copy(source,result,source.Length);return result;}
