@@ -247,6 +247,8 @@ jobs:
           dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/model-smoke.c -o /tmp/model-smoke.o
+      - name: Test DOL alignment handling
+        run: python3 -m unittest discover -s tests -p test_dol_sections.py
       - name: Build ELF and DOL
         run: make V=1
       - name: Compile and link managed networking for GameCube
@@ -269,6 +271,7 @@ jobs:
         run: |
           test -s DolphinDotNet.elf
           test -s DolphinDotNet.dol
+          python3 scripts/dol_sections.py DolphinDotNet.dol
           file DolphinDotNet.elf || true
           ls -lh DolphinDotNet.elf DolphinDotNet.dol
       - uses: actions/upload-artifact@v4
