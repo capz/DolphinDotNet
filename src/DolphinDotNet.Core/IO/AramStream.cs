@@ -58,44 +58,64 @@ public sealed class AramStream : Stream
     public override void Write(byte[] source, int offset, int count)
         => WriteAsync(source, offset, count).GetAwaiter().GetResult();
 
-    public override async Task<int> ReadAsync(byte[] destination, int offset, int count, CancellationToken token)
+    // Dolphin's cooperative Task is not a Roslyn-recognized async return type.
+    // Use a completion continuation until the public standard-Task migration is complete.
+    public override Task<int> ReadAsync(byte[] destination, int offset, int count, CancellationToken token)
     {
         CheckIdle();
         Validate(destination, offset, count);
-        token.ThrowIfCancellationRequested();
+        if (token.IsCancellationRequested) return Task.FromCanceled<int>(token);
         int size = Math.Min(count, Math.Max(0, length - position));
-        if (size == 0) return 0;
+        if (size == 0) return Task.FromResult(0);
         busy = true;
-        try
+        var result = new TaskCompletionSource<int>();
+        Task transfer;
+        try { transfer = buffer.ReadAsync(position, destination, offset, size, token); }
+        catch { busy = false; throw; }
+        transfer.Continue(() =>
         {
-            await buffer.ReadAsync(position, destination, offset, size, token);
-            position += size;
-            return size;
-        }
-        finally { busy = false; }
+            try
+            {
+                transfer.GetAwaiter().GetResult();
+                position += size;
+                result.SetResult(size);
+            }
+            catch (Exception error) { result.SetException(error); }
+            finally { busy = false; }
+        });
+        return result.Task;
     }
 
     public override Task<int> ReadAsync(byte[] destination, int offset, int count)
         => ReadAsync(destination, offset, count, default);
 
-    public override async Task WriteAsync(byte[] source, int offset, int count, CancellationToken token)
+    public override Task WriteAsync(byte[] source, int offset, int count, CancellationToken token)
     {
         CheckIdle();
         Validate(source, offset, count);
         if (!writable) throw new NotSupportedException("ARAM stream is read-only.");
         if (count > Capacity - position) throw new IOException("ARAM stream capacity exceeded.");
-        token.ThrowIfCancellationRequested();
-        if (count == 0) return;
-        // Gaps have undefined native contents, so forbid sparse writes.
         if (position > length) throw new NotSupportedException("Sparse writes to ARAM are not supported.");
+        if (token.IsCancellationRequested) return Task.FromCanceled(token);
+        if (count == 0) return Task.CompletedTask;
         busy = true;
-        try
+        var result = new TaskCompletionSource<int>();
+        Task transfer;
+        try { transfer = buffer.WriteAsync(source, offset, position, count, token); }
+        catch { busy = false; throw; }
+        transfer.Continue(() =>
         {
-            await buffer.WriteAsync(source, offset, position, count, token);
-            position += count;
-            if (position > length) length = position;
-        }
-        finally { busy = false; }
+            try
+            {
+                transfer.GetAwaiter().GetResult();
+                position += count;
+                if (position > length) length = position;
+                result.SetResult(0);
+            }
+            catch (Exception error) { result.SetException(error); }
+            finally { busy = false; }
+        });
+        return result.Task;
     }
 
     public override Task WriteAsync(byte[] source, int offset, int count)
