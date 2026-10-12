@@ -21,3 +21,9 @@ The new `dnd_worker_submit` accepts **native-only** operations that do not acces
 5. Remove the two explicit pump calls from samples **only after** integration tests prove downloads and ARAM transfers make progress without them. Test GameCube hardware and emulator behavior, shutdown, cancellation and GC stress.
 
 The worker foundation and host tests deliberately preserve the existing default single-thread managed behavior. The current `System.Threading.Tasks.Task` public signatures remain supported, but their scheduler still requires cooperative pumping.
+
+## Managed GC-root registration groundwork
+
+The managed runtime now supports `dnd_gc_register_roots` and `dnd_gc_unregister_roots`. Callers can register a `DndRootSet` whose rooted managed objects remain alive across GC collections, even when the immediate stack frame is no longer participating. Tests verify that a registered managed object remains live during an explicit collection.
+
+**Safety boundary:** The registration list and managed allocator remain unsynchronized. Registering/unregistering roots, allocating, and collecting must all happen under the existing single-managed-thread assumption. This is the GC *root-enumeration foundation*, not a declaration that managed workers or background continuations are safe. Before enabling cross-thread managed work, add a native thread registry, stop-the-world safepoints, per-thread exception/GC frames, and synchronized access to heap and scheduler state, then test nested exceptions and forced GC on multiple threads.
