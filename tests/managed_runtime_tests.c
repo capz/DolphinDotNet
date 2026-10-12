@@ -298,6 +298,23 @@ int main(void) {
     dnd_gc_frame_pop(&deep_frame);
     dnd_gc_collect(&heap, NULL);
 
+    /* Registered root sets survive independent collections, providing the
+       bookkeeping required before multiple managed threads can be supported. */
+    DndObject *external = dnd_object_new(&heap, &NODE_TYPE);
+    assert(external);
+    DndObject **external_slots[] = { &external };
+    DndRootSet external_roots;
+    dnd_roots_init(&external_roots, external_slots, 1);
+    assert(dnd_root_add(&external_roots, &external));
+    DndGcRootRegistration registration = {0};
+    assert(dnd_gc_register_roots(&registration, &external_roots));
+    assert(!dnd_gc_register_roots(&registration, &external_roots));
+    dnd_gc_collect(&heap, NULL);
+    assert(external->type == &NODE_TYPE);
+    dnd_gc_unregister_roots(&registration);
+    assert(!registration.registered);
+    dnd_gc_collect(&heap, NULL);
+
     puts("managed runtime + core BCL tests passed");
     return 0;
 }
