@@ -32,5 +32,11 @@ void dnd_stw_managed_hook(void *world);
  * Every running managed thread must regularly poll its safepoint. */
 bool dnd_stw_suspend_others(DndStwCoordinator *world, int collector_slot);
 void dnd_stw_resume_others(DndStwCoordinator *world, int collector_slot);
+/* Guard an explicit GC sweep with a rendezvous. Only safe when every managed
+ * mutator is registered and its heap mutations are quiescent while parked. */
+struct DndManagedHeap;
+struct DndRootSet;
+bool dnd_gc_collect_stopped(DndStwCoordinator *world, int collector_slot,
+                            struct DndManagedHeap *heap, const struct DndRootSet *roots);
 
 #endif
