@@ -2,6 +2,7 @@
 #define DND_STW_H
 
 #include <stdbool.h>
+#include "dnd_managed.h"
 
 /* Cooperative stop-the-world rendezvous for future managed mutator threads.
  * Not yet wired into the managed allocator or generated AOT safepoints.
@@ -32,5 +33,9 @@ void dnd_stw_managed_hook(void *world);
  * Every running managed thread must regularly poll its safepoint. */
 bool dnd_stw_suspend_others(DndStwCoordinator *world, int collector_slot);
 void dnd_stw_resume_others(DndStwCoordinator *world, int collector_slot);
+/* Guard an explicit GC sweep with a rendezvous. Only safe when every managed
+ * mutator is registered and its heap mutations are quiescent while parked. */
+bool dnd_gc_collect_stopped(DndStwCoordinator *world, int collector_slot,
+                            DndManagedHeap *heap, const DndRootSet *roots);
 
 #endif
