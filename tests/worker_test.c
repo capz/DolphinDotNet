@@ -63,6 +63,10 @@ int main(void) {
     assert(dnd_worker_start());
     uint32_t id = dnd_worker_submit(blocking_job, &values[0]);
     assert(id != 0);
+    int waited_result = -1;
+    assert(dnd_worker_wait(id, &waited_result) == 1);
+    assert(waited_result == 10);
+    assert(dnd_worker_wait(id, NULL) == -1);
     dnd_worker_stop(); /* drain even when result is not polled */
     assert(atomic_load(&calls) == 33);
     puts("Native worker queue and lifecycle tests passed.");
