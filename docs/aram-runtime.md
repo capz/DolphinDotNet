@@ -82,3 +82,16 @@ Stores are serialized per cache: await one before starting another or removing e
 Portable native tests cover fragmentation/coalescing, slot exhaustion, stale handles, alignment boundaries, adjacent-byte preservation, pending disposal and injected transfer failure. Compiled managed tests exercise multi-chunk round trips, submission order, cancellation, lifecycle, priority eviction, atomic cache replacement and prefetch under optimized sanitizers/GC stress and 32-bit execution. GameCube CI compiles both the backend and generated managed ABI. Actual console DMA/cache behavior, frame-time measurements and coexistence with an audio subsystem remain hardware acceptance checks.
 
 Backend API references: [libogc2 ARAM](https://github.com/extremscorner/libogc2/blob/master/include/ogc/aram.h) and [ARQ](https://github.com/extremscorner/libogc2/blob/master/include/ogc/arqueue.h).
+
+## Example: download Google's PNG logo into ARAM
+
+See [GoogleLogoAram](../samples/GoogleLogoAram/Program.cs). It uses standard `System.Threading.Tasks.Task`, `System.Net.Http.HttpClient`, and Dolphin's `AramStream` to transfer a remote PNG through a reusable 4 KiB MEM1 buffer into a fixed-size 256 KiB ARAM allocation. It validates the PNG magic bytes after reading them back from ARAM; it does **not** decode or display the image. Dispose the stream to free its ARAM allocation.
+
+The GameCube network stack currently supports plain HTTP but **not HTTPS**. Google's public logo image is served via HTTPS, so this example uses a minimal local development relay that fetches the logo from Google using TLS on a PC, then serves the unchanged PNG to the GameCube over HTTP. It is not an HTTPS implementation or a secure transport from the relay to the console.
+
+1. On a trusted computer on the same LAN, run `python3 samples/GoogleLogoAram/logo_proxy.py` (requires internet access).
+2. Change `LogoUrl` in `samples/GoogleLogoAram/Program.cs` from `192.168.1.2` to that computer's IPv4 address. Allow local TCP port 18081 through the firewall.
+3. Build the example with `dotnet build samples/GoogleLogoAram/GoogleLogoAram.csproj -c Release` and AOT-compile the resulting assembly with DolphinDotNet.Compiler, as with other managed GameCube examples. Native backend execution requires devkitPPC/libogc2 and a correctly initialized network interface.
+4. Run the GameCube application with the LAN connected. The main loop services both `NetworkRuntime.Pump()` and `Scheduler.Pump()`; successful transfer returns exit code 0, while a failed download, insufficient ARAM or an invalid PNG returns exit code 1.
+
+The sample is an integration demonstration, not a full-featured downloader. Its size cap protects ARAM and it does not keep the stream after returning; an actual game should retain the `AramStream` as an asset owner until needed for rendering or decoding. If the logo URL changes or redirects, update the relay's upstream URL. Do not expose the relay to untrusted networks; it uses plain HTTP without authentication. Rendering a PNG requires a decoder and GX texture upload, neither of which happens in this sample.
