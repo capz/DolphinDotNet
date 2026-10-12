@@ -14,7 +14,8 @@ DolphinDotNet compiles ordinary .NET assemblies into native C through a typed in
 | Managed runtime | Compiled object lifecycle, fields, virtual/interface dispatch, strings, arrays, delegates, boxing, typed exceptions, rethrow and finally |
 | Memory management | Nonmoving mark/sweep GC, explicit roots and compiler-generated shadow-stack support, reusable free blocks, stress mode |
 | GameCube platform | libogc2 DOL, OpenGX 3D/overlay, PAD input, nonblocking UDP/TCP client/server, console overlay |
-| Collections and storage | Growable Dolphin list, array enumerable, binary System.IO facade, lazy directory enumeration and enum-based SD/DVD mounting; separate memory-card saves |
+| Collections and storage | Selected standard List/comparers, streams/text and System.IO APIs; SD/DVD mounting and separate memory-card saves |
+| Async/await | Compiled Task/Task<T> state machines, cancellation and cooperative continuations; application pumps work on one thread |
 | Integration | Compiler and native runtime tests; 32/64-bit managed smoke execution, GC stress, ASan/UBSan and GameCube build CI |
 | Phase 7 runtime completeness | **Acceptance gates satisfied and merged** in [PR #37](https://github.com/capz/DolphinDotNet/pull/37); target execution remains separate |
 
@@ -43,10 +44,13 @@ make
 
 The output is `DolphinDotNet.dol`. The repository also contains `samples/HelloGameCube`, `samples/ManagedGameCube`, and `scripts/compile-sample.sh`.
 
+The [async networking sample](samples/AsyncNetworking/Program.cs) awaits platform startup and a DNS-resolved HTTP JSON request while the outer loop pumps networking and continuations. Its defaults target the local test fixture; configure a reachable resolver and endpoint for hardware.
+
 ## Tests and CI
 
 - `tests/managed_runtime_tests.c` covers native managed-runtime mechanisms, GC, UTF-16 strings, arrays, type checks and exceptions.
 - `tools/DolphinDotNet.Compiler.Tests` exercises compiler lowering.
+- `tests/AsyncSmoke` covers nested awaits, bounded scheduler pumping, retained state, faults/finally, cancellation, completion sources, WhenAll/WhenAny and System/Dolphin await interoperability.
 - `tests/ControlFlowSmoke` and `tests/GenericSharingSmoke` validate compiled managed behavior, including lifecycle, nullable values, generic dispatch, embedded reference fields, exceptions and finally.
 - GitHub Actions runs managed integration on 32-bit and 64-bit hosts, collects before every allocation in GC-stress runs, and executes optimized ASan/UBSan checks.
 - GameCube CI builds ELF/DOL/map artifacts and publishes section sizes, symbol sizes and per-function static stack usage.
@@ -55,7 +59,7 @@ The output is `DolphinDotNet.dol`. The repository also contains `samples/HelloGa
 
 ## API and architecture rules
 
-GameCube-specific managed APIs belong under the **`Dolphin` namespace** (for example `Dolphin.Graphics`, `Dolphin.Input`, `Dolphin.Network`). The former `DolphinDotNet.GameCube.GameCube` facade is replaced by `Dolphin.Diagnostics.DebugOverlay`, `Dolphin.Input.Controller`, `Dolphin.Graphics.Renderer` and `Dolphin.Platform.Name`. The assembly/project name remains `DolphinDotNet.GameCube`. Standard-library-compatible APIs retain `System.*` names.
+GameCube-specific managed APIs belong under the **`Dolphin` namespace** (for example `Dolphin.Graphics`, `Dolphin.Input`, `Dolphin.Network`). The former `DolphinDotNet.GameCube.GameCube` facade is replaced by `Dolphin.Diagnostics.DebugOverlay`, `Dolphin.Input.Controller`, `Dolphin.Graphics.Renderer` and `Dolphin.Platform.Name`. The assembly/project name remains `DolphinDotNet.GameCube`. Application code uses supported standard-library APIs through `System.*` names. Their Core implementations live under `Dolphin.*` and are redirected during AOT compilation; they are not interchangeable CLR types. Import the scheduler with `using Scheduler = Dolphin.Threading.Tasks.Scheduler;` alongside `System.Threading.Tasks`. See [async scope and namespace rules](docs/async-runtime.md).
 
 The managed/native split keeps game code independent of GX, PAD, libogc and native socket details. The native GameCube backend owns hardware resources.
 

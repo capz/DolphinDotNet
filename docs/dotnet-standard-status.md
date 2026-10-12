@@ -1,6 +1,6 @@
 # .NET Standard compatibility index
 
-Audit date: 2026-10-09. Implementation baseline: Phase 7 plus compiled collections, text, cooperative async, FST and recoverable save replacement. This index describes ordinary compiled C# development; it is not a full .NET Standard conformance report.
+Audit date: 2026-10-12. Implementation baseline: Phase 7 plus compiled collections, text, cooperative async, FST, recoverable save replacement and IPv4 networking. This index describes ordinary compiled C# development; it is not a full .NET Standard conformance report.
 
 The managed Core project targets `netstandard2.0`, while the compiler smoke applications target `net8.0`. A target framework supplies compile-time references; it does not make every referenced API available in the generated GameCube program. .NET Standard 2.0 is the initial API inventory baseline, not a claim that DolphinDotNet implements its whole contract.
 
@@ -50,7 +50,7 @@ The managed Core project targets `netstandard2.0`, while the compiler smoke appl
 | NM01 | `Math`, `Random` | Native only | Integer Abs/Min/Max and PRNG primitives; normal managed APIs not wired up |
 | NM02 | Floating point, Decimal, BigInteger, Convert/Parse families | Missing/unverified broad support | IR kind names and signature recognition do not establish numeric semantics or library coverage |
 | TX01 | `Encoding`, globalization, culture and time/date APIs | Compiled subset; other families missing | UTF-8/UTF-16/ASCII/Latin-1 codecs, strict fallback exceptions and BOM/text buffering; globalization and time/date APIs remain absent |
-| TH01 | Tasks, async/await, cancellation, Thread and synchronization | Compiled cooperative subset | Task/Task<T>, builders/awaiters, completion sources, Yield/Run, WhenAll/WhenAny, ConfigureAwait, cancellation and chunked IO. No thread pool, Thread/locks, timers or synchronization contexts |
+| TH01 | Tasks, async/await, cancellation, Thread and synchronization | Compiled cooperative subset | Task/Task<T>, builders/awaiters, completion sources, Yield/Run, WhenAll/WhenAny, ConfigureAwait, cancellation and chunked IO. [Exact async scope and namespace mapping](async-runtime.md). No Task.Delay, async void, ValueTask, thread pool, Thread/locks, timers or synchronization contexts |
 | NW01 | `System.Net`, sockets, HttpClient | Compiled subset | IPv4 UDP/TCP client/server, DNS A/CNAME and TCP fallback, streamed HTTP/1.1 and selected standard bindings. [Exact networking scope](network-runtime.md); TLS/HTTPS and hardware acceptance remain pending |
 | SR01 | JSON/XML, Regex, serialization, compression | JSON pull reader subset; other families missing | Bounded reflection-free Dolphin JSON tokenizer and checked integer conversion; standard JSON serializers, XML, Regex and compression remain absent |
 | RF01 | Full reflection and dynamic assembly loading | Excluded | Static closed-world metadata and supported type checks remain allowed |
@@ -75,7 +75,7 @@ Standard List, selected streams/text and cooperative async now have compiled smo
 
 No defensible full-contract coverage percentage has been measured. The existing `DolphinDotNet.ApiCompat` tool compares metadata surfaces, not compiled semantics. It compares raw signature blobs, whose type-token encodings can differ between assemblies; nested type ownership, accessibility, events and inherited API surface also need normalization before using its output as an authoritative .NET Standard inventory.
 
-The Core assembly currently contains a small `DolphinDotNet.Runtime` facade, not a replacement implementation of the `netstandard.dll` API surface. Comparing it directly with the full reference assembly would not measure intrinsic/compiler support.
+The Core assembly contains managed implementations under `Dolphin.*` and a legacy `DolphinDotNet.Runtime` information facade. Supported ordinary `System.*` calls are redirected by the compiler; Core is not a replacement `netstandard.dll` assembly. Comparing it directly with the full reference assembly would not measure intrinsic/compiler support.
 
 A reproducible contract report needs: pinned reference assembly/version; normalized namespace/type/member signatures; explicit intrinsic/managed/native/excluded classifications; exact overload-to-test mappings; and separate compile, host-execution and target-execution evidence. Until then this audited index is qualitative and deliberately scoped.
 

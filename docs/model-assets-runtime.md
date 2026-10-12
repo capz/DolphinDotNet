@@ -38,7 +38,7 @@ Mount the desired device before loading. Async operations use Dolphin's cooperat
 using Dolphin.Graphics;
 using Dolphin.Memory;
 using Dolphin.Storage;
-using Dolphin.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 
 Storage.Mount(StorageDevice.SdSerialPort2);
 Aram.Initialize(); // before audio or another ARAM owner

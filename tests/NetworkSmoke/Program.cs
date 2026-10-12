@@ -1,8 +1,10 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
-using Dolphin.Network;
-using Dolphin.Threading.Tasks;
+using NetworkRuntime = Dolphin.Network.NetworkRuntime;
+using NetworkOptions = Dolphin.Network.NetworkOptions;
+using NativeTask = Dolphin.Threading.Tasks.Task;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 using IPAddress=System.Net.IPAddress;
 using IPEndPoint=System.Net.IPEndPoint;
 using UdpClient=System.Net.Sockets.UdpClient;
@@ -11,7 +13,7 @@ using TcpListener=System.Net.Sockets.TcpListener;
 using Dolphin.Serialization.Json;
 internal static class Program
 {
-    private static void Complete(Task task){for(int i=0;i<1000000&&!task.IsCompleted;i++){NetworkRuntime.Pump();Scheduler.Pump(16);}task.GetAwaiter().GetResult();}
+    private static void Complete(NativeTask task){for(int i=0;i<1000000&&!task.IsCompleted;i++){NetworkRuntime.Pump();Scheduler.Pump(16);}task.GetAwaiter().GetResult();}
     private static int Main()
     {
         int phase=0;

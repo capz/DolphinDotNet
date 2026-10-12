@@ -55,7 +55,8 @@ Do not add a native implementation for every high-level .NET overload. `ReadAllB
 | 3: directory operations | `Directory.Exists`, `CreateDirectory`, `Delete(path)`, `Delete(path, recursive)`, `Move`, `GetCurrentDirectory`, `SetCurrentDirectory`, `GetFiles`, `GetDirectories`, `GetFileSystemEntries` | `mkdir`, `rmdir`, `rename`, directory cursors; minimal `DirectoryInfo` because `CreateDirectory` returns it |
 | 4: lazy traversal | `EnumerateFiles`, `EnumerateDirectories`, `EnumerateFileSystemEntries`; pattern and `SearchOption` overloads | Custom disposable generic enumerator; existing enumerable contract work must cover early termination and exceptions |
 | 5: text and metadata | UTF-8 `ReadAllText`, `WriteAllText`, `AppendAllText`, line helpers; `StreamReader`, `StreamWriter`; `FileInfo`, fuller `DirectoryInfo`, attributes and timestamps | Managed `Encoding`/text buffering and metadata semantics; not unlocked merely by binary I/O |
-| Later | Async APIs, richer `FileOptions`, `DriveInfo`, additional encoding and filesystem backends | Requires explicit scheduler, cancellation, capability and API coverage decisions |
+| Implemented follow-up | Selected cooperative async file/stream/text APIs | See [async runtime](async-runtime.md) and [storage scope](storage-runtime.md); native descriptor calls remain synchronous within chunks |
+| Later | Richer `FileOptions`, `DriveInfo`, additional encoding and filesystem backends | Requires explicit capability and API coverage decisions |
 
 For the initial binary stages, reject unsupported share/options combinations explicitly. Do not silently accept async, encryption, permissions/ACLs, watcher, link or replacement semantics that the backend cannot provide. `FileSystemWatcher`, memory-mapped files and OS access-control APIs have no implementation in this design.
 
