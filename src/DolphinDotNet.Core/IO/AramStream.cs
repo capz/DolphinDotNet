@@ -65,7 +65,7 @@ public sealed class AramStream : Stream
     {
         CheckIdle();
         Validate(destination, offset, count);
-        if (token.IsCancellationRequested) return Task.FromCanceled<int>(token);
+        if (token.IsCancellationRequested) { var canceled = new TaskCompletionSource<int>(); canceled.SetCanceled(); return canceled.Task; }
         int size = Math.Min(count, Math.Max(0, length - position));
         if (size == 0) return Task.FromResult(0);
         busy = true;
@@ -97,7 +97,7 @@ public sealed class AramStream : Stream
         if (!writable) throw new NotSupportedException("ARAM stream is read-only.");
         if (count > Capacity - position) throw new IOException("ARAM stream capacity exceeded.");
         if (position > length) throw new NotSupportedException("Sparse writes to ARAM are not supported.");
-        if (token.IsCancellationRequested) return Task.FromCanceled(token);
+        if (token.IsCancellationRequested) { var canceled = new TaskCompletionSource<int>(); canceled.SetCanceled(); return canceled.Task; }
         if (count == 0) return Task.CompletedTask;
         busy = true;
         var result = new TaskCompletionSource<int>();
