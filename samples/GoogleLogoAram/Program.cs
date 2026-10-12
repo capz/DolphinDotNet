@@ -50,22 +50,25 @@ internal static class Program
             LogoUrl, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
 
-        // Keep a single reusable staging buffer in MEM1; never materialize
-        // the entire HTTP response as byte[] in the managed heap.
-        using var source = await response.Content.ReadAsStreamAsync();
-        using var destination = new AramStream(MaximumLogoBytes);
-        var scratch = new byte[4096];
+        // Download the image in small segments rather than loading it all into MEM1.
+        // httpResponseStream reads incoming HTTP bytes into a reusable 4 KiB buffer.
+        // Each segment is copied to aramStream, backed by the GameCube's extra
+        // auxiliary RAM (ARAM). Main RAM remains available for gameplay and other
+        // work instead of holding the complete downloaded image.
+        using var httpResponseStream = await response.Content.ReadAsStreamAsync();
+        using var aramStream = new AramStream(MaximumLogoBytes);
+        var segmentBuffer = new byte[4096];
 
         int received;
-        while ((received = await source.ReadAsync(scratch, 0, scratch.Length)) != 0)
+        while ((received = await httpResponseStream.ReadAsync(segmentBuffer, 0, segmentBuffer.Length)) != 0)
         {
-            await destination.WriteAsync(scratch, 0, received);
+            await aramStream.WriteAsync(segmentBuffer, 0, received);
         }
 
-        var storedLength = destination.Length;
-        destination.Position = 0;
+        var storedLength = aramStream.Length;
+        aramStream.Position = 0;
         var signature = new byte[8];
-        if (await destination.ReadAsync(signature, 0, signature.Length) != signature.Length ||
+        if (await aramStream.ReadAsync(signature, 0, signature.Length) != signature.Length ||
             signature[0] != 137 || signature[1] != 80 ||
             signature[2] != 78 || signature[3] != 71 ||
             signature[4] != 13 || signature[5] != 10 ||
@@ -73,9 +76,10 @@ internal static class Program
             throw new InvalidOperationException("Downloaded data is not a PNG.");
 
         if (storedLength == 0) throw new InvalidOperationException("Empty logo.");
-        // Keep destination alive for as long as the game needs the asset.
-        // Disposing here demonstrates cleanup; move it to a long-lived owner
-        // in a real game so it remains available for later ReadAsync calls.
+        // Later, seek and read only the bytes the game needs from aramStream
+        // into a small main-RAM buffer (for decoding, textures, or other work).
+        // Keep aramStream alive in an asset owner until then. This demo disposes
+        // it on return, releasing the ARAM allocation.
         return 0;
     }
 }
