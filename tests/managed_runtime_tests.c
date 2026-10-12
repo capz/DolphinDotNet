@@ -367,6 +367,10 @@ int main(void) {
     assert(outer_root->type == &NODE_TYPE);
     assert(inner_root->type == &NODE_TYPE);
     assert(dnd_context_switch(&executing, &suspended));
+    /* Registration of currently active saved frames must be rejected. */
+    DndExecutionContext active_alias = {0};
+    active_alias.gc_frames = &inner_frame;
+    assert(!dnd_context_register(&active_alias));
     dnd_gc_frame_pop(&inner_frame);
     dnd_gc_frame_pop(&outer_frame);
     dnd_context_unregister(&suspended);
