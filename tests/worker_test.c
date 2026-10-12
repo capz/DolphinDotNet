@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "dnd_worker.h"
 #include <assert.h>
 #include <stdatomic.h>
