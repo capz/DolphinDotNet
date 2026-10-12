@@ -19,6 +19,12 @@ await stored.ReadAsync(0, chunk, 0, chunk.Length);
 Use `Dolphin.Threading.Tasks.Scheduler.Pump()` in the game loop. Each pump performs at most one chunk start/poll transition; a polling turn does not busy-wait for DMA. `Wait`/`GetResult` and `RunUntilIdle` intentionally pump to completion and can block rendering. For frame budgets, limit scheduler pumps per frame. Source arrays must remain unchanged during upload; destination arrays must not be concurrently consumed or modified during download. ARAM transfers are serialized in submission order across all allocations. The queue accepts up to 128 outstanding requests; additional submissions throw until queued work drains. Callbacks only publish a native completion flag; continuations execute on the application thread.
 
 
+## Standard .NET async compatibility
+
+The long-term public contract is `System.Threading.Tasks.Task`, `Task<T>` and `System.Threading.CancellationToken`; the cooperative scheduler remains an internal implementation detail. The compiler already maps these framework types to `Dolphin.Threading.Tasks` during AOT lowering, but the currently compiled `Dolphin.IO.Stream`, networking and ARAM APIs expose custom task types. Merely replacing a `using` directive does not make the CLR-visible signatures equivalent, and Roslyn does not accept Dolphin's Task as an `async` return type.
+
+Migration needs to proceed across the entire public API and compiler together: (1) inventory/convert task and token signatures, (2) replace internal continuation dependencies with a runtime adapter, (3) teach AOT signature resolution to match framework metadata and converted declarations, (4) compile sample applications against stock .NET contracts, and (5) run native GameCube tests for cancellation and continuation ordering. Avoid mixing framework Task and Dolphin Task in a single public inheritance hierarchy. This work is **not completed** by this PR; the stream currently follows its base `Dolphin.IO.Stream` contract and uses explicit continuations to compile.
+
 ## Seekable ARAM streams
 
 `Dolphin.IO.AramStream` supplies a fixed-capacity, disposable `Dolphin.IO.Stream` that owns an `AramBuffer`. It works with `Stream.CopyToAsync`, including HTTP response streams, and copies chunks through the existing 4 KiB staging transfer queue. It does not enable network-to-ARAM direct DMA.
