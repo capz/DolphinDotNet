@@ -43,10 +43,10 @@ def main() -> int:
     # logging in the isolated user directory rather than passing Qt GUI flags.
     config = user / "Config"
     config.mkdir(exist_ok=True)
-    (config / "Dolphin.ini").write_text("[Core]\\nGFXBackend = Null\\n")
+    (config / "Dolphin.ini").write_text("[Core]\nGFXBackend = Null\n")
     (config / "Logger.ini").write_text(
-        "[Options]\\nWriteToFile = True\\nWriteToConsole = True\\nVerbosity = 4\\n"
-        "[Logs]\\nBOOT = True\\nCORE = True\\nPOWERPC = True\\nOSREPORT = True\\n")
+        "[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 4\n"
+        "[Logs]\nBOOT = True\nCORE = True\nPOWERPC = True\nOSREPORT = True\n")
     environment = dict(os.environ)
     environment["DOLPHIN_EMU_USERPATH"] = str(user)
     command = ["xvfb-run", "-a", "timeout", "--signal=TERM", "--kill-after=5s",
