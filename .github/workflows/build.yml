@@ -272,6 +272,11 @@ jobs:
           test -s DolphinDotNet.elf
           test -s DolphinDotNet.dol
           python3 scripts/dol_sections.py DolphinDotNet.dol
+          python3 scripts/verify_dol_elf.py DolphinDotNet.elf DolphinDotNet.dol
+          "$DEVKITPPC/bin/powerpc-eabi-readelf" -h -l DolphinDotNet.elf > footprint/elf-headers.txt
+          "$DEVKITPPC/bin/powerpc-eabi-objdump" -d DolphinDotNet.elf > footprint/powerpc-disassembly.txt
+          test -s footprint/elf-headers.txt
+          test -s footprint/powerpc-disassembly.txt
           file DolphinDotNet.elf || true
           ls -lh DolphinDotNet.elf DolphinDotNet.dol
       - uses: actions/upload-artifact@v4
