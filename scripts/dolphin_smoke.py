@@ -55,7 +55,8 @@ def main() -> int:
                                timeout=args.seconds + 30)
     output = completed.stdout
     for path in (user / "Logs").rglob("*.txt") if (user / "Logs").exists() else []:
-        output += f"\n--- {path.name} ---\n" + path.read_text(errors="replace")
+        if path.is_file() and path.suffix.lower() in (".log", ".txt"):
+            output += f"\n--- {path.name} ---\n" + path.read_text(errors="replace")
     (args.logs / "emulator.log").write_text(output)
     print(output[-12000:], flush=True)
     hits = check(output)
