@@ -33,6 +33,8 @@ def main() -> int:
     parser.add_argument("--seconds", type=int, default=20)
     parser.add_argument("--binary", default="/usr/games/dolphin-emu-nogui")
     parser.add_argument("--logs", type=Path, default=Path("dolphin-smoke"))
+    parser.add_argument("--gdb-port", type=int, default=0,
+                        help="Capture guest PC/LR through Dolphin GDB stub")
     parser.add_argument("--expect-marker", help="Require a UART boot marker from the emulated program")
     args = parser.parse_args()
     if not args.dol.is_file() or args.dol.stat().st_size < 256:
@@ -44,7 +46,8 @@ def main() -> int:
     # logging in the isolated user directory rather than passing Qt GUI flags.
     config = user / "Config"
     config.mkdir(exist_ok=True)
-    (config / "Dolphin.ini").write_text("[Core]\nGFXBackend = Null\nCPUCore = 0\nCPUThread = False\n[DSP]\nBackend = No Audio Output\n[Interface]\nDebugModeEnabled = True\n")
+    (config / "Dolphin.ini").write_text("[Core]\nGFXBackend = Null\nCPUCore = 0\nCPUThread = False\n[DSP]\nBackend = No Audio Output\n[Interface]\nDebugModeEnabled = True\n" +
+        (f"[General]\nGDBPort = {args.gdb_port}\n" if args.gdb_port else ""))
     (config / "Logger.ini").write_text(
         "[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 4\n"
         "[Logs]\nBOOT = True\nCORE = True\nPOWERPC = True\nOSREPORT = True\nOSREPORT_HLE = True\nEXI = True\n")
@@ -64,10 +67,18 @@ def main() -> int:
     command = ["xvfb-run", "-a", "timeout", "--signal=TERM", "--kill-after=5s",
                f"{args.seconds}s", args.binary, "--exec", str(args.dol.resolve())]
     print("Launching:", " ".join(command), flush=True)
+    guest_state = []
+    if args.gdb_port:
+        def capture_guest_state():
+            guest_state.append(probe(args.gdb_port, seconds=min(args.seconds, 9)))
+        diagnostic = threading.Thread(target=capture_guest_state, daemon=True)
+        diagnostic.start()
     completed = subprocess.run(command, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, errors="replace",
                                timeout=args.seconds + 30, env=environment)
-    output = completed.stdout
+    if args.gdb_port:
+        diagnostic.join(timeout=1)
+    output = completed.stdout + ("\n" + "\n".join(guest_state) if guest_state else "")
     for path in (user / "Logs").rglob("*") if (user / "Logs").exists() else []:
         if path.is_file() and path.suffix.lower() in (".log", ".txt"):
             output += f"\n--- {path.name} ---\n" + path.read_text(errors="replace")
