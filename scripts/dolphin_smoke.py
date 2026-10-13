@@ -35,6 +35,8 @@ def main() -> int:
     parser.add_argument("--seconds", type=int, default=20)
     parser.add_argument("--binary", default="/usr/games/dolphin-emu-nogui")
     parser.add_argument("--logs", type=Path, default=Path("dolphin-smoke"))
+    parser.add_argument("--cpu-core", choices=[0, 1], type=int, default=0,
+                        help="Dolphin CPU core (0=interpreter, 1=JIT64)")
     parser.add_argument("--gdb-port", type=int, default=0,
                         help="Capture guest PC/LR through Dolphin GDB stub")
     parser.add_argument("--elf", type=Path, help="Matching symbol-bearing ELF")
@@ -60,7 +62,7 @@ def main() -> int:
     # logging in the isolated user directory rather than passing Qt GUI flags.
     config = user / "Config"
     config.mkdir(exist_ok=True)
-    (config / "Dolphin.ini").write_text("[Core]\nGFXBackend = Null\nCPUCore = 1\nCPUThread = False\n[DSP]\nBackend = No Audio Output\n[Interface]\nDebugModeEnabled = True\n" +
+    (config / "Dolphin.ini").write_text(f"[Core]\nGFXBackend = Null\nCPUCore = 1\nCPUThread = False\n[DSP]\nBackend = No Audio Output\n[Interface]\nDebugModeEnabled = True\n" +
         (f"[General]\nGDBPort = {args.gdb_port}\n" if args.gdb_port else ""))
     (config / "Logger.ini").write_text(
         "[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 4\n"
