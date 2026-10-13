@@ -125,6 +125,13 @@ def probe(port: int, expected: list[tuple[str, int]], seconds: float = 15) -> Pr
                     try:
                         stopped = _reply(conn, time.monotonic() + 2)
                         lines.append(f"DND_GDB_TIMEOUT_PC=0x{parse_stop_pc(stopped):08x}")
+                        # LR helps identify the caller when startup hangs before main().
+                        _send(conn, "p43")
+                        lr_reply = _reply(conn, time.monotonic() + 2)
+                        if re.fullmatch(r"[0-9a-fA-F]{8}", lr_reply):
+                            lines.append(f"DND_GDB_TIMEOUT_LR=0x{int(lr_reply, 16):08x}")
+                        else:
+                            lines.append(f"DND_GDB_TIMEOUT_LR_UNAVAILABLE: {lr_reply!r}")
                     except (OSError, ValueError, TimeoutError) as diagnostic_error:
                         lines.append(f"DND_GDB_TIMEOUT_PC_UNAVAILABLE: {diagnostic_error}")
                     raise TimeoutError(f"Guest never reached {name} at 0x{address:08x}")
