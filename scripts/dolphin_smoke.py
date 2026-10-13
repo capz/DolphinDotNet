@@ -44,7 +44,7 @@ def main() -> int:
     # logging in the isolated user directory rather than passing Qt GUI flags.
     config = user / "Config"
     config.mkdir(exist_ok=True)
-    (config / "Dolphin.ini").write_text("[Core]\nGFXBackend = Null\nCPUCore = 1\nCPUThread = False\n[DSP]\nBackend = No Audio Output\n")
+    (config / "Dolphin.ini").write_text("[Core]\nGFXBackend = Null\nCPUCore = 0\nCPUThread = False\n[DSP]\nBackend = No Audio Output\n[Interface]\nDebugModeEnabled = True\n")
     (config / "Logger.ini").write_text(
         "[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 4\n"
         "[Logs]\nBOOT = True\nCORE = True\nPOWERPC = True\nOSREPORT = True\nOSREPORT_HLE = True\nEXI = True\n")
