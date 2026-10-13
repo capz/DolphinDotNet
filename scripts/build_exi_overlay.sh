@@ -22,7 +22,7 @@ python3 "$ROOT/scripts/verify_exi_source.py" "$UP/libogc/exi.c" "$ROOT/vendor/li
   -mcpu=750 -meabi -msdata=sysv -mhard-float \
   -ffunction-sections -fdata-sections -fno-strict-aliasing \
   -Wall -Wno-address-of-packed-member -Wno-prio-ctor-dtor \
-  -I"$UP" -I"$UP/include" -I"$UP/include/ogc" \
+  -I"$UP" -I"$UP/libogc" -I"$UP/include" -I"$UP/include/ogc" \
   -I"$UP/include/ogc/machine" -I"$UP/include/sdcard" \
   -I"$SDK/include" -I"$SDK/include/ogc" \
   -I"$ROOT/build/exi-upstream/lwip/include"
