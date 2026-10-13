@@ -239,6 +239,13 @@ jobs:
         run: |
           dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll generated/managed_gamecube.c
+      - name: Build generated standalone GameCube project
+        run: |
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-standalone --platform gamecube
+          make -C /tmp/dnd-standalone V=1
+          test -s /tmp/dnd-standalone/Game.elf
+          test -s /tmp/dnd-standalone/Game.dol
+          python3 /tmp/dnd-standalone/scripts/dol_sections.py /tmp/dnd-standalone/Game.dol
       - name: Compile managed storage ABI for PowerPC
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
