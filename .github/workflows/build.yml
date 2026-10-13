@@ -264,6 +264,14 @@ jobs:
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -I"$DEVKITPRO/libogc2/gamecube/include" tests/dolphin_control.c -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/dolphin_control.elf
           elf2dol footprint/dolphin_control.elf footprint/dolphin_control.dol
           python3 scripts/dol_sections.py --pad footprint/dolphin_control.dol
+      - name: Create experimental EXI-compatible diagnostic DOLs
+        run: |
+          python3 scripts/patch_gamecube_exi_sync.py DolphinDotNet.elf --output footprint/DolphinDotNet_exi_compat.elf
+          python3 scripts/patch_gamecube_exi_sync.py footprint/dolphin_control.elf --output footprint/dolphin_control_exi_compat.elf
+          for name in DolphinDotNet_exi_compat dolphin_control_exi_compat; do
+            elf2dol "footprint/$name.elf" "footprint/$name.dol"
+            python3 scripts/dol_sections.py --pad "footprint/$name.dol"
+          done
       - name: Compile and link managed networking for GameCube
         run: |
           dotnet build tests/NetworkSmoke/NetworkSmoke.csproj -c Release
@@ -335,12 +343,22 @@ jobs:
         id: app_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2160 --elf dist/DolphinDotNet.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol "dnd_value_ManagedGameCube_Program_Main_*" --logs dolphin-smoke --require-boot
+      - name: Diagnose libogc control with conventional EXI register
+        id: control_exi_compat
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_control_exi_compat.dol --binary /usr/games/dolphin-emu-nogui --seconds 25 --cpu-core 1 --gdb-port 2161 --elf dist/footprint/dolphin_control_exi_compat.elf --expect-symbol main --logs dolphin-control-exi-compat --require-boot
+      - name: Diagnose managed DOL with conventional EXI register
+        id: app_exi_compat
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/DolphinDotNet_exi_compat.dol --binary /usr/games/dolphin-emu-nogui --seconds 35 --cpu-core 1 --gdb-port 2162 --elf dist/footprint/DolphinDotNet_exi_compat.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol "dnd_value_ManagedGameCube_Program_Main_*" --logs dolphin-app-exi-compat --require-boot
       - name: Require both guest entry-point checks
         if: always()
         run: |
           echo "Bare-metal DOL: ${{ steps.minimal_boot.outcome }}"
           echo "Control DOL: ${{ steps.control_boot.outcome }}"
           echo "DolphinDotNet DOL: ${{ steps.app_boot.outcome }}"
+          echo "EXI-compatible control (diagnostic only): ${{ steps.control_exi_compat.outcome }}"
+          echo "EXI-compatible managed (diagnostic only): ${{ steps.app_exi_compat.outcome }}"
           test "${{ steps.minimal_boot.outcome }}" = success
           test "${{ steps.control_boot.outcome }}" = success
           test "${{ steps.app_boot.outcome }}" = success
@@ -353,6 +371,8 @@ jobs:
             dolphin-minimal/
             dolphin-control/
             dolphin-smoke/
+            dolphin-control-exi-compat/
+            dolphin-app-exi-compat/
           if-no-files-found: warn
 
   release-gamecube:
