@@ -72,8 +72,8 @@ class GuestEntryTests(unittest.TestCase):
 
 class GuestMemoryTests(unittest.TestCase):
     def test_resolve_guest_data_symbols(self):
-        table = (" 1: 8006fcb0 790 OBJECT LOCAL DEFAULT 11 lines\\n"
-                 " 2: 8007ff00 4 OBJECT GLOBAL DEFAULT 11 dnd_control_main_reached\\n")
+        table = (" 1: 8006fcb0 790 OBJECT LOCAL DEFAULT 11 lines\n"
+                 " 2: 8007ff00 4 OBJECT GLOBAL DEFAULT 11 dnd_control_main_reached\n")
         with TemporaryDirectory() as folder:
             elf = Path(folder) / "test.elf"
             elf.touch()
