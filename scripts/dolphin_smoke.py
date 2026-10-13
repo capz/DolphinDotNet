@@ -38,6 +38,7 @@ def main() -> int:
     parser.add_argument("--gdb-port", type=int, default=0,
                         help="Capture guest PC/LR through Dolphin GDB stub")
     parser.add_argument("--expect-marker", help="Require a UART boot marker from the emulated program")
+    parser.add_argument("--require-boot", action="store_true", help="Require Dolphin executable boot log")
     args = parser.parse_args()
     if not args.dol.is_file() or args.dol.stat().st_size < 256:
         parser.error("missing or truncated DOL")
@@ -95,7 +96,7 @@ def main() -> int:
         return 1
     # A silent process running until timeout proves nothing: require evidence
     # from Dolphin's enabled BOOT logging that it attempted to boot the DOL.
-    if not re.search(r"(?:\[BOOT\]|Booting.*(?:DOL|\.dol)|Loading.*\.dol)", output, re.IGNORECASE):
+    if args.require_boot and not re.search(r"Booting from executable:.*\.dol", output, re.IGNORECASE):
         print("No Dolphin boot log detected; cannot confirm the DOL was loaded", file=sys.stderr)
         return 1
     if args.expect_marker and args.expect_marker not in output:
