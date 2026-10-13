@@ -45,6 +45,18 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube.c -o /tmp/managed_gamecube.o
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube_value.c
           cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube_value.c -o /tmp/managed_gamecube_value.o
+      - name: Generate standalone GameCube AOT build bundle
+        run: |
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-bundle
+          test -s /tmp/dnd-bundle/Makefile
+          test -s /tmp/dnd-bundle/source/generated_program.c
+          test -s /tmp/dnd-bundle/source/main.c
+          test -s /tmp/dnd-bundle/DEPENDENCIES.txt
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-gamecube-explicit --platform gamecube
+          cmp /tmp/dnd-bundle/Makefile /tmp/dnd-gamecube-explicit/Makefile
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-wii --platform wii
+          grep -q '/libogc2/wii_rules' /tmp/dnd-wii/Makefile
+          if grep -q '/libogc2/gamecube_rules' /tmp/dnd-wii/Makefile; then exit 1; fi
       - name: Compile Google logo ARAM example through AOT
         timeout-minutes: 4
         run: |
@@ -227,6 +239,13 @@ jobs:
         run: |
           dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll generated/managed_gamecube.c
+      - name: Build generated standalone GameCube project
+        run: |
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-standalone --platform gamecube
+          make -C /tmp/dnd-standalone V=1
+          test -s /tmp/dnd-standalone/Game.elf
+          test -s /tmp/dnd-standalone/Game.dol
+          python3 /tmp/dnd-standalone/scripts/dol_sections.py /tmp/dnd-standalone/Game.dol
       - name: Compile managed storage ABI for PowerPC
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
