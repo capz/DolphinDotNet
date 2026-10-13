@@ -317,9 +317,20 @@ jobs:
       - name: Test emulator log validation
         run: python3 -m unittest discover -s tests -p test_dolphin_smoke.py
       - name: Verify independent libogc main() guest PC
+        id: control_boot
+        continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_control.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2159 --elf dist/footprint/dolphin_control.elf --expect-symbol main --logs dolphin-control --require-boot
       - name: Verify native and managed main() executed in Dolphin
+        id: app_boot
+        continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2160 --elf dist/DolphinDotNet.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol "dnd_value_ManagedGameCube_Program_Main_*" --logs dolphin-smoke --require-boot
+      - name: Require both guest entry-point checks
+        if: always()
+        run: |
+          echo "Control DOL: ${{ steps.control_boot.outcome }}"
+          echo "DolphinDotNet DOL: ${{ steps.app_boot.outcome }}"
+          test "${{ steps.control_boot.outcome }}" = success
+          test "${{ steps.app_boot.outcome }}" = success
       - name: Upload emulator logs
         if: always()
         uses: actions/upload-artifact@v4
