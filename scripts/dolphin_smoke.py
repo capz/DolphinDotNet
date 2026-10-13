@@ -67,7 +67,7 @@ def main() -> int:
         return 1
     # A silent process running until timeout proves nothing: require evidence
     # from Dolphin's enabled BOOT logging that it attempted to boot the DOL.
-    if not re.search(r"(?:\\[BOOT\\]|Booting.*(?:DOL|\\.dol)|Loading.*\\.dol)", output, re.IGNORECASE):
+    if not re.search(r"(?:\[BOOT\]|Booting.*(?:DOL|\.dol)|Loading.*\.dol)", output, re.IGNORECASE):
         print("No Dolphin boot log detected; cannot confirm the DOL was loaded", file=sys.stderr)
         return 1
     print("No DOL-specific loader or PPC errors detected.")
