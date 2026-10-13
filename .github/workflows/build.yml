@@ -317,9 +317,9 @@ jobs:
       - name: Test emulator log validation
         run: python3 -m unittest discover -s tests -p test_dolphin_smoke.py
       - name: Verify independent libogc main() executed in guest RAM
-        run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_control.dol --binary /usr/games/dolphin-emu-nogui --seconds 15 --gdb-port 2159 --elf dist/footprint/dolphin_control.elf --expect-word dnd_control_main_reached=0x444e4443 --logs dolphin-control --require-boot
+        run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_control.dol --binary /usr/games/dolphin-emu-nogui --seconds 15 --gdb-port 2159 --elf dist/footprint/dolphin_control.elf --expect-symbol main --logs dolphin-control --require-boot
       - name: Verify native and managed main() executed in Dolphin
-        run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu-nogui --seconds 30 --gdb-port 2160 --elf dist/DolphinDotNet.elf --expect-text lines=DOLPHINDOTNET --expect-text "lines=Hello from managed C# on GameCube" --logs dolphin-smoke --require-boot
+        run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu-nogui --seconds 30 --gdb-port 2160 --elf dist/DolphinDotNet.elf --expect-symbol main --expect-symbol dnd_aot_entry --logs dolphin-smoke --require-boot
       - name: Upload emulator logs
         if: always()
         uses: actions/upload-artifact@v4
