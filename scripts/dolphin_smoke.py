@@ -5,6 +5,7 @@ Exit 124 from GNU timeout is expected for a game that keeps running.
 Dolphin's own log is merged with stdout/stderr for troubleshooting.
 """
 import argparse
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -30,7 +31,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("dol", type=Path)
     parser.add_argument("--seconds", type=int, default=20)
-    parser.add_argument("--binary", default="dolphin-emu")
+    parser.add_argument("--binary", default="/usr/games/dolphin-emu-nogui")
     parser.add_argument("--logs", type=Path, default=Path("dolphin-smoke"))
     args = parser.parse_args()
     if not args.dol.is_file() or args.dol.stat().st_size < 256:
@@ -38,21 +39,22 @@ def main() -> int:
     args.logs.mkdir(parents=True, exist_ok=True)
     user = args.logs.resolve() / "user"
     user.mkdir(exist_ok=True)
+    # Non-GUI Dolphin only accepts the executable path. Configure backend and
+    # logging in the isolated user directory rather than passing Qt GUI flags.
+    config = user / "Config"
+    config.mkdir(exist_ok=True)
+    (config / "Dolphin.ini").write_text("[Core]\\nGFXBackend = Null\\n")
+    (config / "Logger.ini").write_text(
+        "[Options]\\nWriteToFile = True\\nWriteToConsole = True\\nVerbosity = 4\\n"
+        "[Logs]\\nBOOT = True\\nCORE = True\\nPOWERPC = True\\nOSREPORT = True\\n")
+    environment = dict(os.environ)
+    environment["DOLPHIN_EMU_USERPATH"] = str(user)
     command = ["xvfb-run", "-a", "timeout", "--signal=TERM", "--kill-after=5s",
-               f"{args.seconds}s", args.binary, "--batch", "--exec",
-               str(args.dol.resolve()), "--user", str(user),
-               "--video_backend=Null",
-               "--config=Logger.Options.WriteToFile=True",
-               "--config=Logger.Options.WriteToConsole=True",
-               "--config=Logger.Options.Verbosity=4",
-               "--config=Logger.Logs.BOOT=True",
-               "--config=Logger.Logs.CORE=True",
-               "--config=Logger.Logs.POWERPC=True",
-               "--config=Logger.Logs.OSREPORT=True"]
+               f"{args.seconds}s", args.binary, "--exec", str(args.dol.resolve())]
     print("Launching:", " ".join(command), flush=True)
     completed = subprocess.run(command, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, errors="replace",
-                               timeout=args.seconds + 30)
+                               timeout=args.seconds + 30, env=environment)
     output = completed.stdout
     for path in (user / "Logs").rglob("*.txt") if (user / "Logs").exists() else []:
         if path.is_file() and path.suffix.lower() in (".log", ".txt"):
