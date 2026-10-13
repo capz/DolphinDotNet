@@ -10,8 +10,8 @@ mkdir -p "$ROOT/build/exi-overlay" "$ROOT/build/exi-upstream"
 if [ ! -d "$ROOT/build/exi-upstream/.git" ]; then
   git clone --quiet --filter=blob:none https://github.com/extremscorner/libogc2.git "$ROOT/build/exi-upstream"
 fi
-git -C "$ROOT/build/exi-upstream" fetch --quiet --depth=1 origin "$UPSTREAM_REV"
-git -C "$ROOT/build/exi-upstream" checkout --quiet --detach FETCH_HEAD
+git -C "$ROOT/build/exi-upstream" fetch --quiet --depth=100 origin master || git -C "$ROOT/build/exi-upstream" fetch --quiet origin
+ git -C "$ROOT/build/exi-upstream" checkout --quiet --detach "$UPSTREAM_REV"
 UP="$ROOT/build/exi-upstream"
 # Verify our source is exactly the pinned upstream EXI implementation,
 # except for the documented register correction and attribution.
