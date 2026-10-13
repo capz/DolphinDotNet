@@ -85,7 +85,9 @@ internal static class GameCubeBundle
         report.AppendLine("Feature -> namespace prefixes -> native libraries:");
         foreach (var feature in FeatureMap)
             report.AppendLine(feature.Name + " -> " + string.Join(", ", feature.Prefixes) +
-                " -> " + (feature.Libs.Length > 0 ? string.Join(" ", feature.Libs) : "UNSUPPORTED"));
+                " -> " + (feature.Libs.Length == 0 ? "UNSUPPORTED" :
+                    platform == "wiiu" ? "WUT-NATIVE BACKEND REQUIRED (not libogc)" :
+                    string.Join(" ", feature.Libs)));
         report.AppendLine("GameCube and Wii use separate libogc2 target library directories and rules.");
         report.AppendLine("Wii U uses wut and RPX, not ELF-to-DOL conversion.");
         report.AppendLine("Library pruning is not yet safe because the existing native runtime is monolithic.");
