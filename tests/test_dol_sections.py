@@ -48,7 +48,25 @@ class DolSectionsTests(unittest.TestCase):
         data = fixture(33)
         # Text follows data in memory, with insufficient space for data padding.
         struct.pack_into('>I', data, 0x48, 0x80003221)
-        with self.assertRaisesRegex(ValueError, 'overlapping'):
+        with self.assertRaisesRegex(ValueError, 'aligned|overlapping'):
+            dol.pad(data)
+
+    def test_entrypoint_must_be_in_text(self):
+        data = fixture()
+        struct.pack_into('>I', data, 0xE0, 0x80003200)
+        with self.assertRaisesRegex(ValueError, 'entry point'):
+            dol.pad(data)
+
+    def test_nonzero_data_must_not_overlap_bss(self):
+        data = fixture()
+        struct.pack_into('>II', data, 0xD8, 0x80003200, 64)
+        with self.assertRaisesRegex(ValueError, 'overlap BSS'):
+            dol.pad(data)
+
+    def test_bss_must_be_in_mem1(self):
+        data = fixture()
+        struct.pack_into('>II', data, 0xD8, 0x81800000, 64)
+        with self.assertRaisesRegex(ValueError, 'BSS outside'):
             dol.pad(data)
 
     def test_short_header_is_rejected(self):
@@ -66,7 +84,7 @@ class DolSectionsTests(unittest.TestCase):
     def test_address_overflow_is_rejected(self):
         data = fixture()
         struct.pack_into('>I', data, 0x48 + 7 * 4, 0xFFFFFFF0)
-        with self.assertRaisesRegex(ValueError, 'overflow'):
+        with self.assertRaisesRegex(ValueError, 'MEM1'):
             dol.pad(data)
 
     def test_file_overlap_is_rejected(self):
