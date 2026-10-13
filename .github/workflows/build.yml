@@ -284,6 +284,34 @@ jobs:
             footprint/
           if-no-files-found: error
 
+  dolphin-smoke:
+    name: Dolphin headless DOL boot
+    runs-on: ubuntu-24.04
+    needs: gamecube
+    container:
+      image: ubuntu:26.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Dolphin and virtual display
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth python3
+          dolphin-emu --version
+      - name: Download GameCube DOL
+        uses: actions/download-artifact@v4
+        with:
+          name: DolphinDotNet-gamecube
+          path: dist
+      - name: Boot DOL in Dolphin (headless)
+        run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --seconds 20 --logs dolphin-smoke
+      - name: Upload emulator logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DolphinDotNet-dolphin-smoke
+          path: dolphin-smoke/
+          if-no-files-found: warn
+
   release-gamecube:
     name: Publish GameCube build release
     runs-on: ubuntu-latest
@@ -291,6 +319,7 @@ jobs:
       - managed
       - portable-runtime
       - gamecube
+      - dolphin-smoke
     # Publish successful builds of main only; pull requests retain their Actions artifacts.
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     permissions:
