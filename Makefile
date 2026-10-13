@@ -27,7 +27,7 @@ export DEPSDIR := $(CURDIR)/$(BUILD)
 CFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 export OFILES := $(CFILES:.c=.o)
 export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) $(foreach dir,$(LIBDIRS),-I$(dir)/include) -I$(CURDIR)/$(BUILD)
-export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib) $(LIBPATHS_EXTRA)
+export LIBPATHS := $(LIBPATHS_EXTRA) $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 .PHONY: all clean
 all: $(BUILD)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
