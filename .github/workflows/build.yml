@@ -268,14 +268,29 @@ jobs:
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/model-smoke.c -o /tmp/model-smoke.o
       - name: Test DOL alignment handling
         run: python3 -m unittest discover -s tests -p test_dol_sections.py
+      - name: Build corrected project-owned EXI implementation
+        run: bash scripts/build_exi_overlay.sh
       - name: Build ELF and DOL
         run: make V=1
+      - name: Build bare-metal ELF/DOL to test emulator debugger
+        run: |
+          mkdir -p footprint
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -c -g tests/dolphin_minimal.S -o footprint/dolphin_minimal.o
+          "$DEVKITPPC/bin/powerpc-eabi-ld" -Ttext=0x80003100 -e main -o footprint/dolphin_minimal.elf footprint/dolphin_minimal.o
+          elf2dol footprint/dolphin_minimal.elf footprint/dolphin_minimal.dol
+          python3 scripts/dol_sections.py --pad footprint/dolphin_minimal.dol
+      - name: Build independent libogc emulator control DOL
+        run: |
+          mkdir -p footprint
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -I"$DEVKITPRO/libogc2/gamecube/include" tests/dolphin_control.c -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/dolphin_control.elf
+          elf2dol footprint/dolphin_control.elf footprint/dolphin_control.dol
+          python3 scripts/dol_sections.py --pad footprint/dolphin_control.dol
       - name: Compile and link managed networking for GameCube
         run: |
           dotnet build tests/NetworkSmoke/NetworkSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/NetworkSmoke/bin/Release/net8.0/NetworkSmoke.dll /tmp/network-smoke.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/network-smoke.c -o /tmp/network-smoke.o
-          "$DEVKITPPC/bin/powerpc-eabi-gcc" -mogc -Iinclude tests/network_gamecube_entry.c /tmp/network-smoke.o build/managed_runtime.o build/text.o build/network.o build/network_gamecube_backend.o -L"$DEVKITPRO/libogc2/gamecube/lib" -lbba -logc -lm -o /tmp/network-smoke.elf
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -mogc -Iinclude tests/network_gamecube_entry.c /tmp/network-smoke.o build/managed_runtime.o build/text.o build/network.o build/network_gamecube_backend.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -lbba -logc -lm -o /tmp/network-smoke.elf
       - name: Report GameCube runtime footprint
         run: |
           mkdir -p footprint
@@ -308,6 +323,64 @@ jobs:
             footprint/
           if-no-files-found: error
 
+  dolphin-smoke:
+    name: Dolphin headless DOL boot
+    runs-on: ubuntu-24.04
+    needs: gamecube
+    container:
+      image: debian:trixie
+      options: --shm-size=1g
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Docker shared memory
+        run: |
+          df -h /dev/shm
+          test "$(stat -f -c %a /dev/shm)" -gt 100000
+      - name: Install Dolphin and virtual display
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth python3 binutils libxcb-cursor0
+          test -x /usr/games/dolphin-emu-nogui
+          xvfb-run -a /usr/games/dolphin-emu-nogui --version
+      - name: Download GameCube DOL
+        uses: actions/download-artifact@v4
+        with:
+          name: DolphinDotNet-gamecube
+          path: dist
+      - name: Test emulator log validation
+        run: python3 -m unittest discover -s tests -p test_dolphin_smoke.py
+      - name: Verify bare-metal main() guest PC
+        id: minimal_boot
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_minimal.dol --binary /usr/games/dolphin-emu-nogui --seconds 12 --cpu-core 1 --gdb-port 2158 --elf dist/footprint/dolphin_minimal.elf --expect-symbol main --logs dolphin-minimal --require-boot
+      - name: Verify independent libogc main() guest PC
+        id: control_boot
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_control.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2159 --elf dist/footprint/dolphin_control.elf --expect-symbol main --logs dolphin-control --require-boot
+      - name: Verify native and managed main() executed in Dolphin
+        id: app_boot
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2160 --elf dist/DolphinDotNet.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol "dnd_value_ManagedGameCube_Program_Main_*" --logs dolphin-smoke --require-boot
+      - name: Require both guest entry-point checks
+        if: always()
+        run: |
+          echo "Bare-metal DOL: ${{ steps.minimal_boot.outcome }}"
+          echo "Control DOL: ${{ steps.control_boot.outcome }}"
+          echo "DolphinDotNet DOL: ${{ steps.app_boot.outcome }}"
+          test "${{ steps.minimal_boot.outcome }}" = success
+          test "${{ steps.control_boot.outcome }}" = success
+          test "${{ steps.app_boot.outcome }}" = success
+      - name: Upload emulator logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DolphinDotNet-dolphin-smoke
+          path: |
+            dolphin-minimal/
+            dolphin-control/
+            dolphin-smoke/
+          if-no-files-found: warn
+
   release-gamecube:
     name: Publish GameCube build release
     runs-on: ubuntu-latest
@@ -315,6 +388,7 @@ jobs:
       - managed
       - portable-runtime
       - gamecube
+      - dolphin-smoke
     # Publish successful builds of main only; pull requests retain their Actions artifacts.
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     permissions:

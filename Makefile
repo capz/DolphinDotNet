@@ -15,7 +15,7 @@ PORTLIBS := $(DEVKITPRO)/libogc2/gamecube
 LIBS := -lopengx -lfat -ldvm -liso9660 -lbba -logc -lm
 LIBOGC ?= $(DEVKITPRO)/libogc2/gamecube
 LIBDIRS := $(PORTLIBS) $(LIBOGC)
-LIBPATHS_EXTRA := -L$(LIBOGC)/lib
+LIBPATHS_EXTRA := -L$(CURDIR)/build/exi-overlay -L$(LIBOGC)/lib
 CFLAGS := -DDND_GAMECUBE_STORAGE -g -O2 -fstack-usage -Wall -Wextra $(MACHDEP) $(INCLUDE)
 CXXFLAGS := $(CFLAGS)
 LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map
@@ -27,7 +27,7 @@ export DEPSDIR := $(CURDIR)/$(BUILD)
 CFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 export OFILES := $(CFILES:.c=.o)
 export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) $(foreach dir,$(LIBDIRS),-I$(dir)/include) -I$(CURDIR)/$(BUILD)
-export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib) $(LIBPATHS_EXTRA)
+export LIBPATHS := $(LIBPATHS_EXTRA) $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 .PHONY: all clean
 all: $(BUILD)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile

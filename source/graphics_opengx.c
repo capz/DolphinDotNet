@@ -3,6 +3,8 @@
 #include "dnd_performance.h"
 #include "dnd_aram.h"
 #include <GL/gl.h>
+/* OpenGX requires explicit state initialization after GX_Init. */
+extern void ogx_initialize(void);
 #include <gccore.h>
 #include <malloc.h>
 #include <ogc/timesupp.h>
@@ -51,6 +53,7 @@ void dnd_graphics_init(void) {
   fifo = memalign(32, 256 * 1024);
   memset(fifo, 0, 256 * 1024);
   GX_Init(fifo, 256 * 1024);
+  ogx_initialize();
   GX_SetCopyClear((GXColor){0, 0, 0, 255}, 0x00ffffff);
   GX_SetViewport(0, 0, mode->fbWidth, mode->efbHeight, 0, 1);
   GX_SetDispCopyYScale(GX_GetYScaleFactor(mode->efbHeight, mode->xfbHeight));
