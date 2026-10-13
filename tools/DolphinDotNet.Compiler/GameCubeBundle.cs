@@ -24,6 +24,14 @@ internal static class GameCubeBundle
         var root = FindRoot();
         var reachable = compilation.ValueMethods.Select(x => x.Key.TypeName)
             .Distinct(StringComparer.Ordinal).ToArray();
+        // Managed API compatibility is cumulative, native binary linkage is not.
+        var supportedApiPlatforms = platform switch
+        {
+            "gamecube" => new[] { "gamecube" },
+            "wii" => new[] { "gamecube", "wii" },
+            "wiiu" => new[] { "gamecube", "wii", "wiiu" },
+            _ => throw new ArgumentOutOfRangeException(nameof(platform))
+        };
         var features = FeatureMap.Where(feature =>
             reachable.Any(type => feature.Prefixes.Any(prefix =>
                 type.StartsWith(prefix, StringComparison.Ordinal)))).ToArray();
@@ -56,7 +64,7 @@ internal static class GameCubeBundle
             "main", "managed_runtime", "model", "model_animation",
             "model_graphics", "model_transform", "network", "network_gamecube",
             "network_gamecube_backend", "performance", "platform_gamecube",
-            "storage", "storage_gamecube", "stw", "system", "text", "runtime", "vm", "worker"
+            "storage", "storage_gamecube", "stw", "system", "text", "worker"
         };
 
         if (platform == "wiiu")
@@ -80,6 +88,8 @@ internal static class GameCubeBundle
         report.AppendLine("DolphinDotNet AOT Native Dependencies");
         report.AppendLine("Target: " + platform);
         report.AppendLine("Assembly: " + Path.GetFileName(assembly));
+        report.AppendLine("Allowed managed API platforms: " + string.Join(", ", supportedApiPlatforms));
+        report.AppendLine("Managed API compatibility does not imply native binary/library compatibility.");
         report.AppendLine("Detection: declaring types of reachable AOT methods; unused using directives are ignored.");
         report.AppendLine("Selected: " + (features.Length == 0 ? "core" : string.Join(", ", features.Select(f => f.Name))));
         report.AppendLine("Feature -> namespace prefixes -> native libraries:");
