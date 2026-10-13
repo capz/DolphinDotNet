@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import threading
-from dolphin_gdb_probe import probe
+from dolphin_gdb_probe import probe, resolve_symbols
 import sys
 
 FATAL = [
@@ -37,11 +37,16 @@ def main() -> int:
     parser.add_argument("--logs", type=Path, default=Path("dolphin-smoke"))
     parser.add_argument("--gdb-port", type=int, default=0,
                         help="Capture guest PC/LR through Dolphin GDB stub")
+    parser.add_argument("--elf", type=Path, help="Matching symbol-bearing ELF")
+    parser.add_argument("--expect-symbol", action="append", default=[], help="Required guest function symbol")
     parser.add_argument("--expect-marker", help="Require a UART boot marker from the emulated program")
     parser.add_argument("--require-boot", action="store_true", help="Require Dolphin executable boot log")
     args = parser.parse_args()
     if not args.dol.is_file() or args.dol.stat().st_size < 256:
         parser.error("missing or truncated DOL")
+    if args.expect_symbol and (not args.gdb_port or not args.elf):
+        parser.error("--expect-symbol requires --gdb-port and --elf")
+    expected = resolve_symbols(args.elf, args.expect_symbol) if args.expect_symbol else []
     args.logs.mkdir(parents=True, exist_ok=True)
     user = args.logs.resolve() / "user"
     user.mkdir(exist_ok=True)
@@ -73,7 +78,7 @@ def main() -> int:
     guest_state = []
     if args.gdb_port:
         def capture_guest_state():
-            guest_state.append(probe(args.gdb_port, seconds=min(args.seconds, 9)))
+            guest_state.append(probe(args.gdb_port, expected, seconds=max(2, args.seconds - 2)))
         diagnostic = threading.Thread(target=capture_guest_state, daemon=True)
         diagnostic.start()
     completed = subprocess.run(command, stdout=subprocess.PIPE,
@@ -81,7 +86,7 @@ def main() -> int:
                                timeout=args.seconds + 30, env=environment)
     if args.gdb_port:
         diagnostic.join(timeout=1)
-    output = completed.stdout + ("\n" + "\n".join(guest_state) if guest_state else "")
+    output = completed.stdout + ("\n" + "\n".join(result.message for result in guest_state) if guest_state else "")
     for path in (user / "Logs").rglob("*") if (user / "Logs").exists() else []:
         if path.is_file() and path.suffix.lower() in (".log", ".txt"):
             output += f"\n--- {path.name} ---\n" + path.read_text(errors="replace")
@@ -101,6 +106,10 @@ def main() -> int:
         return 1
     if args.expect_marker and args.expect_marker not in output:
         print("Missing emulated-program boot marker: " + args.expect_marker, file=sys.stderr)
+        return 1
+    if args.expect_symbol and (not guest_state or not guest_state[0].success):
+        print("Guest entry-point verification failed: " +
+              (guest_state[0].message if guest_state else "GDB probe did not finish"), file=sys.stderr)
         return 1
     print("No DOL-specific loader or PPC errors detected.")
     print("Note: this is a smoke test, not proof of application correctness.")

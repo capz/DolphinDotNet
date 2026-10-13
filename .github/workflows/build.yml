@@ -306,7 +306,7 @@ jobs:
       - name: Install Dolphin and virtual display
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth python3 libxcb-cursor0
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth python3 binutils libxcb-cursor0
           test -x /usr/games/dolphin-emu-nogui
           xvfb-run -a /usr/games/dolphin-emu-nogui --version
       - name: Download GameCube DOL
@@ -317,9 +317,9 @@ jobs:
       - name: Test emulator log validation
         run: python3 -m unittest discover -s tests -p test_dolphin_smoke.py
       - name: Verify emulator using independent libogc DOL
-        run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_control.dol --binary /usr/games/dolphin-emu-nogui --seconds 12 --gdb-port 2159 --logs dolphin-control --require-boot
+        run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_control.dol --binary /usr/games/dolphin-emu-nogui --seconds 15 --gdb-port 2159 --elf dist/footprint/dolphin_control.elf --expect-symbol main --logs dolphin-control --require-boot
       - name: Boot DOL in Dolphin (headless)
-        run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu-nogui --seconds 20 --logs dolphin-smoke --require-boot
+        run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu-nogui --seconds 30 --gdb-port 2160 --elf dist/DolphinDotNet.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol "dnd_value_ManagedGameCube_Program_Main_*" --logs dolphin-smoke --require-boot
       - name: Upload emulator logs
         if: always()
         uses: actions/upload-artifact@v4
