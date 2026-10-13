@@ -95,6 +95,10 @@ internal static class GameCubeBundle
 
     private static string FindRoot()
     {
+        var packaged = Path.Combine(AppContext.BaseDirectory, "native");
+        if (File.Exists(Path.Combine(packaged, "source", "main.c")) &&
+            File.Exists(Path.Combine(packaged, "scripts", "dol_sections.py")))
+            return packaged;
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
         while (dir != null)
         {
