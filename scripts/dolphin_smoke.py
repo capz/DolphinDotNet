@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import threading
+from dolphin_gdb_probe import probe
 import sys
 
 FATAL = [
