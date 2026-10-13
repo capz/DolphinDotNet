@@ -32,6 +32,20 @@ internal static class GameCubeBundle
             "wiiu" => new[] { "gamecube", "wii", "wiiu" },
             _ => throw new ArgumentOutOfRangeException(nameof(platform))
         };
+        // Reject reachable platform-exclusive APIs; base Dolphin/System APIs
+        // remain available on every target through target-specific adapters.
+        foreach (var type in reachable)
+        {
+            var required = type.StartsWith("Dolphin.WiiU.", StringComparison.Ordinal) ||
+                           type.StartsWith("DolphinDotNet.WiiU.", StringComparison.Ordinal)
+                ? "wiiu"
+                : type.StartsWith("Dolphin.Wii.", StringComparison.Ordinal) ||
+                  type.StartsWith("DolphinDotNet.Wii.", StringComparison.Ordinal)
+                    ? "wii" : "gamecube";
+            if (!supportedApiPlatforms.Contains(required, StringComparer.Ordinal))
+                throw new NotSupportedException(
+                    $"API '{type}' requires platform '{required}', but target is '{platform}'.");
+        }
         var features = FeatureMap.Where(feature =>
             reachable.Any(type => feature.Prefixes.Any(prefix =>
                 type.StartsWith(prefix, StringComparison.Ordinal)))).ToArray();
