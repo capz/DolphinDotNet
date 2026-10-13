@@ -40,3 +40,17 @@ The compiler walks reachable AOT methods rather than `using` directives. For eac
 Wii U uses **wut** libraries, not any of the above GameCube/Wii link flags. The mapping is a starting point: namespaces alone cannot prove native dependency closure, particularly for reflection, implicit runtime calls and transitive C references.
 
 The generated Makefile automatically runs `elf2dol` and the existing 32-byte DOL section validator for GameCube/Wii; Wii U instead emits an RPX through `elf2rpl`. Each platform must use its matching SDK and toolchain.
+
+## API compatibility hierarchy
+
+Managed feature/API availability is cumulative:
+
+| Target | Allowed managed API families |
+|---|---|
+| GameCube | GameCube |
+| Wii | GameCube + Wii |
+| Wii U | GameCube + Wii + Wii U |
+
+This is an **API surface compatibility rule**, not permission to reuse incompatible native binaries. The Wii U's PowerPC CPU does not make Wii/libogc2 object files, video/graphics initialization, OS services, or networking automatically compatible with wut/RPX. Every shared managed API must map to a native backend implemented for the target console. The bundle records these intended managed API families in its manifest, but compile-time platform-family enforcement and adapters for Wii and Wii U still need to be implemented before treating those targets as fully supported.
+
+The earlier `source/vm.c` and `source/runtime.c` files are the old custom bytecode VM and heap used by the non-AOT demonstration path. The standalone AOT bundle uses `source/managed_runtime.c` instead, so these old sources are intentionally excluded. They remain in the repository for legacy unit tests and are not distributed in the bundle.
