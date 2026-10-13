@@ -41,7 +41,14 @@ def main() -> int:
     command = ["xvfb-run", "-a", "timeout", "--signal=TERM", "--kill-after=5s",
                f"{args.seconds}s", args.binary, "--batch", "--exec",
                str(args.dol.resolve()), "--user", str(user),
-               "--video_backend=Null"]
+               "--video_backend=Null",
+               "--config=Logger.Options.WriteToFile=True",
+               "--config=Logger.Options.WriteToConsole=True",
+               "--config=Logger.Options.Verbosity=4",
+               "--config=Logger.Logs.BOOT=True",
+               "--config=Logger.Logs.CORE=True",
+               "--config=Logger.Logs.POWERPC=True",
+               "--config=Logger.Logs.OSREPORT=True"]
     print("Launching:", " ".join(command), flush=True)
     completed = subprocess.run(command, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, errors="replace",
@@ -58,8 +65,10 @@ def main() -> int:
     if completed.returncode not in (0, 124):
         print(f"Dolphin exited abnormally: {completed.returncode}", file=sys.stderr)
         return 1
-    if not output.strip() and completed.returncode == 0:
-        print("Dolphin exited with no diagnostics; boot not confirmed", file=sys.stderr)
+    # A silent process running until timeout proves nothing: require evidence
+    # from Dolphin's enabled BOOT logging that it attempted to boot the DOL.
+    if not re.search(r"(?:\\[BOOT\\]|Booting.*(?:DOL|\\.dol)|Loading.*\\.dol)", output, re.IGNORECASE):
+        print("No Dolphin boot log detected; cannot confirm the DOL was loaded", file=sys.stderr)
         return 1
     print("No DOL-specific loader or PPC errors detected.")
     print("Note: this is a smoke test, not proof of application correctness.")
