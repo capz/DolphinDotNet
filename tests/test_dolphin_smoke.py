@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from dolphin_smoke import check
-from dolphin_gdb_probe import parse_stop_pc, resolve_symbols, probe
+from dolphin_gdb_probe import parse_stop_pc, resolve_symbols, probe, probe_memory, MemoryExpectation, resolve_memory_expectations
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -68,6 +68,40 @@ class GuestEntryTests(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertIn("expected main", result.message)
 
+
+
+class GuestMemoryTests(unittest.TestCase):
+    def test_resolve_guest_data_symbols(self):
+        table = (" 1: 8006fcb0 790 OBJECT LOCAL DEFAULT 11 lines\\n"
+                 " 2: 8007ff00 4 OBJECT GLOBAL DEFAULT 11 dnd_control_main_reached\\n")
+        with TemporaryDirectory() as folder:
+            elf = Path(folder) / "test.elf"
+            elf.touch()
+            with patch("dolphin_gdb_probe.subprocess.run", return_value=SimpleNamespace(stdout=table)):
+                watches = resolve_memory_expectations(elf,
+                    ["dnd_control_main_reached=0x444e4443"],
+                    ["lines=Hello from managed C# on GameCube"])
+                self.assertEqual(len(watches), 2)
+                self.assertEqual(watches[0].expected, b"DNDC")
+                self.assertEqual(watches[1].address, 0x8006fcb0)
+
+
+    def test_guest_ram_proof_requires_matching_bytes(self):
+        class FakeSocket:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def sendall(self, data): pass
+        watch = MemoryExpectation("main", 0x8007ff00, 4, b"DNDC")
+        with patch("dolphin_gdb_probe.socket.create_connection", return_value=FakeSocket()):
+            with patch("dolphin_gdb_probe.time.sleep"):
+                with patch("dolphin_gdb_probe._reply",
+                           side_effect=["T0540:8000528c;01:00000000;", "444e4443"]):
+                    good = probe_memory(2159, [watch], seconds=5)
+                with patch("dolphin_gdb_probe._reply",
+                           side_effect=["T0540:8000528c;01:00000000;", "E00"]):
+                    bad = probe_memory(2159, [watch], seconds=5)
+        self.assertTrue(good.success, good.message)
+        self.assertFalse(bad.success)
 
 if __name__ == "__main__":
     unittest.main()

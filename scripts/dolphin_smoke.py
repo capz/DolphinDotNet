@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import threading
-from dolphin_gdb_probe import probe, resolve_symbols
+from dolphin_gdb_probe import probe, probe_memory, resolve_symbols, resolve_memory_expectations
 import sys
 
 FATAL = [
@@ -39,14 +39,20 @@ def main() -> int:
                         help="Capture guest PC/LR through Dolphin GDB stub")
     parser.add_argument("--elf", type=Path, help="Matching symbol-bearing ELF")
     parser.add_argument("--expect-symbol", action="append", default=[], help="Required guest function symbol")
+    parser.add_argument("--expect-word", action="append", default=[], help="Require guest RAM SYMBOL=0xVALUE")
+    parser.add_argument("--expect-text", action="append", default=[], help="Require text in guest RAM SYMBOL=TEXT")
     parser.add_argument("--expect-marker", help="Require a UART boot marker from the emulated program")
     parser.add_argument("--require-boot", action="store_true", help="Require Dolphin executable boot log")
     args = parser.parse_args()
     if not args.dol.is_file() or args.dol.stat().st_size < 256:
         parser.error("missing or truncated DOL")
-    if args.expect_symbol and (not args.gdb_port or not args.elf):
-        parser.error("--expect-symbol requires --gdb-port and --elf")
+    requires_gdb = bool(args.expect_symbol or args.expect_word or args.expect_text)
+    if requires_gdb and (not args.gdb_port or not args.elf):
+        parser.error("Guest entry checks require --gdb-port and --elf")
+    if args.expect_symbol and (args.expect_word or args.expect_text):
+        parser.error("Choose ELF breakpoints or guest-memory checks, not both")
     expected = resolve_symbols(args.elf, args.expect_symbol) if args.expect_symbol else []
+    memory_expected = resolve_memory_expectations(args.elf, args.expect_word, args.expect_text) if (args.expect_word or args.expect_text) else []
     args.logs.mkdir(parents=True, exist_ok=True)
     user = args.logs.resolve() / "user"
     user.mkdir(exist_ok=True)
@@ -78,7 +84,9 @@ def main() -> int:
     guest_state = []
     if args.gdb_port:
         def capture_guest_state():
-            guest_state.append(probe(args.gdb_port, expected, seconds=max(2, args.seconds - 2)))
+            guest_state.append(probe_memory(args.gdb_port, memory_expected, seconds=max(2, args.seconds - 2))
+                               if memory_expected else
+                               probe(args.gdb_port, expected, seconds=max(2, args.seconds - 2)))
         diagnostic = threading.Thread(target=capture_guest_state, daemon=True)
         diagnostic.start()
     completed = subprocess.run(command, stdout=subprocess.PIPE,
@@ -107,12 +115,15 @@ def main() -> int:
     if args.expect_marker and args.expect_marker not in output:
         print("Missing emulated-program boot marker: " + args.expect_marker, file=sys.stderr)
         return 1
-    if args.expect_symbol and (not guest_state or not guest_state[0].success):
+    if requires_gdb and (not guest_state or not guest_state[0].success):
         print("Guest entry-point verification failed: " +
               (guest_state[0].message if guest_state else "GDB probe did not finish"), file=sys.stderr)
         return 1
     print("No DOL-specific loader or PPC errors detected.")
-    print("Note: this is a smoke test, not proof of application correctness.")
+    if requires_gdb:
+        print("Verified guest execution using emulator-observed PC and entry evidence.")
+    else:
+        print("Note: loader-only smoke does not prove entry into main().")
     return 0
 
 

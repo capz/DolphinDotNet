@@ -139,3 +139,103 @@ def probe(port: int, expected: list[tuple[str, int]], seconds: float = 15) -> Pr
         return ProbeResult(True, "\n".join(lines))
     except (OSError, ValueError, TimeoutError) as error:
         return ProbeResult(False, "\n".join(lines + [f"DND_GDB_ENTRY_FAILED: {error}"]))
+
+
+@dataclass(frozen=True)
+class MemoryExpectation:
+    name: str
+    address: int
+    size: int
+    expected: bytes
+
+
+def resolve_memory_expectations(elf: Path, words: list[str],
+                                texts: list[str]) -> list[MemoryExpectation]:
+    """Find real ELF data symbols, not string literals or loader metadata."""
+    if not elf.is_file():
+        raise ValueError(f"Missing ELF with symbols: {elf}")
+    output = subprocess.run(["readelf", "-sW", str(elf)], check=True,
+                            capture_output=True, text=True).stdout
+    objects = []
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) < 8 or not parts[0].endswith(":") or parts[3] != "OBJECT":
+            continue
+        try:
+            address, size = int(parts[1], 16), int(parts[2])
+        except ValueError:
+            continue
+        if address and size:
+            objects.append((parts[7], address, size))
+
+    def locate(name: str) -> tuple[int, int]:
+        matches = set((address, size) for symbol, address, size in objects if symbol == name)
+        if len(matches) != 1:
+            raise ValueError(f"Expected one ELF data symbol {name!r}, found {len(matches)}")
+        return next(iter(matches))
+
+    expectations = []
+    for specification in words:
+        if "=" not in specification:
+            raise ValueError(f"Expected SYMBOL=VALUE: {specification}")
+        name, value = specification.split("=", 1)
+        address, size = locate(name)
+        if size < 4:
+            raise ValueError(f"ELF word {name} is too small ({size} bytes)")
+        expected = int(value, 0).to_bytes(4, "big")
+        expectations.append(MemoryExpectation(name, address, 4, expected))
+    for specification in texts:
+        if "=" not in specification:
+            raise ValueError(f"Expected SYMBOL=TEXT: {specification}")
+        name, value = specification.split("=", 1)
+        address, size = locate(name)
+        expected = value.encode("utf-8")
+        if not expected or len(expected) > size:
+            raise ValueError(f"Text expectation does not fit ELF buffer {name}")
+        expectations.append(MemoryExpectation(f"{name}:{value}", address, size, expected))
+    return expectations
+
+
+def probe_memory(port: int, expectations: list[MemoryExpectation],
+                 seconds: float = 15) -> ProbeResult:
+    """Resume the guest, periodically halt it, and verify actual RAM writes."""
+    deadline = time.monotonic() + seconds
+    lines = []
+    missing = list(expectations)
+    last_pc = None
+    try:
+        conn = None
+        while time.monotonic() < deadline:
+            try:
+                conn = socket.create_connection(("127.0.0.1", port), timeout=0.4)
+                break
+            except OSError:
+                time.sleep(0.15)
+        if conn is None:
+            raise TimeoutError("Dolphin GDB stub never opened a connection")
+        with conn:
+            _send(conn, "c")
+            while time.monotonic() < deadline - 2:
+                time.sleep(0.6)
+                conn.sendall(bytes([3]))
+                stopped = _reply(conn, deadline)
+                last_pc = parse_stop_pc(stopped)
+                lines.append(f"DND_GDB_SAMPLED_PC=0x{last_pc:08x}")
+                for watch in list(missing):
+                    _send(conn, f"m{watch.address:08x},{watch.size:x}")
+                    response = _reply(conn, deadline)
+                    if len(response) != watch.size * 2 or not re.fullmatch(r"[0-9a-fA-F]+", response):
+                        raise ValueError(f"Cannot read {watch.name} at 0x{watch.address:08x}: {response!r}")
+                    actual = bytes.fromhex(response)
+                    if watch.expected in actual:
+                        lines.append(f"DND_GDB_MEMORY_PROOF {watch.name} at 0x{watch.address:08x}")
+                        missing.remove(watch)
+                if not missing:
+                    _send(conn, "c")
+                    return ProbeResult(True, "\n".join(lines))
+                _send(conn, "c")
+            raise TimeoutError(f"Missing guest-written values: {[w.name for w in missing]}; "
+                               f"last PC=0x{last_pc:08x}" if last_pc is not None else
+                               f"Missing guest-written values: {[w.name for w in missing]}; no guest PC")
+    except (OSError, ValueError, TimeoutError) as error:
+        return ProbeResult(False, "\n".join(lines + [f"DND_GDB_MEMORY_FAILED: {error}"]))
