@@ -17,3 +17,9 @@ The October 12 CI DOL had an initialized data section with length 0x159FC, which
 
 ## Acceptance
 CI format tests pass; generated DOL passes the validator; valid payload bytes and linked addresses are preserved; no nonzero BSS overlap. Run Dolphin emulator and physical hardware boot tests separately to establish runtime correctness.
+
+## Second-stage static ELF/DOL verification
+
+`scripts/verify_dol_elf.py` validates 32-bit big-endian PowerPC ELF headers and PT_LOAD bounds, checks ELF and DOL entry points agree, compares each loadable ELF payload byte with the DOL image at its linked load address, and validates ELF zero-fill extents against the DOL BSS region. CI also archives `powerpc-eabi-readelf` program headers and an `objdump -d` disassembly alongside build artifacts. This is static validation; it cannot establish bootability.
+
+Native unwind metadata remains under observation. No unwind sections are removed, because blindly discarding them may break runtime expectations. Future optimization requires cross-toolchain linker provenance and hardware/emulator tests.
