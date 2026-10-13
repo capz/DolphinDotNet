@@ -116,7 +116,18 @@ def probe(port: int, expected: list[tuple[str, int]], seconds: float = 15) -> Pr
                     raise ValueError(f"Cannot set breakpoint {name} at 0x{address:08x}: {reply!r}")
             for name, address in expected:
                 _send(conn, "c")
-                packet = _reply(conn, deadline)
+                try:
+                    packet = _reply(conn, deadline - 3)
+                except TimeoutError:
+                    # Capture the guest PC instead of guessing whether startup
+                    # or a debugger breakpoint caused the missing entry hit.
+                    conn.sendall(bytes([3]))
+                    try:
+                        stopped = _reply(conn, time.monotonic() + 2)
+                        lines.append(f"DND_GDB_TIMEOUT_PC=0x{parse_stop_pc(stopped):08x}")
+                    except (OSError, ValueError, TimeoutError) as diagnostic_error:
+                        lines.append(f"DND_GDB_TIMEOUT_PC_UNAVAILABLE: {diagnostic_error}")
+                    raise TimeoutError(f"Guest never reached {name} at 0x{address:08x}")
                 actual = parse_stop_pc(packet)
                 if actual != address:
                     raise ValueError(f"Guest stopped at 0x{actual:08x}, expected {name} at 0x{address:08x}")
