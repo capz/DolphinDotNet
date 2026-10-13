@@ -58,7 +58,7 @@ def main() -> int:
         (f"[General]\nGDBPort = {args.gdb_port}\n" if args.gdb_port else ""))
     (config / "Logger.ini").write_text(
         "[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 4\n"
-        "[Logs]\nBOOT = True\nCORE = True\nPOWERPC = True\nOSREPORT = True\nOSREPORT_HLE = True\nEXI = True\n")
+        "[Logs]\nBOOT = True\nCORE = True\nPOWERPC = True\nOSREPORT = True\nOSREPORT_HLE = True\nEXI = True\nGDB_STUB = True\n")
     environment = dict(os.environ)
     # The Actions container's default HOME can be inaccessible to Dolphin/SDL.
     # Keep every user/config/cache path inside this job's writable workspace.

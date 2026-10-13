@@ -55,14 +55,14 @@ class GuestEntryTests(unittest.TestCase):
             def sendall(self, data): pass
         with patch("dolphin_gdb_probe.socket.create_connection", return_value=FakeSocket()), \
              patch("dolphin_gdb_probe._reply", side_effect=[
-                 "T0540:80003100;01:00000000;", "OK",
+                 "OK",
                  "T0540:80004000;01:00000000;", "OK"]):
             result = probe(2159, [("main", 0x80004000)])
         self.assertTrue(result.success, result.message)
         self.assertIn("DND_GDB_ENTRY_REACHED main", result.message)
         with patch("dolphin_gdb_probe.socket.create_connection", return_value=FakeSocket()), \
              patch("dolphin_gdb_probe._reply", side_effect=[
-                 "T0540:80003100;01:00000000;", "OK",
+                 "OK",
                  "T0540:80005000;01:00000000;"]):
             result = probe(2159, [("main", 0x80004000)])
         self.assertFalse(result.success)

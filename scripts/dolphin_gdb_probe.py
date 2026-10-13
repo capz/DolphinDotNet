@@ -107,11 +107,8 @@ def probe(port: int, expected: list[tuple[str, int]], seconds: float = 15) -> Pr
         if conn is None:
             raise TimeoutError("Dolphin GDB stub never opened a connection")
         with conn:
-            # Explicitly halt before placing breakpoints; never assume a boot log
-            # means the CPU has executed the guest's entry point.
-            conn.sendall(b"\x03")
-            initial = _reply(conn, deadline)
-            lines.append(f"DND_GDB_INITIAL_PC=0x{parse_stop_pc(initial):08x}")
+            # Dolphin holds the guest at startup while the GDB stub accepts
+            # its first connection. Install breakpoints before resuming.
             for name, address in expected:
                 _send(conn, f"Z0,{address:08x},4")
                 reply = _reply(conn, deadline)
