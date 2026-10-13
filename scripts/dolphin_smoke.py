@@ -56,7 +56,7 @@ def main() -> int:
                                stderr=subprocess.STDOUT, text=True, errors="replace",
                                timeout=args.seconds + 30, env=environment)
     output = completed.stdout
-    for path in (user / "Logs").rglob("*.txt") if (user / "Logs").exists() else []:
+    for path in (user / "Logs").rglob("*") if (user / "Logs").exists() else []:
         if path.is_file() and path.suffix.lower() in (".log", ".txt"):
             output += f"\n--- {path.name} ---\n" + path.read_text(errors="replace")
     (args.logs / "emulator.log").write_text(output)
