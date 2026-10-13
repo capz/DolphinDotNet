@@ -56,7 +56,7 @@ internal static class GameCubeBundle
             "main", "managed_runtime", "model", "model_animation",
             "model_graphics", "model_transform", "network", "network_gamecube",
             "network_gamecube_backend", "performance", "platform_gamecube",
-            "storage", "storage_gamecube", "stw", "system", "text", "worker"
+            "storage", "storage_gamecube", "stw", "system", "text", "runtime", "vm", "worker"
         };
 
         if (platform == "wiiu")
