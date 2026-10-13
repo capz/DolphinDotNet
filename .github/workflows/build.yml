@@ -289,7 +289,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: gamecube
     container:
-      image: ubuntu:26.04
+      image: debian:trixie
     steps:
       - uses: actions/checkout@v4
       - name: Install Dolphin and virtual display
