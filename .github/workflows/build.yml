@@ -299,6 +299,10 @@ jobs:
       options: --shm-size=1g
     steps:
       - uses: actions/checkout@v4
+      - name: Check Docker shared memory
+        run: |
+          df -h /dev/shm
+          test "$(stat -f -c %a /dev/shm)" -gt 100000
       - name: Install Dolphin and virtual display
         run: |
           apt-get update
