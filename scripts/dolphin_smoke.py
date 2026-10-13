@@ -43,12 +43,23 @@ def main() -> int:
     # logging in the isolated user directory rather than passing Qt GUI flags.
     config = user / "Config"
     config.mkdir(exist_ok=True)
-    (config / "Dolphin.ini").write_text("[Core]\nGFXBackend = Null\n")
+    (config / "Dolphin.ini").write_text("[Core]\nGFXBackend = Null\nCPUCore = 0\n")
     (config / "Logger.ini").write_text(
         "[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 4\n"
         "[Logs]\nBOOT = True\nCORE = True\nPOWERPC = True\nOSREPORT = True\n")
     environment = dict(os.environ)
+    # The Actions container's default HOME can be inaccessible to Dolphin/SDL.
+    # Keep every user/config/cache path inside this job's writable workspace.
+    home = args.logs.resolve() / "home"
+    home.mkdir(exist_ok=True)
+    for subdir in ("config", "data", "cache"):
+        (home / subdir).mkdir(exist_ok=True)
+    environment["HOME"] = str(home)
+    environment["XDG_CONFIG_HOME"] = str(home / "config")
+    environment["XDG_DATA_HOME"] = str(home / "data")
+    environment["XDG_CACHE_HOME"] = str(home / "cache")
     environment["DOLPHIN_EMU_USERPATH"] = str(user)
+    environment["SDL_AUDIODRIVER"] = "dummy"
     command = ["xvfb-run", "-a", "timeout", "--signal=TERM", "--kill-after=5s",
                f"{args.seconds}s", args.binary, "--exec", str(args.dol.resolve())]
     print("Launching:", " ".join(command), flush=True)
