@@ -296,8 +296,8 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth python3 libxcb-cursor0
-          test -x /usr/games/dolphin-emu
-          xvfb-run -a /usr/games/dolphin-emu --version
+          test -x /usr/games/dolphin-emu-nogui
+          xvfb-run -a /usr/games/dolphin-emu-nogui --version
       - name: Download GameCube DOL
         uses: actions/download-artifact@v4
         with:
@@ -306,7 +306,7 @@ jobs:
       - name: Test emulator log validation
         run: python3 -m unittest discover -s tests -p test_dolphin_smoke.py
       - name: Boot DOL in Dolphin (headless)
-        run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu --seconds 20 --logs dolphin-smoke
+        run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu-nogui --seconds 20 --logs dolphin-smoke
       - name: Upload emulator logs
         if: always()
         uses: actions/upload-artifact@v4
