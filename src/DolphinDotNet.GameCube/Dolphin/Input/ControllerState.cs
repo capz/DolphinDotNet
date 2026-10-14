@@ -6,6 +6,19 @@ namespace Dolphin.Input;
 public readonly struct ControllerState
 {
     private readonly int flags, held, pressed, released;
+    public ControllerButton HeldButtons => (ControllerButton)held;
+    public ControllerButton PressedButtons => (ControllerButton)pressed;
+    public ControllerButton ReleasedButtons => (ControllerButton)released;
+    internal ControllerState Without(ControllerButton buttons, bool stick=false, bool cstick=false,
+        bool leftTrigger=false, bool rightTrigger=false) =>
+        new ControllerState(flags, held & ~(int)buttons, pressed & ~(int)buttons, released & ~(int)buttons,
+            stick ? default : Stick, cstick ? default : CStick,
+            leftTrigger ? 0 : LeftTrigger, rightTrigger ? 0 : RightTrigger);
+    internal static void ValidateButtons(ControllerButton buttons)
+    {
+        if (((int)buttons & ~(int)ControllerButton.All)!=0)
+            throw new ArgumentOutOfRangeException("buttons");
+    }
     public bool IsConnected => (flags & 1)!=0;
     public bool WasConnected => (flags & 2)!=0;
     public bool WasDisconnected => (flags & 4)!=0;

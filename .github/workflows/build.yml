@@ -55,7 +55,7 @@ jobs:
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube.c -o /tmp/managed_gamecube.o
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube_value.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube_value.c -o /tmp/managed_gamecube_value.o
-          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/managed_gamecube.c tests/managed_gamecube_host.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/managed-gamecube-test
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/managed_gamecube.c tests/managed_gamecube_host.c source/performance.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/managed-gamecube-test
           /tmp/managed-gamecube-test
       - name: Generate standalone GameCube AOT build bundle
         run: |
@@ -78,6 +78,13 @@ jobs:
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/InputSmoke/bin/Release/net8.0/InputSmoke.dll /tmp/input-smoke.c
           cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-smoke.c tests/input_host.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-smoke
           /tmp/input-smoke
+      - name: Validate input contexts and binding capture
+        timeout-minutes: 4
+        run: |
+          dotnet run --project tests/InputContextSmoke/InputContextSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/InputContextSmoke/bin/Release/net8.0/InputContextSmoke.dll /tmp/input-contexts.c
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-contexts.c tests/input_context_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-contexts
+          /tmp/input-contexts
       - name: Compile Google logo ARAM example through AOT
         timeout-minutes: 4
         run: |
@@ -127,6 +134,8 @@ jobs:
           DND_ASYNC_MANUAL=0 /tmp/timing-smoke32
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-smoke.c tests/input_host.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-smoke32
           DND_ASYNC_MANUAL=0 /tmp/input-smoke32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-contexts.c tests/input_context_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-contexts32
+          /tmp/input-contexts32
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/generic_sharing_32
           timeout 30s /tmp/generic_sharing_32
           timeout 30s /tmp/generic_sharing_32 --gc-stress
@@ -348,6 +357,9 @@ jobs:
           dotnet build tests/InputSmoke/InputSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/InputSmoke/bin/Release/net8.0/InputSmoke.dll /tmp/input-smoke.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/input-smoke.c build/input.o build/input_gamecube.o build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o /tmp/input-smoke.elf
+          dotnet build tests/InputContextSmoke/InputContextSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/InputContextSmoke/bin/Release/net8.0/InputContextSmoke.dll /tmp/input-contexts.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/input-contexts.c build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o /tmp/input-contexts.elf
           dotnet build tests/TimingSmoke/TimingSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/TimingSmoke/bin/Release/net8.0/TimingSmoke.dll /tmp/timing-smoke.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/timing-smoke.c build/timing.o build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/timing_tasks.elf

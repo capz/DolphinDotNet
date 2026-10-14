@@ -588,7 +588,7 @@ internal static class ValueCBackend
         if(model.Types.TryGetValue(type,out var tm)&&tm.BaseType is { } parent&&model.Types.ContainsKey(parent))result.AddRange(VirtualSlots(parent,model,compiled));
         foreach(var method in model.Methods.Values.Where(m=>m.Key.TypeName==type&&m.IsVirtual).OrderBy(m=>m.Handle.GetHashCode()))
         {
-            var slot=result.FindIndex(x=>x.Key.Name==method.Key.Name&&x.Key.Signature==method.Key.Signature);
+            var slot=result.FindIndex(x=>MethodSignatureIdentity.Matches(x,method,model));
             if(slot>=0&&!method.IsNewSlot)result[slot]=method;else result.Add(method);
         }
         return result;

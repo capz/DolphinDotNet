@@ -45,5 +45,12 @@ public sealed class PlayerControls
     public PlayerBindings Bindings { get; }
     public PlayerControls(int port=0, PlayerBindings? bindings=null)
     { Controller.ValidatePort(port); Port=port; Bindings=bindings ?? new PlayerBindings(); }
-    public PlayerInputState GetState() => new PlayerInputState(Controller.GetState(Port),Bindings);
+    public PlayerInputState GetState() => GetState(Controller.GetState(Port));
+    public PlayerInputState GetState(ControllerState state) => new PlayerInputState(state,Bindings);
+    /// <summary>Map only input still available to this context.</summary>
+    public PlayerInputState GetState(InputFrame input)
+    {
+        if (input==null) throw new ArgumentNullException("input");
+        return GetState(input.State);
+    }
 }

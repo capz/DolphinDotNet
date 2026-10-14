@@ -52,9 +52,9 @@ use `using` and networking stops in `finally`.
 These focused examples do not cover every feature. Models, animation, scene
 transforms, cameras and ARAM residency use the separate
 [model API](../docs/model-assets-runtime.md); the triangle intentionally uses
-immediate rendering without an external model asset. The existing
-[performance overlay](../docs/debug-overlay.md) can be enabled with
-`DebugOverlay.PerformanceVisible = true` in ManagedGameCube.
+immediate rendering without an external model asset. ManagedGameCube enables the
+[performance overlay](../docs/debug-overlay.md) and displays
+`csharp with dolphin dotnet` above the scene.
 Consult the [API inventory](../docs/dotnet-standard-status.md) before adding desktop
 .NET APIs: TLS, `ValueTask` and `System.Text.Json` are not supported.
 

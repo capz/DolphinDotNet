@@ -85,11 +85,145 @@ unchanged. This small typed layer supports common actions; custom game-specific
 maps can use the same controller snapshots. No reflection or string action names
 are needed.
 
+## Input contexts
+
+`InputRouter` routes one player's shared snapshot through a bounded context stack.
+Call it once per game tick after the shared hardware update:
+
+```csharp
+var router = new InputRouter(port: 0);
+router.Push(new GameplayContext());
+
+// Each game tick, on the application executor:
+Controller.Update();
+router.Update();
+```
+
+Contexts are game-owned classes. A context is modal by default: only it and any
+non-modal contexts above it receive input. Use `base(isModal: false)` for an
+input overlay that should pass unconsumed controls to lower contexts.
+Handlers run from top to bottom; the first modal context ends routing.
+
+```csharp
+sealed class GameplayContext : InputContext
+{
+    private readonly ButtonBinding attack = new ButtonBinding(ControllerButton.A);
+    private readonly MenuContext menu = new MenuContext();
+
+    public override void HandleInput(InputFrame input)
+    {
+        if (input[ControllerButton.Start].WasPressed)
+        {
+            Router.Push(menu);
+            return;
+        }
+        // Read inside the handler so higher contexts' consumption is respected.
+        if (attack.GetState(input).WasPressed) Attack();
+        Move(input.State.Stick.X, input.State.Stick.Y);
+    }
+    public override void OnDeactivated() => StopPlayerActions();
+    public override void OnDisconnected() => StopPlayerActions();
+}
+
+sealed class MenuContext : InputContext
+{
+    public override void HandleInput(InputFrame input)
+    {
+        if (input[ControllerButton.B].WasPressed) Router.Pop();
+        // Handle menu navigation and selection here.
+    }
+}
+```
+
+`Attack`, `Move` and `StopPlayerActions` represent application logic.
+`Push`, `Pop`, `Remove` and `Clear` may be called from handlers.
+`Pop` removes the top context; `Remove(context)` removes that specific instance,
+including one underneath a non-modal overlay. A structural change ends
+that tick's routing immediately, so the newly exposed context cannot receive the
+same press. `Clear` removes all contexts without briefly reactivating intermediate
+screens. A context instance can belong to only one stack and cannot be pushed twice.
+Capacity defaults to 16; exceeding it throws rather than allocating during a tick.
+
+By default stack changes suppress all currently held physical buttons until they
+are released. Both the held state and the eventual release edge are hidden;
+a fresh press is required. Pass `suppressHeldButtons: false` to a stack operation
+when intentionally preserving held controls. `Router.SuppressUntilRelease(mask)`
+can suppress selected buttons. Sticks and analog triggers are not suppressed by
+transitions; games decide whether movement should resume immediately.
+Reconnection also suppresses already held buttons until release.
+
+`OnActivated` runs when a context becomes eligible for routing; `OnDeactivated`
+runs when it is removed or blocked by a modal context. Non-modal overlays leave
+lower eligible contexts active. Cancel continuous gameplay actions in
+`OnDeactivated`. `OnDisconnected` notifies every active context before dispatch,
+including lower contexts under non-modal overlays. Disconnect does not generate
+physical release edges. Lifecycle callbacks must not change the stack; do that
+from `HandleInput` instead. Recursive dispatch is rejected.
+
+## Consuming input and custom actions
+
+Inside a non-modal handler, `input.Consume(ControllerButton.A)` hides A's held,
+pressed and released states from later reads and lower handlers for this tick.
+Masks such as `ControllerButton.A | ControllerButton.B` are supported by `Consume`
+and the public `HeldButtons`, `PressedButtons`, `ReleasedButtons` snapshot properties.
+The button indexer still accepts exactly one physical button.
+
+`ConsumeStick(ControllerStick.Stick)`, `ConsumeLeftTrigger`,
+`ConsumeRightTrigger` and `ConsumeAll` also support analog input. Consuming a
+physical button does not consume the corresponding analog trigger travel.
+Consumption is local to a router dispatch: it does not alter the global controller
+cache, previously copied snapshots or another player's router. A handler owning a
+held control should consume it every tick it owns it.
+
+`InputFrame` is reused and must not be retained. `input.State` returns an immutable
+copy of the remaining input. Existing `PlayerControls` can map that filtered input
+with `controls.GetState(input)`; its parameterless overload reads the global cache
+and therefore bypasses context consumption.
+
+Use `ButtonBinding` for any custom action without extending the fixed
+`PlayerBindings` action list:
+
+```csharp
+var attack = new ButtonBinding(ControllerButton.A);
+// In a handler:
+if (attack.GetState(input).WasPressed) Attack();
+attack.Consume(input); // Prevent lower contexts from using the same physical button.
+```
+
+Each binding maps one physical button. Games own action names, duplicate-binding
+policy, persistence, chords and any analog-to-button thresholds.
+
+## Button assignment
+
+Push a `ButtonCaptureContext` from the settings handler:
+
+```csharp
+var capture = new ButtonCaptureContext(attack);
+Router.Push(capture);
+// Later inspect capture.Status and capture.CapturedButton.
+```
+
+Capture blocks lower contexts, waits for all physical buttons to be released,
+then assigns the next allowed fresh button press. It updates the supplied
+`ButtonBinding` and pops itself. B cancels by default without modifying the binding;
+disconnection also cancels. The result is `Waiting`, `Completed` or `Cancelled`.
+After completion/cancellation, held buttons remain suppressed in the returning
+context until release. A manually removed pending capture is cancelled.
+
+Use `cancelButton: ControllerButton.None` to allow assigning B, or provide another
+single cancel button. `allowedButtons` is a physical-button mask; the cancel button
+is reserved even if included. Simultaneous allowed presses choose the lowest button
+bit deterministically. Capture supports digital buttons; sticks/triggers need a
+game-specific capture policy. Routers and contexts do not build any menu UI.
+
 `ReadButtonsDown` remains a compatibility polling call and advances input itself;
 avoid mixing it with snapshot reads within one game update.
 
 ## Validation
 
+Managed context fixtures execute both on .NET and through AOT with forced GC and
+ASan/UBSan. They cover modal/non-modal routing, consumption, lifecycle, transition
+suppression, reconnection, capture success/cancellation and mutation guards.
 Native fixtures cover transitions, connection changes, radial deadzones,
 calibration, trigger ranges, timed-rumble backend contracts and cleanup. The actual GameCube backend is also
 compiled against a recording SDK fixture to verify alarm creation/arming failures,

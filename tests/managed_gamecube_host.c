@@ -2,6 +2,7 @@
 #include "dnd_graphics.h"
 #include "dnd_input.h"
 #include "dnd_managed.h"
+#include "dnd_performance.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -12,7 +13,7 @@ static unsigned stage, polls;
 static void next(unsigned expected) { assert(stage++ == expected); }
 static void close_to(float actual, float expected) { assert(fabsf(actual - expected) < 0.0001f); }
 void dnd_console_write_line(const char *text) {
-  assert(strcmp(text, "Hello from managed C# on GameCube") == 0);
+  assert(strcmp(text, "csharp with dolphin dotnet") == 0);
 }
 void dnd_input_backend_init(void) { }
 void dnd_input_backend_shutdown(void) { }
@@ -58,6 +59,7 @@ int main(void) {
   dnd_managed_heap_init(&heap, memory, sizeof(memory));
   assert(dnd_aot_entry(&heap) == 0);
   assert(stage == 13 && polls == 2);
+  assert(dnd_performance_visible());
   puts("Managed sample owns and submits the complete demo frame.");
   return 0;
 }
