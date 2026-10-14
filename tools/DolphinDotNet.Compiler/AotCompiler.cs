@@ -63,7 +63,8 @@ internal static class AotCompiler
         if(!graph.Types.Any(t=>t.StartsWith("Dolphin.Threading.Tasks.",StringComparison.Ordinal)))return;
         foreach(var method in model.Methods.Values.Where(m=>
             (m.Key.TypeName=="Dolphin.Threading.Tasks.Scheduler"&&m.Key.Name is "PumpContext" or "Pending")||
-            (graph.Types.Contains("Dolphin.Network.NetworkRuntime")&&m.Key.TypeName=="Dolphin.Network.NetworkRuntime"&&m.Key.Name is "Pump" or "get_PendingOperations")).ToArray())
+            (graph.Types.Contains("Dolphin.Network.NetworkRuntime")&&m.Key.TypeName=="Dolphin.Network.NetworkRuntime"&&m.Key.Name is "Pump" or "get_PendingOperations")||
+            (graph.Types.Contains("Dolphin.Timing.TimingRuntime")&&m.Key.TypeName=="Dolphin.Timing.TimingRuntime"&&m.Key.Name is "Pump" or "get_Pending" or "Stop")).ToArray())
         {graph.AddType(method.Key.TypeName);graph.AddMethod(method.Key);}
     }
 

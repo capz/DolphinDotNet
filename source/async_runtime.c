@@ -189,7 +189,7 @@ void dnd_async_stop(void) {
 }
 
 void dnd_async_require_application_thread(void) {
-    if (owner != 0) dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Graphics require the application thread.");
+    if (owner != 0) dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION, "Operation requires the application executor.");
 }
 
 void dnd_async_enter_critical(void) { critical_depth[owner]++; }

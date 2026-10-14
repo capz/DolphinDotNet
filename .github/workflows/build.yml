@@ -55,7 +55,7 @@ jobs:
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube.c -o /tmp/managed_gamecube.o
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube_value.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube_value.c -o /tmp/managed_gamecube_value.o
-          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/managed_gamecube.c tests/managed_gamecube_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/managed-gamecube-test
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/managed_gamecube.c tests/managed_gamecube_host.c source/performance.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/managed-gamecube-test
           /tmp/managed-gamecube-test
       - name: Generate standalone GameCube AOT build bundle
         run: |
@@ -69,12 +69,37 @@ jobs:
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-wii --platform wii
           grep -q '/libogc2/wii_rules' /tmp/dnd-wii/Makefile
           if grep -q '/libogc2/gamecube_rules' /tmp/dnd-wii/Makefile; then exit 1; fi
+      - name: Validate controller snapshots, bindings and executor ownership
+        env:
+          DND_ASYNC_MANUAL: "0"
+        timeout-minutes: 4
+        run: |
+          dotnet build tests/InputSmoke/InputSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/InputSmoke/bin/Release/net8.0/InputSmoke.dll /tmp/input-smoke.c
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-smoke.c tests/input_host.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-smoke
+          /tmp/input-smoke
+      - name: Validate input contexts and binding capture
+        timeout-minutes: 4
+        run: |
+          dotnet run --project tests/InputContextSmoke/InputContextSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/InputContextSmoke/bin/Release/net8.0/InputContextSmoke.dll /tmp/input-contexts.c
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-contexts.c tests/input_context_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-contexts
+          /tmp/input-contexts
       - name: Compile Google logo ARAM example through AOT
         timeout-minutes: 4
         run: |
           dotnet build samples/GoogleLogoAram/GoogleLogoAram.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/GoogleLogoAram/bin/Release/net8.0/GoogleLogoAram.dll /tmp/google-logo-aram.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/google-logo-aram.c -o /tmp/google-logo-aram.o
+      - name: Validate clocks, frame timing, Task.Delay and captured timers
+        env:
+          DND_ASYNC_MANUAL: "0"
+        timeout-minutes: 4
+        run: |
+          dotnet build tests/TimingSmoke/TimingSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/TimingSmoke/bin/Release/net8.0/TimingSmoke.dll /tmp/timing-smoke.c
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/timing-smoke.c tests/timing_host.c source/timing.c source/managed_runtime.c source/async_runtime.c -o /tmp/timing-smoke
+          /tmp/timing-smoke
       - name: Compiler integration tests
         run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
       - name: Build control-flow smoke assembly
@@ -105,6 +130,12 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y gcc-multilib
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/timing-smoke.c tests/timing_host.c source/timing.c source/managed_runtime.c source/async_runtime.c -o /tmp/timing-smoke32
+          DND_ASYNC_MANUAL=0 /tmp/timing-smoke32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-smoke.c tests/input_host.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-smoke32
+          DND_ASYNC_MANUAL=0 /tmp/input-smoke32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-contexts.c tests/input_context_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-contexts32
+          /tmp/input-contexts32
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/generic_sharing_32
           timeout 30s /tmp/generic_sharing_32
           timeout 30s /tmp/generic_sharing_32 --gc-stress
@@ -119,6 +150,8 @@ jobs:
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/library.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/library_32
           timeout 30s /tmp/library_32
           timeout 30s /tmp/library_32 --gc-stress
+      - name: Validate network fixture watchdog
+        run: python3 -m unittest discover -s tests -p test_network_fixtures.py
       - name: Validate automatic async HTTP and ARAM without application pumps
         timeout-minutes: 5
         env:
@@ -130,7 +163,9 @@ jobs:
           python3 tests/network_fixtures.py /tmp/automatic-async
           python3 tests/network_fixtures.py /tmp/automatic-async --gc-stress
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/automatic-async.c tests/automatic_async_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c source/aram.c -o /tmp/automatic-async32
-          python3 tests/network_fixtures.py /tmp/automatic-async32 --gc-stress
+          # 32-bit GC stress and serialized executor handoffs can exceed the
+          # default 45-second fixture budget on shared runners; retain a watchdog.
+          python3 tests/network_fixtures.py --timeout-seconds 120 /tmp/automatic-async32 --gc-stress
       - name: Validate cooperative async and namespace interoperability
         timeout-minutes: 4
         run: |
@@ -321,6 +356,19 @@ jobs:
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/automatic-tasks.o build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/automatic_tasks.elf
           elf2dol footprint/automatic_tasks.elf footprint/automatic_tasks.dol
           python3 scripts/dol_sections.py --pad footprint/automatic_tasks.dol
+      - name: Compile and link controller and timing ABI for PowerPC
+        run: |
+          dotnet build tests/InputSmoke/InputSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/InputSmoke/bin/Release/net8.0/InputSmoke.dll /tmp/input-smoke.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/input-smoke.c build/input.o build/input_gamecube.o build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o /tmp/input-smoke.elf
+          dotnet build tests/InputContextSmoke/InputContextSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/InputContextSmoke/bin/Release/net8.0/InputContextSmoke.dll /tmp/input-contexts.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/input-contexts.c build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o /tmp/input-contexts.elf
+          dotnet build tests/TimingSmoke/TimingSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/TimingSmoke/bin/Release/net8.0/TimingSmoke.dll /tmp/timing-smoke.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/timing-smoke.c build/timing.o build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/timing_tasks.elf
+          elf2dol footprint/timing_tasks.elf footprint/timing_tasks.dol
+          python3 scripts/dol_sections.py --pad footprint/timing_tasks.dol
       - name: Report GameCube runtime footprint
         run: |
           mkdir -p footprint
@@ -395,6 +443,10 @@ jobs:
         id: async_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/footprint/automatic_tasks.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2161 --elf dist/footprint/automatic_tasks.elf --expect-word dnd_async_test_result=0x4153594e --memory-after-symbol dnd_async_test_done --logs dolphin-async --require-boot
+      - name: Verify timing delays, callbacks and cleanup in Dolphin
+        id: timing_boot
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/timing_tasks.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2162 --elf dist/footprint/timing_tasks.elf --expect-word dnd_async_test_result=0x4153594e --memory-after-symbol dnd_async_test_done --logs dolphin-timing --require-boot
       - name: Require both guest entry-point checks
         if: always()
         run: |
@@ -405,6 +457,7 @@ jobs:
           test "${{ steps.control_boot.outcome }}" = success
           test "${{ steps.app_boot.outcome }}" = success
           test "${{ steps.async_boot.outcome }}" = success
+          test "${{ steps.timing_boot.outcome }}" = success
       - name: Upload emulator logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -415,6 +468,7 @@ jobs:
             dolphin-control/
             dolphin-smoke/
             dolphin-async/
+            dolphin-timing/
           if-no-files-found: warn
 
   release-gamecube:

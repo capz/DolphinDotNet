@@ -2,6 +2,7 @@
 #include "dnd_graphics.h"
 #include "dnd_input.h"
 #include "dnd_managed.h"
+#include "dnd_performance.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -9,14 +10,19 @@
 
 extern intptr_t dnd_aot_entry(DndManagedHeap *heap);
 static unsigned stage, polls;
-static DndGamePad pad;
 static void next(unsigned expected) { assert(stage++ == expected); }
 static void close_to(float actual, float expected) { assert(fabsf(actual - expected) < 0.0001f); }
 void dnd_console_write_line(const char *text) {
-  assert(strcmp(text, "Hello from managed C# on GameCube") == 0);
+  assert(strcmp(text, "csharp with dolphin dotnet") == 0);
 }
-void dnd_input_poll(void) { pad.down = ++polls == 1 ? 0 : DND_PAD_BUTTON_START; }
-const DndGamePad *dnd_input_gamepad(unsigned port) { assert(port == 0); return &pad; }
+void dnd_input_backend_init(void) { }
+void dnd_input_backend_shutdown(void) { }
+void dnd_input_backend_sample(DndInputSample pads[4]) {
+  pads[0].connected = true;
+  pads[0].held = ++polls == 1 ? 0 : DND_PAD_BUTTON_START;
+}
+bool dnd_input_backend_rumble(int port, uint32_t duration) { (void)port; (void)duration; return false; }
+void dnd_input_backend_stop_rumble(int port) { (void)port; }
 void dnd_graphics_begin_frame(float r, float g, float b, float a) {
   next(0); close_to(r, 0.025f); close_to(g, 0.035f); close_to(b, 0.06f); close_to(a, 1);
 }
@@ -53,6 +59,7 @@ int main(void) {
   dnd_managed_heap_init(&heap, memory, sizeof(memory));
   assert(dnd_aot_entry(&heap) == 0);
   assert(stage == 13 && polls == 2);
+  assert(dnd_performance_visible());
   puts("Managed sample owns and submits the complete demo frame.");
   return 0;
 }

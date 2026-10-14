@@ -1,4 +1,7 @@
 """Local deterministic DNS/HTTP endpoints for compiled networking smoke tests."""
+import argparse
+import math
+import shlex
 import socket
 import struct
 import threading
@@ -79,12 +82,43 @@ def http():
         peer, _ = sock.accept()
         threading.Thread(target=http_peer, args=(peer,), daemon=True).start()
 
-for service in (dns_udp, dns_tcp, http):
-    threading.Thread(target=service, daemon=True).start()
-print('network fixtures ready', flush=True)
-if len(sys.argv) > 1:
+def positive_timeout(value):
+    seconds = float(value)
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError('timeout must be a finite positive number')
+    return seconds
+
+
+def parse_options(argv):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--timeout-seconds', type=positive_timeout, default=45,
+                        help='child-process watchdog in seconds (default: 45)')
+    parser.add_argument('command', nargs=argparse.REMAINDER)
+    return parser.parse_args(argv)
+
+
+def run_command(command, timeout):
+    try:
+        return subprocess.run(command, timeout=timeout).returncode
+    except subprocess.TimeoutExpired:
+        print(f'network fixture command timed out after {timeout:g}s: '
+              f'{shlex.join(command)}', file=sys.stderr, flush=True)
+        return 124
+
+
+def main(argv=None):
+    options = parse_options(sys.argv[1:] if argv is None else argv)
+    for service in (dns_udp, dns_tcp, http):
+        threading.Thread(target=service, daemon=True).start()
     for event in ready:
         if not event.wait(5):
             raise RuntimeError('fixture failed to start')
-    sys.exit(subprocess.run(sys.argv[1:], timeout=45).returncode)
-threading.Event().wait()
+    print('network fixtures ready', flush=True)
+    if options.command:
+        return run_command(options.command, options.timeout_seconds)
+    threading.Event().wait()
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

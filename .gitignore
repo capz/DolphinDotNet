@@ -12,3 +12,5 @@ tests/aram_test
 tests/fst_test
 tests/card_transaction_test
 tests/overlay_test
+tests/input_native_test
+tests/input_gamecube_test
