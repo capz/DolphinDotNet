@@ -204,7 +204,7 @@ def resolve_memory_expectations(elf: Path, words: list[str],
 
 
 def probe_memory(port: int, expectations: list[MemoryExpectation],
-                 seconds: float = 15) -> ProbeResult:
+                 seconds: float = 15, stop_symbol: tuple[str, int] | None = None) -> ProbeResult:
     """Resume the guest, periodically halt it, and verify actual RAM writes."""
     deadline = time.monotonic() + seconds
     lines = []
@@ -221,6 +221,30 @@ def probe_memory(port: int, expectations: list[MemoryExpectation],
         if conn is None:
             raise TimeoutError("Dolphin GDB stub never opened a connection")
         with conn:
+            if stop_symbol is not None:
+                name, address = stop_symbol
+                _send(conn, f"Z0,{address:08x},4")
+                if _reply(conn, deadline) != "OK":
+                    raise ValueError(f"Cannot install completion breakpoint {name}")
+                _send(conn, "c")
+                stopped = _reply(conn, deadline)
+                last_pc = parse_stop_pc(stopped)
+                if last_pc != address:
+                    raise ValueError(f"Expected completion {name} at 0x{address:08x}, got 0x{last_pc:08x}")
+                lines.append(f"DND_GDB_COMPLETION_REACHED {name} PC=0x{last_pc:08x}")
+                for watch in expectations:
+                    _send(conn, f"m{watch.address:08x},{watch.size:x}")
+                    response = _reply(conn, deadline)
+                    if len(response) != watch.size * 2 or not re.fullmatch(r"[0-9a-fA-F]+", response):
+                        raise ValueError(f"Cannot read {watch.name}: {response!r}")
+                    if watch.expected not in bytes.fromhex(response):
+                        raise ValueError(f"Guest result {watch.name}: expected {watch.expected.hex()}, got {response}")
+                    lines.append(f"DND_GDB_MEMORY_PROOF {watch.name} at 0x{watch.address:08x}")
+                _send(conn, f"z0,{address:08x},4")
+                if _reply(conn, deadline) != "OK":
+                    raise ValueError(f"Cannot remove completion breakpoint {name}")
+                _send(conn, "c")
+                return ProbeResult(True, "\n".join(lines))
             _send(conn, "c")
             while time.monotonic() < deadline - 2:
                 time.sleep(0.6)

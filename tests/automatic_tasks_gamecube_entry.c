@@ -4,9 +4,13 @@
 #include "dnd_async.h"
 #include <stdint.h>
 #include <unistd.h>
+#include <ogc/cache.h>
 volatile uint32_t dnd_async_test_result;
 static unsigned char storage[256 * 1024];
 extern intptr_t dnd_aot_entry(DndManagedHeap *heap);
+__attribute__((noinline, noreturn)) void dnd_async_test_done(void) {
+    for (;;) usleep(1000);
+}
 int main(void) {
     DndManagedHeap heap;
     dnd_async_test_result = 1;
@@ -15,5 +19,6 @@ int main(void) {
     intptr_t result = dnd_aot_entry(&heap);
     dnd_async_test_result = result == 0 && !dnd_exception_pending() && !dnd_async_running()
         ? 0x4153594e : 0xdead0000u | (uint32_t)result;
-    for (;;) usleep(1000);
+    DCFlushRange((void *)&dnd_async_test_result, sizeof(dnd_async_test_result));
+    dnd_async_test_done();
 }

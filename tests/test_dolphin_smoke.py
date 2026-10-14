@@ -71,6 +71,23 @@ class GuestEntryTests(unittest.TestCase):
 
 
 class GuestMemoryTests(unittest.TestCase):
+    def test_completion_breakpoint_checks_actual_guest_result(self):
+        class FakeSocket:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def sendall(self, data): pass
+        watch = MemoryExpectation("result", 0x8007ff00, 4, b"ASYN")
+        completion = ("done", 0x80004000)
+        with patch("dolphin_gdb_probe.socket.create_connection", return_value=FakeSocket()):
+            with patch("dolphin_gdb_probe._reply", side_effect=["OK", "T0540:80004000;01:00000000;", "4153594e", "OK"]):
+                good = probe_memory(2161, [watch], seconds=5, stop_symbol=completion)
+            with patch("dolphin_gdb_probe._reply", side_effect=["OK", "T0540:80004000;01:00000000;", "dead0002"]):
+                bad = probe_memory(2161, [watch], seconds=5, stop_symbol=completion)
+        self.assertTrue(good.success, good.message)
+        self.assertIn("DND_GDB_MEMORY_PROOF", good.message)
+        self.assertFalse(bad.success)
+        self.assertIn("got dead0002", bad.message)
+
     def test_resolve_guest_data_symbols(self):
         table = (" 1: 8006fcb0 790 OBJECT LOCAL DEFAULT 11 lines\n"
                  " 2: 8007ff00 4 OBJECT GLOBAL DEFAULT 11 dnd_control_main_reached\n")

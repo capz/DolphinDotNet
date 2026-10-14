@@ -390,7 +390,7 @@ jobs:
       - name: Verify automatic async tasks complete and the service thread shuts down
         id: async_boot
         continue-on-error: true
-        run: python3 scripts/dolphin_smoke.py dist/footprint/automatic_tasks.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2161 --elf dist/footprint/automatic_tasks.elf --expect-word dnd_async_test_result=0x4153594e --logs dolphin-async --require-boot
+        run: python3 scripts/dolphin_smoke.py dist/footprint/automatic_tasks.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2161 --elf dist/footprint/automatic_tasks.elf --expect-word dnd_async_test_result=0x4153594e --memory-after-symbol dnd_async_test_done --logs dolphin-async --require-boot
       - name: Require both guest entry-point checks
         if: always()
         run: |
