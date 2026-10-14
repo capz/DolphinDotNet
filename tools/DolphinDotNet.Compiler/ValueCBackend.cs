@@ -8,9 +8,11 @@ internal static class ValueCBackend
         var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include <math.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_performance.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\n#include \"dnd_storage.h\"\n#include \"dnd_text.h\"\n#include \"dnd_aram.h\"\n#include \"dnd_model.h\"\nstatic DndManagedHeap *dnd_value_heap;");
         b.AppendLine("static inline float dnd_read_float(const void *p) {float v;memcpy(&v,p,4);return v;}\nstatic inline double dnd_read_double(const void *p) {double v;memcpy(&v,p,8);return v;}\nstatic inline uint64_t dnd_float_bits(double v,bool single) {if(single){float f=(float)v;uint32_t bits;memcpy(&bits,&f,4);return bits;}uint64_t bits;memcpy(&bits,&v,8);return bits;}\nstatic inline double dnd_float_value(uint64_t bits,bool single) {if(single){uint32_t b=(uint32_t)bits;return dnd_read_float(&b);}return dnd_read_double(&bits);}");
         b.AppendLine("static inline uint16_t dnd_read_u16(const void *p) {uint16_t v;memcpy(&v,p,2);return v;}\nstatic inline int32_t dnd_read_i32(const void *p) { int32_t v; memcpy(&v,p,sizeof(v)); return v; }\nstatic inline int64_t dnd_read_i64(const void *p) { int64_t v; memcpy(&v,p,sizeof(v)); return v; }");
-        b.AppendLine("#include \"dnd_network.h\"\n#include \"dnd_async.h\"");
+        b.AppendLine("#include \"dnd_network.h\"\n#include \"dnd_async.h\"\n#include \"dnd_timing.h\"");
         var schedulerPump=methods.SingleOrDefault(m=>m.Key.TypeName=="Dolphin.Threading.Tasks.Scheduler"&&m.Key.Name=="PumpContext");
         var automaticAsync=schedulerPump is not null;
+        var usesInput=methods.SelectMany(m=>m.Blocks).SelectMany(block=>block.Instructions)
+            .Any(i=>i is ValueIrReadButtonsDown || i is ValueIrNativeStorage n && n.Operation.StartsWith("Input",StringComparison.Ordinal));
         var stringLiterals=methods.SelectMany(m=>m.Blocks).SelectMany(block=>block.Instructions).OfType<ValueIrLoadString>().Select(x=>x.Value).Distinct(StringComparer.Ordinal).OrderBy(x=>x,StringComparer.Ordinal).ToArray();
         var stringIds=stringLiterals.Select((value,index)=>(value,index)).ToDictionary(x=>x.value,x=>x.index,StringComparer.Ordinal);
         foreach(var literal in stringLiterals)
@@ -79,25 +81,31 @@ internal static class ValueCBackend
             b.AppendLine(" }");
         }
         foreach(var group in methods.GroupBy(m=>(m.Key.TypeName,m.Key.Name)).Where(g=>g.Count()==1)){var m=group.Single();var alias=LegacySymbol(m.Key);if(alias==Symbol(m.Key))continue;b.Append($"{ReturnCType(m,model)} {alias}({Parameters(m,model)}) {{ return {Symbol(m.Key)}(");b.Append(string.Join(", ",Enumerable.Range(0,m.ParameterCount+(m.HasThis?1:0)).Select(i=>$"a{i}").Concat(ReturnSize(m.Key,model)>0?new[]{"dnd_ret"}:Array.Empty<string>())));b.AppendLine("); }");}
+        var timingPump=methods.SingleOrDefault(m=>m.Key.TypeName=="Dolphin.Timing.TimingRuntime"&&m.Key.Name=="Pump");
+        var timingStop=methods.SingleOrDefault(m=>m.Key.TypeName=="Dolphin.Timing.TimingRuntime"&&m.Key.Name=="Stop");
         if(automaticAsync)
         {
             var pending=methods.Single(m=>m.Key.TypeName=="Dolphin.Threading.Tasks.Scheduler"&&m.Key.Name=="Pending");
             var networkPump=methods.SingleOrDefault(m=>m.Key.TypeName=="Dolphin.Network.NetworkRuntime"&&m.Key.Name=="Pump");
             b.AppendLine("static int dnd_generated_async_dispatch(int context) {");
             if(TypeInitializer("Dolphin.Threading.Tasks.Scheduler",model) is not null)b.AppendLine($"  {EnsureSymbol("Dolphin.Threading.Tasks.Scheduler")}();");
+            var servicePending=new List<string>();
             if(networkPump is not null)
             {
                 var networkPending=methods.Single(m=>m.Key.TypeName=="Dolphin.Network.NetworkRuntime"&&m.Key.Name=="get_PendingOperations");
                 if(TypeInitializer("Dolphin.Network.NetworkRuntime",model) is not null)b.AppendLine($"  {EnsureSymbol("Dolphin.Network.NetworkRuntime")}();");
                 b.AppendLine($"  if(context==1) (void){Symbol(networkPump.Key)}(16,1);");
-                b.AppendLine($"  (void){Symbol(schedulerPump!.Key)}(context,16);");
-                b.AppendLine($"  return (int){Symbol(pending.Key)}(context)+(context==1?(int){Symbol(networkPending.Key)}():0);");
+                servicePending.Add($"(int){Symbol(networkPending.Key)}()");
             }
-            else
+            if(timingPump is not null)
             {
-                b.AppendLine($"  (void){Symbol(schedulerPump!.Key)}(context,16);");
-                b.AppendLine($"  return (int){Symbol(pending.Key)}(context);");
+                var timingPending=methods.Single(m=>m.Key.TypeName=="Dolphin.Timing.TimingRuntime"&&m.Key.Name=="get_Pending");
+                if(TypeInitializer("Dolphin.Timing.TimingRuntime",model) is not null)b.AppendLine($"  {EnsureSymbol("Dolphin.Timing.TimingRuntime")}();");
+                b.AppendLine($"  if(context==1) (void){Symbol(timingPump.Key)}();");
+                servicePending.Add($"(int){Symbol(timingPending.Key)}()");
             }
+            b.AppendLine($"  (void){Symbol(schedulerPump!.Key)}(context,16);");
+            b.AppendLine($"  return (int){Symbol(pending.Key)}(context)"+(servicePending.Count>0?$"+(context==1?({string.Join("+",servicePending)}):0)":"")+";");
             b.AppendLine("}");
         }
         var em=methods.Single(m=>m.Key==entry);
@@ -113,6 +121,8 @@ internal static class ValueCBackend
         }
         b.Append($"  intptr_t result = {Symbol(entry)}(");b.Append(string.Join(", ",Enumerable.Range(0,em.ParameterCount+(em.HasThis?1:0)).Select(i=>$"a{i}")));b.AppendLine(");");
         if(automaticAsync)b.AppendLine("  if(async_started) dnd_async_stop();\n  if(dnd_exception_pending()) result=1;");
+        if(timingStop is not null)b.AppendLine($"  (void){Symbol(timingStop.Key)}();");
+        if(usesInput)b.AppendLine("  dnd_input_shutdown();");
         if(staticRefs.Length>0)b.AppendLine("  dnd_gc_frame_pop(&static_frame);");b.AppendLine("  return result;");b.AppendLine("}");
         b.AppendLine("intptr_t dnd_value_aot_entry(DndManagedHeap *heap) { return dnd_aot_entry(heap); }");return b.ToString();
     }
@@ -456,7 +466,7 @@ internal static class ValueCBackend
                     case ValueIrLoadElement x:b.AppendLine(x.Result.Kind is IrValueKind.R4 or IrValueKind.R8?$"  v{x.Result.Id}=dnd_float_value(dnd_array_load_scalar((DndArray*)v{x.Array.Id},(uint32_t)v{x.Index.Id},{x.Size}u,false),{(x.Size==4?"true":"false")});":x.Reference?$"  v{x.Result.Id} = (intptr_t)dnd_array_load_ref((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id});":$"  v{x.Result.Id} = ({CType(x.Result.Kind)})dnd_array_load_scalar((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id}, {x.Size}u, {(x.Signed?"true":"false")});");break;
                     case ValueIrStoreElement x:b.AppendLine(x.Value.Kind is IrValueKind.R4 or IrValueKind.R8?$"  (void)dnd_array_store_scalar((DndArray*)v{x.Array.Id},(uint32_t)v{x.Index.Id},dnd_float_bits(v{x.Value.Id},{(x.Size==4?"true":"false")}),{x.Size}u);":x.Reference?$"  (void)dnd_array_store_ref((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id}, (DndObject*)v{x.Value.Id});":$"  (void)dnd_array_store_scalar((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id}, (uint64_t)v{x.Value.Id}, {x.Size}u);");break;
                     case ValueIrConsoleWriteLine x:b.AppendLine($"  {{ DndString *s=(DndString*)v{x.String.Id}; char text[256]; size_t n=s&&s->length<255?s->length:255; for(size_t i=0;i<n;i++) text[i]=(char)(s->chars[i]&0x7f); text[n]=0; dnd_console_write_line(text); }}");break;
-                    case ValueIrReadButtonsDown x:b.AppendLine($"  dnd_input_poll(); {{ const DndGamePad *pad=dnd_input_gamepad((unsigned)v{x.Port.Id}); v{x.Result.Id}=pad?(intptr_t)pad->down:0; }}");break;
+                    case ValueIrReadButtonsDown x:b.AppendLine($"  dnd_async_require_application_thread(); dnd_input_poll(); {{ const DndGamePad *pad=dnd_input_gamepad((unsigned)v{x.Port.Id}); v{x.Result.Id}=pad?(intptr_t)pad->down:0; }}");break;
                     case ValueIrPhi: break; // Assigned on predecessor edges.
                 }
             }

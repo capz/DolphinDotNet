@@ -6,7 +6,7 @@ the GameCube runs generated native code, using only the supported AOT API subset
 | Sample | Demonstrates | Setup / result |
 | --- | --- | --- |
 | [HelloGameCube](HelloGameCube/Program.cs) | `int Main`, `DebugOverlay.WriteLine`, integer arithmetic and standard `Int32.ToString` | Prints a greeting and 42, then exits |
-| [ManagedGameCube](ManagedGameCube/Program.cs) | Controller input, debug text and `ImmediateRenderer`; the scene belongs to `DemoScene`, not the framework | Rotating triangle; press Start on controller port 0 to exit |
+| [ManagedGameCube](ManagedGameCube/Program.cs) | Cached controller snapshots, debug text and `ImmediateRenderer`; the scene belongs to `DemoScene`, not the framework | Rotating triangle; press Start on controller port 0 to exit |
 | [AsyncNetworking](AsyncNetworking/Program.cs) | Standard `async Task<int> Main`, `HttpClient`, `Task.Run` and `ConfigureAwait(false)`; bounded Dolphin JSON parsing | Local DNS/HTTP fixture defaults; returns 0 when JSON `value` is 42, otherwise 1 |
 | [GoogleLogoAram](GoogleLogoAram/README.md) | Streamed HTTP to `AramStream` with standard `Stream.CopyToAsync`; partial-read-safe PNG signature verification | Run the PC relay and configure its LAN address; returns 0 on success, otherwise 1 |
 
@@ -56,7 +56,7 @@ immediate rendering without an external model asset. The existing
 [performance overlay](../docs/debug-overlay.md) can be enabled with
 `DebugOverlay.PerformanceVisible = true` in ManagedGameCube.
 Consult the [API inventory](../docs/dotnet-standard-status.md) before adding desktop
-.NET APIs: TLS, `Task.Delay`, `ValueTask` and `System.Text.Json` are not supported.
+.NET APIs: TLS, `ValueTask` and `System.Text.Json` are not supported.
 
 ## Networking setup and checks
 

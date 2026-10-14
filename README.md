@@ -11,6 +11,7 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
 - Nonmoving mark/sweep garbage collection with compiler-generated roots.
 - Supported standard `System.*` APIs for lists and comparers, binary/text streams,
   files and directories, encoding, tasks and cancellation.
+- Monotonic clocks, frame timing, async delays and disposable callback timers.
 - Ordinary `async`/`await`, `Task.Run` and captured continuations, dispatched by
   a runtime-owned service thread. Managed execution is serialized between the
   application and background executors.
@@ -26,7 +27,7 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
 Compilation is closed-world: reachable methods and static metadata must fit the
 [supported API subset](docs/dotnet-standard-status.md). A .NET target framework
 provides compile-time references, not full runtime compatibility. Full reflection,
-dynamic assembly loading, TLS/HTTPS, `Task.Delay`, `ValueTask`, general threading
+dynamic assembly loading, TLS/HTTPS, `ValueTask`, general threading
 and `System.Text.Json` are outside the implemented surface.
 
 GameCube is the primary target. Wii bundle generation is experimental; Wii U has
@@ -90,5 +91,5 @@ See [standalone builds](docs/standalone-native-builds.md) for SDK dependencies a
 platform targets, [async APIs](docs/async-runtime.md),
 [storage](docs/storage-runtime.md), [networking](docs/network-runtime.md),
 [ARAM](docs/aram-runtime.md), [models](docs/model-assets-runtime.md),
-[diagnostics](docs/debug-overlay.md), and [save image preparation](tools/DolphinDotNet.SaveImage/README.md)
+[timing](docs/timing.md), [controller input](docs/controller-input.md), [diagnostics](docs/debug-overlay.md), and [save image preparation](tools/DolphinDotNet.SaveImage/README.md)
 for feature-specific usage and limits.

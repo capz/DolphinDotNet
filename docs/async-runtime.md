@@ -24,7 +24,7 @@ The [AsyncNetworking](../samples/AsyncNetworking/Program.cs) and [GoogleLogoAram
 
 ## Dispatch and continuation placement
 
-The generated native entry point starts a persistent service thread when the reachable program uses tasks. It services nonblocking network operations and bounded background action batches, sleeps on a condition variable when idle, and uses 1 ms timed waits while socket/DMA polling is pending. Submissions and completions signal the condition variable. Startup failure is reported; shutdown joins the service thread before releasing the application's static roots.
+The generated native entry point starts a persistent service thread when the reachable program uses tasks. It services nonblocking network operations and bounded background action batches, sleeps on a condition variable when idle, and uses 1 ms timed waits while socket/DMA/timing polling is pending. Submissions and completions signal the condition variable. Startup failure is reported; shutdown joins the service thread before releasing the application's static roots.
 
 | Operation | Executor |
 | --- | --- |
@@ -66,7 +66,7 @@ No scheduler namespace import is needed for normal async applications. `Dolphin.
 | Cancellation | Source.Cancel, token checks; no registrations or timed cancellation |
 | Blocking access | Wait, Result and GetAwaiter().GetResult integrate with automatic dispatch |
 
-Task.Run has no async-delegate unwrapping overload. Task.Delay, async void, ValueTask, async streams, user-created Thread, locks, timers, general SynchronizationContext / ExecutionContext and full TPL behavior are not supplied. WhenAll reports the first captured fault ahead of cancellation and does not supply AggregateException collections. WhenAny returns the winning task; await it separately to observe its result.
+Task.Delay(int) and Task.Delay(int, CancellationToken) are supplied by [Dolphin.Timing](timing.md), alongside executor-captured callback timers. Task.Run has no async-delegate unwrapping overload. TimeSpan/TimeProvider delays, async void, ValueTask, async streams, user-created Thread, locks, System.Threading.Timer, general SynchronizationContext / ExecutionContext and full TPL behavior are not supplied. WhenAll reports the first captured fault ahead of cancellation and does not supply AggregateException collections. WhenAny returns the winning task; await it separately to observe its result.
 
 ## Verification
 

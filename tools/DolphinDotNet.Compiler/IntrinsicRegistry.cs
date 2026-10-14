@@ -88,6 +88,8 @@ internal static class IntrinsicRegistry
             ("System.String",".ctor") when parameterCount is 1 or 3=>IntrinsicKind.StringFromChars,
             ("Dolphin.Graphics.NativeModel",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Graphics.NativeGraphics",_)=>IntrinsicKind.NativeStorage,
+            ("Dolphin.Input.NativeInput",_)=>IntrinsicKind.NativeStorage,
+            ("Dolphin.Timing.NativeTiming",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Diagnostics.NativeDiagnostics",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Memory.NativeAram",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Storage.NativeStorage",_)=>IntrinsicKind.NativeStorage,
