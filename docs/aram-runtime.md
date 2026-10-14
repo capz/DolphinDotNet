@@ -21,18 +21,19 @@ Use `Dolphin.Threading.Tasks.Scheduler.Pump()` in the game loop. Each pump perfo
 
 ## Standard .NET async compatibility
 
-The long-term public contract is `System.Threading.Tasks.Task`, `Task<T>` and `System.Threading.CancellationToken`; the cooperative scheduler remains an internal implementation detail. The compiler already maps these framework types to `Dolphin.Threading.Tasks` during AOT lowering, but the currently compiled `Dolphin.IO.Stream`, networking and ARAM APIs expose custom task types. Merely replacing a `using` directive does not make the CLR-visible signatures equivalent, and Roslyn does not accept Dolphin's Task as an `async` return type.
+The public I/O, ARAM and networking APIs use `System.Threading.Tasks.Task`, `Task<T>` and `System.Threading.CancellationToken`. `Dolphin.IO.AramStream` derives from `System.IO.Stream`, so standard HTTP response streams can copy into it with `CopyToAsync`. Application methods should declare `async Task` using the standard namespace; alias `Dolphin.Threading.Tasks.Scheduler` only for pumping.
 
-Migration needs to proceed across the entire public API and compiler together: (1) inventory/convert task and token signatures, (2) replace internal continuation dependencies with a runtime adapter, (3) teach AOT signature resolution to match framework metadata and converted declarations, (4) compile sample applications against stock .NET contracts, and (5) run native GameCube tests for cancellation and continuation ordering. Avoid mixing framework Task and Dolphin Task in a single public inheritance hierarchy. This work is **not completed** by this PR; the stream currently follows its base `Dolphin.IO.Stream` contract and uses explicit continuations to compile.
+The AOT compiler redirects supported standard stream/task/awaiter/cancellation metadata to the cooperative Dolphin runtime. This supplies compatibility on the target, not a desktop GameCube backend or the full .NET API surface. See [async runtime and namespace rules](async-runtime.md) for supported signatures and limitations.
 
 ## Seekable ARAM streams
 
-`Dolphin.IO.AramStream` supplies a fixed-capacity, disposable `Dolphin.IO.Stream` that owns an `AramBuffer`. It works with `Stream.CopyToAsync`, including HTTP response streams, and copies chunks through the existing 4 KiB staging transfer queue. It does not enable network-to-ARAM direct DMA.
+`Dolphin.IO.AramStream` supplies a fixed-capacity, disposable `System.IO.Stream` that owns an `AramBuffer`. It works with `Stream.CopyToAsync`, including HTTP response streams, and copies chunks through the existing 4 KiB staging transfer queue. It does not enable network-to-ARAM direct DMA.
 
 ```csharp
 using Dolphin.IO;
 using Dolphin.Memory;
-using Dolphin.Threading.Tasks;
+using System.Threading.Tasks;
+using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 
 Aram.Initialize(); // only once, before other ARAM owners
 using var download = new AramStream(8 * 1024 * 1024);
@@ -85,7 +86,7 @@ Backend API references: [libogc2 ARAM](https://github.com/extremscorner/libogc2/
 
 ## Example: download Google's PNG logo into ARAM
 
-See [GoogleLogoAram](../samples/GoogleLogoAram/Program.cs). The sample downloads an image as an HTTP response, receives it in small segments using one reusable 4 KiB buffer in main RAM (MEM1), and writes each segment to `aramStream`, a fixed-capacity 256 KiB allocation in GameCube auxiliary RAM (ARAM). ARAM is extra memory outside the CPU's directly accessible main RAM. Streaming this way avoids holding the complete downloaded image in MEM1, leaving more main RAM for gameplay and other tasks. It does not bypass main RAM entirely: network reception and ARAM DMA still use small staging buffers. The sample uses standard `System.Threading.Tasks.Task` and `System.Net.Http.HttpClient` APIs. When the developer is ready to work with the data, they can set `aramStream.Position` to the desired offset and call `ReadAsync` to copy just the required bytes back to MEM1 for decoding, texture upload, or other processing. The sample demonstrates this by reading back and validating the PNG signature; it does **not** decode or display the image. Keep the `AramStream` alive until its contents are needed, then dispose it to release the ARAM allocation. The sample disposes it at the end of the demonstration.
+See [GoogleLogoAram](../samples/GoogleLogoAram/Program.cs). The sample downloads an image as an HTTP response, copies it with standard `Stream.CopyToAsync` using one reusable 4 KiB buffer in main RAM (MEM1), awaiting each write to `aramStream`, a fixed-capacity 256 KiB allocation in GameCube auxiliary RAM (ARAM). ARAM is extra memory outside the CPU's directly accessible main RAM. Streaming this way avoids holding the complete downloaded image in MEM1, leaving more main RAM for gameplay and other tasks. It does not bypass main RAM entirely: network reception and ARAM DMA still use small staging buffers. The sample uses standard `System.Threading.Tasks.Task` and `System.Net.Http.HttpClient` APIs. When the developer is ready to work with the data, they can set `aramStream.Position` to the desired offset and call `ReadAsync` to copy just the required bytes back to MEM1 for decoding, texture upload, or other processing. The sample demonstrates this by reading back and validating the PNG signature; it does **not** decode or display the image. Keep the `AramStream` alive until its contents are needed, then dispose it to release the ARAM allocation. The sample disposes it at the end of the demonstration.
 
 ### What `Main()` does and why the pumps are needed
 

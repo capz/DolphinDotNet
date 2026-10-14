@@ -2,9 +2,15 @@
 
 This sample demonstrates downloading an image without keeping the entire download in GameCube **main RAM (MEM1)**.
 
-The HTTP response is consumed as a stream (`httpResponseStream`). A single reusable **4 KiB buffer** (`segmentBuffer`) receives the image in small segments. Each segment is written to `aramStream`, an `AramStream` backed by **ARAM (Auxiliary RAM)** — the GameCube's additional memory that is separate from CPU-accessible MEM1. This avoids allocating a full image-sized byte array in MEM1, leaving more main RAM available for gameplay, rendering and other work. Network reception and ARAM DMA still use small MEM1 staging buffers; data does not bypass main RAM entirely.
+The HTTP response is consumed as a stream (`httpResponseStream`). The standard `Stream.CopyToAsync(aramStream, CopyBufferBytes)` API receives the image in small segments through a single reusable **4 KiB buffer** and awaits each write to `aramStream`, an `AramStream` backed by **ARAM (Auxiliary RAM)** — the GameCube's additional memory that is separate from CPU-accessible MEM1. This avoids allocating a full image-sized byte array in MEM1, leaving more main RAM available for gameplay, rendering and other work. Network reception and ARAM DMA still use small MEM1 staging buffers; data does not bypass main RAM entirely.
 
 When the image is needed, seek within `aramStream` and read the necessary bytes back into MEM1 with `ReadAsync`. The sample demonstrates this by retrieving the first eight bytes and checking the PNG signature. It does not decode or draw the PNG. **Keep the ARAM stream alive** if you need to retrieve the image later; this short demonstration disposes it when the method returns.
+
+## Modern API surface
+
+Application async methods use `System.Threading.Tasks.Task`, and HTTP uses `System.Net.Http.HttpClient`. `Dolphin.IO.AramStream` now derives from `System.IO.Stream` and exposes standard Task/cancellation signatures, so the HTTP response can be copied directly with `CopyToAsync` instead of a hand-written read/write loop. The sample uses an alias for this platform-specific stream and for the cooperative scheduler and network runtime.
+
+DolphinDotNet AOT maps the supported standard calls to its cooperative runtime. This does not add background threads or support every modern .NET overload; PNG validation uses the supported byte-array `ReadAsync` overload, repeating reads until all eight signature bytes arrive. Running this sample with the desktop CLR does not provide the native GameCube backend.
 
 ## Understanding `Main()`
 
