@@ -39,6 +39,14 @@ jobs:
           dotnet pack tools/DolphinDotNet.SaveImage/DolphinDotNet.SaveImage.csproj -c Release -o /tmp/dnd-tools
           dotnet tool install DolphinDotNet.SaveImage --version 0.1.0 --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
           /tmp/dnd-tool-install/dnd-save-image --help
+      - name: Validate HelloGameCube through current AOT path
+        run: |
+          dotnet build samples/HelloGameCube/HelloGameCube.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll /tmp/hello-gamecube.c
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/hello-gamecube.c tests/hello_gamecube_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/hello-gamecube-test
+          /tmp/hello-gamecube-test
+          sh scripts/compile-sample.sh /tmp/hello-gamecube-bundle
+          test -s /tmp/hello-gamecube-bundle/source/generated_program.c
       - name: Build managed GameCube sample
         run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
       - name: Lower managed GameCube dependency graph
@@ -208,8 +216,8 @@ jobs:
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/performance.c -lm -o /tmp/model-smoke32
           timeout 30s /tmp/model-smoke32 /tmp/dnd-model-fixtures --gc-stress
-      - name: Regenerate managed sample
-        run: sh scripts/compile-sample.sh
+      - name: Regenerate legacy VM regression fixture
+        run: sh scripts/compile-legacy-smoke.sh
       - name: Verify generated source
         run: git diff --exit-code -- generated/generated_program.h
 

@@ -42,7 +42,7 @@ dotnet run --project tools/DolphinDotNet.Compiler -- --aot path/to/Managed.dll g
 make
 ```
 
-The output is `DolphinDotNet.dol`. The repository also contains `samples/HelloGameCube`, `samples/ManagedGameCube`, and `scripts/compile-sample.sh`.
+The output is `DolphinDotNet.dol`. See the [sample guide](samples/README.md) for all four examples and standalone AOT/DOL build commands. `sh scripts/compile-sample.sh` generates a standalone HelloGameCube bundle in `out/HelloGameCube`.
 
 The [async networking sample](samples/AsyncNetworking/Program.cs) awaits platform startup and a DNS-resolved HTTP JSON request using an ordinary async Main without application pump calls. Its defaults target the local test fixture; configure a reachable resolver and endpoint for hardware.
 

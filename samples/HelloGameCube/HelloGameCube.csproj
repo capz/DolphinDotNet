@@ -6,4 +6,7 @@
     <Nullable>enable</Nullable>
     <Optimize>true</Optimize>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
+  </ItemGroup>
 </Project>

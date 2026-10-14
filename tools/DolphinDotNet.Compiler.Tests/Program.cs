@@ -4,12 +4,12 @@ using System.IO;
 using System.Linq;
 
 var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-var sample = Path.Combine(root, "samples/HelloGameCube/HelloGameCube.csproj");
+var sample = Path.Combine(root, "tests/LegacyHelloSmoke/LegacyHelloSmoke.csproj");
 var compiler = Path.Combine(root, "tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj");
 var temp = Path.Combine(Path.GetTempPath(), $"dnd-{Guid.NewGuid():N}.h");
 
 Run("dotnet", $"build \"{sample}\" -c Release");
-var dll = Path.Combine(root, "samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll");
+var dll = Path.Combine(root, "tests/LegacyHelloSmoke/bin/Release/net8.0/LegacyHelloSmoke.dll");
 Run("dotnet", $"run --project \"{compiler}\" -- \"{dll}\" \"{temp}\"");
 
 var generated = File.ReadAllText(temp);
