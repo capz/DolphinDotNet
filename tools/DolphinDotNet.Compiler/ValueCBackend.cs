@@ -5,12 +5,13 @@ internal static class ValueCBackend
 {
     public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry,CompilationModel model,DependencyGraph graph)
     {
-        var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include <math.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_performance.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\n#include \"dnd_storage.h\"\n#include \"dnd_text.h\"\n#include \"dnd_aram.h\"\n#include \"dnd_model.h\"\nstatic DndManagedHeap *dnd_value_heap;");
+        var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include <math.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_performance.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\n#include \"dnd_draw.h\"\n#include \"dnd_gx_raw.h\"\n#include \"dnd_storage.h\"\n#include \"dnd_text.h\"\n#include \"dnd_aram.h\"\n#include \"dnd_model.h\"\nstatic DndManagedHeap *dnd_value_heap;");
         b.AppendLine("static inline float dnd_read_float(const void *p) {float v;memcpy(&v,p,4);return v;}\nstatic inline double dnd_read_double(const void *p) {double v;memcpy(&v,p,8);return v;}\nstatic inline uint64_t dnd_float_bits(double v,bool single) {if(single){float f=(float)v;uint32_t bits;memcpy(&bits,&f,4);return bits;}uint64_t bits;memcpy(&bits,&v,8);return bits;}\nstatic inline double dnd_float_value(uint64_t bits,bool single) {if(single){uint32_t b=(uint32_t)bits;return dnd_read_float(&b);}return dnd_read_double(&bits);}");
         b.AppendLine("static inline uint16_t dnd_read_u16(const void *p) {uint16_t v;memcpy(&v,p,2);return v;}\nstatic inline int32_t dnd_read_i32(const void *p) { int32_t v; memcpy(&v,p,sizeof(v)); return v; }\nstatic inline int64_t dnd_read_i64(const void *p) { int64_t v; memcpy(&v,p,sizeof(v)); return v; }");
         b.AppendLine("#include \"dnd_network.h\"\n#include \"dnd_async.h\"\n#include \"dnd_timing.h\"");
         var schedulerPump=methods.SingleOrDefault(m=>m.Key.TypeName=="Dolphin.Threading.Tasks.Scheduler"&&m.Key.Name=="PumpContext");
         var automaticAsync=schedulerPump is not null;
+        var usesGraphics=methods.Any(m=>m.Key.TypeName.StartsWith("Dolphin.Graphics.",StringComparison.Ordinal));
         var usesInput=methods.SelectMany(m=>m.Blocks).SelectMany(block=>block.Instructions)
             .Any(i=>i is ValueIrReadButtonsDown || i is ValueIrNativeStorage n && n.Operation.StartsWith("Input",StringComparison.Ordinal));
         var stringLiterals=methods.SelectMany(m=>m.Blocks).SelectMany(block=>block.Instructions).OfType<ValueIrLoadString>().Select(x=>x.Value).Distinct(StringComparer.Ordinal).OrderBy(x=>x,StringComparer.Ordinal).ToArray();
@@ -122,6 +123,7 @@ internal static class ValueCBackend
         b.Append($"  intptr_t result = {Symbol(entry)}(");b.Append(string.Join(", ",Enumerable.Range(0,em.ParameterCount+(em.HasThis?1:0)).Select(i=>$"a{i}")));b.AppendLine(");");
         if(automaticAsync)b.AppendLine("  if(async_started) dnd_async_stop();\n  if(dnd_exception_pending()) result=1;");
         if(timingStop is not null)b.AppendLine($"  (void){Symbol(timingStop.Key)}();");
+        if(usesGraphics)b.AppendLine("  dnd_device_shutdown();");
         if(usesInput)b.AppendLine("  dnd_input_shutdown();");
         if(staticRefs.Length>0)b.AppendLine("  dnd_gc_frame_pop(&static_frame);");b.AppendLine("  return result;");b.AppendLine("}");
         b.AppendLine("intptr_t dnd_value_aot_entry(DndManagedHeap *heap) { return dnd_aot_entry(heap); }");return b.ToString();

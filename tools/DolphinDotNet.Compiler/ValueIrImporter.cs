@@ -158,13 +158,13 @@ internal static class ValueIrImporter
                     }
                     case 0xa3:
                     {
-                        var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array load at IL_{cil.Offset:x4}.");var index=Pop(stack,cil);var array=Pop(stack,cil);
+                        var optional=resolveGenericTypeParameter(cil);if(optional is null&&resolveType(cil) is {} named){var layout=valueLayout(named);if(layout.Item1>0)optional=new GenericRepresentation(GenericRepresentationKind.ValueType,layout.Item1,layout.Item2,named);}var rep=optional??throw new NotSupportedException($"Unable to resolve array load at IL_{cil.Offset:x4}.");var index=Pop(stack,cil);var array=Pop(stack,cil);
                         var result=New(rep.StackKind);
                         instructions.Add(rep.IsAggregate?new ValueIrAggregateElement(result,array,index,rep.Size):new ValueIrLoadElement(result,array,index,rep.Size,rep.IsReference,rep.TypeName is not ("System.Byte" or "System.Boolean" or "System.Char" or "System.UInt16" or "System.UInt32" or "System.UInt64")));stack.Add(result);break;
                     }
                     case 0xa4:
                     {
-                        var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array store at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);
+                        var optional=resolveGenericTypeParameter(cil);if(optional is null&&resolveType(cil) is {} named){var layout=valueLayout(named);if(layout.Item1>0)optional=new GenericRepresentation(GenericRepresentationKind.ValueType,layout.Item1,layout.Item2,named);}var rep=optional??throw new NotSupportedException($"Unable to resolve array store at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);
                         instructions.Add(rep.IsAggregate?new ValueIrStoreAggregateElement(array,index,value,rep.Size):new ValueIrStoreElement(array,index,value,rep.Size,rep.IsReference));break;
                     }
                     case 0xfe15:

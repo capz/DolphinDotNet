@@ -14,7 +14,7 @@ internal static class GameCubeBundle
         ("networking", new[] {"System.Net.", "Dolphin.Network."}, new[] {"-lbba", "-logc"}),
         ("storage", new[] {"System.IO.", "Dolphin.Storage."}, new[] {"-lfat", "-ldvm", "-liso9660", "-logc"}),
         ("aram", new[] {"Dolphin.IO.Aram", "Dolphin.Aram."}, new[] {"-logc"}),
-        ("graphics", new[] {"Dolphin.Graphics.", "Dolphin.Models."}, new[] {"-lopengx", "-logc", "-lm"}),
+        ("graphics", new[] {"Dolphin.Graphics.", "Dolphin.Models."}, new[] {"-logc", "-lm"}),
         ("input", new[] {"Dolphin.Input."}, new[] {"-logc"}),
         ("timing", new[] {"Dolphin.Timing."}, new[] {"-logc"}),
         ("sound", new[] {"System.Media.", "Dolphin.Audio.", "Dolphin.Sound."}, Array.Empty<string>())
@@ -74,7 +74,7 @@ internal static class GameCubeBundle
 
         var sources = new[] {
             "aram", "async_runtime", "bcl", "card_transaction", "console_overlay", "fst",
-            "fst_gamecube", "gc_stw", "graphics_opengx", "input", "input_gamecube",
+            "fst_gamecube", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "model", "model_animation",
             "model_graphics", "model_transform", "network", "network_gamecube",
             "network_gamecube_backend", "performance", "platform_gamecube",
@@ -144,7 +144,7 @@ internal static class GameCubeBundle
         var rules = isWiiU ? "$(DEVKITPRO)/wut/share/wut_rules"
             : "$(DEVKITPRO)/libogc2/" + (platform == "wii" ? "wii_rules" : "gamecube_rules");
         var suffix = isWiiU ? "rpx" : "dol";
-        var libs = isWiiU ? "-lwut -lm" : "-lopengx -lfat -ldvm -liso9660 -lbba -logc -lm";
+        var libs = isWiiU ? "-lwut -lm" : "-lfat -ldvm -liso9660 -lbba -logc -lm";
         var library = isWiiU ? "$(DEVKITPRO)/wut"
             : "$(DEVKITPRO)/libogc2/" + (platform == "wii" ? "wii" : "gamecube");
         var builder = new StringBuilder();

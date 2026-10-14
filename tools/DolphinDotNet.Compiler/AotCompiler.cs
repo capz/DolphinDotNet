@@ -151,8 +151,9 @@ internal static class AotCompiler
         if(instruction.Operand is not CilMetadataToken { Token:var raw }||MetadataTokens.EntityHandle(raw).Kind!=HandleKind.FieldDefinition)throw new NotSupportedException("Only static field data tokens are supported.");
         var field=assembly.Metadata.GetFieldDefinition((FieldDefinitionHandle)MetadataTokens.EntityHandle(raw));var rva=field.GetRelativeVirtualAddress();
         var signature=field.DecodeSignature(new SignatureAbi(model),new SignatureAbi.Context(Array.Empty<GenericRepresentation>(),Array.Empty<GenericRepresentation>()));
-        if(rva==0||signature.Size<=0)throw new NotSupportedException("Field token has no fixed RVA data.");
-        return assembly.PE.GetSectionData(rva).GetContent(0,signature.Size).ToArray();
+        var size=signature.Size>0?signature.Size:signature.Kind is CilStackKind.I4 or CilStackKind.I8 or CilStackKind.Float?signature.ScalarSize:0;
+        if(rva==0||size<=0)throw new NotSupportedException("Field token has no fixed RVA data.");
+        return assembly.PE.GetSectionData(rva).GetContent(0,size).ToArray();
     }
     private static MethodKey? ResolveArrayEnumerator(MetadataReader md,CompilationModel model,MethodModel context,CilInstruction call)
     {

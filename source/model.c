@@ -1,3 +1,4 @@
+#include "dnd_draw.h"
 #include "dnd_model_internal.h"
 #include "dnd_storage.h"
 #include <limits.h>
@@ -149,7 +150,7 @@ void dnd_model_release(DndModel *m) {
 }
 int dnd_model_dispose(int token) {
   DndModel *m = dnd_model_find(token, true);
-  if (!m || m->closed)
+  if (!m || m->closed || dnd_device_active())
     return -1;
   m->closed = true;
   dnd_model_release(m);
@@ -525,7 +526,7 @@ int dnd_model_copy(int token, int offset, DndArray *array, int count,
 }
 int dnd_model_unload(int token) {
   DndModel *m = dnd_model_find(token, false);
-  if (!m || !m->ready || m->restoring || dnd_model_frame_active)
+  if (!m || !m->ready || m->restoring || dnd_device_active())
     return -1;
   for (int i = 0; i < DND_INSTANCE_SLOTS; i++)
     if (dnd_instances[i] && dnd_instances[i]->model == m)

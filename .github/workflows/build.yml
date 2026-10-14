@@ -55,8 +55,18 @@ jobs:
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube.c -o /tmp/managed_gamecube.o
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube_value.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube_value.c -o /tmp/managed_gamecube_value.o
-          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/managed_gamecube.c tests/managed_gamecube_host.c source/performance.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/managed-gamecube-test
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/managed_gamecube.c -DDND_GRAPHICS_TEST tests/managed_gamecube_host.c tests/graphics_compat_backend.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/managed-gamecube-test
           /tmp/managed-gamecube-test
+      - name: Validate raw and managed graphics layers
+        run: |
+          python3 tools/gx-bindings/generate.py
+          git diff --exit-code -- src/DolphinDotNet.GameCube/Dolphin/Graphics/Raw include/dnd_gx_raw.h source/gx_raw.c tools/DolphinDotNet.Compiler/RawGXBindings.Generated.cs
+          dotnet build tests/GraphicsSmoke/GraphicsSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/GraphicsSmoke/bin/Release/net8.0/GraphicsSmoke.dll /tmp/graphics-smoke.c
+          cc -pthread -DDND_GRAPHICS_TEST -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke
+          /tmp/graphics-smoke
+          cc -pthread -m32 -DDND_GRAPHICS_TEST -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke32
+          /tmp/graphics-smoke32
       - name: Generate standalone GameCube AOT build bundle
         run: |
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-bundle
@@ -235,21 +245,21 @@ jobs:
           /tmp/dnd-tool-install/dnd-assets --help
           dotnet build /tmp/dnd-model-fixtures/Build.csproj -c Release -p:DndAssetsCommand=/tmp/dnd-tool-install/dnd-assets
           cmp /tmp/dnd-model-fixtures/sd/animated.dndmodel /tmp/dnd-model-fixtures/sd/built.dndmodel
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/performance.c -lm -o /tmp/model-native
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native
           timeout 30s /tmp/model-native /tmp/dnd-model-fixtures
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/performance.c -lm -o /tmp/model-native32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native32
           timeout 30s /tmp/model-native32 /tmp/dnd-model-fixtures
       - name: Validate model AOT, transforms, animation and ARAM residency
         timeout-minutes: 5
         run: |
           dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/performance.c -lm -o /tmp/model-smoke
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures --gc-stress
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/performance.c -lm -o /tmp/model-smoke32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke32
           timeout 30s /tmp/model-smoke32 /tmp/dnd-model-fixtures --gc-stress
 
   portable-runtime:
@@ -270,10 +280,9 @@ jobs:
       image: ghcr.io/extremscorner/libogc2:20260805
     steps:
       - uses: actions/checkout@v4
-      - name: Verify libogc2 storage and OpenGX packages
+      - name: Verify libogc2 storage and GX packages
         run: |
           test -f "$DEVKITPRO/libogc2/gamecube/include/fat.h"
-          test -f "$DEVKITPRO/libogc2/gamecube/lib/libopengx.a"
           dkp-pacman -Q | grep -E 'libogc2|devkitPPC'
       - name: Locate libogc installation
         run: |
@@ -288,7 +297,6 @@ jobs:
           echo "DEVKITPPC=$DEVKITPPC"
           test -x "$DEVKITPPC/bin/powerpc-eabi-gcc"
           "$DEVKITPPC/bin/powerpc-eabi-gcc" --version
-          test -f "$DEVKITPRO/libogc2/gamecube/lib/libopengx.a"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -323,6 +331,12 @@ jobs:
           dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/model-smoke.c -o /tmp/model-smoke.o
+      - name: Compile and link graphics layers for PowerPC
+        run: |
+          dotnet build tests/GraphicsSmoke/GraphicsSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle tests/GraphicsSmoke/bin/Release/net8.0/GraphicsSmoke.dll /tmp/dnd-graphics --platform gamecube
+          make -C /tmp/dnd-graphics V=1
+          test -s /tmp/dnd-graphics/Game.dol
       - name: Test DOL alignment handling
         run: python3 -m unittest discover -s tests -p test_dol_sections.py
       - name: Build corrected project-owned EXI implementation

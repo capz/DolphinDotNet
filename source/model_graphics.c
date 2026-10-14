@@ -1,4 +1,5 @@
 #include "dnd_graphics.h"
+#include "dnd_draw.h"
 #include "dnd_performance.h"
 #include "dnd_model_internal.h"
 #include <math.h>
@@ -7,6 +8,7 @@
 #include <gccore.h>
 #endif
 static float frame_view[16], frame_projection[16];
+static bool owns_frame;
 static bool matrix_array(DndArray *a, float out[16]) {
   if (!a || a->element_size != 4 || a->elements_are_references ||
       a->length != 16)
@@ -21,8 +23,11 @@ int dnd_model_frame_begin(DndArray *view, DndArray *projection) {
   if (dnd_model_frame_active || !matrix_array(view, frame_view) ||
       !matrix_array(projection, frame_projection))
     return -1;
+  owns_frame=!dnd_device_active();
+  if(owns_frame && dnd_device_begin(0.025f,0.035f,0.06f,1)<0) return -1;
+  if(dnd_device_pass_begin(1)<0) return -1;
+  dnd_draw_set_camera(frame_view,frame_projection);
 #ifdef DND_GAMECUBE_STORAGE
-  dnd_graphics_model_begin();
   Mtx44 p;
   for (int r = 0; r < 4; r++)
     for (int c = 0; c < 4; c++)
@@ -30,16 +35,14 @@ int dnd_model_frame_begin(DndArray *view, DndArray *projection) {
   GX_LoadProjectionMtx(p, GX_PERSPECTIVE);
 #endif
   dnd_model_frame_active = true;
-  dnd_performance_begin_frame();
   return 0;
 }
 int dnd_model_frame_end(void) {
   if (!dnd_model_frame_active)
     return -1;
-#ifdef DND_GAMECUBE_STORAGE
-  dnd_graphics_model_end();
-#endif
+  if(dnd_device_pass_end(1)<0) return -1;
   dnd_model_frame_active = false;
+  if(owns_frame) return dnd_device_end();
   return 0;
 }
 int dnd_model_draw(int token, DndArray *transform) {

@@ -1,3 +1,4 @@
+#include "dnd_draw.h"
 #include "dnd_model_internal.h"
 #include <limits.h>
 #include <math.h>
@@ -307,7 +308,7 @@ int dnd_model_instance(int token, int budget) {
 }
 int dnd_model_instance_dispose(int token) {
   DndInstance *in = dnd_instance_find(token);
-  if (!in || dnd_model_frame_active)
+  if (!in || dnd_device_active())
     return -1;
   for (int i = 0; i < DND_INSTANCE_SLOTS; i++)
     if (dnd_instances[i] == in)
@@ -327,7 +328,7 @@ int dnd_model_play(int token, int clip, int loop, float fade) {
   DndInstance *in = dnd_instance_find(token);
   if (!in || !in->model->ready || clip < 0 ||
       (unsigned)clip >= in->model->clips || !isfinite(fade) || fade < 0 ||
-      dnd_model_frame_active)
+      dnd_device_active())
     return -1;
   if (fade > 0 && in->clip >= 0) {
     if (in->next >= 0)
@@ -354,7 +355,7 @@ static float advance(float time, float delta, float duration, bool loop) {
 }
 int dnd_model_control(int token, int op, float value) {
   DndInstance *in = dnd_instance_find(token);
-  if (!in || !isfinite(value) || value < 0 || dnd_model_frame_active)
+  if (!in || !isfinite(value) || value < 0 || dnd_device_active())
     return -1;
   if (op == 1) {
     in->paused = true;

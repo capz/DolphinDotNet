@@ -6,7 +6,7 @@
 #include <stdlib.h>
 
 void dnd_platform_init(void) {
-    dnd_graphics_init();
+    /* Graphics initialization is lazy so raw-only applications can own GX/VIDEO. */
     dnd_input_init();
     dnd_console_init();
 }

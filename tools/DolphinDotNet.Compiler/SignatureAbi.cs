@@ -39,8 +39,8 @@ internal sealed class SignatureAbi(CompilationModel model) : ISignatureTypeProvi
         return Reference with { Name=name };
     }
     public Type GetTypeFromSpecification(MetadataReader md,Context context,TypeSpecificationHandle h,byte raw)=>md.GetTypeSpecification(h).DecodeSignature(this,context);
-    public Type GetSZArrayType(Type element)=>Reference;
-    public Type GetArrayType(Type element,ArrayShape shape)=>Reference;
+    public Type GetSZArrayType(Type element)=>Reference with { Name=(element.Name ?? element.Kind.ToString())+"[]" };
+    public Type GetArrayType(Type element,ArrayShape shape)=>Reference with { Name=(element.Name ?? element.Kind.ToString())+"["+new string(',',shape.Rank-1)+"]" };
     public Type GetByReferenceType(Type element)=>new(CilStackKind.ManagedPointer);
     public Type GetPointerType(Type element)=>new(CilStackKind.ManagedPointer);
     public Type GetFunctionPointerType(MethodSignature<Type> signature)=>new(CilStackKind.NativeInt);

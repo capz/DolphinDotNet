@@ -1,6 +1,6 @@
 namespace Dolphin.Graphics;
 
-/// <summary>Immediate-mode graphics operations backed by OpenGX. Calls run on the application thread.</summary>
+/// <summary>Immediate-mode graphics operations backed by native GX. Calls run on the application thread.</summary>
 /// <remarks>Begin a frame, set its projection and transform, then submit complete coloured triangles.
 /// End every triangle batch before ending the frame. EndFrame renders the diagnostic overlay and presents.</remarks>
 public static class ImmediateRenderer
