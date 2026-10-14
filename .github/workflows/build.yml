@@ -314,7 +314,7 @@ jobs:
           dotnet build tests/AutomaticTaskSmoke/AutomaticTaskSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/AutomaticTaskSmoke/bin/Release/net8.0/AutomaticTaskSmoke.dll /tmp/automatic-tasks.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/automatic-tasks.c -o /tmp/automatic-tasks.o
-          "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude tests/automatic_tasks_gamecube_entry.c /tmp/automatic-tasks.o build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/automatic_tasks.elf
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/automatic-tasks.o build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/automatic_tasks.elf
           elf2dol footprint/automatic_tasks.elf footprint/automatic_tasks.dol
           python3 scripts/dol_sections.py --pad footprint/automatic_tasks.dol
       - name: Report GameCube runtime footprint
