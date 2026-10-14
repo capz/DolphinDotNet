@@ -17,6 +17,8 @@ int dnd_device_begin(float r,float g,float b,float a) {
     if(dnd_exception_pending()){active=false;return -1;}
     viewport[0]=viewport[1]=scissor[0]=scissor[1]=0;
     viewport[2]=scissor[2]=dnd_device_width();viewport[3]=scissor[3]=dnd_device_height();
+    /* Asset completions and application callbacks must not reenter rendering. */
+    dnd_async_enter_critical();
     dnd_performance_begin_frame();
     return 0;
 }
@@ -28,6 +30,7 @@ int dnd_device_end(void) {
 #endif
     active=false;
     dnd_draw_collect();
+    dnd_async_leave_critical();
     return 0;
 }
 int dnd_device_pass_begin(int next) {
@@ -98,7 +101,7 @@ int dnd_raw_depth(void) { return raw_depth; }
 void dnd_device_shutdown(void) {
     /* Native shutdown never executes user callbacks and retains pending errors. */
     if(raw_depth) { dnd_draw_backend_abort();raw_depth=0; dnd_async_leave_critical(); }
-    dnd_draw_backend_wait(); active=false; pass=0; dnd_draw_shutdown(); external=false;
+    dnd_draw_backend_wait(); if(active)dnd_async_leave_critical(); active=false; pass=0; dnd_draw_shutdown(); external=false;
 }
 void dnd_immediate_begin(float r,float g,float b,float a) {
     if(dnd_device_begin(r,g,b,a)<0 || dnd_device_pass_begin(4)<0)

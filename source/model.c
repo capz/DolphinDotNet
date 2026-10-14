@@ -150,7 +150,7 @@ void dnd_model_release(DndModel *m) {
 }
 int dnd_model_dispose(int token) {
   DndModel *m = dnd_model_find(token, true);
-  if (!m || m->closed || dnd_device_active())
+  if (!m || m->closed)
     return -1;
   m->closed = true;
   dnd_model_release(m);

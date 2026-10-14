@@ -27,8 +27,10 @@ device.EndFrame();
 
 Only one pass can be active. Complete each pass before changing viewport,
 copying the EFB, entering another pass, or presenting. Calls execute on the
-application executor. Do not await between a raw begin/end pair: the executor
-holds a critical region across raw primitives and display lists. Dispose resources
+application executor. Complete each frame synchronously without awaiting:
+the executor holds a critical region for the frame so queued asset completions
+and application callbacks run between frames. Raw-only primitives and display
+lists also hold a critical region until their matching end command. Dispose resources
 explicitly. Disposal during a frame invalidates the public handle immediately
 and retains storage until presentation completes. Native addresses already
 submitted to GX remain the caller's responsibility.
@@ -86,7 +88,10 @@ Draw transparent objects in the appropriate order. Transforms/cameras retain the
 existing column-major managed matrix convention.
 
 `Texture2D.Create` takes straight RGBA bytes and packs tiled GX_RGBA8 once during
-setup. `FromPackage`/`LoadAsync` load DNTX native texture packages. Dimensions are
+setup. `FromPackage`/`LoadAsync` load DNTX native texture packages. Loading
+currently stages the full package in managed memory before copying to native
+storage; size the application heap for the largest package and other live
+managed objects. Dimensions are
 1–1024. Native packages support I4, I8, IA4, IA8, RGB565, RGB5A3, RGBA8 and CMPR,
 with one mip level and no palettes. Managed sampling is clamp with nearest or
 linear filtering. Use raw GX for mip chains, palettes, texture regions or more
