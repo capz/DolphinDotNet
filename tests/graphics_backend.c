@@ -20,3 +20,5 @@ void dnd_draw_backend_abort(void){}
 void dnd_draw_backend_external(void){}
 void dnd_draw_backend_flush(void *p,int n,int invalidate){assert(p&&n>=0);(void)invalidate;}
 uint64_t dnd_raw_record(int op,const uint64_t *args,int count){(void)op;(void)args;(void)count;graphics_raw_commands++;return 0;}
+
+bool dnd_draw_backend_immediate_ready(void){return true;}

@@ -23,6 +23,8 @@ static uint32_t immediate_color=0xffffffffu;
 static unsigned glyph_quads;
 static int glyph_vertices;
 static bool projection_ortho, external_gpu;
+bool dnd_draw_backend_immediate_ready(void){return !immediate_batch;}
+static bool immediate_pass(void){if(dnd_device_pass()!=4){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Begin an immediate frame first.");return false;}return true;}
 static void identity(float *m) { memset(m,0,64);m[0]=m[5]=m[10]=m[15]=1; }
 static void multiply(float *out,const float *a,const float *b) {
     float m[16];for(int c=0;c<4;c++)for(int r=0;r<4;r++) { m[c*4+r]=0;for(int k=0;k<4;k++)m[c*4+r]+=a[k*4+r]*b[c*4+k]; }memcpy(out,m,64);
@@ -37,9 +39,10 @@ static uint32_t rgba(float r,float g,float b,float a) {
 void dnd_graphics_init(void) {
     if(mode)return;
     VIDEO_Init();mode=VIDEO_GetPreferredMode(NULL);
+    if(!mode){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"No video mode available.");return;}
     xfb[0]=MEM_K0_TO_K1(SYS_AllocateFramebuffer(mode));xfb[1]=MEM_K0_TO_K1(SYS_AllocateFramebuffer(mode));
     fifo=memalign(32,256*1024);
-    if(!xfb[0]||!xfb[1]||!fifo){dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY,"Graphics initialization failed.");return;}
+    if(!xfb[0]||!xfb[1]||!fifo){if(xfb[0])free(MEM_K1_TO_K0(xfb[0]));if(xfb[1])free(MEM_K1_TO_K0(xfb[1]));free(fifo);xfb[0]=xfb[1]=fifo=NULL;mode=NULL;dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY,"Graphics initialization failed.");return;}
     memset(fifo,0,256*1024);GX_Init(fifo,256*1024);
     VIDEO_Configure(mode);VIDEO_SetNextFramebuffer(xfb[0]);VIDEO_SetBlack(TRUE);VIDEO_Flush();VIDEO_WaitVSync();
     if(mode->viTVMode&VI_NON_INTERLACE)VIDEO_WaitVSync();
@@ -56,7 +59,7 @@ void dnd_draw_backend_wait(void){if(mode||external_gpu)GX_DrawDone();}
 void dnd_draw_backend_abort(void){if(mode||external_gpu)GX_AbortFrame();immediate_batch=false;immediate_count=0;glyph_vertices=0;}
 void dnd_draw_backend_flush(void *data,int bytes,int invalidate){if(invalidate==1)DCInvalidateRange(data,(u32)bytes);else {DCFlushRange(data,(u32)bytes);if(invalidate==2&&mode)GX_InvalidateTexAll();}}
 void dnd_draw_backend_viewport(int x,int y,int w,int h){GX_SetViewport((float)x,(float)y,(float)w,(float)h,0,1);}
-void dnd_draw_backend_scissor(int x,int y,int w,int h){GX_SetScissor((u32)x,(u32)y,(u32)w,(u32)h);}
+void dnd_draw_backend_scissor(int x,int y,int w,int h){GX_SetScissorBoxOffset(0,0);GX_SetScissor((u32)x,(u32)y,(u32)w,(u32)h);}
 void dnd_draw_backend_camera(const float *view,const float *projection){memcpy(view_matrix,view,64);memcpy(projection_matrix,projection,64);projection_ortho=false;}
 void dnd_draw_backend_2d(int w,int h) {
     projection_ortho=true;Mtx44 p;guOrtho(p,0,(float)h,0,(float)w,-1,1);identity(view_matrix);
@@ -64,7 +67,16 @@ void dnd_draw_backend_2d(int w,int h) {
     dnd_draw_backend_viewport(0,0,dnd_graphics_width(),dnd_graphics_height());
     dnd_draw_backend_scissor(0,0,dnd_graphics_width(),dnd_graphics_height());
 }
+void dnd_draw_backend_restore(void) {
+    GX_SetPixelFmt(mode&&mode->aa?GX_PF_RGB565_Z16:GX_PF_RGB8_Z24,GX_ZC_LINEAR);
+    GX_SetDither(GX_FALSE);GX_SetDstAlpha(GX_FALSE,0);GX_SetColorUpdate(GX_TRUE);GX_SetAlphaUpdate(GX_TRUE);GX_SetZCompLoc(GX_FALSE);
+    GX_SetNumIndStages(0);GX_SetTevDirect(GX_TEVSTAGE0);GX_SetTevSwapMode(GX_TEVSTAGE0,GX_TEV_SWAP0,GX_TEV_SWAP0);
+    GX_SetTevSwapModeTable(GX_TEV_SWAP0,GX_CH_RED,GX_CH_GREEN,GX_CH_BLUE,GX_CH_ALPHA);
+    GX_SetTexCoordScaleManually(GX_TEXCOORD0,GX_FALSE,1,1);GX_SetTexCoordBias(GX_TEXCOORD0,GX_FALSE,GX_FALSE);
+    GX_SetClipMode(GX_CLIP_ENABLE);GX_SetCoPlanar(GX_FALSE);GX_SetFog(GX_FOG_NONE,0,1,0,1,(GXColor){0,0,0,0});
+}
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world) {
+    dnd_draw_backend_restore();
     float mv[16];multiply(mv,view_matrix,world);Mtx m;Mtx44 p;
     for(int r=0;r<3;r++)for(int c=0;c<4;c++)m[r][c]=mv[c*4+r];
     for(int r=0;r<4;r++)for(int c=0;c<4;c++)p[r][c]=projection_matrix[c*4+r];
@@ -126,19 +138,22 @@ void dnd_graphics_begin_frame(float r,float g,float b,float a) {
     projection_ortho=false;identity(view_matrix);identity(projection_matrix);identity(immediate_world);
 }
 void dnd_graphics_frustum(float l,float r,float b,float t,float n,float f) {
+    if(!immediate_pass())return;
+    if(immediate_batch||!isfinite(l)||!isfinite(r)||!isfinite(b)||!isfinite(t)||!isfinite(n)||!isfinite(f)||r==l||t==b||n<=0||f<=n){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Invalid frustum or active triangle batch.");return;}
     projection_ortho=false;Mtx44 p;guFrustum(p,t,b,l,r,n,f);for(int y=0;y<4;y++)for(int x=0;x<4;x++)projection_matrix[x*4+y]=p[y][x];
 }
-void dnd_graphics_translate(float x,float y,float z){float m[16];identity(m);m[12]=x;m[13]=y;m[14]=z;multiply(immediate_world,immediate_world,m);}
+void dnd_graphics_translate(float x,float y,float z){if(!immediate_pass())return;if(immediate_batch||!isfinite(x)||!isfinite(y)||!isfinite(z)){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Invalid translation or active triangle batch.");return;}float m[16];identity(m);m[12]=x;m[13]=y;m[14]=z;multiply(immediate_world,immediate_world,m);}
 void dnd_graphics_rotate(float angle,float x,float y,float z) {
+    if(!immediate_pass())return;if(immediate_batch||!isfinite(angle)||!isfinite(x)||!isfinite(y)||!isfinite(z)){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Invalid rotation or active triangle batch.");return;}
     float length=sqrtf(x*x+y*y+z*z);if(length==0)return;x/=length;y/=length;z/=length;
     float a=angle*0.01745329252f,c=cosf(a),s=sinf(a),q=1-c;
     float m[16]={c+x*x*q,y*x*q+z*s,z*x*q-y*s,0,x*y*q-z*s,c+y*y*q,z*y*q+x*s,0,x*z*q+y*s,y*z*q-x*s,c+z*z*q,0,0,0,0,1};multiply(immediate_world,immediate_world,m);
 }
 static void immediate_flush(void){if(!immediate_count)return;DndDrawMaterial mat={0xffffffffu,4,0};dnd_draw_backend_vertices(immediate_vertices,immediate_count,GX_TRIANGLES,NULL,&mat,immediate_world);dnd_performance_add_triangles((uint32_t)immediate_count/3);immediate_count=0;}
-void dnd_graphics_begin_triangles(void){if(immediate_batch){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Triangle batch already active.");return;}immediate_batch=true;immediate_count=0;}
-void dnd_graphics_color(float r,float g,float b){immediate_color=rgba(r,g,b,1);}
-void dnd_graphics_vertex(float x,float y,float z){if(!immediate_batch){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"No triangle batch.");return;}if(immediate_count==1536)immediate_flush();immediate_vertices[immediate_count++]=(DndDrawVertex){x,y,z,0,0,1,0,0,immediate_color};}
-void dnd_graphics_end_triangles(void){if(!immediate_batch||immediate_count%3){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Incomplete triangle batch.");return;}immediate_flush();immediate_batch=false;}
+void dnd_graphics_begin_triangles(void){if(!immediate_pass())return;if(immediate_batch){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Triangle batch already active.");return;}immediate_batch=true;immediate_count=0;}
+void dnd_graphics_color(float r,float g,float b){if(!immediate_pass())return;if(!isfinite(r)||!isfinite(g)||!isfinite(b)||r<0||r>1||g<0||g>1||b<0||b>1){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Color must be finite and normalized.");return;}immediate_color=rgba(r,g,b,1);}
+void dnd_graphics_vertex(float x,float y,float z){if(!immediate_pass())return;if(!isfinite(x)||!isfinite(y)||!isfinite(z)){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Vertex must be finite.");return;}if(!immediate_batch){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"No triangle batch.");return;}if(immediate_count==1536)immediate_flush();immediate_vertices[immediate_count++]=(DndDrawVertex){x,y,z,0,0,1,0,0,immediate_color};}
+void dnd_graphics_end_triangles(void){if(!immediate_pass())return;if(!immediate_batch||immediate_count%3){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Incomplete triangle batch.");return;}immediate_flush();immediate_batch=false;}
 void dnd_graphics_begin_overlay(void) {
     if(dnd_performance_visible()) {
         uint64_t now=ticks_to_microsecs(gettime());
@@ -181,6 +196,7 @@ void dnd_graphics_model_begin(void){dnd_graphics_begin_frame(0.025f,0.035f,0.06f
 void dnd_graphics_model_end(void){dnd_graphics_present();}
 #else
 #ifndef DND_GRAPHICS_TEST
+bool dnd_draw_backend_immediate_ready(void){return true;}
 void dnd_draw_backend_external(void){}
 void dnd_draw_backend_wait(void){}
 void dnd_draw_backend_abort(void){}

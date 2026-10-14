@@ -67,6 +67,7 @@ int dnd_model_draw(int token, DndArray *transform) {
       return -1;
     dnd_performance_add_triangles(mesh->indices / 3);
 #ifdef DND_GAMECUBE_STORAGE
+    dnd_draw_backend_restore();
     Mtx matrix;
     for (int r = 0; r < 3; r++)
       for (int c = 0; c < 4; c++)

@@ -25,6 +25,7 @@ int dnd_device_wait(void);
 void dnd_device_shutdown(void);
 void dnd_immediate_begin(float r,float g,float b,float a);
 void dnd_immediate_end(void);
+bool dnd_draw_backend_immediate_ready(void);
 
 int dnd_buffer_create(int bytes,int alignment);
 uint64_t dnd_buffer_address(int token,int offset);
@@ -56,6 +57,7 @@ int dnd_canvas_stats(int token,int kind);
 int dnd_draw_copy_texture(int texture,int x,int y,int width,int height);
 void dnd_draw_set_camera(const float *view,const float *projection);
 void dnd_draw_backend_vertices(const DndDrawVertex *vertices,int count,int primitive,const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world);
+void dnd_draw_backend_restore(void);
 void dnd_draw_backend_camera(const float *view,const float *projection);
 void dnd_draw_backend_2d(int width,int height);
 void dnd_draw_backend_viewport(int x,int y,int width,int height);

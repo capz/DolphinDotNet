@@ -9,3 +9,5 @@ void dnd_draw_backend_camera(const float *view,const float *projection){(void)vi
 void dnd_draw_backend_2d(int w,int h){(void)w;(void)h;}
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const DndDrawTexture *t,const DndDrawMaterial *m,const float *world){(void)v;(void)n;(void)primitive;(void)t;(void)m;(void)world;}
 void dnd_draw_backend_copy(const DndDrawTexture *t,int x,int y,int w,int h){(void)t;(void)x;(void)y;(void)w;(void)h;}
+
+bool dnd_draw_backend_immediate_ready(void){return true;}

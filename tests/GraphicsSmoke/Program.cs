@@ -22,6 +22,16 @@ internal static class Program
         batch.DrawTexture(texture,new RectF(0,0,4,4),Color32.White);texture.Dispose();batch.End();
         if(batch.DrawCalls!=2)return 1;
         device.EndFrame();
+        using var atlas=Texture2D.Create(4,4,new byte[64]);
+        using var font=new BitmapFont(atlas,1,1,32,16);
+        var measured=font.MeasureText(" !\n!",2);if(measured.X!=4||measured.Y!=4)return 3;
+        device.BeginFrame(Color32.Black);batch.Begin();
+        batch.SetClip(0,0,100,100);batch.DrawText(font," !",new Vector2(2,2),Color32.White);
+        batch.DrawNineSlice(atlas,new RectF(0,0,4,4),new RectF(0,0,20,20),new Border(1,1,1,1),Color32.White);
+        batch.DrawLine(new Vector2(0,0),new Vector2(10,10),Color32.White,2);
+        batch.DrawRectangle(new RectF(1,1,10,10),Color32.White);
+        batch.FillTriangle(new Vector2(0,0),new Vector2(0,1),new Vector2(1,0),Color32.White);
+        batch.SetBlend(BlendMode.Additive);batch.ResetClip();batch.End();device.EndFrame();
         try{renderer.End3D();return 2;}catch(InvalidOperationException){}
         return 0;
     }

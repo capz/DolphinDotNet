@@ -105,6 +105,6 @@ void dnd_immediate_begin(float r,float g,float b,float a) {
         dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Graphics frame already active or clear color invalid.");
 }
 void dnd_immediate_end(void) {
-    if(dnd_device_pass_end(4)<0 || dnd_device_end()<0)
+    if(!dnd_draw_backend_immediate_ready() || dnd_device_pass_end(4)<0 || dnd_device_end()<0)
         dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"No complete immediate frame.");
 }
