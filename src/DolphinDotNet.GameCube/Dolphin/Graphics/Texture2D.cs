@@ -25,7 +25,7 @@ public sealed class Texture2D : IDisposable
     }
     public static async Task<Texture2D> LoadAsync(string path,CancellationToken cancellationToken=default,bool linear=false)
     {
-        var bytes=await System.IO.File.ReadAllBytesAsync(path,cancellationToken);
+        var bytes=await Dolphin.IO.File.ReadAllBytesAsync(path,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();return FromPackage(bytes,linear);
     }
     internal void Check(){if(disposed)throw new ObjectDisposedException("Texture2D");}

@@ -25,7 +25,7 @@ public sealed class BitmapFont : IDisposable
     private static int Read(byte[] bytes,int offset) => bytes[offset]|bytes[offset+1]<<8|bytes[offset+2]<<16|bytes[offset+3]<<24;
     public static async Task<BitmapFont> LoadAsync(string path,CancellationToken cancellationToken=default)
     {
-        var bytes=await System.IO.File.ReadAllBytesAsync(path,cancellationToken);
+        var bytes=await Dolphin.IO.File.ReadAllBytesAsync(path,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         if(bytes.Length<64||Read(bytes,0)!=0x54464e44||Read(bytes,4)!=1||Read(bytes,28)!=0||Read(bytes,24)!=bytes.Length-32)throw new ArgumentException("Invalid DNFT font package.");
         var data=new byte[bytes.Length-32];Array.Copy(bytes,32,data,0,data.Length);
