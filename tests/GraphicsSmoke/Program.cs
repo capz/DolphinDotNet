@@ -18,9 +18,11 @@ internal static class Program
         using var batch=new Draw2D(device,new Draw2DOptions{VertexCapacity=12});
         using var buffer=NativeBuffer.Allocate(64);
         buffer.Write(new byte[]{1,2,3,4});buffer.Flush();
+        using var texturedMesh=Mesh.Create(new[]{new VertexPositionColorTexture(new Vector3(0,1,0),Color32.White,new Vector2(0,0)),new VertexPositionColorTexture(new Vector3(-1,-1,0),Color32.White,new Vector2(0,1)),new VertexPositionColorTexture(new Vector3(1,-1,0),Color32.White,new Vector2(1,1))});
+        using var normalMesh=Mesh.Create(new[]{new VertexPositionNormalColorTexture(new Vector3(0,1,0),new Vector3(0,0,1),Color32.White,new Vector2(0,0)),new VertexPositionNormalColorTexture(new Vector3(-1,-1,0),new Vector3(0,0,1),Color32.White,new Vector2(0,1)),new VertexPositionNormalColorTexture(new Vector3(1,-1,0),new Vector3(0,0,1),Color32.White,new Vector2(1,1))});
         var renderer=new Renderer();var camera=new Camera();var transform=new Transform();var material=new Material();
         device.BeginFrame(Color32.Black);
-        renderer.Begin3D(camera);renderer.DrawMesh(mesh,material,transform);renderer.End3D();
+        renderer.Begin3D(camera);renderer.DrawMesh(mesh,material,transform);material.Texture=texture;renderer.DrawMesh(texturedMesh,material,transform);material.Lighting=LightingMode.Diffuse;renderer.DrawMesh(normalMesh,material,transform);renderer.End3D();
         device.BeginRaw();GX.GX_SetCopyClear(new GXColor(0x11,0x22,0x33,0x44),0xffffff);GX.GX_SetTevColorS10(0,new GXColorS10(-1,2,-3,4));GU.guMtxIdentity(buffer.Address);GX.GX_Begin((byte)GXConstants.GX_TRIANGLES,(byte)GXConstants.GX_VTXFMT0,3);
         GX.GX_Position3f32(0,1,0);GX.GX_Position3f32(-1,-1,0);GX.GX_Position3f32(1,-1,0);GX.GX_End();device.EndRaw();
         batch.Begin();batch.FillRectangle(new RectF(0,0,10,10),Color32.White);batch.FillRectangle(new RectF(10,0,10,10),Color32.White);

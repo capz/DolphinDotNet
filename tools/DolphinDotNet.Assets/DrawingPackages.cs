@@ -27,7 +27,7 @@ public static class DrawingPackages
     public static byte[] Font(RasterImage atlas,int cellWidth,int cellHeight,int firstCharacter=32,int characters=96)
     {
         ArgumentNullException.ThrowIfNull(atlas);
-        if(cellWidth<=0||cellHeight<=0||atlas.Width%cellWidth!=0||atlas.Height%cellHeight!=0||firstCharacter<0||characters<=0||firstCharacter>65535-characters||characters>(atlas.Width/cellWidth)*(atlas.Height/cellHeight))throw new ArgumentException("Invalid fixed-cell atlas or character range.");
+        if(cellWidth<=0||cellHeight<=0||atlas.Width%cellWidth!=0||atlas.Height%cellHeight!=0||firstCharacter<0||characters<=0||firstCharacter>65535||characters>65536-firstCharacter||characters>(atlas.Width/cellWidth)*(atlas.Height/cellHeight))throw new ArgumentException("Invalid fixed-cell atlas or character range.");
         byte[] texture=Texture(atlas),data=new byte[32+texture.Length];
         Put(data,0,0x54464e44);Put(data,4,1);Put(data,8,cellWidth);Put(data,12,cellHeight);Put(data,16,firstCharacter);Put(data,20,characters);Put(data,24,texture.Length);texture.CopyTo(data,32);return data;
     }

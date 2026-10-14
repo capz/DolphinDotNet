@@ -86,7 +86,7 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
         Mtx inverse,normal;
         if(!guMtxInverse(m,inverse))return;
         guMtxTranspose(inverse,normal);GX_LoadNrmMtxImm(normal,GX_PNMTX0);
-        GXLightObj light;GX_InitLightPos(&light,0,0,1000000);GX_InitLightColor(&light,(GXColor){192,192,192,255});GX_LoadLightObj(&light,GX_LIGHT0);
+        GXLightObj light={0};GX_InitLightPos(&light,0,0,1000000);GX_InitLightColor(&light,(GXColor){192,192,192,255});GX_LoadLightObj(&light,GX_LIGHT0);
         GX_SetChanAmbColor(GX_COLOR0A0,(GXColor){64,64,64,255});
     }
     GX_SetTevSwapMode(GX_TEVSTAGE0,GX_TEV_SWAP0,GX_TEV_SWAP0);GX_SetTevSwapModeTable(GX_TEV_SWAP0,GX_CH_RED,GX_CH_GREEN,GX_CH_BLUE,GX_CH_ALPHA);

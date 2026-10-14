@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 namespace Dolphin.Graphics;
 
 public struct Color32
@@ -29,12 +30,14 @@ public enum PrimitiveType { Triangles=0x90, Lines=0xa8, Points=0xb8 }
 public enum BlendMode { Opaque,Alpha,Additive,PremultipliedAlpha }
 public enum LightingMode { Unlit,Diffuse }
 public enum CullMode { None,Back }
+[StructLayout(LayoutKind.Sequential, Pack=4)]
 public struct VertexPositionColor
 {
     public Vector3 Position;
     public Color32 Color;
     public VertexPositionColor(Vector3 position,Color32 color){Position=position;Color=color;}
 }
+[StructLayout(LayoutKind.Sequential, Pack=4)]
 public struct VertexPositionColorTexture
 {
     public Vector3 Position;
@@ -42,6 +45,7 @@ public struct VertexPositionColorTexture
     public Vector2 TextureCoordinate;
     public VertexPositionColorTexture(Vector3 position,Color32 color,Vector2 textureCoordinate){Position=position;Color=color;TextureCoordinate=textureCoordinate;}
 }
+[StructLayout(LayoutKind.Sequential, Pack=4)]
 public struct VertexPositionNormalColorTexture
 {
     public Vector3 Position,Normal;
