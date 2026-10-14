@@ -4,19 +4,23 @@ using System.IO;
 using System.Linq;
 
 var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-var sample = Path.Combine(root, "tests/LegacyHelloSmoke/LegacyHelloSmoke.csproj");
+var sample = Path.Combine(root, "samples/HelloGameCube/HelloGameCube.csproj");
 var compiler = Path.Combine(root, "tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj");
-var temp = Path.Combine(Path.GetTempPath(), $"dnd-{Guid.NewGuid():N}.h");
+var temp = Path.Combine(Path.GetTempPath(), $"dnd-{Guid.NewGuid():N}.c");
 
 Run("dotnet", $"build \"{sample}\" -c Release");
-var dll = Path.Combine(root, "tests/LegacyHelloSmoke/bin/Release/net8.0/LegacyHelloSmoke.dll");
+var dll = Path.Combine(root, "samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll");
 Run("dotnet", $"run --project \"{compiler}\" -- \"{dll}\" \"{temp}\"");
 
 var generated = File.ReadAllText(temp);
 if (!generated.Contains("Hello from real C#!") ||
-    !generated.Contains("0x06, 0x01") ||
-    !generated.Contains("0x06, 0x02"))
-    throw new Exception("Compiler output did not contain expected strings/internal calls.");
+    !generated.Contains("dnd_console_write_line") ||
+    !generated.Contains("dnd_aot_entry"))
+    throw new Exception("Compiler output did not contain expected greeting and native AOT calls.");
+
+Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{dll}\" \"{temp}\"");
+if (File.ReadAllText(temp) != generated)
+    throw new Exception("Default compilation and --aot produced different native programs.");
 
 File.Delete(temp);
 

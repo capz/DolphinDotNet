@@ -126,7 +126,7 @@ internal static class GenericSharing
         if(name is not null&&model.Types.TryGetValue(name,out var tm)&&!tm.IsInterface){
             var method=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==name&&!m.Handle.IsNil);
             if(method is not null){
-                var closed=IlImporter.Specialize(md,model,method,args,Array.Empty<GenericRepresentation>()).Key.TypeName;
+                var closed=MetadataResolver.Specialize(md,model,method,args,Array.Empty<GenericRepresentation>()).Key.TypeName;
                 var layout=model.Types[closed];var refs=model.Fields.Values.Where(f=>f.DeclaringType==closed&&!f.IsStatic).SelectMany(f=>f.IsReference?new[]{f.Offset}:(f.ReferenceOffsets??Array.Empty<int>()).Select(o=>f.Offset+o)).ToArray();
                 return isValue?new(GenericRepresentationKind.ValueType,Math.Max(1,layout.InstanceSize),refs,closed,args):new(GenericRepresentationKind.PointerSized,8,new[]{0},closed,args);
             }

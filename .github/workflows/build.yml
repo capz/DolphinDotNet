@@ -216,10 +216,6 @@ jobs:
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/performance.c -lm -o /tmp/model-smoke32
           timeout 30s /tmp/model-smoke32 /tmp/dnd-model-fixtures --gc-stress
-      - name: Regenerate legacy VM regression fixture
-        run: sh scripts/compile-legacy-smoke.sh
-      - name: Verify generated source
-        run: git diff --exit-code -- generated/generated_program.h
 
   portable-runtime:
     name: Portable runtime

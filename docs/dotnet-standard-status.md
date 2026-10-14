@@ -66,7 +66,7 @@ Standard List, selected streams/text and cooperative async now have compiled smo
 - [Green Phase 7 CI run 996](https://github.com/capz/DolphinDotNet/actions/runs/37862418540): managed/compiler, portable runtime and GameCube build jobs.
 - `tests/GenericSharingSmoke/Program.cs`: combined compiled runtime/generic/nullable/collection regressions; its helper classes are test fixtures.
 - `tests/ControlFlowSmoke/Program.cs`, `tools/DolphinDotNet.Compiler.Tests/Program.cs`: control flow and compiler characterization.
-- `tests/managed_runtime_tests.c`, `tests/runtime_tests.c`: native mechanisms; native-only evidence must not promote a normal managed API to supported.
+- `tests/managed_runtime_tests.c`: native mechanisms; native-only evidence must not promote a normal managed API to supported.
 - `tools/DolphinDotNet.Compiler/IntrinsicRegistry.cs`, `ValueIrImporter.cs`, `ValueCBackend.cs`: production managed call bindings and emitted behavior.
 - `AotCompiler.EnsureEnumerationContracts`: synthetic generic/nongeneric collection contracts.
 - GameCube ELF/DOL linking is verified. Hardware/Dolphin execution and runtime stack high-water are still separate pending verification.

@@ -70,7 +70,3 @@ records ManagedGameCube's complete frame and Start-button exit through a host
 backend, and executes AsyncNetworking against the DNS/HTTP fixture with normal
 and stressed GC. GoogleLogoAram is compiled through AOT; its live relay and console
 network/ARAM operation need hardware testing.
-
-The old bytecode console program is retained only as the
-`tests/LegacyHelloSmoke` compiler regression fixture, regenerated with
-`sh scripts/compile-legacy-smoke.sh`.
