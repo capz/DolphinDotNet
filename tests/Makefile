@@ -3,8 +3,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
 
-test: runtime_tests managed_runtime_tests fst_test card_transaction_test aram_test overlay_test worker_test stw_test
-	./runtime_tests
+test: managed_runtime_tests fst_test card_transaction_test aram_test overlay_test worker_test stw_test
 	./managed_runtime_tests
 	./fst_test
 	./card_transaction_test
@@ -12,9 +11,6 @@ test: runtime_tests managed_runtime_tests fst_test card_transaction_test aram_te
 	./overlay_test
 	./worker_test
 	./stw_test
-
-runtime_tests: runtime_tests.c ../source/runtime.c
-	$(CC) $(CFLAGS) $^ -o $@
 
 managed_runtime_tests: managed_runtime_tests.c ../source/managed_runtime.c ../source/bcl.c ../source/stw.c ../source/gc_stw.c
 	$(CC) $(CFLAGS) -pthread $^ -o $@
@@ -38,4 +34,4 @@ overlay_test: overlay_test.c ../source/performance.c ../source/console_overlay.c
 	$(CC) $(CFLAGS) $^ -lm -o $@
 
 clean:
-	rm -f runtime_tests managed_runtime_tests fst_test card_transaction_test aram_test overlay_test worker_test
+	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test worker_test stw_test

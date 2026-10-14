@@ -1,27 +1,41 @@
 # Compiler architecture
 
-DolphinDotNet is a small closed-world AOT .NET environment. The production compiler deliberately separates raw CIL decoding from runtime semantics.
+DolphinDotNet compiles a closed world of reachable managed methods to native C.
 
 ## Pipeline
 
-`MetadataLoader -> DependencyGraph -> CilDecoder -> CFG -> stack analysis -> typed Value IR -> C backend -> devkitPPC`
+`MetadataLoader → MetadataResolver → DependencyGraph → CilDecoder → CFG → stack analysis → typed Value IR → C backend → devkitPPC`
 
-The decoder preserves typed operands including branch targets, switch tables, metadata tokens, integer constants, and indexed variable operands. CFG construction records predecessors and successors. Stack analysis validates block entry/exit states and supplies stack kinds. Value IR consumes the CIL evaluation stack and represents values, mutable locals/arguments, calls, objects/fields, phi joins, branches, switches, and returns explicitly.
+Metadata loading establishes types, fields, method signatures and layouts.
+Resolution selects overloads, maps supported standard APIs to managed facades and
+specializes generic metadata. Reachability includes virtual methods, type
+initializers and async runtime services.
 
-Phi values are lowered to predecessor-edge assignments. The C backend emits ordinary labels/gotos/switches and leaves machine optimization to GCC.
+The decoder preserves branch targets, switch tables, metadata tokens, constants
+and indexed operands. CFG construction records predecessors and successors.
+Stack analysis validates block entry/exit states. Value IR represents typed values,
+mutable locals and arguments, calls, objects, fields, phi joins and control flow.
+The verifier checks the IR before C generation.
+
+Phi values become predecessor-edge assignments. The backend emits native C with
+explicit GC roots and exception regions; GCC performs machine optimization.
 
 ## Identity and intrinsics
 
-Method identity includes assembly, declaring type, name, and the metadata signature blob so overloads no longer collide. Generated Value AOT symbols derive from that identity. Unique methods also receive compatibility aliases used by characterization tests.
+Method identity includes assembly, declaring type, name and metadata signature.
+Generated symbols derive from that identity. Unique methods also receive aliases
+used by characterization tests.
 
-Platform substitutions are classified by `IntrinsicRegistry`. Current intrinsics cover string length plus GameCube console output, controller input, and demo-frame presentation. Managed application code does not reference libogc or runtime C structures.
+`IntrinsicRegistry` and native bindings connect supported managed APIs to the
+runtime ABI. Game code uses `System.*` and `Dolphin.*` APIs. Samples own their scene
+composition, geometry and application loops.
 
 ## Runtime boundary
 
-Generated code targets `dnd_managed.h` and platform headers. Object allocation and type metadata remain runtime responsibilities. C is not part of the managed application contract.
+Generated code targets `dnd_managed.h` and platform headers. The runtime provides
+allocation, GC, type operations, exception state and async executor management.
+The native bootstrap initializes platform resources, invokes the managed entry
+point and joins the async service before releasing application roots.
 
-The GameCube sample now owns its frame loop in managed C#: it polls controller input, exits on Start, advances managed state, and invokes a frame-presentation intrinsic. Native `main` performs platform/runtime initialization and then hands control to managed `Main`.
-
-## Remaining runtime work beyond this compiler milestone
-
-The typed compiler architecture is in place, but broad .NET compatibility still requires precise GC maps and tracing, virtual/interface dispatch, generic instantiation, exception regions, richer value types and floating-point semantics, static initialization, arrays, delegates, boxing, and the selected .NET Standard BCL surface. Those are runtime/conformance milestones rather than reasons to retain the old stack-oriented compiler.
+Unsupported managed calls fail during compilation. The supported subset and its
+validation limits are recorded in the [API inventory](../../docs/dotnet-standard-status.md).

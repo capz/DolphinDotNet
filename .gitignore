@@ -1,8 +1,8 @@
 build/
+out/
 *.dol
 *.elf
 *.map
-tests/runtime_tests
 
 **/bin/
 **/obj/

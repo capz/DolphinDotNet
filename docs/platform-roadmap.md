@@ -13,7 +13,6 @@ DolphinDotNet uses a Unity-like managed/native split and Godot-like subsystem dr
 - [x] frame loop based on SYS_MainLoop
 - [x] nonblocking UDP socket driver
 - [x] managed Console output routed to the graphical diagnostic overlay
-- [x] real .NET assembly -> DND bytecode compiler proof of concept
 
 ## Runtime/compiler work
 
@@ -65,5 +64,3 @@ A normal C# project builds to a .NET assembly. DolphinDotNet compiles it to nati
 4. sends/receives a UDP packet,
 5. displays Console.WriteLine diagnostics over the 3D scene,
 6. runs without a desktop CLR.
-
-The bytecode VM remains as the reference/debug backend after the PowerPC AOT backend exists.

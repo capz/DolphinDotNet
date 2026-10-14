@@ -8,9 +8,9 @@ When the image is needed, seek within `aramStream` and read the necessary bytes 
 
 ## Modern API surface
 
-Application async methods use `System.Threading.Tasks.Task`, and HTTP uses `System.Net.Http.HttpClient`. `Dolphin.IO.AramStream` now derives from `System.IO.Stream` and exposes standard Task/cancellation signatures, so the HTTP response can be copied directly with `CopyToAsync` instead of a hand-written read/write loop. The sample uses an alias for this platform-specific stream and for the cooperative scheduler and network runtime.
+Application async methods use `System.Threading.Tasks.Task`, and HTTP uses `System.Net.Http.HttpClient`. `Dolphin.IO.AramStream` derives from `System.IO.Stream` and exposes standard Task/cancellation signatures, so the HTTP response can be copied directly with `CopyToAsync` instead of a hand-written read/write loop. The sample uses aliases for this platform-specific stream and the network runtime.
 
-DolphinDotNet AOT maps the supported standard calls to its cooperative runtime. This does not add background threads or support every modern .NET overload; PNG validation uses the supported byte-array `ReadAsync` overload, repeating reads until all eight signature bytes arrive. Running this sample with the desktop CLR does not provide the native GameCube backend.
+DolphinDotNet AOT maps the supported standard calls to its runtime-owned async service thread. Managed execution is serialized between the application and background executors; this is not a general thread pool. PNG validation uses the supported byte-array `ReadAsync` overload, repeating reads until all eight signature bytes arrive. Running this sample with the desktop CLR does not provide the native GameCube backend.
 
 ## Understanding `Main()`
 
@@ -24,7 +24,7 @@ GameCube HTTP support currently **does not include TLS/HTTPS**. Because the offi
 
 1. On a development PC with internet access, run `python3 samples/GoogleLogoAram/logo_proxy.py`.
 2. Change `LogoUrl` in `Program.cs` to the PC's LAN IPv4 address (port 18081).
-3. Build with `dotnet build samples/GoogleLogoAram/GoogleLogoAram.csproj -c Release`, then compile the assembly through DolphinDotNet AOT and your GameCube DOL build process.
+3. Follow the [standalone sample build instructions](../README.md#build-a-gamecube-dol), choosing `GoogleLogoAram`.
 4. Run it on the GameCube with networking enabled. Exit code 0 means the streamed image's PNG signature was validated. Exit code 1 indicates a failure.
 
 The example allocates **256 KiB of ARAM capacity** as an upper bound, not as a claim that the image occupies that much data. The 4 KiB staging buffer is reused for every segment. CI checks compilation and AOT generation; live network/ARAM hardware operation still needs testing.

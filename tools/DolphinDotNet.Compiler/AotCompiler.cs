@@ -5,7 +5,7 @@ using System.Reflection.PortableExecutable;
 
 namespace DolphinDotNet.Compiler;
 
-internal sealed record AotCompilation(CompilationModel Model,DependencyGraph Graph,List<IrMethod> Methods,List<ValueIrMethod> ValueMethods,MethodKey Entry);
+internal sealed record AotCompilation(CompilationModel Model,DependencyGraph Graph,List<ValueIrMethod> ValueMethods,MethodKey Entry);
 
 internal static class AotCompiler
 {
@@ -32,7 +32,7 @@ internal static class AotCompiler
             var entryKey=new MethodKey(entryType,root.Metadata.GetString(def.Name),root.Name,entrySignature);
             if(!model.Methods.TryGetValue(entryKey,out var entryMethod))throw new InvalidDataException("Entry point missing from model.");
 
-            var graph=new DependencyGraph();var output=new List<IrMethod>();var valueOutput=new List<ValueIrMethod>();var queue=new Queue<MethodModel>();var queued=new HashSet<MethodKey>();
+            var graph=new DependencyGraph();var valueOutput=new List<ValueIrMethod>();var queue=new Queue<MethodModel>();var queued=new HashSet<MethodKey>();
             queue.Enqueue(entryMethod);queued.Add(entryMethod.Key);
             while(queue.Count>0)
             {
@@ -50,12 +50,10 @@ internal static class AotCompiler
                 DiscoverVirtuals(model,graph);
                 DiscoverTypeInitializers(model,graph);
                 DiscoverAsyncServices(model,graph);
-                try { output.Add(IlImporter.Import(assembly.PE,model,method,new DependencyGraph())); }
-                catch(NotSupportedException) { /* Legacy backend is a regression oracle, not a production dependency. */ }
                 foreach(var key in graph.Methods)
                     if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable)&&model.Assemblies.TryGetValue(reachable.AssemblyName,out var reachableAssembly)&&reachableAssembly.Metadata.GetMethodDefinition(reachable.Handle).RelativeVirtualAddress!=0)queue.Enqueue(reachable);
             }
-            return new AotCompilation(model,graph,output,valueOutput,entryKey);
+            return new AotCompilation(model,graph,valueOutput,entryKey);
         }
         catch { model.Dispose(); throw; }
     }
@@ -104,7 +102,7 @@ internal static class AotCompiler
             foreach(var definition in model.Methods.Values.Where(m=>m.IsVirtual&&m.Key.TypeName==original&&!m.Key.Signature.Contains("|g:")).ToArray())
             {
                 if(!model.Assemblies.TryGetValue(definition.AssemblyName,out var assembly)||assembly.Metadata.GetMethodDefinition(definition.Handle).RelativeVirtualAddress==0)continue;
-                var method=tm?.TypeArguments is { } args?IlImporter.Specialize(assembly.Metadata,model,definition,args,Array.Empty<GenericRepresentation>()):definition;
+                var method=tm?.TypeArguments is { } args?MetadataResolver.Specialize(assembly.Metadata,model,definition,args,Array.Empty<GenericRepresentation>()):definition;
                 graph.AddMethod(method.Key);
             }
         }
@@ -158,7 +156,7 @@ internal static class AotCompiler
     private static MethodKey? ResolveArrayEnumerator(MetadataReader md,CompilationModel model,MethodModel context,CilInstruction call)
     {
         var method=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName=="Dolphin.Collections.ArrayEnumerable`1"&&m.Key.Name=="Enumerate");if(method is null)return null;
-        return IlImporter.Specialize(md,model,method,GenericArguments(md,model,call,context),Array.Empty<GenericRepresentation>()).Key;
+        return MetadataResolver.Specialize(md,model,method,GenericArguments(md,model,call,context),Array.Empty<GenericRepresentation>()).Key;
     }
     private static MethodModel? ResolveConstrained(MetadataReader md,CompilationModel model,MethodModel context,CilInstruction constraint,string name)
     {
@@ -170,12 +168,12 @@ internal static class AotCompiler
         var definition=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==original&&(m.Key.Name==name||m.ExplicitContracts?.Any(c=>c.Method==name)==true)&&!m.Key.Signature.Contains("|g:",StringComparison.Ordinal));
         if(definition is null)return null;
         var arguments=tm.TypeArguments??(h.Kind==HandleKind.TypeSpecification?GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)h,model,context):Array.Empty<GenericRepresentation>());
-        return arguments.Count>0?IlImporter.Specialize(md,model,definition,arguments,Array.Empty<GenericRepresentation>()):definition;
+        return arguments.Count>0?MetadataResolver.Specialize(md,model,definition,arguments,Array.Empty<GenericRepresentation>()):definition;
     }
     private static MethodModel? ResolveCall(MetadataReader md,CompilationModel model,CilInstruction i,MethodModel? context=null)
     {
         if(i.OpCode is not (0x28 or 0x6f or 0x73 or 0xfe06 or 0xfe07)||i.Operand is not CilMetadataToken { Token: var raw })return null;
-        try{return IlImporter.ResolveMethod(md,model,MetadataTokens.EntityHandle(raw),context);}
+        try{return MetadataResolver.ResolveMethod(md,model,MetadataTokens.EntityHandle(raw),context);}
         catch(NotSupportedException ex){if(ResolveIntrinsic(md,i)==IntrinsicKind.None)throw new NotSupportedException($"Call at IL_{i.Offset:x4}: {ex.Message}",ex);return null;}
     }
 
@@ -187,7 +185,7 @@ internal static class AotCompiler
         var h=MetadataTokens.EntityHandle(raw);if(h.Kind!=HandleKind.TypeSpecification)return name;
         var args=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)h,model,context);if(args.Count==0)return name;
         var definition=model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==name&&!m.Handle.IsNil);if(definition is null)return name;
-        return IlImporter.Specialize(md,model,definition,args,Array.Empty<GenericRepresentation>()).Key.TypeName;
+        return MetadataResolver.Specialize(md,model,definition,args,Array.Empty<GenericRepresentation>()).Key.TypeName;
     }
     private static string? ResolveType(MetadataReader md,CilInstruction i)
     {
@@ -219,7 +217,7 @@ internal static class AotCompiler
         if(i.OpCode is not (0x7b or 0x7c or 0x7d or 0x7e or 0x80)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         try
         {
-            var handle=MetadataTokens.EntityHandle(raw);var field=IlImporter.ResolveField(md,model,handle);
+            var handle=MetadataTokens.EntityHandle(raw);var field=MetadataResolver.ResolveField(md,model,handle);
             if(handle.Kind==HandleKind.MemberReference&&md.GetMemberReference((MemberReferenceHandle)handle).Parent is { Kind:HandleKind.TypeSpecification } parent)
             {
                 var args=GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)parent,model,context);
@@ -271,7 +269,7 @@ internal static class AotCompiler
     private static bool IsIgnoredCall(MetadataReader md,CilInstruction i)
     {
         if(i.OpCode is not (0x28 or 0x6f)||i.Operand is not CilMetadataToken { Token: var raw })return false;
-        return IlImporter.TryIgnoreObjectCtor(md,MetadataTokens.EntityHandle(raw));
+        return MetadataResolver.TryIgnoreObjectCtor(md,MetadataTokens.EntityHandle(raw));
     }
 
     private static CilCallStackEffect? ResolveCallEffect(MetadataReader md,CompilationModel model,CilInstruction i,MethodModel? context=null)

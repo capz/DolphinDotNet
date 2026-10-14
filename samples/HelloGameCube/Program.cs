@@ -1,3 +1,12 @@
-Console.WriteLine("Hello from real C#!");
-Console.WriteLine("Running through DolphinDotNet.");
-Console.WriteLine(40 + 2);
+using Dolphin.Diagnostics;
+
+internal static class Program
+{
+    private static int Main()
+    {
+        DebugOverlay.WriteLine("Hello from real C#!");
+        DebugOverlay.WriteLine("Running through DolphinDotNet.");
+        DebugOverlay.WriteLine((40 + 2).ToString());
+        return 0;
+    }
+}

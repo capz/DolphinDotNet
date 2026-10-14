@@ -6,19 +6,26 @@ using System.Linq;
 var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 var sample = Path.Combine(root, "samples/HelloGameCube/HelloGameCube.csproj");
 var compiler = Path.Combine(root, "tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj");
-var temp = Path.Combine(Path.GetTempPath(), $"dnd-{Guid.NewGuid():N}.h");
+var tempDirectory = Path.Combine(Path.GetTempPath(), $"dnd-{Guid.NewGuid():N}");
+var temp = Path.Combine(tempDirectory, "hello.c");
 
 Run("dotnet", $"build \"{sample}\" -c Release");
 var dll = Path.Combine(root, "samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll");
 Run("dotnet", $"run --project \"{compiler}\" -- \"{dll}\" \"{temp}\"");
 
 var generated = File.ReadAllText(temp);
-if (!generated.Contains("Hello from real C#!") ||
-    !generated.Contains("0x06, 0x01") ||
-    !generated.Contains("0x06, 0x02"))
-    throw new Exception("Compiler output did not contain expected strings/internal calls.");
+if (!generated.Contains("dnd_console_write_line") ||
+    !generated.Contains("dnd_aot_entry"))
+    throw new Exception("Compiler output did not contain native AOT calls.");
 
-File.Delete(temp);
+Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{dll}\" \"{temp}\"");
+if (File.ReadAllText(temp) != generated)
+    throw new Exception("Default compilation and --aot produced different native programs.");
+
+var helloHost = Path.Combine(tempDirectory, "hello-host");
+Run("cc", $"-pthread -std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" \"{temp}\" \"{Path.Combine(root, "tests/hello_gamecube_host.c")}\" \"{Path.Combine(root, "source/managed_runtime.c")}\" \"{Path.Combine(root, "source/async_runtime.c")}\" -o \"{helloHost}\"");
+Run(helloHost, "");
+Directory.Delete(tempDirectory, recursive: true);
 
 var genericProject = Path.Combine(root, "tests/GenericSharingSmoke/GenericSharingSmoke.csproj");
 Run("dotnet", $"build \"{genericProject}\" -c Release");
