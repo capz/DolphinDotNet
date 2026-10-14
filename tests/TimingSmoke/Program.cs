@@ -65,6 +65,16 @@ internal static class Program
         bool background=false;
         var workerTimer=await Task.Run(()=>Timer.Schedule(()=>background=!Scheduler.IsApplicationThread,0));
         await workerTimer.Completion; if (!background || !Scheduler.IsApplicationThread) return 21;
+        int active=0, blockingTicks=0;
+        var blocking=await Task.Run(()=>Timer.Schedule(()=> {
+            active++;
+            if (active!=1) throw new InvalidOperationException("Overlapping periodic callback.");
+            Task.Delay(2).Wait();
+            blockingTicks++; active--;
+        },0,1));
+        await Task.Delay(10);
+        blocking.Dispose(); await blocking.Completion;
+        if (active!=0 || blockingTicks==0) return 26;
         using(var cancellation=new CancellationTokenSource())
         {
             var waiters=new Task[64];

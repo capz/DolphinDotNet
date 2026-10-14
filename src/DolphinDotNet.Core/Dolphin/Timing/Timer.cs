@@ -41,7 +41,7 @@ public sealed class Timer : IDisposable
         if (due<0 || now<due) return;
         if (callback==null) { Close(); completion.SetResult(0); return; }
         if (period>0) due+=((now-due)/period+1)*period; // Coalesce missed intervals.
-        if (queued) return;
+        if (queued || executing) return;
         queued=true;
         Scheduler.Post(dispatch,context);
     }
