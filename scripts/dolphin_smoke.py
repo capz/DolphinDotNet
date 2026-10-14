@@ -43,6 +43,7 @@ def main() -> int:
     parser.add_argument("--expect-symbol", action="append", default=[], help="Required guest function symbol")
     parser.add_argument("--expect-word", action="append", default=[], help="Require guest RAM SYMBOL=0xVALUE")
     parser.add_argument("--expect-text", action="append", default=[], help="Require text in guest RAM SYMBOL=TEXT")
+    parser.add_argument("--memory-after-symbol", help="Read guest RAM at this completion breakpoint")
     parser.add_argument("--expect-marker", help="Require a UART boot marker from the emulated program")
     parser.add_argument("--require-boot", action="store_true", help="Require Dolphin executable boot log")
     args = parser.parse_args()
@@ -53,8 +54,11 @@ def main() -> int:
         parser.error("Guest entry checks require --gdb-port and --elf")
     if args.expect_symbol and (args.expect_word or args.expect_text):
         parser.error("Choose ELF breakpoints or guest-memory checks, not both")
+    if args.memory_after_symbol and not (args.expect_word or args.expect_text):
+        parser.error("--memory-after-symbol requires a guest-memory expectation")
     expected = resolve_symbols(args.elf, args.expect_symbol) if args.expect_symbol else []
     memory_expected = resolve_memory_expectations(args.elf, args.expect_word, args.expect_text) if (args.expect_word or args.expect_text) else []
+    completion = resolve_symbols(args.elf, [args.memory_after_symbol])[0] if args.memory_after_symbol else None
     args.logs.mkdir(parents=True, exist_ok=True)
     user = args.logs.resolve() / "user"
     user.mkdir(exist_ok=True)
@@ -86,7 +90,7 @@ def main() -> int:
     guest_state = []
     if args.gdb_port:
         def capture_guest_state():
-            guest_state.append(probe_memory(args.gdb_port, memory_expected, seconds=max(2, args.seconds - 2))
+            guest_state.append(probe_memory(args.gdb_port, memory_expected, seconds=max(2, args.seconds - 2), stop_symbol=completion)
                                if memory_expected else
                                probe(args.gdb_port, expected, seconds=max(2, args.seconds - 2)))
         diagnostic = threading.Thread(target=capture_guest_state, daemon=True)

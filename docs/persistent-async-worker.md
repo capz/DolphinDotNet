@@ -1,26 +1,14 @@
-# Persistent async runtime: native worker foundation
+# Persistent async runtime
 
-This branch adds a **native-only** persistent I/O worker, started before the managed GameCube entry point and joined after that entry point returns. It is implemented with libogc LWP threads, mutexes, and a condition variable on GameCube, and POSIX threads in portable tests.
+The runtime now provides automatic async progress through a persistent service thread and an execution gate. Applications use ordinary async Main and await; they do not write task/network pump loops. See [automatic async/await](async-runtime.md) for continuation placement, task APIs, shutdown behavior and verification.
 
-The native worker sleeps when idle, executes one queued native operation at a time, and provides bounded 32-slot submission and completion-ticket polling or condition-variable waiting with `dnd_worker_wait()` (no busy-spin). It drains queued jobs during shutdown. Native job contexts are owned by the caller and must stay valid until their completion ticket has been consumed (or until the worker has been joined).
+`source/async_runtime.c` implements libogc LWP and POSIX backends. Generated application safe points and standard Task waits dispatch application-thread continuations automatically. The service thread runs background tasks, network service and ARAM work. Both executors share one serialized managed execution gate; paused native stacks, GC roots and exception frames are registered and restored at handoff. This avoids parallel access to the allocator, task/cancellation queues and managed/native buffers.
 
-**This is a foundational part of the requested background async model, not completion of it.** It does **not** remove `NetworkRuntime.Pump()` or `Scheduler.Pump()` from application code, and it does not execute managed `Task` continuations on the native thread.
+The older `source/worker.c` queue remains a separate native-only facility with native context ownership. It is no longer started as an unused queue by the GameCube entry point. General parallel managed threading remains outside this implementation; the two runtime-owned executors are the supported scheduling model.
 
-## Why managed callbacks are prohibited
+## Historical foundations
 
-The existing AOT managed runtime uses process-global `gc_frames`, exception state and a single-thread heap allocator. There is no per-thread registration, thread-local exception state, safe-point coordination, cross-thread GC root enumeration, or locking for task and network state. Simply executing managed delegates from a native LWP would produce data races and potential use-after-free during collection.
-
-The new `dnd_worker_submit` accepts **native-only** operations that do not access the managed heap, generated managed frames, or mutable managed socket/ARAM state. Do not capture or pass pointers to managed arrays, strings, or objects. The existing native networking and ARAM adapters remain application-thread-only until they have an explicitly thread-safe ownership design.
-
-## Required to finish the requested feature
-
-1. Add managed thread registration and per-thread GC roots, exception state, safe points and synchronized heap access. Test forced collections while both threads hold live object graphs.
-2. Make `Task`, `TaskCompletionSource`, the scheduler and cancellation safe across threads with appropriate memory ordering. Specify where `await` resumes, including `SynchronizationContext` / main-thread dispatch for graphics.
-3. Separate native-only socket/ARAM work from managed buffers using owned staging storage, with thread-safe submission/completion queues and cancellation. Avoid touching GX or game objects from the I/O thread.
-4. Move network service and task progress to the background worker, while providing a sleep/wakeup mechanism instead of busy-polling. Preserve bounded service latency and avoid starving rendering.
-5. Remove the two explicit pump calls from samples **only after** integration tests prove downloads and ARAM transfers make progress without them. Test GameCube hardware and emulator behavior, shutdown, cancellation and GC stress.
-
-The worker foundation and host tests deliberately preserve the existing default single-thread managed behavior. The current `System.Threading.Tasks.Task` public signatures remain supported, but their scheduler still requires cooperative pumping.
+The following sections describe the earlier incremental groundwork. Their restrictions apply to standalone use of those primitives. Automatic async handoffs use the execution gate and dedicated suspend/resume API described above; they do not enable arbitrary concurrent managed mutators or install the optional stop-the-world hook.
 
 ## Managed GC-root registration groundwork
 

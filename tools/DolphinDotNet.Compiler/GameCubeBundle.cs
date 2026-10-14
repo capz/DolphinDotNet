@@ -67,13 +67,12 @@ internal static class GameCubeBundle
         File.Copy(Path.Combine(root, "scripts", "dol_sections.py"),
             Path.Combine(directory, "scripts", "dol_sections.py"), true);
 
-        var entry = compilation.ValueMethods.FirstOrDefault(m => m.Key.Name == "Main")
-            ?? throw new InvalidDataException("AOT entry point missing.");
+        var entry = compilation.ValueMethods.Single(m => m.Key == compilation.Entry);
         File.WriteAllText(Path.Combine(directory, "source", "generated_program.c"),
             ValueCBackend.EmitProgram(compilation.ValueMethods, entry.Key, compilation.Model, compilation.Graph));
 
         var sources = new[] {
-            "aram", "bcl", "card_transaction", "console_overlay", "fst",
+            "aram", "async_runtime", "bcl", "card_transaction", "console_overlay", "fst",
             "fst_gamecube", "gc_stw", "graphics_opengx", "input_gamecube",
             "main", "managed_runtime", "model", "model_animation",
             "model_graphics", "model_transform", "network", "network_gamecube",
@@ -85,6 +84,8 @@ internal static class GameCubeBundle
         {
             // This subset is independent of libogc. A Wii U-native entry
             // and WUT backend are required; never embed GameCube main.c.
+            if(reachable.Any(t=>t.StartsWith("Dolphin.Threading.Tasks.",StringComparison.Ordinal)))
+                throw new NotSupportedException("Automatic async dispatch requires a target-specific thread backend; Wii U is not implemented.");
             sources = new[] { "bcl", "managed_runtime", "text", "system" };
             File.WriteAllText(Path.Combine(directory, "source", "wiiu_main.c"),
                 "#include \"dnd_managed.h\"\n#include <stdlib.h>\n" +

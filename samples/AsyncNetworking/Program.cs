@@ -4,25 +4,15 @@ using System.Threading.Tasks;
 using Dolphin.Serialization.Json;
 using NetworkRuntime = Dolphin.Network.NetworkRuntime;
 using NetworkOptions = Dolphin.Network.NetworkOptions;
-using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 using NativeIPAddress = Dolphin.Network.IPAddress;
 
 internal static class Program
 {
     // These defaults match tests/network_fixtures.py. Configure your own resolver,
     // DNS port (normally 53), and reachable HTTP endpoint for a console build.
-    private static int Main()
+    private static async Task<int> Main()
     {
-        var download = DownloadValueAsync();
-        while (!download.IsCompleted)
-        {
-            NetworkRuntime.Pump();
-            Scheduler.Pump(16);
-            // A game performs input, update and rendering here each frame.
-        }
-
-        // GetResult is safe here: the task has already completed, including faults.
-        try { return download.GetAwaiter().GetResult() == 42 ? 0 : 1; }
+        try { return await DownloadValueAsync() == 42 ? 0 : 1; }
         finally { if (NetworkRuntime.IsReady) NetworkRuntime.Stop(); }
     }
 

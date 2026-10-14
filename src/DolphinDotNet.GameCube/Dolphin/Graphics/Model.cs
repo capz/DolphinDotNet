@@ -24,7 +24,7 @@ public sealed class AnimationCollection : IReadOnlyList<AnimationClipInfo>
     public IEnumerator<AnimationClipInfo> GetEnumerator()=>ArrayEnumerable<AnimationClipInfo>.Enumerate(clips);
     IEnumerator IEnumerable.GetEnumerator()=>GetEnumerator();
 }
-/// <summary>Shared model package and resident native resources. Application-thread operations only.</summary>
+/// <summary>Shared model package and resident native resources. Operations are serialized by the runtime execution gate.</summary>
 public sealed class Model : IDisposable
 {
     internal readonly int Token;

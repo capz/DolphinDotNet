@@ -5,6 +5,10 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["AsyncRunning"]=("dnd_async_running","",false),
+        ["AsyncContext"]=("dnd_async_context","",false),
+        ["AsyncWake"]=("dnd_async_wake","",false),
+        ["AsyncProgress"]=("dnd_async_progress","",false),
         ["GraphicsBeginFrame"]=("dnd_graphics_begin_frame","ffff",false),
         ["GraphicsFrustum"]=("dnd_graphics_frustum","ffffff",false),
         ["GraphicsTranslate"]=("dnd_graphics_translate","fff",false),
@@ -47,6 +51,8 @@ internal static class NativeStorageBindings
         if(!Bindings.TryGetValue(call.Operation,out var binding)||binding.Types.Length!=call.Arguments.Count)throw new NotSupportedException($"Invalid native storage binding {call.Operation}.");
         var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'o'=>"DndObject*",'l'=>"int64_t",'f'=>"float",_=>"int"})})v{arg.Id}").ToList();
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
+        if(call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd")
+            b.AppendLine("  dnd_async_require_application_thread();");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";
         if(call.Result is {} result)b.AppendLine($"  v{result.Id} = {(result.Kind==IrValueKind.ObjectReference?"(intptr_t)":"")}{expression};");else b.AppendLine($"  {expression};");
     }

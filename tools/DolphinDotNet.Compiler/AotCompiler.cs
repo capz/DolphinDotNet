@@ -5,7 +5,7 @@ using System.Reflection.PortableExecutable;
 
 namespace DolphinDotNet.Compiler;
 
-internal sealed record AotCompilation(CompilationModel Model,DependencyGraph Graph,List<IrMethod> Methods,List<ValueIrMethod> ValueMethods);
+internal sealed record AotCompilation(CompilationModel Model,DependencyGraph Graph,List<IrMethod> Methods,List<ValueIrMethod> ValueMethods,MethodKey Entry);
 
 internal static class AotCompiler
 {
@@ -49,14 +49,24 @@ internal static class AotCompiler
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
                 DiscoverTypeInitializers(model,graph);
+                DiscoverAsyncServices(model,graph);
                 try { output.Add(IlImporter.Import(assembly.PE,model,method,new DependencyGraph())); }
                 catch(NotSupportedException) { /* Legacy backend is a regression oracle, not a production dependency. */ }
                 foreach(var key in graph.Methods)
                     if(queued.Add(key)&&model.Methods.TryGetValue(key,out var reachable)&&model.Assemblies.TryGetValue(reachable.AssemblyName,out var reachableAssembly)&&reachableAssembly.Metadata.GetMethodDefinition(reachable.Handle).RelativeVirtualAddress!=0)queue.Enqueue(reachable);
             }
-            return new AotCompilation(model,graph,output,valueOutput);
+            return new AotCompilation(model,graph,output,valueOutput,entryKey);
         }
         catch { model.Dispose(); throw; }
+    }
+
+    private static void DiscoverAsyncServices(CompilationModel model,DependencyGraph graph)
+    {
+        if(!graph.Types.Any(t=>t.StartsWith("Dolphin.Threading.Tasks.",StringComparison.Ordinal)))return;
+        foreach(var method in model.Methods.Values.Where(m=>
+            (m.Key.TypeName=="Dolphin.Threading.Tasks.Scheduler"&&m.Key.Name is "PumpContext" or "Pending")||
+            (graph.Types.Contains("Dolphin.Network.NetworkRuntime")&&m.Key.TypeName=="Dolphin.Network.NetworkRuntime"&&m.Key.Name is "Pump" or "get_PendingOperations")).ToArray())
+        {graph.AddType(method.Key.TypeName);graph.AddMethod(method.Key);}
     }
 
     private static IReadOnlyList<ValueIrExceptionRegion> ReadExceptionRegions(MetadataReader md,ImmutableArray<ExceptionRegion> regions)

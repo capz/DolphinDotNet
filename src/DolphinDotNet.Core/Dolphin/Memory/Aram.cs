@@ -94,7 +94,7 @@ internal static class TransferQueue
     {
         if(queue.Count>=128)throw new InvalidOperationException("ARAM transfer queue is full.");
         queue.Add(work);
-        if(queue.Count==1){try{Scheduler.Post(Pump);}catch{queue.RemoveAt(0);throw;}}
+        if(queue.Count==1){try{Scheduler.PostBackground(Pump);}catch{queue.RemoveAt(0);throw;}}
     }
-    private static void Pump(){if(queue[0].Step())queue.RemoveAt(0);if(queue.Count!=0)Scheduler.Post(Pump);}
+    private static void Pump(){if(queue[0].Step())queue.RemoveAt(0);if(queue.Count!=0)Scheduler.PostBackground(Pump);}
 }

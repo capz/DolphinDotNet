@@ -1,77 +1,73 @@
-# Cooperative async/await
+# Automatic async/await
 
-Ordinary C# `async Task` and `async Task<T>` methods compile through AOT, including generated state machines, deferred continuations and retained locals. Execution uses one application thread. An await of a pending task suspends the method; its continuation runs when the application pumps the scheduler. Awaiting an already completed task can continue immediately.
+Ordinary C# `async Task`, `async Task<T>` and `async Task<int> Main()` run through the production AOT compiler without application-owned `Scheduler.Pump()` or `NetworkRuntime.Pump()` calls. The compiler uses the assembly's actual CLI entry point, including Roslyn's synchronous `<Main>` wrapper for async Main.
+
+```csharp
+using System.Net.Http;
+using System.Threading.Tasks;
+using NetworkRuntime = Dolphin.Network.NetworkRuntime;
+
+static async Task<int> Main()
+{
+    try
+    {
+        await NetworkRuntime.StartAsync();
+        using var http = new HttpClient();
+        var text = await http.GetStringAsync("http://192.168.1.2:18081/json");
+        return text.Length > 0 ? 0 : 1;
+    }
+    finally { if (NetworkRuntime.IsReady) NetworkRuntime.Stop(); }
+}
+```
+
+The [AsyncNetworking](../samples/AsyncNetworking/Program.cs) and [GoogleLogoAram](../samples/GoogleLogoAram/Program.cs) samples use async Main directly. HTTP currently supports plain HTTP only; HTTPS is not implemented.
+
+## Dispatch and continuation placement
+
+The generated native entry point starts a persistent service thread when the reachable program uses tasks. It services nonblocking network operations and bounded background action batches, sleeps on a condition variable when idle, and uses 1 ms timed waits while socket/DMA polling is pending. Submissions and completions signal the condition variable. Startup failure is reported; shutdown joins the service thread before releasing the application's static roots.
+
+| Operation | Executor |
+| --- | --- |
+| Initial application code | Application thread |
+| Default pending `await` | Captures the current executor; application awaits resume on the application thread |
+| `Task.Yield()` | Queues another turn on the current executor |
+| `Task.Run(Action)` / `Task.Run<T>(Func<T>)` | Service thread |
+| Pending `ConfigureAwait(false)` | Service thread; an already completed await may continue inline |
+| Network service / ARAM transfer queue | Service thread |
+| Graphics | Application thread; background calls are rejected |
+
+Application continuations are dispatched automatically at generated application basic-block safe points (including loop backedges), at most once per millisecond, and from standard task waits. There are no async dispatch safe points inside Core/GameCube runtime operations: queue, task, cancellation, allocator and native bridge updates remain atomic relative to the other executor. An application can start an async operation and continue its ordinary input/update/render loop without adding service calls.
+
+`Wait`, `Result` and `GetAwaiter().GetResult()` on pending tasks integrate with the dispatcher and condition-variable waits. They do not spin or require the caller to advance networking. They still block that call; use `await` to keep an application's logical flow asynchronous. A long synchronous native operation can delay dispatch until it returns.
+
+## Managed execution safety
+
+An execution gate serializes managed code between the application and service threads. This supplies background scheduling and I/O progress, **not parallel managed execution or a general thread pool**. Thread handoffs save and restore GC-frame chains, native exception-handler stacks, exception objects and pending exception state. The parked thread's live native stack remains registered as GC roots until it resumes. GC and heap mutation run exclusively under the same gate; they can safely trace both active and parked stacks, including nested exception frames.
+
+The runtime supports these two owned executors. Arbitrary native threads must not call managed code, manipulate managed buffers, allocate or collect. The independent native-only worker queue and stop-the-world coordinator remain lower-level primitives, not permission to create additional managed mutators. Class initialization also holds an explicit critical scope, so another executor cannot observe partially initialized static fields. Waiting for a pending task inside a class initializer is unsupported. Synchronous storage calls still run under the execution gate and can delay the other executor.
+
+Shutdown wakes the service thread and requests cancellation at application safe points and standard task waits in any active background callback, allowing finally blocks to unwind before join. Callbacks that catch shutdown exceptions indefinitely, or native calls that never return, can prevent graceful shutdown. Pending fire-and-forget work is not guaranteed to finish; await work and dispose its resources before Main returns.
 
 ## Namespaces and assemblies
 
-Reference `DolphinDotNet.Core` for the runtime implementations; graphics/input also require `DolphinDotNet.GameCube`. Assembly names are not API namespaces.
+Reference `DolphinDotNet.Core` for runtime implementations; graphics/input also require `DolphinDotNet.GameCube`. Applications use `System.Threading.Tasks`, `System.Threading` and the supported `System.IO` / `System.Net` signatures. AOT maps these contracts to Dolphin implementations. Direct ARAM and model methods also expose standard Task/cancellation signatures. The desktop CLR does not provide a native GameCube backend.
 
-| Application surface | Runtime implementation / platform surface |
+No scheduler namespace import is needed for normal async applications. `Dolphin.Threading.Tasks.Scheduler.IsApplicationThread` is available for diagnostics. Explicit pump methods remain for low-level compatibility/characterization tests. Host tests can set `DND_ASYNC_MANUAL=1` to disable automatic dispatch for deterministic queue-boundary checks; this switch is not present in the GameCube backend.
+
+## Supported Task subset
+
+| Feature | Scope |
 | --- | --- |
-| `System.Threading.Tasks.Task`, `Task<T>`, `TaskCompletionSource<T>` | AOT maps to `Dolphin.Threading.Tasks` |
-| `System.Threading.CancellationToken`, `CancellationTokenSource` | AOT maps to `Dolphin.Threading` |
-| Compiler-generated `System.Runtime.CompilerServices` async types | AOT maps the supported builders, awaiters and state-machine contracts to `Dolphin.Runtime.CompilerServices` |
-| Standard `System.IO`, `System.Net`, `System.Net.Sockets`, `System.Net.Http` calls | Selected signatures map to `Dolphin.IO`, `Dolphin.Network` and `Dolphin.Network.Http` |
-| Queue pumping | `Dolphin.Threading.Tasks.Scheduler` (no standard .NET equivalent) |
-| Network startup/pumping/options | `Dolphin.Network.NetworkRuntime`, `NetworkOptions` |
-| Direct model/ARAM APIs | `Dolphin.Graphics`, `Dolphin.Memory`; expose standard `System.Threading.Tasks.Task` and `System.Threading.CancellationToken` |
-
-Use `using System.Threading.Tasks;` for normal async method return types. Alias the scheduler instead of importing both Task namespaces:
-
-```csharp
-using System.Threading.Tasks;
-using Scheduler = Dolphin.Threading.Tasks.Scheduler;
-using NetworkRuntime = Dolphin.Network.NetworkRuntime;
-```
-
-The public I/O, ARAM, networking and model APIs now use standard Task and cancellation signatures. The desktop CLR still sees the Dolphin task implementation as a separate type: do not cast between task types. The AOT compiler rewrites standard task, awaiter and cancellation metadata to the cooperative runtime equivalents. AOT redirection supplies the standard API compatibility on the target. Running a platform sample with `dotnet run` does not substitute for native AOT execution; platform internal calls require the native backend.
-
-Custom Dolphin tasks remain internal runtime plumbing and are not the public application contract; custom async-method builders are not advertised for declaring `async Dolphin.Threading.Tasks.Task` methods. Use the standard Task return type. The legacy `DolphinDotNet.Runtime` information facade is separate from compiler-generated `Dolphin.Runtime.CompilerServices`; game platform information is exposed through `Dolphin.Platform`.
-
-## Established Task subset
-
-| Feature | Supported scope |
-| --- | --- |
-| Async methods | `async Task`, `async Task<T>`, nested awaits, result/fault/cancellation completion |
-| Task state | IsCompleted, IsCompletedSuccessfully, IsFaulted, IsCanceled |
-| Factories | CompletedTask, FromResult, FromException, FromCanceled |
-| Queued work | Run(Action[, token]), Run<T>(Func<T>[, token]), Yield |
-| Composition | WhenAll(Task[]), WhenAny(Task[]); generic result-array/enumerable overloads are not established |
+| Async methods | Task / Task<T>, nested awaits, result/fault/cancellation and async Main |
+| Task state / factories | IsCompleted, IsCompletedSuccessfully, IsFaulted, IsCanceled; CompletedTask, FromResult, FromException, FromCanceled |
+| Work and composition | Run(Action / Func<T>, optional token), Yield, WhenAll(Task[]), WhenAny(Task[]) |
 | Completion source | TaskCompletionSource<T>: Task, SetResult, SetException, SetCanceled |
-| Await configuration | ConfigureAwait(bool); no synchronization or execution context is captured |
-| Cancellation | Source.Cancel, token state and ThrowIfCancellationRequested; cooperative checks, no cancellation registrations or timed cancellation |
-| Blocking access | Wait, Result and GetAwaiter().GetResult pump scheduler work; use only intentionally, outside a frame loop or after completion |
+| Continuation placement | Captured executor by default; ConfigureAwait(bool) |
+| Cancellation | Source.Cancel, token checks; no registrations or timed cancellation |
+| Blocking access | Wait, Result and GetAwaiter().GetResult integrate with automatic dispatch |
 
-`Task.Run` schedules its delegate on the application thread; it does not provide parallel execution. It has no dedicated async-delegate unwrapping overload: do not assume desktop `Task.Run(Func<Task>)` semantics. `Task.Yield` schedules another queue turn, not necessarily the next rendered frame. No `Task.Delay`, async void, ValueTask, async streams, managed Thread/thread pool, locks, timers or full TPL/context behavior is supplied.
+Task.Run has no async-delegate unwrapping overload. Task.Delay, async void, ValueTask, async streams, user-created Thread, locks, timers, general SynchronizationContext / ExecutionContext and full TPL behavior are not supplied. WhenAll reports the first captured fault ahead of cancellation and does not supply AggregateException collections. WhenAny returns the winning task; await it separately to observe its result.
 
-WhenAll waits for all tasks, reports the first captured fault ahead of cancellation and does not expose a desktop AggregateException collection. WhenAny returns the completed candidate task; await that candidate separately to observe its result/fault/cancellation.
+## Verification
 
-## Keep the outer loop running
-
-Start an async operation and keep pumping from the outer loop. Do not put a synchronous Wait/Result/GetResult on a pending network task in that loop: only networking's service pump can advance its socket/DNS/HTTP work. A scheduler wait with no queued completion path throws; it does not service networking automatically.
-
-```csharp
-var pending = DownloadValueAsync(); // ordinary async Task<int> method
-while (!pending.IsCompleted)
-{
-    NetworkRuntime.Pump();
-    Scheduler.Pump(16);
-    // Input, update and render remain application-owned.
-}
-var value = pending.GetAwaiter().GetResult(); // already completed; observes faults
-```
-
-The complete, compiled [AsyncNetworking example](../samples/AsyncNetworking/Program.cs) defines DownloadValueAsync, awaits direct Dolphin startup, then awaits standard HttpClient DNS/HTTP work and reads a JSON value. Its loop is headless; a game can use the same pumps inside its existing frame loop. Defaults match the local network fixture, not a production server. HTTPS remains unsupported.
-
-`Scheduler.Pump()` executes one queued action. `Pump(maximumActions)` executes at most that many actions and no more than the queue count at entry; continuations posted during the call may remain for a later pump. RunUntilIdle drains the queue and can block rendering. Action count is not a time budget: a long CPU delegate or synchronous native call can exceed a frame's duration.
-
-File/stream/text operations yield between bounded chunks, but storage descriptor calls remain synchronous within a chunk. Network sockets use nonblocking operations with a separate bounded service pump. ARAM operations submit/poll native DMA and queue continuations; they still require main-RAM staging. Serialize concurrent operations on a shared stream and keep resources/buffers alive until their operations complete.
-
-## Examples and verification
-
-- `tests/AsyncSmoke`: ordinary System Task/cancellation namespaces, nested awaits and retained strings, one-action pumping, faults/catch/finally, cancellation, completion sources, WhenAll/WhenAny and awaiting a direct Dolphin task.
-- `tests/LibrarySmoke`: collections/text plus compiled async Yield/Run/ConfigureAwait and stream copying.
-- `tests/StorageSmoke`, `tests/AramSmoke`, `tests/ModelSmoke`: cooperative platform I/O and resource lifecycle tests.
-- `tests/NetworkSmoke` and `samples/AsyncNetworking`: generated native execution against deterministic UDP/TCP/DNS/HTTP fixtures.
-
-CI compiles the dedicated async smoke to native C, runs it under sanitizers and GC stress on 64-bit hosts, and runs the GC-stress path on 32-bit hosts. The network example also executes through AOT against local fixtures. GameCube build/link evidence is separate from execution: actual Dolphin/console behavior and frame-time/stack acceptance remain pending.
+`tests/AutomaticAsyncSmoke` contains no pump calls. Compiled native execution covers captured/default awaits, Task.Run, Yield, ConfigureAwait(false), cancellation during active work, a synchronous application loop, exception rethrow across thread handoffs, GC roots on both executors, DNS/HTTP streaming to ARAM and multi-chunk readback/disposal. CI runs optimized sanitizers with forced GC and 32-bit native execution. Legacy tests still characterize explicit queue boundaries in manual host mode. A separate AutomaticTaskSmoke DOL exercises Task.Run, captured awaits, ConfigureAwait(false), WhenAll, faults and cancellation under forced GC in Dolphin. Its guest-memory success marker is published only after async Main completes and the service thread has joined. Actual console timing and DMA behavior remain hardware validation tasks.

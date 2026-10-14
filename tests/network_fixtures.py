@@ -54,7 +54,10 @@ def http_peer(peer):
             request.extend(part)
         path = request.split(b' ')[1]
         body = b'{"value":42,"name":"GameCube","ok":true}'
-        if path == b'/chunked':
+        if path == b'/large':
+            body = bytes(i % 251 for i in range(12001))
+            peer.sendall(b'HTTP/1.1 200 OK\r\nContent-Length: ' + str(len(body)).encode() + b'\r\n\r\n' + body)
+        elif path == b'/chunked':
             peer.sendall(b'HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n')
             for part in (body[:5], body[5:]):
                 peer.sendall(f'{len(part):x}\r\n'.encode() + part + b'\r\n')

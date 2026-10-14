@@ -22,7 +22,7 @@ public static class NetworkRuntime
     public static NetworkOptions Options {get;private set;}=new NetworkOptions();
     public static int PendingOperations=>pending.Count;
     internal static int Now=>NativeNetwork.NetTime();
-    internal static void Add(Operation operation){if(pending.Count>=32)throw new InvalidOperationException("Network operation limit reached.");pending.Add(operation);}
+    internal static void Add(Operation operation){if(pending.Count>=32)throw new InvalidOperationException("Network operation limit reached.");pending.Add(operation);Dolphin.Threading.Tasks.NativeAsync.AsyncWake();}
     public static Task StartAsync()=>StartAsync(new NetworkOptions(),default);
     public static Task StartAsync(NetworkOptions options,CancellationToken token)
     {

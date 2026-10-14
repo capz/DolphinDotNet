@@ -2,22 +2,21 @@
 
 This sample demonstrates downloading an image without keeping the entire download in GameCube **main RAM (MEM1)**.
 
-The HTTP response is consumed as a stream (`httpResponseStream`). A single reusable **4 KiB buffer** (`segmentBuffer`) receives the image in small segments. Each segment is written to `aramStream`, an `AramStream` backed by **ARAM (Auxiliary RAM)** — the GameCube's additional memory that is separate from CPU-accessible MEM1. This avoids allocating a full image-sized byte array in MEM1, leaving more main RAM available for gameplay, rendering and other work. Network reception and ARAM DMA still use small MEM1 staging buffers; data does not bypass main RAM entirely.
+The HTTP response is consumed as a stream (`httpResponseStream`). The standard `Stream.CopyToAsync(aramStream, CopyBufferBytes)` API receives the image in small segments through a single reusable **4 KiB buffer** and awaits each write to `aramStream`, an `AramStream` backed by **ARAM (Auxiliary RAM)** — the GameCube's additional memory that is separate from CPU-accessible MEM1. This avoids allocating a full image-sized byte array in MEM1, leaving more main RAM available for gameplay, rendering and other work. Network reception and ARAM DMA still use small MEM1 staging buffers; data does not bypass main RAM entirely.
 
 When the image is needed, seek within `aramStream` and read the necessary bytes back into MEM1 with `ReadAsync`. The sample demonstrates this by retrieving the first eight bytes and checking the PNG signature. It does not decode or draw the PNG. **Keep the ARAM stream alive** if you need to retrieve the image later; this short demonstration disposes it when the method returns.
 
+## Modern API surface
+
+Application async methods use `System.Threading.Tasks.Task`, and HTTP uses `System.Net.Http.HttpClient`. `Dolphin.IO.AramStream` now derives from `System.IO.Stream` and exposes standard Task/cancellation signatures, so the HTTP response can be copied directly with `CopyToAsync` instead of a hand-written read/write loop. The sample uses an alias for this platform-specific stream and for the cooperative scheduler and network runtime.
+
+DolphinDotNet AOT maps the supported standard calls to its cooperative runtime. This does not add background threads or support every modern .NET overload; PNG validation uses the supported byte-array `ReadAsync` overload, repeating reads until all eight signature bytes arrive. Running this sample with the desktop CLR does not provide the native GameCube backend.
+
 ## Understanding `Main()`
 
-`Main()` starts `DownloadLogoToAramAsync()` and receives a `Task<int>` representing its eventual completion. DolphinDotNet is **cooperatively scheduled** on GameCube; async operations do not automatically progress on background threads.
+`Main()` is an ordinary `async Task<int>` entry point. It awaits the download and PNG verification, returns 0 on success or 1 on failure, and stops networking in `finally`. The generated native bootstrap starts and joins the runtime service thread. Networking, ARAM DMA and continuations advance automatically; no application pump loop is needed.
 
-While the task is pending, the sample explicitly runs both pumps:
-
-- `NetworkRuntime.Pump(16, 1)` progresses network initialization, DNS, sockets and HTTP requests. The arguments cap the operations and approximate milliseconds of work in a pass.
-- `Scheduler.Pump(16)` executes up to 16 queued task continuations and advances ARAM DMA transfer completion.
-
-Without these calls, the HTTP download or ARAM writes may remain pending. This headless example pumps in a loop until completion. **A real game should place both pumps in its existing per-frame loop** alongside input, updates and rendering; the call limits are not a guarantee of frame timing.
-
-After completion, `GetAwaiter().GetResult()` returns 0 on success or throws an exception; `Main()` returns 1 on failure. The `finally` block shuts down networking.
+Default awaits resume on the application thread. Background tasks and I/O service execute on the service thread under a shared managed execution gate. See [automatic async runtime](../../docs/async-runtime.md) for executor capture, safe points and supported APIs.
 
 ## Run the example
 
