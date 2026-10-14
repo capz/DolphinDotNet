@@ -31,12 +31,13 @@ static int create(int kind,int bytes,int alignment) {
     if(dnd_raw_depth() || bytes<=0 || bytes>BUDGET-total_bytes || alignment<32 || alignment>4096 || (alignment&(alignment-1))) return 0;
     for(int i=0;i<SLOTS;i++) if(!slots[i].kind && slots[i].generation<0x1fffff) {
         Resource *r=&slots[i];
-        void *base=malloc((size_t)bytes+(unsigned)alignment-1);
+        size_t padded=((size_t)bytes+31)&~(size_t)31;
+        void *base=malloc(padded+(unsigned)alignment-1);
         if(!base) return 0;
         int generation=r->generation+1;
         memset(r,0,sizeof(*r)); r->generation=generation; r->kind=kind; r->bytes=bytes; r->allocation=base;
         r->data=(unsigned char*)(((uintptr_t)base+(unsigned)alignment-1)&~((uintptr_t)alignment-1));
-        memset(r->data,0,(size_t)bytes); total_bytes+=bytes;
+        memset(r->data,0,padded); total_bytes+=bytes;
         return (generation<<10)|(i+1);
     }
     return 0;
@@ -178,7 +179,7 @@ int dnd_mesh_primitives(DndArray *a,int offset,int count,int format,int primitiv
     DndDrawMaterial material={color,flags,0};float transform[16];
     if(dnd_device_pass()!=1||count<0||count>768||!matrix(world,transform)||!vertices(a,offset,count,format,staging))return -1;
     if((primitive==0x90&&count%3)||(primitive==0xa8&&count%2)||(primitive!=0x90&&primitive!=0xa8&&primitive!=0xb8))return -1;
-    dnd_draw_backend_vertices(staging,count,primitive,NULL,&material,transform);
+    if(count)dnd_draw_backend_vertices(staging,count,primitive,NULL,&material,transform);
     if(primitive==0x90)dnd_performance_add_triangles((uint32_t)count/3);
     return 0;
 }

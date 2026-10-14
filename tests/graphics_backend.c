@@ -1,5 +1,6 @@
 #include "dnd_draw.h"
 #include "dnd_graphics.h"
+#include "dnd_gx_raw.h"
 #include <assert.h>
 int graphics_draws, graphics_vertices, graphics_raw_commands;
 static int frames;
@@ -19,6 +20,9 @@ void dnd_draw_backend_wait(void){}
 void dnd_draw_backend_abort(void){}
 void dnd_draw_backend_external(void){}
 void dnd_draw_backend_flush(void *p,int n,int invalidate){assert(p&&n>=0);(void)invalidate;}
-uint64_t dnd_raw_record(int op,const uint64_t *args,int count){(void)op;(void)args;(void)count;graphics_raw_commands++;return 0;}
+uint64_t dnd_raw_record(int op,const uint64_t *args,int count){if(op==DND_RAW_GX_SETCOPYCLEAR){assert(count==2&&args[0]==0x11223344&&args[1]==0xffffff);}
+if(op==DND_RAW_GX_SETTEVCOLORS10){assert(count==2&&args[1]==UINT64_C(0xffff0002fffd0004));}
+if(op==DND_RAW_GUMTXIDENTITY){assert(count==1&&args[0]&&(args[0]&31)==0);}
+graphics_raw_commands++;return 0;}
 
 bool dnd_draw_backend_immediate_ready(void){return true;}

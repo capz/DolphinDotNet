@@ -85,13 +85,13 @@ int dnd_device_claim_external(void) {
 }
 int dnd_raw_enter(int kind) {
     dnd_async_require_application_thread();
-    if((kind!=1&&kind!=2) || (raw_depth&kind) || (kind==2&&raw_depth) || (active&&pass!=3)) return -1;
+    if((kind!=1&&kind!=2&&kind!=4) || (raw_depth&kind) || (kind!=1&&raw_depth) || (active&&pass!=3)) return -1;
     if(!raw_depth)dnd_async_enter_critical();
     raw_depth|=kind;return 0;
 }
 int dnd_raw_leave(int kind) {
     dnd_async_require_application_thread();
-    if(!(raw_depth&kind) || (kind==2&&(raw_depth&1)))return -1;
+    if(!(raw_depth&kind) || (kind!=1&&(raw_depth&1)))return -1;
     raw_depth&=~kind;if(!raw_depth)dnd_async_leave_critical();return 0;
 }
 int dnd_raw_depth(void) { return raw_depth; }

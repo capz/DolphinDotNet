@@ -1660,7 +1660,7 @@ uint64_t dnd_Raw_GX_RedirectWriteGatherPipe(uint64_t a0) {
     const uint64_t args[] = {(uint64_t)a0};
     dnd_raw_command(161,args,1);
     if(dnd_exception_pending()) return 0;
-    if(dnd_raw_enter(2)<0) {dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Nested raw command stream.");return 0;}
+    if(dnd_raw_enter(4)<0) {dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Nested raw command stream.");return 0;}
 #ifdef DND_GAMECUBE_STORAGE
     uint64_t result=(uint64_t)(uintptr_t)GX_RedirectWriteGatherPipe((void *)(uintptr_t)a0);
 #else
@@ -1688,7 +1688,7 @@ void dnd_Raw_GX_RestoreWriteGatherPipe(void) {
 #else
     (void)dnd_raw_record(163,args,0);
 #endif
-    if(dnd_raw_leave(2)<0)dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"No matching raw command stream.");
+    if(dnd_raw_leave(4)<0)dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"No matching raw command stream.");
 }
 void dnd_Raw_GX_SetAlphaCompare(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) {
     const uint64_t args[] = {(uint64_t)a0,(uint64_t)a1,(uint64_t)a2,(uint64_t)a3,(uint64_t)a4};

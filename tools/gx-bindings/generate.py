@@ -86,8 +86,8 @@ for index,f in enumerate(schema['functions']):
  native.append('    const uint64_t args[] = {'+(','.join(record_args) if record_args else '0')+'};')
  native.append(f'    dnd_raw_command({index},args,{len(params)});')
  native.append('    if(dnd_exception_pending()) return'+(';' if ret=='void' else ' 0;'))
- enter=1 if name in ('GX_Begin','GX_FastBegin') else 2 if name in ('GX_BeginDispList','GX_RedirectWriteGatherPipe') else 0
- leave=1 if name=='GX_End' else 2 if name in ('GX_EndDispList','GX_RestoreWriteGatherPipe') else 0
+ enter=1 if name in ('GX_Begin','GX_FastBegin') else 2 if name=='GX_BeginDispList' else 4 if name=='GX_RedirectWriteGatherPipe' else 0
+ leave=1 if name=='GX_End' else 2 if name=='GX_EndDispList' else 4 if name=='GX_RestoreWriteGatherPipe' else 0
  if enter:native.append(f'    if(dnd_raw_enter({enter})<0) {{dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Nested raw command stream.");return'+(';' if ret=='void' else ' 0;')+'}')
  cparams=[]
  for i,a in enumerate(params):

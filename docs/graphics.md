@@ -127,7 +127,7 @@ then one complete DNTX package. Loaders reject truncated or inconsistent sizes.
 
 `GraphicsSmoke` compiles normal C# calls through AOT and runs against a recording
 native backend with stress GC. It covers mixed passes, array value layouts,
-raw calls, adjacent batching and deferred release. CI also builds and links a
+raw pointer/color calls, asynchronous texture/font loading, text and nine-slice drawing, adjacent batching and deferred release. CI also builds and links a
 GameCube DOL against libogc2. Host recording cannot establish visual correctness,
 GPU performance, lighting appearance or cache behavior on hardware. Validate
 those with Dolphin and real hardware before relying on a graphics workload.

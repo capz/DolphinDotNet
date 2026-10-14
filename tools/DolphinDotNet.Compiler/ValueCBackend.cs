@@ -268,12 +268,23 @@ internal static class ValueCBackend
                     {
                         var unsigned = x.Operation.EndsWith(".un", StringComparison.Ordinal);
                         var op = Op(x.Operation);
-                        if (unsigned && (op == "<" || op == ">") && (IsFloating(x.Left) || IsFloating(x.Right)))
+                        if (x.Operation is "shl" or "shr" or "shr.un")
+                        {
+                            var wide=x.Left.Kind==IrValueKind.I8;
+                            var native=x.Left.Kind==IrValueKind.NativeInt;
+                            var utype=wide?"uint64_t":native?"uintptr_t":"uint32_t";
+                            var stype=wide?"int64_t":native?"intptr_t":"int32_t";
+                            var mask=wide?"63":native?"(sizeof(uintptr_t)*8-1)":"31";
+                            var input=x.Operation=="shr"?stype:utype;
+                            b.AppendLine($"  v{x.Result.Id} = ({stype})(({input})v{x.Left.Id} {op} ((uint32_t)v{x.Right.Id} & {mask}));");
+                        }
+                        else if (unsigned && (op == "<" || op == ">") && (IsFloating(x.Left) || IsFloating(x.Right)))
                             b.AppendLine($"  v{x.Result.Id} = {FloatingComparison($"v{x.Left.Id}", $"v{x.Right.Id}", op, unsigned)};");
                         else
                         {
-                            var left = unsigned ? $"(uintptr_t)v{x.Left.Id}" : $"v{x.Left.Id}";
-                            var right = unsigned ? $"(uintptr_t)v{x.Right.Id}" : $"v{x.Right.Id}";
+                            var unsignedType=x.Left.Kind==IrValueKind.I8?"uint64_t":x.Left.Kind==IrValueKind.I4?"uint32_t":"uintptr_t";
+                            var left = unsigned ? $"({unsignedType})v{x.Left.Id}" : $"v{x.Left.Id}";
+                            var right = unsigned ? $"({unsignedType})v{x.Right.Id}" : $"v{x.Right.Id}";
                             b.AppendLine($"  v{x.Result.Id} = {left} {op} {right};");
                         }
                         break;
