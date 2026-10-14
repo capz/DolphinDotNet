@@ -106,3 +106,22 @@ Set `Dolphin.Diagnostics.DebugOverlay.PerformanceVisible = true` to show FPS, fr
 submitted scene triangles and main/auxiliary RAM use in the bottom-left corner. The panel
 uses light gray text on black, is disabled by default, and can be hidden at runtime by setting
 the property to `false`. See [debug overlay](docs/debug-overlay.md) for metric definitions.
+
+### Managed source layout and sample rendering
+
+Assembly projects stay in `src/DolphinDotNet.Core` and `src/DolphinDotNet.GameCube`.
+Within each project, source paths follow the complete declared namespace, for example:
+
+- `Dolphin/Graphics/Renderer.cs` → `Dolphin.Graphics`
+- `Dolphin/Network/Http/Http.cs` → `Dolphin.Network.Http`
+- `Dolphin/Serialization/Json/JsonReader.cs` → `Dolphin.Serialization.Json`
+- `Dolphin/Text/Encoding.cs` → `Dolphin.Text`
+- `Dolphin/Threading/Tasks/Tasks.cs` → `Dolphin.Threading.Tasks`
+- `Dolphin/Runtime/CompilerServices/Awaitables.cs` → `Dolphin.Runtime.CompilerServices`
+
+`ManagedGameCube/DemoScene.cs` owns `PresentDemoFrame`: its background colour,
+projection, rotation, vertex colours and triangle geometry. The framework provides
+reusable `Dolphin.Graphics.ImmediateRenderer` drawing operations and handles the
+diagnostic overlay and presentation in `EndFrame()`. `Renderer` remains the
+model-rendering API. The compiler binds generic native operations; it contains no
+demo scene intrinsic.

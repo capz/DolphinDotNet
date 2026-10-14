@@ -45,7 +45,4 @@ public sealed class Renderer
             throw new InvalidOperationException("No active model frame.");
     }
 
-    /// <summary>Draws and presents the built-in rotating demonstration scene.</summary>
-    public static void PresentDemoFrame(int rotationDegrees) =>
-        throw new PlatformNotSupportedException("Renderer.PresentDemoFrame requires DolphinDotNet AOT.");
 }

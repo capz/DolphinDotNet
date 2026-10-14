@@ -45,6 +45,8 @@ jobs:
           cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube.c -o /tmp/managed_gamecube.o
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube_value.c
           cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube_value.c -o /tmp/managed_gamecube_value.o
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/managed_gamecube.c tests/managed_gamecube_host.c source/managed_runtime.c -lm -o /tmp/managed-gamecube-test
+          /tmp/managed-gamecube-test
       - name: Generate standalone GameCube AOT build bundle
         run: |
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-bundle

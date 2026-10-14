@@ -11,7 +11,6 @@ uint16_t dnd_input_buttons_down(unsigned p) {
   (void)p;
   return 0;
 }
-void dnd_graphics_present_demo_frame(int p) { (void)p; }
 extern intptr_t dnd_value_aot_entry(DndManagedHeap *);
 int main(int argc, char **argv) {
   (void)argv;
