@@ -44,6 +44,7 @@ var output = positionalArgs.Length == 2 ? positionalArgs[1] : "generated_program
 try
 {
     var compiled = AotCompiler.Compile(input);
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
     File.WriteAllText(output, ValueCBackend.EmitProgram(compiled.ValueMethods, compiled.Entry, compiled.Model, compiled.Graph));
     Console.WriteLine($"AOT compiled {input} -> {output} ({compiled.ValueMethods.Count} reachable methods, {compiled.Graph.Types.Count} types)");
     return 0;
