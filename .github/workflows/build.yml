@@ -150,6 +150,8 @@ jobs:
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/library.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/library_32
           timeout 30s /tmp/library_32
           timeout 30s /tmp/library_32 --gc-stress
+      - name: Validate network fixture watchdog
+        run: python3 -m unittest discover -s tests -p test_network_fixtures.py
       - name: Validate automatic async HTTP and ARAM without application pumps
         timeout-minutes: 5
         env:
@@ -161,7 +163,9 @@ jobs:
           python3 tests/network_fixtures.py /tmp/automatic-async
           python3 tests/network_fixtures.py /tmp/automatic-async --gc-stress
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/automatic-async.c tests/automatic_async_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c source/aram.c -o /tmp/automatic-async32
-          python3 tests/network_fixtures.py /tmp/automatic-async32 --gc-stress
+          # 32-bit GC stress and serialized executor handoffs can exceed the
+          # default 45-second fixture budget on shared runners; retain a watchdog.
+          python3 tests/network_fixtures.py --timeout-seconds 120 /tmp/automatic-async32 --gc-stress
       - name: Validate cooperative async and namespace interoperability
         timeout-minutes: 4
         run: |

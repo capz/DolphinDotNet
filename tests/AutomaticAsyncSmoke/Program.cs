@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Dolphin.Memory;
+using Dolphin.Diagnostics;
 using AramStream = Dolphin.IO.AramStream;
 using NetworkRuntime = Dolphin.Network.NetworkRuntime;
 using NetworkOptions = Dolphin.Network.NetworkOptions;
@@ -15,6 +16,7 @@ internal static class Program
     {
         try
         {
+            DebugOverlay.WriteLine("background work and captured awaits");
             if(!Scheduler.IsApplicationThread)return 1;
             // Suspend main's live string/exception frames while background code
             // allocates under GC stress and completes a task from another thread.
@@ -45,6 +47,7 @@ internal static class Program
             await work;
             await Task.Yield();
             if(!Scheduler.IsApplicationThread)return 7;
+            DebugOverlay.WriteLine("cooperative cancellation");
             // Cancellation while the service thread has live managed frames.
             using(var cancel=new CancellationTokenSource())
             {
@@ -63,9 +66,11 @@ internal static class Program
                 try { await canceled;return 13; }
                 catch(OperationCanceledException) { }
             }
+            DebugOverlay.WriteLine("exception handoff");
             // Preserve native EH frames and the original exception across waits.
             try { RethrowAfterWork(Task.Run(()=>string.Concat("collect-", "while-main-catches")));return 14; }
             catch(InvalidOperationException error) { if(error.Message!="original main exception")return 15; }
+            DebugOverlay.WriteLine("HTTP streaming to ARAM");
             await NetworkRuntime.StartAsync(new NetworkOptions {
                 DnsServers=new[]{Dolphin.Network.IPAddress.Loopback},DnsPort=15353
             },default);
@@ -87,11 +92,13 @@ internal static class Program
                 }
             }
             if(Aram.Statistics.AllocationCount!=0)return 11;
+            DebugOverlay.WriteLine("ConfigureAwait(false)");
             // Force a deferred ConfigureAwait(false), even if Task.Run is fast.
             var source=new TaskCompletionSource<int>();
             var switched=SwitchAsync(source.Task);
             source.SetResult(1);
             if(await switched!=1||!Scheduler.IsApplicationThread)return 12;
+            DebugOverlay.WriteLine("runtime shutdown");
             // Returning Main must cancel/unwind an active background callback
             // and join it, rather than hanging or leaving a managed thread alive.
             var shutdownStarted=new TaskCompletionSource<int>();
