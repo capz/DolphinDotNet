@@ -211,7 +211,7 @@ internal static class ValueIrImporter
                     }
                     case >=0x58 and <=0x64:
                     {
-                        var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(Merge(left.Kind,right.Kind));
+                        var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(cil.OpCode is >=0x62 and <=0x64?Unmap(left.Kind):Merge(left.Kind,right.Kind));
                         instructions.Add(new ValueIrBinary(result,cil.OpCode switch{0x58=>"add",0x59=>"sub",0x5a=>"mul",0x5b=>"div",0x5c=>"div.un",0x5d=>"rem",0x5e=>"rem.un",0x5f=>"and",0x60=>"or",0x61=>"xor",0x62=>"shl",0x63=>"shr",_=>"shr.un"},left,right));stack.Add(result);break;
                     }
                     case 0x65 or 0x66:{var input=Pop(stack,cil);var unary=New(Unmap(input.Kind));instructions.Add(new ValueIrUnary(unary,cil.OpCode==0x65?"neg":"not",input));stack.Add(unary);break;}
