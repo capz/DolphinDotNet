@@ -54,6 +54,23 @@ class Program
         try{buffer.WriteAsync(one,0,0,1);return 22;}catch(InvalidOperationException){}
         buffer.Dispose();Task.WhenAll(pending).GetAwaiter().GetResult();
         if(Aram.Statistics.AllocationCount!=0)return 23;
+        // Standard Stream interoperability: multi-chunk copying in both
+        // directions and disposal through the standard base/interface contract.
+        System.IO.Stream stream=new Dolphin.IO.AramStream(10000);
+        using(var input=new System.IO.MemoryStream(src))
+            input.CopyToAsync(stream,4096).GetAwaiter().GetResult();
+        if(stream.Length!=src.Length)return 24;
+        stream.Position=0;
+        using(var output=new System.IO.MemoryStream())
+        {
+            stream.CopyToAsync(output,4096).GetAwaiter().GetResult();
+            var roundtrip=output.ToArray();
+            if(roundtrip.Length!=src.Length)return 25;
+            for(var i=0;i<src.Length;i++)if(roundtrip[i]!=src[i])return 26;
+        }
+        ((IDisposable)stream).Dispose();
+        if(stream.CanRead || Aram.Statistics.AllocationCount!=0)return 27;
+        stream.Dispose(); // Repeated disposal is safe through System.IO.Stream.
         return 0;
     }
 }

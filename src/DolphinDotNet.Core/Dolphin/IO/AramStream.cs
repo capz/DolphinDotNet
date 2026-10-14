@@ -9,7 +9,7 @@ namespace Dolphin.IO;
 
 /// <summary>Seekable, fixed-capacity stream backed by GameCube auxiliary RAM.
 /// The stream owns its ARAM allocation; access is serialized and application-thread-only.</summary>
-public sealed class AramStream : Stream
+public sealed class AramStream : System.IO.Stream, IDisposable
 {
     private readonly AramBuffer buffer;
     private readonly bool writable;
@@ -47,6 +47,13 @@ public sealed class AramStream : Stream
         if (disposed) throw new ObjectDisposedException("AramStream");
     }
 
+    private static void Validate(byte[] array, int offset, int count)
+    {
+        if (array == null) throw new ArgumentNullException("array");
+        if (offset < 0 || count < 0 || offset > array.Length || count > array.Length - offset)
+            throw new ArgumentOutOfRangeException("count");
+    }
+
     private void CheckIdle()
     {
         Check();
@@ -59,8 +66,7 @@ public sealed class AramStream : Stream
     public override void Write(byte[] source, int offset, int count)
         => WriteAsync(source, offset, count).GetAwaiter().GetResult();
 
-    // Dolphin's cooperative Task is not a Roslyn-recognized async return type.
-    // Use a completion continuation until the public standard-Task migration is complete.
+    // Queue completion through the cooperative scheduler used by AOT.
     public override Task<int> ReadAsync(byte[] destination, int offset, int count, CancellationToken token)
     {
         CheckIdle();
@@ -89,7 +95,7 @@ public sealed class AramStream : Stream
         return result.Task;
     }
 
-    public override Task<int> ReadAsync(byte[] destination, int offset, int count)
+    public new Task<int> ReadAsync(byte[] destination, int offset, int count)
         => ReadAsync(destination, offset, count, default);
 
     public override Task WriteAsync(byte[] source, int offset, int count, CancellationToken token)
@@ -121,7 +127,7 @@ public sealed class AramStream : Stream
         return result.Task;
     }
 
-    public override Task WriteAsync(byte[] source, int offset, int count)
+    public new Task WriteAsync(byte[] source, int offset, int count)
         => WriteAsync(source, offset, count, default);
 
     public override long Seek(long offset, SeekOrigin origin)
@@ -149,11 +155,18 @@ public sealed class AramStream : Stream
 
     public override void Flush() { CheckIdle(); }
 
-    public override void Dispose()
+    // Keep an explicit IDisposable entry point for AOT's Stream facade while
+    // also honoring System.IO.Stream disposal through its protected hook.
+    public new void Dispose()
     {
         if (disposed) return;
         if (busy) throw new InvalidOperationException("Await the pending ARAM transfer before disposing.");
         disposed = true;
         buffer.Dispose();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) Dispose();
     }
 }
