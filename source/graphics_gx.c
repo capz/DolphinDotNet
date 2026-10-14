@@ -40,9 +40,11 @@ void dnd_graphics_init(void) {
     if(mode)return;
     VIDEO_Init();mode=VIDEO_GetPreferredMode(NULL);
     if(!mode){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"No video mode available.");return;}
-    xfb[0]=MEM_K0_TO_K1(SYS_AllocateFramebuffer(mode));xfb[1]=MEM_K0_TO_K1(SYS_AllocateFramebuffer(mode));
+    void *first=SYS_AllocateFramebuffer(mode),*second=SYS_AllocateFramebuffer(mode);
     fifo=memalign(32,256*1024);
-    if(!xfb[0]||!xfb[1]||!fifo){if(xfb[0])free(MEM_K1_TO_K0(xfb[0]));if(xfb[1])free(MEM_K1_TO_K0(xfb[1]));free(fifo);xfb[0]=xfb[1]=fifo=NULL;mode=NULL;dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY,"Graphics initialization failed.");return;}
+    /* A null allocation must be checked before the K0-to-K1 address alias. */
+    if(!first||!second||!fifo){free(first);free(second);free(fifo);fifo=NULL;mode=NULL;dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY,"Graphics initialization failed.");return;}
+    xfb[0]=MEM_K0_TO_K1(first);xfb[1]=MEM_K0_TO_K1(second);
     memset(fifo,0,256*1024);GX_Init(fifo,256*1024);
     VIDEO_Configure(mode);VIDEO_SetNextFramebuffer(xfb[0]);VIDEO_SetBlack(TRUE);VIDEO_Flush();VIDEO_WaitVSync();
     if(mode->viTVMode&VI_NON_INTERLACE)VIDEO_WaitVSync();
