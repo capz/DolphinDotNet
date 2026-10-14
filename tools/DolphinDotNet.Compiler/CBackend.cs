@@ -37,7 +37,6 @@ internal static class CBackend{
    case IrStringLength:b.AppendLine("    { DndString *s=(DndString*)stack[--sp]; stack[sp++]=s?(intptr_t)s->length:0; }");break;
    case IrConsoleWriteLine:b.AppendLine("    { DndString *s=(DndString*)stack[--sp]; char text[256]; size_t n=s&&s->length<255?s->length:255; for(size_t i=0;i<n;i++) text[i]=(char)(s->chars[i]&0x7f); text[n]=0; dnd_console_write_line(text); }");break;
    case IrReadButtonsDown:b.AppendLine("    { unsigned port=(unsigned)stack[--sp]; dnd_input_poll(); const DndGamePad *pad=dnd_input_gamepad(port); stack[sp++]=pad?(intptr_t)pad->down:0; }");break;
-   case IrPresentDemoFrame:b.AppendLine("    { float rotation=(float)stack[--sp]; dnd_graphics_begin_frame(0.025f,0.035f,0.06f,1.0f); dnd_graphics_draw_demo(rotation); dnd_graphics_begin_overlay(); dnd_console_render(); dnd_graphics_end_frame(); }");break;
    case IrCompareGreaterThan:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l>r?1:0; }");break;
    case IrCompareEqual:b.AppendLine("    { intptr_t r=stack[--sp], l=stack[--sp]; stack[sp++]=l==r?1:0; }");break;
    case IrLabel l:b.AppendLine($"dnd_il_{l.Offset:x4}: ; dnd_gc_safepoint();");break;

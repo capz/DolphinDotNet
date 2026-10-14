@@ -345,7 +345,6 @@ internal static class ValueIrImporter
                         if(ik==IntrinsicKind.ArraySegmentEnumeratorDispose){Pop(stack,cil);break;}
                         if(ik==IntrinsicKind.GameCubeWriteLine){instructions.Add(new ValueIrConsoleWriteLine(Pop(stack,cil)));break;}
                         if(ik==IntrinsicKind.GameCubeReadButtonsDown){var port=Pop(stack,cil);var value=New(CilStackKind.I4);instructions.Add(new ValueIrReadButtonsDown(value,port));stack.Add(value);break;}
-                        if(ik==IntrinsicKind.GameCubePresentDemoFrame){instructions.Add(new ValueIrPresentDemoFrame(Pop(stack,cil)));break;}
                         if(ignoreCall(cil)){Pop(stack,cil);break;}
                         var target=constraint is not null?constrainedMethod(constraint,resolveCall(cil)?.Key.Name??"")??resolveCall(cil):resolveCall(cil);
                         if(target is null)

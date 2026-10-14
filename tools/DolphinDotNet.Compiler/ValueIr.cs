@@ -78,7 +78,6 @@ internal sealed record ValueIrLoadElement(IrValue Result,IrValue Array,IrValue I
 internal sealed record ValueIrStoreElement(IrValue Array,IrValue Index,IrValue Value,int Size,bool Reference):ValueIrInstruction;
 internal sealed record ValueIrConsoleWriteLine(IrValue String):ValueIrInstruction;
 internal sealed record ValueIrReadButtonsDown(IrValue Result,IrValue Port):ValueIrInstruction;
-internal sealed record ValueIrPresentDemoFrame(IrValue Rotation):ValueIrInstruction;
 internal sealed record ValueIrOpaqueStackEffect(int PopCount,IReadOnlyList<IrValue> Results,ushort OpCode):ValueIrInstruction;
 internal sealed record ValueIrPhi(IrValue Result,IReadOnlyDictionary<int,IrValue> Inputs):ValueIrInstruction;
 internal sealed record ValueIrIncomingStack(IReadOnlyList<IrValue> Values);

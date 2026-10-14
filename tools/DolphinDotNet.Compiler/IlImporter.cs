@@ -48,7 +48,7 @@ internal static class IlImporter{
   return new IrMethod(method.Key,result,locals,method.ParameterCount,!method.IsStatic,method.ReturnsValue);
  }
  private static void ImportCall(MetadataReader md,CompilationModel model,DependencyGraph graph,List<IrInstruction> r,EntityHandle token,bool virt){if(TryIgnoreObjectCtor(md,token)){r.Add(new IrPop());return;}if(TryImportIntrinsic(md,token,r))return;var t=ResolveMethod(md,model,token);graph.AddMethod(t.Key);graph.AddType(t.Key.TypeName);r.Add(new IrCall(t.Key,virt,t.ParameterCount,!t.IsStatic,t.ReturnsValue));}
- private static bool TryImportIntrinsic(MetadataReader md,EntityHandle h,List<IrInstruction> r){switch(IntrinsicRegistry.Classify(md,h)){case IntrinsicKind.StringLength:r.Add(new IrStringLength());return true;case IntrinsicKind.GameCubeWriteLine:r.Add(new IrConsoleWriteLine());return true;case IntrinsicKind.GameCubeReadButtonsDown:r.Add(new IrReadButtonsDown());return true;case IntrinsicKind.GameCubePresentDemoFrame:r.Add(new IrPresentDemoFrame());return true;default:return false;}}
+ private static bool TryImportIntrinsic(MetadataReader md,EntityHandle h,List<IrInstruction> r){switch(IntrinsicRegistry.Classify(md,h)){case IntrinsicKind.StringLength:r.Add(new IrStringLength());return true;case IntrinsicKind.GameCubeWriteLine:r.Add(new IrConsoleWriteLine());return true;case IntrinsicKind.GameCubeReadButtonsDown:r.Add(new IrReadButtonsDown());return true;default:return false;}}
  internal static bool TryIgnoreObjectCtor(MetadataReader md,EntityHandle h)=>IntrinsicRegistry.Classify(md,h)==IntrinsicKind.ObjectConstructor;
  internal static MethodModel ResolveMethod(MetadataReader md,CompilationModel model,EntityHandle h,MethodModel? context=null)
  {

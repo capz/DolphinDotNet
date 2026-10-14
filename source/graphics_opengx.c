@@ -74,24 +74,38 @@ void dnd_graphics_begin_frame(float r, float g, float b, float a) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  glFrustum(-0.8, 0.8, -0.6, 0.6, 1.0, 100.0);
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
 }
-void dnd_graphics_draw_demo(float angle) {
-  dnd_performance_add_triangles(1);
-  glPushMatrix();
-  glTranslatef(0, 0, -4);
-  glRotatef(angle, 0.4f, 1.0f, 0.2f);
+void dnd_graphics_frustum(float left, float right, float bottom, float top,
+                          float near, float far) {
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glFrustum(left, right, bottom, top, near, far);
+  glMatrixMode(GL_MODELVIEW);
+}
+void dnd_graphics_translate(float x, float y, float z) { glTranslatef(x, y, z); }
+void dnd_graphics_rotate(float degrees, float x, float y, float z) {
+  glRotatef(degrees, x, y, z);
+}
+static unsigned triangle_vertices;
+void dnd_graphics_begin_triangles(void) {
+  triangle_vertices = 0;
   glBegin(GL_TRIANGLES);
-  glColor3f(1, 0.25f, 0.15f);
-  glVertex3f(0, 1, 0);
-  glColor3f(0.15f, 0.8f, 0.35f);
-  glVertex3f(-1, -1, 0);
-  glColor3f(0.2f, 0.45f, 1);
-  glVertex3f(1, -1, 0);
+}
+void dnd_graphics_color(float r, float g, float b) { glColor3f(r, g, b); }
+void dnd_graphics_vertex(float x, float y, float z) {
+  glVertex3f(x, y, z);
+  triangle_vertices++;
+}
+void dnd_graphics_end_triangles(void) {
   glEnd();
-  glPopMatrix();
+  dnd_performance_add_triangles(triangle_vertices / 3);
+}
+void dnd_graphics_present(void) {
+  dnd_graphics_begin_overlay();
+  dnd_console_render();
+  dnd_graphics_end_frame();
 }
 void dnd_graphics_begin_overlay(void) {
   sample_performance_memory();

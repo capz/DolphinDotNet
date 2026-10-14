@@ -13,7 +13,7 @@ internal static class Program
             var buttons=Controller.ReadButtonsDown(0);
             if((buttons&Controller.ButtonStart)!=0)return 0;
             rotation=rotation+1;
-            Renderer.PresentDemoFrame(rotation);
+            DemoScene.PresentDemoFrame(rotation);
         }
     }
 }

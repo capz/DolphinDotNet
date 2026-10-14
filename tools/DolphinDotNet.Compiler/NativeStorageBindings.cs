@@ -5,6 +5,15 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["GraphicsBeginFrame"]=("dnd_graphics_begin_frame","ffff",false),
+        ["GraphicsFrustum"]=("dnd_graphics_frustum","ffffff",false),
+        ["GraphicsTranslate"]=("dnd_graphics_translate","fff",false),
+        ["GraphicsRotate"]=("dnd_graphics_rotate","ffff",false),
+        ["GraphicsBeginTriangles"]=("dnd_graphics_begin_triangles","",false),
+        ["GraphicsColor"]=("dnd_graphics_color","fff",false),
+        ["GraphicsVertex"]=("dnd_graphics_vertex","fff",false),
+        ["GraphicsEndTriangles"]=("dnd_graphics_end_triangles","",false),
+        ["GraphicsEndFrame"]=("dnd_graphics_present","",false),
         ["NetFailure"]=("dnd_net_failure","ii",true),["NetFailureCode"]=("dnd_net_failure_code","o",false),
         ["NetStart"]=("dnd_net_start","iiii",false),["NetStatus"]=("dnd_net_status","",false),["NetTime"]=("dnd_net_time","",false),["NetError"]=("dnd_net_error","",false),
         ["NetOpen"]=("dnd_net_open","i",false),["NetBind"]=("dnd_net_bind","iii",false),["NetListen"]=("dnd_net_listen","ii",false),["NetAccept"]=("dnd_net_accept","ia",false),
