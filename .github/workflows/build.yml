@@ -309,6 +309,14 @@ jobs:
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/NetworkSmoke/bin/Release/net8.0/NetworkSmoke.dll /tmp/network-smoke.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/network-smoke.c -o /tmp/network-smoke.o
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -mogc -Iinclude tests/network_gamecube_entry.c /tmp/network-smoke.o build/managed_runtime.o build/async_runtime.o build/text.o build/network.o build/network_gamecube_backend.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -lbba -logc -lm -o /tmp/network-smoke.elf
+      - name: Build automatic task execution DOL
+        run: |
+          dotnet build tests/AutomaticTaskSmoke/AutomaticTaskSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/AutomaticTaskSmoke/bin/Release/net8.0/AutomaticTaskSmoke.dll /tmp/automatic-tasks.c
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/automatic-tasks.c -o /tmp/automatic-tasks.o
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude tests/automatic_tasks_gamecube_entry.c /tmp/automatic-tasks.o build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/automatic_tasks.elf
+          elf2dol footprint/automatic_tasks.elf footprint/automatic_tasks.dol
+          python3 scripts/dol_sections.py --pad footprint/automatic_tasks.dol
       - name: Report GameCube runtime footprint
         run: |
           mkdir -p footprint
@@ -379,6 +387,10 @@ jobs:
         id: app_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2160 --elf dist/DolphinDotNet.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol "dnd_value_ManagedGameCube_Program_Main_*" --logs dolphin-smoke --require-boot
+      - name: Verify automatic async tasks complete and the service thread shuts down
+        id: async_boot
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/automatic_tasks.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2161 --elf dist/footprint/automatic_tasks.elf --expect-word dnd_async_test_result=0x4153594e --logs dolphin-async --require-boot
       - name: Require both guest entry-point checks
         if: always()
         run: |
@@ -388,6 +400,7 @@ jobs:
           test "${{ steps.minimal_boot.outcome }}" = success
           test "${{ steps.control_boot.outcome }}" = success
           test "${{ steps.app_boot.outcome }}" = success
+          test "${{ steps.async_boot.outcome }}" = success
       - name: Upload emulator logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -397,6 +410,7 @@ jobs:
             dolphin-minimal/
             dolphin-control/
             dolphin-smoke/
+            dolphin-async/
           if-no-files-found: warn
 
   release-gamecube:
