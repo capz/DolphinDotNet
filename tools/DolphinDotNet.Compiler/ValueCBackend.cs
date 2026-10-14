@@ -62,7 +62,10 @@ internal static class ValueCBackend
         foreach(var type in initializedTypes)
         {
             var cctor=TypeInitializer(type,model)!;
-            b.AppendLine($"static void {EnsureSymbol(type)}(void) {{ if(dnd_cctor_state_{Id(type)}==2) return; if(dnd_cctor_state_{Id(type)}==1) return; dnd_cctor_state_{Id(type)}=1; dnd_async_enter_critical(); DndEhFrame guard; dnd_eh_push(&guard); if(setjmp(guard.environment)==0) {{ (void){Symbol(cctor.Key)}(); dnd_cctor_state_{Id(type)}=2; }} dnd_eh_pop(&guard); dnd_async_leave_critical(); if(dnd_exception_pending()) dnd_exception_rethrow(); }}");
+            if(automaticAsync)
+                b.AppendLine($"static void {EnsureSymbol(type)}(void) {{ if(dnd_cctor_state_{Id(type)}==2) return; if(dnd_cctor_state_{Id(type)}==1) return; dnd_cctor_state_{Id(type)}=1; dnd_async_enter_critical(); DndEhFrame guard; dnd_eh_push(&guard); if(setjmp(guard.environment)==0) {{ (void){Symbol(cctor.Key)}(); dnd_cctor_state_{Id(type)}=2; }} dnd_eh_pop(&guard); dnd_async_leave_critical(); if(dnd_exception_pending()) dnd_exception_rethrow(); }}");
+            else
+                b.AppendLine($"static void {EnsureSymbol(type)}(void) {{ if(dnd_cctor_state_{Id(type)}==2) return; if(dnd_cctor_state_{Id(type)}==1) return; dnd_cctor_state_{Id(type)}=1; (void){Symbol(cctor.Key)}(); dnd_cctor_state_{Id(type)}=2; }}");
         }
         foreach(var m in wrapperMethods)
         {
