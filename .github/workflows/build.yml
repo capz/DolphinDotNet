@@ -15,6 +15,8 @@ permissions:
 jobs:
   managed:
     name: Managed compiler
+    env:
+      DND_ASYNC_MANUAL: "1"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +33,7 @@ jobs:
           dotnet run --project tests/SaveImageTests/SaveImageTests.csproj -c Release -- --emit-source /tmp/embedded-icon
           dotnet run --project /tmp/embedded-icon/Embedded.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot /tmp/embedded-icon/bin/Release/net8.0/Embedded.dll /tmp/embedded-icon.c
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/embedded-icon.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/embedded-icon-test
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/embedded-icon.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/embedded-icon-test
           /tmp/embedded-icon-test
           /tmp/embedded-icon-test --gc-stress
           dotnet pack tools/DolphinDotNet.SaveImage/DolphinDotNet.SaveImage.csproj -c Release -o /tmp/dnd-tools
@@ -42,10 +44,10 @@ jobs:
       - name: Lower managed GameCube dependency graph
         run: |
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube.c
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube.c -o /tmp/managed_gamecube.o
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube.c -o /tmp/managed_gamecube.o
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube_value.c
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube_value.c -o /tmp/managed_gamecube_value.o
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/managed_gamecube.c tests/managed_gamecube_host.c source/managed_runtime.c -lm -o /tmp/managed-gamecube-test
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/managed_gamecube_value.c -o /tmp/managed_gamecube_value.o
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/managed_gamecube.c tests/managed_gamecube_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/managed-gamecube-test
           /tmp/managed-gamecube-test
       - name: Generate standalone GameCube AOT build bundle
         run: |
@@ -64,21 +66,21 @@ jobs:
         run: |
           dotnet build samples/GoogleLogoAram/GoogleLogoAram.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/GoogleLogoAram/bin/Release/net8.0/GoogleLogoAram.dll /tmp/google-logo-aram.c
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/google-logo-aram.c -o /tmp/google-logo-aram.o
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/google-logo-aram.c -o /tmp/google-logo-aram.o
       - name: Compiler integration tests
         run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
       - name: Build control-flow smoke assembly
         run: |
           dotnet build tests/ControlFlowSmoke/ControlFlowSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot tests/ControlFlowSmoke/bin/Release/net8.0/ControlFlowSmoke.dll /tmp/control_flow_value.c
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/control_flow_value.c tests/control_flow_value_host.c source/managed_runtime.c -o /tmp/control_flow_value
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/control_flow_value.c tests/control_flow_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/control_flow_value
           /tmp/control_flow_value
       - name: Build AOT smoke assembly
         run: dotnet build tests/AotSmoke/AotSmoke.csproj -c Release
       - name: Lower AOT smoke assembly to native C
         run: dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/AotSmoke/bin/Release/net8.0/AotSmoke.dll /tmp/aot_smoke.c
       - name: Compile generated AOT C
-        run: cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/aot_smoke.c -o /tmp/aot_smoke.o
+        run: cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/aot_smoke.c -o /tmp/aot_smoke.o
       - name: Compile and execute generic sharing integration smoke
         timeout-minutes: 3
         run: |
@@ -86,16 +88,16 @@ jobs:
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --value-aot tests/GenericSharingSmoke/bin/Release/net8.0/GenericSharingSmoke.dll /tmp/generic_sharing_value.c
           echo 'Primitive formatting calls in generated C:'
           grep -n -E 'dnd_string_from_(u64|i64)' /tmp/generic_sharing_value.c | head -60 || true
-          cc -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/generic_sharing_value
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/generic_sharing_value
           timeout 30s /tmp/generic_sharing_value
           timeout 30s /tmp/generic_sharing_value --gc-stress
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/generic_sharing_sanitized
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/generic_sharing_sanitized
           timeout 30s /tmp/generic_sharing_sanitized --gc-stress
       - name: Validate 32-bit managed dispatch and GC
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y gcc-multilib
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/generic_sharing_32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/generic_sharing_32
           timeout 30s /tmp/generic_sharing_32
           timeout 30s /tmp/generic_sharing_32 --gc-stress
       - name: Validate standard List, comparers, streams, text and async state machines
@@ -103,34 +105,46 @@ jobs:
         run: |
           dotnet build tests/LibrarySmoke/LibrarySmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/LibrarySmoke/bin/Release/net8.0/LibrarySmoke.dll /tmp/library.c
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/library.c tests/generic_sharing_value_host.c source/managed_runtime.c source/text.c -o /tmp/library
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/library.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/library
           timeout 30s /tmp/library
           timeout 30s /tmp/library --gc-stress
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/library.c tests/generic_sharing_value_host.c source/managed_runtime.c source/text.c -o /tmp/library_32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/library.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/library_32
           timeout 30s /tmp/library_32
           timeout 30s /tmp/library_32 --gc-stress
+      - name: Validate automatic async HTTP and ARAM without application pumps
+        timeout-minutes: 5
+        env:
+          DND_ASYNC_MANUAL: "0"
+        run: |
+          dotnet build tests/AutomaticAsyncSmoke/AutomaticAsyncSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/AutomaticAsyncSmoke/bin/Release/net8.0/AutomaticAsyncSmoke.dll /tmp/automatic-async.c
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/automatic-async.c tests/automatic_async_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c source/aram.c -o /tmp/automatic-async
+          python3 tests/network_fixtures.py /tmp/automatic-async
+          python3 tests/network_fixtures.py /tmp/automatic-async --gc-stress
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/automatic-async.c tests/automatic_async_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c source/aram.c -o /tmp/automatic-async32
+          python3 tests/network_fixtures.py /tmp/automatic-async32 --gc-stress
       - name: Validate cooperative async and namespace interoperability
         timeout-minutes: 4
         run: |
           dotnet build tests/AsyncSmoke/AsyncSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/AsyncSmoke/bin/Release/net8.0/AsyncSmoke.dll /tmp/async-smoke.c
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-smoke.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/async-smoke
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-smoke.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/async-smoke
           timeout 30s /tmp/async-smoke
           timeout 30s /tmp/async-smoke --gc-stress
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-smoke.c tests/generic_sharing_value_host.c source/managed_runtime.c -o /tmp/async-smoke32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-smoke.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/async-smoke32
           timeout 30s /tmp/async-smoke32 --gc-stress
       - name: Validate collections and storage I/O
         timeout-minutes: 3
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/StorageSmoke/bin/Release/net8.0/StorageSmoke.dll /tmp/storage.c
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/storage.c source/text.c -o /tmp/storage
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/text.c -o /tmp/storage
           timeout 30s /tmp/storage
           timeout 30s /tmp/storage --gc-stress
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/storage.c source/text.c -o /tmp/storage32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/text.c -o /tmp/storage32
           timeout 30s /tmp/storage32
           timeout 30s /tmp/storage32 --gc-stress
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Iinclude tests/storage_faults.c source/managed_runtime.c source/storage.c -Wl,--wrap=read,--wrap=write,--wrap=close -o /tmp/storage_faults
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Iinclude tests/storage_faults.c source/managed_runtime.c source/async_runtime.c source/storage.c -Wl,--wrap=read,--wrap=write,--wrap=close -o /tmp/storage_faults
           timeout 30s /tmp/storage_faults
       - name: Validate ARAM transfers and asset cache
         # Networking is tested through generated native code, not a desktop CLR facade.
@@ -138,31 +152,33 @@ jobs:
         run: |
           dotnet build tests/AramSmoke/AramSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/AramSmoke/bin/Release/net8.0/AramSmoke.dll /tmp/aram.c
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/aram.c tests/aram_host.c source/managed_runtime.c source/aram.c -o /tmp/aram
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/aram.c tests/aram_host.c source/managed_runtime.c source/async_runtime.c source/aram.c -o /tmp/aram
           timeout 30s /tmp/aram
           timeout 30s /tmp/aram --gc-stress
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/aram.c tests/aram_host.c source/managed_runtime.c source/aram.c -o /tmp/aram32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/aram.c tests/aram_host.c source/managed_runtime.c source/async_runtime.c source/aram.c -o /tmp/aram32
           timeout 30s /tmp/aram32 --gc-stress
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -DDND_ARAM_TEST -Iinclude tests/aram_test.c source/aram.c -o /tmp/aram-native32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -DDND_ARAM_TEST -Iinclude tests/aram_test.c source/aram.c -o /tmp/aram-native32
           /tmp/aram-native32
       - name: Validate managed networking, DNS, HTTP and JSON
         timeout-minutes: 5
         run: |
           dotnet build tests/NetworkSmoke/NetworkSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/NetworkSmoke/bin/Release/net8.0/NetworkSmoke.dll /tmp/network-smoke.c
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/network-smoke.c tests/network_host.c source/managed_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/network-smoke
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/network-smoke.c tests/network_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/network-smoke
           python3 tests/network_fixtures.py /tmp/network-smoke
           python3 tests/network_fixtures.py /tmp/network-smoke --gc-stress
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/network-smoke.c tests/network_host.c source/managed_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/network-smoke32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/network-smoke.c tests/network_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/network-smoke32
           python3 tests/network_fixtures.py /tmp/network-smoke32 --gc-stress
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/network_native_test.c source/managed_runtime.c source/network.c source/network_posix.c -o /tmp/network-native
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/network_native_test.c source/managed_runtime.c source/async_runtime.c source/network.c source/network_posix.c -o /tmp/network-native
           /tmp/network-native
       - name: Validate documented async networking example
+        env:
+          DND_ASYNC_MANUAL: "0"
         timeout-minutes: 4
         run: |
           dotnet build samples/AsyncNetworking/AsyncNetworking.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/AsyncNetworking/bin/Release/net8.0/AsyncNetworking.dll /tmp/async-networking.c
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-networking.c tests/network_host.c source/managed_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/async-networking
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-networking.c tests/network_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/async-networking
           python3 tests/network_fixtures.py /tmp/async-networking
           python3 tests/network_fixtures.py /tmp/async-networking --gc-stress
       - name: Convert, package and validate model assets
@@ -176,21 +192,21 @@ jobs:
           /tmp/dnd-tool-install/dnd-assets --help
           dotnet build /tmp/dnd-model-fixtures/Build.csproj -c Release -p:DndAssetsCommand=/tmp/dnd-tool-install/dnd-assets
           cmp /tmp/dnd-model-fixtures/sd/animated.dndmodel /tmp/dnd-model-fixtures/sd/built.dndmodel
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/storage.c source/model*.c source/performance.c -lm -o /tmp/model-native
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/performance.c -lm -o /tmp/model-native
           timeout 30s /tmp/model-native /tmp/dnd-model-fixtures
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/storage.c source/model*.c source/performance.c -lm -o /tmp/model-native32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/performance.c -lm -o /tmp/model-native32
           timeout 30s /tmp/model-native32 /tmp/dnd-model-fixtures
       - name: Validate model AOT, transforms, animation and ARAM residency
         timeout-minutes: 5
         run: |
           dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
-          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/storage.c source/aram.c source/model*.c source/performance.c -lm -o /tmp/model-smoke
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/performance.c -lm -o /tmp/model-smoke
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures --gc-stress
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
-          cc -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/storage.c source/aram.c source/model*.c source/performance.c -lm -o /tmp/model-smoke32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/performance.c -lm -o /tmp/model-smoke32
           timeout 30s /tmp/model-smoke32 /tmp/dnd-model-fixtures --gc-stress
       - name: Regenerate managed sample
         run: sh scripts/compile-sample.sh
@@ -292,7 +308,7 @@ jobs:
           dotnet build tests/NetworkSmoke/NetworkSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/NetworkSmoke/bin/Release/net8.0/NetworkSmoke.dll /tmp/network-smoke.c
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -c /tmp/network-smoke.c -o /tmp/network-smoke.o
-          "$DEVKITPPC/bin/powerpc-eabi-gcc" -mogc -Iinclude tests/network_gamecube_entry.c /tmp/network-smoke.o build/managed_runtime.o build/text.o build/network.o build/network_gamecube_backend.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -lbba -logc -lm -o /tmp/network-smoke.elf
+          "$DEVKITPPC/bin/powerpc-eabi-gcc" -mogc -Iinclude tests/network_gamecube_entry.c /tmp/network-smoke.o build/managed_runtime.o build/async_runtime.o build/text.o build/network.o build/network_gamecube_backend.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -lbba -logc -lm -o /tmp/network-smoke.elf
       - name: Report GameCube runtime footprint
         run: |
           mkdir -p footprint

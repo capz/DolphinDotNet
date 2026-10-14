@@ -14,16 +14,9 @@ DolphinDotNet AOT maps the supported standard calls to its cooperative runtime. 
 
 ## Understanding `Main()`
 
-`Main()` starts `DownloadLogoToAramAsync()` and receives a `Task<int>` representing its eventual completion. DolphinDotNet is **cooperatively scheduled** on GameCube; async operations do not automatically progress on background threads.
+`Main()` is an ordinary `async Task<int>` entry point. It awaits the download and PNG verification, returns 0 on success or 1 on failure, and stops networking in `finally`. The generated native bootstrap starts and joins the runtime service thread. Networking, ARAM DMA and continuations advance automatically; no application pump loop is needed.
 
-While the task is pending, the sample explicitly runs both pumps:
-
-- `NetworkRuntime.Pump(16, 1)` progresses network initialization, DNS, sockets and HTTP requests. The arguments cap the operations and approximate milliseconds of work in a pass.
-- `Scheduler.Pump(16)` executes up to 16 queued task continuations and advances ARAM DMA transfer completion.
-
-Without these calls, the HTTP download or ARAM writes may remain pending. This headless example pumps in a loop until completion. **A real game should place both pumps in its existing per-frame loop** alongside input, updates and rendering; the call limits are not a guarantee of frame timing.
-
-After completion, `GetAwaiter().GetResult()` returns 0 on success or throws an exception; `Main()` returns 1 on failure. The `finally` block shuts down networking.
+Default awaits resume on the application thread. Background tasks and I/O service execute on the service thread under a shared managed execution gate. See [automatic async runtime](../../docs/async-runtime.md) for executor capture, safe points and supported APIs.
 
 ## Run the example
 

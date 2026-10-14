@@ -8,7 +8,7 @@ using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 namespace Dolphin.IO;
 
 /// <summary>Seekable, fixed-capacity stream backed by GameCube auxiliary RAM.
-/// The stream owns its ARAM allocation; access is serialized and application-thread-only.</summary>
+/// The stream owns its ARAM allocation; access is serialized and serialized by the runtime execution gate.</summary>
 public sealed class AramStream : System.IO.Stream, IDisposable
 {
     private readonly AramBuffer buffer;

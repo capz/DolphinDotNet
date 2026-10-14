@@ -245,6 +245,7 @@ void dnd_gc_frame_pop(DndGcFrame *frame);
  * with no active EH frames; NOT safe for concurrent managed threads yet. */
 typedef struct DndExecutionContext {
     DndGcFrame *gc_frames;
+    struct DndEhFrame *eh_frames;
     DndObject *exception_object;
     const char *exception_text;
     DndExceptionKind exception_kind;
@@ -256,6 +257,11 @@ bool dnd_context_switch(DndExecutionContext *from, DndExecutionContext *to);
 /* Keep inactive sequential contexts visible to GC while their frames remain valid. */
 bool dnd_context_register(DndExecutionContext *context);
 void dnd_context_unregister(DndExecutionContext *context);
+/* Execution-gate-only context handoff. Suspend roots the blocked native stack
+ * and clears active globals; resume removes its registration and restores it.
+ * The caller must serialize all managed execution for the entire handoff. */
+void dnd_context_suspend(DndExecutionContext *context);
+void dnd_context_resume(DndExecutionContext *context);
 
 
 typedef struct DndEhFrame {

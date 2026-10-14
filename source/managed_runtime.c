@@ -83,6 +83,36 @@ static DndObject *exception_object;
 static DndEhFrame *eh_frames;
 static const char *exception_text;
 
+void dnd_context_suspend(DndExecutionContext *context) {
+    context->gc_frames = gc_frames;
+    context->eh_frames = eh_frames;
+    context->exception_object = exception_object;
+    context->exception_text = exception_text;
+    context->exception_kind = exception_kind;
+    context->exception_pending = exception_is_pending;
+    gc_frames = NULL;
+    eh_frames = NULL;
+    exception_object = NULL;
+    exception_text = NULL;
+    exception_kind = DND_EXCEPTION_NONE;
+    exception_is_pending = false;
+    /* Only called with the execution gate held. The saved native stack is
+       blocked and remains valid until this context resumes. */
+    context->next_registered = registered_contexts;
+    registered_contexts = context;
+    context->registered = true;
+}
+
+void dnd_context_resume(DndExecutionContext *context) {
+    dnd_context_unregister(context);
+    gc_frames = context->gc_frames;
+    eh_frames = context->eh_frames;
+    exception_object = context->exception_object;
+    exception_text = context->exception_text;
+    exception_kind = context->exception_kind;
+    exception_is_pending = context->exception_pending;
+}
+
 static size_t align8(size_t n) { return (n + 7u) & ~(size_t)7u; }
 static size_t block_header_size(void) { return align8(sizeof(DndHeapBlock)); }
 static DndHeapBlock *first_block(DndManagedHeap *heap) { return (DndHeapBlock *)heap->blocks; }

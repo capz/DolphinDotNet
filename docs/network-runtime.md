@@ -2,15 +2,15 @@
 
 IPv4 UDP/TCP client and server sockets, DNS, bounded HTTP/1.1 and a reflection-free JSON reader now have managed implementations and AOT bindings. This is an explicitly selected API subset, not desktop .NET networking conformance.
 
-## Startup and pumping
+## Startup and automatic progress
 
-See [async runtime and namespace rules](async-runtime.md) and the complete [AsyncNetworking sample](../samples/AsyncNetworking/Program.cs). Use standard `System.Net`/`System.Net.Sockets`/`System.Net.Http` APIs for the compatible subset. Alias platform helpers such as `NetworkRuntime`, `NetworkOptions` and `Scheduler` rather than importing both competing task/socket namespaces. `NetworkOptions.DnsServers` specifically requires `Dolphin.Network.IPAddress[]`.
+See [async runtime and namespace rules](async-runtime.md) and the complete [AsyncNetworking sample](../samples/AsyncNetworking/Program.cs). Use standard `System.Net`/`System.Net.Sockets`/`System.Net.Http` APIs for the compatible subset. Alias platform helpers such as `NetworkRuntime` and `NetworkOptions` rather than importing both competing task/socket namespaces. `NetworkOptions.DnsServers` specifically requires `Dolphin.Network.IPAddress[]`.
 
 Start through `Dolphin.Network.NetworkRuntime.StartAsync(NetworkOptions, CancellationToken)`. Defaults use DHCP; static IPv4 configuration is also available. Configure DNS server addresses explicitly: this backend does not assume that the gateway provides DNS or that DHCP exposes its resolver addresses. Initialization runs on a native LWP worker on GameCube. Its records and stack contain no managed pointers.
 
-An application must call `NetworkRuntime.Pump()` and `Dolphin.Threading.Tasks.Scheduler.Pump(16)` each frame. Pump services at most 32 registered operation steps and has a 1 ms soft elapsed-time target by default. IO steps transfer at most 4 KiB, except atomic UDP datagrams. Game updates, input and graphics remain owned by the application. Headless servers can run the same services without rendering.
+The runtime service thread advances registered operations automatically, with bounded batches and a soft elapsed-time budget. I/O steps transfer at most 4 KiB, except atomic UDP datagrams. Application input, updates and graphics stay on the application executor; default awaits return there. No network or task pump calls are required.
 
-Await operations from ordinary C# methods; do not wait synchronously for pending networking tasks on the application thread. Existing `Task.Wait` rejects a task that requires external service rather than silently blocking. `Task.Run` is cooperative and is not a worker pool.
+Await operations from ordinary C# methods or async Main; no application pump calls are needed. Standard task waits integrate with automatic dispatch, but block that call. Task.Run schedules on the service thread under the managed execution gate. See [automatic async/await](async-runtime.md).
 
 Example configuration:
 
@@ -18,7 +18,7 @@ Example configuration:
 var startup = NetworkRuntime.StartAsync(new NetworkOptions {
     DnsServers = new[] { Dolphin.Network.IPAddress.Parse("192.168.1.1") }
 }, default);
-// Continue pumping networking and the scheduler while startup is pending.
+// Await normally; runtime-owned dispatch advances startup.
 ```
 
 `IsReady` indicates a configured interface, not a successful Internet connection. Stop closes application-owned sockets and cancels outstanding operations. A running native configuration call cannot be killed: Stop rejects during configuration. The current libogc2 backend does not promise interface reset after configuration failure; restart the application to retry a failed native initialization.

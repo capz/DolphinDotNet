@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Dolphin.Memory;
 using AramStream = Dolphin.IO.AramStream;
 using NetworkRuntime = Dolphin.Network.NetworkRuntime;
-using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 
 internal static class Program
 {
@@ -15,32 +14,12 @@ internal static class Program
     private const int MaximumLogoBytes = 256 * 1024;
     private const int CopyBufferBytes = 4096;
 
-    private static int Main()
+    private static async Task<int> Main()
     {
-        // Main is the application entry point. Starting an async method gives
-        // us a Task representing the download; it does not block on network I/O.
         try
         {
-            var downloadTask = DownloadLogoToAramAsync();
-
-            // GameCube/DolphinDotNet uses cooperative I/O instead of a desktop
-            // background thread pool. Pending operations advance only when the
-            // application services both pumps:
-            //
-            // NetworkRuntime.Pump: advances DHCP, DNS, sockets and HTTP requests.
-            // Scheduler.Pump: runs async continuations and polls ARAM DMA work.
-            //
-            // The limits bound work per iteration; they are not a guaranteed
-            // frame-time budget. A game places these calls in its normal loop,
-            // alongside input, update and rendering, rather than spinning here.
-            while (!downloadTask.IsCompleted)
-            {
-                NetworkRuntime.Pump(16, 1);
-                Scheduler.Pump(16);
-            }
-
-            // The Task is complete: observe any error and use its exit code.
-            return downloadTask.GetAwaiter().GetResult();
+            // The runtime owns networking, DMA and continuation dispatch.
+            return await DownloadLogoToAramAsync();
         }
         catch (Exception)
         {
@@ -48,7 +27,6 @@ internal static class Program
         }
         finally
         {
-            // Release network resources even when the download fails.
             if (NetworkRuntime.IsReady) NetworkRuntime.Stop();
         }
     }

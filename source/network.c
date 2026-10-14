@@ -15,7 +15,7 @@ const DndType DND_TYPE_SOCKET_EXCEPTION={"System.Net.Sockets.SocketException",&D
 DndObject *dnd_net_failure(DndManagedHeap *heap,int error,int result){DndObject *root=dnd_object_new(heap,&DND_TYPE_SOCKET_EXCEPTION);if(!root)return NULL;DndObject **roots[]={&root};DndGcFrame frame;dnd_gc_frame_push(&frame,roots,1);((NetException*)root)->error=error;((NetException*)root)->exception.message=dnd_string_from_utf8(heap,result==-5?"Datagram truncated.":result==-3?"Socket disposed.":result==-4?"Socket capacity exhausted.":"Network operation failed.");dnd_gc_frame_pop(&frame);return root;}
 int dnd_net_failure_code(DndObject *object){return object&&object->type==&DND_TYPE_SOCKET_EXCEPTION?((NetException*)object)->error:0;}
 /* One application-thread staging area detects truncation without managed pointers
-   escaping the bridge. No native worker touches sockets or these buffers. */
+   escaping the bridge. Managed service/application accesses are serialized by the execution gate. */
 static unsigned char datagram[UDP_CAP+1];
 static NetSlot *slot(int token){for(int i=0;i<NET_SLOTS;i++)if(slots[i].token==token&&token>0)return &slots[i];return NULL;}
 static int valid(DndArray *a,int offset,int count){return a&&a->element_size==1&&offset>=0&&count>=0&&(uint32_t)offset<=a->length&&(uint32_t)count<=a->length-(uint32_t)offset;}

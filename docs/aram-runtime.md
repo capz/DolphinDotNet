@@ -16,12 +16,12 @@ var chunk = new byte[4096];
 await stored.ReadAsync(0, chunk, 0, chunk.Length);
 ```
 
-Use `Dolphin.Threading.Tasks.Scheduler.Pump()` in the game loop. Each pump performs at most one chunk start/poll transition; a polling turn does not busy-wait for DMA. `Wait`/`GetResult` and `RunUntilIdle` intentionally pump to completion and can block rendering. For frame budgets, limit scheduler pumps per frame. Source arrays must remain unchanged during upload; destination arrays must not be concurrently consumed or modified during download. ARAM transfers are serialized in submission order across all allocations. The queue accepts up to 128 outstanding requests; additional submissions throw until queued work drains. Callbacks only publish a native completion flag; continuations execute on the application thread.
+The runtime services queued DMA automatically; use ordinary await without scheduler pump calls. Source arrays must remain unchanged during upload, and destination arrays must not be concurrently consumed or modified during download. Transfers are serialized in submission order, with up to 128 queued requests. DMA callbacks publish only a native completion flag. Default awaits resume on their captured executor. See [automatic async/await](async-runtime.md).
 
 
 ## Standard .NET async compatibility
 
-The public I/O, ARAM and networking APIs use `System.Threading.Tasks.Task`, `Task<T>` and `System.Threading.CancellationToken`. `Dolphin.IO.AramStream` derives from `System.IO.Stream`, so standard HTTP response streams can copy into it with `CopyToAsync`. Application methods should declare `async Task` using the standard namespace; alias `Dolphin.Threading.Tasks.Scheduler` only for pumping.
+The public I/O, ARAM and networking APIs use `System.Threading.Tasks.Task`, `Task<T>` and `System.Threading.CancellationToken`. `Dolphin.IO.AramStream` derives from `System.IO.Stream`, so standard HTTP response streams can copy into it with `CopyToAsync`. Application methods should declare `async Task` using the standard namespace; no scheduler import is needed for normal awaits.
 
 The AOT compiler redirects supported standard stream/task/awaiter/cancellation metadata to the cooperative Dolphin runtime. This supplies compatibility on the target, not a desktop GameCube backend or the full .NET API surface. See [async runtime and namespace rules](async-runtime.md) for supported signatures and limitations.
 
@@ -33,7 +33,6 @@ The AOT compiler redirects supported standard stream/task/awaiter/cancellation m
 using Dolphin.IO;
 using Dolphin.Memory;
 using System.Threading.Tasks;
-using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 
 Aram.Initialize(); // only once, before other ARAM owners
 using var download = new AramStream(8 * 1024 * 1024);
@@ -41,10 +40,10 @@ await httpResponseStream.CopyToAsync(download, 4096);
 download.Position = 0;
 byte[] header = new byte[256];
 int count = await download.ReadAsync(header, 0, header.Length);
-// Pump Scheduler.Pump() in the game loop while transfers are pending.
+// Await each operation; the runtime advances DMA and continuations automatically.
 ```
 
-The constructor capacity is fixed; logical stream length starts at zero. Appending writes advances the length, and seeking within already-written content permits overwrites. Sparse writes and growing `SetLength` are deliberately unsupported: newly allocated ARAM is uninitialized. `SetLength` can truncate. Writes exceeding capacity fail rather than expanding into main RAM. Only one operation may be pending on a stream at a time. Dispose must occur after any pending transfer has completed. Synchronous `Read` and `Write` pump cooperative tasks and therefore block the calling thread until DMA completes; use async operations in the frame loop. Cancellation may have transferred a partial chunk and does not guarantee transactional rollback.
+The constructor capacity is fixed; logical stream length starts at zero. Appending writes advances the length, and seeking within already-written content permits overwrites. Sparse writes and growing `SetLength` are deliberately unsupported: newly allocated ARAM is uninitialized. `SetLength` can truncate. Writes exceeding capacity fail rather than expanding into main RAM. Only one operation may be pending on a stream at a time. Dispose must occur after any pending transfer has completed. Synchronous `Read` and `Write` wait through the runtime dispatcher and block the calling thread until DMA completes; use async operations in the frame loop. Cancellation may have transferred a partial chunk and does not guarantee transactional rollback.
 
 ### Complete GameObject streaming: design boundary
 
@@ -88,20 +87,15 @@ Backend API references: [libogc2 ARAM](https://github.com/extremscorner/libogc2/
 
 See [GoogleLogoAram](../samples/GoogleLogoAram/Program.cs). The sample downloads an image as an HTTP response, copies it with standard `Stream.CopyToAsync` using one reusable 4 KiB buffer in main RAM (MEM1), awaiting each write to `aramStream`, a fixed-capacity 256 KiB allocation in GameCube auxiliary RAM (ARAM). ARAM is extra memory outside the CPU's directly accessible main RAM. Streaming this way avoids holding the complete downloaded image in MEM1, leaving more main RAM for gameplay and other tasks. It does not bypass main RAM entirely: network reception and ARAM DMA still use small staging buffers. The sample uses standard `System.Threading.Tasks.Task` and `System.Net.Http.HttpClient` APIs. When the developer is ready to work with the data, they can set `aramStream.Position` to the desired offset and call `ReadAsync` to copy just the required bytes back to MEM1 for decoding, texture upload, or other processing. The sample demonstrates this by reading back and validating the PNG signature; it does **not** decode or display the image. Keep the `AramStream` alive until its contents are needed, then dispose it to release the ARAM allocation. The sample disposes it at the end of the demonstration.
 
-### What `Main()` does and why the pumps are needed
+### Async Main and automatic progress
 
-`Main()` is the GameCube application's entry point. It starts `DownloadLogoToAramAsync()`, receiving a `Task<int>` that will complete when the transfer and PNG signature check finish. Because DolphinDotNet runs asynchronous work cooperatively on the application's thread, starting an async operation does not automatically create a worker thread to progress its I/O. The sample explicitly services two queues until the task completes:
-
-- `NetworkRuntime.Pump(16, 1)` services network startup and pending network operations (such as socket connections, DNS and HTTP transfer progress). The arguments limit the number of operations and approximate time spent in the network service pass.
-- `Scheduler.Pump(16)` runs up to 16 scheduled actions, including continuations of awaited operations and ARAM DMA submission/completion polling. Without this pump, waiting tasks may never resume.
-
-These pumps perform different jobs; **both** are required to move the download from receiving a segment to writing that segment into ARAM. In this intentionally headless demonstration, `Main()` loops until completion; a real game should invoke both pumps as part of its normal per-frame input, update and render loop, not busy-wait for a network response. Limits bound the work attempted per pass but do not guarantee a particular frame time. Once the task completes, `GetAwaiter().GetResult()` reports success or propagates an error; the sample returns exit code 0 on success and 1 on failure, and stops networking in `finally`.
+The sample uses ordinary `async Task<int> Main()`. It awaits the download, validates the PNG signature, returns 0 on success or 1 on failure, and stops networking in finally. The generated native bootstrap owns automatic network service, DMA dispatch and continuation execution. No application pump calls or busy-wait loop are needed.
 
 The GameCube network stack currently supports plain HTTP but **not HTTPS**. Google's public logo image is served via HTTPS, so this example uses a minimal local development relay that fetches the logo from Google using TLS on a PC, then serves the unchanged PNG to the GameCube over HTTP. It is not an HTTPS implementation or a secure transport from the relay to the console.
 
 1. On a trusted computer on the same LAN, run `python3 samples/GoogleLogoAram/logo_proxy.py` (requires internet access).
 2. Change `LogoUrl` in `samples/GoogleLogoAram/Program.cs` from `192.168.1.2` to that computer's IPv4 address. Allow local TCP port 18081 through the firewall.
 3. Build the example with `dotnet build samples/GoogleLogoAram/GoogleLogoAram.csproj -c Release` and AOT-compile the resulting assembly with DolphinDotNet.Compiler, as with other managed GameCube examples. Native backend execution requires devkitPPC/libogc2 and a correctly initialized network interface.
-4. Run the GameCube application with the LAN connected. The main loop services both `NetworkRuntime.Pump()` and `Scheduler.Pump()`; successful transfer returns exit code 0, while a failed download, insufficient ARAM or an invalid PNG returns exit code 1.
+4. Run the GameCube application with the LAN connected. The runtime services the download automatically; successful transfer returns exit code 0, while a failed download, insufficient ARAM or an invalid PNG returns exit code 1.
 
 The sample is an integration demonstration, not a full-featured downloader. Its size cap protects ARAM and it does not keep the stream after returning; an actual game should retain the `AramStream` as an asset owner until needed for rendering or decoding. If the logo URL changes or redirects, update the relay's upstream URL. Do not expose the relay to untrusted networks; it uses plain HTTP without authentication. Rendering a PNG requires a decoder and GX texture upload, neither of which happens in this sample.

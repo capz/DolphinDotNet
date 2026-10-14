@@ -15,13 +15,13 @@ DolphinDotNet compiles ordinary .NET assemblies into native C through a typed in
 | Memory management | Nonmoving mark/sweep GC, explicit roots and compiler-generated shadow-stack support, reusable free blocks, stress mode |
 | GameCube platform | libogc2 DOL, OpenGX 3D/overlay, PAD input, nonblocking UDP/TCP client/server, console overlay |
 | Collections and storage | Selected standard List/comparers, streams/text and System.IO APIs; SD/DVD mounting and separate memory-card saves |
-| Async/await | Compiled Task/Task<T> state machines, cancellation and cooperative continuations; application pumps work on one thread |
+| Async/await | Compiled Task/Task<T> state machines, cancellation and cooperative continuations; runtime-owned service thread and captured continuations |
 | Integration | Compiler and native runtime tests; 32/64-bit managed smoke execution, GC stress, ASan/UBSan and GameCube build CI |
 | Phase 7 runtime completeness | **Acceptance gates satisfied and merged** in [PR #37](https://github.com/capz/DolphinDotNet/pull/37); target execution remains separate |
 
 The native runtime implementing a feature does **not** automatically mean all corresponding C# constructs are fully supported by the AOT compiler.
 
-The [networking runtime](docs/network-runtime.md) adds selected standard `System.Net`, socket and HTTP APIs, DNS, streamed HTTP/1.1 downloads and a bounded JSON reader. Networking and cooperative continuations must be pumped by the application. Verified HTTPS/TLS and hardware networking acceptance remain pending.
+The [networking runtime](docs/network-runtime.md) adds selected standard `System.Net`, socket and HTTP APIs, DNS, streamed HTTP/1.1 downloads and a bounded JSON reader. Networking and continuations advance automatically through runtime-owned dispatch. Verified HTTPS/TLS and hardware networking acceptance remain pending.
 
 ## Build pipeline
 
@@ -44,7 +44,7 @@ make
 
 The output is `DolphinDotNet.dol`. The repository also contains `samples/HelloGameCube`, `samples/ManagedGameCube`, and `scripts/compile-sample.sh`.
 
-The [async networking sample](samples/AsyncNetworking/Program.cs) awaits platform startup and a DNS-resolved HTTP JSON request while the outer loop pumps networking and continuations. Its defaults target the local test fixture; configure a reachable resolver and endpoint for hardware.
+The [async networking sample](samples/AsyncNetworking/Program.cs) awaits platform startup and a DNS-resolved HTTP JSON request using an ordinary async Main without application pump calls. Its defaults target the local test fixture; configure a reachable resolver and endpoint for hardware.
 
 ## Tests and CI
 

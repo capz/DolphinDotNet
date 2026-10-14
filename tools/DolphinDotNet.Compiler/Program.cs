@@ -54,7 +54,7 @@ try
         if(legacyAot)File.WriteAllText(output,CBackend.Emit(compiled.Methods,compiled.Model,compiled.Graph));
         else
         {
-            var entry=compiled.ValueMethods.FirstOrDefault(m=>m.Key.Name=="Main")??throw new InvalidDataException("Value IR entry point missing.");
+            var entry=compiled.ValueMethods.Single(m=>m.Key==compiled.Entry);
             File.WriteAllText(output,ValueCBackend.EmitProgram(compiled.ValueMethods,entry.Key,compiled.Model,compiled.Graph));
         }
         Console.WriteLine($"AOT compiled {input} -> {output} ({compiled.Methods.Count} reachable methods, {compiled.Graph.Types.Count} types)");

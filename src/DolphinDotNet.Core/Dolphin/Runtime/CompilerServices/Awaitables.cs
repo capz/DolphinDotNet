@@ -26,31 +26,35 @@ namespace Dolphin.Runtime.CompilerServices
     public struct ConfiguredTaskAwaitable
     {
         private Dolphin.Threading.Tasks.Task task;
-        internal ConfiguredTaskAwaitable(Dolphin.Threading.Tasks.Task task){this.task=task;}
-        public ConfiguredTaskAwaiter GetAwaiter()=>new ConfiguredTaskAwaiter(task);
+        private bool capture;
+        internal ConfiguredTaskAwaitable(Dolphin.Threading.Tasks.Task task,bool capture){this.task=task;this.capture=capture;}
+        public ConfiguredTaskAwaiter GetAwaiter()=>new ConfiguredTaskAwaiter(task,capture);
         public struct ConfiguredTaskAwaiter : ICriticalNotifyCompletion, System.Runtime.CompilerServices.ICriticalNotifyCompletion
         {
-            private TaskAwaiter awaiter;
-            internal ConfiguredTaskAwaiter(Dolphin.Threading.Tasks.Task task){awaiter=task.GetAwaiter();}
-            public bool IsCompleted=>awaiter.IsCompleted;
-            public void GetResult()=>awaiter.GetResult();
-            public void OnCompleted(Action action)=>awaiter.OnCompleted(action);
-            public void UnsafeOnCompleted(Action action)=>awaiter.UnsafeOnCompleted(action);
+            private Dolphin.Threading.Tasks.Task task;
+            private bool capture;
+            internal ConfiguredTaskAwaiter(Dolphin.Threading.Tasks.Task task,bool capture){this.task=task;this.capture=capture;}
+            public bool IsCompleted=>task.IsCompleted;
+            public void GetResult()=>task.Wait();
+            public void OnCompleted(Action action)=>task.Continue(action,capture||!Dolphin.Threading.Tasks.NativeAsync.AsyncRunning()?Dolphin.Threading.Tasks.Scheduler.Context:1);
+            public void UnsafeOnCompleted(Action action)=>OnCompleted(action);
         }
     }
     public struct ConfiguredTaskAwaitable<T>
     {
         private Dolphin.Threading.Tasks.Task<T> task;
-        internal ConfiguredTaskAwaitable(Dolphin.Threading.Tasks.Task<T> task){this.task=task;}
-        public ConfiguredTaskAwaiter GetAwaiter()=>new ConfiguredTaskAwaiter(task);
+        private bool capture;
+        internal ConfiguredTaskAwaitable(Dolphin.Threading.Tasks.Task<T> task,bool capture){this.task=task;this.capture=capture;}
+        public ConfiguredTaskAwaiter GetAwaiter()=>new ConfiguredTaskAwaiter(task,capture);
         public struct ConfiguredTaskAwaiter : ICriticalNotifyCompletion, System.Runtime.CompilerServices.ICriticalNotifyCompletion
         {
-            private TaskAwaiter<T> awaiter;
-            internal ConfiguredTaskAwaiter(Dolphin.Threading.Tasks.Task<T> task){awaiter=task.GetAwaiter();}
-            public bool IsCompleted=>awaiter.IsCompleted;
-            public T GetResult()=>awaiter.GetResult();
-            public void OnCompleted(Action action)=>awaiter.OnCompleted(action);
-            public void UnsafeOnCompleted(Action action)=>awaiter.UnsafeOnCompleted(action);
+            private Dolphin.Threading.Tasks.Task<T> task;
+            private bool capture;
+            internal ConfiguredTaskAwaiter(Dolphin.Threading.Tasks.Task<T> task,bool capture){this.task=task;this.capture=capture;}
+            public bool IsCompleted=>task.IsCompleted;
+            public T GetResult()=>task.Result;
+            public void OnCompleted(Action action)=>task.Continue(action,capture||!Dolphin.Threading.Tasks.NativeAsync.AsyncRunning()?Dolphin.Threading.Tasks.Scheduler.Context:1);
+            public void UnsafeOnCompleted(Action action)=>OnCompleted(action);
         }
     }
     public struct YieldAwaitable

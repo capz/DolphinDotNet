@@ -2,20 +2,50 @@ using System;
 using System.Collections.Generic;
 namespace Dolphin.Threading.Tasks
 {
-    /// <summary>Single-threaded cooperative queue. Pump on the application thread.</summary>
+    /// <summary>Runtime-owned dispatch. Normal application awaits need no pumps.</summary>
     public static class Scheduler
     {
-        private static readonly List<Action> queue=new List<Action>();
-        public static void Post(Action action){if(action==null)throw new ArgumentNullException("action");queue.Add(action);}
-        public static bool Pump(){if(queue.Count==0)return false;var action=queue[0];queue.RemoveAt(0);action();return true;}
-        public static int Pump(int maximumActions){if(maximumActions<1)throw new ArgumentOutOfRangeException("maximumActions");int available=queue.Count,count=0;while(count<maximumActions&&count<available&&Pump())count++;return count;}
+        private static readonly List<Action> applicationQueue=new List<Action>();
+        private static readonly List<Action> backgroundQueue=new List<Action>();
+        public static bool IsApplicationThread=>NativeAsync.AsyncContext()==0;
+        internal static int Context=>NativeAsync.AsyncContext();
+        public static void Post(Action action)=>Post(action,Context);
+        internal static void PostBackground(Action action)=>Post(action,NativeAsync.AsyncRunning()?1:0);
+        internal static void Post(Action action,int context)
+        {
+            if(action==null)throw new ArgumentNullException("action");
+            var queue=context==0?applicationQueue:backgroundQueue;
+            queue.Add(action);
+            NativeAsync.AsyncWake();
+        }
+        // Kept for deterministic runtime tests and existing integrations.
+        public static bool Pump()=>PumpContext(Context,1)!=0;
+        public static int Pump(int maximumActions)=>PumpContext(Context,maximumActions);
         public static void RunUntilIdle(){while(Pump()){} }
+        internal static int PumpContext(int context,int maximumActions)
+        {
+            if(maximumActions<1)throw new ArgumentOutOfRangeException("maximumActions");
+            var queue=context==0?applicationQueue:backgroundQueue;
+            int available=queue.Count,count=0;
+            while(count<maximumActions&&count<available&&queue.Count!=0)
+            {
+                var action=queue[0];queue.RemoveAt(0);count++;action();
+            }
+            return count;
+        }
+        internal static int Pending(int context)=>(context==0?applicationQueue:backgroundQueue).Count;
+    }
+    internal sealed class Continuation
+    {
+        internal readonly Action Action;
+        internal readonly int Context;
+        internal Continuation(Action action,int context){Action=action;Context=context;}
     }
     public class Task
     {
         private int state;
         private Exception? error;
-        private List<Action>? continuations;
+        private List<Continuation>? continuations;
         public bool IsCompleted=>state!=0;
         public bool IsFaulted=>state==2;
         public bool IsCanceled=>state==3;
@@ -23,15 +53,28 @@ namespace Dolphin.Threading.Tasks
         public static Task CompletedTask {get {var task=new Task();task.Complete();return task;}}
         internal void Complete(){Finish(1,null);}
         internal void Fail(Exception exception){Finish(exception is OperationCanceledException?3:2,exception);}
-        private void Finish(int status,Exception? exception){if(state!=0)throw new InvalidOperationException("Task already completed.");error=exception;state=status;if(continuations!=null){foreach(var continuation in continuations)Scheduler.Post(continuation);continuations=null;}}
-        internal void Continue(Action action){if(IsCompleted)Scheduler.Post(action);else{if(continuations==null)continuations=new List<Action>();continuations.Add(action);}}
-        public void Wait(){while(!IsCompleted){if(!Scheduler.Pump())throw new InvalidOperationException("No queued work can complete this task.");}if(error!=null)throw error;}
-        public Runtime.CompilerServices.ConfiguredTaskAwaitable ConfigureAwait(bool continueOnCapturedContext)=>new Runtime.CompilerServices.ConfiguredTaskAwaitable(this);
+        private void Finish(int status,Exception? exception){if(state!=0)throw new InvalidOperationException("Task already completed.");error=exception;state=status;NativeAsync.AsyncWake();if(continuations!=null){foreach(var continuation in continuations)Scheduler.Post(continuation.Action,continuation.Context);continuations=null;}}
+        internal void Continue(Action action)=>Continue(action,Scheduler.Context);
+        internal void Continue(Action action,int context)
+        {
+            if(IsCompleted)Scheduler.Post(action,context);
+            else{if(continuations==null)continuations=new List<Continuation>();continuations.Add(new Continuation(action,context));}
+        }
+        public void Wait()
+        {
+            while(!IsCompleted)
+            {
+                if(NativeAsync.AsyncRunning())NativeAsync.AsyncProgress();
+                else if(!Scheduler.Pump())throw new InvalidOperationException("No queued work can complete this task.");
+            }
+            if(error!=null)throw error;
+        }
+        public Runtime.CompilerServices.ConfiguredTaskAwaitable ConfigureAwait(bool continueOnCapturedContext)=>new Runtime.CompilerServices.ConfiguredTaskAwaitable(this,continueOnCapturedContext);
         public Runtime.CompilerServices.TaskAwaiter GetAwaiter()=>new Runtime.CompilerServices.TaskAwaiter(this);
         public static Task Run(Action action)=>Run(action,default);
-        public static Task Run(Action action,Dolphin.Threading.CancellationToken token){if(action==null)throw new ArgumentNullException("action");var task=new Task();Scheduler.Post(()=>{try{token.ThrowIfCancellationRequested();action();task.Complete();}catch(Exception error){task.Fail(error);}});return task;}
+        public static Task Run(Action action,Dolphin.Threading.CancellationToken token){if(action==null)throw new ArgumentNullException("action");var task=new Task();Scheduler.PostBackground(()=>{try{token.ThrowIfCancellationRequested();action();task.Complete();}catch(Exception error){task.Fail(error);}});return task;}
         public static Task<T> Run<T>(Func<T> action)=>Run(action,default);
-        public static Task<T> Run<T>(Func<T> action,Dolphin.Threading.CancellationToken token){if(action==null)throw new ArgumentNullException("action");var task=new Task<T>();Scheduler.Post(()=>{try{token.ThrowIfCancellationRequested();task.SetResult(action());}catch(Exception error){task.Fail(error);}});return task;}
+        public static Task<T> Run<T>(Func<T> action,Dolphin.Threading.CancellationToken token){if(action==null)throw new ArgumentNullException("action");var task=new Task<T>();Scheduler.PostBackground(()=>{try{token.ThrowIfCancellationRequested();task.SetResult(action());}catch(Exception error){task.Fail(error);}});return task;}
         public static Task<T> FromResult<T>(T result){var task=new Task<T>();task.SetResult(result);return task;}
         public static Task FromException(Exception error){if(error==null)throw new ArgumentNullException("error");var task=new Task();task.Fail(error);return task;}
         public static Task<T> FromException<T>(Exception error){if(error==null)throw new ArgumentNullException("error");var task=new Task<T>();task.Fail(error);return task;}
@@ -59,7 +102,7 @@ namespace Dolphin.Threading.Tasks
         private T result=default!;
         public T Result {get{Wait();return result;}}
         internal void SetResult(T value){result=value;Complete();}
-        public new Runtime.CompilerServices.ConfiguredTaskAwaitable<T> ConfigureAwait(bool continueOnCapturedContext)=>new Runtime.CompilerServices.ConfiguredTaskAwaitable<T>(this);
+        public new Runtime.CompilerServices.ConfiguredTaskAwaitable<T> ConfigureAwait(bool continueOnCapturedContext)=>new Runtime.CompilerServices.ConfiguredTaskAwaitable<T>(this,continueOnCapturedContext);
         public new Runtime.CompilerServices.TaskAwaiter<T> GetAwaiter()=>new Runtime.CompilerServices.TaskAwaiter<T>(this);
     }
     public sealed class TaskCompletionSource<T>
