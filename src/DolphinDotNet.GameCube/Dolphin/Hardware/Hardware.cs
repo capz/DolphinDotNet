@@ -80,7 +80,7 @@ public static class Hardware
 
     private static HardwareDeviceInfo Query(HardwareKind kind,HardwarePort port,HardwareProbeMode mode)
     {
-        int value=NativeHardware.Probe((int)kind,(int)port,(int)mode);
+        int value=NativeHardware.HardwareProbe((int)kind,(int)port,(int)mode);
         var presence=value>=0 && value<=4?(HardwarePresence)value:HardwarePresence.Unknown;
         bool mounted=false;
         if(kind==HardwareKind.MemoryCard)
@@ -90,7 +90,7 @@ public static class Hardware
         else if(kind==HardwareKind.Sd2Sp2)mounted=StorageApi.IsMounted(StorageDevice.SdSerialPort2);
         else if(kind==HardwareKind.GcLoader)mounted=StorageApi.IsMounted(StorageDevice.GcLoader);
         else if(kind==HardwareKind.GameDisc)mounted=StorageApi.IsMounted(StorageDevice.DvdDrive);
-        uint id=presence==HardwarePresence.Present?(uint)NativeHardware.Id((int)kind,(int)port):0;
+        uint id=presence==HardwarePresence.Present?(uint)NativeHardware.HardwareId((int)kind,(int)port):0;
         return new HardwareDeviceInfo(kind,port,presence,id,mounted);
     }
     /// <summary>Safe uses cached state; Extended may make read-only hardware probes.
