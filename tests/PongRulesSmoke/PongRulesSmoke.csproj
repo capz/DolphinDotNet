@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Optimize>true</Optimize>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../samples/Pong/PongGame.cs" Link="PongGame.cs" />
+    <Compile Include="../../samples/Pong/PongWaveforms.cs" Link="PongWaveforms.cs" />
+  </ItemGroup>
+</Project>

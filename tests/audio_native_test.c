@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static uint8_t file_data[256];
@@ -44,6 +45,12 @@ int64_t dnd_fs_seek(int handle,int64_t offset,int origin) {
     cursor=(unsigned)offset;return offset;
 }
 void dnd_fs_close(int handle){assert(handle==11);closed++;}
+uint32_t dnd_array_length(DndArray *array){return array->length;}
+uint64_t dnd_array_load_scalar(DndArray *array,uint32_t index,uint32_t size,bool signed_value){
+    (void)signed_value;
+    assert(array && index<array->length && size==1 && array->element_size==1);
+    return array->data[index];
+}
 void dnd_audio_backend_init(void){initialized++;}
 void dnd_audio_backend_shutdown(void){shutdowns++;}
 int dnd_audio_backend_play(unsigned slot,const void *data,unsigned size,
@@ -91,6 +98,27 @@ int main(void) {
     valid_wav();
     clip=dnd_audio_begin((DndString *)1);
     assert(clip>0 && dnd_audio_dispose(clip)==0 && closed==1);
+    /* New PCM8 factory must copy the managed array before returning. */
+    DndArray *samples=(DndArray *)malloc(sizeof(DndArray)+64);
+    assert(samples!=NULL);
+    memset(samples,0,sizeof(DndArray)+64);
+    samples->length=64;samples->element_size=1;
+    for(unsigned i=0;i<64;i++)samples->data[i]=(uint8_t)i;
+    int pcm=dnd_audio_create_pcm8(samples,22050);
+    assert(pcm>0 && dnd_audio_stat(pcm,0)==1 &&
+           dnd_audio_stat(pcm,1)==64 && dnd_audio_stat(pcm,2)==22050);
+    int pcm_voice=dnd_audio_play(pcm,0,0.75f,1.f);
+    assert(pcm_voice>0 && last_format==4 && last_rate==22050 &&
+           last_size==64 && first_sample[0]==0 && first_sample[3]==3);
+    samples->data[0]=255; /* Audio must retain its own immutable native copy. */
+    assert(dnd_audio_voice_stop(pcm_voice)==0);
+    assert(dnd_audio_play(pcm,0,1.f,1.f)>0 && first_sample[0]==0);
+    assert(dnd_audio_dispose(pcm)==0);
+    samples->element_size=2;
+    assert(dnd_audio_create_pcm8(samples,22050)==0);
+    samples->element_size=1;
+    assert(dnd_audio_create_pcm8(samples,4000)==0);
+    free(samples);
     dnd_audio_shutdown();
     assert(shutdowns==1);
     puts("audio native tests passed");

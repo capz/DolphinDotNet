@@ -110,6 +110,21 @@ jobs:
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/AudioDemo/bin/Release/net8.0/AudioDemo.dll /tmp/dnd-audio-bundle
           grep -q -- '-laesnd' /tmp/dnd-audio-bundle/Makefile
           test -s /tmp/dnd-audio-bundle/source/audio_gamecube.c
+      - name: Test Pong gameplay and synthesized waveforms on host
+        run: |
+          dotnet run --project tests/PongRulesSmoke/PongRulesSmoke.csproj -c Release
+      - name: Compile self-contained two-player Pong through managed AOT
+        run: |
+          dotnet build samples/Pong/Pong.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong.c
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-pong.c -o /tmp/dnd-pong.o
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong-bundle
+          test -s /tmp/dnd-pong-bundle/source/generated_program.c
+          test -s /tmp/dnd-pong-bundle/vendor/libogc2/exi.c
+          test -s /tmp/dnd-pong-bundle/scripts/build_exi_overlay.sh
+          grep -q -- 'build/exi-overlay' /tmp/dnd-pong-bundle/Makefile
+          grep -q -- '-DDND_NO_AUTONETWORK' /tmp/dnd-pong-bundle/Makefile
+          grep -q -- '-laesnd' /tmp/dnd-pong-bundle/Makefile
       - name: Compile Google logo ARAM example through AOT
         timeout-minutes: 4
         run: |
@@ -331,6 +346,16 @@ jobs:
           make -C /tmp/dnd-audio-demo-ppc
           test -s /tmp/dnd-audio-demo-ppc/Game.dol
           python3 /tmp/dnd-audio-demo-ppc/scripts/dol_sections.py /tmp/dnd-audio-demo-ppc/Game.dol
+      - name: Build and validate self-contained Pong GameCube DOL
+        run: |
+          dotnet build samples/Pong/Pong.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong-gamecube --platform gamecube
+          make -C /tmp/dnd-pong-gamecube
+          test -s /tmp/dnd-pong-gamecube/Game.dol
+          python3 /tmp/dnd-pong-gamecube/scripts/dol_sections.py /tmp/dnd-pong-gamecube/Game.dol
+          mkdir -p footprint
+          cp /tmp/dnd-pong-gamecube/Game.dol footprint/pong.dol
+          cp /tmp/dnd-pong-gamecube/Game.elf footprint/pong.elf
       - name: Compile managed storage ABI for PowerPC
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
@@ -461,6 +486,10 @@ jobs:
           path: dist
       - name: Test emulator log validation
         run: python3 -m unittest discover -s tests -p test_dolphin_smoke.py
+      - name: Verify Pong synthesizes audio and presents frames in Dolphin
+        id: pong_boot
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/pong.dol --binary /usr/games/dolphin-emu-nogui --seconds 65 --cpu-core 1 --gdb-port 2163 --elf dist/footprint/pong.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol dnd_audio_create_pcm8 --expect-symbol dnd_device_end --logs dolphin-pong --require-boot
       - name: Verify bare-metal main() guest PC
         id: minimal_boot
         continue-on-error: true
@@ -492,6 +521,7 @@ jobs:
           test "${{ steps.app_boot.outcome }}" = success
           test "${{ steps.async_boot.outcome }}" = success
           test "${{ steps.timing_boot.outcome }}" = success
+          test "${{ steps.pong_boot.outcome }}" = success
       - name: Upload emulator logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -503,6 +533,7 @@ jobs:
             dolphin-smoke/
             dolphin-async/
             dolphin-timing/
+            dolphin-pong/
           if-no-files-found: warn
 
   release-gamecube:

@@ -10,7 +10,16 @@ make
 
 The **default is GameCube**; `--platform gamecube` produces exactly the same Makefile and output. The other accepted values are `--platform wii` and `--platform wiiu`.
 
-The bundle contains generated managed C, copied native runtime sources and headers, `scripts/dol_sections.py`, a devkitPPC Makefile, and `DEPENDENCIES.txt`.
+The bundle contains generated managed C, copied native runtime sources and headers,
+`scripts/dol_sections.py`, a devkitPPC Makefile, and `DEPENDENCIES.txt`.
+
+**GameCube bundles also contain the verified EXI source correction and build
+scripts**. The first `make` clones the pinned libogc2 upstream source
+(requires `git` and network access), verifies the single EXI register correction,
+and builds a local `build/exi-overlay/libogc.a` used *before* the SDK library.
+Without this step, stock libogc2 can hang at `EXI_Sync` in Dolphin. Subsequent
+builds reuse the generated overlay. This applies equally to standalone games,
+AudioDemo and the Pong sample.
 
 ## Platform contract
 

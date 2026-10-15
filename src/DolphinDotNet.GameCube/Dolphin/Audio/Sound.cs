@@ -12,6 +12,18 @@ public sealed class Sound : IDisposable
     private bool disposed;
     private float volume=1f,pitch=1f;
     private Sound(int token){this.token=token;}
+    /// <summary>Create a self-contained sound from mono, unsigned 8-bit PCM.
+    /// Copies the data to aligned native memory, so callers can reuse the array.</summary>
+    public static Sound FromPcm8(byte[] samples,int sampleRate=22050)
+    {
+        if(samples==null)throw new ArgumentNullException("samples");
+        if(samples.Length==0)throw new ArgumentException("PCM must not be empty.","samples");
+        if(sampleRate<8000 || sampleRate>48000)throw new ArgumentOutOfRangeException("sampleRate");
+        Audio.Initialize();
+        int token=NativeAudio.AudioCreatePcm8(samples,sampleRate);
+        if(token==0)throw new OutOfMemoryException("No free native sound slot or insufficient audio memory.");
+        return new Sound(token);
+    }
     /// <summary>Read a PCM 8/16-bit, mono/stereo WAV into aligned native RAM. The volume must be mounted first.</summary>
     public static Sound Load(string path)
     {
