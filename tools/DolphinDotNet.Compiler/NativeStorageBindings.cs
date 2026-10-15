@@ -89,7 +89,7 @@ internal static class NativeStorageBindings
         ["PerformanceVisible"]=("dnd_performance_visible","",false),
         ["PerformanceSetVisible"]=("dnd_performance_set_visible","i",false),
         ["ModelTrs"]=("dnd_model_trs","aa",false),["ModelMultiply"]=("dnd_model_multiply_arrays","aaa",false),["ModelPosition"]=("dnd_model_position","aafff",false),["ModelTranslate"]=("dnd_model_translate","afff",false),["ModelRotate"]=("dnd_model_rotate","afff",false),["ModelCamera"]=("dnd_model_camera","aaa",false),
-        ["ModelBegin"]=("dnd_model_begin","si",false),["ModelStep"]=("dnd_model_step","i",false),["ModelDispose"]=("dnd_model_dispose","i",false),["ModelStat"]=("dnd_model_stat","ii",false),
+        ["ModelBegin"]=("dnd_model_begin","si",false),["ModelBeginObj"]=("dnd_model_begin_obj","si",false),["ModelBeginBytes"]=("dnd_model_begin_bytes","ai",false),["ModelStep"]=("dnd_model_step","i",false),["ModelDispose"]=("dnd_model_dispose","i",false),["ModelStat"]=("dnd_model_stat","ii",false),
         ["ModelName"]=("dnd_model_name","iii",true),["ModelDuration"]=("dnd_model_duration","ii",false),["ModelCopy"]=("dnd_model_copy","iiaii",false),
         ["ModelRestoreBegin"]=("dnd_model_restore_begin","i",false),["ModelRestoreEnd"]=("dnd_model_restore_end","ii",false),["ModelUnload"]=("dnd_model_unload","i",false),
         ["ModelInstance"]=("dnd_model_instance","ii",false),["ModelInstanceBytes"]=("dnd_model_instance_bytes","i",false),["ModelInstanceDispose"]=("dnd_model_instance_dispose","i",false),["ModelPlay"]=("dnd_model_play","iiif",false),["ModelControl"]=("dnd_model_control","iif",false),
