@@ -22,6 +22,28 @@ class Program
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 1;
         if(!Aram.Initialize())return 2;
         TransformChecks.Run();
+        using(var directObj=Model.LoadObjAsync("sd:/live.obj").Result)
+        {
+            if(directObj.NodeCount!=1||directObj.Animations.Count!=0)return 38;
+            using(var instance=directObj.CreateInstance())
+            {
+                var cameraLive=new Camera();
+                cameraLive.LookAt(new Vector3(0,0,5),Vector3.Zero,new Vector3(0,1,0));
+                var drawLive=new Renderer();
+                drawLive.BeginFrame(cameraLive);drawLive.DrawModel(instance,Identity());drawLive.EndFrame();
+            }
+        }
+        byte[] modelData=Dolphin.IO.File.ReadAllBytes("sd:/animated.dndmodel");
+        using(var modelMemory=Model.FromPackage(modelData))
+        {
+            if(modelMemory.Animations.Count!=5)return 39;
+            modelData[0]=0; // model owns a copy
+            if(!modelMemory.IsResident)return 40;
+        }
+        using(var pso=Model.LoadAsync("sd:/geometry-gj.dndmodel").Result)
+        {
+            if(pso.NodeCount!=1||pso.Animations.Count!=0)return 41;
+        }
         using(var canceled=new CancellationTokenSource()){canceled.Cancel();try{Model.LoadAsync("sd:/animated.dndmodel",canceled.Token).Wait();return 3;}catch(OperationCanceledException){}}
         AwaitModel().GetAwaiter().GetResult();
         var task=Model.LoadAsync("sd:/cache.dndmodel");if(task.IsCompleted)return 4;var model=task.Result;

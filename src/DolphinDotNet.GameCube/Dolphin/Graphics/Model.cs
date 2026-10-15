@@ -45,7 +45,28 @@ public sealed class Model : IDisposable
     public static Task<Model> LoadAsync(string path,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
     {
         if(path==null)throw new ArgumentNullException("path");if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)throw new ArgumentOutOfRangeException("nativeBudgetBytes");
-        var work=new LoadWork(path,nativeBudgetBytes,cancellationToken);Scheduler.Post(work.Step);return work.Completion.Task;
+        var work=new LoadWork(path,nativeBudgetBytes,cancellationToken);
+        Scheduler.Post(work.Step);return work.Completion.Task;
+    }
+    /// <summary>Import a static Wavefront OBJ directly on GameCube from a mounted
+    /// volume. Geometry and optional OBJ normals/UV are supported. MTL/textures,
+    /// skinning and animations require offline .dndmodel conversion.</summary>
+    public static Task<Model> LoadObjAsync(string path,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(path==null)throw new ArgumentNullException("path");
+        if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)throw new ArgumentOutOfRangeException("nativeBudgetBytes");
+        var work=new LoadWork(path,nativeBudgetBytes,cancellationToken,true);
+        Scheduler.Post(work.Step);return work.Completion.Task;
+    }
+    /// <summary>Validate and load an in-memory prebuilt DNMD model, without
+    /// creating any temporary files. A native owned copy is made.</summary>
+    public static Model FromPackage(byte[] package,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(package==null)throw new ArgumentNullException("package");
+        if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)throw new ArgumentOutOfRangeException("nativeBudgetBytes");
+        int token=NativeModel.ModelBeginBytes(package,nativeBudgetBytes);
+        if(token==0)throw new System.IO.IOException("Invalid model package or insufficient memory.");
+        try{return new Model(token);}catch{NativeModel.ModelDispose(token);throw;}
     }
     public bool TryGetAnimation(string name,out AnimationClipInfo clip)
     {
@@ -80,10 +101,12 @@ public sealed class Model : IDisposable
     private void EndWork(){busy=false;if(disposed){NativeModel.ModelDispose(Token);if(cold!=null){cold.Dispose();cold=null;}}}
     private sealed class LoadWork
     {
-        private readonly string path;private readonly int budget;private readonly CancellationToken cancellation;private int token;
+        private readonly string path;private readonly int budget;private readonly CancellationToken cancellation;private readonly bool obj;private int token;
         internal readonly TaskCompletionSource<Model> Completion=new TaskCompletionSource<Model>();
-        internal LoadWork(string path,int budget,CancellationToken cancellation){this.path=path;this.budget=budget;this.cancellation=cancellation;}
-        internal void Step(){try{cancellation.ThrowIfCancellationRequested();if(token==0){token=NativeModel.ModelBegin(path,budget);if(token==0)throw new System.IO.IOException("Model header, native budget or handle limit is invalid.");}int result=NativeModel.ModelStep(token);if(result<0)throw new System.IO.IOException("Invalid or truncated model package, or insufficient native memory.");if(result==0){Scheduler.Post(Step);return;}cancellation.ThrowIfCancellationRequested();var model=new Model(token);token=0;Completion.SetResult(model);}catch(Exception error){if(token!=0){try{NativeModel.ModelDispose(token);}catch(Exception closeError){error=closeError;}token=0;}Completion.SetException(error);}}
+        internal LoadWork(string path,int budget,CancellationToken cancellation,bool obj=false){this.path=path;this.budget=budget;this.cancellation=cancellation;this.obj=obj;}
+        internal void Step(){try{cancellation.ThrowIfCancellationRequested();if(token==0){token=obj?NativeModel.ModelBeginObj(path,budget):NativeModel.ModelBegin(path,budget);
+                if(token==0)throw new System.IO.IOException("Model input, native budget or handle limit is invalid.");}
+                int result=obj?1:NativeModel.ModelStep(token);if(result<0)throw new System.IO.IOException("Invalid or truncated model package, or insufficient native memory.");if(result==0){Scheduler.Post(Step);return;}cancellation.ThrowIfCancellationRequested();var model=new Model(token);token=0;Completion.SetResult(model);}catch(Exception error){if(token!=0){try{NativeModel.ModelDispose(token);}catch(Exception closeError){error=closeError;}token=0;}Completion.SetException(error);}}
     }
     private sealed class ResidencyWork
     {

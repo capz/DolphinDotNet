@@ -331,9 +331,9 @@ character.Update(1f / 60f);
 
 ### Model / AnimationCollection / AnimationClipInfo
 
-Loads packaged `.dndmodel` assets and enumerates available animation clips; supports ARAM eviction and reloading.
+Loads packaged `.dndmodel` assets, directly parses bounded static OBJ geometry at runtime, or validates a prebuilt package from memory. Model instances, animation clips and ARAM residency use the same APIs after loading. FBX/OBJ and PSO GJ/XJ can also be converted offline; GJ/XJ model geometry has a built-in parser, currently without GVM/XVM textures or NJM animation.
 
-**API:** `Model.LoadAsync(path[,token,nativeBudgetBytes])`, `Animations`, `NodeCount`, `IsResident`, `NativeBytes`, `AramBytes`, `TryGetAnimation(name,out clip)`, `GetNodeName(index)`, `CreateInstance([budget])`, `UnloadToAramAsync()`, `PrepareAsync()`, `PrepareAnimationAsync(name)`, `Dispose()`, `AnimationClipInfo.Name/DurationSeconds`.
+**API:** `Model.LoadAsync(path[,token,nativeBudgetBytes])`, `Model.LoadObjAsync(path[,token,nativeBudgetBytes])`, `Model.FromPackage(bytes[,nativeBudgetBytes])`, `Animations`, `NodeCount`, `IsResident`, `NativeBytes`, `AramBytes`, `TryGetAnimation(name,out clip)`, `GetNodeName(index)`, `CreateInstance([budget])`, `UnloadToAramAsync()`, `PrepareAsync()`, `PrepareAnimationAsync(name)`, `Dispose()`, `AnimationClipInfo.Name/DurationSeconds`.
 
 ~~~csharp
 using var model = await Model.LoadAsync("sd:/player.dndmodel");

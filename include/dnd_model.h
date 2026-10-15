@@ -9,6 +9,10 @@ int dnd_model_translate(DndArray *values, float x, float y, float z);
 int dnd_model_rotate(DndArray *values, float x, float y, float z);
 int dnd_model_camera(DndArray *settings, DndArray *view, DndArray *projection);
 int dnd_model_begin(DndString *path, int budget);
+/* Runtime import of static Wavefront OBJ, not MTL or animations. */
+int dnd_model_begin_obj(DndString *path, int budget);
+/* Runtime load of an already-compiled model from memory. */
+int dnd_model_begin_bytes(DndArray *data, int budget);
 int dnd_model_step(int token);
 int dnd_model_dispose(int token);
 int dnd_model_stat(int token,

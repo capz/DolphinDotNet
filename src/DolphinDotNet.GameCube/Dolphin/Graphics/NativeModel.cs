@@ -10,6 +10,8 @@ internal static class NativeModel
     internal static int ModelRotate(float[] values,float x,float y,float z)=>throw Unsupported();
     internal static int ModelCamera(float[] settings,float[] view,float[] projection)=>throw Unsupported();
     internal static int ModelBegin(string path,int budget)=>throw Unsupported();
+    internal static int ModelBeginObj(string path,int budget)=>throw Unsupported();
+    internal static int ModelBeginBytes(byte[] data,int budget)=>throw Unsupported();
     internal static int ModelStep(int token)=>throw Unsupported();
     internal static int ModelDispose(int token)=>throw Unsupported();
     internal static int ModelStat(int token,int kind)=>throw Unsupported();
