@@ -168,6 +168,7 @@ internal static class GameCubeBundle
         builder.AppendLine("$(error DEVKITPPC must be set)");
         builder.AppendLine("endif");
         builder.AppendLine("include " + rules);
+        builder.AppendLine(".DEFAULT_GOAL := all");
         builder.AppendLine("TARGET := Game");
         builder.AppendLine("BUILD := build");
         builder.AppendLine("SOURCES := source");
