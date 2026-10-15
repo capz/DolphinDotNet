@@ -5,14 +5,7 @@ internal static class NativeStorage
 {
     private static Exception Unsupported()=>new PlatformNotSupportedException("Requires DolphinDotNet AOT.");
     internal static bool MountDisc(int format)=>throw Unsupported();
-    internal static int IsoOpen(string path)=>throw Unsupported();
-    internal static void IsoClose(int handle)=>throw Unsupported();
-    internal static int IsoFind(int handle,string path)=>throw Unsupported();
-    internal static bool IsoDirectory(int handle,int entry)=>throw Unsupported();
-    internal static int IsoNext(int handle,int entry)=>throw Unsupported();
-    internal static int IsoLength(int handle,int entry)=>throw Unsupported();
-    internal static string IsoName(int handle,int entry)=>throw Unsupported();
-    internal static int IsoRead(int handle,int entry,int offset,byte[] buffer,int destination,int count)=>throw Unsupported();
+    internal static bool MountDiscImage(string path)=>throw Unsupported();
     internal static bool Mount(int device)=>throw Unsupported();
     internal static void Unmount(int device)=>throw Unsupported();
     internal static bool IsMounted(int device)=>throw Unsupported();
