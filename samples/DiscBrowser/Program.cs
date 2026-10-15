@@ -36,7 +36,7 @@ internal static class Program
             Storage.Unmount(StorageDevice.GcLoader);
         }
         // Real DVD and loaded ODE game both use the same dvd:/ view.
-        if(Storage.MountGameCubeDisc())
+        if(Storage.MountDisc())
         {
             ShowMountedGame();
             Storage.Unmount(StorageDevice.DvdDrive);

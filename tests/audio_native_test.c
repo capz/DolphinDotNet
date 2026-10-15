@@ -1,5 +1,6 @@
 /* Standalone host test: deterministic storage and DSP fake. */
 #include "dnd_audio.h"
+#include "dnd_audio_codec.h"
 #include "dnd_storage.h"
 #include <assert.h>
 #include <math.h>
@@ -8,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "audio_test_eh.inc"
+int dnd_audio_backend_play_encoded(unsigned slot,const DndAudioSource*s,bool loop,unsigned start,unsigned end,float volume,float pitch){(void)slot;(void)s;(void)loop;(void)start;(void)end;(void)volume;(void)pitch;assert(0);return 0;}
 static uint8_t file_data[256];
 static unsigned file_size, cursor;
 static int open_file, closed, initialized, shutdowns, stopped;
@@ -80,6 +83,7 @@ int main(void) {
            last_format==3 && last_rate==22050 && last_size==4);
     assert(first_sample[0]==0x12 && first_sample[1]==0x34 &&
            first_sample[2]==0xab && first_sample[3]==0xcd);
+    assert(dnd_audio_stat(clip,9)==0 && !dnd_audio_play_range(clip,0,1,1,1));
     assert(dnd_audio_voice_stat(one)==1 && dnd_audio_voice_control(one,0,0.3f)==0 &&
            fabsf(last_volume-0.3f)<0.001f);
     assert(dnd_audio_voice_control(two,1,2.f)==0 && last_pitch==2.f);
@@ -98,6 +102,25 @@ int main(void) {
     valid_wav();
     clip=dnd_audio_begin((DndString *)1);
     assert(clip>0 && dnd_audio_dispose(clip)==0 && closed==1);
+    /* The ordinary loader detects WAV by signature, or accepts explicit WAV.
+     * It retains the PCM backend and rejects bank-only options for WAV. */
+    for(int format=0;format<=13;format+=13) {
+        valid_wav();
+        clip=dnd_audio_begin_source((DndString *)1,NULL,format,0,1024);
+        assert(clip>0);
+        while(dnd_audio_step(clip)==0){}
+        assert(dnd_audio_stat(clip,0)==1 && dnd_audio_stat(clip,1)==4 &&
+               dnd_audio_stat(clip,9)==0 && closed==1);
+        int voice=dnd_audio_play(clip,0,1,1);
+        assert(voice>0 && first_sample[0]==0x12 && first_sample[1]==0x34);
+        assert(!dnd_audio_dispose(clip));
+    }
+    valid_wav();
+    assert(!dnd_audio_begin_source((DndString *)1,NULL,0,1,1024) && closed==1);
+    valid_wav();
+    assert(!dnd_audio_begin_source((DndString *)1,(DndString *)2,0,0,1024) && closed==1);
+    valid_wav();u16(20,3);
+    assert(!dnd_audio_begin_source((DndString *)1,NULL,13,0,1024) && closed==1);
     /* New PCM8 factory must copy the managed array before returning. */
     DndArray *samples=(DndArray *)malloc(sizeof(DndArray)+64);
     assert(samples!=NULL);

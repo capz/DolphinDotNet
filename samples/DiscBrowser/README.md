@@ -5,7 +5,7 @@ are presented as the same read-only `dvd:/` filesystem. The only difference
 is the mount argument:
 
 ```csharp
-Storage.MountGameCubeDisc();              // Physical game or ODE-selected game
+Storage.MountDisc();              // Physical game or ODE-selected game
 Storage.MountDisc("sd:/games/game.iso"); // ISO file on a mounted SD volume
 ```
 

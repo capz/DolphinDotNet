@@ -52,7 +52,7 @@ internal static class GameCubeBundle
             reachable.Any(type => feature.Prefixes.Any(prefix =>
                 type.StartsWith(prefix, StringComparison.Ordinal)))).ToArray();
         if (features.Any(x => x.Name == "unsupported-sound"))
-            throw new NotSupportedException("Only Dolphin.Audio PCM WAV playback is supported; System.Media and Dolphin.Sound have no native backend.");
+            throw new NotSupportedException("Use Dolphin.Audio for native audio playback; System.Media and Dolphin.Sound have no native backend.");
 
         // libogc2 native modules are currently GameCube-specific. Do not
         // silently compile those files as Wii/Wii U implementations.
@@ -66,6 +66,10 @@ internal static class GameCubeBundle
 
         foreach (var path in Directory.GetFiles(Path.Combine(root, "include"), "*.h"))
             File.Copy(path, Path.Combine(directory, "include", Path.GetFileName(path)), true);
+        foreach (var path in Directory.GetFiles(Path.Combine(root, "source"), "*.inc"))
+            File.Copy(path, Path.Combine(directory, "source", Path.GetFileName(path)), true);
+        Directory.CreateDirectory(Path.Combine(directory,"vendor","ufbx"));
+        File.Copy(Path.Combine(root,"vendor","ufbx","LICENSE"),Path.Combine(directory,"vendor","ufbx","LICENSE"),true);
         File.Copy(Path.Combine(root, "scripts", "dol_sections.py"),
             Path.Combine(directory, "scripts", "dol_sections.py"), true);
         if (platform == "gamecube")
@@ -88,7 +92,7 @@ internal static class GameCubeBundle
         var sources = new[] {
             "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "fst",
             "fst_gamecube", "iso_file", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
-            "main", "managed_runtime", "model", "model_obj", "model_animation",
+            "main", "managed_runtime", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
             "model_graphics", "model_transform", "network", "network_gamecube",
             "network_gamecube_backend", "performance", "platform_gamecube",
             "storage", "storage_gamecube", "stw", "system", "text", "timing", "worker"

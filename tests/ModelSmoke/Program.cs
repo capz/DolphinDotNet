@@ -12,6 +12,84 @@ class Program
     {
         using(var model=await Model.LoadAsync("sd:/animated.dndmodel")){if(model.Animations.Count!=5)throw new InvalidOperationException("Awaited model metadata.");}
     }
+    static void SourceImports()
+    {
+        var nativeTasks=new Task<Model>[]{Model.LoadRenderWareAsync("sd:/rw-native-skin.dff","sd:/rw.txd","sd:/rw.anm"),Model.LoadMeleeAsync("sd:/melee-weighted.dat","sd:/melee-weighted-motion.dat"),Model.LoadPsoEpisode3Async("sd:/ep3.bml",motionPath:"sd:/ep3-motion.rel")};
+        for(int i=0;i<nativeTasks.Length;i++)using(var model=nativeTasks[i].Result)using(var instance=model.CreateInstance())
+        {
+            if(model.Animations.Count!=1)throw new InvalidOperationException("Native adapter animation metadata.");
+            instance.Animator.Play("Motion");instance.Update(.5f);
+            model.UnloadToAramAsync().Wait();model.PrepareAsync().Wait();
+            var draw=new Renderer();draw.BeginFrame(Identity(),Identity());draw.DrawModel(instance,Identity());draw.EndFrame();
+        }
+        using(var model=Model.LoadJ3dAsync("sd:/sms-archive.szs","sd:/sms.arc#move.bck").Result)
+        using(var instance=model.CreateInstance())
+        {
+            if(model.NodeCount!=1||model.GetNodeName(0)!="Root"||model.Animations.Count!=1)throw new InvalidOperationException("Native J3D metadata.");
+            instance.Animator.Play("Motion");instance.Update(.5f);
+            var matrix=Identity();instance.GetNodeTransform(0,matrix);
+            if(matrix[12]<1.99f||matrix[12]>2.01f)throw new InvalidOperationException("Native BCK motion.");
+            model.UnloadToAramAsync().Wait();model.PrepareAsync().Wait();
+            var renderer=new Renderer();renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(instance,Identity());renderer.EndFrame();
+        }
+        using(var model=Model.LoadResidentEvil4Async("sd:/re4.drs#0","sd:/re4.drs#1","sd:/re4.drs#2").Result)
+        using(var instance=model.CreateInstance())
+        {
+            if(model.NodeCount!=2||model.Animations.Count!=1)throw new InvalidOperationException("Native RE4 metadata.");
+            instance.Animator.Play("Motion");instance.Update(.5f);
+            var matrix=Identity();instance.GetNodeTransform(1,matrix);
+            if(matrix[12]<1.49f||matrix[12]>1.51f)throw new InvalidOperationException("Native FCV motion.");
+            model.UnloadToAramAsync().Wait();model.PrepareAsync().Wait();
+            var renderer=new Renderer();renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(instance,Identity());renderer.EndFrame();
+        }
+        using(var model=Model.LoadFZeroGxAsync("sd:/fz.arc.lz").Result)
+        using(var instance=model.CreateInstance())
+        {
+            if(model.NodeCount!=1||model.Animations.Count!=0)throw new InvalidOperationException("F-Zero GX metadata.");
+            var renderer=new Renderer();renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(instance,Identity());renderer.EndFrame();
+        }
+
+        using(var model=Model.LoadFbxAsync("sd:/skinned.fbx").Result)
+        using(var instance=model.CreateInstance())
+        {
+            if(model.Animations.Count!=1)throw new InvalidOperationException("Native FBX metadata.");
+            instance.Animator.Play("Move");instance.Update(.5f);
+            int bone=-1;for(int i=0;i<model.NodeCount;i++)if(model.GetNodeName(i)=="Bone")bone=i;
+            if(bone<0)throw new InvalidOperationException("Native FBX skeleton.");
+            var matrix=Identity();instance.GetNodeTransform(bone,matrix);
+            if(matrix[12]<.99f||matrix[12]>1.01f)throw new InvalidOperationException("Native FBX animation.");
+            var renderer=new Renderer();renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(instance,Identity());renderer.EndFrame();
+        }
+        using(var model=Model.LoadObjAsync("sd:/concave.obj").Result)
+        using(var instance=model.CreateInstance())
+        {
+            if(model.Animations.Count!=0)throw new InvalidOperationException("Native textured OBJ metadata.");
+            var renderer=new Renderer();renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(instance,Identity());renderer.EndFrame();
+        }
+        using(var model=Model.LoadPsoAsync("sd:/direct.gj","sd:/direct.gvm","sd:/direct.njm",30).Result)
+        using(var instance=model.CreateInstance())
+        {
+            if(model.Animations.Count!=1||model.Animations[0].Name!="Motion")throw new InvalidOperationException("Native PSO metadata.");
+            instance.Animator.Play("Motion");instance.Update(.5f);
+            var matrix=Identity();instance.GetNodeTransform(0,matrix);
+            if(matrix[12]<.99f||matrix[12]>1.01f)throw new InvalidOperationException("Native PSO motion.");
+            var renderer=new Renderer();renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(instance,Identity());renderer.EndFrame();
+        }
+        using(var model=Model.LoadGlbAsync("sd:/embedded.glb").Result)
+        using(var instance=model.CreateInstance())
+        {
+            if(model.Animations.Count!=5)throw new InvalidOperationException("Native GLB metadata.");
+            instance.Animator.Play("Walk");instance.Update(.5f);
+            var matrix=Identity();instance.GetNodeTransform(1,matrix);
+            if(matrix[12]<.99f||matrix[12]>1.01f)throw new InvalidOperationException("Native GLB animation.");
+        }
+        using(var cancel=new CancellationTokenSource())
+        {
+            cancel.Cancel();
+            try{Model.LoadGlbAsync("sd:/embedded.glb",cancel.Token).Wait();throw new InvalidOperationException("Canceled native import accepted.");}
+            catch(OperationCanceledException){}
+        }
+    }
     static int Main()
     {
         if(Dolphin.Diagnostics.DebugOverlay.PerformanceVisible)return 35;
@@ -22,9 +100,16 @@ class Program
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 1;
         if(!Aram.Initialize())return 2;
         TransformChecks.Run();
+        SourceImports();
+        using(var transparentModel=Model.LoadFZeroGxAsync("sd:/fz-translucent.gma").Result)
+        using(var instance=transparentModel.CreateInstance())
+        {
+            transparentModel.UnloadToAramAsync().Wait();transparentModel.PrepareAsync().Wait();
+            var draw=new Renderer();draw.BeginFrame(Identity(),Identity());draw.DrawModel(instance,Identity());draw.EndFrame();
+        }
         using(var directObj=Model.LoadObjAsync("sd:/live.obj").Result)
         {
-            if(directObj.NodeCount!=1||directObj.Animations.Count!=0)return 38;
+            if(directObj.NodeCount<1||directObj.Animations.Count!=0)return 38;
             using(var instance=directObj.CreateInstance())
             {
                 var cameraLive=new Camera();
