@@ -97,6 +97,7 @@ internal static class NativeStorageBindings
         ["AramInitialize"]=("dnd_aram_initialize","i",false),["AramAvailable"]=("dnd_aram_available","",false),["AramStat"]=("dnd_aram_stat","i",false),["AramAllocate"]=("dnd_aram_allocate","i",false),
         ["AramRetain"]=("dnd_aram_retain","i",false),["AramRelease"]=("dnd_aram_release","i",false),["AramDispose"]=("dnd_aram_dispose","i",false),["AramBegin"]=("dnd_aram_begin","iiaiii",false),["AramPoll"]=("dnd_aram_poll","ai",false),
         ["TextCompare"]=("dnd_text_compare","ssi",false),["TextHash"]=("dnd_text_hash","si",false),["MountDisc"]=("dnd_storage_mount_disc","i",false),["MountDiscImage"]=("dnd_storage_mount_disc_image","s",false),
+        ["DiscHeader"]=("dnd_storage_disc_header","",true),
         ["PlatformReset"]=("dnd_platform_reboot","i",false),
         ["PlatformResetButton"]=("dnd_platform_reset_button","",false),
         ["HardwareProbe"]=("dnd_hardware_probe","iii",false),
