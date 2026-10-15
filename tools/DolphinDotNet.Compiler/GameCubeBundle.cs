@@ -100,7 +100,7 @@ internal static class GameCubeBundle
             File.Copy(Path.Combine(root, "source", name + ".c"),
                 Path.Combine(directory, "source", name + ".c"), true);
 
-        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform));
+        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking")));
         var report = new StringBuilder();
         report.AppendLine("DolphinDotNet AOT Native Dependencies");
         report.AppendLine("Target: " + platform);
@@ -139,7 +139,7 @@ internal static class GameCubeBundle
         throw new DirectoryNotFoundException("The DolphinDotNet repository's native sources are required to emit a self-contained build directory.");
     }
 
-    private static string Makefile(string platform)
+    private static string Makefile(string platform, bool usesNetworking)
     {
         var isWiiU = platform == "wiiu";
         var rules = isWiiU ? "$(DEVKITPRO)/wut/share/wut_rules"
@@ -163,7 +163,9 @@ internal static class GameCubeBundle
         builder.AppendLine("LIBDIRS := " + library);
         builder.AppendLine("LIBS := " + libs);
         builder.AppendLine("CFLAGS := -O2 -g -Wall -Wextra $(MACHDEP) $(INCLUDE)" +
-            (isWiiU ? " -D__WIIU__ -D__WUT__" : " -DDND_GAMECUBE_STORAGE"));
+            (isWiiU ? " -D__WIIU__ -D__WUT__" :
+                usesNetworking ? " -DDND_GAMECUBE_STORAGE" :
+                " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK"));
         builder.AppendLine("LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map");
         builder.AppendLine("ifneq ($(BUILD),$(notdir $(CURDIR)))");
         builder.AppendLine("export OUTPUT := $(CURDIR)/$(TARGET)");
