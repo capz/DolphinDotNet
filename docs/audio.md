@@ -66,7 +66,10 @@ generated, enveloped effects in a standalone DOL.
   budget work; long background music requires a future stream reader.
 - `System.Media` and `Dolphin.Sound` are not mapped; the bundler rejects
   those unsupported APIs.
-- The audio module targets libogc2 AESND on GameCube; standalone Wii builds
+- GameCube bundles without reachable networking APIs skip unnecessary native
+network initialization on boot, so standalone audio games need no network.
+
+The audio module targets libogc2 AESND on GameCube; standalone Wii builds
   remain experimental, and Wii U needs a separate native backend.
 
 GameCube applications and bundles link `-laesnd` before `-logc`. There is
