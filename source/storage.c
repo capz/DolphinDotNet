@@ -16,6 +16,8 @@
 #define HANDLE_CAP 32
 static const char *prefixes[7] = {"carda", "cardb", "sd", "dvd", "mca", "mcb", "gcloader"};
 static bool mounted[7];
+/* Keep backing mounted while its ISO is presented through dvd:/ */
+static int iso_source_device = -1;
 static unsigned card_users[2];
 static char roots[7][PATH_CAP];
 static char cwd[PATH_CAP] = "sd:/";
@@ -35,6 +37,7 @@ static int next_token = 1;
 #ifdef DND_GAMECUBE_STORAGE
 bool dnd_gc_mount(int device);
 bool dnd_gc_mount_disc(int format);
+bool dnd_gc_mount_disc_image(const char *path);
 void dnd_gc_unmount(int device);
 bool dnd_gc_card_mount(int device, const char *game, const char *company);
 int dnd_gc_card_metadata(int device, const char *name, bool metadata,
@@ -261,6 +264,39 @@ bool dnd_storage_mount_disc(int format) {
   return dnd_storage_mount(3);
 #endif
 }
+bool dnd_storage_mount_disc_image(DndString *path) {
+  char canonical[PATH_CAP], native[PATH_CAP];
+  if (!path) {
+    fail(EINVAL, "ISO image path is null.");
+    return false;
+  }
+  /* The source is a fully-qualified path on an already-mounted volume. */
+  char raw[PATH_CAP];
+  if (!utf8(path, raw)) return false;
+  if (!strchr(raw, ':') || raw[0] == '/' || raw[0] == '\\') {
+    fail(EINVAL, "Specify a full mounted-volume ISO path.");
+    return false;
+  }
+  if (mounted[3]) {
+    fail(EBUSY, "Unmount dvd:/ before mounting an image.");
+    return false;
+  }
+  int source = resolve(path, canonical, native);
+  if (source < 0) return false;
+  if (source == 3 || source == 4 || source == 5) {
+    fail(EINVAL, "ISO source must be a mounted filesystem, not dvd or a memory card.");
+    return false;
+  }
+#ifdef DND_GAMECUBE_STORAGE
+  if (!dnd_gc_mount_disc_image(native)) return false;
+  mounted[3] = true;
+  iso_source_device = source;
+  return true;
+#else
+  fail(ENOSYS, "Mounted GameCube image volumes require a GameCube target.");
+  return false;
+#endif
+}
 int dnd_fs_open_handles(void) {
   int n = 0;
   for (int i = 0; i < HANDLE_CAP; i++) {
@@ -278,6 +314,10 @@ static bool busy(const char *path) {
 void dnd_storage_unmount(int d) {
   if (!valid_device(d) || !mounted[d])
     return;
+  if (d == iso_source_device && mounted[3]) {
+    fail(EBUSY, "Unmount the ISO-backed dvd volume before its source.");
+    return;
+  }
   if ((d == 4 || d == 5) && card_users[d - 4] > 1) {
     card_users[d - 4]--;
     return;
@@ -296,6 +336,7 @@ void dnd_storage_unmount(int d) {
   dnd_gc_unmount(d);
 #endif
   mounted[d] = false;
+  if (d == 3) iso_source_device = -1;
 }
 DndString *dnd_fs_full_path(DndManagedHeap *heap, DndString *path) {
   char raw[PATH_CAP], out[PATH_CAP];
