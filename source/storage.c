@@ -107,7 +107,7 @@ static bool utf8(DndString *s, char out[PATH_CAP]) {
   return true;
 }
 static int device_name(const char *s, size_t len) {
-  for (int i = 0; i < 6; i++)
+  for (int i = 0; i < 7; i++)
     if (strlen(prefixes[i]) == len && !strncmp(s, prefixes[i], len))
       return i;
   return -1;
@@ -278,11 +278,11 @@ static bool busy(const char *path) {
 void dnd_storage_unmount(int d) {
   if (!valid_device(d) || !mounted[d])
     return;
-  if (d >= 4 && card_users[d - 4] > 1) {
+  if ((d == 4 || d == 5) && card_users[d - 4] > 1) {
     card_users[d - 4]--;
     return;
   }
-  if (d >= 4)
+  if (d == 4 || d == 5)
     card_users[d - 4] = 0;
   for (int i = 0; i < HANDLE_CAP; i++)
     if ((files[i].token &&
@@ -906,7 +906,7 @@ static char card_game[2][5], card_company[2][3];
 static bool card_arguments(int d, DndString *name, char out[PATH_CAP]) {
   if (!valid_device(d))
     return false;
-  if (d < 4) {
+  if (d != 4 && d != 5) {
     fail(EINVAL, "Not a memory card slot.");
     return false;
   }
@@ -936,7 +936,7 @@ static bool card_arguments(int d, DndString *name, char out[PATH_CAP]) {
 bool dnd_card_mount(int d, DndString *game, DndString *company) {
   if (!valid_device(d))
     return false;
-  if (d < 4) {
+  if (d != 4 && d != 5) {
     fail(EINVAL, "Not a memory card slot.");
     return false;
   }
@@ -1200,7 +1200,7 @@ void dnd_card_delete(int d, DndString *name) {
 #endif
 }
 DndArray *dnd_card_entries(DndManagedHeap *heap, int d) {
-  if (!valid_device(d) || d < 4 || !mounted[d]) {
+  if (!valid_device(d) || (d != 4 && d != 5) || !mounted[d]) {
     fail(ENODEV, "Memory card is not mounted.");
     return NULL;
   }
