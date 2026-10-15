@@ -45,7 +45,7 @@ internal static class Program
         // emulator, exposes the original GameCube filesystem at dvd:/.
         if (Storage.MountGameCubeDisc())
         {
-            PrintFiles("DVD game FST:",Storage.GetFiles(StorageDevice.DvdDrive,"/"));
+            PrintFiles("DVD game FST:",Storage.GetFiles(StorageDevice.DvdDrive,""));
             if(Storage.FileExists(StorageDevice.DvdDrive,"opening.bnr"))
             {
                 var data=Storage.ReadAllBytes(StorageDevice.DvdDrive,"opening.bnr");
