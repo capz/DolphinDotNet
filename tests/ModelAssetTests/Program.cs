@@ -59,6 +59,28 @@ File.WriteAllBytes(gjPath,broken);
 try{ModelConverter.Convert(gjPath,gjPackage+".broken");throw new Exception("Broken GJ stream accepted.");}
 catch(InvalidDataException){}
 File.WriteAllBytes(gjPath,gj);
+// Blue Burst XJ uses LE NJCM and fixed vertex-info/strip descriptors.
+byte[] xj = new byte[8+174];
+"NJCM"u8.CopyTo(xj.AsSpan(0,4));
+BinaryPrimitives.WriteUInt32LittleEndian(xj.AsSpan(4,4),174);
+void Xj32(int p,uint v)=>BinaryPrimitives.WriteUInt32LittleEndian(xj.AsSpan(8+p,4),v);
+void Xj16(int p,ushort v)=>BinaryPrimitives.WriteUInt16LittleEndian(xj.AsSpan(8+p,2),v);
+void XjFloat(int p,float v)=>Xj32(p,unchecked((uint)BitConverter.SingleToInt32Bits(v)));
+Xj32(4,52);XjFloat(32,1);XjFloat(36,1);XjFloat(40,1);
+Xj32(56,96);Xj32(60,1);Xj32(64,112);Xj32(68,1);
+Xj32(96+4,132);Xj32(96+8,12);Xj32(96+12,3);
+Xj32(112,168);Xj32(112+4,0);Xj32(112+8,168);Xj32(112+12,3);
+XjFloat(132,0);XjFloat(136,0);XjFloat(140,0);
+XjFloat(144,1);XjFloat(148,0);XjFloat(152,0);
+XjFloat(156,0);XjFloat(160,1);XjFloat(164,0);
+Xj16(168,0);Xj16(170,1);Xj16(172,2);
+string xjPath=Path.Combine(output,"geometry.xj");
+File.WriteAllBytes(xjPath,xj);
+string xjPackage=Path.Combine(output,"sd","geometry-xj.dndmodel");
+ModelConverter.Convert(xjPath,xjPackage);
+byte[] xjData=File.ReadAllBytes(xjPackage);
+if(BinaryPrimitives.ReadUInt32BigEndian(xjData)!=0x444e444d)
+    throw new Exception("Direct PSO XJ binary import failed.");
 File.WriteAllText(Path.Combine(output,"sd","live.obj"),
     "v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nf 1/1 2/2 3/3\n");
 string gltf=Path.Combine(output,"animated.gltf"),package=Path.Combine(output,"sd","animated.dndmodel");File.WriteAllText(gltf,root.ToJsonString());ModelConverter.Convert(gltf,package);
