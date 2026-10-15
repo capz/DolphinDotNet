@@ -125,6 +125,18 @@ jobs:
           grep -q -- 'build/exi-overlay' /tmp/dnd-pong-bundle/Makefile
           grep -q -- '-DDND_NO_AUTONETWORK' /tmp/dnd-pong-bundle/Makefile
           grep -q -- '-laesnd' /tmp/dnd-pong-bundle/Makefile
+      - name: Test Snake rules, state persistence and timed autosaves
+        run: dotnet run --project tests/SnakeRulesSmoke/SnakeRulesSmoke.csproj -c Release
+      - name: Compile Snake save/load game through managed AOT
+        run: |
+          dotnet build samples/Snake/Snake.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/Snake/bin/Release/net8.0/Snake.dll /tmp/dnd-snake.c
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-snake.c -o /tmp/dnd-snake.o
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Snake/bin/Release/net8.0/Snake.dll /tmp/dnd-snake-bundle --platform gamecube
+          test -s /tmp/dnd-snake-bundle/source/generated_program.c
+          grep -q 'dnd_card_mount' /tmp/dnd-snake-bundle/source/generated_program.c
+          grep -q 'dnd_card_write_save' /tmp/dnd-snake-bundle/source/generated_program.c
+          grep -q -- '-DDND_NO_AUTONETWORK' /tmp/dnd-snake-bundle/Makefile
       - name: Compile Google logo ARAM example through AOT
         timeout-minutes: 4
         run: |
@@ -356,6 +368,16 @@ jobs:
           mkdir -p footprint
           cp /tmp/dnd-pong-gamecube/Game.dol footprint/pong.dol
           cp /tmp/dnd-pong-gamecube/Game.elf footprint/pong.elf
+      - name: Build and validate Snake save/load GameCube DOL
+        run: |
+          dotnet build samples/Snake/Snake.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Snake/bin/Release/net8.0/Snake.dll /tmp/dnd-snake-gamecube --platform gamecube
+          make -C /tmp/dnd-snake-gamecube
+          test -s /tmp/dnd-snake-gamecube/Game.dol
+          python3 /tmp/dnd-snake-gamecube/scripts/dol_sections.py /tmp/dnd-snake-gamecube/Game.dol
+          mkdir -p footprint
+          cp /tmp/dnd-snake-gamecube/Game.dol footprint/snake.dol
+          cp /tmp/dnd-snake-gamecube/Game.elf footprint/snake.elf
       - name: Compile managed storage ABI for PowerPC
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
@@ -490,6 +512,10 @@ jobs:
         id: pong_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/footprint/pong.dol --binary /usr/games/dolphin-emu-nogui --seconds 65 --cpu-core 1 --gdb-port 2163 --elf dist/footprint/pong.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol dnd_audio_create_pcm8 --expect-symbol dnd_device_end --logs dolphin-pong --require-boot
+      - name: Verify Snake memory card initialization and frame rendering in Dolphin
+        id: snake_boot
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/snake.dol --binary /usr/games/dolphin-emu-nogui --seconds 70 --cpu-core 1 --gdb-port 2164 --elf dist/footprint/snake.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol dnd_card_mount --expect-symbol dnd_device_end --logs dolphin-snake --require-boot
       - name: Verify bare-metal main() guest PC
         id: minimal_boot
         continue-on-error: true
@@ -522,6 +548,7 @@ jobs:
           test "${{ steps.async_boot.outcome }}" = success
           test "${{ steps.timing_boot.outcome }}" = success
           test "${{ steps.pong_boot.outcome }}" = success
+          test "${{ steps.snake_boot.outcome }}" = success
       - name: Upload emulator logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -534,6 +561,7 @@ jobs:
             dolphin-async/
             dolphin-timing/
             dolphin-pong/
+            dolphin-snake/
           if-no-files-found: warn
 
   release-gamecube:
