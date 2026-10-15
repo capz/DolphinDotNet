@@ -70,6 +70,7 @@ unsigned dnd_model_hash(const void *p, unsigned length);
 void *dnd_model_alloc(unsigned size, unsigned *used, unsigned budget);
 void dnd_model_free(void *p, unsigned *used);
 DndModel *dnd_model_find(int token, bool closed);
+int dnd_model_begin_data(const unsigned char *bytes, unsigned length, int budget);
 DndInstance *dnd_instance_find(int token);
 void dnd_model_release(DndModel *model);
 void dnd_model_identity(float m[16]);
