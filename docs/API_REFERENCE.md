@@ -590,8 +590,9 @@ Shift-JIS text, which is not yet natively decoded.
 ~~~csharp
 var disc = Storage.GetMountedDiscIdentity(DiscBannerLanguage.Dutch);
 string id = disc.GameId, title = disc.Title;
-if (disc.Banner != null)
+if (disc.Banner != null) {
     using var texture = Texture2D.Create(96, 32, disc.Banner.Rgba32);
+}
 ~~~
 
 ### Storage — unified GameCube game disc and ISO mounts
