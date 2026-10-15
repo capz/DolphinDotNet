@@ -305,6 +305,9 @@ jobs:
           sudo apt-get install -y assimp-utils
           assimp version
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures /usr/bin/assimp
+          test -s /tmp/dnd-model-fixtures/sd/geometry-gj.dndmodel
+          test -s /tmp/dnd-model-fixtures/sd/geometry-xj.dndmodel
+          test -s /tmp/dnd-model-fixtures/sd/live.obj
           dotnet pack tools/DolphinDotNet.Assets/DolphinDotNet.Assets.csproj -c Release -o /tmp/dnd-tools
           dotnet tool install DolphinDotNet.Assets --version 0.1.0 --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
           /tmp/dnd-tool-install/dnd-assets --help
@@ -417,6 +420,7 @@ jobs:
           test -s /tmp/dnd-disc-browser-bundle/source/hardware.c
           make -C /tmp/dnd-disc-browser-bundle
           test -s /tmp/dnd-disc-browser-bundle/Game.dol
+          test -s /tmp/dnd-disc-browser-bundle/source/model_obj.c
       - name: Compile managed storage ABI for PowerPC
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
