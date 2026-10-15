@@ -102,6 +102,25 @@ int main(void) {
     valid_wav();
     clip=dnd_audio_begin((DndString *)1);
     assert(clip>0 && dnd_audio_dispose(clip)==0 && closed==1);
+    /* The ordinary loader detects WAV by signature, or accepts explicit WAV.
+     * It retains the PCM backend and rejects bank-only options for WAV. */
+    for(int format=0;format<=13;format+=13) {
+        valid_wav();
+        clip=dnd_audio_begin_source((DndString *)1,NULL,format,0,1024);
+        assert(clip>0);
+        while(dnd_audio_step(clip)==0){}
+        assert(dnd_audio_stat(clip,0)==1 && dnd_audio_stat(clip,1)==4 &&
+               dnd_audio_stat(clip,9)==0 && closed==1);
+        int voice=dnd_audio_play(clip,0,1,1);
+        assert(voice>0 && first_sample[0]==0x12 && first_sample[1]==0x34);
+        assert(!dnd_audio_dispose(clip));
+    }
+    valid_wav();
+    assert(!dnd_audio_begin_source((DndString *)1,NULL,0,1,1024) && closed==1);
+    valid_wav();
+    assert(!dnd_audio_begin_source((DndString *)1,(DndString *)2,0,0,1024) && closed==1);
+    valid_wav();u16(20,3);
+    assert(!dnd_audio_begin_source((DndString *)1,NULL,13,0,1024) && closed==1);
     /* New PCM8 factory must copy the managed array before returning. */
     DndArray *samples=(DndArray *)malloc(sizeof(DndArray)+64);
     assert(samples!=NULL);

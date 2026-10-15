@@ -52,7 +52,7 @@ internal static class NativeStorageBindings
         ["MeshUpdateNormal"]=("dnd_mesh_update","iaiii",false),
         ["AudioInit"]=("dnd_audio_init","",false),
         ["AudioBegin"]=("dnd_audio_begin","s",false),
-        ["AudioBeginGameCube"]=("dnd_audio_begin_gamecube","ssiii",false),
+        ["AudioBeginSource"]=("dnd_audio_begin_source","ssiii",false),
         ["AudioCreatePcm8"]=("dnd_audio_create_pcm8","ai",false),
         ["AudioStep"]=("dnd_audio_step","i",false),
         ["AudioStat"]=("dnd_audio_stat","ii",false),
@@ -94,7 +94,7 @@ internal static class NativeStorageBindings
         ["ModelBegin"]=("dnd_model_begin","si",false),["ModelBeginObj"]=("dnd_model_begin_obj","si",false),["ModelBeginGlb"]=("dnd_model_begin_glb","sii",false),["ModelBeginBytes"]=("dnd_model_begin_bytes","ai",false),["ModelStep"]=("dnd_model_step","i",false),["ModelDispose"]=("dnd_model_dispose","i",false),["ModelStat"]=("dnd_model_stat","ii",false),
         ["ModelName"]=("dnd_model_name","iii",true),["ModelDuration"]=("dnd_model_duration","ii",false),["ModelCopy"]=("dnd_model_copy","iiaii",false),
         ["ModelBeginFzero"]=("dnd_model_begin_fzero","ssiii",false),
-        ["ModelBeginGamecube"]=("dnd_model_begin_gamecube","sssfiii",false),
+        ["ModelBeginFormat"]=("dnd_model_begin_format","sssfiii",false),
         ["ModelBeginPsoEpisode3"]=("dnd_model_begin_pso_ep3","sssfiii",false),
         ["ModelBeginPso"]=("dnd_model_begin_pso","sssfii",false),
         ["ModelBeginScene"]=("dnd_model_begin_scene","sifii",false),
@@ -130,7 +130,7 @@ internal static class NativeStorageBindings
         if(!Bindings.TryGetValue(call.Operation,out var binding)||binding.Types.Length!=call.Arguments.Count)throw new NotSupportedException($"Invalid native storage binding {call.Operation}.");
         var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'o'=>"DndObject*",'l'=>"int64_t",'f'=>"float",_=>"int"})})v{arg.Id}").ToList();
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
-        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginGameCube" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
+        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";
         if(call.Result is {} result)b.AppendLine($"  v{result.Id} = {(result.Kind==IrValueKind.ObjectReference?"(intptr_t)":"")}{expression};");else b.AppendLine($"  {expression};");

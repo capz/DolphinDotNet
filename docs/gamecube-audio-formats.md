@@ -5,19 +5,19 @@ GameCube games share several codecs but use different containers and sample bank
 ```csharp
 using Dolphin.Audio;
 
-using var music = await Music.LoadGameCubeAsync("sd:/audio/theme.hps");
+using var music = await Music.LoadAsync("sd:/audio/theme.hps");
 music.Play(); // honors the file's loop region, if present
 
-using var voice = await Sound.LoadGameCubeAsync(
-    "sd:/audio/fighter.ssm", GameCubeAudioFormat.Ssm, entryIndex: 3);
+using var voice = await Sound.LoadAsync(
+    "sd:/audio/fighter.ssm", AudioFormat.Ssm, entryIndex: 3);
 using var playing = voice.Play();
 
-using var wave = await Sound.LoadGameCubeAsync(
-    "sd:/audio/JaiInit.aaf", GameCubeAudioFormat.JAudioWaveBank,
+using var wave = await Sound.LoadAsync(
+    "sd:/audio/JaiInit.aaf", AudioFormat.JAudioWaveBank,
     dataPath: "sd:/audio/voice.aw", entryIndex: 0);
 ```
 
-Mount storage first. Initialize ARAM before audio if both are used. Await continuations retain their executor; voice operations run on the application executor. Loading and validation use the background executor in bounded read/decode slices. Cancellation disposes partially loaded buffers and closes both files. Synchronous `Sound.LoadGameCube` and `Music.LoadGameCube` counterparts are also available.
+Mount storage first. Initialize ARAM before audio if both are used. Await continuations retain their executor; voice operations run on the application executor. Loading and validation use the background executor in bounded read/decode slices. Cancellation disposes partially loaded buffers and closes both files. Synchronous `Sound.Load` and `Music.Load` counterparts are also available.
 
 ## Game research and coverage
 
@@ -35,7 +35,7 @@ Mount storage first. Initialize ARAM before audio if both are used. Await contin
 
 ## Implemented readers
 
-`GameCubeAudioFormat.Auto` recognizes strong signatures: ADX, AFS, HPS, AST, RWS and GameCube AWD. Choose an explicit format for plain DSP, AFC, SSM, DTK, JAudio wave banks and RE4 pairs. Extensions alone never select a headerless codec.
+`Sound.Load/LoadAsync` and `Music.Load/LoadAsync` use `AudioFormat.Auto` by default, recognizing headers for WAV, ADX, AFS, HPS, AST, RWS and AWD. `AudioFormat.Wav` explicitly selects PCM WAV. Choose an explicit format for plain DSP, AFC, SSM, DTK, JAudio wave banks and RE4 pairs. Extensions alone never select a headerless codec.
 
 - **Dsp:** standard big-endian 0x60-byte mono Nintendo DSP header. Decoder coefficients and initial histories are honored. Platform-specific interleaved `.dsp` variants and dual-file stereo are not guessed.
 - **Adx / Afs:** unencrypted CRI ADX types 2/3/4, versions 3/4/5; mono/stereo, initial histories and supported loop headers. AFS has a bounded LE directory; `entryIndex` selects one ADX member. Encrypted ADX, AHX, SFD and other CRI codecs are rejected.
@@ -51,10 +51,10 @@ Mount storage first. Initialize ARAM before audio if both are used. Await contin
 
 `Sound` exposes `Channels`, `SampleCount`, `HasLoop`, `LoopStartSample`, `LoopEndSample` and `NativeBytes`. `LengthBytes` describes decoded PCM size even when the stored source remains compressed. `Play(loop: true)` uses the file loop interval when present, otherwise the full clip. Nonlooping playback includes the whole source.
 
-`Sound.PlayLoop(loopStartSample, loopEndSample)` and `Music.PlayLoop(loopStartSample, loopEndSample)` override the interval for that playback. Indices are sample frames per channel, starting at zero, with an **exclusive end**: playback emits the intro `[0, loopEndSample)`, then repeats `[loopStartSample, loopEndSample)`. Require `0 <= start < end <= SampleCount`. For ADX, boundaries may fall anywhere inside a 32-sample frame; cached samples and predictor histories are restored together. Each voice can use a different range without changing the file metadata. This also works for ADX entries selected from AFS and other supported `LoadGameCube/Async` sources. WAV/`FromPcm8` custom ranges throw `NotSupportedException`; their existing whole-clip looping remains available.
+`Sound.PlayLoop(loopStartSample, loopEndSample)` and `Music.PlayLoop(loopStartSample, loopEndSample)` override the interval for that playback. Indices are sample frames per channel, starting at zero, with an **exclusive end**: playback emits the intro `[0, loopEndSample)`, then repeats `[loopStartSample, loopEndSample)`. Require `0 <= start < end <= SampleCount`. For ADX, boundaries may fall anywhere inside a 32-sample frame; cached samples and predictor histories are restored together. Each voice can use a different range without changing the file metadata. This also works for ADX entries selected from AFS and other supported source codecs. WAV/`FromPcm8` custom ranges throw `NotSupportedException`; their existing whole-clip looping remains available.
 
 ```csharp
-using var track = await Music.LoadGameCubeAsync("sd:/audio/theme.adx");
+using var track = await Music.LoadAsync("sd:/audio/theme.adx");
 track.PlayLoop(22050, 220500); // repeat 1s–10s at 22050 Hz, after the intro
 ```
 

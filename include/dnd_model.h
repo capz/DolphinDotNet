@@ -22,7 +22,7 @@ int dnd_model_begin_scene(DndString *path, int fbx, float sample_rate,
                           int budget, int approximate_materials);
 /* F-Zero GX GMA/GCMF, AV TPL, LZSS and U8/ARC; selection=-1 loads all
  * GMA entries. options: 1=material approximation, 2=static deformation snapshot. */
-int dnd_model_begin_gamecube(DndString *path, DndString *textures,
+int dnd_model_begin_format(DndString *path, DndString *textures,
                               DndString *motion, float fps, int format,
                               int budget, int approximate);
 int dnd_model_begin_pso_ep3(DndString *path, DndString *textures, DndString *motion,

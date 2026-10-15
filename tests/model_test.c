@@ -184,7 +184,7 @@ static void fzero_tests(const char *root) {
 }
 static int gamecube_try(const char *path, const char *textures, const char *motion,
                         int format, int approximate, int budget) {
-  return dnd_model_begin_gamecube(dnd_string_from_utf8(&heap, path),
+  return dnd_model_begin_format(dnd_string_from_utf8(&heap, path),
       textures ? dnd_string_from_utf8(&heap, textures) : NULL,
       motion ? dnd_string_from_utf8(&heap, motion) : NULL, 30, format, budget, approximate);
 }

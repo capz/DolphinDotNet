@@ -9,7 +9,7 @@
  */
 int dnd_audio_init(void);
 int dnd_audio_begin(DndString *path);
-int dnd_audio_begin_gamecube(DndString *path, DndString *data_path, int format,
+int dnd_audio_begin_source(DndString *path, DndString *data_path, int format,
                              int entry, int budget);
 /* Copy mono 8-bit unsigned PCM out of movable managed memory into aligned DSP
  * RAM. */

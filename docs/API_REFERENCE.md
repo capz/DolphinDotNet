@@ -392,9 +392,9 @@ Dolphin.Audio.Audio.Initialize();
 
 Owned native clip, loaded from WAV, supported GameCube containers, or synthesized PCM8. GameCube sources remain compressed in native memory and decode bounded AESND buffers. See [format and game coverage](gamecube-audio-formats.md).
 
-**API:** `Sound.Load(path)`, `Sound.LoadAsync(path[,token])`, `LoadGameCube(path[,format,dataPath,entryIndex,nativeBudgetBytes])`, `LoadGameCubeAsync(path[,format,dataPath,entryIndex,cancellationToken,nativeBudgetBytes])`, `FromPcm8(byte[],sampleRate)`, `SampleRate`, `LengthBytes`, `Channels`, `SampleCount`, `HasLoop`, `LoopStartSample`, `LoopEndSample`, `NativeBytes`, `Volume`, `Pitch`, `Play([loop])`, `PlayLoop(loopStartSample,loopEndSample)`, `Dispose()`.
+**API:** `Sound.Load(path[,format,dataPath,entryIndex,nativeBudgetBytes])`, `LoadAsync(path[,format,dataPath,entryIndex,cancellationToken,nativeBudgetBytes])`, `LoadAsync(path,cancellation)`, `AudioFormat`, `FromPcm8(byte[],sampleRate)`, `SampleRate`, `LengthBytes`, `Channels`, `SampleCount`, `HasLoop`, `LoopStartSample`, `LoopEndSample`, `NativeBytes`, `Volume`, `Pitch`, `Play([loop])`, `PlayLoop(loopStartSample,loopEndSample)`, `Dispose()`.
 
-`PlayLoop` requires a `LoadGameCube/Async` source. It plays the intro once, then repeats `[start,end)` in sample frames per channel. Ranges are per voice and sample-exact, including ADX partial frames; embedded loop metadata stays unchanged. Require `0 <= start < end <= SampleCount`.
+`Load`/`LoadAsync` recognize file headers, including WAV, automatically; headerless or paired inputs require an explicit `AudioFormat`. `PlayLoop` supports imported source codecs except WAV; it plays the intro once, then repeats `[start,end)` in sample frames per channel. Ranges are per voice and sample-exact, including ADX partial frames; embedded loop metadata stays unchanged. Require `0 <= start < end <= SampleCount`.
 
 ~~~csharp
 using var sound = Sound.FromPcm8(new byte[] { 128, 255, 128, 0 }, 22050);
@@ -419,7 +419,7 @@ channel.Stop();
 
 Convenience sound owner for a looping background track. WAV uses resident PCM; supported GameCube sources use compressed resident playback. Disk streaming and MP3/Ogg/AHX decoding are unavailable.
 
-**API:** `Load(path)`, `LoadAsync(path[,token])`, `LoadGameCube(...)`, `LoadGameCubeAsync(...)` (same source options as Sound), `Volume`, `Pitch`, `IsPlaying`, `Play([loop=true])`, `PlayLoop(loopStartSample,loopEndSample)` (same range semantics as Sound), `Stop()`, `Dispose()`.
+**API:** `Load(...)`, `LoadAsync(...)` (same source options and cancellation overload as Sound), `Volume`, `Pitch`, `IsPlaying`, `Play([loop=true])`, `PlayLoop(loopStartSample,loopEndSample)` (same range semantics as Sound), `Stop()`, `Dispose()`.
 
 ~~~csharp
 using var music = Music.Load("sd:/audio/loop.wav");
@@ -435,7 +435,7 @@ GameCube `StorageDevice` values: `SdSlotA` (`carda:/` SD adapter), `SdSlotB` (`c
 
 Mount/unmount SD or disc devices, switch ISO9660 versus GameCube original-disc FST, and use device-scoped file/directory helpers.
 
-**API:** `Mount(device)`, `MountDisc(format)`, `IsMounted(device)`, `Unmount(device)`, `GetPath(device,path)`, `FileExists/DirectoryExists`, `ReadAllBytes/WriteAllBytes`, `Open(...)`, `CreateDirectory(...)`, `EnumerateFiles/EnumerateDirectories`, `GetFiles/GetDirectories`, `DeleteFile/DeleteDirectory`, `DiscFormat.Iso9660/GameCubeFst`.
+**API:** `Mount(device)`, `MountDisc(format)`, `IsMounted(device)`, `Unmount(device)`, `GetPath(device,path)`, `FileExists/DirectoryExists`, `ReadAllBytes/WriteAllBytes`, `Open(...)`, `CreateDirectory(...)`, `EnumerateFiles/EnumerateDirectories`, `GetFiles/GetDirectories`, `DeleteFile/DeleteDirectory`, `DiscFormat.Iso9660/Fst`.
 
 ~~~csharp
 if (Storage.Mount(StorageDevice.SdSerialPort2)) {
@@ -600,13 +600,13 @@ if (disc.Banner != null) {
 ### Storage — unified GameCube game disc and ISO mounts
 
 Every original GameCube FST uses `dvd:/`. For a physical or ODE-presented disc
-call `MountGameCubeDisc()`; for a plain ISO/GCM image, give a full mounted
-filesystem path to `MountDisc(path)` or `MountGameCubeDisc(path)`. Continue
+call `MountDisc()`; for a plain ISO/GCM image, give a full mounted
+filesystem path to `MountDisc(path)`. Continue
 using normal `Storage.GetFiles`, `ReadAllBytes` and `Open` on
 `StorageDevice.DvdDrive`. GC Loader's optional SD filesystem mounts at
 `gcloader:/` via `StorageDevice.GcLoader`.
 
-**API:** `Storage.MountGameCubeDisc([isoPath])`,
+**API:** `Storage.MountDisc()`,
 `Storage.MountDisc(DiscFormat)`, `Storage.MountDisc(string imagePath)`,
 `Storage.Unmount(StorageDevice.DvdDrive)`.
 

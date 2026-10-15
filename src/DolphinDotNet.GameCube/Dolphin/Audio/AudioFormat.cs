@@ -1,7 +1,7 @@
 namespace Dolphin.Audio;
 
-/// <summary>GameCube audio containers; headerless and paired formats require an explicit choice.</summary>
-public enum GameCubeAudioFormat
+/// <summary>Audio containers; headerless and paired formats require an explicit choice.</summary>
+public enum AudioFormat
 {
     Auto=0,
     Dsp=1,
@@ -15,5 +15,6 @@ public enum GameCubeAudioFormat
     Afs=9,
     ResidentEvil4Stream=10,
     Dtk=11,
-    RenderWareWaveDictionary=12
+    RenderWareWaveDictionary=12,
+    Wav=13
 }

@@ -2227,7 +2227,7 @@ done:
 #include "model_melee.inc"
 #include "model_pso_ep3.inc"
 
-int dnd_model_begin_gamecube(DndString *path, DndString *textures,
+int dnd_model_begin_format(DndString *path, DndString *textures,
                               DndString *motion, float fps, int format,
                               int budget, int approximate) {
   if (!path || (format < 6 || format > 9) || budget < 1024 ||

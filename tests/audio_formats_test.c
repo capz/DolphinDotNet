@@ -136,7 +136,7 @@ static void input(const char *root, const char *name, const char *body) {
   }
 }
 static int start(int format, int entry, int budget) {
-  return dnd_audio_begin_gamecube((DndString *)1,
+  return dnd_audio_begin_source((DndString *)1,
                                   files[1].data ? (DndString *)2 : NULL, format,
                                   entry, budget);
 }

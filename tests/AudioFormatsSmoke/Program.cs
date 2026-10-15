@@ -12,11 +12,11 @@ class Program
     {
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 1;
         Audio.Initialize();
-        var hps=Sound.LoadGameCubeAsync("sd:/audio/tone.hps");
-        var waves=Sound.LoadGameCubeAsync("sd:/audio/wave-1.aaf",GameCubeAudioFormat.JAudioWaveBank,"sd:/audio/wave-1.aw");
-        var re4=Sound.LoadGameCubeAsync("sd:/audio/tone.sbh",GameCubeAudioFormat.ResidentEvil4Stream,"sd:/audio/tone.sbb");
-        var rw=Sound.LoadGameCubeAsync("sd:/audio/tone.rws");
-        var awd=Sound.LoadGameCubeAsync("sd:/audio/tone.awd",GameCubeAudioFormat.RenderWareWaveDictionary);
+        var hps=Sound.LoadAsync("sd:/audio/tone.hps");
+        var waves=Sound.LoadAsync("sd:/audio/wave-1.aaf",AudioFormat.JAudioWaveBank,"sd:/audio/wave-1.aw");
+        var re4=Sound.LoadAsync("sd:/audio/tone.sbh",AudioFormat.ResidentEvil4Stream,"sd:/audio/tone.sbb");
+        var rw=Sound.LoadAsync("sd:/audio/tone.rws");
+        var awd=Sound.LoadAsync("sd:/audio/tone.awd",AudioFormat.RenderWareWaveDictionary);
         await Task.WhenAll(new Task[]{hps,waves,re4,rw,awd});
         using(var dictionary=await awd){if(dictionary.SampleCount!=28)return 15;}
         using(var h=await hps)using(var w=await waves)using(var r=await re4)using(var s=await rw)
@@ -29,7 +29,7 @@ class Program
                 one.Volume=.5f;two.Pitch=1.25f;one.Stop();if(one.IsPlaying||!two.IsPlaying)return 5;
             }
         }
-        using(var music=await Music.LoadGameCubeAsync("sd:/audio/tone.afs",entryIndex:1))
+        using(var music=await Music.LoadAsync("sd:/audio/tone.afs",entryIndex:1))
         {
             music.Play();if(!music.IsPlaying)return 6;
             music.PlayLoop(3,40);if(!music.IsPlaying)return 19;
@@ -37,24 +37,24 @@ class Program
             if(!music.IsPlaying)return 21;
             music.Volume=.3f;music.Pitch=.8f;music.Stop();if(music.IsPlaying)return 7;
         }
-        try{await Sound.LoadGameCubeAsync("sd:/audio/bad-predictor.dsp",GameCubeAudioFormat.Dsp);return 8;}catch(IOException){}
-        try{await Sound.LoadGameCubeAsync("sd:/audio/tone.sbh",GameCubeAudioFormat.ResidentEvil4Stream,"sd:/audio/missing.sbb");return 9;}catch(IOException){}
+        try{await Sound.LoadAsync("sd:/audio/bad-predictor.dsp",AudioFormat.Dsp);return 8;}catch(IOException){}
+        try{await Sound.LoadAsync("sd:/audio/tone.sbh",AudioFormat.ResidentEvil4Stream,"sd:/audio/missing.sbb");return 9;}catch(IOException){}
         using(var cancel=new CancellationTokenSource())
         {
-            cancel.Cancel();var task=Sound.LoadGameCubeAsync("sd:/audio/tone.hps",cancellationToken:cancel.Token);
+            cancel.Cancel();var task=Sound.LoadAsync("sd:/audio/tone.hps",cancellationToken:cancel.Token);
             try{await task;return 10;}catch(OperationCanceledException){}
             if(!task.IsCanceled||!Scheduler.IsApplicationThread)return 11;
         }
         // Cancel between native read/validation slices; ownership must be released.
         using(var cancel=new CancellationTokenSource())
         {
-            var task=Sound.LoadGameCubeAsync("sd:/audio/large.dsp",GameCubeAudioFormat.Dsp,cancellationToken:cancel.Token);
+            var task=Sound.LoadAsync("sd:/audio/large.dsp",AudioFormat.Dsp,cancellationToken:cancel.Token);
             await Task.Yield();cancel.Cancel();
             try{using(var unexpected=await task){}return 12;}catch(OperationCanceledException){}
         }
-        using(var recovered=await Sound.LoadGameCubeAsync("sd:/audio/tone.dsp",GameCubeAudioFormat.Dsp))
+        using(var recovered=await Sound.LoadAsync("sd:/audio/tone.dsp",AudioFormat.Dsp))
         using(var channel=recovered.Play()){if(!channel.IsPlaying)return 13;}
-        using(var background=await Task.Run(()=>Sound.LoadGameCubeAsync("sd:/audio/tone.adx").Result))
+        using(var background=await Task.Run(()=>Sound.LoadAsync("sd:/audio/tone.adx").Result))
         {
             if(!Scheduler.IsApplicationThread||background.Channels!=2)return 14;
             using(var one=background.PlayLoop(1,33))using(var two=background.PlayLoop(31,64))
@@ -68,17 +68,19 @@ class Program
                 if(worker!=0)return 27;
             }
         }
-        using(var sync=Sound.LoadGameCube("sd:/audio/tone.dsp",GameCubeAudioFormat.Dsp))
+        using(var sync=Sound.Load("sd:/audio/tone.dsp",AudioFormat.Dsp))
         {
             if(sync.SampleCount!=28)return 16;
             int worker=await Task.Run(()=>{try{sync.Play();return 1;}catch(InvalidOperationException){return 0;}});
             if(worker!=0)return 17;
         }
-        using(var wav=await Sound.LoadAsync("sd:/audio/tone.wav"))
+        using(var wav=await Sound.LoadAsync("sd:/audio/tone.wav",CancellationToken.None))
         {
             if(wav.SampleRate!=22050||wav.Channels!=1||wav.SampleCount!=32)return 18;
             try{wav.PlayLoop(1,20);return 28;}catch(NotSupportedException){}
         }
+        using(var wav=Sound.Load("sd:/audio/tone.wav",AudioFormat.Wav))
+        {if(wav.SampleCount!=32)return 29;}
         return 0;
     }
 }

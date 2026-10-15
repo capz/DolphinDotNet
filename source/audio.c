@@ -110,6 +110,25 @@ int dnd_audio_init(void) {
   }
   return 1;
 }
+static int prepare_wav(Clip *c, int64_t total, unsigned budget) {
+  unsigned offset = 0, size = 0, format = 0, rate = 0;
+  if (total < 44 || total > INT_MAX ||
+      !wav_header(c->file, total, &offset, &size, &format, &rate) ||
+      dnd_fs_seek(c->file, offset, 0) != (int64_t)offset)
+    return 0;
+  size_t aligned = ((size_t)size + 31u) & ~(size_t)31u;
+  if (aligned > budget)
+    return 0;
+  c->pcm = memalign(32, aligned);
+  if (!c->pcm)
+    return 0;
+  memset(c->pcm, 0, aligned);
+  c->length = size;
+  c->format = format;
+  c->rate = rate;
+  c->encoded = 0;
+  return 1;
+}
 int dnd_audio_begin(DndString *path) {
   if (!path || next_clip == INT_MAX)
     return 0;
@@ -125,33 +144,19 @@ int dnd_audio_begin(DndString *path) {
   int file = dnd_fs_open(path, 3, 1, 1);
   if (!file)
     return 0;
-  int64_t total = dnd_fs_length_native(file);
-  unsigned offset = 0, size = 0, format = 0, rate = 0;
-  if (total < 44 || total > INT_MAX ||
-      !wav_header(file, total, &offset, &size, &format, &rate) ||
-      dnd_fs_seek(file, offset, 0) != (int64_t)offset) {
+  Clip clip = {.file = file};
+  if (!prepare_wav(&clip, dnd_fs_length_native(file), MAX_PCM_BYTES)) {
     dnd_fs_close(file);
     return 0;
   }
-  size_t aligned = ((size_t)size + 31u) & ~(size_t)31u;
-  uint8_t *pcm = memalign(32, aligned);
-  if (!pcm) {
-    dnd_fs_close(file);
-    return 0;
-  }
-  memset(pcm, 0, aligned);
   int token = next_clip++;
-  clips[slot] = (Clip){.token = token,
-                       .file = file,
-                       .length = size,
-                       .format = format,
-                       .rate = rate,
-                       .pcm = pcm};
+  clip.token = token;
+  clips[slot] = clip;
   return token;
 }
-int dnd_audio_begin_gamecube(DndString *path, DndString *body, int format,
-                             int entry, int budget) {
-  if (!path || format < 0 || format > 12 || entry < 0 || entry > 65535 ||
+int dnd_audio_begin_source(DndString *path, DndString *body, int format,
+                           int entry, int budget) {
+  if (!path || format < 0 || format > 13 || entry < 0 || entry > 65535 ||
       budget < 1024 || budget > MAX_PCM_BYTES || next_clip == INT_MAX)
     return 0;
   dnd_audio_init();
@@ -176,21 +181,37 @@ int dnd_audio_begin_gamecube(DndString *path, DndString *body, int format,
     c->file = dnd_fs_open(path, 3, 1, 1);
     if (c->file) {
       int64_t n = dnd_fs_length_native(c->file), extra = 0;
-      if (body) {
-        c->auxiliary_file = dnd_fs_open(body, 3, 1, 1);
-        if (c->auxiliary_file)
-          extra = dnd_fs_length_native(c->auxiliary_file);
+      int wave = format == 13;
+      if (format == 0 && n >= 12) {
+        uint8_t signature[12];
+        if (!read_exact(c->file, signature, sizeof(signature)) ||
+            dnd_fs_seek(c->file, 0, 0) != 0)
+          n = -1;
+        else
+          wave = !memcmp(signature, "RIFF", 4) &&
+                 !memcmp(signature + 8, "WAVE", 4);
       }
-      if (n > 0 && n <= budget && (!body || (c->auxiliary_file && extra > 0)) &&
-          extra <= budget - n &&
-          n + extra + sizeof(DndAudioDecoder) + 64 <= (unsigned)budget) {
-        c->input_size[0] = (unsigned)n;
-        c->input_size[1] = (unsigned)extra;
-        c->input[0] = malloc((size_t)n);
-        if (extra)
-          c->input[1] = malloc((size_t)extra);
-        if (c->input[0] && (!extra || c->input[1]))
-          success = 1;
+      if (n > 0 && wave) {
+        if (!body && entry == 0)
+          success = prepare_wav(c, n, (unsigned)budget);
+      } else if (n > 0) {
+        if (body) {
+          c->auxiliary_file = dnd_fs_open(body, 3, 1, 1);
+          if (c->auxiliary_file)
+            extra = dnd_fs_length_native(c->auxiliary_file);
+        }
+        if (n > 0 && n <= budget &&
+            (!body || (c->auxiliary_file && extra > 0)) &&
+            extra <= budget - n &&
+            n + extra + sizeof(DndAudioDecoder) + 64 <= (unsigned)budget) {
+          c->input_size[0] = (unsigned)n;
+          c->input_size[1] = (unsigned)extra;
+          c->input[0] = malloc((size_t)n);
+          if (extra)
+            c->input[1] = malloc((size_t)extra);
+          if (c->input[0] && (!extra || c->input[1]))
+            success = 1;
+        }
       }
     }
   }

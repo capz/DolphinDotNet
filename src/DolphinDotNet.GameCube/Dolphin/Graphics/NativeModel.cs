@@ -15,7 +15,7 @@ internal static class NativeModel
     internal static int ModelBeginPso(string path,string? textures,string? motion,float fps,int eulerKeyBytes,int budget)=>throw Unsupported();
     internal static int ModelBeginScene(string path,int fbx,float sampleRate,int budget,int approximate)=>throw Unsupported();
     internal static int ModelBeginFzero(string path,string? textures,int selection,int budget,int options)=>throw Unsupported();
-    internal static int ModelBeginGamecube(string path,string? textures,string? motion,float fps,int format,int budget,int approximate)=>throw Unsupported();
+    internal static int ModelBeginFormat(string path,string? textures,string? motion,float fps,int format,int budget,int approximate)=>throw Unsupported();
     internal static int ModelBeginPsoEpisode3(string path,string? textures,string? motion,float fps,int eulerKeyBytes,int budget,int approximate)=>throw Unsupported();
     internal static int ModelBeginBytes(byte[] data,int budget)=>throw Unsupported();
     internal static int ModelStep(int token)=>throw Unsupported();

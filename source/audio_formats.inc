@@ -704,7 +704,7 @@ static int ac_awd(DndAudioSource *s, AudioView *v, unsigned entry,
   }
   return entry < count && s->span != NULL;
 }
-/* Explicit format values match GameCubeAudioFormat. Auto recognizes signatures;
+/* Explicit format values match AudioFormat. Auto recognizes signatures;
  * headerless DTK, DSP and paired banks always require an explicit format. */
 static int ac_parse(DndAudioSource *s, AudioView *h, AudioView *body,
                     unsigned format, unsigned entry, unsigned budget) {

@@ -29,7 +29,13 @@ on the automatic background executor. Use `Audio.Initialize()` after initializin
 `Dolphin.Memory.Aram` if ARAM is used, since DSP and ARAM resources must
 be coordinated. Mount storage before loading.
 
-For ADX and other sources loaded through `LoadGameCube/Async`, use
+`Load` and `LoadAsync` detect WAV, ADX, AFS, HPS, AST, RWS and AWD by signature.
+Use `AudioFormat` for headerless or paired formats, for example
+`Sound.LoadAsync(path, AudioFormat.Dsp)` or `AudioFormat.JAudioWaveBank`
+with `dataPath`. `AudioFormat.Wav` explicitly selects PCM WAV. The default native
+budget is 8 MiB, configurable up to 16 MiB; WAV budgets bound aligned PCM storage.
+
+For ADX and other supported source codecs, use
 `sound.PlayLoop(startSample, endSample)` or `music.PlayLoop(startSample, endSample)`
 to play the intro and then repeat a custom range. Indices count sample frames per
 channel; the end is exclusive. ADX ranges can start or end inside a compressed
@@ -59,7 +65,7 @@ generated, enveloped effects in a standalone DOL.
 
 - RIFF/WAVE, uncompressed PCM, 8-bit unsigned or 16-bit signed,
   mono or stereo, 8000–48000 Hz; other WAV encodings are rejected.
-  `LoadGameCubeAsync` provides the separate native game-format readers.
+  The same loading methods handle supported native codecs and banks.
 - Native-aligned memory per clip, maximum 16 MiB WAV PCM.
   Loaded sounds are independent of managed garbage collection.
 - Native clip slots: 16. Hardware playback slots: up to 32 total.
@@ -69,7 +75,7 @@ generated, enveloped effects in a standalone DOL.
   releasing native PCM memory. Channels are invalidated upon finish/stop,
   and a stale channel cannot take control of a newly allocated voice.
 - `Music` wraps a single `Sound` for a single looping/stoppable track.
-  WAV music preloads PCM. `Music.LoadGameCubeAsync` retains supported GameCube
+  WAV music preloads PCM. `Music.LoadAsync` retains supported GameCube
   audio in compressed native memory and decodes bounded playback buffers.
   Disk streaming and MP3/Ogg/AHX decoding are not implemented. See
   [GameCube game audio formats](gamecube-audio-formats.md) for codecs, banks,
