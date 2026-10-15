@@ -37,7 +37,7 @@ static int sd_probe(int index) {
     if (!disc->startup(disc)) return ABSENT;
     return disc->isInserted(disc) ? PRESENT : ABSENT;
 }
-static int ser1_id(uint32_t *id) {
+static int ser1_id(u32 *id) {
     /* Locking inside EXI_GetID is non-destructive; BUSY is not ABSENT. */
     return EXI_GetID(EXI_CHANNEL_0,EXI_DEVICE_2,id) ? PRESENT : BUSY;
 }
@@ -70,7 +70,7 @@ int dnd_hardware_probe(int kind,int port,int extended) {
     }
     if (kind==3 || kind==4) return sd_probe(m);
     if (kind==5 || kind==6) {
-        uint32_t id=0;
+        u32 id=0;
         int status=ser1_id(&id);
         if(status!=PRESENT)return status;
         if(kind==5)return (id&0xffffff00u)==0x04020200u ? PRESENT : ABSENT;
