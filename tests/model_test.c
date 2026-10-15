@@ -223,8 +223,8 @@ int main(int argc, char **argv) {
   live_instance=dnd_model_instance(live,4*1024*1024);
   assert(live_instance);
   assert(dnd_model_vertex(live_instance,0,1,v)==0);
-  near(v[0],0.f); /* 0,1,0 after GX triangle winding correction. */
-  near(v[1],1.f);
+  near(v[0],1.f); /* vertex 1 has local position (1,0,0). */
+  near(v[1],0.f);
   assert(dnd_model_instance_dispose(live_instance)==0);
   assert(dnd_model_dispose(live)==0);
   assert(!dnd_model_live_handles());
