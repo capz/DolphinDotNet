@@ -98,6 +98,18 @@ jobs:
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/InputContextSmoke/bin/Release/net8.0/InputContextSmoke.dll /tmp/input-contexts.c
           cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-contexts.c tests/input_context_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-contexts
           /tmp/input-contexts
+      - name: Validate native WAV parser, voice ownership and DSP controls
+        run: |
+          cc -std=gnu11 -Wall -Wextra -Werror -O2 -Iinclude tests/audio_native_test.c source/audio.c -lm -o /tmp/dnd-audio-native
+          /tmp/dnd-audio-native
+      - name: Compile managed AESND audio sample through current AOT pipeline
+        run: |
+          dotnet build samples/AudioDemo/AudioDemo.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/AudioDemo/bin/Release/net8.0/AudioDemo.dll /tmp/dnd-audio-demo.c
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-audio-demo.c -o /tmp/dnd-audio-demo.o
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/AudioDemo/bin/Release/net8.0/AudioDemo.dll /tmp/dnd-audio-bundle
+          grep -q -- '-laesnd' /tmp/dnd-audio-bundle/Makefile
+          test -s /tmp/dnd-audio-bundle/source/audio_gamecube.c
       - name: Compile Google logo ARAM example through AOT
         timeout-minutes: 4
         run: |
