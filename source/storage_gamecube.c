@@ -16,7 +16,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-static const char *names[] = {"carda", "cardb", "sd", "dvd"};
+static const char *names[] = {"carda", "cardb", "sd", "dvd", "mca", "mcb", "gcloader"};
 static void *workareas[2];
 static char games[2][5], companies[2][3];
 static bool card_initialized;
@@ -60,11 +60,12 @@ bool dnd_gc_mount(int device) {
   if (device == 3) {
     return dnd_gc_mount_disc(1);
   }
-  if (device < 0 || device > 2)
+  if (device < 0 || (device > 2 && device != 6))
     return false;
   DISC_INTERFACE *iface = device == 0   ? get_io_gcsda()
                           : device == 1 ? get_io_gcsdb()
-                                        : get_io_gcsd2();
+                          : device == 2 ? get_io_gcsd2()
+                                        : &__io_gcode; /* GC Loader firmware-mediated SD sectors */
   dvmRegisterFsDriver(&g_vfatFsDriver);
   dvmRegisterFsDriver(&g_exfatFsDriver);
   DvmDisc *disc = iface ? dvmDiscCreate(iface) : NULL;
@@ -93,7 +94,7 @@ void dnd_gc_unmount(int device) {
       dnd_gc_fst_unmount();
     return;
   }
-  if (device >= 0 && device < 3) {
+  if ((device >= 0 && device < 3) || device == 6) {
     dvmUnmountVolume(names[device]);
     return;
   }
