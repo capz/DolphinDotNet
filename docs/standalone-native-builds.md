@@ -35,7 +35,8 @@ The compiler walks reachable AOT methods rather than `using` directives. For eac
 | ARAM | `Dolphin.IO.Aram*`, `Dolphin.Aram.*` | `-logc` |
 | Graphics and models | `Dolphin.Graphics.*`, `Dolphin.Models.*` | `-lopengx -logc -lm` |
 | Controller input | `Dolphin.Input.*` | `-logc` |
-| Sound | `System.Media.*`, `Dolphin.Audio.*`, `Dolphin.Sound.*` | No verified backend; generator rejects it |
+| PCM WAV sound | `Dolphin.Audio.*` | `-laesnd -logc` (libogc2 GameCube/Wii) |
+| Other sound APIs | `System.Media.*`, `Dolphin.Sound.*` | Unsupported; generator rejects them |
 
 Wii U uses **wut** libraries, not any of the above GameCube/Wii link flags. The mapping is a starting point: namespaces alone cannot prove native dependency closure, particularly for reflection, implicit runtime calls and transitive C references.
 
