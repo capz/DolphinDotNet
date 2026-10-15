@@ -14,10 +14,10 @@
 
 #define PATH_CAP 1024
 #define HANDLE_CAP 32
-static const char *prefixes[6] = {"carda", "cardb", "sd", "dvd", "mca", "mcb"};
-static bool mounted[6];
+static const char *prefixes[7] = {"carda", "cardb", "sd", "dvd", "mca", "mcb", "gcloader"};
+static bool mounted[7];
 static unsigned card_users[2];
-static char roots[6][PATH_CAP];
+static char roots[7][PATH_CAP];
 static char cwd[PATH_CAP] = "sd:/";
 typedef struct {
   int token, fd, access, share;
@@ -198,7 +198,7 @@ static int resolve(DndString *path, char canonical[PATH_CAP],
   int device = normalize(raw, canonical);
   if (device < 0)
     return -1;
-  if (device >= 4) {
+  if (device == 4 || device == 5) {
     fail(ENOSYS, "Memory cards require the save API.");
     return -1;
   }
@@ -219,7 +219,7 @@ static int resolve(DndString *path, char canonical[PATH_CAP],
   return device;
 }
 static bool valid_device(int d) {
-  if (d < 0 || d >= 6) {
+  if (d < 0 || d >= 7) {
     fail(EINVAL, "Invalid device.");
     return false;
   }
@@ -229,7 +229,7 @@ bool dnd_storage_is_mounted(int d) { return valid_device(d) && mounted[d]; }
 bool dnd_storage_mount(int d) {
   if (!valid_device(d))
     return false;
-  if (d >= 4) {
+  if (d == 4 || d == 5) {
     fail(ENOSYS, "Use MemoryCard.Mount with a save identity.");
     return false;
   }
@@ -306,7 +306,7 @@ DndString *dnd_fs_full_path(DndManagedHeap *heap, DndString *path) {
 DndString *dnd_storage_path(DndManagedHeap *heap, int d, DndString *path) {
   if (!valid_device(d))
     return NULL;
-  if (d >= 4) {
+  if (d == 4 || d == 5) {
     fail(ENOSYS, "Memory cards do not have directories.");
     return NULL;
   }
