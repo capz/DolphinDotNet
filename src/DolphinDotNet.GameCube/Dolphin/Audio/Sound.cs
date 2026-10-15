@@ -80,11 +80,11 @@ public sealed class Sound : IDisposable
     }
     internal static void ValidateVolume(float v)
     {
-        if(float.IsNaN(v)||float.IsInfinity(v)||v<0||v>1)throw new ArgumentOutOfRangeException("volume");
+        if(!(v>=0 && v<=1))throw new ArgumentOutOfRangeException("volume");
     }
     internal static void ValidatePitch(float v)
     {
-        if(float.IsNaN(v)||float.IsInfinity(v)||v<0.25f||v>3f)throw new ArgumentOutOfRangeException("pitch");
+        if(!(v>=0.25f && v<=3f))throw new ArgumentOutOfRangeException("pitch");
     }
     private void Check(){if(disposed)throw new ObjectDisposedException("Sound");}
     /// <summary>Stops active instances of this clip before freeing native PCM storage.</summary>
