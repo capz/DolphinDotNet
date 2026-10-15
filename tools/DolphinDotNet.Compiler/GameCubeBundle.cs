@@ -68,6 +68,18 @@ internal static class GameCubeBundle
             File.Copy(path, Path.Combine(directory, "include", Path.GetFileName(path)), true);
         File.Copy(Path.Combine(root, "scripts", "dol_sections.py"),
             Path.Combine(directory, "scripts", "dol_sections.py"), true);
+        if (platform == "gamecube")
+        {
+            // Standalone DOLs require the same verified EXI correction as the
+            // repository's primary GameCube Makefile; stock libogc2 hangs in
+            // EXI_Sync in Dolphin's default hardware configuration.
+            Directory.CreateDirectory(Path.Combine(directory, "vendor", "libogc2"));
+            foreach (var file in new[] { "build_exi_overlay.sh", "verify_exi_source.py" })
+                File.Copy(Path.Combine(root, "scripts", file),
+                    Path.Combine(directory, "scripts", file), true);
+            File.Copy(Path.Combine(root, "vendor", "libogc2", "exi.c"),
+                Path.Combine(directory, "vendor", "libogc2", "exi.c"), true);
+        }
 
         var entry = compilation.ValueMethods.Single(m => m.Key == compilation.Entry);
         File.WriteAllText(Path.Combine(directory, "source", "generated_program.c"),
@@ -173,10 +185,18 @@ internal static class GameCubeBundle
         builder.AppendLine("export DEPSDIR := $(CURDIR)/$(BUILD)");
         builder.AppendLine("export OFILES := $(notdir $(patsubst %.c,%.o,$(wildcard source/*.c)))");
         builder.AppendLine("export INCLUDE := -I$(CURDIR)/include -I" + library + "/include -I$(CURDIR)/build");
-        builder.AppendLine("export LIBPATHS := -L" + library + "/lib");
+        builder.AppendLine("export LIBPATHS := " + (platform == "gamecube" ?
+            "-L$(CURDIR)/build/exi-overlay " : "") + "-L" + library + "/lib");
         builder.AppendLine("export DOL_VALIDATOR := $(CURDIR)/scripts/dol_sections.py");
+        if (platform == "gamecube")
+        {
+            builder.AppendLine("EXI_OVERLAY := $(CURDIR)/build/exi-overlay/libogc.a");
+            builder.AppendLine("$(EXI_OVERLAY): scripts/build_exi_overlay.sh scripts/verify_exi_source.py vendor/libogc2/exi.c");
+            builder.AppendLine("\t@bash scripts/build_exi_overlay.sh");
+        }
         builder.AppendLine(".PHONY: all clean");
-        builder.AppendLine("all: $(BUILD)");
+        builder.AppendLine("all: " + (platform == "gamecube" ?
+            "$(EXI_OVERLAY) $(BUILD)" : "$(BUILD)"));
         builder.AppendLine("\t@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile");
         builder.AppendLine("$(BUILD):");
         builder.AppendLine("\t@mkdir -p $@");
