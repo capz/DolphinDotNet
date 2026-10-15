@@ -589,3 +589,273 @@ await cache.StoreAsync("level1", levelBytes);
 byte[] head = await cache.PrefetchAsync("level1", 0, 32);
 ~~~
 
+
+## Networking and HTTP
+
+Networking requires `await NetworkRuntime.StartAsync(...)`; the native service thread then makes progress without application pumping. Supported protocols are **IPv4 TCP/UDP, DNS and plain HTTP**; no TLS/HTTPS. Standard `System.Net.*`, `System.Net.Sockets.*` and `System.Net.Http.*` signatures are lowered to these implementations.
+
+### Dolphin.Network.NetworkRuntime / NetworkOptions
+
+Start/stop GameCube networking with DHCP or static IPv4, DNS servers, retry timeout and operation status. `Pump` remains a compatibility hook but is not needed for ordinary awaits.
+
+**API:** `StartAsync()`, `StartAsync(options,token)`, `IsReady`, `Options`, `PendingOperations`, `Stop()`, `Pump(maxOperations,maxMilliseconds)`, `NetworkOptions.UseDhcp/Address/Netmask/Gateway/DnsServers/DnsPort/OperationTimeoutMilliseconds`.
+
+~~~csharp
+await NetworkRuntime.StartAsync();
+try { /* perform HTTP or socket operations */ }
+finally { if (NetworkRuntime.IsReady) NetworkRuntime.Stop(); }
+~~~
+
+### IPAddress / IPEndPoint / EndPoint
+
+IPv4 parsing/formatting and network socket endpoint representation.
+
+**API:** `IPAddress.Parse(text)`, `IPAddress.TryParse(text,out address)`, `IPAddress(byte[])`, `Any/Loopback/Broadcast`, `GetAddressBytes()`, `Format()`, `IsLoopback(address)`, `IPEndPoint(address,port)`, `Address`, `Port`.
+
+~~~csharp
+var ip = Dolphin.Network.IPAddress.Parse("192.168.0.3");
+var endpoint = new Dolphin.Network.IPEndPoint(ip, 8080);
+~~~
+
+### Dns / IPHostEntry
+
+Asynchronous DNS host lookup with IPv4 A records and CNAME handling.
+
+**API:** `Dns.GetHostAddressesAsync(host[,token])`, `Dns.GetHostEntryAsync(host)`, `IPHostEntry.HostName/Aliases/AddressList`.
+
+~~~csharp
+var addresses = await Dolphin.Network.Dns.GetHostAddressesAsync("example.com");
+var first = addresses[0];
+~~~
+
+### Socket / socket enums / SocketException
+
+Lower-level asynchronous IPv4 TCP/UDP socket operations, endpoint binding/listening and nonblocking datagrams.
+
+**API:** `Socket(family,type,protocol)`, `Bind(endpoint)`, `Listen(backlog)`, `ConnectAsync(endpoint[,token])`, `AcceptAsync([token])`, `ReceiveAsync(buffer,offset,count,flags[,token])`, `SendAsync(...)`, `TryReceiveFrom(...)`, `TrySendTo(...)`, `LocalEndPoint`, `RemoteEndPoint`, `NoDelay`, `EnableBroadcast`, `Close/Dispose`, `AddressFamily.InterNetwork`, `SocketType.Stream/Dgram`, `ProtocolType.Tcp/Udp`, `SocketFlags.None`, `SocketException.ErrorCode`.
+
+~~~csharp
+using var socket = new Dolphin.Network.Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+await socket.ConnectAsync(new IPEndPoint(IPAddress.Parse("192.168.0.3"), 9000));
+~~~
+
+### UdpClient / UdpReceiveResult
+
+Datagram client with bind/default peer, send and receive, datagram-size cap and remote endpoint metadata.
+
+**API:** `UdpClient()`, `UdpClient(port/IPEndPoint)`, `Connect(endpoint)`, `SendAsync(bytes,count[,endpoint,token])`, `ReceiveAsync([token])`, `MaximumDatagramBytes`, `Client`, `Close/Dispose`, `UdpReceiveResult.Buffer/RemoteEndPoint`.
+
+~~~csharp
+using var udp = new UdpClient(9000);
+var incoming = await udp.ReceiveAsync();
+byte[] payload = incoming.Buffer;
+~~~
+
+### TcpClient / TcpListener
+
+Convenience TCP connect, read/write streams and listening/accepting sockets.
+
+**API:** `TcpClient()`, `ConnectAsync(IPAddress,int)`, `ConnectAsync(host,int[,token])`, `GetStream()`, `NoDelay`, `Client`, `Close/Dispose`, `TcpListener(IPAddress,port/IPEndPoint)`, `Start([backlog])`, `AcceptTcpClientAsync([token])`, `LocalEndpoint`, `Stop()`.
+
+~~~csharp
+using var client = new TcpClient();
+await client.ConnectAsync("192.168.0.3", 9000);
+var stream = client.GetStream();
+~~~
+
+### NetworkStream
+
+Duplex socket-backed byte stream, async reads and full async writes; synchronous reads and writes intentionally throw.
+
+**API:** `NetworkStream(socket[,ownsSocket])`, `ReadAsync(buffer,offset,count,token)`, `WriteAsync(buffer,offset,count,token)`, `Flush()`, `CanRead/CanWrite`, `Dispose()`.
+
+~~~csharp
+var stream = client.GetStream();
+byte[] buffer = new byte[256];
+int received = await stream.ReadAsync(buffer, 0, buffer.Length);
+~~~
+
+### HttpClient / HttpCompletionOption
+
+Bounded plain HTTP client supporting GET and request messages, redirect limits, buffered replies or streamed response headers.
+
+**API:** `GetAsync(uri[,completionOption,token])`, `SendAsync(request[,completionOption,token])`, `GetStringAsync(uri)`, `GetByteArrayAsync(uri)`, `GetStreamAsync(uri)`, `MaximumResponseBytes`, `MaximumRedirects`, `DefaultRequestHeaders`, `Dispose()`, `ResponseContentRead/ResponseHeadersRead`.
+
+~~~csharp
+using var http = new HttpClient();
+using var response = await http.GetAsync("http://192.168.0.3:8080/data");
+response.EnsureSuccessStatusCode();
+string text = await response.Content.ReadAsStringAsync();
+~~~
+
+### HttpRequestMessage / HttpResponseMessage
+
+Explicit HTTP method, URL, request headers/body and response status, reason, response headers/body; verify status before consuming.
+
+**API:** `HttpRequestMessage(method,uri)`, `Method`, `RequestUri`, `Headers`, `Content`, `Dispose()`, `HttpResponseMessage.StatusCode/ReasonPhrase/IsSuccessStatusCode/Headers/Content`, `EnsureSuccessStatusCode()`.
+
+~~~csharp
+using var request = new HttpRequestMessage(HttpMethod.Post, "http://server.test/data");
+request.Content = new StringContent("hello");
+using var response = await http.SendAsync(request);
+~~~
+
+### HttpContent / ByteArrayContent / StringContent / HttpHeaders / HttpMethod
+
+Byte/text request bodies; response body as text, bytes or stream; validated header names/values, and GET/HEAD/POST/PUT/DELETE methods.
+
+**API:** `ReadAsByteArrayAsync()`, `ReadAsStringAsync()`, `ReadAsStreamAsync()`, `HttpHeaders.Add(name,value)`, `Get(name)`, `HttpMethod.Get/Head/Post/Put/Delete`, `ByteArrayContent(bytes)`, `StringContent(text)`, `Dispose()`.
+
+~~~csharp
+var request = new HttpRequestMessage(HttpMethod.Put, "http://server.test/item");
+request.Headers.Add("x-client", "gamecube");
+request.Content = new ByteArrayContent(new byte[] { 1, 2 });
+~~~
+
+### JsonReader / JsonTokenType
+
+Bounded forward-only JSON tokenizer, avoiding heavyweight DOM or `System.Text.Json`; `GetInt32` accepts an integer Number token.
+
+**API:** `JsonReader(text)`, `Read()`, `TokenType`, `Value`, `GetInt32()`, `JsonTokenType.StartObject/PropertyName/String/Number/True/False/Null/StartArray/EndArray/EndObject`.
+
+~~~csharp
+var json = new Dolphin.Serialization.Json.JsonReader("{\"score\":42}");
+while (json.Read())
+    if (json.TokenType == JsonTokenType.Number) score = json.GetInt32();
+~~~
+
+## Tasks and cancellation
+
+The managed program begins on the **application executor**. Normal pending `await` captures the current executor; `Task.Run` and pending `ConfigureAwait(false)` use the service executor. Rendering and input must remain on the application executor. No application-level async pumping is needed.
+
+### Task / Task<T> / System.Threading.Tasks
+
+Ordinary C# async state machines, tasks, result/error/cancellation state, task factories and composition.
+
+**API:** `CompletedTask`, `FromResult(value)`, `FromException(exception)`, `FromCanceled(token)`, `Run(action/function[,token])`, `Yield()`, `WhenAll(Task[])`, `WhenAny(Task[])`, `Delay(ms[,token])`, `IsCompleted/IsCompletedSuccessfully/IsFaulted/IsCanceled`, `Wait()`, `Result`, `GetAwaiter()`, `ConfigureAwait(bool)`.
+
+~~~csharp
+int value = await System.Threading.Tasks.Task.Run(() => ComputeScore());
+await System.Threading.Tasks.Task.Delay(100);
+await System.Threading.Tasks.Task.WhenAll(new System.Threading.Tasks.Task[] { SaveAsync(), UploadAsync() });
+~~~
+
+### TaskCompletionSource<T>
+
+Bridge callback-style work to an awaitable task; manually complete, fail or cancel the pending result.
+
+**API:** `Task`, `SetResult(value)`, `SetException(error)`, `SetCanceled()`.
+
+~~~csharp
+var completion = new TaskCompletionSource<int>();
+completion.SetResult(42);
+int value = await completion.Task;
+~~~
+
+### Dolphin.Threading.Tasks.Scheduler
+
+Low-level managed executor queue and compatibility pump; use `Post` for application-executor callbacks, not as a manual async loop.
+
+**API:** `IsApplicationThread`, `Post(Action)`, `Pump()`, `Pump(maxActions)`, `RunUntilIdle()`.
+
+~~~csharp
+Dolphin.Threading.Tasks.Scheduler.Post(() => UpdateUi());
+~~~
+
+### CancellationTokenSource / CancellationToken
+
+Cooperative cancellation for supported async I/O, networking, tasks and timers; no timed cancellation or callback registration.
+
+**API:** `CancellationTokenSource.Token`, `IsCancellationRequested`, `Cancel()`, `Dispose()`, `CancellationToken.None`, `CanBeCanceled`, `ThrowIfCancellationRequested()`.
+
+~~~csharp
+using var cts = new System.Threading.CancellationTokenSource();
+cts.Cancel();
+cts.Token.ThrowIfCancellationRequested();
+~~~
+
+### Compiler-generated awaitables and builders
+
+Compiler-facing glue for `async Task`/`Task<T>`, awaiters, `YieldAwaitable`, and `ConfigureAwait`. Usually generated by C#; not application APIs that need direct invocation.
+
+**API:** `INotifyCompletion`, `ICriticalNotifyCompletion`, `IAsyncStateMachine`, `TaskAwaiter/TaskAwaiter<T>`, `ConfiguredTaskAwaitable<T>`, `YieldAwaitable`, `AsyncTaskMethodBuilder<T>`.
+
+~~~csharp
+async System.Threading.Tasks.Task<int> AnswerAsync() {
+    await System.Threading.Tasks.Task.Yield();
+    return 42;
+}
+~~~
+
+## Collections and core runtime
+
+`System.Collections.Generic.List<T>`, comparer interfaces, arrays and basic core APIs are mapped to the available managed implementation. This is a targeted subset: `Dictionary<TKey,TValue>`, `HashSet<T>`, and LINQ are **not** part of the implemented contract.
+
+### List<T>
+
+Resizable indexed collection with ranges, predicates, sorting, binary search and version-checked enumeration. The normal `System.Collections.Generic.List<T>` maps to it.
+
+**API:** `List()`, `List(capacity)`, `List(IEnumerable<T>)`, `Count`, `Capacity`, `this[index]`, `Add`, `AddRange`, `Insert`, `InsertRange`, `Clear`, `Remove/RemoveAt/RemoveRange/RemoveAll`, `IndexOf/LastIndexOf/Contains`, `Find/FindLast/FindAll`, `FindIndex/FindLastIndex`, `Exists`, `TrueForAll`, `ForEach`, `CopyTo`, `ToArray`, `GetRange`, `TrimExcess`, `Reverse`, `Sort`, `BinarySearch`, `GetEnumerator`.
+
+~~~csharp
+var items = new System.Collections.Generic.List<int>();
+items.Add(3); items.Add(1);
+items.Sort();
+int smallest = items[0];
+~~~
+
+### EqualityComparer<T> / Comparer<T> / StringComparer
+
+Default typed equality, hashing, order and delegate comparers; ordinal and Unicode simple ordinal-ignore-case string comparison.
+
+**API:** `EqualityComparer<T>.Default`, `Equals(x,y)`, `GetHashCode(x)`, `Comparer<T>.Default`, `Compare(x,y)`, `Comparer<T>.Create(comparison)`, `StringComparer.Ordinal`, `StringComparer.OrdinalIgnoreCase`.
+
+~~~csharp
+bool equal = System.Collections.Generic.EqualityComparer<int>.Default.Equals(1, 1);
+int order = System.Collections.Generic.Comparer<int>.Default.Compare(1, 2);
+~~~
+
+### ArrayEnumerable<T>
+
+Adapter that explicitly exposes a `T[]` through a standard `IEnumerable<T>` and enumerator.
+
+**API:** `ArrayEnumerable<T>(items)`, `Enumerate(items)`, `GetEnumerator()`, `Current`, `MoveNext()`, `Reset()`, `Dispose()`.
+
+~~~csharp
+var sequence = new Dolphin.Collections.ArrayEnumerable<int>(new int[] { 1, 2 });
+foreach (int number in sequence) Log(number);
+~~~
+
+### Nullable<T> / Nullable helper
+
+Selected nullable primitives and generic comparisons, `HasValue`, `Value`, `GetValueOrDefault`, equality and boxing.
+
+**API:** `Nullable<T>`, `HasValue`, `Value`, `GetValueOrDefault()`, `Nullable.Equals<T>(x,y)`, `Nullable.Compare<T>(x,y)`.
+
+~~~csharp
+int? score = null;
+int displayed = score.GetValueOrDefault();
+~~~
+
+### Core language and collection interfaces
+
+Supported subset of `Object`, `String`, `Array`, exceptions, constructors/inheritance, virtual/interface calls, delegates, typed catches, boxing, generics, and collection interfaces. Consult documented limits below.
+
+**API:** `Object.Equals/GetHashCode`, `String.Length/Substring/Concat(string,string)/StartsWith/EndsWith/Contains/IndexOf`, `Array.Length/Copy/Clear/IndexOf`, `IEnumerable<T>`, `ICollection<T>`, `IList<T>`, `IReadOnlyList<T>`, `KeyValuePair<K,V>`, `ArraySegment<T>`, `IDisposable`, `Action/Func`.
+
+~~~csharp
+string label = string.Concat("LEVEL ", "1");
+var numbers = new int[] { 1, 2, 3 };
+Array.Copy(numbers, 0, numbers, 1, 2);
+~~~
+
+### Primitive formatting / Guid / AppContext / Console
+
+Limited `ToString()` on primitive values and selected native runtime primitives for GUIDs, basic console output and app-context probes. GUID randomness is **not cryptographically secure** on GameCube; framework mapping coverage is narrower than desktop .NET.
+
+**API:** `int/long/uint/ulong/bool/char ToString()`, `Guid.Parse/NewGuid/ToString`, `Console.Write/WriteLine (selected)`, `AppContext.BaseDirectory/TryGetSwitch (selected)`.
+
+~~~csharp
+Dolphin.Diagnostics.DebugOverlay.WriteLine(42.ToString());
+~~~
+
