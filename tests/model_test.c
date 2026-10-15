@@ -209,6 +209,25 @@ int main(int argc, char **argv) {
   assert(om->textures == 1 && om->clips == 0 && om->mesh[0].indices == 6);
   assert(dnd_model_dispose(obj) == 0);
   assert(!dnd_model_live_handles());
-  puts("Model validation, playback, skinning and residency tests passed");
+  DndString *obj_path=dnd_string_from_utf8(&heap,"sd:/live.obj");
+  int live=dnd_model_begin_obj(obj_path,8*1024*1024);
+  assert(live);
+  assert(dnd_model_stat(live,3)==0&&dnd_model_stat(live,4)==1);
+  int live_instance=dnd_model_instance(live,4*1024*1024);
+  assert(live_instance);
+  assert(dnd_model_vertex(live_instance,0,1,v)==0);
+  near(v[0],1.f);
+  assert(dnd_model_instance_dispose(live_instance)==0);
+  assert(dnd_model_dispose(live)==0);
+  live=load("sd:/geometry-gj.dndmodel");
+  live_instance=dnd_model_instance(live,4*1024*1024);
+  assert(live_instance);
+  assert(dnd_model_vertex(live_instance,0,1,v)==0);
+  near(v[0],0.f); /* 0,1,0 after GX triangle winding correction. */
+  near(v[1],1.f);
+  assert(dnd_model_instance_dispose(live_instance)==0);
+  assert(dnd_model_dispose(live)==0);
+  assert(!dnd_model_live_handles());
+  puts("Model validation, playback, skinning, live OBJ and PSO GJ import tests passed");
   return 0;
 }
