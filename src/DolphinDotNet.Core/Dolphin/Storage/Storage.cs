@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 namespace Dolphin.Storage;
-public enum StorageDevice { SdSlotA, SdSlotB, SdSerialPort2, DvdDrive, MemoryCardSlotA, MemoryCardSlotB }
+public enum StorageDevice { SdSlotA, SdSlotB, SdSerialPort2, DvdDrive, MemoryCardSlotA, MemoryCardSlotB, GcLoader }
 public enum DiscFormat { Iso9660=1, GameCubeFst=2 }
 public static class Storage
 {
     public static bool Mount(StorageDevice device)=>NativeStorage.Mount((int)device);
     public static bool MountDisc(DiscFormat format)=>NativeStorage.MountDisc((int)format);
+    /// <summary>Read the GameCube FST on the disc currently presented by the DVD interface (real drive or ODE).</summary>
+    public static bool MountGameCubeDisc()=>MountDisc(DiscFormat.GameCubeFst);
     public static bool IsMounted(StorageDevice device)=>NativeStorage.IsMounted((int)device);
     public static void Unmount(StorageDevice device)=>NativeStorage.Unmount((int)device);
     public static string GetPath(StorageDevice device,string path)=>NativeStorage.GetPath((int)device,path);
