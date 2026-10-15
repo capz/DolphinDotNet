@@ -412,6 +412,41 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
       return false;
   return true;
 }
+/* Create a resident model from caller-owned memory (validated, copied first).
+ * Also used by the direct console OBJ importer. */
+int dnd_model_begin_data(const unsigned char *data, unsigned length, int budget) {
+  if (!data || length < 160 || length > DND_MODEL_LIMIT ||
+      budget < 1024 || budget > (int)DND_MODEL_LIMIT ||
+      next_token == INT_MAX)
+    return 0;
+  int slot = -1;
+  for (int i = 0; i < DND_MODEL_SLOTS; i++)
+    if (!dnd_models[i]) {slot = i; break;}
+  if (slot < 0) return 0;
+  DndModel *m = calloc(1, sizeof(*m));
+  if (!m) return 0;
+  m->token = next_token++;
+  m->refs = 1;
+  m->budget = (unsigned)budget;
+  m->bytes = sizeof(*m);
+  m->length = length;
+  m->package = dnd_model_alloc(length, &m->bytes, m->budget);
+  if (!m->package) {free(m); return 0;}
+  memcpy(m->package, data, length);
+  dnd_models[slot] = m;
+  if (!validate(m, m->package, false)) {
+    dnd_model_dispose(m->token);
+    return 0;
+  }
+  m->hash = dnd_model_hash(m->package, m->length);
+  m->ready = true;
+  return m->token;
+}
+int dnd_model_begin_bytes(DndArray *data, int budget) {
+  if (!data || data->element_size != 1 || data->elements_are_references)
+    return 0;
+  return dnd_model_begin_data(data->data, data->length, budget);
+}
 int dnd_model_begin(DndString *path, int budget) {
   if (budget < 1024 || budget > (int)DND_MODEL_LIMIT || next_token == INT_MAX)
     return 0;
