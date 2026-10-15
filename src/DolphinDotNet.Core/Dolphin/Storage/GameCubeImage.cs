@@ -55,7 +55,7 @@ public sealed class GameCubeImage : IDisposable
                 list.Add(NativeStorage.IsoName(handle,i));
         return list.ToArray(); // Immediate children: names relative to directory.
     }
-    public Stream OpenRead(string path)
+    public Dolphin.IO.Stream OpenRead(string path)
     {
         int entry=Find(path);
         if(entry<0)throw new FileNotFoundException("GameCube ISO file not found.",path);
@@ -86,7 +86,7 @@ public sealed class GameCubeImage : IDisposable
         handle=0;
     }
 
-    private sealed class ImageStream : Stream
+    private sealed class ImageStream : Dolphin.IO.Stream
     {
         private readonly GameCubeImage image;
         private readonly int entry,length;
