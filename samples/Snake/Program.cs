@@ -127,7 +127,7 @@ internal static class Program
             }
 
             renderer.Present(game,screen,selection,store.HasSave,
-                store.CardLabel+"  "+store.Message,pad.IsConnected);
+                string.Concat(string.Concat(store.CardLabel,"  "),store.Message),pad.IsConnected);
         }
     }
 }
