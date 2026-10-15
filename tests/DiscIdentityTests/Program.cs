@@ -27,7 +27,7 @@ internal static class Program
         // RGB5A3 tile pixels: first opaque red, second alpha pixel,
         // first pixel of the next 4x4 tile opaque green.
         data[0x20]=0xfc;data[0x21]=0x00;
-        data[0x22]=0x71;data[0x23]=0x23;
+        data[0x22]=0x61;data[0x23]=0x23;
         data[0x40]=0x83;data[0x41]=0xe0;
         int number=pal?6:1;
         for(int i=0;i<number;i++)
@@ -73,7 +73,7 @@ internal static class Program
         Assert(banner.Rgb5A3.Length==6144 && banner.Rgba32.Length==96*32*4,"banner size");
         var rgba=banner.Rgba32;
         Assert(rgba[0]==255 && rgba[1]==0 && rgba[2]==0 && rgba[3]==255,"red RGB5A3");
-        Assert(rgba[4]==17 && rgba[5]==34 && rgba[6]==51 && rgba[7]==238,"3-bit alpha RGBA");
+        Assert(rgba[4]==17 && rgba[5]==34 && rgba[6]==51 && rgba[7]==219,"3-bit alpha RGBA");
         int x4=4*4;
         Assert(rgba[x4]==0 && rgba[x4+1]==255 && rgba[x4+2]==0,"GX tile order");
         bnr1[0x1820+64]=(byte)'X';
