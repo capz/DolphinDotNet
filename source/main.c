@@ -13,14 +13,16 @@ static uint8_t managed_heap_memory[256 * 1024];
 extern intptr_t dnd_aot_entry(DndManagedHeap *heap);
 
 int main(void) {
-    DndManagedHeap heap; int network_status;
+    DndManagedHeap heap;
     dnd_platform_init();
     dnd_managed_heap_init(&heap,managed_heap_memory,sizeof(managed_heap_memory));
     dnd_console_write_line("DOLPHINDOTNET");
-    dnd_console_write_line("MANAGED C# AOT / GX / PAD / NETWORK");
-    network_status=dnd_network_init();
+    dnd_console_write_line("MANAGED C# AOT / GX / PAD");
+#ifndef DND_NO_AUTONETWORK
+    int network_status=dnd_network_init();
     network_status=network_status<0?-1:dnd_net_status();
     dnd_console_write_line(network_status==1?"NETWORK: READY":network_status==0?"NETWORK: CONFIGURING":"NETWORK: UNAVAILABLE");
+#endif
 
     intptr_t managed_result=dnd_aot_entry(&heap);
     dnd_audio_shutdown();
