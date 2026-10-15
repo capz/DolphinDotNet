@@ -8,6 +8,7 @@ the GameCube runs generated native code, using only the supported AOT API subset
 | [HelloGameCube](HelloGameCube/Program.cs) | `int Main`, `DebugOverlay.WriteLine`, integer arithmetic and standard `Int32.ToString` | Prints a greeting and 42, then exits |
 | [ManagedGameCube](ManagedGameCube/Program.cs) | Cached controller snapshots, debug text and `ImmediateRenderer`; the scene belongs to `DemoScene`, not the framework | Rotating triangle; press Start on controller port 0 to exit |
 | [AsyncNetworking](AsyncNetworking/Program.cs) | Standard `async Task<int> Main`, `HttpClient`, `Task.Run` and `ConfigureAwait(false)`; bounded Dolphin JSON parsing | Local DNS/HTTP fixture defaults; returns 0 when JSON `value` is 42, otherwise 1 |
+| [AudioDemo](AudioDemo/Program.cs) | AESND WAV effects and looping PCM music with async loading | Mount an SD device containing `audio/laser.wav` and `audio/theme.wav` (PCM WAV) |
 | [GoogleLogoAram](GoogleLogoAram/README.md) | Streamed HTTP to `AramStream` with standard `Stream.CopyToAsync`; partial-read-safe PNG signature verification | Run the PC relay and configure its LAN address; returns 0 on success, otherwise 1 |
 
 ## Build a GameCube DOL
@@ -68,5 +69,5 @@ console does not refer to the development PC. HTTP currently has no TLS support.
 CI compiles all samples. It checks HelloGameCube's AOT output,
 records ManagedGameCube's complete frame and Start-button exit through a host
 backend, and executes AsyncNetworking against the DNS/HTTP fixture with normal
-and stressed GC. GoogleLogoAram is compiled through AOT; its live relay and console
+and stressed GC. AudioDemo is compiled through AOT; GoogleLogoAram is compiled through AOT; its live relay and console
 network/ARAM operation need hardware testing.
