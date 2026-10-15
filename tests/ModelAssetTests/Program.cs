@@ -55,3 +55,12 @@ var buildProject=new System.Xml.Linq.XElement("Project",new System.Xml.Linq.XAtt
     new System.Xml.Linq.XElement("ItemGroup",new System.Xml.Linq.XElement("DndModel",new System.Xml.Linq.XAttribute("Include",gltf),new System.Xml.Linq.XElement("DndOutput",Path.Combine(output,"sd","built.dndmodel")),new System.Xml.Linq.XElement("Options","--texture-limit 256"))));
 File.WriteAllText(Path.Combine(output,"Build.csproj"),buildProject.ToString());
 Console.WriteLine("Model converter fixtures passed: "+output);
+
+using(var drawingImage=new RasterImage(5,3,new Rgba32(10,20,30,40)))
+{
+    byte[] packed=DrawingPackages.Texture(drawingImage);
+    if(packed.Length!=160||BinaryPrimitives.ReadInt32LittleEndian(packed.AsSpan(4,4))!=1||packed[32]!=40||packed[33]!=10||packed[64]!=20||packed[65]!=30||packed[96]!=40||packed[98]!=0)throw new Exception("Drawing texture packing or tile padding.");
+    byte[] font=DrawingPackages.Font(drawingImage,1,1,32,15);
+    if(font.Length!=192||font[0]!='D'||font[1]!='N'||font[2]!='F'||font[3]!='T'||BinaryPrimitives.ReadInt32LittleEndian(font.AsSpan(24,4))!=packed.Length)throw new Exception("Drawing font header.");
+    try{DrawingPackages.Font(drawingImage,2,2);throw new Exception("Invalid font accepted.");}catch(ArgumentException){}
+}

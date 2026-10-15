@@ -12,7 +12,7 @@ DebugOverlay.PerformanceVisible = false;
 
 It is disabled by default. The panel uses light gray text on an opaque black background,
 inset eight pixels from the bottom-left corner. It is independent of the existing
-top-of-screen `DebugOverlay.WriteLine` log. Both the OpenGX demo and model renderer
+top-of-screen `DebugOverlay.WriteLine` log. Both the native GX demo and model renderer
 draw it automatically during presentation.
 
 * **FPS** averages the last 32 presentation intervals.

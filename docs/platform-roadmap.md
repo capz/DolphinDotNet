@@ -5,7 +5,7 @@ DolphinDotNet uses a Unity-like managed/native split and Godot-like subsystem dr
 ## Implemented platform foundation
 
 - [x] devkitPPC/libogc DOL target
-- [x] OpenGX-backed graphics driver with double-buffered GX presentation
+- [x] Native GX graphics driver with double-buffered GX presentation
 - [x] perspective 3D render pass
 - [x] orthographic overlay pass
 - [x] diagnostic console ring buffer rendered over 3D
@@ -30,7 +30,7 @@ DolphinDotNet uses a Unity-like managed/native split and Godot-like subsystem dr
 
 ## Graphics
 
-The public API will remain backend-neutral. OpenGX is the bootstrap GameCube backend because it exposes a useful OpenGL-style subset over GX. Resource handles will be opaque so selected hot paths can later move to native GX without changing C# games.
+The managed graphics API uses native GX and opaque resource handles. Explicit raw GX/GU/VIDEO bindings provide a target-specific escape hatch. Both layers share frame ownership; see [Graphics APIs](graphics.md).
 
 Next graphics acceptance test: compile a managed Game subclass that rotates a textured mesh while the overlay reports FPS, heap use, controller state and network status.
 

@@ -4,6 +4,9 @@ namespace Dolphin.Graphics;
 
 internal static class NativeGraphics
 {
+    internal static float DrawSin(float x)=>throw Unsupported();
+    internal static float DrawCos(float x)=>throw Unsupported();
+    internal static float DrawSqrt(float x)=>throw Unsupported();
     private static Exception Unsupported() => new PlatformNotSupportedException("Requires DolphinDotNet AOT.");
     internal static void GraphicsBeginFrame(float r, float g, float b, float a) => throw Unsupported();
     internal static void GraphicsFrustum(float left, float right, float bottom, float top, float near, float far) => throw Unsupported();
@@ -14,4 +17,46 @@ internal static class NativeGraphics
     internal static void GraphicsVertex(float x, float y, float z) => throw Unsupported();
     internal static void GraphicsEndTriangles() => throw Unsupported();
     internal static void GraphicsEndFrame() => throw Unsupported();
+    internal static int DeviceBegin(float r,float g,float b,float a) => throw Unsupported();
+    internal static int DeviceEnd() => throw Unsupported();
+    internal static int DeviceWidth() => throw Unsupported();
+    internal static int DeviceHeight() => throw Unsupported();
+    internal static int DeviceActive() => throw Unsupported();
+    internal static int DeviceRawBegin() => throw Unsupported();
+    internal static int DeviceRawEnd() => throw Unsupported();
+    internal static int DeviceViewport(int x,int y,int w,int h) => throw Unsupported();
+    internal static int DeviceScissor(int x,int y,int w,int h) => throw Unsupported();
+    internal static int DeviceWait() => throw Unsupported();
+    internal static int BufferCreate(int bytes,int alignment) => throw Unsupported();
+    internal static ulong BufferAddress(int token,int offset) => throw Unsupported();
+    internal static ulong BufferUncached(int token) => throw Unsupported();
+    internal static int NativeObjectSize(int kind) => throw Unsupported();
+    internal static int BufferFlush(int token,int offset,int count,int invalidate) => throw Unsupported();
+    internal static int DrawRelease(int token) => throw Unsupported();
+    internal static int DrawBytes(int token) => throw Unsupported();
+    internal static int DrawTotalBytes() => throw Unsupported();
+    internal static int TextureCreate(int width,int height,byte[] rgba,int linear) => throw Unsupported();
+    internal static int TexturePackage(byte[] package,int linear) => throw Unsupported();
+    internal static int TextureDimension(int token,int axis) => throw Unsupported();
+    internal static int MeshDraw(int mesh,int texture,float[] world,uint color,int flags,float cutoff) => throw Unsupported();
+    internal static int MeshPrimitives(VertexPositionColor[] vertices,int offset,int count,int format,int primitive,float[] world,uint color,int flags) => throw Unsupported();
+    internal static int CanvasCreate(int capacity) => throw Unsupported();
+    internal static int CanvasBegin(int token,int width,int height) => throw Unsupported();
+    internal static int CanvasEnd(int token) => throw Unsupported();
+    internal static int CanvasFlush(int token) => throw Unsupported();
+    internal static int CanvasVertices(int token,int texture,float[] vertices,int count,uint color) => throw Unsupported();
+    internal static int CanvasClip(int token,int x,int y,int width,int height) => throw Unsupported();
+    internal static int CanvasBlend(int token,int blend) => throw Unsupported();
+    internal static int CanvasStats(int token,int kind) => throw Unsupported();
+    internal static int DrawCopyTexture(int token,int x,int y,int width,int height) => throw Unsupported();
+    internal static int BufferWriteBytes(int token,int offset,byte[] array,int index,int count) => throw Unsupported();
+    internal static int BufferWriteFloats(int token,int offset,float[] array,int index,int count) => throw Unsupported();
+    internal static int BufferWriteIndices(int token,int offset,ushort[] array,int index,int count) => throw Unsupported();
+    internal static int BufferReadBytes(int token,int offset,byte[] array,int index,int count) => throw Unsupported();
+    internal static int MeshCreateColor(VertexPositionColor[] vertices,ushort[]? indices,int format,int dynamic) => throw Unsupported();
+    internal static int MeshUpdateColor(int token,VertexPositionColor[] vertices,int offset,int count,int format) => throw Unsupported();
+    internal static int MeshCreateTexture(VertexPositionColorTexture[] vertices,ushort[]? indices,int format,int dynamic) => throw Unsupported();
+    internal static int MeshUpdateTexture(int token,VertexPositionColorTexture[] vertices,int offset,int count,int format) => throw Unsupported();
+    internal static int MeshCreateNormal(VertexPositionNormalColorTexture[] vertices,ushort[]? indices,int format,int dynamic) => throw Unsupported();
+    internal static int MeshUpdateNormal(int token,VertexPositionNormalColorTexture[] vertices,int offset,int count,int format) => throw Unsupported();
 }

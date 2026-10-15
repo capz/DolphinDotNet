@@ -3,8 +3,16 @@ try
 {
     if (args.Length == 0 || args[0] == "--help")
     {
-        Console.WriteLine("dnd-assets model INPUT.{glb,gltf,fbx,obj} OUTPUT.dndmodel [--texture-limit N] [--assimp PATH] [--allow-material-approximation]\nFBX/OBJ require Assimp CLI 5.3.x. Outputs include a dependency manifest.");
+        Console.WriteLine("dnd-assets model INPUT.{glb,gltf,fbx,obj} OUTPUT.dndmodel [--texture-limit N] [--assimp PATH] [--allow-material-approximation]\ndnd-assets texture INPUT.png OUTPUT.dndtex\ndnd-assets font ATLAS.png OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]\nFBX/OBJ require Assimp CLI 5.3.x. Outputs include a dependency manifest.");
         return 0;
+    }
+    if(args.Length>=3&&(args[0]=="texture"||args[0]=="font"))
+    {
+        using var image=DolphinDotNet.Imaging.RasterImage.Load(File.ReadAllBytes(args[1]));
+        byte[] package;
+        if(args[0]=="texture") {if(args.Length!=3)throw new ArgumentException("texture INPUT OUTPUT.dndtex");package=DrawingPackages.Texture(image);}
+        else {if(args.Length<5||args.Length>7)throw new ArgumentException("font ATLAS OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]");package=DrawingPackages.Font(image,int.Parse(args[3]),int.Parse(args[4]),args.Length>5?int.Parse(args[5]):32,args.Length>6?int.Parse(args[6]):96);}
+        File.WriteAllBytes(args[2],package);return 0;
     }
     if (args.Length < 3 || args[0] != "model") throw new ArgumentException("Use dnd-assets --help.");
     var options = new ImportOptions();

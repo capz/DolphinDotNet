@@ -16,7 +16,7 @@ int main(void) {
     dnd_platform_init();
     dnd_managed_heap_init(&heap,managed_heap_memory,sizeof(managed_heap_memory));
     dnd_console_write_line("DOLPHINDOTNET");
-    dnd_console_write_line("MANAGED C# AOT / OPENGX / PAD / NETWORK");
+    dnd_console_write_line("MANAGED C# AOT / GX / PAD / NETWORK");
     network_status=dnd_network_init();
     network_status=network_status<0?-1:dnd_net_status();
     dnd_console_write_line(network_status==1?"NETWORK: READY":network_status==0?"NETWORK: CONFIGURING":"NETWORK: UNAVAILABLE");

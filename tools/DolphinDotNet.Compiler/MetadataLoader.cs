@@ -24,7 +24,7 @@ internal static class MetadataLoader
     foreach(var fh in type.GetFields())
     {
      var field=md.GetFieldDefinition(fh);var isStatic=(field.Attributes&FieldAttributes.Static)!=0;var(size,reference)=FieldLayout(md,field.Signature,model);
-     var align=Math.Min(Math.Max(size,1),8);if(!isStatic)offset=Align(offset,align);
+     var align=Math.Min(Math.Max(size,1),type.GetLayout().PackingSize==0?8:type.GetLayout().PackingSize);if(!isStatic)offset=Align(offset,align);
      var name=md.GetString(field.Name);var fieldReader=md.GetBlobReader(field.Signature);fieldReader.ReadSignatureHeader();
      var fieldCode=fieldReader.ReadSignatureTypeCode();var aggregateSize=0;IReadOnlyList<int>? embedded=null;
      if(fieldCode==SignatureTypeCode.GenericTypeInstance) { fieldReader.Offset--;var layout=GenericSharing.ReadGenericLocalLayout(md,ref fieldReader,model);aggregateSize=layout.Size;embedded=layout.References; }
@@ -72,9 +72,9 @@ internal static class MetadataLoader
    {
     var f=md.GetFieldDefinition(fh);var value=f.DecodeSignature(new SignatureAbi(model),new SignatureAbi.Context(Array.Empty<GenericRepresentation>(),Array.Empty<GenericRepresentation>()));
     var reference=value.Kind==CilStackKind.ObjectReference;var size=value.Size>0?value.Size:reference?8:value.ScalarSize;
-    var stat=(f.Attributes&FieldAttributes.Static)!=0;if(!stat)offset=Align(offset,Math.Min(Math.Max(size,1),8));
+    var stat=(f.Attributes&FieldAttributes.Static)!=0;if(!stat)offset=Align(offset,Math.Min(Math.Max(size,1),td.GetLayout().PackingSize==0?8:td.GetLayout().PackingSize));
     var oldField=model.Fields[(name,md.GetString(f.Name))];
-    if(oldField.Size!=size||oldField.StorageSize!=value.Size||oldField.IsReference!=reference||!(oldField.ReferenceOffsets??Array.Empty<int>()).SequenceEqual(value.References??Array.Empty<int>()))changed=true;
+    if(oldField.Offset!=(stat?0:offset)||oldField.Size!=size||oldField.StorageSize!=value.Size||oldField.IsReference!=reference||!(oldField.ReferenceOffsets??Array.Empty<int>()).SequenceEqual(value.References??Array.Empty<int>()))changed=true;
     model.Fields[(name,md.GetString(f.Name))]=new(name,md.GetString(f.Name),stat?0:offset,reference,stat,size,value.Size,value.References,value.Representation??new GenericRepresentation(reference?GenericRepresentationKind.PointerSized:GenericRepresentationKind.ValueType,size,value.References,value.Name));
     if(!stat)offset+=size;
    }
@@ -101,7 +101,7 @@ internal static class MetadataLoader
    var size=decoded.Size>0?decoded.Size:reference||decoded.Kind==CilStackKind.I8?8:4;
    var original=model.Fields[(model.Types[typeName].GenericDefinition!,name)];
    if(original.Size<4&&decoded.Size==0&&!reference)size=original.Size;
-   if(!isStatic)offset=Align(offset,Math.Min(size,8));
+   if(!isStatic)offset=Align(offset,Math.Min(size,type.GetLayout().PackingSize==0?8:type.GetLayout().PackingSize));
    model.Fields[(typeName,name)]=new(typeName,name,isStatic?0:offset,reference,isStatic,size,decoded.Size,decoded.References,decoded.Representation??new GenericRepresentation(reference?GenericRepresentationKind.PointerSized:GenericRepresentationKind.ValueType,size,decoded.References,decoded.Name));
    if(!isStatic)offset+=size;
   }

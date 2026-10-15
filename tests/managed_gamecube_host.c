@@ -63,3 +63,7 @@ int main(void) {
   puts("Managed sample owns and submits the complete demo frame.");
   return 0;
 }
+
+void dnd_graphics_init(void){}
+int dnd_graphics_width(void){return 640;}
+int dnd_graphics_height(void){return 480;}

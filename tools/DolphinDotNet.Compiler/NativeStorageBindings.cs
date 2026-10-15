@@ -5,6 +5,51 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["DrawSin"]=("sinf","f",false),
+        ["DrawCos"]=("cosf","f",false),
+        ["DrawSqrt"]=("sqrtf","f",false),
+        ["DeviceBegin"]=("dnd_device_begin","ffff",false),
+        ["DeviceEnd"]=("dnd_device_end","",false),
+        ["DeviceWidth"]=("dnd_device_width","",false),
+        ["DeviceHeight"]=("dnd_device_height","",false),
+        ["DeviceActive"]=("dnd_device_active","",false),
+        ["DeviceRawBegin"]=("dnd_device_raw_begin","",false),
+        ["DeviceRawEnd"]=("dnd_device_raw_end","",false),
+        ["DeviceViewport"]=("dnd_device_viewport","iiii",false),
+        ["DeviceScissor"]=("dnd_device_scissor","iiii",false),
+        ["DeviceWait"]=("dnd_device_wait","",false),
+        ["BufferCreate"]=("dnd_buffer_create","ii",false),
+        ["BufferAddress"]=("dnd_buffer_address","ii",false),
+        ["BufferUncached"]=("dnd_buffer_uncached","i",false),
+        ["NativeObjectSize"]=("dnd_native_object_size","i",false),
+        ["BufferFlush"]=("dnd_buffer_flush","iiii",false),
+        ["DrawRelease"]=("dnd_draw_release","i",false),
+        ["DrawBytes"]=("dnd_draw_bytes","i",false),
+        ["DrawTotalBytes"]=("dnd_draw_total_bytes","",false),
+        ["TextureCreate"]=("dnd_texture_create","iiai",false),
+        ["TexturePackage"]=("dnd_texture_package","ai",false),
+        ["TextureDimension"]=("dnd_texture_dimension","ii",false),
+        ["MeshDraw"]=("dnd_mesh_draw","iiaiif",false),
+        ["MeshPrimitives"]=("dnd_mesh_primitives","aiiiiaii",false),
+        ["CanvasCreate"]=("dnd_canvas_create","i",false),
+        ["CanvasBegin"]=("dnd_canvas_begin","iii",false),
+        ["CanvasEnd"]=("dnd_canvas_end","i",false),
+        ["CanvasFlush"]=("dnd_canvas_flush","i",false),
+        ["CanvasVertices"]=("dnd_canvas_vertices","iiaii",false),
+        ["CanvasClip"]=("dnd_canvas_clip","iiiii",false),
+        ["CanvasBlend"]=("dnd_canvas_blend","ii",false),
+        ["CanvasStats"]=("dnd_canvas_stats","ii",false),
+        ["DrawCopyTexture"]=("dnd_draw_copy_texture","iiiii",false),
+        ["BufferWriteBytes"]=("dnd_buffer_write","iiaii",false),
+        ["BufferWriteFloats"]=("dnd_buffer_write","iiaii",false),
+        ["BufferWriteIndices"]=("dnd_buffer_write","iiaii",false),
+        ["BufferReadBytes"]=("dnd_buffer_read","iiaii",false),
+        ["MeshCreateColor"]=("dnd_mesh_create","aaii",false),
+        ["MeshUpdateColor"]=("dnd_mesh_update","iaiii",false),
+        ["MeshCreateTexture"]=("dnd_mesh_create","aaii",false),
+        ["MeshUpdateTexture"]=("dnd_mesh_update","iaiii",false),
+        ["MeshCreateNormal"]=("dnd_mesh_create","aaii",false),
+        ["MeshUpdateNormal"]=("dnd_mesh_update","iaiii",false),
         ["TimingNow"]=("dnd_timing_now","",false),
         ["InputUpdate"]=("dnd_input_poll","",false),
         ["InputFlags"]=("dnd_input_flags","i",false),
@@ -17,7 +62,7 @@ internal static class NativeStorageBindings
         ["AsyncContext"]=("dnd_async_context","",false),
         ["AsyncWake"]=("dnd_async_wake","",false),
         ["AsyncProgress"]=("dnd_async_progress","",false),
-        ["GraphicsBeginFrame"]=("dnd_graphics_begin_frame","ffff",false),
+        ["GraphicsBeginFrame"]=("dnd_immediate_begin","ffff",false),
         ["GraphicsFrustum"]=("dnd_graphics_frustum","ffffff",false),
         ["GraphicsTranslate"]=("dnd_graphics_translate","fff",false),
         ["GraphicsRotate"]=("dnd_graphics_rotate","ffff",false),
@@ -25,7 +70,7 @@ internal static class NativeStorageBindings
         ["GraphicsColor"]=("dnd_graphics_color","fff",false),
         ["GraphicsVertex"]=("dnd_graphics_vertex","fff",false),
         ["GraphicsEndTriangles"]=("dnd_graphics_end_triangles","",false),
-        ["GraphicsEndFrame"]=("dnd_graphics_present","",false),
+        ["GraphicsEndFrame"]=("dnd_immediate_end","",false),
         ["NetFailure"]=("dnd_net_failure","ii",true),["NetFailureCode"]=("dnd_net_failure_code","o",false),
         ["NetStart"]=("dnd_net_start","iiii",false),["NetStatus"]=("dnd_net_status","",false),["NetTime"]=("dnd_net_time","",false),["NetError"]=("dnd_net_error","",false),
         ["NetOpen"]=("dnd_net_open","i",false),["NetBind"]=("dnd_net_bind","iii",false),["NetListen"]=("dnd_net_listen","ii",false),["NetAccept"]=("dnd_net_accept","ia",false),
@@ -56,10 +101,11 @@ internal static class NativeStorageBindings
     };
     internal static void Emit(StringBuilder b,ValueIrNativeStorage call)
     {
+        if(call.Operation.StartsWith("Raw_",StringComparison.Ordinal)) {RawGXBindings.Emit(b,call);return;}
         if(!Bindings.TryGetValue(call.Operation,out var binding)||binding.Types.Length!=call.Arguments.Count)throw new NotSupportedException($"Invalid native storage binding {call.Operation}.");
         var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'o'=>"DndObject*",'l'=>"int64_t",'f'=>"float",_=>"int"})})v{arg.Id}").ToList();
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
-        if(call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd")
+        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd")
             b.AppendLine("  dnd_async_require_application_thread();");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";
         if(call.Result is {} result)b.AppendLine($"  v{result.Id} = {(result.Kind==IrValueKind.ObjectReference?"(intptr_t)":"")}{expression};");else b.AppendLine($"  {expression};");

@@ -1,0 +1,6447 @@
+{
+  "source": "https://github.com/extremscorner/libogc2",
+  "headers": [
+    "include/ogc/gx.h",
+    "include/ogc/gu.h",
+    "include/ogc/video.h"
+  ],
+  "functions": [
+    {
+      "name": "GX_AbortFrame",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_AdjustForOverscan",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXRModeObj *",
+          "name": "rmin"
+        },
+        {
+          "type": "GXRModeObj *",
+          "name": "rmout"
+        },
+        {
+          "type": "u16",
+          "name": "hor"
+        },
+        {
+          "type": "u16",
+          "name": "ver"
+        }
+      ]
+    },
+    {
+      "name": "GX_Begin",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "primitve"
+        },
+        {
+          "type": "u8",
+          "name": "vtxfmt"
+        },
+        {
+          "type": "u16",
+          "name": "vtxcnt"
+        }
+      ]
+    },
+    {
+      "name": "GX_BeginDispList",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "void *",
+          "name": "list"
+        },
+        {
+          "type": "u32",
+          "name": "size"
+        }
+      ]
+    },
+    {
+      "name": "GX_CallDispList",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const void *",
+          "name": "list"
+        },
+        {
+          "type": "u32",
+          "name": "nbytes"
+        }
+      ]
+    },
+    {
+      "name": "GX_ClearBoundingBox",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_ClearGPMetric",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_ClearPixMetric",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_ClearVCacheMetric",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_ClearVtxDesc",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_Color1u16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "clr"
+        }
+      ]
+    },
+    {
+      "name": "GX_Color1u32",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32",
+          "name": "clr"
+        }
+      ]
+    },
+    {
+      "name": "GX_Color1x16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "index"
+        }
+      ]
+    },
+    {
+      "name": "GX_Color1x8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "index"
+        }
+      ]
+    },
+    {
+      "name": "GX_Color3f32",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "f32",
+          "name": "r"
+        },
+        {
+          "type": "f32",
+          "name": "g"
+        },
+        {
+          "type": "f32",
+          "name": "b"
+        }
+      ]
+    },
+    {
+      "name": "GX_Color3u8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "r"
+        },
+        {
+          "type": "u8",
+          "name": "g"
+        },
+        {
+          "type": "u8",
+          "name": "b"
+        }
+      ]
+    },
+    {
+      "name": "GX_Color4u8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "r"
+        },
+        {
+          "type": "u8",
+          "name": "g"
+        },
+        {
+          "type": "u8",
+          "name": "b"
+        },
+        {
+          "type": "u8",
+          "name": "a"
+        }
+      ]
+    },
+    {
+      "name": "GX_CopyDisp",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "void *",
+          "name": "dest"
+        },
+        {
+          "type": "u8",
+          "name": "clear"
+        }
+      ]
+    },
+    {
+      "name": "GX_CopyTex",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "void *",
+          "name": "dest"
+        },
+        {
+          "type": "u8",
+          "name": "clear"
+        }
+      ]
+    },
+    {
+      "name": "GX_DisableBreakPt",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_DrawDone",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_EnableBreakPt",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "void *",
+          "name": "break_pt"
+        }
+      ]
+    },
+    {
+      "name": "GX_EnableTexOffsets",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "coord"
+        },
+        {
+          "type": "u8",
+          "name": "line_enable"
+        },
+        {
+          "type": "u8",
+          "name": "point_enable"
+        }
+      ]
+    },
+    {
+      "name": "GX_End",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_EndDispList",
+      "class": "GX",
+      "return": "u32",
+      "parameters": []
+    },
+    {
+      "name": "GX_FastBegin",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "primitve"
+        },
+        {
+          "type": "u8",
+          "name": "vtxfmt"
+        },
+        {
+          "type": "u16",
+          "name": "vtxcnt"
+        }
+      ]
+    },
+    {
+      "name": "GX_FastCallDispList",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const void *",
+          "name": "list"
+        },
+        {
+          "type": "u32",
+          "name": "nbytes"
+        }
+      ]
+    },
+    {
+      "name": "GX_Flush",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_GetCPUFifo",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXFifoObj *",
+          "name": "fifo"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetCurrentGXThread",
+      "class": "GX",
+      "return": "lwp_t",
+      "parameters": []
+    },
+    {
+      "name": "GX_GetDrawSync",
+      "class": "GX",
+      "return": "u16",
+      "parameters": []
+    },
+    {
+      "name": "GX_GetFifoBase",
+      "class": "GX",
+      "return": "void*",
+      "parameters": [
+        {
+          "type": "const GXFifoObj *",
+          "name": "fifo"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetFifoCount",
+      "class": "GX",
+      "return": "u32",
+      "parameters": [
+        {
+          "type": "const GXFifoObj *",
+          "name": "fifo"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetFifoPtrs",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXFifoObj *",
+          "name": "fifo"
+        },
+        {
+          "type": "void **",
+          "name": "rd_ptr"
+        },
+        {
+          "type": "void **",
+          "name": "wt_ptr"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetFifoSize",
+      "class": "GX",
+      "return": "u32",
+      "parameters": [
+        {
+          "type": "const GXFifoObj *",
+          "name": "fifo"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetFifoWrap",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXFifoObj *",
+          "name": "fifo"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetGPFifo",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXFifoObj *",
+          "name": "fifo"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetGPStatus",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8 *",
+          "name": "overhi"
+        },
+        {
+          "type": "u8 *",
+          "name": "underlow"
+        },
+        {
+          "type": "u8 *",
+          "name": "readIdle"
+        },
+        {
+          "type": "u8 *",
+          "name": "cmdIdle"
+        },
+        {
+          "type": "u8 *",
+          "name": "brkpt"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetNumXfbLines",
+      "class": "GX",
+      "return": "u16",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "efbHeight"
+        },
+        {
+          "type": "f32",
+          "name": "yscale"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetOverflowCount",
+      "class": "GX",
+      "return": "u32",
+      "parameters": []
+    },
+    {
+      "name": "GX_GetScissor",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32 *",
+          "name": "xOrigin"
+        },
+        {
+          "type": "u32 *",
+          "name": "yOrigin"
+        },
+        {
+          "type": "u32 *",
+          "name": "wd"
+        },
+        {
+          "type": "u32 *",
+          "name": "ht"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexBufferSize",
+      "class": "GX",
+      "return": "u32",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "wd"
+        },
+        {
+          "type": "u16",
+          "name": "ht"
+        },
+        {
+          "type": "u32",
+          "name": "fmt"
+        },
+        {
+          "type": "u8",
+          "name": "mipmap"
+        },
+        {
+          "type": "u8",
+          "name": "maxlod"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjAll",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "void **",
+          "name": "img_ptr"
+        },
+        {
+          "type": "u16 *",
+          "name": "wd"
+        },
+        {
+          "type": "u16 *",
+          "name": "ht"
+        },
+        {
+          "type": "u8 *",
+          "name": "fmt"
+        },
+        {
+          "type": "u8 *",
+          "name": "wrap_s"
+        },
+        {
+          "type": "u8 *",
+          "name": "wrap_t"
+        },
+        {
+          "type": "u8 *",
+          "name": "mipmap"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjBiasClamp",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjData",
+      "class": "GX",
+      "return": "void*",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjEdgeLOD",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjFmt",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjHeight",
+      "class": "GX",
+      "return": "u16",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjLODAll",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "u8 *",
+          "name": "minfilt"
+        },
+        {
+          "type": "u8 *",
+          "name": "magfilt"
+        },
+        {
+          "type": "f32 *",
+          "name": "minlod"
+        },
+        {
+          "type": "f32 *",
+          "name": "maxlod"
+        },
+        {
+          "type": "f32 *",
+          "name": "lodbias"
+        },
+        {
+          "type": "u8 *",
+          "name": "biasclamp"
+        },
+        {
+          "type": "u8 *",
+          "name": "edgelod"
+        },
+        {
+          "type": "u8 *",
+          "name": "maxaniso"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjLODBias",
+      "class": "GX",
+      "return": "f32",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjMagFilt",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjMaxAniso",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjMaxLOD",
+      "class": "GX",
+      "return": "f32",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjMinFilt",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjMinLOD",
+      "class": "GX",
+      "return": "f32",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjMipMap",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjTlut",
+      "class": "GX",
+      "return": "u32",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjUserData",
+      "class": "GX",
+      "return": "void*",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjWidth",
+      "class": "GX",
+      "return": "u16",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjWrapS",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTexObjWrapT",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTlutObjAll",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXTlutObj *",
+          "name": "obj"
+        },
+        {
+          "type": "void **",
+          "name": "lut"
+        },
+        {
+          "type": "u8 *",
+          "name": "fmt"
+        },
+        {
+          "type": "u16 *",
+          "name": "entries"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTlutObjData",
+      "class": "GX",
+      "return": "void*",
+      "parameters": [
+        {
+          "type": "const GXTlutObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTlutObjFmt",
+      "class": "GX",
+      "return": "u8",
+      "parameters": [
+        {
+          "type": "const GXTlutObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetTlutObjNumEntries",
+      "class": "GX",
+      "return": "u16",
+      "parameters": [
+        {
+          "type": "const GXTlutObj *",
+          "name": "obj"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetVtxDescv",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXVtxDesc *",
+          "name": "attr_list"
+        }
+      ]
+    },
+    {
+      "name": "GX_GetYScaleFactor",
+      "class": "GX",
+      "return": "f32",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "efbHeight"
+        },
+        {
+          "type": "u16",
+          "name": "xfbHeight"
+        }
+      ]
+    },
+    {
+      "name": "GX_Init",
+      "class": "GX",
+      "return": "GXFifoObj*",
+      "parameters": [
+        {
+          "type": "void *",
+          "name": "base"
+        },
+        {
+          "type": "u32",
+          "name": "size"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitFifoBase",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXFifoObj *",
+          "name": "fifo"
+        },
+        {
+          "type": "void *",
+          "name": "base"
+        },
+        {
+          "type": "u32",
+          "name": "size"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitFifoLimits",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXFifoObj *",
+          "name": "fifo"
+        },
+        {
+          "type": "u32",
+          "name": "hiwatermark"
+        },
+        {
+          "type": "u32",
+          "name": "lowatermark"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitFifoPtrs",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXFifoObj *",
+          "name": "fifo"
+        },
+        {
+          "type": "void *",
+          "name": "rd_ptr"
+        },
+        {
+          "type": "void *",
+          "name": "wt_ptr"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitFogAdjTable",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXFogAdjTbl *",
+          "name": "table"
+        },
+        {
+          "type": "u16",
+          "name": "width"
+        },
+        {
+          "type": "const f32[4][4]",
+          "name": "projmtx"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightAttn",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "f32",
+          "name": "a0"
+        },
+        {
+          "type": "f32",
+          "name": "a1"
+        },
+        {
+          "type": "f32",
+          "name": "a2"
+        },
+        {
+          "type": "f32",
+          "name": "k0"
+        },
+        {
+          "type": "f32",
+          "name": "k1"
+        },
+        {
+          "type": "f32",
+          "name": "k2"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightAttnA",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "f32",
+          "name": "a0"
+        },
+        {
+          "type": "f32",
+          "name": "a1"
+        },
+        {
+          "type": "f32",
+          "name": "a2"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightAttnK",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "f32",
+          "name": "k0"
+        },
+        {
+          "type": "f32",
+          "name": "k1"
+        },
+        {
+          "type": "f32",
+          "name": "k2"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightColor",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "GXColor",
+          "name": "col"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightDir",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "f32",
+          "name": "nx"
+        },
+        {
+          "type": "f32",
+          "name": "ny"
+        },
+        {
+          "type": "f32",
+          "name": "nz"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightDirv",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lo"
+        },
+        {
+          "type": "const guVector *",
+          "name": "vec"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightDistAttn",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "f32",
+          "name": "ref_dist"
+        },
+        {
+          "type": "f32",
+          "name": "ref_brite"
+        },
+        {
+          "type": "u8",
+          "name": "dist_fn"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightPos",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "f32",
+          "name": "x"
+        },
+        {
+          "type": "f32",
+          "name": "y"
+        },
+        {
+          "type": "f32",
+          "name": "z"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightPosv",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lo"
+        },
+        {
+          "type": "const guVector *",
+          "name": "vec"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightShininess",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lo"
+        },
+        {
+          "type": "f32",
+          "name": "shininess"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitLightSpot",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "f32",
+          "name": "cut_off"
+        },
+        {
+          "type": "u8",
+          "name": "spotfn"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitSpecularDir",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "f32",
+          "name": "nx"
+        },
+        {
+          "type": "f32",
+          "name": "ny"
+        },
+        {
+          "type": "f32",
+          "name": "nz"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitSpecularDirHA",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "f32",
+          "name": "nx"
+        },
+        {
+          "type": "f32",
+          "name": "ny"
+        },
+        {
+          "type": "f32",
+          "name": "nz"
+        },
+        {
+          "type": "f32",
+          "name": "hx"
+        },
+        {
+          "type": "f32",
+          "name": "hy"
+        },
+        {
+          "type": "f32",
+          "name": "hz"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitSpecularDirHAv",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lo"
+        },
+        {
+          "type": "const guVector *",
+          "name": "vec0"
+        },
+        {
+          "type": "const guVector *",
+          "name": "vec1"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitSpecularDirv",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXLightObj *",
+          "name": "lo"
+        },
+        {
+          "type": "const guVector *",
+          "name": "vec"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexCacheRegion",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexRegion *",
+          "name": "region"
+        },
+        {
+          "type": "u8",
+          "name": "is32bmipmap"
+        },
+        {
+          "type": "u32",
+          "name": "tmem_even"
+        },
+        {
+          "type": "u8",
+          "name": "size_even"
+        },
+        {
+          "type": "u32",
+          "name": "tmem_odd"
+        },
+        {
+          "type": "u8",
+          "name": "size_odd"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObj",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "void *",
+          "name": "img_ptr"
+        },
+        {
+          "type": "u16",
+          "name": "wd"
+        },
+        {
+          "type": "u16",
+          "name": "ht"
+        },
+        {
+          "type": "u8",
+          "name": "fmt"
+        },
+        {
+          "type": "u8",
+          "name": "wrap_s"
+        },
+        {
+          "type": "u8",
+          "name": "wrap_t"
+        },
+        {
+          "type": "u8",
+          "name": "mipmap"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjBiasClamp",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "u8",
+          "name": "biasclamp"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjCI",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "void *",
+          "name": "img_ptr"
+        },
+        {
+          "type": "u16",
+          "name": "wd"
+        },
+        {
+          "type": "u16",
+          "name": "ht"
+        },
+        {
+          "type": "u8",
+          "name": "fmt"
+        },
+        {
+          "type": "u8",
+          "name": "wrap_s"
+        },
+        {
+          "type": "u8",
+          "name": "wrap_t"
+        },
+        {
+          "type": "u8",
+          "name": "mipmap"
+        },
+        {
+          "type": "u32",
+          "name": "tlut_name"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjData",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "void *",
+          "name": "img_ptr"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjEdgeLOD",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "u8",
+          "name": "edgelod"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjFilterMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "u8",
+          "name": "minfilt"
+        },
+        {
+          "type": "u8",
+          "name": "magfilt"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjLOD",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "u8",
+          "name": "minfilt"
+        },
+        {
+          "type": "u8",
+          "name": "magfilt"
+        },
+        {
+          "type": "f32",
+          "name": "minlod"
+        },
+        {
+          "type": "f32",
+          "name": "maxlod"
+        },
+        {
+          "type": "f32",
+          "name": "lodbias"
+        },
+        {
+          "type": "u8",
+          "name": "biasclamp"
+        },
+        {
+          "type": "u8",
+          "name": "edgelod"
+        },
+        {
+          "type": "u8",
+          "name": "maxaniso"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjLODBias",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "f32",
+          "name": "lodbias"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjMaxAniso",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "u8",
+          "name": "maxaniso"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjMaxLOD",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "f32",
+          "name": "maxlod"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjMinLOD",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "f32",
+          "name": "minlod"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjTlut",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "u32",
+          "name": "tlut_name"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjUserData",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "void *",
+          "name": "userdata"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexObjWrapMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "u8",
+          "name": "wrap_s"
+        },
+        {
+          "type": "u8",
+          "name": "wrap_t"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTexPreloadRegion",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTexRegion *",
+          "name": "region"
+        },
+        {
+          "type": "u32",
+          "name": "tmem_even"
+        },
+        {
+          "type": "u32",
+          "name": "size_even"
+        },
+        {
+          "type": "u32",
+          "name": "tmem_odd"
+        },
+        {
+          "type": "u32",
+          "name": "size_odd"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTlutObj",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTlutObj *",
+          "name": "obj"
+        },
+        {
+          "type": "void *",
+          "name": "lut"
+        },
+        {
+          "type": "u8",
+          "name": "fmt"
+        },
+        {
+          "type": "u16",
+          "name": "entries"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTlutObjData",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTlutObj *",
+          "name": "obj"
+        },
+        {
+          "type": "void *",
+          "name": "lut"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitTlutRegion",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXTlutRegion *",
+          "name": "region"
+        },
+        {
+          "type": "u32",
+          "name": "tmem_addr"
+        },
+        {
+          "type": "u8",
+          "name": "tlut_sz"
+        }
+      ]
+    },
+    {
+      "name": "GX_InitXfRasMetric",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_InvVtxCache",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_InvalidateTexAll",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_InvalidateTexRegion",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXTexRegion *",
+          "name": "region"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadLightObj",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXLightObj *",
+          "name": "lit_obj"
+        },
+        {
+          "type": "u8",
+          "name": "lit_id"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadLightObjIdx",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32",
+          "name": "litobjidx"
+        },
+        {
+          "type": "u8",
+          "name": "litid"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadNrmMtxIdx3x3",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "mtxidx"
+        },
+        {
+          "type": "u32",
+          "name": "pnidx"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadNrmMtxImm",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "u32",
+          "name": "pnidx"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadNrmMtxImm3x3",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx33",
+          "name": "mt"
+        },
+        {
+          "type": "u32",
+          "name": "pnidx"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadPosMtxIdx",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "mtxidx"
+        },
+        {
+          "type": "u32",
+          "name": "pnidx"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadPosMtxImm",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "u32",
+          "name": "pnidx"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadProjectionMtx",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx44",
+          "name": "mt"
+        },
+        {
+          "type": "u8",
+          "name": "type"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadTexMtxIdx",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "mtxidx"
+        },
+        {
+          "type": "u32",
+          "name": "texidx"
+        },
+        {
+          "type": "u8",
+          "name": "type"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadTexMtxImm",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "u32",
+          "name": "texidx"
+        },
+        {
+          "type": "u8",
+          "name": "type"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadTexObj",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "u8",
+          "name": "mapid"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadTexObjPreloaded",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "const GXTexRegion *",
+          "name": "region"
+        },
+        {
+          "type": "u8",
+          "name": "mapid"
+        }
+      ]
+    },
+    {
+      "name": "GX_LoadTlut",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXTlutObj *",
+          "name": "obj"
+        },
+        {
+          "type": "u32",
+          "name": "tlut_name"
+        }
+      ]
+    },
+    {
+      "name": "GX_MatrixIndex1x8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "index"
+        }
+      ]
+    },
+    {
+      "name": "GX_Normal1x16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "index"
+        }
+      ]
+    },
+    {
+      "name": "GX_Normal1x8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "index"
+        }
+      ]
+    },
+    {
+      "name": "GX_Normal3f32",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "f32",
+          "name": "nx"
+        },
+        {
+          "type": "f32",
+          "name": "ny"
+        },
+        {
+          "type": "f32",
+          "name": "nz"
+        }
+      ]
+    },
+    {
+      "name": "GX_Normal3s16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s16",
+          "name": "nx"
+        },
+        {
+          "type": "s16",
+          "name": "ny"
+        },
+        {
+          "type": "s16",
+          "name": "nz"
+        }
+      ]
+    },
+    {
+      "name": "GX_Normal3s8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s8",
+          "name": "nx"
+        },
+        {
+          "type": "s8",
+          "name": "ny"
+        },
+        {
+          "type": "s8",
+          "name": "nz"
+        }
+      ]
+    },
+    {
+      "name": "GX_PeekARGB",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "x"
+        },
+        {
+          "type": "u16",
+          "name": "y"
+        },
+        {
+          "type": "GXColor *",
+          "name": "color"
+        }
+      ]
+    },
+    {
+      "name": "GX_PeekZ",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "x"
+        },
+        {
+          "type": "u16",
+          "name": "y"
+        },
+        {
+          "type": "u32 *",
+          "name": "z"
+        }
+      ]
+    },
+    {
+      "name": "GX_PixModeSync",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_PokeARGB",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "x"
+        },
+        {
+          "type": "u16",
+          "name": "y"
+        },
+        {
+          "type": "GXColor",
+          "name": "color"
+        }
+      ]
+    },
+    {
+      "name": "GX_PokeAlphaMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "func"
+        },
+        {
+          "type": "u8",
+          "name": "threshold"
+        }
+      ]
+    },
+    {
+      "name": "GX_PokeAlphaRead",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "mode"
+        }
+      ]
+    },
+    {
+      "name": "GX_PokeAlphaUpdate",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "update_enable"
+        }
+      ]
+    },
+    {
+      "name": "GX_PokeBlendMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "type"
+        },
+        {
+          "type": "u8",
+          "name": "src_fact"
+        },
+        {
+          "type": "u8",
+          "name": "dst_fact"
+        },
+        {
+          "type": "u8",
+          "name": "op"
+        }
+      ]
+    },
+    {
+      "name": "GX_PokeColorUpdate",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "update_enable"
+        }
+      ]
+    },
+    {
+      "name": "GX_PokeDither",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "dither"
+        }
+      ]
+    },
+    {
+      "name": "GX_PokeDstAlpha",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "enable"
+        },
+        {
+          "type": "u8",
+          "name": "a"
+        }
+      ]
+    },
+    {
+      "name": "GX_PokeZ",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "x"
+        },
+        {
+          "type": "u16",
+          "name": "y"
+        },
+        {
+          "type": "u32",
+          "name": "z"
+        }
+      ]
+    },
+    {
+      "name": "GX_PokeZMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "comp_enable"
+        },
+        {
+          "type": "u8",
+          "name": "func"
+        },
+        {
+          "type": "u8",
+          "name": "update_enable"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position1x16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "index"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position1x8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "index"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position2f32",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "f32",
+          "name": "x"
+        },
+        {
+          "type": "f32",
+          "name": "y"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position2s16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s16",
+          "name": "x"
+        },
+        {
+          "type": "s16",
+          "name": "y"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position2s8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s8",
+          "name": "x"
+        },
+        {
+          "type": "s8",
+          "name": "y"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position2u16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "x"
+        },
+        {
+          "type": "u16",
+          "name": "y"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position2u8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "x"
+        },
+        {
+          "type": "u8",
+          "name": "y"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position3f32",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "f32",
+          "name": "x"
+        },
+        {
+          "type": "f32",
+          "name": "y"
+        },
+        {
+          "type": "f32",
+          "name": "z"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position3s16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s16",
+          "name": "x"
+        },
+        {
+          "type": "s16",
+          "name": "y"
+        },
+        {
+          "type": "s16",
+          "name": "z"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position3s8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s8",
+          "name": "x"
+        },
+        {
+          "type": "s8",
+          "name": "y"
+        },
+        {
+          "type": "s8",
+          "name": "z"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position3u16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "x"
+        },
+        {
+          "type": "u16",
+          "name": "y"
+        },
+        {
+          "type": "u16",
+          "name": "z"
+        }
+      ]
+    },
+    {
+      "name": "GX_Position3u8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "x"
+        },
+        {
+          "type": "u8",
+          "name": "y"
+        },
+        {
+          "type": "u8",
+          "name": "z"
+        }
+      ]
+    },
+    {
+      "name": "GX_PreloadEntireTexture",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXTexObj *",
+          "name": "obj"
+        },
+        {
+          "type": "const GXTexRegion *",
+          "name": "region"
+        }
+      ]
+    },
+    {
+      "name": "GX_ReadBoundingBox",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16 *",
+          "name": "top"
+        },
+        {
+          "type": "u16 *",
+          "name": "bottom"
+        },
+        {
+          "type": "u16 *",
+          "name": "left"
+        },
+        {
+          "type": "u16 *",
+          "name": "right"
+        }
+      ]
+    },
+    {
+      "name": "GX_ReadClksPerVtx",
+      "class": "GX",
+      "return": "u32",
+      "parameters": []
+    },
+    {
+      "name": "GX_ReadGPMetric",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32 *",
+          "name": "cnt0"
+        },
+        {
+          "type": "u32 *",
+          "name": "cnt1"
+        }
+      ]
+    },
+    {
+      "name": "GX_ReadPixMetric",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32 *",
+          "name": "toppixin"
+        },
+        {
+          "type": "u32 *",
+          "name": "toppixout"
+        },
+        {
+          "type": "u32 *",
+          "name": "botpixin"
+        },
+        {
+          "type": "u32 *",
+          "name": "botpixout"
+        },
+        {
+          "type": "u32 *",
+          "name": "clrpixin"
+        },
+        {
+          "type": "u32 *",
+          "name": "copyclks"
+        }
+      ]
+    },
+    {
+      "name": "GX_ReadVCacheMetric",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32 *",
+          "name": "check"
+        },
+        {
+          "type": "u32 *",
+          "name": "miss"
+        },
+        {
+          "type": "u32 *",
+          "name": "stall"
+        }
+      ]
+    },
+    {
+      "name": "GX_ReadXfRasMetric",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32 *",
+          "name": "xfwaitin"
+        },
+        {
+          "type": "u32 *",
+          "name": "xfwaitout"
+        },
+        {
+          "type": "u32 *",
+          "name": "rasbusy"
+        },
+        {
+          "type": "u32 *",
+          "name": "clks"
+        }
+      ]
+    },
+    {
+      "name": "GX_RedirectWriteGatherPipe",
+      "class": "GX",
+      "return": "volatile void*",
+      "parameters": [
+        {
+          "type": "void *",
+          "name": "ptr"
+        }
+      ]
+    },
+    {
+      "name": "GX_ResetOverflowCount",
+      "class": "GX",
+      "return": "u32",
+      "parameters": []
+    },
+    {
+      "name": "GX_RestoreWriteGatherPipe",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_SetAlphaCompare",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "comp0"
+        },
+        {
+          "type": "u8",
+          "name": "ref0"
+        },
+        {
+          "type": "u8",
+          "name": "aop"
+        },
+        {
+          "type": "u8",
+          "name": "comp1"
+        },
+        {
+          "type": "u8",
+          "name": "ref1"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetAlphaUpdate",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "enable"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetArray",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32",
+          "name": "attr"
+        },
+        {
+          "type": "const void *",
+          "name": "ptr"
+        },
+        {
+          "type": "u8",
+          "name": "stride"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetBlendMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "type"
+        },
+        {
+          "type": "u8",
+          "name": "src_fact"
+        },
+        {
+          "type": "u8",
+          "name": "dst_fact"
+        },
+        {
+          "type": "u8",
+          "name": "op"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetBreakPtCallback",
+      "class": "GX",
+      "return": "GXBreakPtCallback",
+      "parameters": [
+        {
+          "type": "GXBreakPtCallback",
+          "name": "cb"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetCPUFifo",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXFifoObj *",
+          "name": "fifo"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetChanAmbColor",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s32",
+          "name": "channel"
+        },
+        {
+          "type": "GXColor",
+          "name": "color"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetChanCtrl",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s32",
+          "name": "channel"
+        },
+        {
+          "type": "u8",
+          "name": "enable"
+        },
+        {
+          "type": "u8",
+          "name": "ambsrc"
+        },
+        {
+          "type": "u8",
+          "name": "matsrc"
+        },
+        {
+          "type": "u8",
+          "name": "litmask"
+        },
+        {
+          "type": "u8",
+          "name": "diff_fn"
+        },
+        {
+          "type": "u8",
+          "name": "attn_fn"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetChanMatColor",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s32",
+          "name": "channel"
+        },
+        {
+          "type": "GXColor",
+          "name": "color"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetClipMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "mode"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetCoPlanar",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "enable"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetColorUpdate",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "enable"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetCopyClamp",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "clamp"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetCopyClear",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXColor",
+          "name": "color"
+        },
+        {
+          "type": "u32",
+          "name": "zvalue"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetCopyFilter",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "aa"
+        },
+        {
+          "type": "const u8[12][2]",
+          "name": "sample_pattern"
+        },
+        {
+          "type": "u8",
+          "name": "vf"
+        },
+        {
+          "type": "const u8[7]",
+          "name": "vfilter"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetCullMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "mode"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetCurrentGXThread",
+      "class": "GX",
+      "return": "lwp_t",
+      "parameters": []
+    },
+    {
+      "name": "GX_SetCurrentMtx",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32",
+          "name": "mtx"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetDispCopyDst",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "wd"
+        },
+        {
+          "type": "u16",
+          "name": "ht"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetDispCopyFrame2Field",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "mode"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetDispCopyGamma",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "gamma"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetDispCopySrc",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "left"
+        },
+        {
+          "type": "u16",
+          "name": "top"
+        },
+        {
+          "type": "u16",
+          "name": "wd"
+        },
+        {
+          "type": "u16",
+          "name": "ht"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetDispCopyYScale",
+      "class": "GX",
+      "return": "u32",
+      "parameters": [
+        {
+          "type": "f32",
+          "name": "yscale"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetDither",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "dither"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetDrawDone",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_SetDrawDoneCallback",
+      "class": "GX",
+      "return": "GXDrawDoneCallback",
+      "parameters": [
+        {
+          "type": "GXDrawDoneCallback",
+          "name": "cb"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetDrawSync",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "token"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetDrawSyncCallback",
+      "class": "GX",
+      "return": "GXDrawSyncCallback",
+      "parameters": [
+        {
+          "type": "GXDrawSyncCallback",
+          "name": "cb"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetDstAlpha",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "enable"
+        },
+        {
+          "type": "u8",
+          "name": "a"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetFieldMask",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "even_mask"
+        },
+        {
+          "type": "u8",
+          "name": "odd_mask"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetFieldMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "field_mode"
+        },
+        {
+          "type": "u8",
+          "name": "half_aspect_ratio"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetFog",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "type"
+        },
+        {
+          "type": "f32",
+          "name": "startz"
+        },
+        {
+          "type": "f32",
+          "name": "endz"
+        },
+        {
+          "type": "f32",
+          "name": "nearz"
+        },
+        {
+          "type": "f32",
+          "name": "farz"
+        },
+        {
+          "type": "GXColor",
+          "name": "col"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetFogColor",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "GXColor",
+          "name": "color"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetFogRangeAdj",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "enable"
+        },
+        {
+          "type": "u16",
+          "name": "center"
+        },
+        {
+          "type": "const GXFogAdjTbl *",
+          "name": "table"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetGPFifo",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXFifoObj *",
+          "name": "fifo"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetGPMetric",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32",
+          "name": "perf0"
+        },
+        {
+          "type": "u32",
+          "name": "perf1"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetIndTexCoordScale",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "indtexid"
+        },
+        {
+          "type": "u8",
+          "name": "scale_s"
+        },
+        {
+          "type": "u8",
+          "name": "scale_t"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetIndTexMatrix",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "indtexmtx"
+        },
+        {
+          "type": "const f32[2][3]",
+          "name": "offset_mtx"
+        },
+        {
+          "type": "s8",
+          "name": "scale_exp"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetIndTexOrder",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "indtexstage"
+        },
+        {
+          "type": "u8",
+          "name": "texcoord"
+        },
+        {
+          "type": "u8",
+          "name": "texmap"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetLineWidth",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "width"
+        },
+        {
+          "type": "u8",
+          "name": "fmt"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetMisc",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32",
+          "name": "token"
+        },
+        {
+          "type": "u32",
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetNumChans",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "num"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetNumIndStages",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "nstages"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetNumTevStages",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "num"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetNumTexGens",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32",
+          "name": "nr"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetPixelFmt",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "pix_fmt"
+        },
+        {
+          "type": "u8",
+          "name": "z_fmt"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetPointSize",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "width"
+        },
+        {
+          "type": "u8",
+          "name": "fmt"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetScissor",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32",
+          "name": "xOrigin"
+        },
+        {
+          "type": "u32",
+          "name": "yOrigin"
+        },
+        {
+          "type": "u32",
+          "name": "wd"
+        },
+        {
+          "type": "u32",
+          "name": "ht"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetScissorBoxOffset",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s32",
+          "name": "xoffset"
+        },
+        {
+          "type": "s32",
+          "name": "yoffset"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevAlphaIn",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "a"
+        },
+        {
+          "type": "u8",
+          "name": "b"
+        },
+        {
+          "type": "u8",
+          "name": "c"
+        },
+        {
+          "type": "u8",
+          "name": "d"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevAlphaOp",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "tevop"
+        },
+        {
+          "type": "u8",
+          "name": "tevbias"
+        },
+        {
+          "type": "u8",
+          "name": "tevscale"
+        },
+        {
+          "type": "u8",
+          "name": "clamp"
+        },
+        {
+          "type": "u8",
+          "name": "tevregid"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevColor",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tev_regid"
+        },
+        {
+          "type": "GXColor",
+          "name": "color"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevColorIn",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "a"
+        },
+        {
+          "type": "u8",
+          "name": "b"
+        },
+        {
+          "type": "u8",
+          "name": "c"
+        },
+        {
+          "type": "u8",
+          "name": "d"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevColorOp",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "tevop"
+        },
+        {
+          "type": "u8",
+          "name": "tevbias"
+        },
+        {
+          "type": "u8",
+          "name": "tevscale"
+        },
+        {
+          "type": "u8",
+          "name": "clamp"
+        },
+        {
+          "type": "u8",
+          "name": "tevregid"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevColorS10",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tev_regid"
+        },
+        {
+          "type": "GXColorS10",
+          "name": "color"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevDirect",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevIndBumpST",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "indstage"
+        },
+        {
+          "type": "u8",
+          "name": "mtx_sel"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevIndBumpXYZ",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "indstage"
+        },
+        {
+          "type": "u8",
+          "name": "mtx_sel"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevIndRepeat",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevIndTile",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "indtexid"
+        },
+        {
+          "type": "u16",
+          "name": "tilesize_x"
+        },
+        {
+          "type": "u16",
+          "name": "tilesize_y"
+        },
+        {
+          "type": "u16",
+          "name": "tilespacing_x"
+        },
+        {
+          "type": "u16",
+          "name": "tilespacing_y"
+        },
+        {
+          "type": "u8",
+          "name": "indtexfmt"
+        },
+        {
+          "type": "u8",
+          "name": "indtexmtx"
+        },
+        {
+          "type": "u8",
+          "name": "bias_sel"
+        },
+        {
+          "type": "u8",
+          "name": "alpha_sel"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevIndWarp",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "indstage"
+        },
+        {
+          "type": "u8",
+          "name": "signed_offset"
+        },
+        {
+          "type": "u8",
+          "name": "replace_mode"
+        },
+        {
+          "type": "u8",
+          "name": "mtx_sel"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevIndirect",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "indtexid"
+        },
+        {
+          "type": "u8",
+          "name": "format"
+        },
+        {
+          "type": "u8",
+          "name": "bias"
+        },
+        {
+          "type": "u8",
+          "name": "mtxid"
+        },
+        {
+          "type": "u8",
+          "name": "wrap_s"
+        },
+        {
+          "type": "u8",
+          "name": "wrap_t"
+        },
+        {
+          "type": "u8",
+          "name": "addprev"
+        },
+        {
+          "type": "u8",
+          "name": "utclod"
+        },
+        {
+          "type": "u8",
+          "name": "a"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevKAlphaSel",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "sel"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevKColor",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "sel"
+        },
+        {
+          "type": "GXColor",
+          "name": "col"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevKColorS10",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "sel"
+        },
+        {
+          "type": "GXColorS10",
+          "name": "col"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevKColorSel",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "sel"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevOp",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "mode"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevOrder",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "texcoord"
+        },
+        {
+          "type": "u32",
+          "name": "texmap"
+        },
+        {
+          "type": "u8",
+          "name": "color"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevSwapMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "tevstage"
+        },
+        {
+          "type": "u8",
+          "name": "ras_sel"
+        },
+        {
+          "type": "u8",
+          "name": "tex_sel"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTevSwapModeTable",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "swapid"
+        },
+        {
+          "type": "u8",
+          "name": "r"
+        },
+        {
+          "type": "u8",
+          "name": "g"
+        },
+        {
+          "type": "u8",
+          "name": "b"
+        },
+        {
+          "type": "u8",
+          "name": "a"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTexCoordBias",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "texcoord"
+        },
+        {
+          "type": "u8",
+          "name": "s_enable"
+        },
+        {
+          "type": "u8",
+          "name": "t_enable"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTexCoordCylWrap",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "texcoord"
+        },
+        {
+          "type": "u8",
+          "name": "s_enable"
+        },
+        {
+          "type": "u8",
+          "name": "t_enable"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTexCoordGen",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "texcoord"
+        },
+        {
+          "type": "u32",
+          "name": "tgen_typ"
+        },
+        {
+          "type": "u32",
+          "name": "tgen_src"
+        },
+        {
+          "type": "u32",
+          "name": "mtxsrc"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTexCoordGen2",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "texcoord"
+        },
+        {
+          "type": "u32",
+          "name": "tgen_typ"
+        },
+        {
+          "type": "u32",
+          "name": "tgen_src"
+        },
+        {
+          "type": "u32",
+          "name": "mtxsrc"
+        },
+        {
+          "type": "u32",
+          "name": "normalize"
+        },
+        {
+          "type": "u32",
+          "name": "postmtx"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTexCoordScaleManually",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "texcoord"
+        },
+        {
+          "type": "u8",
+          "name": "enable"
+        },
+        {
+          "type": "u16",
+          "name": "ss"
+        },
+        {
+          "type": "u16",
+          "name": "ts"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTexCopyDst",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "wd"
+        },
+        {
+          "type": "u16",
+          "name": "ht"
+        },
+        {
+          "type": "u32",
+          "name": "fmt"
+        },
+        {
+          "type": "u8",
+          "name": "mode"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTexCopySrc",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "left"
+        },
+        {
+          "type": "u16",
+          "name": "top"
+        },
+        {
+          "type": "u16",
+          "name": "wd"
+        },
+        {
+          "type": "u16",
+          "name": "ht"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTexRegionCallback",
+      "class": "GX",
+      "return": "GXTexRegionCallback",
+      "parameters": [
+        {
+          "type": "GXTexRegionCallback",
+          "name": "cb"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetTlutRegionCallback",
+      "class": "GX",
+      "return": "GXTlutRegionCallback",
+      "parameters": [
+        {
+          "type": "GXTlutRegionCallback",
+          "name": "cb"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetVCacheMetric",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u32",
+          "name": "attr"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetViewport",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "f32",
+          "name": "xOrig"
+        },
+        {
+          "type": "f32",
+          "name": "yOrig"
+        },
+        {
+          "type": "f32",
+          "name": "wd"
+        },
+        {
+          "type": "f32",
+          "name": "ht"
+        },
+        {
+          "type": "f32",
+          "name": "nearZ"
+        },
+        {
+          "type": "f32",
+          "name": "farZ"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetViewportJitter",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "f32",
+          "name": "xOrig"
+        },
+        {
+          "type": "f32",
+          "name": "yOrig"
+        },
+        {
+          "type": "f32",
+          "name": "wd"
+        },
+        {
+          "type": "f32",
+          "name": "ht"
+        },
+        {
+          "type": "f32",
+          "name": "nearZ"
+        },
+        {
+          "type": "f32",
+          "name": "farZ"
+        },
+        {
+          "type": "u32",
+          "name": "field"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetVtxAttrFmt",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "vtxfmt"
+        },
+        {
+          "type": "u32",
+          "name": "vtxattr"
+        },
+        {
+          "type": "u32",
+          "name": "comptype"
+        },
+        {
+          "type": "u32",
+          "name": "compsize"
+        },
+        {
+          "type": "u32",
+          "name": "frac"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetVtxAttrFmtv",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "vtxfmt"
+        },
+        {
+          "type": "const GXVtxAttrFmt *",
+          "name": "attr_list"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetVtxDesc",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "attr"
+        },
+        {
+          "type": "u8",
+          "name": "type"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetVtxDescv",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXVtxDesc *",
+          "name": "attr_list"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetZCompLoc",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "before_tex"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetZMode",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "enable"
+        },
+        {
+          "type": "u8",
+          "name": "func"
+        },
+        {
+          "type": "u8",
+          "name": "update_enable"
+        }
+      ]
+    },
+    {
+      "name": "GX_SetZTexture",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "op"
+        },
+        {
+          "type": "u8",
+          "name": "fmt"
+        },
+        {
+          "type": "u32",
+          "name": "bias"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord1f32",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "f32",
+          "name": "s"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord1s16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s16",
+          "name": "s"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord1s8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s8",
+          "name": "s"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord1u16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "s"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord1u8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "s"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord1x16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "index"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord1x8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "index"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord2f32",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "f32",
+          "name": "s"
+        },
+        {
+          "type": "f32",
+          "name": "t"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord2s16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s16",
+          "name": "s"
+        },
+        {
+          "type": "s16",
+          "name": "t"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord2s8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s8",
+          "name": "s"
+        },
+        {
+          "type": "s8",
+          "name": "t"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord2u16",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "s"
+        },
+        {
+          "type": "u16",
+          "name": "t"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexCoord2u8",
+      "class": "GX",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u8",
+          "name": "s"
+        },
+        {
+          "type": "u8",
+          "name": "t"
+        }
+      ]
+    },
+    {
+      "name": "GX_TexModeSync",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "GX_WaitDrawDone",
+      "class": "GX",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_ClearFrameBuffer",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXRModeObj *",
+          "name": "rmode"
+        },
+        {
+          "type": "void *",
+          "name": "fb"
+        },
+        {
+          "type": "u32",
+          "name": "color"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_Configure",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const GXRModeObj *",
+          "name": "rmode"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_ConfigurePan",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16",
+          "name": "xOrg"
+        },
+        {
+          "type": "u16",
+          "name": "yOrg"
+        },
+        {
+          "type": "u16",
+          "name": "width"
+        },
+        {
+          "type": "u16",
+          "name": "height"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_DisablePositionInterrupt",
+      "class": "VIDEO",
+      "return": "VIPositionCallback",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_EnablePositionInterrupt",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s16",
+          "name": "posX"
+        },
+        {
+          "type": "s16",
+          "name": "posY"
+        },
+        {
+          "type": "VIPositionCallback",
+          "name": "callback"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_Flush",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_GetAdjustingValues",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s16 *",
+          "name": "posX"
+        },
+        {
+          "type": "s16 *",
+          "name": "posY"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_GetAspectRatio",
+      "class": "VIDEO",
+      "return": "f32",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_GetCurrentFramebuffer",
+      "class": "VIDEO",
+      "return": "void*",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_GetCurrentLine",
+      "class": "VIDEO",
+      "return": "u32",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_GetCurrentTvMode",
+      "class": "VIDEO",
+      "return": "u32",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_GetFrameBufferPan",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "u16 *",
+          "name": "xOrg"
+        },
+        {
+          "type": "u16 *",
+          "name": "yOrg"
+        },
+        {
+          "type": "u16 *",
+          "name": "width"
+        },
+        {
+          "type": "u16 *",
+          "name": "height"
+        },
+        {
+          "type": "u16 *",
+          "name": "stride"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_GetFrameBufferSize",
+      "class": "VIDEO",
+      "return": "u32",
+      "parameters": [
+        {
+          "type": "const GXRModeObj *",
+          "name": "rmode"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_GetNextField",
+      "class": "VIDEO",
+      "return": "u32",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_GetNextFramebuffer",
+      "class": "VIDEO",
+      "return": "void*",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_GetPreferredMode",
+      "class": "VIDEO",
+      "return": "GXRModeObj *",
+      "parameters": [
+        {
+          "type": "GXRModeObj *",
+          "name": "mode"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_GetRetraceCount",
+      "class": "VIDEO",
+      "return": "u32",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_GetRetraceRate",
+      "class": "VIDEO",
+      "return": "f32",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_GetScanMode",
+      "class": "VIDEO",
+      "return": "u32",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_HaveComponentCable",
+      "class": "VIDEO",
+      "return": "u32",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_Init",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_Set3D",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "bool",
+          "name": "threeD"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_SetAdjustingValues",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "s16",
+          "name": "posX"
+        },
+        {
+          "type": "s16",
+          "name": "posY"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_SetBlack",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "bool",
+          "name": "black"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_SetNextFramebuffer",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "void *",
+          "name": "fb"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_SetNextRightFramebuffer",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "void *",
+          "name": "fb"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_SetPostRetraceCallback",
+      "class": "VIDEO",
+      "return": "VIRetraceCallback",
+      "parameters": [
+        {
+          "type": "VIRetraceCallback",
+          "name": "callback"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_SetPreRetraceCallback",
+      "class": "VIDEO",
+      "return": "VIRetraceCallback",
+      "parameters": [
+        {
+          "type": "VIRetraceCallback",
+          "name": "callback"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_WaitForFlush",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "VIDEO_WaitForRetrace",
+      "class": "VIDEO",
+      "return": "u32",
+      "parameters": [
+        {
+          "type": "u32",
+          "name": "count"
+        }
+      ]
+    },
+    {
+      "name": "VIDEO_WaitVSync",
+      "class": "VIDEO",
+      "return": "void",
+      "parameters": []
+    },
+    {
+      "name": "guFrustum",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx44",
+          "name": "mt"
+        },
+        {
+          "type": "f32",
+          "name": "t"
+        },
+        {
+          "type": "f32",
+          "name": "b"
+        },
+        {
+          "type": "f32",
+          "name": "l"
+        },
+        {
+          "type": "f32",
+          "name": "r"
+        },
+        {
+          "type": "f32",
+          "name": "n"
+        },
+        {
+          "type": "f32",
+          "name": "f"
+        }
+      ]
+    },
+    {
+      "name": "guLightFrustum",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "f32",
+          "name": "t"
+        },
+        {
+          "type": "f32",
+          "name": "b"
+        },
+        {
+          "type": "f32",
+          "name": "l"
+        },
+        {
+          "type": "f32",
+          "name": "r"
+        },
+        {
+          "type": "f32",
+          "name": "n"
+        },
+        {
+          "type": "f32",
+          "name": "scaleS"
+        },
+        {
+          "type": "f32",
+          "name": "scaleT"
+        },
+        {
+          "type": "f32",
+          "name": "transS"
+        },
+        {
+          "type": "f32",
+          "name": "transT"
+        }
+      ]
+    },
+    {
+      "name": "guLightOrtho",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "f32",
+          "name": "t"
+        },
+        {
+          "type": "f32",
+          "name": "b"
+        },
+        {
+          "type": "f32",
+          "name": "l"
+        },
+        {
+          "type": "f32",
+          "name": "r"
+        },
+        {
+          "type": "f32",
+          "name": "scaleS"
+        },
+        {
+          "type": "f32",
+          "name": "scaleT"
+        },
+        {
+          "type": "f32",
+          "name": "transS"
+        },
+        {
+          "type": "f32",
+          "name": "transT"
+        }
+      ]
+    },
+    {
+      "name": "guLightPerspective",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "f32",
+          "name": "fovY"
+        },
+        {
+          "type": "f32",
+          "name": "aspect"
+        },
+        {
+          "type": "f32",
+          "name": "scaleS"
+        },
+        {
+          "type": "f32",
+          "name": "scaleT"
+        },
+        {
+          "type": "f32",
+          "name": "transS"
+        },
+        {
+          "type": "f32",
+          "name": "transT"
+        }
+      ]
+    },
+    {
+      "name": "guLookAt",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "const guVector *",
+          "name": "camPos"
+        },
+        {
+          "type": "const guVector *",
+          "name": "camUp"
+        },
+        {
+          "type": "const guVector *",
+          "name": "target"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44Concat",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx44",
+          "name": "a"
+        },
+        {
+          "type": "const Mtx44",
+          "name": "b"
+        },
+        {
+          "type": "Mtx44",
+          "name": "ab"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44Copy",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx44",
+          "name": "src"
+        },
+        {
+          "type": "Mtx44",
+          "name": "dst"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44Identity",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx44",
+          "name": "mt"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44Inverse",
+      "class": "GU",
+      "return": "u32",
+      "parameters": [
+        {
+          "type": "const Mtx44",
+          "name": "src"
+        },
+        {
+          "type": "Mtx44",
+          "name": "inv"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44RotAxisRad",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx44",
+          "name": "mt"
+        },
+        {
+          "type": "const guVector *",
+          "name": "axis"
+        },
+        {
+          "type": "f32",
+          "name": "rad"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44RotRad",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx44",
+          "name": "mt"
+        },
+        {
+          "type": "char",
+          "name": "axis"
+        },
+        {
+          "type": "f32",
+          "name": "rad"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44RotTrig",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx44",
+          "name": "mt"
+        },
+        {
+          "type": "char",
+          "name": "axis"
+        },
+        {
+          "type": "f32",
+          "name": "sinA"
+        },
+        {
+          "type": "f32",
+          "name": "cosA"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44Scale",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx44",
+          "name": "mt"
+        },
+        {
+          "type": "f32",
+          "name": "xS"
+        },
+        {
+          "type": "f32",
+          "name": "yS"
+        },
+        {
+          "type": "f32",
+          "name": "zS"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44ScaleApply",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx44",
+          "name": "src"
+        },
+        {
+          "type": "Mtx44",
+          "name": "dst"
+        },
+        {
+          "type": "f32",
+          "name": "xS"
+        },
+        {
+          "type": "f32",
+          "name": "yS"
+        },
+        {
+          "type": "f32",
+          "name": "zS"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44Trans",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx44",
+          "name": "mt"
+        },
+        {
+          "type": "f32",
+          "name": "xT"
+        },
+        {
+          "type": "f32",
+          "name": "yT"
+        },
+        {
+          "type": "f32",
+          "name": "zT"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44TransApply",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx44",
+          "name": "src"
+        },
+        {
+          "type": "Mtx44",
+          "name": "dst"
+        },
+        {
+          "type": "f32",
+          "name": "xT"
+        },
+        {
+          "type": "f32",
+          "name": "yT"
+        },
+        {
+          "type": "f32",
+          "name": "zT"
+        }
+      ]
+    },
+    {
+      "name": "guMtx44Transpose",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx44",
+          "name": "src"
+        },
+        {
+          "type": "Mtx44",
+          "name": "xPose"
+        }
+      ]
+    },
+    {
+      "name": "guMtxApplyScale",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "src"
+        },
+        {
+          "type": "Mtx",
+          "name": "dst"
+        },
+        {
+          "type": "f32",
+          "name": "xS"
+        },
+        {
+          "type": "f32",
+          "name": "yS"
+        },
+        {
+          "type": "f32",
+          "name": "zS"
+        }
+      ]
+    },
+    {
+      "name": "guMtxApplyTrans",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "src"
+        },
+        {
+          "type": "Mtx",
+          "name": "dst"
+        },
+        {
+          "type": "f32",
+          "name": "xT"
+        },
+        {
+          "type": "f32",
+          "name": "yT"
+        },
+        {
+          "type": "f32",
+          "name": "zT"
+        }
+      ]
+    },
+    {
+      "name": "guMtxConcat",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "a"
+        },
+        {
+          "type": "const Mtx",
+          "name": "b"
+        },
+        {
+          "type": "Mtx",
+          "name": "ab"
+        }
+      ]
+    },
+    {
+      "name": "guMtxCopy",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "src"
+        },
+        {
+          "type": "Mtx",
+          "name": "dst"
+        }
+      ]
+    },
+    {
+      "name": "guMtxIdentity",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "mt"
+        }
+      ]
+    },
+    {
+      "name": "guMtxInvXpose",
+      "class": "GU",
+      "return": "u32",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "src"
+        },
+        {
+          "type": "Mtx",
+          "name": "xPose"
+        }
+      ]
+    },
+    {
+      "name": "guMtxInverse",
+      "class": "GU",
+      "return": "u32",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "src"
+        },
+        {
+          "type": "Mtx",
+          "name": "inv"
+        }
+      ]
+    },
+    {
+      "name": "guMtxQuat",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "m"
+        },
+        {
+          "type": "const guQuaternion *",
+          "name": "a"
+        }
+      ]
+    },
+    {
+      "name": "guMtxReflect",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "m"
+        },
+        {
+          "type": "const guVector *",
+          "name": "p"
+        },
+        {
+          "type": "const guVector *",
+          "name": "n"
+        }
+      ]
+    },
+    {
+      "name": "guMtxRotAxisRad",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "const guVector *",
+          "name": "axis"
+        },
+        {
+          "type": "f32",
+          "name": "rad"
+        }
+      ]
+    },
+    {
+      "name": "guMtxRotRad",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "char",
+          "name": "axis"
+        },
+        {
+          "type": "f32",
+          "name": "rad"
+        }
+      ]
+    },
+    {
+      "name": "guMtxRotTrig",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "char",
+          "name": "axis"
+        },
+        {
+          "type": "f32",
+          "name": "sinA"
+        },
+        {
+          "type": "f32",
+          "name": "cosA"
+        }
+      ]
+    },
+    {
+      "name": "guMtxScale",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "f32",
+          "name": "xS"
+        },
+        {
+          "type": "f32",
+          "name": "yS"
+        },
+        {
+          "type": "f32",
+          "name": "zS"
+        }
+      ]
+    },
+    {
+      "name": "guMtxScaleApply",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "src"
+        },
+        {
+          "type": "Mtx",
+          "name": "dst"
+        },
+        {
+          "type": "f32",
+          "name": "xS"
+        },
+        {
+          "type": "f32",
+          "name": "yS"
+        },
+        {
+          "type": "f32",
+          "name": "zS"
+        }
+      ]
+    },
+    {
+      "name": "guMtxTrans",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "f32",
+          "name": "xT"
+        },
+        {
+          "type": "f32",
+          "name": "yT"
+        },
+        {
+          "type": "f32",
+          "name": "zT"
+        }
+      ]
+    },
+    {
+      "name": "guMtxTransApply",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "src"
+        },
+        {
+          "type": "Mtx",
+          "name": "dst"
+        },
+        {
+          "type": "f32",
+          "name": "xT"
+        },
+        {
+          "type": "f32",
+          "name": "yT"
+        },
+        {
+          "type": "f32",
+          "name": "zT"
+        }
+      ]
+    },
+    {
+      "name": "guMtxTranspose",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "src"
+        },
+        {
+          "type": "Mtx",
+          "name": "xPose"
+        }
+      ]
+    },
+    {
+      "name": "guOrtho",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx44",
+          "name": "mt"
+        },
+        {
+          "type": "f32",
+          "name": "t"
+        },
+        {
+          "type": "f32",
+          "name": "b"
+        },
+        {
+          "type": "f32",
+          "name": "l"
+        },
+        {
+          "type": "f32",
+          "name": "r"
+        },
+        {
+          "type": "f32",
+          "name": "n"
+        },
+        {
+          "type": "f32",
+          "name": "f"
+        }
+      ]
+    },
+    {
+      "name": "guPerspective",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "Mtx44",
+          "name": "mt"
+        },
+        {
+          "type": "f32",
+          "name": "fovy"
+        },
+        {
+          "type": "f32",
+          "name": "aspect"
+        },
+        {
+          "type": "f32",
+          "name": "n"
+        },
+        {
+          "type": "f32",
+          "name": "f"
+        }
+      ]
+    },
+    {
+      "name": "guQuatAdd",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guQuaternion *",
+          "name": "a"
+        },
+        {
+          "type": "const guQuaternion *",
+          "name": "b"
+        },
+        {
+          "type": "guQuaternion *",
+          "name": "ab"
+        }
+      ]
+    },
+    {
+      "name": "guQuatDotProduct",
+      "class": "GU",
+      "return": "f32",
+      "parameters": [
+        {
+          "type": "const guQuaternion *",
+          "name": "a"
+        },
+        {
+          "type": "const guQuaternion *",
+          "name": "b"
+        }
+      ]
+    },
+    {
+      "name": "guQuatInverse",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guQuaternion *",
+          "name": "a"
+        },
+        {
+          "type": "guQuaternion *",
+          "name": "d"
+        }
+      ]
+    },
+    {
+      "name": "guQuatMtx",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "guQuaternion *",
+          "name": "a"
+        },
+        {
+          "type": "const Mtx",
+          "name": "m"
+        }
+      ]
+    },
+    {
+      "name": "guQuatMultiply",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guQuaternion *",
+          "name": "a"
+        },
+        {
+          "type": "const guQuaternion *",
+          "name": "b"
+        },
+        {
+          "type": "guQuaternion *",
+          "name": "ab"
+        }
+      ]
+    },
+    {
+      "name": "guQuatNormalize",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guQuaternion *",
+          "name": "a"
+        },
+        {
+          "type": "guQuaternion *",
+          "name": "d"
+        }
+      ]
+    },
+    {
+      "name": "guQuatScale",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guQuaternion *",
+          "name": "src"
+        },
+        {
+          "type": "guQuaternion *",
+          "name": "dst"
+        },
+        {
+          "type": "f32",
+          "name": "scale"
+        }
+      ]
+    },
+    {
+      "name": "guQuatSub",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guQuaternion *",
+          "name": "a"
+        },
+        {
+          "type": "const guQuaternion *",
+          "name": "b"
+        },
+        {
+          "type": "guQuaternion *",
+          "name": "ab"
+        }
+      ]
+    },
+    {
+      "name": "guVecAdd",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guVector *",
+          "name": "a"
+        },
+        {
+          "type": "const guVector *",
+          "name": "b"
+        },
+        {
+          "type": "guVector *",
+          "name": "ab"
+        }
+      ]
+    },
+    {
+      "name": "guVecCross",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guVector *",
+          "name": "a"
+        },
+        {
+          "type": "const guVector *",
+          "name": "b"
+        },
+        {
+          "type": "guVector *",
+          "name": "axb"
+        }
+      ]
+    },
+    {
+      "name": "guVecDotProduct",
+      "class": "GU",
+      "return": "f32",
+      "parameters": [
+        {
+          "type": "const guVector *",
+          "name": "a"
+        },
+        {
+          "type": "const guVector *",
+          "name": "b"
+        }
+      ]
+    },
+    {
+      "name": "guVecHalfAngle",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guVector *",
+          "name": "a"
+        },
+        {
+          "type": "const guVector *",
+          "name": "b"
+        },
+        {
+          "type": "guVector *",
+          "name": "half"
+        }
+      ]
+    },
+    {
+      "name": "guVecMultiply",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "const guVector *",
+          "name": "src"
+        },
+        {
+          "type": "guVector *",
+          "name": "dst"
+        }
+      ]
+    },
+    {
+      "name": "guVecMultiplySR",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const Mtx",
+          "name": "mt"
+        },
+        {
+          "type": "const guVector *",
+          "name": "src"
+        },
+        {
+          "type": "guVector *",
+          "name": "dst"
+        }
+      ]
+    },
+    {
+      "name": "guVecNormalize",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guVector *",
+          "name": "src"
+        },
+        {
+          "type": "guVector *",
+          "name": "unit"
+        }
+      ]
+    },
+    {
+      "name": "guVecScale",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guVector *",
+          "name": "src"
+        },
+        {
+          "type": "guVector *",
+          "name": "dst"
+        },
+        {
+          "type": "f32",
+          "name": "scale"
+        }
+      ]
+    },
+    {
+      "name": "guVecSub",
+      "class": "GU",
+      "return": "void",
+      "parameters": [
+        {
+          "type": "const guVector *",
+          "name": "a"
+        },
+        {
+          "type": "const guVector *",
+          "name": "b"
+        },
+        {
+          "type": "guVector *",
+          "name": "ab"
+        }
+      ]
+    }
+  ],
+  "constants": {
+    "GX_AF_NONE": 2,
+    "GX_AF_SPEC": 0,
+    "GX_AF_SPOT": 1,
+    "GX_ALPHA0": 2,
+    "GX_ALPHA1": 3,
+    "GX_ALPHA_BUMP": 7,
+    "GX_ALPHA_BUMPN": 8,
+    "GX_ALWAYS": 7,
+    "GX_ANISO_1": 0,
+    "GX_ANISO_2": 1,
+    "GX_ANISO_4": 2,
+    "GX_AOP_AND": 0,
+    "GX_AOP_OR": 1,
+    "GX_AOP_XNOR": 3,
+    "GX_AOP_XOR": 2,
+    "GX_BIGTLUT0": 16,
+    "GX_BIGTLUT1": 17,
+    "GX_BIGTLUT2": 18,
+    "GX_BIGTLUT3": 19,
+    "GX_BLEND": 2,
+    "GX_BL_DSTALPHA": 6,
+    "GX_BL_DSTCLR": 2,
+    "GX_BL_INVDSTALPHA": 7,
+    "GX_BL_INVDSTCLR": 3,
+    "GX_BL_INVSRCALPHA": 5,
+    "GX_BL_INVSRCCLR": 3,
+    "GX_BL_ONE": 1,
+    "GX_BL_SRCALPHA": 4,
+    "GX_BL_SRCCLR": 2,
+    "GX_BL_ZERO": 0,
+    "GX_BM_BLEND": 1,
+    "GX_BM_LOGIC": 2,
+    "GX_BM_NONE": 0,
+    "GX_BM_SUBTRACT": 3,
+    "GX_CA_A0": 1,
+    "GX_CA_A1": 2,
+    "GX_CA_A2": 3,
+    "GX_CA_APREV": 0,
+    "GX_CA_KONST": 6,
+    "GX_CA_ONE": 6,
+    "GX_CA_RASA": 5,
+    "GX_CA_TEXA": 4,
+    "GX_CA_ZERO": 7,
+    "GX_CC_A0": 3,
+    "GX_CC_A1": 5,
+    "GX_CC_A2": 7,
+    "GX_CC_APREV": 1,
+    "GX_CC_C0": 2,
+    "GX_CC_C1": 4,
+    "GX_CC_C2": 6,
+    "GX_CC_CPREV": 0,
+    "GX_CC_HALF": 13,
+    "GX_CC_KONST": 14,
+    "GX_CC_ONE": 12,
+    "GX_CC_QUARTER": 14,
+    "GX_CC_RASA": 11,
+    "GX_CC_RASC": 10,
+    "GX_CC_TEXA": 9,
+    "GX_CC_TEXC": 8,
+    "GX_CC_ZERO": 15,
+    "GX_CH_ALPHA": 3,
+    "GX_CH_BLUE": 2,
+    "GX_CH_GREEN": 1,
+    "GX_CH_RED": 0,
+    "GX_CLAMP": 0,
+    "GX_CLAMP_BOTTOM": 2,
+    "GX_CLAMP_NONE": 0,
+    "GX_CLAMP_TOP": 1,
+    "GX_CLIP_DISABLE": 1,
+    "GX_CLIP_ENABLE": 0,
+    "GX_CLIP_REJECT_DISABLE": 3,
+    "GX_CLR_RGB": 0,
+    "GX_CLR_RGBA": 1,
+    "GX_COLOR0": 0,
+    "GX_COLOR0A0": 4,
+    "GX_COLOR1": 1,
+    "GX_COLOR1A1": 5,
+    "GX_COLORNULL": 255,
+    "GX_COLORZERO": 6,
+    "GX_COLOR_NULL": 255,
+    "GX_COLOR_ZERO": 6,
+    "GX_COPY_INTERLACED": 3,
+    "GX_COPY_INTLC_EVEN": 2,
+    "GX_COPY_INTLC_ODD": 3,
+    "GX_COPY_MIPMAP": 1,
+    "GX_COPY_NONE": 1,
+    "GX_COPY_PROGRESSIVE": 0,
+    "GX_CS_DIVIDE_2": 3,
+    "GX_CS_SCALE_1": 0,
+    "GX_CS_SCALE_2": 1,
+    "GX_CS_SCALE_4": 2,
+    "GX_CULL_ALL": 3,
+    "GX_CULL_BACK": 2,
+    "GX_CULL_FRONT": 1,
+    "GX_CULL_NONE": 0,
+    "GX_DA_GENTLE": 1,
+    "GX_DA_MEDIUM": 2,
+    "GX_DA_OFF": 0,
+    "GX_DA_STEEP": 3,
+    "GX_DECAL": 1,
+    "GX_DF_CLAMP": 2,
+    "GX_DF_NONE": 0,
+    "GX_DF_SIGNED": 1,
+    "GX_DIRECT": 1,
+    "GX_DISABLE": 0,
+    "GX_DTTIDENTITY": 125,
+    "GX_DTTMTX0": 64,
+    "GX_DTTMTX1": 67,
+    "GX_DTTMTX10": 94,
+    "GX_DTTMTX11": 97,
+    "GX_DTTMTX12": 100,
+    "GX_DTTMTX13": 103,
+    "GX_DTTMTX14": 106,
+    "GX_DTTMTX15": 109,
+    "GX_DTTMTX16": 112,
+    "GX_DTTMTX17": 115,
+    "GX_DTTMTX18": 118,
+    "GX_DTTMTX19": 121,
+    "GX_DTTMTX2": 70,
+    "GX_DTTMTX3": 73,
+    "GX_DTTMTX4": 76,
+    "GX_DTTMTX5": 79,
+    "GX_DTTMTX6": 82,
+    "GX_DTTMTX7": 85,
+    "GX_DTTMTX8": 88,
+    "GX_DTTMTX9": 91,
+    "GX_ENABLE": 1,
+    "GX_EQUAL": 2,
+    "GX_F32": 4,
+    "GX_FALSE": 0,
+    "GX_FIFO_HIWATERMARK": 16384,
+    "GX_FIFO_MINSIZE": 65536,
+    "GX_FIFO_OBJSIZE": 128,
+    "GX_FOG_EXP": 4,
+    "GX_FOG_EXP2": 5,
+    "GX_FOG_LIN": 2,
+    "GX_FOG_NONE": 0,
+    "GX_FOG_ORTHO_EXP": 12,
+    "GX_FOG_ORTHO_EXP2": 13,
+    "GX_FOG_ORTHO_LIN": 10,
+    "GX_FOG_ORTHO_REVEXP": 14,
+    "GX_FOG_ORTHO_REVEXP2": 15,
+    "GX_FOG_PERSP_EXP": 4,
+    "GX_FOG_PERSP_EXP2": 5,
+    "GX_FOG_PERSP_LIN": 2,
+    "GX_FOG_PERSP_REVEXP": 6,
+    "GX_FOG_PERSP_REVEXP2": 7,
+    "GX_FOG_REVEXP": 6,
+    "GX_FOG_REVEXP2": 7,
+    "GX_GEQUAL": 6,
+    "GX_GM_1_0": 0,
+    "GX_GM_1_7": 1,
+    "GX_GM_2_2": 2,
+    "GX_GREATER": 4,
+    "GX_IDENTITY": 60,
+    "GX_INDEX16": 3,
+    "GX_INDEX8": 2,
+    "GX_INDTEXSTAGE0": 0,
+    "GX_INDTEXSTAGE1": 1,
+    "GX_INDTEXSTAGE2": 2,
+    "GX_INDTEXSTAGE3": 3,
+    "GX_ITBA_OFF": 0,
+    "GX_ITBA_S": 1,
+    "GX_ITBA_T": 2,
+    "GX_ITBA_U": 3,
+    "GX_ITB_NONE": 0,
+    "GX_ITB_S": 1,
+    "GX_ITB_ST": 3,
+    "GX_ITB_STU": 7,
+    "GX_ITB_SU": 5,
+    "GX_ITB_T": 2,
+    "GX_ITB_TU": 6,
+    "GX_ITB_U": 4,
+    "GX_ITF_3": 3,
+    "GX_ITF_4": 2,
+    "GX_ITF_5": 1,
+    "GX_ITF_8": 0,
+    "GX_ITM_0": 1,
+    "GX_ITM_1": 2,
+    "GX_ITM_2": 3,
+    "GX_ITM_OFF": 0,
+    "GX_ITM_S0": 5,
+    "GX_ITM_S1": 6,
+    "GX_ITM_S2": 7,
+    "GX_ITM_T0": 9,
+    "GX_ITM_T1": 10,
+    "GX_ITM_T2": 11,
+    "GX_ITS_1": 0,
+    "GX_ITS_128": 7,
+    "GX_ITS_16": 4,
+    "GX_ITS_2": 1,
+    "GX_ITS_256": 8,
+    "GX_ITS_32": 5,
+    "GX_ITS_4": 2,
+    "GX_ITS_64": 6,
+    "GX_ITS_8": 3,
+    "GX_ITW_0": 6,
+    "GX_ITW_128": 2,
+    "GX_ITW_16": 5,
+    "GX_ITW_256": 1,
+    "GX_ITW_32": 4,
+    "GX_ITW_64": 3,
+    "GX_ITW_OFF": 0,
+    "GX_KCOLOR0": 0,
+    "GX_KCOLOR1": 1,
+    "GX_KCOLOR2": 2,
+    "GX_KCOLOR3": 3,
+    "GX_KCOLOR_MAX": 4,
+    "GX_LEQUAL": 3,
+    "GX_LESS": 1,
+    "GX_LIGHT0": 1,
+    "GX_LIGHT1": 2,
+    "GX_LIGHT2": 4,
+    "GX_LIGHT3": 8,
+    "GX_LIGHT4": 16,
+    "GX_LIGHT5": 32,
+    "GX_LIGHT6": 64,
+    "GX_LIGHT7": 128,
+    "GX_LIGHTARRAY": 24,
+    "GX_LIGHTNULL": 0,
+    "GX_LIGHT_NULL": 0,
+    "GX_LINEAR": 1,
+    "GX_LINES": 168,
+    "GX_LINESTRIP": 176,
+    "GX_LIN_MIP_LIN": 5,
+    "GX_LIN_MIP_NEAR": 3,
+    "GX_LO_AND": 1,
+    "GX_LO_CLEAR": 0,
+    "GX_LO_COPY": 3,
+    "GX_LO_EQUIV": 9,
+    "GX_LO_INV": 10,
+    "GX_LO_INVAND": 4,
+    "GX_LO_INVCOPY": 12,
+    "GX_LO_INVOR": 13,
+    "GX_LO_NAND": 14,
+    "GX_LO_NOOP": 5,
+    "GX_LO_NOR": 8,
+    "GX_LO_OR": 7,
+    "GX_LO_REVAND": 2,
+    "GX_LO_REVOR": 11,
+    "GX_LO_SET": 15,
+    "GX_LO_XOR": 6,
+    "GX_MAXCOORD": 8,
+    "GX_MAXLIGHT": 256,
+    "GX_MAXTEXWRAPMODE": 3,
+    "GX_MAXVTXFMT": 8,
+    "GX_MAX_ALPHAOP": 4,
+    "GX_MAX_ANISOTROPY": 3,
+    "GX_MAX_BLENDMODE": 4,
+    "GX_MAX_INDTEXSTAGE": 4,
+    "GX_MAX_ITBALPHA": 4,
+    "GX_MAX_ITBIAS": 8,
+    "GX_MAX_ITFORMAT": 4,
+    "GX_MAX_ITSCALE": 9,
+    "GX_MAX_ITWRAP": 7,
+    "GX_MAX_KCOLOR": 4,
+    "GX_MAX_LIGHT": 256,
+    "GX_MAX_TEVBIAS": 3,
+    "GX_MAX_TEVCLAMPMODE": 4,
+    "GX_MAX_TEVREG": 4,
+    "GX_MAX_TEVSCALE": 4,
+    "GX_MAX_TEVSTAGE": 16,
+    "GX_MAX_TEVSWAP": 4,
+    "GX_MAX_TEXCOORD": 8,
+    "GX_MAX_TEXMAP": 8,
+    "GX_MAX_TEXOFFSET": 6,
+    "GX_MAX_TEXWRAPMODE": 3,
+    "GX_MAX_TLUTFMT": 3,
+    "GX_MAX_VTXATTRFMT": 26,
+    "GX_MAX_VTXATTRFMT_LISTSIZE": 27,
+    "GX_MAX_VTXDESC": 26,
+    "GX_MAX_VTXDESC_LISTSIZE": 27,
+    "GX_MAX_VTXFMT": 8,
+    "GX_MAX_Z24": 16777215,
+    "GX_MAX_ZTEXOP": 3,
+    "GX_MIRROR": 2,
+    "GX_MODULATE": 0,
+    "GX_MTX2x4": 1,
+    "GX_MTX3x4": 0,
+    "GX_MT_DL_SAVE_CTX": 2,
+    "GX_MT_NULL": 0,
+    "GX_MT_XF_FLUSH": 1,
+    "GX_NEAR": 0,
+    "GX_NEAR_MIP_LIN": 4,
+    "GX_NEAR_MIP_NEAR": 2,
+    "GX_NEQUAL": 5,
+    "GX_NEVER": 0,
+    "GX_NONE": 0,
+    "GX_NRMMTXARRAY": 22,
+    "GX_NRM_NBT": 1,
+    "GX_NRM_NBT3": 2,
+    "GX_NRM_XYZ": 0,
+    "GX_ORTHOGRAPHIC": 1,
+    "GX_PASSCLR": 4,
+    "GX_PERF0_AVG_QUAD_CNT": 33,
+    "GX_PERF0_CLIP_CLKS": 2,
+    "GX_PERF0_CLIP_RATIO": 10,
+    "GX_PERF0_CLIP_VTX": 1,
+    "GX_PERF0_CLOCKS": 34,
+    "GX_PERF0_NONE": 35,
+    "GX_PERF0_QUAD_0CVG": 27,
+    "GX_PERF0_QUAD_1CVG": 29,
+    "GX_PERF0_QUAD_2CVG": 30,
+    "GX_PERF0_QUAD_3CVG": 31,
+    "GX_PERF0_QUAD_4CVG": 32,
+    "GX_PERF0_QUAD_NON0CVG": 28,
+    "GX_PERF0_TRIANGLES": 11,
+    "GX_PERF0_TRIANGLES_0CLR": 24,
+    "GX_PERF0_TRIANGLES_0TEX": 15,
+    "GX_PERF0_TRIANGLES_1CLR": 25,
+    "GX_PERF0_TRIANGLES_1TEX": 16,
+    "GX_PERF0_TRIANGLES_2CLR": 26,
+    "GX_PERF0_TRIANGLES_2TEX": 17,
+    "GX_PERF0_TRIANGLES_3TEX": 18,
+    "GX_PERF0_TRIANGLES_4TEX": 19,
+    "GX_PERF0_TRIANGLES_5TEX": 20,
+    "GX_PERF0_TRIANGLES_6TEX": 21,
+    "GX_PERF0_TRIANGLES_7TEX": 22,
+    "GX_PERF0_TRIANGLES_8TEX": 23,
+    "GX_PERF0_TRIANGLES_CULLED": 12,
+    "GX_PERF0_TRIANGLES_PASSED": 13,
+    "GX_PERF0_TRIANGLES_SCISSORED": 14,
+    "GX_PERF0_VERTICES": 0,
+    "GX_PERF0_XF_BOT_CLKS": 7,
+    "GX_PERF0_XF_LIT_CLKS": 6,
+    "GX_PERF0_XF_REGLD_CLKS": 8,
+    "GX_PERF0_XF_REGRD_CLKS": 9,
+    "GX_PERF0_XF_WAIT_IN": 3,
+    "GX_PERF0_XF_WAIT_OUT": 4,
+    "GX_PERF0_XF_XFRM_CLKS": 5,
+    "GX_PERF1_CALL_REQ": 18,
+    "GX_PERF1_CLOCKS": 21,
+    "GX_PERF1_CP_ALL_REQ": 20,
+    "GX_PERF1_FIFO_REQ": 17,
+    "GX_PERF1_NONE": 22,
+    "GX_PERF1_TC_CHECK1_2": 4,
+    "GX_PERF1_TC_CHECK3_4": 5,
+    "GX_PERF1_TC_CHECK5_6": 6,
+    "GX_PERF1_TC_CHECK7_8": 7,
+    "GX_PERF1_TC_MISS": 8,
+    "GX_PERF1_TEXELS": 0,
+    "GX_PERF1_TX_IDLE": 1,
+    "GX_PERF1_TX_MEMSTALL": 3,
+    "GX_PERF1_TX_REGS": 2,
+    "GX_PERF1_VC_ALL_STALLS": 15,
+    "GX_PERF1_VC_ELEMQ_FULL": 9,
+    "GX_PERF1_VC_MEMREQ_FULL": 11,
+    "GX_PERF1_VC_MISSQ_FULL": 10,
+    "GX_PERF1_VC_MISSREP_FULL": 13,
+    "GX_PERF1_VC_MISS_REQ": 19,
+    "GX_PERF1_VC_STATUS7": 12,
+    "GX_PERF1_VC_STREAMBUF_LOW": 14,
+    "GX_PERF1_VERTICES": 16,
+    "GX_PERSPECTIVE": 0,
+    "GX_PF_RGB565_Z16": 2,
+    "GX_PF_RGB8_Z24": 0,
+    "GX_PF_RGBA6_Z24": 1,
+    "GX_PF_U8": 5,
+    "GX_PF_V8": 6,
+    "GX_PF_Y8": 4,
+    "GX_PF_YUV420": 7,
+    "GX_PF_Z24": 3,
+    "GX_PNMTX0": 0,
+    "GX_PNMTX1": 3,
+    "GX_PNMTX2": 6,
+    "GX_PNMTX3": 9,
+    "GX_PNMTX4": 12,
+    "GX_PNMTX5": 15,
+    "GX_PNMTX6": 18,
+    "GX_PNMTX7": 21,
+    "GX_PNMTX8": 24,
+    "GX_PNMTX9": 27,
+    "GX_POINTS": 184,
+    "GX_POSMTXARRAY": 21,
+    "GX_POS_XY": 0,
+    "GX_POS_XYZ": 1,
+    "GX_QUADS": 128,
+    "GX_READ_00": 0,
+    "GX_READ_FF": 1,
+    "GX_READ_NONE": 2,
+    "GX_REPEAT": 1,
+    "GX_REPLACE": 3,
+    "GX_RGB565": 0,
+    "GX_RGB8": 1,
+    "GX_RGBA4": 3,
+    "GX_RGBA6": 4,
+    "GX_RGBA8": 5,
+    "GX_RGBX8": 2,
+    "GX_S16": 3,
+    "GX_S8": 1,
+    "GX_SP_COS": 2,
+    "GX_SP_COS2": 3,
+    "GX_SP_FLAT": 1,
+    "GX_SP_OFF": 0,
+    "GX_SP_RING1": 5,
+    "GX_SP_RING2": 6,
+    "GX_SP_SHARP": 4,
+    "GX_SRC_REG": 0,
+    "GX_SRC_VTX": 1,
+    "GX_TB_ADDHALF": 1,
+    "GX_TB_SUBHALF": 2,
+    "GX_TB_ZERO": 0,
+    "GX_TC_EQ": 2,
+    "GX_TC_GE": 1,
+    "GX_TC_LE": 3,
+    "GX_TC_LINEAR": 0,
+    "GX_TEVPREV": 0,
+    "GX_TEVREG0": 1,
+    "GX_TEVREG1": 2,
+    "GX_TEVREG2": 3,
+    "GX_TEVSTAGE0": 0,
+    "GX_TEVSTAGE1": 1,
+    "GX_TEVSTAGE10": 10,
+    "GX_TEVSTAGE11": 11,
+    "GX_TEVSTAGE12": 12,
+    "GX_TEVSTAGE13": 13,
+    "GX_TEVSTAGE14": 14,
+    "GX_TEVSTAGE15": 15,
+    "GX_TEVSTAGE2": 2,
+    "GX_TEVSTAGE3": 3,
+    "GX_TEVSTAGE4": 4,
+    "GX_TEVSTAGE5": 5,
+    "GX_TEVSTAGE6": 6,
+    "GX_TEVSTAGE7": 7,
+    "GX_TEVSTAGE8": 8,
+    "GX_TEVSTAGE9": 9,
+    "GX_TEV_ADD": 0,
+    "GX_TEV_COMP_BGR24_EQ": 13,
+    "GX_TEV_COMP_BGR24_GT": 12,
+    "GX_TEV_COMP_GR16_EQ": 11,
+    "GX_TEV_COMP_GR16_GT": 10,
+    "GX_TEV_COMP_R8_EQ": 9,
+    "GX_TEV_COMP_R8_GT": 8,
+    "GX_TEV_COMP_RGB8_EQ": 15,
+    "GX_TEV_COMP_RGB8_GT": 14,
+    "GX_TEV_KASEL_1": 0,
+    "GX_TEV_KASEL_1_2": 4,
+    "GX_TEV_KASEL_1_4": 6,
+    "GX_TEV_KASEL_1_8": 7,
+    "GX_TEV_KASEL_2_8": 6,
+    "GX_TEV_KASEL_3_4": 2,
+    "GX_TEV_KASEL_3_8": 5,
+    "GX_TEV_KASEL_4_8": 4,
+    "GX_TEV_KASEL_5_8": 3,
+    "GX_TEV_KASEL_6_8": 2,
+    "GX_TEV_KASEL_7_8": 1,
+    "GX_TEV_KASEL_8_8": 0,
+    "GX_TEV_KASEL_K0_A": 28,
+    "GX_TEV_KASEL_K0_B": 24,
+    "GX_TEV_KASEL_K0_G": 20,
+    "GX_TEV_KASEL_K0_R": 16,
+    "GX_TEV_KASEL_K1_A": 29,
+    "GX_TEV_KASEL_K1_B": 25,
+    "GX_TEV_KASEL_K1_G": 21,
+    "GX_TEV_KASEL_K1_R": 17,
+    "GX_TEV_KASEL_K2_A": 30,
+    "GX_TEV_KASEL_K2_B": 26,
+    "GX_TEV_KASEL_K2_G": 22,
+    "GX_TEV_KASEL_K2_R": 18,
+    "GX_TEV_KASEL_K3_A": 31,
+    "GX_TEV_KASEL_K3_B": 27,
+    "GX_TEV_KASEL_K3_G": 23,
+    "GX_TEV_KASEL_K3_R": 19,
+    "GX_TEV_KCSEL_1": 0,
+    "GX_TEV_KCSEL_1_2": 4,
+    "GX_TEV_KCSEL_1_4": 6,
+    "GX_TEV_KCSEL_1_8": 7,
+    "GX_TEV_KCSEL_2_8": 6,
+    "GX_TEV_KCSEL_3_4": 2,
+    "GX_TEV_KCSEL_3_8": 5,
+    "GX_TEV_KCSEL_4_8": 4,
+    "GX_TEV_KCSEL_5_8": 3,
+    "GX_TEV_KCSEL_6_8": 2,
+    "GX_TEV_KCSEL_7_8": 1,
+    "GX_TEV_KCSEL_8_8": 0,
+    "GX_TEV_KCSEL_K0": 12,
+    "GX_TEV_KCSEL_K0_A": 28,
+    "GX_TEV_KCSEL_K0_B": 24,
+    "GX_TEV_KCSEL_K0_G": 20,
+    "GX_TEV_KCSEL_K0_R": 16,
+    "GX_TEV_KCSEL_K1": 13,
+    "GX_TEV_KCSEL_K1_A": 29,
+    "GX_TEV_KCSEL_K1_B": 25,
+    "GX_TEV_KCSEL_K1_G": 21,
+    "GX_TEV_KCSEL_K1_R": 17,
+    "GX_TEV_KCSEL_K2": 14,
+    "GX_TEV_KCSEL_K2_A": 30,
+    "GX_TEV_KCSEL_K2_B": 26,
+    "GX_TEV_KCSEL_K2_G": 22,
+    "GX_TEV_KCSEL_K2_R": 18,
+    "GX_TEV_KCSEL_K3": 15,
+    "GX_TEV_KCSEL_K3_A": 31,
+    "GX_TEV_KCSEL_K3_B": 27,
+    "GX_TEV_KCSEL_K3_G": 23,
+    "GX_TEV_KCSEL_K3_R": 19,
+    "GX_TEV_SUB": 1,
+    "GX_TEV_SWAP0": 0,
+    "GX_TEV_SWAP1": 1,
+    "GX_TEV_SWAP2": 2,
+    "GX_TEV_SWAP3": 3,
+    "GX_TEXCACHE_128K": 1,
+    "GX_TEXCACHE_32K": 0,
+    "GX_TEXCACHE_512K": 2,
+    "GX_TEXCACHE_NONE": 3,
+    "GX_TEXCOORD0": 0,
+    "GX_TEXCOORD1": 1,
+    "GX_TEXCOORD2": 2,
+    "GX_TEXCOORD3": 3,
+    "GX_TEXCOORD4": 4,
+    "GX_TEXCOORD5": 5,
+    "GX_TEXCOORD6": 6,
+    "GX_TEXCOORD7": 7,
+    "GX_TEXCOORDNULL": 255,
+    "GX_TEXCOORD_NULL": 255,
+    "GX_TEXMAP0": 0,
+    "GX_TEXMAP1": 1,
+    "GX_TEXMAP2": 2,
+    "GX_TEXMAP3": 3,
+    "GX_TEXMAP4": 4,
+    "GX_TEXMAP5": 5,
+    "GX_TEXMAP6": 6,
+    "GX_TEXMAP7": 7,
+    "GX_TEXMAPNULL": 255,
+    "GX_TEXMAP_DISABLE": 256,
+    "GX_TEXMAP_NULL": 255,
+    "GX_TEXMTX0": 30,
+    "GX_TEXMTX1": 33,
+    "GX_TEXMTX2": 36,
+    "GX_TEXMTX3": 39,
+    "GX_TEXMTX4": 42,
+    "GX_TEXMTX5": 45,
+    "GX_TEXMTX6": 48,
+    "GX_TEXMTX7": 51,
+    "GX_TEXMTX8": 54,
+    "GX_TEXMTX9": 57,
+    "GX_TEXMTXARRAY": 23,
+    "GX_TEX_S": 0,
+    "GX_TEX_ST": 1,
+    "GX_TF_CI14": 10,
+    "GX_TF_CI4": 8,
+    "GX_TF_CI8": 9,
+    "GX_TF_CMPR": 14,
+    "GX_TF_I4": 0,
+    "GX_TF_I8": 1,
+    "GX_TF_IA4": 2,
+    "GX_TF_IA8": 3,
+    "GX_TF_RGB565": 4,
+    "GX_TF_RGB5A3": 5,
+    "GX_TF_RGBA8": 6,
+    "GX_TG_BINRM": 2,
+    "GX_TG_BUMP0": 2,
+    "GX_TG_BUMP1": 3,
+    "GX_TG_BUMP2": 4,
+    "GX_TG_BUMP3": 5,
+    "GX_TG_BUMP4": 6,
+    "GX_TG_BUMP5": 7,
+    "GX_TG_BUMP6": 8,
+    "GX_TG_BUMP7": 9,
+    "GX_TG_COLOR0": 19,
+    "GX_TG_COLOR1": 20,
+    "GX_TG_MTX2x4": 1,
+    "GX_TG_MTX3x4": 0,
+    "GX_TG_NRM": 1,
+    "GX_TG_POS": 0,
+    "GX_TG_SRTG": 10,
+    "GX_TG_TANGENT": 3,
+    "GX_TG_TEX0": 4,
+    "GX_TG_TEX1": 5,
+    "GX_TG_TEX2": 6,
+    "GX_TG_TEX3": 7,
+    "GX_TG_TEX4": 8,
+    "GX_TG_TEX5": 9,
+    "GX_TG_TEX6": 10,
+    "GX_TG_TEX7": 11,
+    "GX_TG_TEXCOORD0": 12,
+    "GX_TG_TEXCOORD1": 13,
+    "GX_TG_TEXCOORD2": 14,
+    "GX_TG_TEXCOORD3": 15,
+    "GX_TG_TEXCOORD4": 16,
+    "GX_TG_TEXCOORD5": 17,
+    "GX_TG_TEXCOORD6": 18,
+    "GX_TLUT0": 0,
+    "GX_TLUT1": 1,
+    "GX_TLUT10": 10,
+    "GX_TLUT11": 11,
+    "GX_TLUT12": 12,
+    "GX_TLUT13": 13,
+    "GX_TLUT14": 14,
+    "GX_TLUT15": 15,
+    "GX_TLUT2": 2,
+    "GX_TLUT3": 3,
+    "GX_TLUT4": 4,
+    "GX_TLUT5": 5,
+    "GX_TLUT6": 6,
+    "GX_TLUT7": 7,
+    "GX_TLUT8": 8,
+    "GX_TLUT9": 9,
+    "GX_TLUT_128": 8,
+    "GX_TLUT_16K": 1024,
+    "GX_TLUT_1K": 64,
+    "GX_TLUT_256": 16,
+    "GX_TLUT_2K": 128,
+    "GX_TLUT_32": 2,
+    "GX_TLUT_4K": 256,
+    "GX_TLUT_512": 32,
+    "GX_TLUT_64": 4,
+    "GX_TLUT_8K": 512,
+    "GX_TL_IA8": 0,
+    "GX_TL_RGB565": 1,
+    "GX_TL_RGB5A3": 2,
+    "GX_TO_EIGHTH": 2,
+    "GX_TO_FOURTH": 3,
+    "GX_TO_HALF": 4,
+    "GX_TO_ONE": 5,
+    "GX_TO_SIXTEENTH": 1,
+    "GX_TO_ZERO": 0,
+    "GX_TRIANGLEFAN": 160,
+    "GX_TRIANGLES": 144,
+    "GX_TRIANGLESTRIP": 152,
+    "GX_TRUE": 1,
+    "GX_U16": 2,
+    "GX_U8": 0,
+    "GX_VA_CLR0": 11,
+    "GX_VA_CLR1": 12,
+    "GX_VA_MAXATTR": 26,
+    "GX_VA_MAX_ATTR": 26,
+    "GX_VA_NBT": 25,
+    "GX_VA_NRM": 10,
+    "GX_VA_NULL": 255,
+    "GX_VA_PNMTXIDX": 0,
+    "GX_VA_POS": 9,
+    "GX_VA_PTNMTXIDX": 0,
+    "GX_VA_TEX0": 13,
+    "GX_VA_TEX0MTXIDX": 1,
+    "GX_VA_TEX1": 14,
+    "GX_VA_TEX1MTXIDX": 2,
+    "GX_VA_TEX2": 15,
+    "GX_VA_TEX2MTXIDX": 3,
+    "GX_VA_TEX3": 16,
+    "GX_VA_TEX3MTXIDX": 4,
+    "GX_VA_TEX4": 17,
+    "GX_VA_TEX4MTXIDX": 5,
+    "GX_VA_TEX5": 18,
+    "GX_VA_TEX5MTXIDX": 6,
+    "GX_VA_TEX6": 19,
+    "GX_VA_TEX6MTXIDX": 7,
+    "GX_VA_TEX7": 20,
+    "GX_VA_TEX7MTXIDX": 8,
+    "GX_VC_ALL": 15,
+    "GX_VC_CLR0": 2,
+    "GX_VC_CLR1": 3,
+    "GX_VC_NRM": 1,
+    "GX_VC_POS": 0,
+    "GX_VC_TEX0": 4,
+    "GX_VC_TEX1": 5,
+    "GX_VC_TEX2": 6,
+    "GX_VC_TEX3": 7,
+    "GX_VC_TEX4": 8,
+    "GX_VC_TEX5": 9,
+    "GX_VC_TEX6": 10,
+    "GX_VC_TEX7": 11,
+    "GX_VTXFMT0": 0,
+    "GX_VTXFMT1": 1,
+    "GX_VTXFMT2": 2,
+    "GX_VTXFMT3": 3,
+    "GX_VTXFMT4": 4,
+    "GX_VTXFMT5": 5,
+    "GX_VTXFMT6": 6,
+    "GX_VTXFMT7": 7,
+    "GX_XF_FLUSH_NONE": 0,
+    "GX_XF_FLUSH_SAFE": 1,
+    "GX_ZC_FAR": 3,
+    "GX_ZC_LINEAR": 0,
+    "GX_ZC_MID": 2,
+    "GX_ZC_NEAR": 1,
+    "GX_ZT_ADD": 1,
+    "GX_ZT_DISABLE": 0,
+    "GX_ZT_REPLACE": 2
+  }
+}

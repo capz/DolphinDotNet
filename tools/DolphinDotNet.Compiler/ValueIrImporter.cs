@@ -158,13 +158,13 @@ internal static class ValueIrImporter
                     }
                     case 0xa3:
                     {
-                        var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array load at IL_{cil.Offset:x4}.");var index=Pop(stack,cil);var array=Pop(stack,cil);
+                        var optional=resolveGenericTypeParameter(cil);if(optional is null&&resolveType(cil) is {} named){var layout=valueLayout(named);if(layout.Item1>0)optional=new GenericRepresentation(GenericRepresentationKind.ValueType,layout.Item1,layout.Item2,named);}var rep=optional??throw new NotSupportedException($"Unable to resolve array load at IL_{cil.Offset:x4}.");var index=Pop(stack,cil);var array=Pop(stack,cil);
                         var result=New(rep.StackKind);
                         instructions.Add(rep.IsAggregate?new ValueIrAggregateElement(result,array,index,rep.Size):new ValueIrLoadElement(result,array,index,rep.Size,rep.IsReference,rep.TypeName is not ("System.Byte" or "System.Boolean" or "System.Char" or "System.UInt16" or "System.UInt32" or "System.UInt64")));stack.Add(result);break;
                     }
                     case 0xa4:
                     {
-                        var rep=resolveGenericTypeParameter(cil)??throw new NotSupportedException($"Unable to resolve generic array store at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);
+                        var optional=resolveGenericTypeParameter(cil);if(optional is null&&resolveType(cil) is {} named){var layout=valueLayout(named);if(layout.Item1>0)optional=new GenericRepresentation(GenericRepresentationKind.ValueType,layout.Item1,layout.Item2,named);}var rep=optional??throw new NotSupportedException($"Unable to resolve array store at IL_{cil.Offset:x4}.");var value=Pop(stack,cil);var index=Pop(stack,cil);var array=Pop(stack,cil);
                         instructions.Add(rep.IsAggregate?new ValueIrStoreAggregateElement(array,index,value,rep.Size):new ValueIrStoreElement(array,index,value,rep.Size,rep.IsReference));break;
                     }
                     case 0xfe15:
@@ -211,7 +211,7 @@ internal static class ValueIrImporter
                     }
                     case >=0x58 and <=0x64:
                     {
-                        var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(Merge(left.Kind,right.Kind));
+                        var right=Pop(stack,cil);var left=Pop(stack,cil);var result=New(cil.OpCode is >=0x62 and <=0x64?Unmap(left.Kind):Merge(left.Kind,right.Kind));
                         instructions.Add(new ValueIrBinary(result,cil.OpCode switch{0x58=>"add",0x59=>"sub",0x5a=>"mul",0x5b=>"div",0x5c=>"div.un",0x5d=>"rem",0x5e=>"rem.un",0x5f=>"and",0x60=>"or",0x61=>"xor",0x62=>"shl",0x63=>"shr",_=>"shr.un"},left,right));stack.Add(result);break;
                     }
                     case 0x65 or 0x66:{var input=Pop(stack,cil);var unary=New(Unmap(input.Kind));instructions.Add(new ValueIrUnary(unary,cil.OpCode==0x65?"neg":"not",input));stack.Add(unary);break;}

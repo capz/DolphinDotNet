@@ -64,7 +64,7 @@ The pipeline is C# → Roslyn assembly/CIL → control-flow and stack analysis �
 Value IR → native C → devkitPPC ELF → DOL.
 
 Install the .NET 8 SDK and devkitPro's devkitPPC/libogc2 GameCube toolchain, including
-OpenGX, FAT/libdvm and ISO9660. Configure `DEVKITPRO` and `DEVKITPPC` for the SDK.
+native GX, FAT/libdvm and ISO9660. Configure `DEVKITPRO` and `DEVKITPPC` for the SDK.
 From the repository root:
 
 ```sh
@@ -93,3 +93,5 @@ platform targets, [async APIs](docs/async-runtime.md),
 [ARAM](docs/aram-runtime.md), [models](docs/model-assets-runtime.md),
 [timing](docs/timing.md), [controller input](docs/controller-input.md), [diagnostics](docs/debug-overlay.md), and [save image preparation](tools/DolphinDotNet.SaveImage/README.md)
 for feature-specific usage and limits.
+
+Raw GX/GU/VIDEO bindings and managed meshes, textures, materials and Draw2D are documented in [Graphics APIs](docs/graphics.md).
