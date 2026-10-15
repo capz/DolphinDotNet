@@ -120,6 +120,9 @@ jobs:
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-pong.c -o /tmp/dnd-pong.o
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong-bundle
           test -s /tmp/dnd-pong-bundle/source/generated_program.c
+          test -s /tmp/dnd-pong-bundle/vendor/libogc2/exi.c
+          test -s /tmp/dnd-pong-bundle/scripts/build_exi_overlay.sh
+          grep -q -- 'build/exi-overlay' /tmp/dnd-pong-bundle/Makefile
           grep -q -- '-DDND_NO_AUTONETWORK' /tmp/dnd-pong-bundle/Makefile
           grep -q -- '-laesnd' /tmp/dnd-pong-bundle/Makefile
       - name: Compile Google logo ARAM example through AOT
