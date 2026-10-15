@@ -53,6 +53,7 @@ if (Storage.Mount(StorageDevice.SdSerialPort2))
 | SdSerialPort2 | sd:/, SD2SP2 |
 | DvdDrive | dvd:/, physical DVD interface with read-only ISO9660 or original-disc FST |
 | MemoryCardSlotA / MemoryCardSlotB | Separate MemoryCard API; no filesystem path |
+| GcLoader | gcloader:/ (GC Loader SD via libogc2 `__io_gcode`, when firmware exposes sectors) |
 
 SD mounts register VFAT/exFAT and select the first mountable partition, with four cache pages of eight sectors (about 16 KiB per device). Mount returns false when no supported medium/filesystem can mount; it never formats media. ISO9660 uses its own pathname limits. `Storage.Mount(DvdDrive)` retains ISO9660 behavior. Use `Storage.MountDisc(DiscFormat.GameCubeFst)` for original GameCube discs, or `MountDisc(DiscFormat.Iso9660)` explicitly; unmount before changing formats. FST validates the disc magic, entry tree, names and data ranges and exposes files/directories through a read-only devoptab. GC Loader block filesystems remain outside this backend. Memory-card enums cannot be passed to Storage.GetPath or ordinary Directory operations.
 
