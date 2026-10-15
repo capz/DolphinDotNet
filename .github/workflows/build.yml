@@ -226,6 +226,16 @@ jobs:
           timeout 30s /tmp/async-smoke --gc-stress
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-smoke.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/async-smoke32
           timeout 30s /tmp/async-smoke32 --gc-stress
+      - name: Validate hardware probing contracts and AOT platform intrinsics
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/hardware_native_test.c source/hardware.c -o /tmp/dnd-hardware-native
+          /tmp/dnd-hardware-native
+          dotnet build samples/HardwareDiagnostics/HardwareDiagnostics.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/HardwareDiagnostics/bin/Release/net8.0/HardwareDiagnostics.dll /tmp/dnd-hardware-aot.c
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-hardware-aot.c -o /tmp/dnd-hardware-aot.o
+          grep -q 'dnd_hardware_probe' /tmp/dnd-hardware-aot.c
+          grep -q 'dnd_platform_reboot' /tmp/dnd-hardware-aot.c
+          grep -q 'dnd_platform_reset_button' /tmp/dnd-hardware-aot.c
       - name: Validate GameCube ISO image parser and mounted-image sample
         run: |
           cc -std=c11 -O2 -g -Wall -Wextra -Werror -Iinclude tests/iso_image_test.c source/iso_file.c source/fst.c -o /tmp/dnd-iso-image
@@ -233,8 +243,7 @@ jobs:
           dotnet build samples/DiscBrowser/DiscBrowser.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/DiscBrowser/bin/Release/net8.0/DiscBrowser.dll /tmp/dnd-disc-browser.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-disc-browser.c -o /tmp/dnd-disc-browser.o
-          grep -q 'dnd_iso_open' /tmp/dnd-disc-browser.c
-          grep -q 'dnd_iso_read' /tmp/dnd-disc-browser.c
+          grep -q 'dnd_storage_mount_disc_image' /tmp/dnd-disc-browser.c
           grep -q 'dnd_storage_mount_disc' /tmp/dnd-disc-browser.c
       - name: Validate collections and storage I/O
         timeout-minutes: 3
@@ -388,12 +397,18 @@ jobs:
           mkdir -p footprint
           cp /tmp/dnd-snake-gamecube/Game.dol footprint/snake.dol
           cp /tmp/dnd-snake-gamecube/Game.elf footprint/snake.elf
+      - name: Build GameCube hardware discovery and reboot demo DOL
+        run: |
+          dotnet build samples/HardwareDiagnostics/HardwareDiagnostics.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/HardwareDiagnostics/bin/Release/net8.0/HardwareDiagnostics.dll /tmp/dnd-hardware-demo --platform gamecube
+          make -C /tmp/dnd-hardware-demo
+          test -s /tmp/dnd-hardware-demo/Game.dol
       - name: Build GameCube disc browser with libogc2 GC Loader sectors
         run: |
           dotnet build samples/DiscBrowser/DiscBrowser.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/DiscBrowser/bin/Release/net8.0/DiscBrowser.dll /tmp/dnd-disc-browser-bundle --platform gamecube
           test -s /tmp/dnd-disc-browser-bundle/source/iso_file.c
-          test -s /tmp/dnd-disc-browser-bundle/source/iso_managed.c
+          test -s /tmp/dnd-disc-browser-bundle/source/hardware.c
           make -C /tmp/dnd-disc-browser-bundle
           test -s /tmp/dnd-disc-browser-bundle/Game.dol
       - name: Compile managed storage ABI for PowerPC
