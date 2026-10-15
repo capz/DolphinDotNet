@@ -65,7 +65,8 @@ static int parse(char *input,Vec3 *positions,Vec2 *uvs,Vec3 *normals,
       nv++;
     } else if(line[0]=='v'&&line[1]=='t'&&isspace((unsigned char)line[2])) {
       if(nt>=MAX_ITEMS||sscanf(line+2,"%f %f",&uvs[nt].v[0],&uvs[nt].v[1])!=2)return 0;
-      if(!isfinite(uvs[nt].v[0])||!isfinite(uvs[nt].v[1]))return 0;nt++;
+      if(!isfinite(uvs[nt].v[0])||!isfinite(uvs[nt].v[1]))return 0;
+      nt++;
     } else if(line[0]=='v'&&line[1]=='n'&&isspace((unsigned char)line[2])) {
       if(nn>=MAX_ITEMS||sscanf(line+2,"%f %f %f",
              &normals[nn].v[0],&normals[nn].v[1],&normals[nn].v[2])!=3)return 0;
@@ -97,7 +98,8 @@ int dnd_model_begin_obj(DndString *path,int budget) {
   if(!input){dnd_fs_close(handle);return 0;}
   int n=0;while(n<len) {
     int got=dnd_fs_read_native(handle,input+n,(int)(len-n));
-    if(got<=0)break;n+=got;
+    if(got<=0)break;
+    n+=got;
   }
   dnd_fs_close(handle);
   if(n!=len){free(input);return 0;}
