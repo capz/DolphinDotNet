@@ -102,6 +102,26 @@ int dnd_audio_begin(DndString *path) {
                        .rate=rate,.pcm=pcm};
     return token;
 }
+int dnd_audio_create_pcm8(DndArray *samples, int rate) {
+    if(!samples || samples->elements_are_references || samples->element_size!=1 ||
+       rate<8000 || rate>48000 || next_clip==INT_MAX) return 0;
+    unsigned size=dnd_array_length(samples);
+    if(size==0 || size>MAX_PCM_BYTES) return 0;
+    dnd_audio_init();
+    int slot=-1;
+    for(int i=0;i<CLIPS;i++) if(!clips[i].token){slot=i;break;}
+    if(slot<0)return 0;
+    size_t aligned=((size_t)size+31u)&~(size_t)31u;
+    uint8_t *pcm=memalign(32,aligned);
+    if(!pcm)return 0;
+    /* AESND reads native memory asynchronously: never retain a managed pointer. */
+    memset(pcm,128,aligned);
+    for(unsigned i=0;i<size;i++) pcm[i]=(uint8_t)dnd_array_load_scalar(samples,i,1,false);
+    int token=next_clip++;
+    clips[slot]=(Clip){.token=token,.file=0,.ready=1,.length=size,
+                       .format=4,.rate=(unsigned)rate,.pcm=pcm};
+    return token;
+}
 int dnd_audio_step(int token) {
     Clip *c=find_clip(token);
     if(!c) return -1;
