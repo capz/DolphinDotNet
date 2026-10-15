@@ -87,7 +87,7 @@ internal static class GameCubeBundle
 
         var sources = new[] {
             "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "fst",
-            "fst_gamecube", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
+            "fst_gamecube", "iso_file", "iso_managed", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "model", "model_animation",
             "model_graphics", "model_transform", "network", "network_gamecube",
             "network_gamecube_backend", "performance", "platform_gamecube",
