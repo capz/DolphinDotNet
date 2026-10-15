@@ -25,9 +25,13 @@ internal static class Program
     {
         Print(Hardware.Refresh());
         var device=GraphicsDevice.Default;
+        bool resetWasDown=false;
         while(true)
         {
             Controller.Update();
+            bool resetIsDown=Platform.ResetButtonPressed;
+            if(resetIsDown && !resetWasDown) DebugOverlay.WriteLine("PHYSICAL RESET BUTTON PRESSED");
+            resetWasDown=resetIsDown;
             var pad=Controller.GetState(0);
             if(pad.IsConnected && pad.Start.IsHeld && pad.X.WasPressed)
                 Platform.Reboot(RebootMode.Restart);
