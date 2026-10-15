@@ -23,6 +23,44 @@ var root=new JsonObject{
  ["meshes"]=new JsonArray(new JsonObject{["primitives"]=new JsonArray(new JsonObject{["material"]=0,["attributes"]=new JsonObject{["POSITION"]=position,["NORMAL"]=normal,["TEXCOORD_0"]=uv,["JOINTS_0"]=joints,["WEIGHTS_0"]=weights}})})};
 JsonObject Animation(string name,int target,int property,int outputAccessor,string interpolation)=>new(){["name"]=name,["samplers"]=new JsonArray(new JsonObject{["input"]=time,["output"]=outputAccessor,["interpolation"]=interpolation}),["channels"]=new JsonArray(new JsonObject{["sampler"]=0,["target"]=new JsonObject{["node"]=target,["path"]=property==0?"translation":"rotation"}})};
 root["animations"]=new JsonArray(Animation("Walk",1,0,translation,"LINEAR"),Animation("Step",1,0,step,"STEP"),Animation("Cubic",1,0,cubic,"CUBICSPLINE"),Animation("Turn",1,1,rot,"LINEAR"),Animation("Parent",0,0,translation,"LINEAR"));
+// Synthetic, byte-accurate GC PSO GJCM: one Ninja node, a GX property
+// table, independently sized indices, and an indexed triangle primitive.
+byte[] gj = new byte[8 + 194];
+"GJCM"u8.CopyTo(gj.AsSpan(0,4));
+BinaryPrimitives.WriteUInt32LittleEndian(gj.AsSpan(4,4), 194);
+var body=gj.AsSpan(8);
+void Gj32(int at,uint v)=>BinaryPrimitives.WriteUInt32BigEndian(body.Slice(at,4),v);
+void Gj16(int at,ushort v)=>BinaryPrimitives.WriteUInt16BigEndian(body.Slice(at,2),v);
+void GjFloat(int at,float v)=>Gj32(at,unchecked((uint)BitConverter.SingleToInt32Bits(v)));
+Gj32(4,52); // mesh offset
+GjFloat(32,1);GjFloat(36,1);GjFloat(40,1); // node scale
+Gj32(52,88);Gj32(60,164);Gj16(68,1); // property offset and one strip group
+body[88]=1;body[89]=12;Gj16(90,3);Gj32(96,128);Gj32(100,36);
+body[104]=255; // property-list terminator
+GjFloat(128,0);GjFloat(132,0);GjFloat(136,0);
+GjFloat(140,1);GjFloat(144,0);GjFloat(148,0);
+GjFloat(152,0);GjFloat(156,1);GjFloat(160,0);
+Gj32(164,180);Gj32(168,1);Gj32(172,188);Gj32(176,6);
+body[180]=1;Gj32(184,8); // GX position present, 8-bit indices
+body[188]=0x90;Gj16(189,3);body[191]=0;body[192]=1;body[193]=2;
+string gjPath=Path.Combine(output,"geometry.gj");
+File.WriteAllBytes(gjPath,gj);
+string gjPackage=Path.Combine(output,"sd","geometry-gj.dndmodel");
+ModelConverter.Convert(gjPath,gjPackage);
+byte[] gjOutput=File.ReadAllBytes(gjPackage);
+if(BinaryPrimitives.ReadUInt32BigEndian(gjOutput)!=0x444e444d)
+    throw new Exception("Direct PSO GJ package magic.");
+ModelConverter.Convert(gjPath,gjPackage+".again");
+if(!gjOutput.SequenceEqual(File.ReadAllBytes(gjPackage+".again")))
+    throw new Exception("Nondeterministic direct PSO GJ import.");
+byte[] broken=(byte[])gj.Clone();
+BinaryPrimitives.WriteUInt32BigEndian(broken.AsSpan(8+172,4),0xfffffff0);
+File.WriteAllBytes(gjPath,broken);
+try{ModelConverter.Convert(gjPath,gjPackage+".broken");throw new Exception("Broken GJ stream accepted.");}
+catch(InvalidDataException){}
+File.WriteAllBytes(gjPath,gj);
+File.WriteAllText(Path.Combine(output,"sd","live.obj"),
+    "v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nf 1/1 2/2 3/3\n");
 string gltf=Path.Combine(output,"animated.gltf"),package=Path.Combine(output,"sd","animated.dndmodel");File.WriteAllText(gltf,root.ToJsonString());ModelConverter.Convert(gltf,package);
 byte[] bytes=File.ReadAllBytes(package);if(BinaryPrimitives.ReadUInt32BigEndian(bytes)!=0x444e444d)throw new Exception("Package magic.");
 int textureOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16+3*16+4)));var texture=bytes.AsSpan(textureOffset+4+28,64);if(texture[0]!=255||texture[1]!=0||texture[3]!=30||texture[32]!=0||texture[33]!=50||texture[40]!=40)throw new Exception("GX RGBA8 tile fixture.");
