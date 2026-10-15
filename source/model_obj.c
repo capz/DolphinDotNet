@@ -44,9 +44,6 @@ static int face_ref(const char *s,int vertices,int uvs,int norms,Ref *r) {
   if(*p=='/') {p++;r->n=component(&p,norms,1);if(r->n==-2)return 0;}
   return *p==0;
 }
-static void point(float *out,const Vec3 *p) {
-  out[0]=p->v[0];out[1]=p->v[1];out[2]=p->v[2];
-}
 static void triangle_normal(float out[3],const Vec3 *a,const Vec3 *b,const Vec3 *c) {
   float x=b->v[0]-a->v[0],y=b->v[1]-a->v[1],z=b->v[2]-a->v[2];
   float p=c->v[0]-a->v[0],q=c->v[1]-a->v[1],r=c->v[2]-a->v[2];
@@ -105,6 +102,7 @@ int dnd_model_begin_obj(DndString *path,int budget) {
   dnd_fs_close(handle);
   if(n!=len){free(input);return 0;}
   input[n]=0;
+  if(memchr(input,0,(size_t)n)) {free(input);return 0;}
   Vec3 *positions=calloc(MAX_ITEMS,sizeof(Vec3));
   Vec2 *uvs=calloc(MAX_ITEMS,sizeof(Vec2));
   Vec3 *normals=calloc(MAX_ITEMS,sizeof(Vec3));
