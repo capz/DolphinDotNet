@@ -29,8 +29,8 @@ byte[] gj = new byte[8 + 194];
 "GJCM"u8.CopyTo(gj.AsSpan(0,4));
 BinaryPrimitives.WriteUInt32LittleEndian(gj.AsSpan(4,4), 194);
 var body=gj.AsSpan(8);
-void Gj32(int at,uint v)=>BinaryPrimitives.WriteUInt32BigEndian(body.Slice(at,4),v);
-void Gj16(int at,ushort v)=>BinaryPrimitives.WriteUInt16BigEndian(body.Slice(at,2),v);
+void Gj32(int at,uint v)=>BinaryPrimitives.WriteUInt32BigEndian(gj.AsSpan(8+at,4),v);
+void Gj16(int at,ushort v)=>BinaryPrimitives.WriteUInt16BigEndian(gj.AsSpan(8+at,2),v);
 void GjFloat(int at,float v)=>Gj32(at,unchecked((uint)BitConverter.SingleToInt32Bits(v)));
 Gj32(4,52); // mesh offset
 GjFloat(32,1);GjFloat(36,1);GjFloat(40,1); // node scale
