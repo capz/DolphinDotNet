@@ -7,7 +7,7 @@ The game uses a 640×480 logical playfield, colored rectangle paddles, a square
 ball, seven-segment scores, paddle deflections with increasing ball speed,
 wall bounces, and a first-to-seven match. Audio is generated procedurally on
 startup: separate triangle-wave chirps for paddle hits, wall hits and goals.
-No textures, bitmap fonts, SD card, disc or external sound files are needed.
+No textures, bitmap fonts, SD card, disc, network initialization or external sound files are needed.
 
 ## Controls
 
