@@ -330,6 +330,8 @@ jobs:
           /tmp/dnd-tool-install/dnd-assets --help
           dotnet build /tmp/dnd-model-fixtures/Build.csproj -c Release -p:DndAssetsCommand=/tmp/dnd-tool-install/dnd-assets
           cmp /tmp/dnd-model-fixtures/sd/animated.dndmodel /tmp/dnd-model-fixtures/sd/built.dndmodel
+          cc -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_inflate_test.c source/model_ufbx.c -lm -o /tmp/model-inflate
+          /tmp/model-inflate
           cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native
           timeout 30s /tmp/model-native /tmp/dnd-model-fixtures
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native32

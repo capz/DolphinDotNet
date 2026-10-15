@@ -23,6 +23,10 @@ The ufbx [MIT notice](../vendor/ufbx/LICENSE) is retained. Its documented header
 and allocator hooks allow the implementation to remain unmodified while preventing
 unbudgeted allocation and direct stdio access. The wrapper supplies correctly typed
 NULL-returning global allocation fallbacks for this pin's C no-malloc configuration.
+The wrapper also enables the documented `UFBX_UBSAN` mode for defined Huffman
+shift counts and pointer operations on every compiler. GCC's sanitizer feature
+detection is insufficient for the pin's automatic selection. Upstream snapshots
+and hashes remain unchanged.
 
 PSO parsing follows the reverse-engineered
 [PSO specification](https://github.com/theanine3D/pso_ultimate_importer/wiki/Format-Specification)
