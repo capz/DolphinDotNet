@@ -341,3 +341,251 @@ Typed layouts passed to mesh creation and primitive drawing.
 ~~~csharp
 var vertex = new VertexPositionColor(new Vector3(0, 0, 0), Color32.White);
 ~~~
+
+## Audio
+
+### Dolphin.Audio.Audio
+
+Initializes the GameCube libogc2 AESND playback system (also initialized lazily when loading or generating a sound).
+
+**API:** `Initialize()`.
+
+~~~csharp
+Dolphin.Audio.Audio.Initialize();
+~~~
+
+### Sound
+
+Owned native PCM clip, loaded from a mounted WAV file or synthesized unsigned mono PCM8. The native backend copies managed PCM bytes to aligned memory.
+
+**API:** `Sound.Load(path)`, `Sound.LoadAsync(path[,token])`, `Sound.FromPcm8(byte[],sampleRate)`, `SampleRate`, `LengthBytes`, `Volume`, `Pitch`, `Play([loop])`, `Dispose()`.
+
+~~~csharp
+using var sound = Sound.FromPcm8(new byte[] { 128, 255, 128, 0 }, 22050);
+sound.Volume = 0.6f;
+using var voice = sound.Play();
+~~~
+
+### SoundChannel
+
+Active or stopped AESND voice handle with independent volume and pitch. The sound must remain alive during playback.
+
+**API:** `IsPlaying`, `Volume`, `Pitch`, `Stop()`, `Dispose()`.
+
+~~~csharp
+using var sound = Sound.Load("sd:/audio/coin.wav");
+using var channel = sound.Play();
+channel.Pitch = 1.2f;
+channel.Stop();
+~~~
+
+### Music
+
+Convenience long-lived sound owner for looping background WAV playback **preloaded into native memory**; it is not an MP3/Ogg decoder or streaming player.
+
+**API:** `Load(path)`, `LoadAsync(path[,token])`, `Volume`, `Pitch`, `IsPlaying`, `Play([loop=true])`, `Stop()`, `Dispose()`.
+
+~~~csharp
+using var music = Music.Load("sd:/audio/loop.wav");
+music.Volume = 0.4f;
+music.Play(loop: true);
+~~~
+
+## Storage and file IO
+
+GameCube `StorageDevice` values: `SdSlotA` (`carda:/` SD adapter), `SdSlotB` (`cardb:/`), `SdSerialPort2` (`sd:/` SD2SP2), `DvdDrive` (`dvd:/`, read only), and `MemoryCardSlotA/B` (native card API, **not** ordinary file paths). Most `Dolphin.IO` operations are also exposed through the supported `System.IO` names.
+
+### Dolphin.Storage.Storage / DiscFormat
+
+Mount/unmount SD or disc devices, switch ISO9660 versus GameCube original-disc FST, and use device-scoped file/directory helpers.
+
+**API:** `Mount(device)`, `MountDisc(format)`, `IsMounted(device)`, `Unmount(device)`, `GetPath(device,path)`, `FileExists/DirectoryExists`, `ReadAllBytes/WriteAllBytes`, `Open(...)`, `CreateDirectory(...)`, `EnumerateFiles/EnumerateDirectories`, `GetFiles/GetDirectories`, `DeleteFile/DeleteDirectory`, `DiscFormat.Iso9660/GameCubeFst`.
+
+~~~csharp
+if (Storage.Mount(StorageDevice.SdSerialPort2)) {
+    Storage.WriteAllBytes(StorageDevice.SdSerialPort2, "save.bin", new byte[] { 1 });
+    Storage.Unmount(StorageDevice.SdSerialPort2);
+}
+~~~
+
+### MemoryCard / MemoryCardIdentity
+
+Native GameCube card slots with a four-character game code, two-character company code and separate named save entries. Card APIs work without SD.
+
+**API:** `MemoryCard.Mount(slot,identity)`, `ReadAllBytes(name)`, `WriteAllBytes(name,data)`, `WriteSave(name,data,options)`, `GetEntries()`, `Delete(name)`, `Dispose()`, `MemoryCardIdentity(gameCode,companyCode)`.
+
+~~~csharp
+using var card = MemoryCard.Mount(StorageDevice.MemoryCardSlotA, new MemoryCardIdentity("DSNK", "01"));
+card.WriteAllBytes("Save01", new byte[] { 1, 2, 3 });
+byte[] saved = card.ReadAllBytes("Save01");
+~~~
+
+### MemoryCardSaveOptions / MemoryCardEntry
+
+Metadata for a native card save. `WriteSave` accepts title/comment, optional 96×32 banner and 32×32 icon (both GX-tiled RGB5A3); entries report name and logical length.
+
+**API:** `Title`, `Comment`, `Banner`, `Icon`, `MemoryCardEntry.Name`, `MemoryCardEntry.Length`.
+
+~~~csharp
+var options = new MemoryCardSaveOptions { Title = "Snake", Comment = "Level 1" };
+card.WriteSave("SnakeRun", data, options);
+foreach (var item in card.GetEntries()) Log(item.Name);
+~~~
+
+### Dolphin.IO.File / System.IO.File
+
+Basic and asynchronous binary/text files, copy/move/delete and stream access on mounted volumes. Normal writes are not power-loss atomic; use native card transactions for resilient saves.
+
+**API:** `Exists`, `ReadAllBytes/WriteAllBytes`, `ReadAllBytesAsync/WriteAllBytesAsync`, `ReadAllText/WriteAllText/AppendAllText`, `ReadAllLines/WriteAllLines/AppendAllLines`, `ReadLines`, `ReadAllTextAsync/WriteAllTextAsync/AppendAllTextAsync`, `ReadAllLinesAsync/WriteAllLinesAsync/AppendAllLinesAsync`, `Open/OpenRead/OpenWrite/Create`, `Copy`, `Move`, `Delete`.
+
+~~~csharp
+Dolphin.IO.File.WriteAllBytes("sd:/state.bin", new byte[] { 1, 2 });
+byte[] data = Dolphin.IO.File.ReadAllBytes("sd:/state.bin");
+await Dolphin.IO.File.WriteAllTextAsync("sd:/note.txt", "OK");
+~~~
+
+### Dolphin.IO.Directory / DirectoryInfo
+
+Create/remove/move directories, set current directory and enumerate filenames or directories with optional `*`/`?` patterns and recursion.
+
+**API:** `CreateDirectory`, `Exists`, `Delete([recursive])`, `Move`, `GetCurrentDirectory/SetCurrentDirectory`, `GetFiles/GetDirectories/GetFileSystemEntries`, `EnumerateFiles/EnumerateDirectories/EnumerateFileSystemEntries`, `DirectoryInfo.FullName/Name/Exists/Create/Delete`.
+
+~~~csharp
+Dolphin.IO.Directory.CreateDirectory("sd:/saves");
+foreach (string file in Dolphin.IO.Directory.EnumerateFiles("sd:/saves", "*.bin"))
+    Log(file);
+~~~
+
+### Dolphin.IO.Path / System.IO.Path
+
+Path operations for `volume:/relative/path` names; supports normalized slashes but not Windows drive/UNC semantics.
+
+**API:** `Combine(first,second)`, `GetFullPath(path)`, `IsPathRooted(path)`, `GetFileName(path)`, `GetDirectoryName(path)`, `GetExtension(path)`.
+
+~~~csharp
+string file = Dolphin.IO.Path.Combine("sd:/saves", "slot1.bin");
+string name = Dolphin.IO.Path.GetFileName(file);
+~~~
+
+### Dolphin.IO.FileStream / System.IO.FileStream
+
+Seekable native file descriptor with modes, access/share flags and deterministic close/flush; includes inherited stream async operations.
+
+**API:** `FileStream(path,FileMode[,FileAccess,FileShare])`, `CanRead/CanWrite/CanSeek`, `Length`, `Position`, `Read/Write`, `Seek`, `SetLength`, `Flush`, `Close`, `Dispose`.
+
+~~~csharp
+using var file = Dolphin.IO.File.Open("sd:/level.dat", System.IO.FileMode.Create);
+file.Write(new byte[] { 42 }, 0, 1);
+file.Flush();
+~~~
+
+### Dolphin.IO.Stream / System.IO.Stream
+
+Base byte-stream abstraction for file, memory, networking and ARAM; synchronous or cooperative async I/O plus copy/flush.
+
+**API:** `Read/ReadAsync`, `Write/WriteAsync`, `ReadByte/WriteByte`, `Seek`, `SetLength`, `Flush/FlushAsync`, `CopyTo/CopyToAsync`, `CanRead/CanWrite/CanSeek`, `Length`, `Position`, `Close/Dispose`.
+
+~~~csharp
+using Dolphin.IO.Stream source = Dolphin.IO.File.OpenRead("sd:/from.dat");
+using Dolphin.IO.Stream dest = Dolphin.IO.File.Create("sd:/to.dat");
+await source.CopyToAsync(dest, 4096);
+~~~
+
+### Dolphin.IO.MemoryStream
+
+In-memory byte stream with expandable or fixed backing array, seek, capacity, buffer access and `ToArray`.
+
+**API:** `MemoryStream([capacity/byte[]/segment])`, `Capacity`, `Length`, `Position`, `Read/Write`, `ReadByte/WriteByte`, `Seek`, `SetLength`, `ToArray`, `GetBuffer`, `WriteTo`, `Dispose`.
+
+~~~csharp
+using var stream = new Dolphin.IO.MemoryStream();
+stream.WriteByte(42);
+byte[] bytes = stream.ToArray();
+~~~
+
+### Dolphin.IO.TextReader / StreamReader
+
+Decode line-oriented or entire-text content from a file or stream with optional encoding, BOM detection, buffered reads and async helpers.
+
+**API:** `StreamReader(path[,encoding,detectBOM,bufferSize])`, `StreamReader(stream[,encoding,...])`, `Read/ReadBlock`, `Peek`, `ReadLine/ReadToEnd`, `ReadAsync/ReadLineAsync/ReadToEndAsync`, `EndOfStream`, `CurrentEncoding`, `DiscardBufferedData`, `Close/Dispose`.
+
+~~~csharp
+using var reader = new Dolphin.IO.StreamReader("sd:/notes.txt");
+string? firstLine = reader.ReadLine();
+~~~
+
+### Dolphin.IO.TextWriter / StreamWriter
+
+Text output to files or streams with encoding, buffering, configurable newline, optional auto-flush and async write.
+
+**API:** `StreamWriter(path[,append,encoding,bufferSize])`, `StreamWriter(stream[,encoding,bufferSize,leaveOpen])`, `Write/WriteLine`, `WriteAsync/WriteLineAsync`, `Flush/FlushAsync`, `NewLine`, `AutoFlush`, `Encoding`, `BaseStream`, `Close/Dispose`.
+
+~~~csharp
+using var writer = new Dolphin.IO.StreamWriter("sd:/notes.txt");
+writer.WriteLine("Ready");
+writer.Flush();
+~~~
+
+### Dolphin.Text.Encoding / UTF8Encoding / UnicodeEncoding
+
+Encode/decode UTF-8, UTF-16 LE/BE, ASCII, and Latin-1 (code page 28591); choose strict or replacement behavior and optional BOM.
+
+**API:** `Encoding.UTF8/Unicode/BigEndianUnicode/ASCII`, `GetEncoding(name/codePage)`, `GetBytes/GetString`, `GetChars/GetCharCount/GetByteCount`, `GetPreamble`, `UTF8Encoding(bom,strict)`, `UnicodeEncoding(bigEndian,bom,strict)`.
+
+~~~csharp
+byte[] bytes = Dolphin.Text.Encoding.UTF8.GetBytes("Hello");
+string text = Dolphin.Text.Encoding.UTF8.GetString(bytes);
+~~~
+
+## Auxiliary memory (ARAM)
+
+On GameCube, ARAM is separate auxiliary RAM. Initialize it before allocating ARAM-backed streams, caching cold assets, or using assets that require it. Copies are asynchronous and native-managed; never assume a managed array stays pinned across a transfer.
+
+### Dolphin.Memory.Aram / AramStatistics
+
+Initialize the ARAM allocator; inspect availability, free space, total capacity, largest block and allocations.
+
+**API:** `Initialize([reservedBytes])`, `IsAvailable`, `Statistics`, `TryAllocate(length,out buffer)`, `Allocate(length)`, `AramStatistics.CapacityBytes/AllocatedBytes/FreeBytes/LargestFreeBlockBytes/AllocationCount`.
+
+~~~csharp
+if (Aram.Initialize()) {
+    int available = Aram.Statistics.FreeBytes;
+}
+~~~
+
+### Dolphin.Memory.AramBuffer
+
+Owned fixed-size ARAM allocation with asynchronous ranged transfers and disposal.
+
+**API:** `Length`, `WriteAsync(source,sourceOffset,destOffset,count[,token])`, `ReadAsync(sourceOffset,destination,destOffset,count[,token])`, `Dispose()`.
+
+~~~csharp
+using var ram = Aram.Allocate(4096);
+await ram.WriteAsync(bytes, 0, 0, bytes.Length);
+await ram.ReadAsync(0, result, 0, result.Length);
+~~~
+
+### Dolphin.IO.AramStream
+
+Seekable, bounded ARAM-backed `System.IO.Stream`, suitable for streaming large downloads without keeping them in the managed heap.
+
+**API:** `AramStream(capacity[,writable])`, `Capacity`, `Read/ReadAsync`, `Write/WriteAsync`, `Length`, `Position`, `Seek`, `SetLength`, `Flush`, `Dispose`, `CanRead/CanWrite/CanSeek`.
+
+~~~csharp
+using var aram = new Dolphin.IO.AramStream(65536);
+await source.CopyToAsync(aram, 4096);
+aram.Position = 0;
+~~~
+
+### Dolphin.Memory.AramAssetCache
+
+Budgeted ID-keyed cold-asset store in ARAM, with priorities, eviction rules and ranged prefetches.
+
+**API:** `AramAssetCache(capacityBytes)`, `CapacityBytes`, `UsedBytes`, `Contains(id)`, `StoreAsync(id,data[,token,priority,evictable])`, `ReadAsync(id,offset,buffer,destOffset,count[,token])`, `PrefetchAsync(id,offset,count[,token])`, `Remove(id)`, `Dispose`.
+
+~~~csharp
+using var cache = new AramAssetCache(1024 * 1024);
+await cache.StoreAsync("level1", levelBytes);
+byte[] head = await cache.PrefetchAsync("level1", 0, 32);
+~~~
+
