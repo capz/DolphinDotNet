@@ -55,7 +55,7 @@ internal static class Program
 }
 ```
 
-See the [samples](samples/README.md) for two-player Pong, rendering, automatic async networking and
+See the [samples](samples/README.md) for two-player Pong, memory-card Snake, rendering, automatic async networking and
 HTTP-to-ARAM streaming. Native platform APIs execute in the compiled console
 program; desktop `dotnet run` does not provide their backend.
 
