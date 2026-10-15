@@ -6,7 +6,7 @@
 static bool iso_read(void *context, uint64_t offset, void *output, size_t count) {
   DndIsoFile *image = context;
   if (!image || !image->file || offset > LONG_MAX || count > LONG_MAX ||
-      offset + count > LONG_MAX || fseek(image->file, (long)offset, SEEK_SET))
+      count > (uint64_t)LONG_MAX - offset || fseek(image->file, (long)offset, SEEK_SET))
     return false;
   return fread(output, 1, count, image->file) == count;
 }
