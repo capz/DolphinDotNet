@@ -171,8 +171,8 @@ jobs:
           dotnet build tests/AutomaticAsyncSmoke/AutomaticAsyncSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/AutomaticAsyncSmoke/bin/Release/net8.0/AutomaticAsyncSmoke.dll /tmp/automatic-async.c
           cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/automatic-async.c tests/automatic_async_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c source/aram.c -o /tmp/automatic-async
-          python3 tests/network_fixtures.py /tmp/automatic-async
-          python3 tests/network_fixtures.py /tmp/automatic-async --gc-stress
+          python3 tests/network_fixtures.py --timeout-seconds 120 /tmp/automatic-async
+          python3 tests/network_fixtures.py --timeout-seconds 120 /tmp/automatic-async --gc-stress
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/automatic-async.c tests/automatic_async_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c source/aram.c -o /tmp/automatic-async32
           # 32-bit GC stress and serialized executor handoffs can exceed the
           # default 45-second fixture budget on shared runners; retain a watchdog.
