@@ -3,7 +3,7 @@ try
 {
     if (args.Length == 0 || args[0] == "--help")
     {
-        Console.WriteLine("dnd-assets model INPUT.{glb,gltf,fbx,obj,gj} OUTPUT.dndmodel [--texture-limit N] [--assimp PATH] [--allow-material-approximation]\ndnd-assets texture INPUT.png OUTPUT.dndtex\ndnd-assets font ATLAS.png OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]\nFBX/OBJ require Assimp CLI 5.3.x. PSO GJ geometry uses a built-in native parser; textured GJ currently requires --allow-material-approximation. Outputs include a dependency manifest.");
+        Console.WriteLine("dnd-assets model INPUT.{glb,gltf,fbx,obj,gj,xj} OUTPUT.dndmodel [--texture-limit N] [--assimp PATH] [--allow-material-approximation]\ndnd-assets texture INPUT.png OUTPUT.dndtex\ndnd-assets font ATLAS.png OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]\nFBX/OBJ require Assimp CLI 5.3.x. PSO GJ/XJ geometry uses built-in .NET parsers; textured PSO materials currently require --allow-material-approximation. Outputs include a dependency manifest.");
         return 0;
     }
     if(args.Length>=3&&(args[0]=="texture"||args[0]=="font"))
