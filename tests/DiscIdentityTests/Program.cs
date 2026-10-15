@@ -56,9 +56,9 @@ internal static class Program
         Assert(simple.DiscNumber==1 && simple.Revision==3,"disc and revision");
         Assert(simple.AudioStreaming && simple.StreamBufferSize==9,"audio metadata");
         Assert(simple.Title=="Header Game Name" && simple.Banner==null,"fallback title");
-        header[0]='X';
+        header[0]=(byte)'X';
         Assert(simple.GameId=="GZLE01","immutable source header");
-        byte[] copied=simple.RawHeader;copied[0]='X';
+        byte[] copied=simple.RawHeader;copied[0]=(byte)'X';
         Assert(simple.RawHeader[0]=='G',"defensive header copy");
         ExpectError(()=>DiscIdentity.ParseHeader(new byte[2]));
         ExpectError(()=>DiscIdentity.ParseHeader(new byte[DiscIdentity.HeaderSize]));
