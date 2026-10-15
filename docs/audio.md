@@ -29,6 +29,25 @@ via the automatic async scheduler. Use `Audio.Initialize()` after initializing
 `Dolphin.Memory.Aram` if ARAM is used, since DSP and ARAM resources must
 be coordinated. Mount storage before loading.
 
+## Self-contained generated sounds
+
+An application can synthesize its own unsigned mono PCM8 and load it without
+mounting a filesystem:
+
+```csharp
+var wave = new byte[2205]; // 100 ms at 22050 Hz
+for (int i=0;i<wave.Length;i++)
+    wave[i] = (byte)((i%32<16)?190:66);
+using var beep = Sound.FromPcm8(wave,22050);
+beep.Play();
+```
+
+`FromPcm8` copies the bytes into 32-byte-aligned native memory, so the managed
+array can be collected or changed without affecting playback. Samples are
+unsigned, with silence at 128, and require an 8000–48000 Hz sample rate.
+See the [Pong sample](../samples/Pong/README.md) for three procedurally
+generated, enveloped effects in a standalone DOL.
+
 ## Supported audio formats and limits
 
 - RIFF/WAVE, uncompressed PCM, 8-bit unsigned or 16-bit signed,
