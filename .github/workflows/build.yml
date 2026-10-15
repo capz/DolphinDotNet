@@ -324,6 +324,13 @@ jobs:
           test -s /tmp/dnd-standalone/Game.elf
           test -s /tmp/dnd-standalone/Game.dol
           python3 /tmp/dnd-standalone/scripts/dol_sections.py /tmp/dnd-standalone/Game.dol
+      - name: Link managed AESND sample to a real GameCube DOL
+        run: |
+          dotnet build samples/AudioDemo/AudioDemo.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/AudioDemo/bin/Release/net8.0/AudioDemo.dll /tmp/dnd-audio-demo-ppc --platform gamecube
+          make -C /tmp/dnd-audio-demo-ppc
+          test -s /tmp/dnd-audio-demo-ppc/Game.dol
+          python3 /tmp/dnd-audio-demo-ppc/scripts/dol_sections.py /tmp/dnd-audio-demo-ppc/Game.dol
       - name: Compile managed storage ABI for PowerPC
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
