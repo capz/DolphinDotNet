@@ -110,6 +110,17 @@ jobs:
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/AudioDemo/bin/Release/net8.0/AudioDemo.dll /tmp/dnd-audio-bundle
           grep -q -- '-laesnd' /tmp/dnd-audio-bundle/Makefile
           test -s /tmp/dnd-audio-bundle/source/audio_gamecube.c
+      - name: Test Pong gameplay and synthesized waveforms on host
+        run: |
+          dotnet run --project tests/PongRulesSmoke/PongRulesSmoke.csproj -c Release
+      - name: Compile self-contained two-player Pong through managed AOT
+        run: |
+          dotnet build samples/Pong/Pong.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong.c
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-pong.c -o /tmp/dnd-pong.o
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong-bundle
+          test -s /tmp/dnd-pong-bundle/source/generated_program.c
+          grep -q -- '-laesnd' /tmp/dnd-pong-bundle/Makefile
       - name: Compile Google logo ARAM example through AOT
         timeout-minutes: 4
         run: |
@@ -331,6 +342,13 @@ jobs:
           make -C /tmp/dnd-audio-demo-ppc
           test -s /tmp/dnd-audio-demo-ppc/Game.dol
           python3 /tmp/dnd-audio-demo-ppc/scripts/dol_sections.py /tmp/dnd-audio-demo-ppc/Game.dol
+      - name: Build and validate self-contained Pong GameCube DOL
+        run: |
+          dotnet build samples/Pong/Pong.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong-gamecube --platform gamecube
+          make -C /tmp/dnd-pong-gamecube
+          test -s /tmp/dnd-pong-gamecube/Game.dol
+          python3 /tmp/dnd-pong-gamecube/scripts/dol_sections.py /tmp/dnd-pong-gamecube/Game.dol
       - name: Compile managed storage ABI for PowerPC
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
