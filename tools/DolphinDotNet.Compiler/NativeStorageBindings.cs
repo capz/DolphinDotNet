@@ -96,7 +96,14 @@ internal static class NativeStorageBindings
         ["ModelNodeMatrix"]=("dnd_model_node_matrix","iia",false),["ModelDraw"]=("dnd_model_draw","ia",false),["ModelFrameBegin"]=("dnd_model_frame_begin","aa",false),["ModelFrameEnd"]=("dnd_model_frame_end","",false),
         ["AramInitialize"]=("dnd_aram_initialize","i",false),["AramAvailable"]=("dnd_aram_available","",false),["AramStat"]=("dnd_aram_stat","i",false),["AramAllocate"]=("dnd_aram_allocate","i",false),
         ["AramRetain"]=("dnd_aram_retain","i",false),["AramRelease"]=("dnd_aram_release","i",false),["AramDispose"]=("dnd_aram_dispose","i",false),["AramBegin"]=("dnd_aram_begin","iiaiii",false),["AramPoll"]=("dnd_aram_poll","ai",false),
-        ["TextCompare"]=("dnd_text_compare","ssi",false),["TextHash"]=("dnd_text_hash","si",false),["MountDisc"]=("dnd_storage_mount_disc","i",false),["Encode"]=("dnd_text_encode","sii",true),["Decode"]=("dnd_text_decode","aiiii",true),["FromChars"]=("dnd_text_from_chars","aii",true),
+        ["TextCompare"]=("dnd_text_compare","ssi",false),["TextHash"]=("dnd_text_hash","si",false),["MountDisc"]=("dnd_storage_mount_disc","i",false),["MountDiscImage"]=("dnd_storage_mount_disc_image","s",false),
+        ["PlatformReset"]=("dnd_platform_reboot","i",false),
+        ["PlatformResetButton"]=("dnd_platform_reset_button","",false),
+        ["HardwareProbe"]=("dnd_hardware_probe","iii",false),
+        ["HardwareId"]=("dnd_hardware_id","ii",false),
+        ["Encode"]=("dnd_text_encode","sii",true),
+        ["Decode"]=("dnd_text_decode","aiiii",true),
+        ["FromChars"]=("dnd_text_from_chars","aii",true),
         ["Mount"]=("dnd_storage_mount","i",false),["Unmount"]=("dnd_storage_unmount","i",false),["IsMounted"]=("dnd_storage_is_mounted","i",false),
         ["GetPath"]=("dnd_storage_path","is",true),["FullPath"]=("dnd_fs_full_path","s",true),["Exists"]=("dnd_fs_exists","si",false),
         ["ReadAllBytes"]=("dnd_fs_read_all","s",true),["WriteAllBytes"]=("dnd_fs_write_all","sa",false),["Delete"]=("dnd_fs_delete","si",false),
@@ -115,7 +122,7 @@ internal static class NativeStorageBindings
         if(!Bindings.TryGetValue(call.Operation,out var binding)||binding.Types.Length!=call.Arguments.Count)throw new NotSupportedException($"Invalid native storage binding {call.Operation}.");
         var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'o'=>"DndObject*",'l'=>"int64_t",'f'=>"float",_=>"int"})})v{arg.Id}").ToList();
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
-        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||call.Operation.StartsWith("Audio",StringComparison.Ordinal)||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd")
+        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||call.Operation.StartsWith("Audio",StringComparison.Ordinal)||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";
         if(call.Result is {} result)b.AppendLine($"  v{result.Id} = {(result.Kind==IrValueKind.ObjectReference?"(intptr_t)":"")}{expression};");else b.AppendLine($"  {expression};");

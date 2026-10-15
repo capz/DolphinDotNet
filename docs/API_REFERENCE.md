@@ -31,6 +31,40 @@ DebugOverlay.PerformanceVisible = true;
 DebugOverlay.WriteLine("Snake started");
 ~~~
 
+### Platform.Reboot / ResetButtonPressed
+
+Explicit native console reset and physical reset-button input. Complete saves
+before rebooting. The bootloader/ODE determines what executes next; requesting
+the IPL menu might be intercepted by the boot environment.
+
+**API:** `Platform.Reboot(RebootMode.Restart/ResetConsole/SystemMenu)`,
+`Platform.ResetButtonPressed`.
+
+~~~csharp
+if (Platform.ResetButtonPressed) SaveGame();
+Platform.Reboot(RebootMode.ResetConsole);
+~~~
+
+### Dolphin.Hardware — non-destructive device inventory
+
+Discover controllers, GBA links, native memory cards, SD Gecko, SD2SP2,
+BBA, modem, DVD media, GC Loader and Game Boy Player as typed entries.
+Statuses are Present/Absent/Busy/Unknown/Unsupported; unknown or busy
+does **not** mean absent. Safe scanning uses existing state; Extended may
+make additional read-only probes on idle interfaces. Game Boy Player
+detection remains Unknown (high-speed-port arbitration with ARAM).
+
+**API:** `Hardware.Refresh([HardwareProbeMode.Safe/Extended])`,
+`Hardware.Current`, `HardwareSnapshot.Devices/ConnectedDevices`,
+`GetDevice(kind,port)`, `GetPresence(kind,port)`,
+`IsPresent(kind,port)`, `HardwareDeviceInfo.NativeId/IsMounted`.
+
+~~~csharp
+var snapshot = Dolphin.Hardware.Hardware.Refresh();
+if (snapshot.IsPresent(HardwareKind.MemoryCard, HardwarePort.SlotA))
+    LoadGame();
+~~~
+
 ## Controller input
 
 ### Dolphin.Input.Controller
@@ -535,6 +569,26 @@ Encode/decode UTF-8, UTF-16 LE/BE, ASCII, and Latin-1 (code page 28591); choose 
 ~~~csharp
 byte[] bytes = Dolphin.Text.Encoding.UTF8.GetBytes("Hello");
 string text = Dolphin.Text.Encoding.UTF8.GetString(bytes);
+~~~
+
+### Storage — unified GameCube game disc and ISO mounts
+
+Every original GameCube FST uses `dvd:/`. For a physical or ODE-presented disc
+call `MountGameCubeDisc()`; for a plain ISO/GCM image, give a full mounted
+filesystem path to `MountDisc(path)` or `MountGameCubeDisc(path)`. Continue
+using normal `Storage.GetFiles`, `ReadAllBytes` and `Open` on
+`StorageDevice.DvdDrive`. GC Loader's optional SD filesystem mounts at
+`gcloader:/` via `StorageDevice.GcLoader`.
+
+**API:** `Storage.MountGameCubeDisc([isoPath])`,
+`Storage.MountDisc(DiscFormat)`, `Storage.MountDisc(string imagePath)`,
+`Storage.Unmount(StorageDevice.DvdDrive)`.
+
+~~~csharp
+if (Storage.MountDisc("sd:/games/game.iso")) {
+    string[] names = Storage.GetFiles(StorageDevice.DvdDrive, "");
+    Storage.Unmount(StorageDevice.DvdDrive);
+}
 ~~~
 
 ## Auxiliary memory (ARAM)

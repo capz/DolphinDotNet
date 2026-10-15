@@ -14,10 +14,12 @@
 
 #define PATH_CAP 1024
 #define HANDLE_CAP 32
-static const char *prefixes[6] = {"carda", "cardb", "sd", "dvd", "mca", "mcb"};
-static bool mounted[6];
+static const char *prefixes[7] = {"carda", "cardb", "sd", "dvd", "mca", "mcb", "gcloader"};
+static bool mounted[7];
+/* Keep backing mounted while its ISO is presented through dvd:/ */
+static int iso_source_device = -1;
 static unsigned card_users[2];
-static char roots[6][PATH_CAP];
+static char roots[7][PATH_CAP];
 static char cwd[PATH_CAP] = "sd:/";
 typedef struct {
   int token, fd, access, share;
@@ -35,6 +37,7 @@ static int next_token = 1;
 #ifdef DND_GAMECUBE_STORAGE
 bool dnd_gc_mount(int device);
 bool dnd_gc_mount_disc(int format);
+bool dnd_gc_mount_disc_image(const char *path);
 void dnd_gc_unmount(int device);
 bool dnd_gc_card_mount(int device, const char *game, const char *company);
 int dnd_gc_card_metadata(int device, const char *name, bool metadata,
@@ -107,7 +110,7 @@ static bool utf8(DndString *s, char out[PATH_CAP]) {
   return true;
 }
 static int device_name(const char *s, size_t len) {
-  for (int i = 0; i < 6; i++)
+  for (int i = 0; i < 7; i++)
     if (strlen(prefixes[i]) == len && !strncmp(s, prefixes[i], len))
       return i;
   return -1;
@@ -198,7 +201,7 @@ static int resolve(DndString *path, char canonical[PATH_CAP],
   int device = normalize(raw, canonical);
   if (device < 0)
     return -1;
-  if (device >= 4) {
+  if (device == 4 || device == 5) {
     fail(ENOSYS, "Memory cards require the save API.");
     return -1;
   }
@@ -219,7 +222,7 @@ static int resolve(DndString *path, char canonical[PATH_CAP],
   return device;
 }
 static bool valid_device(int d) {
-  if (d < 0 || d >= 6) {
+  if (d < 0 || d >= 7) {
     fail(EINVAL, "Invalid device.");
     return false;
   }
@@ -229,7 +232,7 @@ bool dnd_storage_is_mounted(int d) { return valid_device(d) && mounted[d]; }
 bool dnd_storage_mount(int d) {
   if (!valid_device(d))
     return false;
-  if (d >= 4) {
+  if (d == 4 || d == 5) {
     fail(ENOSYS, "Use MemoryCard.Mount with a save identity.");
     return false;
   }
@@ -261,6 +264,39 @@ bool dnd_storage_mount_disc(int format) {
   return dnd_storage_mount(3);
 #endif
 }
+bool dnd_storage_mount_disc_image(DndString *path) {
+  char canonical[PATH_CAP], native[PATH_CAP];
+  if (!path) {
+    fail(EINVAL, "ISO image path is null.");
+    return false;
+  }
+  /* The source is a fully-qualified path on an already-mounted volume. */
+  char raw[PATH_CAP];
+  if (!utf8(path, raw)) return false;
+  if (!strchr(raw, ':') || raw[0] == '/' || raw[0] == '\\') {
+    fail(EINVAL, "Specify a full mounted-volume ISO path.");
+    return false;
+  }
+  if (mounted[3]) {
+    fail(EBUSY, "Unmount dvd:/ before mounting an image.");
+    return false;
+  }
+  int source = resolve(path, canonical, native);
+  if (source < 0) return false;
+  if (source == 3 || source == 4 || source == 5) {
+    fail(EINVAL, "ISO source must be a mounted filesystem, not dvd or a memory card.");
+    return false;
+  }
+#ifdef DND_GAMECUBE_STORAGE
+  if (!dnd_gc_mount_disc_image(native)) return false;
+  mounted[3] = true;
+  iso_source_device = source;
+  return true;
+#else
+  fail(ENOSYS, "Mounted GameCube image volumes require a GameCube target.");
+  return false;
+#endif
+}
 int dnd_fs_open_handles(void) {
   int n = 0;
   for (int i = 0; i < HANDLE_CAP; i++) {
@@ -278,11 +314,15 @@ static bool busy(const char *path) {
 void dnd_storage_unmount(int d) {
   if (!valid_device(d) || !mounted[d])
     return;
-  if (d >= 4 && card_users[d - 4] > 1) {
+  if (d == iso_source_device && mounted[3]) {
+    fail(EBUSY, "Unmount the ISO-backed dvd volume before its source.");
+    return;
+  }
+  if ((d == 4 || d == 5) && card_users[d - 4] > 1) {
     card_users[d - 4]--;
     return;
   }
-  if (d >= 4)
+  if (d == 4 || d == 5)
     card_users[d - 4] = 0;
   for (int i = 0; i < HANDLE_CAP; i++)
     if ((files[i].token &&
@@ -296,6 +336,7 @@ void dnd_storage_unmount(int d) {
   dnd_gc_unmount(d);
 #endif
   mounted[d] = false;
+  if (d == 3) iso_source_device = -1;
 }
 DndString *dnd_fs_full_path(DndManagedHeap *heap, DndString *path) {
   char raw[PATH_CAP], out[PATH_CAP];
@@ -306,7 +347,7 @@ DndString *dnd_fs_full_path(DndManagedHeap *heap, DndString *path) {
 DndString *dnd_storage_path(DndManagedHeap *heap, int d, DndString *path) {
   if (!valid_device(d))
     return NULL;
-  if (d >= 4) {
+  if (d == 4 || d == 5) {
     fail(ENOSYS, "Memory cards do not have directories.");
     return NULL;
   }
@@ -906,7 +947,7 @@ static char card_game[2][5], card_company[2][3];
 static bool card_arguments(int d, DndString *name, char out[PATH_CAP]) {
   if (!valid_device(d))
     return false;
-  if (d < 4) {
+  if (d != 4 && d != 5) {
     fail(EINVAL, "Not a memory card slot.");
     return false;
   }
@@ -936,7 +977,7 @@ static bool card_arguments(int d, DndString *name, char out[PATH_CAP]) {
 bool dnd_card_mount(int d, DndString *game, DndString *company) {
   if (!valid_device(d))
     return false;
-  if (d < 4) {
+  if (d != 4 && d != 5) {
     fail(EINVAL, "Not a memory card slot.");
     return false;
   }
@@ -1200,7 +1241,7 @@ void dnd_card_delete(int d, DndString *name) {
 #endif
 }
 DndArray *dnd_card_entries(DndManagedHeap *heap, int d) {
-  if (!valid_device(d) || d < 4 || !mounted[d]) {
+  if (!valid_device(d) || (d != 4 && d != 5) || !mounted[d]) {
     fail(ENODEV, "Memory card is not mounted.");
     return NULL;
   }

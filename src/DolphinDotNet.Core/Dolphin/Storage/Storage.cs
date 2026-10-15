@@ -1,12 +1,22 @@
 using System;
 using System.Collections.Generic;
 namespace Dolphin.Storage;
-public enum StorageDevice { SdSlotA, SdSlotB, SdSerialPort2, DvdDrive, MemoryCardSlotA, MemoryCardSlotB }
+public enum StorageDevice { SdSlotA, SdSlotB, SdSerialPort2, DvdDrive, MemoryCardSlotA, MemoryCardSlotB, GcLoader }
 public enum DiscFormat { Iso9660=1, GameCubeFst=2 }
 public static class Storage
 {
     public static bool Mount(StorageDevice device)=>NativeStorage.Mount((int)device);
+    /// <summary>Mount a physical disc (or ODE-provided disc) at dvd:/.</summary>
     public static bool MountDisc(DiscFormat format)=>NativeStorage.MountDisc((int)format);
+    /// <summary>Mount a plain GameCube ISO/GCM by full mounted-volume path as dvd:/.</summary>
+    public static bool MountDisc(string imagePath)
+    {
+        if(imagePath==null)throw new ArgumentNullException("imagePath");
+        return NativeStorage.MountDiscImage(imagePath);
+    }
+    /// <summary>Mount the currently loaded GameCube game, or an ISO at a full path.</summary>
+    public static bool MountGameCubeDisc(string? imagePath=null)=>
+        imagePath==null ? MountDisc(DiscFormat.GameCubeFst) : MountDisc(imagePath);
     public static bool IsMounted(StorageDevice device)=>NativeStorage.IsMounted((int)device);
     public static void Unmount(StorageDevice device)=>NativeStorage.Unmount((int)device);
     public static string GetPath(StorageDevice device,string path)=>NativeStorage.GetPath((int)device,path);

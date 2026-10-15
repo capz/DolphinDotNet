@@ -23,6 +23,7 @@ int dnd_fst_read(const DndFst *, uint32_t entry, uint32_t offset, void *data,
                  size_t length);
 #ifdef DND_GAMECUBE_STORAGE
 bool dnd_gc_fst_mount(void);
+bool dnd_gc_fst_mount_image(const char *path);
 void dnd_gc_fst_unmount(void);
 #endif
 #endif

@@ -1,4 +1,5 @@
 #include "dnd_fst.h"
+#include "dnd_iso_file.h"
 #ifdef DND_GAMECUBE_STORAGE
 #include <errno.h>
 #include <fcntl.h>
@@ -10,6 +11,7 @@
 #include <sys/iosupport.h>
 #include <sys/stat.h>
 static DndFst fst;
+static DndIsoFile image;
 typedef struct {
   uint32_t entry, position;
 } FstFile;
@@ -150,6 +152,17 @@ static const devoptab_t device = {.name = "dvd",
                                   .dirreset_r = fs_dirreset,
                                   .dirnext_r = fs_dirnext,
                                   .dirclose_r = fs_dirclose};
+bool dnd_gc_fst_mount_image(const char *path) {
+  if (fst.table || image.file || !dnd_iso_file_open(&image, path))
+    return false;
+  fst = image.fst; /* Shared table; image owns its backing file and FST. */
+  if (AddDevice(&device) < 0) {
+    dnd_iso_file_close(&image);
+    memset(&fst, 0, sizeof(fst));
+    return false;
+  }
+  return true;
+}
 bool dnd_gc_fst_mount(void) {
   if (!dnd_fst_mount(&fst, disc_read, NULL, 1459978240ull))
     return false;
@@ -161,6 +174,10 @@ bool dnd_gc_fst_mount(void) {
 }
 void dnd_gc_fst_unmount(void) {
   RemoveDevice("dvd:");
-  dnd_fst_unmount(&fst);
+  if (image.file)
+    dnd_iso_file_close(&image);
+  else
+    dnd_fst_unmount(&fst);
+  memset(&fst, 0, sizeof(fst));
 }
 #endif
