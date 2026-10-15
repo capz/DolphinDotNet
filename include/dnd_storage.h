@@ -2,6 +2,15 @@
 #define DND_STORAGE_H
 #include "dnd_managed.h"
 bool dnd_storage_mount(int device);
+/* Read-only GameCube FST images opened via any mounted stdio filesystem. */
+int dnd_iso_open(DndString *path);
+void dnd_iso_close(int token);
+int dnd_iso_find(int token, DndString *path);
+int dnd_iso_directory(int token, int index);
+int dnd_iso_next(int token, int index);
+int dnd_iso_length(int token, int index);
+DndString *dnd_iso_name(DndManagedHeap *heap, int token, int index);
+int dnd_iso_read(int token, int index, int offset, DndArray *buffer, int destination, int length);
 bool dnd_storage_mount_disc(int format);
 void dnd_storage_unmount(int device);
 bool dnd_storage_is_mounted(int device);
