@@ -49,10 +49,10 @@ int dnd_hardware_probe(int kind,int port,int extended) {
     }
     if (kind==1) {
         if (!extended) return UNKNOWN;
-        u32 type=SI_GetType(port);
+        u32 type=SI_Probe(port); /* libogc2 normalizes attached SI IDs. */
         if (type==SI_GBA) return PRESENT;
-        if (type & SI_ERROR_BUSY) return BUSY;
-        return type & SI_ERROR_NO_RESPONSE ? ABSENT : UNKNOWN;
+        if (type==SI_ERROR_BUSY) return BUSY;
+        return type==SI_ERROR_NO_RESPONSE ? ABSENT : UNKNOWN;
     }
     if (kind==9) return UNKNOWN; /* GBP uses high-speed parallel/ARAM bus. */
     int m=media(kind,port);
