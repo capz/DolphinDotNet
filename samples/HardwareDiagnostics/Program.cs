@@ -16,7 +16,7 @@ internal static class Program
             string label=((int)device.Kind).ToString();
             string slot=((int)device.Port).ToString();
             string status=((int)device.Presence).ToString();
-            DebugOverlay.WriteLine(label+" / "+slot+" = "+status);
+            DebugOverlay.WriteLine(string.Concat(string.Concat(label," / "),string.Concat(slot,string.Concat(" = ",status))));
         }
         DebugOverlay.WriteLine("A: EXTENDED SCAN   START+X: RESTART");
         DebugOverlay.WriteLine("START+Y: SYSTEM MENU   RESET BUTTON: STATUS");
