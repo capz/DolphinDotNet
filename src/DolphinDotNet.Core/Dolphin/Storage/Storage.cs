@@ -17,6 +17,24 @@ public static class Storage
     /// <summary>Mount the currently loaded GameCube game, or an ISO at a full path.</summary>
     public static bool MountGameCubeDisc(string? imagePath=null)=>
         imagePath==null ? MountDisc(DiscFormat.GameCubeFst) : MountDisc(imagePath);
+    /// <summary>Read the mounted GameCube boot header and optional opening.bnr
+    /// artwork/text. Works for real media, ODE-loaded discs and ISO-backed dvd:/.
+    /// Use the selected PAL language for BNR2; BNR1 has one language record.
+    /// Throws if dvd:/ is unmounted or not a GameCube FST mount.</summary>
+    public static DiscIdentity GetMountedDiscIdentity(
+        DiscBannerLanguage language = DiscBannerLanguage.English)
+    {
+        if ((int)language < 0 || (int)language > 5)
+            throw new ArgumentOutOfRangeException("language");
+        byte[] header = NativeStorage.DiscHeader();
+        DiscBanner? banner = null;
+        if (FileExists(StorageDevice.DvdDrive, "opening.bnr"))
+        {
+            byte[] raw = ReadAllBytes(StorageDevice.DvdDrive, "opening.bnr");
+            banner = DiscBanner.TryParse(raw, language);
+        }
+        return DiscIdentity.ParseHeader(header, banner);
+    }
     public static bool IsMounted(StorageDevice device)=>NativeStorage.IsMounted((int)device);
     public static void Unmount(StorageDevice device)=>NativeStorage.Unmount((int)device);
     public static string GetPath(StorageDevice device,string path)=>NativeStorage.GetPath((int)device,path);

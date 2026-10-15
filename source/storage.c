@@ -1,6 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
 #include "dnd_storage.h"
 #include "dnd_card_transaction.h"
+#ifdef DND_GAMECUBE_STORAGE
+#include "dnd_fst.h"
+#endif
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -295,6 +298,30 @@ bool dnd_storage_mount_disc_image(DndString *path) {
 #else
   fail(ENOSYS, "Mounted GameCube image volumes require a GameCube target.");
   return false;
+#endif
+}
+/* Same immutable 0x440 boot header for a native disc or an ISO backed dvd:/.
+ * The FST parser snapshots these bytes when mounting the volume. */
+DndArray *dnd_storage_disc_header(DndManagedHeap *heap) {
+  if (!mounted[3]) {
+    fail(ENODEV, "Mount a GameCube disc at dvd:/ first.");
+    return NULL;
+  }
+#ifdef DND_GAMECUBE_STORAGE
+  uint8_t raw[0x440];
+  if (!dnd_gc_fst_copy_header(raw)) {
+    fail(ENOSYS, "Disc identity is available for GameCube FST mounts only.");
+    return NULL;
+  }
+  DndArray *result = dnd_managed_array_new_typed(
+      heap, sizeof(raw), 1, &DND_TYPE_BYTE, false);
+  if (!result) return NULL;
+  memcpy(result->data, raw, sizeof(raw));
+  return result;
+#else
+  (void)heap;
+  fail(ENOSYS, "Original GameCube disc identity requires the GameCube target.");
+  return NULL;
 #endif
 }
 int dnd_fs_open_handles(void) {

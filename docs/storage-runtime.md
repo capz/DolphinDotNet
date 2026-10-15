@@ -60,6 +60,15 @@ SD mounts register VFAT/exFAT and select the first mountable partition, with fou
 ## GC Loader and unified GameCube DVD filesystems
 
 All original GameCube FST content is mounted as `dvd:/`, regardless of source.
+`Storage.GetMountedDiscIdentity([language])` returns the cached validated boot header
+(GameId, disc number, revision and internal title), and reads `dvd:/opening.bnr`
+when present to expose the displayed title, short description, publisher and
+96x32 banner. For BNR2, the language is selectable (English, German, French,
+Spanish, Italian or Dutch). `DiscIdentity.Banner.Rgba32` contains linear RGBA
+pixels ready for `Texture2D.Create`; `Rgb5A3` preserves original GX tiles.
+An absent or malformed banner leaves `Banner` null and falls back to the boot
+header title. Japanese BNR1 text can be Shift-JIS; the raw banner bytes are
+preserved but display strings currently use western Latin-1 decoding.
 **The full image path is the only API difference.** The same `Storage` path,
 directory and stream operations are used after either mount:
 

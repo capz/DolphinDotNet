@@ -571,6 +571,30 @@ byte[] bytes = Dolphin.Text.Encoding.UTF8.GetBytes("Hello");
 string text = Dolphin.Text.Encoding.UTF8.GetString(bytes);
 ~~~
 
+### DiscIdentity — on-disc GameCube game metadata and banner
+
+Read the cached boot.bin header for a mounted `dvd:/` GameCube FST, whether
+from a real game disc, ODE or ISO/GCM file, and parse optional `opening.bnr`
+artwork and text. Returns `GameId` (six characters), `GameCode`,
+`MakerCode`, disc number, revision, internal name and banner title,
+publisher, short description. The optional `DiscBanner` has BNR1/BNR2
+language selection plus 96x32 RGBA pixels compatible with
+`Texture2D.Create`, tiled RGB5A3 pixels and unmodified raw data.
+Banner strings use western Latin-1; raw banner data preserves Japanese
+Shift-JIS text, which is not yet natively decoded.
+
+**API:** `Storage.GetMountedDiscIdentity([DiscBannerLanguage])`,
+`DiscIdentity.Title/GameId/ShortDescription/Banner/RawHeader`,
+`DiscBanner.Title/Description/ShortTitle/Publisher/Rgba32/Rgb5A3/RawData`.
+
+~~~csharp
+var disc = Storage.GetMountedDiscIdentity(DiscBannerLanguage.Dutch);
+string id = disc.GameId, title = disc.Title;
+if (disc.Banner != null) {
+    using var texture = Texture2D.Create(96, 32, disc.Banner.Rgba32);
+}
+~~~
+
 ### Storage — unified GameCube game disc and ISO mounts
 
 Every original GameCube FST uses `dvd:/`. For a physical or ODE-presented disc

@@ -5,6 +5,7 @@
 bool dnd_storage_mount(int device);
 bool dnd_storage_mount_disc(int format);
 bool dnd_storage_mount_disc_image(DndString *path);
+DndArray *dnd_storage_disc_header(DndManagedHeap *heap);
 void dnd_storage_unmount(int device);
 bool dnd_storage_is_mounted(int device);
 DndString *dnd_storage_path(DndManagedHeap *, int device, DndString *path);

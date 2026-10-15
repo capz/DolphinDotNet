@@ -51,6 +51,10 @@ int main(void) {
   assert(dnd_iso_file_open(&a,temp));
   assert(dnd_iso_file_open(&b,temp));
   assert(a.fst.count==4);
+  assert(!memcmp(a.fst.header,bytes,sizeof(a.fst.header)));
+  bytes[0]='X';
+  assert(a.fst.header[0]==0);
+  bytes[0]=0;
   int dir=dnd_iso_file_entry(&a,"/dir");
   int file=dnd_iso_file_entry(&a,"/dir/data");
   assert(dir==1 && file==2 && dnd_iso_file_entry(&a,"/top")==3);

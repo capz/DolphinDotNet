@@ -236,6 +236,11 @@ jobs:
           grep -q 'dnd_hardware_probe' /tmp/dnd-hardware-aot.c
           grep -q 'dnd_platform_reboot' /tmp/dnd-hardware-aot.c
           grep -q 'dnd_platform_reset_button' /tmp/dnd-hardware-aot.c
+      - name: Verify disc identities and BNR1/BNR2 artwork metadata
+        run: |
+          dotnet run --project tests/DiscIdentityTests/DiscIdentityTests.csproj -c Release
+          cc -std=c11 -O2 -g -Wall -Wextra -Werror -Iinclude tests/fst_test.c source/fst.c -o /tmp/dnd-fst-header
+          /tmp/dnd-fst-header
       - name: Validate GameCube ISO image parser and mounted-image sample
         run: |
           cc -std=c11 -O2 -g -Wall -Wextra -Werror -Iinclude tests/iso_image_test.c source/iso_file.c source/fst.c -o /tmp/dnd-iso-image
@@ -245,6 +250,7 @@ jobs:
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-disc-browser.c -o /tmp/dnd-disc-browser.o
           grep -q 'dnd_storage_mount_disc_image' /tmp/dnd-disc-browser.c
           grep -q 'dnd_storage_mount_disc' /tmp/dnd-disc-browser.c
+          grep -q 'dnd_storage_disc_header' /tmp/dnd-disc-browser.c
       - name: Validate collections and storage I/O
         timeout-minutes: 3
         run: |
