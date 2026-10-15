@@ -13,6 +13,7 @@ internal sealed class PsoGjImport
 {
     private readonly byte[] source;
     private readonly bool approximate;
+    private readonly bool xj;
     private readonly List<Node> nodes = new();
     private readonly List<Mesh> meshes = new();
     private readonly HashSet<int> visited = new();
@@ -24,16 +25,17 @@ internal sealed class PsoGjImport
     private sealed class Reader
     {
         internal readonly byte[] Bytes;
-        internal Reader(byte[] bytes) { Bytes = bytes; }
+        private readonly bool little;
+        internal Reader(byte[] bytes,bool little=false) { Bytes = bytes;this.little=little; }
         internal void Range(int offset,int size)
         {
             if(offset<0||size<0||offset>Bytes.Length-size)
                 throw new InvalidDataException("PSO GJ offset/length out of bounds.");
         }
         internal byte B(int p){Range(p,1);return Bytes[p];}
-        internal ushort U16(int p){Range(p,2);return BinaryPrimitives.ReadUInt16BigEndian(Bytes.AsSpan(p));}
+        internal ushort U16(int p){Range(p,2);return little?BinaryPrimitives.ReadUInt16LittleEndian(Bytes.AsSpan(p)):BinaryPrimitives.ReadUInt16BigEndian(Bytes.AsSpan(p));}
         internal short I16(int p)=>unchecked((short)U16(p));
-        internal uint U32(int p){Range(p,4);return BinaryPrimitives.ReadUInt32BigEndian(Bytes.AsSpan(p));}
+        internal uint U32(int p){Range(p,4);return little?BinaryPrimitives.ReadUInt32LittleEndian(Bytes.AsSpan(p)):BinaryPrimitives.ReadUInt32BigEndian(Bytes.AsSpan(p));}
         internal int I32(int p)=>unchecked((int)U32(p));
         internal float F32(int p)
         {
@@ -43,11 +45,12 @@ internal sealed class PsoGjImport
         }
         internal Vector3 Vec3(int p)=>new(F32(p),F32(p+4),F32(p+8));
     }
-    private PsoGjImport(byte[] bytes,bool allowApproximation)
-    { source=bytes;approximate=allowApproximation; }
+    private PsoGjImport(byte[] bytes,bool allowApproximation,bool isXj)
+    { source=bytes;approximate=allowApproximation;xj=isXj; }
     public static byte[] Convert(string path,bool approximate)
     {
-        var importer=new PsoGjImport(File.ReadAllBytes(path),approximate);
+        var importer=new PsoGjImport(File.ReadAllBytes(path),approximate,
+            Path.GetExtension(path).Equals(".xj",StringComparison.OrdinalIgnoreCase));
         importer.Parse();
         return importer.Build();
     }
@@ -61,11 +64,11 @@ internal sealed class PsoGjImport
             uint len=BinaryPrimitives.ReadUInt32LittleEndian(source.AsSpan(pos+4,4));
             pos+=8;
             if(len>source.Length-pos)throw new InvalidDataException("PSO chunk length beyond file.");
-            if(tag=="GJCM")
+            if(tag==(xj?"NJCM":"GJCM"))
             {
                 chunk=source.AsSpan(pos,(int)len).ToArray();
                 if(chunk.Length<52)throw new InvalidDataException("Empty GJCM hierarchy.");
-                ReadNode(new Reader(chunk),0,-1,0);
+                ReadNode(new Reader(chunk,xj),0,-1,0);
                 geometry=true;break;
             }
             pos+=(int)len;
@@ -96,7 +99,8 @@ internal sealed class PsoGjImport
         }
         int nodeId=nodes.Count;
         nodes.Add(new Node(parent,translation,q,scale));
-        if(meshOffset!=0){if(meshOffset>int.MaxValue)throw new InvalidDataException("Mesh offset.");ReadMesh(r,(int)meshOffset,nodeId);}
+        if(meshOffset!=0){if(meshOffset>int.MaxValue)throw new InvalidDataException("Mesh offset.");
+            if(xj) ReadXjMesh(r,(int)meshOffset,nodeId); else ReadMesh(r,(int)meshOffset,nodeId);}
         if(child!=0){if(child>int.MaxValue)throw new InvalidDataException("Child offset.");ReadNode(r,(int)child,nodeId,depth+1);}
         if(sibling!=0){if(sibling>int.MaxValue)throw new InvalidDataException("Sibling offset.");ReadNode(r,(int)sibling,parent,depth+1);}
     }
@@ -208,6 +212,94 @@ internal sealed class PsoGjImport
         Groups(solid,solidCount);
         Groups(alpha,alphaCount);
     }
+
+    /* Blue Burst XJ uses a fixed, little-endian mesh descriptor rather than
+     * NJ/GJ typed chunk streams. All overlapping vertex-info records are read
+     * in order without dropping UVs/normal/color from earlier records. */
+    private void ReadXjMesh(Reader r,int offset,int nodeId)
+    {
+        r.Range(offset,44);
+        uint attrOfs=r.U32(offset+4),attrCount=r.U32(offset+8);
+        uint opaqueOfs=r.U32(offset+12),opaqueCount=r.U32(offset+16);
+        uint alphaOfs=r.U32(offset+20),alphaCount=r.U32(offset+24);
+        if(attrCount>4096||opaqueCount+alphaCount>4096)
+            throw new InvalidDataException("Invalid XJ descriptor count.");
+        if(attrOfs>int.MaxValue||opaqueOfs>int.MaxValue||alphaOfs>int.MaxValue)
+            throw new InvalidDataException("XJ descriptor offset exceeds range.");
+        r.Range((int)attrOfs,checked((int)attrCount*16));
+        var pool=new List<Vertex>();
+        for(int i=0;i<attrCount;i++)
+        {
+            int entry=(int)attrOfs+i*16;
+            int flags=r.U16(entry);
+            uint start=r.U32(entry+4),count=r.U32(entry+12);
+            if(count>1_000_000||start>int.MaxValue)
+                throw new InvalidDataException("XJ vertex array exceeds limits.");
+            int stride=12+((flags&2)!=0?12:0)+((flags&4)!=0?4:0)+((flags&1)!=0?8:0);
+            r.Range((int)start,checked((int)count*stride));
+            for(int j=0;j<count;j++)
+            {
+                int p=checked((int)start+j*stride);
+                while(pool.Count<=j)pool.Add(new Vertex(Vector3.Zero,Vector3.UnitY,Vector2.Zero,Vector4.One));
+                Vertex old=pool[j];
+                Vector3 point=r.Vec3(p);p+=12;
+                Vector3 normal=(flags&2)!=0?r.Vec3(p):old.Normal;
+                if((flags&2)!=0)p+=12;
+                Vector4 color=(flags&4)!=0?new Vector4(r.B(p)/255f,r.B(p+1)/255f,r.B(p+2)/255f,r.B(p+3)/255f):old.Color;
+                if((flags&4)!=0)p+=4;
+                Vector2 uv=(flags&1)!=0?new Vector2(r.F32(p),1f-r.F32(p+4)):old.Uv;
+                pool[j]=new Vertex(point,normal,uv,color);
+            }
+        }
+        if(pool.Count==0)throw new InvalidDataException("XJ mesh has no vertices.");
+        void Groups(uint location,uint amount)
+        {
+            if(amount==0)return;
+            if(location>int.MaxValue)throw new InvalidDataException("XJ strip table pointer.");
+            int table=(int)location;
+            r.Range(table,checked((int)amount*20));
+            for(int i=0;i<amount;i++)
+            {
+                int entry=table+i*20;
+                uint material=r.U32(entry),properties=r.U32(entry+4);
+                uint indices=r.U32(entry+8),length=r.U32(entry+12);
+                if(material>int.MaxValue||indices>int.MaxValue||properties>2048||length>1_000_000)
+                    throw new InvalidDataException("XJ strip counts/offsets.");
+                r.Range((int)material,checked((int)properties*16));
+                r.Range((int)indices,checked((int)length*2));
+                Vector4 diffuse=Vector4.One;
+                for(int j=0;j<properties;j++)
+                {
+                    int p=(int)material+j*16;
+                    int type=r.I32(p);
+                    if(type==3&&!approximate)
+                        throw new InvalidDataException("Textured XJ materials require --allow-material-approximation.");
+                    if(type==5)
+                        diffuse=new Vector4(r.B(p+4)/255f,r.B(p+5)/255f,r.B(p+6)/255f,r.B(p+7)/255f);
+                }
+                var mesh=new Mesh(nodeId,new List<Vertex>(),new List<int>());
+                for(int j=0;j<length;j++)
+                {
+                    int ix=r.I16((int)indices+j*2);
+                    if(ix<0||ix>=pool.Count)throw new InvalidDataException("XJ strip vertex index out of range.");
+                    Vertex v=pool[ix];
+                    mesh.Vertices.Add(v with {Color=v.Color*diffuse});
+                }
+                // The PSO XJ reference parser emits both triangle windings.
+                for(int j=0;j+2<length;j++)
+                {
+                    int a=j,b=j+1,c=j+2;
+                    if(a==b||b==c||c==a)continue;
+                    mesh.Indices.Add(a);mesh.Indices.Add(b);mesh.Indices.Add(c);
+                    mesh.Indices.Add(a);mesh.Indices.Add(c);mesh.Indices.Add(b);
+                }
+                if(mesh.Indices.Count>0)meshes.Add(mesh);
+            }
+        }
+        Groups(opaqueOfs,opaqueCount);
+        Groups(alphaOfs,alphaCount);
+    }
+
     private byte[] Build()
     {
         using var n=new BigWriter();using var m=new BigWriter();
