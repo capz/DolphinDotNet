@@ -537,38 +537,24 @@ byte[] bytes = Dolphin.Text.Encoding.UTF8.GetBytes("Hello");
 string text = Dolphin.Text.Encoding.UTF8.GetString(bytes);
 ~~~
 
-### GameCubeImage — plain ISO/GCM reader
+### Storage — unified GameCube game disc and ISO mounts
 
-Read the original GameCube filesystem contained in an image on an already-mounted
-volume. Native FST validation precedes all reads, and `OpenRead` returns a
-read-only seekable `Dolphin.IO.Stream`; close any streams before the image.
+Every original GameCube FST uses `dvd:/`. For a physical or ODE-presented disc
+call `MountGameCubeDisc()`; for a plain ISO/GCM image, give a full mounted
+filesystem path to `MountDisc(path)` or `MountGameCubeDisc(path)`. Continue
+using normal `Storage.GetFiles`, `ReadAllBytes` and `Open` on
+`StorageDevice.DvdDrive`. GC Loader's optional SD filesystem mounts at
+`gcloader:/` via `StorageDevice.GcLoader`.
 
-**API:** `GameCubeImage.Open(path)`, `FileExists(path)`,
-`DirectoryExists(path)`, `GetFiles(dir)`, `GetDirectories(dir)`,
-`OpenRead(path)`, `ReadAllBytes(path)`, `Dispose()`.
-
-~~~csharp
-using var image = GameCubeImage.Open("sd:/games/game.iso");
-string[] children = image.GetFiles("/");
-using var file = image.OpenRead(children[0]);
-byte[] head = new byte[32]; int n = file.Read(head, 0, head.Length);
-~~~
-
-### Storage.GcLoader / MountGameCubeDisc
-
-GC Loader card access (hardware/firmware dependent) mounts as
-`StorageDevice.GcLoader` at `gcloader:/`; the loaded game's disc filesystem
-mounts separately at `dvd:/` via `MountGameCubeDisc()` (original FST).
-Avoid using both drive interfaces simultaneously.
-
-**API:** `StorageDevice.GcLoader`, `Storage.Mount(GcLoader)`,
-`Storage.MountGameCubeDisc()`, `Storage.MountDisc(GameCubeFst)`.
+**API:** `Storage.MountGameCubeDisc([isoPath])`,
+`Storage.MountDisc(DiscFormat)`, `Storage.MountDisc(string imagePath)`,
+`Storage.Unmount(StorageDevice.DvdDrive)`.
 
 ~~~csharp
-bool gcLoaderReady = Storage.Mount(StorageDevice.GcLoader);
-if (gcLoaderReady) Storage.Unmount(StorageDevice.GcLoader);
-bool discReady = Storage.MountGameCubeDisc();
-if (discReady) Storage.Unmount(StorageDevice.DvdDrive);
+if (Storage.MountDisc("sd:/games/game.iso")) {
+    string[] names = Storage.GetFiles(StorageDevice.DvdDrive, "");
+    Storage.Unmount(StorageDevice.DvdDrive);
+}
 ~~~
 
 ## Auxiliary memory (ARAM)
