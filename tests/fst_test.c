@@ -37,6 +37,10 @@ int main(void) {
   memcpy(image + 0x900, "abc", 3);
   DndFst fst = {0};
   assert(dnd_fst_mount(&fst, read_image, NULL, sizeof(image)));
+  assert(memcmp(fst.header, image, sizeof(fst.header)) == 0);
+  image[0] = 88; /* Header is a stable, mounted snapshot. */
+  assert(fst.header[0] == 0);
+  image[0] = 0;
   assert(dnd_fst_find(&fst, "dvd:/dir/data") == 2);
   assert(dnd_fst_find(&fst, "/top") == 3);
   assert(dnd_fst_find(&fst, "/data") == -1);
