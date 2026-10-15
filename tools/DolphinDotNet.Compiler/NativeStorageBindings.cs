@@ -52,6 +52,7 @@ internal static class NativeStorageBindings
         ["MeshUpdateNormal"]=("dnd_mesh_update","iaiii",false),
         ["AudioInit"]=("dnd_audio_init","",false),
         ["AudioBegin"]=("dnd_audio_begin","s",false),
+        ["AudioCreatePcm8"]=("dnd_audio_create_pcm8","ai",false),
         ["AudioStep"]=("dnd_audio_step","i",false),
         ["AudioStat"]=("dnd_audio_stat","ii",false),
         ["AudioDispose"]=("dnd_audio_dispose","i",false),
