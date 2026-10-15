@@ -46,6 +46,12 @@ static int card_errno(int rc) {
     return -EIO;
   }
 }
+bool dnd_gc_mount_disc_image(const char *path) {
+  if (!path || !dnd_gc_fst_mount_image(path))
+    return false;
+  disc_format = 2;
+  return true;
+}
 bool dnd_gc_mount_disc(int format) {
   DVD_Init();
   if (DVD_Mount() < 0)
