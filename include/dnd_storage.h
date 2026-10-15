@@ -3,6 +3,8 @@
 #include "dnd_managed.h"
 #include "dnd_hardware.h" /* Shared native storage/platform intrinsic declarations. */
 bool dnd_storage_mount(int device);
+bool dnd_storage_mount_disc(int format);
+bool dnd_storage_mount_disc_image(DndString *path);
 void dnd_storage_unmount(int device);
 bool dnd_storage_is_mounted(int device);
 DndString *dnd_storage_path(DndManagedHeap *, int device, DndString *path);
