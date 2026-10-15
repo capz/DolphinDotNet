@@ -349,6 +349,9 @@ jobs:
           make -C /tmp/dnd-pong-gamecube
           test -s /tmp/dnd-pong-gamecube/Game.dol
           python3 /tmp/dnd-pong-gamecube/scripts/dol_sections.py /tmp/dnd-pong-gamecube/Game.dol
+          mkdir -p footprint
+          cp /tmp/dnd-pong-gamecube/Game.dol footprint/pong.dol
+          cp /tmp/dnd-pong-gamecube/Game.elf footprint/pong.elf
       - name: Compile managed storage ABI for PowerPC
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
@@ -499,6 +502,10 @@ jobs:
         id: timing_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/footprint/timing_tasks.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2162 --elf dist/footprint/timing_tasks.elf --expect-word dnd_async_test_result=0x4153594e --memory-after-symbol dnd_async_test_done --logs dolphin-timing --require-boot
+      - name: Verify Pong synthesizes audio and presents frames in Dolphin
+        id: pong_boot
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/pong.dol --binary /usr/games/dolphin-emu-nogui --seconds 35 --cpu-core 1 --gdb-port 2163 --elf dist/footprint/pong.elf --expect-symbol dnd_aot_entry --expect-symbol dnd_audio_create_pcm8 --expect-symbol dnd_device_end --logs dolphin-pong --require-boot
       - name: Require both guest entry-point checks
         if: always()
         run: |
@@ -510,6 +517,7 @@ jobs:
           test "${{ steps.app_boot.outcome }}" = success
           test "${{ steps.async_boot.outcome }}" = success
           test "${{ steps.timing_boot.outcome }}" = success
+          test "${{ steps.pong_boot.outcome }}" = success
       - name: Upload emulator logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -521,6 +529,7 @@ jobs:
             dolphin-smoke/
             dolphin-async/
             dolphin-timing/
+            dolphin-pong/
           if-no-files-found: warn
 
   release-gamecube:
