@@ -5,6 +5,11 @@ using System.Text.Json.Nodes;
 using DolphinDotNet.Assets;
 
 string output=args.Length==0?Path.Combine(Path.GetTempPath(),"dnd-model-fixtures"):Path.GetFullPath(args[0]);Directory.CreateDirectory(output);Directory.CreateDirectory(Path.Combine(output,"sd"));
+PsoImportTests.Run(output);
+FZeroImportTests.Run(output);
+GameCubeImportTests.Run(output);
+RenderWareMeleeFixtures.Run(output);
+PsoEpisode3Fixtures.Run(output);
 var binary=new MemoryStream();var views=new JsonArray();var accessors=new JsonArray();
 int Attribute(float[] values,string type,int components)
 {
@@ -115,6 +120,8 @@ var buildProject=new System.Xml.Linq.XElement("Project",new System.Xml.Linq.XAtt
     new System.Xml.Linq.XElement("ItemGroup",new System.Xml.Linq.XElement("DndModel",new System.Xml.Linq.XAttribute("Include",gltf),new System.Xml.Linq.XElement("DndOutput",Path.Combine(output,"sd","built.dndmodel")),new System.Xml.Linq.XElement("Options","--texture-limit 256"))));
 File.WriteAllText(Path.Combine(output,"Build.csproj"),buildProject.ToString());
 Console.WriteLine("Model converter fixtures passed: "+output);
+NativeImportTests.Run(output);
+GlbImportTests.Run(output);
 
 using(var drawingImage=new RasterImage(5,3,new Rgba32(10,20,30,40)))
 {

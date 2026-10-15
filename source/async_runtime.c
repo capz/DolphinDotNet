@@ -25,7 +25,13 @@ static void wait_cond(AsyncCond *c, AsyncMutex *m, bool timed) {
 }
 static uint64_t now_us(void) { return ticks_to_microsecs(gettime()); }
 static int thread_start(AsyncThread *t, void *(*fn)(void *)) {
-    return LWP_CreateThread(t, fn, NULL, NULL, 64 * 1024, 40);
+    /* Equal, timesliced priorities let both executors advance on the console's
+     * single CPU even while native parsing has released the managed gate.
+     * A lower priority service thread could starve behind a busy frame loop. */
+    int priority = LWP_GetThreadPriority(LWP_GetSelf());
+    if (priority < LWP_PRIO_LOWEST) priority = LWP_PRIO_NORMAL;
+    if (priority > LWP_PRIO_HIGHEST) priority = LWP_PRIO_HIGHEST;
+    return LWP_CreateThread(t, fn, NULL, NULL, 64 * 1024, (uint8_t)priority);
 }
 static void thread_join(AsyncThread *t) { LWP_JoinThread(*t, NULL); }
 static void yield_thread(void) { LWP_YieldThread(); }
@@ -194,3 +200,21 @@ void dnd_async_require_application_thread(void) {
 
 void dnd_async_enter_critical(void) { critical_depth[owner]++; }
 void dnd_async_leave_critical(void) { if (critical_depth[owner] > 0) critical_depth[owner]--; }
+
+int dnd_async_native_begin(void) {
+    if (!running) return -1;
+    if (owner != 1 || critical_depth[owner] != 0) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION, "Native background work requires the service executor outside class initialization.");
+        return -1;
+    }
+    dnd_context_suspend(&contexts[1]);
+    unlock(&gate);
+    return 1;
+}
+
+void dnd_async_native_end(int context) {
+    if (context < 0) return;
+    lock(&gate);
+    dnd_context_resume(&contexts[context]);
+    owner = context;
+}

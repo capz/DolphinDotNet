@@ -390,9 +390,11 @@ Dolphin.Audio.Audio.Initialize();
 
 ### Sound
 
-Owned native PCM clip, loaded from a mounted WAV file or synthesized unsigned mono PCM8. The native backend copies managed PCM bytes to aligned memory.
+Owned native clip, loaded from WAV, supported GameCube containers, or synthesized PCM8. GameCube sources remain compressed in native memory and decode bounded AESND buffers. See [format and game coverage](gamecube-audio-formats.md).
 
-**API:** `Sound.Load(path)`, `Sound.LoadAsync(path[,token])`, `Sound.FromPcm8(byte[],sampleRate)`, `SampleRate`, `LengthBytes`, `Volume`, `Pitch`, `Play([loop])`, `Dispose()`.
+**API:** `Sound.Load(path)`, `Sound.LoadAsync(path[,token])`, `LoadGameCube(path[,format,dataPath,entryIndex,nativeBudgetBytes])`, `LoadGameCubeAsync(path[,format,dataPath,entryIndex,cancellationToken,nativeBudgetBytes])`, `FromPcm8(byte[],sampleRate)`, `SampleRate`, `LengthBytes`, `Channels`, `SampleCount`, `HasLoop`, `LoopStartSample`, `LoopEndSample`, `NativeBytes`, `Volume`, `Pitch`, `Play([loop])`, `PlayLoop(loopStartSample,loopEndSample)`, `Dispose()`.
+
+`PlayLoop` requires a `LoadGameCube/Async` source. It plays the intro once, then repeats `[start,end)` in sample frames per channel. Ranges are per voice and sample-exact, including ADX partial frames; embedded loop metadata stays unchanged. Require `0 <= start < end <= SampleCount`.
 
 ~~~csharp
 using var sound = Sound.FromPcm8(new byte[] { 128, 255, 128, 0 }, 22050);
@@ -415,9 +417,9 @@ channel.Stop();
 
 ### Music
 
-Convenience long-lived sound owner for looping background WAV playback **preloaded into native memory**; it is not an MP3/Ogg decoder or streaming player.
+Convenience sound owner for a looping background track. WAV uses resident PCM; supported GameCube sources use compressed resident playback. Disk streaming and MP3/Ogg/AHX decoding are unavailable.
 
-**API:** `Load(path)`, `LoadAsync(path[,token])`, `Volume`, `Pitch`, `IsPlaying`, `Play([loop=true])`, `Stop()`, `Dispose()`.
+**API:** `Load(path)`, `LoadAsync(path[,token])`, `LoadGameCube(...)`, `LoadGameCubeAsync(...)` (same source options as Sound), `Volume`, `Pitch`, `IsPlaying`, `Play([loop=true])`, `PlayLoop(loopStartSample,loopEndSample)` (same range semantics as Sound), `Stop()`, `Dispose()`.
 
 ~~~csharp
 using var music = Music.Load("sd:/audio/loop.wav");
@@ -1250,7 +1252,7 @@ These constants correspond to the IDs and enum values in [GXConstants.Generated.
 - **Storage:** ordinary files require a mounted filesystem and are not power-loss atomic. GameCube memory-card entries are separate, journaled native saves. Media and free capacity matter.
 - **Graphics:** only one frame and pass at once, native resources need Dispose, and raw GPU commands require manual state and pointer correctness.
 - **Async:** no manual Scheduler.Pump call is needed for regular async/await; graphics and input stay on the application executor.
-- **Audio:** AESND PCM/WAV; Music is preloaded WAV (not streamed MP3/Ogg).
+- **Audio:** AESND PCM/WAV and [native GameCube game audio](gamecube-audio-formats.md), with compressed resident playback; no disk streaming or MP3/Ogg/AHX decoder.
 - **Validation:** AOT and Dolphin emulator smoke tests do not prove correct physical memory-card writes, peripherals, or audio output on real hardware.
 - **Authoritative details:** the source in src/ and the focused technical docs govern any edge cases, method overloads and platform limits.
 

@@ -52,11 +52,13 @@ internal static class NativeStorageBindings
         ["MeshUpdateNormal"]=("dnd_mesh_update","iaiii",false),
         ["AudioInit"]=("dnd_audio_init","",false),
         ["AudioBegin"]=("dnd_audio_begin","s",false),
+        ["AudioBeginGameCube"]=("dnd_audio_begin_gamecube","ssiii",false),
         ["AudioCreatePcm8"]=("dnd_audio_create_pcm8","ai",false),
         ["AudioStep"]=("dnd_audio_step","i",false),
         ["AudioStat"]=("dnd_audio_stat","ii",false),
         ["AudioDispose"]=("dnd_audio_dispose","i",false),
         ["AudioPlay"]=("dnd_audio_play","iiff",false),
+        ["AudioPlayRange"]=("dnd_audio_play_range","iiiff",false),
         ["AudioVoiceStat"]=("dnd_audio_voice_stat","i",false),
         ["AudioVoiceControl"]=("dnd_audio_voice_control","iif",false),
         ["AudioVoiceStop"]=("dnd_audio_voice_stop","i",false),
@@ -89,8 +91,13 @@ internal static class NativeStorageBindings
         ["PerformanceVisible"]=("dnd_performance_visible","",false),
         ["PerformanceSetVisible"]=("dnd_performance_set_visible","i",false),
         ["ModelTrs"]=("dnd_model_trs","aa",false),["ModelMultiply"]=("dnd_model_multiply_arrays","aaa",false),["ModelPosition"]=("dnd_model_position","aafff",false),["ModelTranslate"]=("dnd_model_translate","afff",false),["ModelRotate"]=("dnd_model_rotate","afff",false),["ModelCamera"]=("dnd_model_camera","aaa",false),
-        ["ModelBegin"]=("dnd_model_begin","si",false),["ModelBeginObj"]=("dnd_model_begin_obj","si",false),["ModelBeginBytes"]=("dnd_model_begin_bytes","ai",false),["ModelStep"]=("dnd_model_step","i",false),["ModelDispose"]=("dnd_model_dispose","i",false),["ModelStat"]=("dnd_model_stat","ii",false),
+        ["ModelBegin"]=("dnd_model_begin","si",false),["ModelBeginObj"]=("dnd_model_begin_obj","si",false),["ModelBeginGlb"]=("dnd_model_begin_glb","sii",false),["ModelBeginBytes"]=("dnd_model_begin_bytes","ai",false),["ModelStep"]=("dnd_model_step","i",false),["ModelDispose"]=("dnd_model_dispose","i",false),["ModelStat"]=("dnd_model_stat","ii",false),
         ["ModelName"]=("dnd_model_name","iii",true),["ModelDuration"]=("dnd_model_duration","ii",false),["ModelCopy"]=("dnd_model_copy","iiaii",false),
+        ["ModelBeginFzero"]=("dnd_model_begin_fzero","ssiii",false),
+        ["ModelBeginGamecube"]=("dnd_model_begin_gamecube","sssfiii",false),
+        ["ModelBeginPsoEpisode3"]=("dnd_model_begin_pso_ep3","sssfiii",false),
+        ["ModelBeginPso"]=("dnd_model_begin_pso","sssfii",false),
+        ["ModelBeginScene"]=("dnd_model_begin_scene","sifii",false),
         ["ModelRestoreBegin"]=("dnd_model_restore_begin","i",false),["ModelRestoreEnd"]=("dnd_model_restore_end","ii",false),["ModelUnload"]=("dnd_model_unload","i",false),
         ["ModelInstance"]=("dnd_model_instance","ii",false),["ModelInstanceBytes"]=("dnd_model_instance_bytes","i",false),["ModelInstanceDispose"]=("dnd_model_instance_dispose","i",false),["ModelPlay"]=("dnd_model_play","iiif",false),["ModelControl"]=("dnd_model_control","iif",false),
         ["ModelNodeMatrix"]=("dnd_model_node_matrix","iia",false),["ModelDraw"]=("dnd_model_draw","ia",false),["ModelFrameBegin"]=("dnd_model_frame_begin","aa",false),["ModelFrameEnd"]=("dnd_model_frame_end","",false),
@@ -123,7 +130,7 @@ internal static class NativeStorageBindings
         if(!Bindings.TryGetValue(call.Operation,out var binding)||binding.Types.Length!=call.Arguments.Count)throw new NotSupportedException($"Invalid native storage binding {call.Operation}.");
         var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'o'=>"DndObject*",'l'=>"int64_t",'f'=>"float",_=>"int"})})v{arg.Id}").ToList();
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
-        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||call.Operation.StartsWith("Audio",StringComparison.Ordinal)||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
+        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginGameCube" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";
         if(call.Result is {} result)b.AppendLine($"  v{result.Id} = {(result.Kind==IrValueKind.ObjectReference?"(intptr_t)":"")}{expression};");else b.AppendLine($"  {expression};");

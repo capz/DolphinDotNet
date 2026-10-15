@@ -9,8 +9,26 @@ int dnd_model_translate(DndArray *values, float x, float y, float z);
 int dnd_model_rotate(DndArray *values, float x, float y, float z);
 int dnd_model_camera(DndArray *settings, DndArray *view, DndArray *projection);
 int dnd_model_begin(DndString *path, int budget);
-/* Runtime import of static Wavefront OBJ, not MTL or animations. */
+/* Runtime static OBJ import, including MTL/base-color images; OBJ has no clips. */
 int dnd_model_begin_obj(DndString *path, int budget);
+/* Source imports run on the service executor (or standalone/manual native
+ * tests). They release the managed gate only over native-owned parsing data,
+ * and reacquire it for storage and publication. */
+/* Bounded embedded GLB profile, parsed natively without a desktop runtime. */
+int dnd_model_begin_glb(DndString *path, int budget, int approximate_materials);
+int dnd_model_begin_pso(DndString *path, DndString *textures, DndString *motion,
+                        float motion_fps, int euler_key_bytes, int budget);
+int dnd_model_begin_scene(DndString *path, int fbx, float sample_rate,
+                          int budget, int approximate_materials);
+/* F-Zero GX GMA/GCMF, AV TPL, LZSS and U8/ARC; selection=-1 loads all
+ * GMA entries. options: 1=material approximation, 2=static deformation snapshot. */
+int dnd_model_begin_gamecube(DndString *path, DndString *textures,
+                              DndString *motion, float fps, int format,
+                              int budget, int approximate);
+int dnd_model_begin_pso_ep3(DndString *path, DndString *textures, DndString *motion,
+                             float fps, int euler_bytes, int budget, int approximate);
+int dnd_model_begin_fzero(DndString *path, DndString *textures, int selection,
+                          int budget, int options);
 /* Runtime load of an already-compiled model from memory. */
 int dnd_model_begin_bytes(DndArray *data, int budget);
 int dnd_model_step(int token);

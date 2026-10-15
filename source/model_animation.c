@@ -297,9 +297,16 @@ int dnd_model_instance(int token, int budget) {
   in->done = dnd_model_alloc(m->nodes, &in->bytes, in->budget);
   in->vertices =
       dnd_model_alloc(m->meshes * sizeof(float *), &in->bytes, in->budget);
+  bool blended = false;
+  for (unsigned i = 0; i < m->materials; i++) blended |= (m->material[i].mode & 4) != 0;
+  if (blended) {
+    in->draw_order = dnd_model_alloc(m->meshes * sizeof(unsigned), &in->bytes, in->budget);
+    in->draw_depth = dnd_model_alloc(m->meshes * sizeof(float), &in->bytes, in->budget);
+  }
   m->refs++;
   dnd_instances[slot] = in;
   if (!in->pose || !in->other || !in->global || !in->done || !in->vertices ||
+      (blended && (!in->draw_order || !in->draw_depth)) ||
       dnd_model_evaluate(in) < 0) {
     dnd_model_instance_dispose(in->token);
     return 0;
@@ -320,6 +327,8 @@ int dnd_model_instance_dispose(int token) {
   dnd_model_free(in->other, &in->bytes);
   dnd_model_free(in->global, &in->bytes);
   dnd_model_free(in->done, &in->bytes);
+  dnd_model_free(in->draw_order, &in->bytes);
+  dnd_model_free(in->draw_depth, &in->bytes);
   free(in);
   dnd_model_release(m);
   return 0;

@@ -15,6 +15,7 @@ typedef struct {
 typedef struct {
   int node, skin, material;
   unsigned vertices, indices;
+  float center[3];
   const unsigned char *data, *index;
 } DndMesh;
 typedef struct {
@@ -60,6 +61,8 @@ typedef struct {
   unsigned char *done;
   float **vertices;
   float *workspace;
+  unsigned *draw_order;
+  float *draw_depth;
 } DndInstance;
 extern DndModel *dnd_models[DND_MODEL_SLOTS];
 extern DndInstance *dnd_instances[DND_INSTANCE_SLOTS];
@@ -77,5 +80,7 @@ void dnd_model_identity(float m[16]);
 void dnd_model_multiply(float out[16], const float a[16], const float b[16]);
 bool dnd_model_inverse(float out[16], const float m[16]);
 int dnd_model_evaluate(DndInstance *instance);
+void dnd_model_sort_draws(DndInstance *instance, const float world[16],
+                           const float view[16]);
 void dnd_model_drop_vertices(DndInstance *instance);
 #endif

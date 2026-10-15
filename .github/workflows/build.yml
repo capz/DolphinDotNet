@@ -102,6 +102,23 @@ jobs:
         run: |
           cc -std=gnu11 -Wall -Wextra -Werror -O2 -Iinclude tests/audio_native_test.c source/audio.c -lm -o /tmp/dnd-audio-native
           /tmp/dnd-audio-native
+      - name: Validate GameCube audio containers, decoders and AESND callbacks
+        run: |
+          python3 tests/generate_audio_fixtures.py /tmp/dnd-audio-fixtures/sd/audio
+          cc -std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all -Iinclude tests/audio_formats_test.c source/audio.c -lm -o /tmp/dnd-audio-formats
+          /tmp/dnd-audio-formats /tmp/dnd-audio-fixtures/sd/audio
+          cc -m32 -std=c11 -Wall -Wextra -Werror -O2 -Iinclude tests/audio_formats_test.c source/audio.c -lm -o /tmp/dnd-audio-formats32
+          /tmp/dnd-audio-formats32 /tmp/dnd-audio-fixtures/sd/audio
+          cc -std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -Itests/audio_sdk -Iinclude tests/audio_backend_test.c source/audio_gamecube.c -lm -o /tmp/dnd-audio-callbacks
+          /tmp/dnd-audio-callbacks
+      - name: Validate GameCube audio awaits, background loading and cancellation
+        env:
+          DND_ASYNC_MANUAL: "0"
+        run: |
+          dotnet build tests/AudioFormatsSmoke -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/AudioFormatsSmoke/bin/Release/net8.0/AudioFormatsSmoke.dll /tmp/dnd-audio-formats-aot.c
+          cc -pthread -std=c11 -Wall -Wextra -Werror -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -Iinclude /tmp/dnd-audio-formats-aot.c tests/audio_formats_host.c source/audio.c source/managed_runtime.c source/async_runtime.c source/storage.c source/performance.c -lm -o /tmp/dnd-audio-formats-aot
+          /tmp/dnd-audio-formats-aot /tmp/dnd-audio-fixtures --gc-stress
       - name: Compile managed AESND audio sample through current AOT pipeline
         run: |
           dotnet build samples/AudioDemo/AudioDemo.csproj -c Release
@@ -322,13 +339,30 @@ jobs:
         run: |
           dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke
+          # Avoid pathological sanitizer compile times for large generated state machines.
+          # Native code stays optimized; the 32-bit pass below also optimizes generated C.
+          cc -pthread -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/model-smoke.c -o /tmp/model-smoke-generated.o
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke-generated.o tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures --gc-stress
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke32
           timeout 30s /tmp/model-smoke32 /tmp/dnd-model-fixtures --gc-stress
+
+      - name: Validate background model awaits, rendering and in-flight cancellation
+        timeout-minutes: 5
+        env:
+          DND_ASYNC_MANUAL: "0"
+        run: |
+          dotnet build tests/ModelAsyncSmoke/ModelAsyncSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/ModelAsyncSmoke/bin/Release/net8.0/ModelAsyncSmoke.dll /tmp/model-async.c
+          cc -pthread -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/model-async.c -o /tmp/model-async-generated.o
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-async-generated.o tests/model_async_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/timing.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -Wl,--wrap=ufbx_load_memory -lm -o /tmp/model-async
+          timeout 30s /tmp/model-async /tmp/dnd-model-fixtures
+          timeout 30s /tmp/model-async /tmp/dnd-model-fixtures --gc-stress
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-async.c tests/model_async_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/timing.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -Wl,--wrap=ufbx_load_memory -lm -o /tmp/model-async32
+          timeout 30s /tmp/model-async32 /tmp/dnd-model-fixtures --gc-stress
 
   portable-runtime:
     name: Portable runtime
@@ -386,6 +420,12 @@ jobs:
           make -C /tmp/dnd-audio-demo-ppc
           test -s /tmp/dnd-audio-demo-ppc/Game.dol
           python3 /tmp/dnd-audio-demo-ppc/scripts/dol_sections.py /tmp/dnd-audio-demo-ppc/Game.dol
+      - name: Link GameCube audio format loaders and async API
+        run: |
+          dotnet build tests/AudioFormatsSmoke -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle tests/AudioFormatsSmoke/bin/Release/net8.0/AudioFormatsSmoke.dll /tmp/dnd-audio-formats-ppc --platform gamecube
+          make -C /tmp/dnd-audio-formats-ppc
+          python3 /tmp/dnd-audio-formats-ppc/scripts/dol_sections.py /tmp/dnd-audio-formats-ppc/Game.dol
       - name: Build and validate self-contained Pong GameCube DOL
         run: |
           dotnet build samples/Pong/Pong.csproj -c Release

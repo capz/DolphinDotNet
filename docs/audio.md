@@ -1,7 +1,7 @@
 # Audio (GameCube)
 
 `Dolphin.Audio` provides a native AESND (libogc2) implementation with up to
-32 simultaneous PCM voices, including independent volume, pitch, clip looping,
+32 simultaneous PCM output voices, including independent volume, pitch, clip looping,
 and explicit stop/dispose. No custom application-side audio pump is required:
 DSP processing runs independently of managed continuations.
 
@@ -25,9 +25,16 @@ playback.Pitch = 1.2f;
 ```
 
 `Sound.Load` is synchronous; `Sound.LoadAsync` reads in 4096-byte slices
-via the automatic async scheduler. Use `Audio.Initialize()` after initializing
+on the automatic background executor. Use `Audio.Initialize()` after initializing
 `Dolphin.Memory.Aram` if ARAM is used, since DSP and ARAM resources must
 be coordinated. Mount storage before loading.
+
+For ADX and other sources loaded through `LoadGameCube/Async`, use
+`sound.PlayLoop(startSample, endSample)` or `music.PlayLoop(startSample, endSample)`
+to play the intro and then repeat a custom range. Indices count sample frames per
+channel; the end is exclusive. ADX ranges can start or end inside a compressed
+frame. `Play(loop: true)` uses embedded loop points instead. See
+[loop range details](gamecube-audio-formats.md) for validation and format limits.
 
 ## Self-contained generated sounds
 
@@ -51,7 +58,8 @@ generated, enveloped effects in a standalone DOL.
 ## Supported audio formats and limits
 
 - RIFF/WAVE, uncompressed PCM, 8-bit unsigned or 16-bit signed,
-  mono or stereo, 8000–48000 Hz; other formats are rejected.
+  mono or stereo, 8000–48000 Hz; other WAV encodings are rejected.
+  `LoadGameCubeAsync` provides the separate native game-format readers.
 - Native-aligned memory per clip, maximum 16 MiB WAV PCM.
   Loaded sounds are independent of managed garbage collection.
 - Native clip slots: 16. Hardware playback slots: up to 32 total.
@@ -61,9 +69,11 @@ generated, enveloped effects in a standalone DOL.
   releasing native PCM memory. Channels are invalidated upon finish/stop,
   and a stale channel cannot take control of a newly allocated voice.
 - `Music` wraps a single `Sound` for a single looping/stoppable track.
-  **Music currently preloads the entire WAV. Streaming from disk and MP3/OGG
-  decoding are not yet implemented.** Short tracks within the native memory
-  budget work; long background music requires a future stream reader.
+  WAV music preloads PCM. `Music.LoadGameCubeAsync` retains supported GameCube
+  audio in compressed native memory and decodes bounded playback buffers.
+  Disk streaming and MP3/Ogg/AHX decoding are not implemented. See
+  [GameCube game audio formats](gamecube-audio-formats.md) for codecs, banks,
+  loop regions, budgets and per-game coverage.
 - `System.Media` and `Dolphin.Sound` are not mapped; the bundler rejects
   those unsupported APIs.
 - GameCube bundles without reachable networking APIs skip unnecessary native
