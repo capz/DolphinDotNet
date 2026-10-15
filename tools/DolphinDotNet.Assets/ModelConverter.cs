@@ -32,8 +32,18 @@ public static class ModelConverter
                 if(durations.Count>importer.AnimationCount)throw new InvalidDataException("Assimp export dropped animation clips.");importer.Dependencies.Remove(temp);importer.Dependencies.Add(input);
                 if(ext==".obj")foreach(string line in File.ReadLines(input))if(line.StartsWith("mtllib ",StringComparison.Ordinal))importer.Dependencies.Add(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(input)!,line[7..].Trim())));
             }
+            else if(ext==".gj")
+            {
+                var native=PsoGjImport.Convert(input,options.ApproximateMaterials);
+                Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+                string tmp=output+"."+Guid.NewGuid().ToString("N")+".tmp";
+                try{File.WriteAllBytes(tmp,native);File.Move(tmp,output,true);}finally{File.Delete(tmp);}
+                File.WriteAllText(output+".deps.json",JsonSerializer.Serialize(
+                    new[]{new {path=input,sha256=System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(input)))}}));
+                return;
+            }
             else if(ext is ".gltf" or ".glb")importer=new(input,options);
-            else throw new ArgumentException("Supported inputs: FBX, OBJ, glTF, GLB.");
+            else throw new ArgumentException("Supported inputs: FBX, OBJ, glTF, GLB, PSO GameCube GJ geometry.");
             var package=importer.Build();Directory.CreateDirectory(Path.GetDirectoryName(output)!);string staged=output+"."+Guid.NewGuid().ToString("N")+".tmp";
             try{File.WriteAllBytes(staged,package);File.Move(staged,output,true);}finally{File.Delete(staged);}
             File.WriteAllText(output+".deps.json",JsonSerializer.Serialize(importer.Dependencies.OrderBy(x=>x,StringComparer.Ordinal).Select(x=>new{path=x,sha256=System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(x)))})));
