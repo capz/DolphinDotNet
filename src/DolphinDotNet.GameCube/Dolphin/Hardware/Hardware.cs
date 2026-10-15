@@ -1,5 +1,6 @@
 using System;
 using Dolphin.Storage;
+using StorageApi = Dolphin.Storage.Storage;
 
 namespace Dolphin.Hardware;
 
@@ -83,12 +84,12 @@ public static class Hardware
         var presence=value>=0 && value<=4?(HardwarePresence)value:HardwarePresence.Unknown;
         bool mounted=false;
         if(kind==HardwareKind.MemoryCard)
-            mounted=Storage.IsMounted(port==HardwarePort.SlotA?StorageDevice.MemoryCardSlotA:StorageDevice.MemoryCardSlotB);
+            mounted=StorageApi.IsMounted(port==HardwarePort.SlotA?StorageDevice.MemoryCardSlotA:StorageDevice.MemoryCardSlotB);
         else if(kind==HardwareKind.SdCard)
-            mounted=Storage.IsMounted(port==HardwarePort.SlotA?StorageDevice.SdSlotA:StorageDevice.SdSlotB);
-        else if(kind==HardwareKind.Sd2Sp2)mounted=Storage.IsMounted(StorageDevice.SdSerialPort2);
-        else if(kind==HardwareKind.GcLoader)mounted=Storage.IsMounted(StorageDevice.GcLoader);
-        else if(kind==HardwareKind.GameDisc)mounted=Storage.IsMounted(StorageDevice.DvdDrive);
+            mounted=StorageApi.IsMounted(port==HardwarePort.SlotA?StorageDevice.SdSlotA:StorageDevice.SdSlotB);
+        else if(kind==HardwareKind.Sd2Sp2)mounted=StorageApi.IsMounted(StorageDevice.SdSerialPort2);
+        else if(kind==HardwareKind.GcLoader)mounted=StorageApi.IsMounted(StorageDevice.GcLoader);
+        else if(kind==HardwareKind.GameDisc)mounted=StorageApi.IsMounted(StorageDevice.DvdDrive);
         uint id=presence==HardwarePresence.Present?(uint)NativeHardware.Id((int)kind,(int)port):0;
         return new HardwareDeviceInfo(kind,port,presence,id,mounted);
     }
