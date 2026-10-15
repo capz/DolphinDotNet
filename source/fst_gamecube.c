@@ -172,6 +172,11 @@ bool dnd_gc_fst_mount(void) {
   }
   return true;
 }
+bool dnd_gc_fst_copy_header(uint8_t output[0x440]) {
+  if (!output || !fst.table) return false;
+  memcpy(output, fst.header, sizeof(fst.header));
+  return true;
+}
 void dnd_gc_fst_unmount(void) {
   RemoveDevice("dvd:");
   if (image.file)
