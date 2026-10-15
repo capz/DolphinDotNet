@@ -53,7 +53,9 @@ bool dnd_fst_mount(DndFst *f, DndDiscRead read, void *context,
     free(table);
     return false;
   }
-  DndFst result = {table, count, size, read, context, capacity};
+  DndFst result = {.table=table, .count=count, .size=size, .read=read,
+                   .context=context, .capacity=capacity};
+  memcpy(result.header, header, sizeof(header));
   uint32_t *stack = malloc((size_t)count * sizeof(uint32_t));
   if (!stack) {
     free(table);
