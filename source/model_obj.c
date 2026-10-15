@@ -113,7 +113,7 @@ int dnd_model_begin_obj(DndString *path,int budget) {
   if(!positions||!uvs||!normals||!faces||!parse(input,positions,uvs,normals,faces,&count))
     goto done;
   unsigned vert=(unsigned)count*3;
-  unsigned section[6]={116,48+vert*84,36,4,4,4};
+  unsigned section[6]={112,48+vert*84,36,4,4,4};
   unsigned offsets[6],total=160;
   for(int i=0;i<6;i++){offsets[i]=total;total=align32(total+section[i]);}
   if(total>DND_MODEL_LIMIT||total>(unsigned)budget)goto done;
