@@ -98,7 +98,7 @@ public static class Hardware
     {
         if(mode!=HardwareProbeMode.Safe && mode!=HardwareProbeMode.Extended)
             throw new ArgumentOutOfRangeException("mode");
-        var data=new HardwareDeviceInfo[17];
+        var data=new HardwareDeviceInfo[18];
         int i=0;
         for(int port=0;port<4;port++)
             data[i++]=Query(HardwareKind.Controller,(HardwarePort)port,mode);
@@ -113,6 +113,7 @@ public static class Hardware
         data[i++]=Query(HardwareKind.Modem,HardwarePort.Serial1,mode);
         data[i++]=Query(HardwareKind.GameDisc,HardwarePort.DiscDrive,mode);
         data[i++]=Query(HardwareKind.GcLoader,HardwarePort.DiscDrive,mode);
+        data[i++]=Query(HardwareKind.GameBoyPlayer,HardwarePort.HighSpeed,mode);
         current=new HardwareSnapshot(data);
         return current;
     }
