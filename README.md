@@ -15,6 +15,7 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
 - Ordinary `async`/`await`, `Task.Run` and captured continuations, dispatched by
   a runtime-owned service thread. Managed execution is serialized between the
   application and background executors.
+- PCM WAV audio with libogc2 AESND, overlapping voices, clip looping, volume and pitch controls.
 - GameCube graphics, controller input, diagnostic text and performance metrics
   through `Dolphin.*` APIs.
 - Model conversion, GX materials/textures, animation, transforms and cameras.
@@ -91,7 +92,7 @@ See [standalone builds](docs/standalone-native-builds.md) for SDK dependencies a
 platform targets, [async APIs](docs/async-runtime.md),
 [storage](docs/storage-runtime.md), [networking](docs/network-runtime.md),
 [ARAM](docs/aram-runtime.md), [models](docs/model-assets-runtime.md),
-[timing](docs/timing.md), [controller input](docs/controller-input.md), [diagnostics](docs/debug-overlay.md), and [save image preparation](tools/DolphinDotNet.SaveImage/README.md)
+[timing](docs/timing.md), [audio](docs/audio.md), [controller input](docs/controller-input.md), [diagnostics](docs/debug-overlay.md), and [save image preparation](tools/DolphinDotNet.SaveImage/README.md)
 for feature-specific usage and limits.
 
 Raw GX/GU/VIDEO bindings and managed meshes, textures, materials and Draw2D are documented in [Graphics APIs](docs/graphics.md).

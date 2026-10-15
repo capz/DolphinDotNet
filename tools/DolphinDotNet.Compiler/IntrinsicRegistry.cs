@@ -90,6 +90,7 @@ internal static class IntrinsicRegistry
             ("Dolphin.Graphics.NativeGraphics",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Graphics.Raw.NativeGX",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Input.NativeInput",_)=>IntrinsicKind.NativeStorage,
+            ("Dolphin.Audio.NativeAudio",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Timing.NativeTiming",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Diagnostics.NativeDiagnostics",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Memory.NativeAram",_)=>IntrinsicKind.NativeStorage,

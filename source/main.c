@@ -1,6 +1,7 @@
 #include "dnd_platform.h"
 #include "dnd_managed.h"
 #include "dnd_input.h"
+#include "dnd_audio.h"
 #include "dnd_graphics.h"
 #include "dnd_console.h"
 #include "dnd_network.h"
@@ -22,6 +23,7 @@ int main(void) {
     dnd_console_write_line(network_status==1?"NETWORK: READY":network_status==0?"NETWORK: CONFIGURING":"NETWORK: UNAVAILABLE");
 
     intptr_t managed_result=dnd_aot_entry(&heap);
+    dnd_audio_shutdown();
     dnd_console_write_line(managed_result==0?"MANAGED MAIN: OK":"MANAGED MAIN: FAILED");
     return managed_result==0?0:1;
 }

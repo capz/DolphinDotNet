@@ -17,7 +17,8 @@ internal static class GameCubeBundle
         ("graphics", new[] {"Dolphin.Graphics.", "Dolphin.Models."}, new[] {"-logc", "-lm"}),
         ("input", new[] {"Dolphin.Input."}, new[] {"-logc"}),
         ("timing", new[] {"Dolphin.Timing."}, new[] {"-logc"}),
-        ("sound", new[] {"System.Media.", "Dolphin.Audio.", "Dolphin.Sound."}, Array.Empty<string>())
+        ("audio", new[] {"Dolphin.Audio."}, new[] {"-laesnd", "-logc"}),
+        ("unsupported-sound", new[] {"System.Media.", "Dolphin.Sound."}, Array.Empty<string>())
     };
 
     internal static void Emit(string assembly, string directory, AotCompilation compilation, string platform)
@@ -50,13 +51,13 @@ internal static class GameCubeBundle
         var features = FeatureMap.Where(feature =>
             reachable.Any(type => feature.Prefixes.Any(prefix =>
                 type.StartsWith(prefix, StringComparison.Ordinal)))).ToArray();
-        if (features.Any(x => x.Name == "sound"))
-            throw new NotSupportedException("Native sound backend not implemented; cannot determine a safe audio link set.");
+        if (features.Any(x => x.Name == "unsupported-sound"))
+            throw new NotSupportedException("Only Dolphin.Audio PCM WAV playback is supported; System.Media and Dolphin.Sound have no native backend.");
 
         // libogc2 native modules are currently GameCube-specific. Do not
         // silently compile those files as Wii/Wii U implementations.
         if (platform == "wiiu" && features.Any(x =>
-            x.Name is "networking" or "storage" or "graphics" or "input" or "aram"))
+            x.Name is "networking" or "storage" or "graphics" or "input" or "aram" or "audio"))
             throw new NotSupportedException("Wii U target requires wut-native adapters for I/O, graphics and input. GameCube libogc2 code cannot be linked into an RPX.");
 
         Directory.CreateDirectory(directory);
@@ -73,7 +74,7 @@ internal static class GameCubeBundle
             ValueCBackend.EmitProgram(compilation.ValueMethods, entry.Key, compilation.Model, compilation.Graph));
 
         var sources = new[] {
-            "aram", "async_runtime", "bcl", "card_transaction", "console_overlay", "fst",
+            "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "fst",
             "fst_gamecube", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "model", "model_animation",
             "model_graphics", "model_transform", "network", "network_gamecube",
@@ -144,7 +145,7 @@ internal static class GameCubeBundle
         var rules = isWiiU ? "$(DEVKITPRO)/wut/share/wut_rules"
             : "$(DEVKITPRO)/libogc2/" + (platform == "wii" ? "wii_rules" : "gamecube_rules");
         var suffix = isWiiU ? "rpx" : "dol";
-        var libs = isWiiU ? "-lwut -lm" : "-lfat -ldvm -liso9660 -lbba -logc -lm";
+        var libs = isWiiU ? "-lwut -lm" : "-lfat -ldvm -liso9660 -lbba -laesnd -logc -lm";
         var library = isWiiU ? "$(DEVKITPRO)/wut"
             : "$(DEVKITPRO)/libogc2/" + (platform == "wii" ? "wii" : "gamecube");
         var builder = new StringBuilder();
