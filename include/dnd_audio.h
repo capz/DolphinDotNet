@@ -8,6 +8,8 @@
  * All public entry points execute on the serialized application thread. */
 int dnd_audio_init(void);
 int dnd_audio_begin(DndString *path);
+/* Copy mono 8-bit unsigned PCM out of movable managed memory into aligned DSP RAM. */
+int dnd_audio_create_pcm8(DndArray *samples, int sample_rate);
 int dnd_audio_step(int clip);
 int dnd_audio_stat(int clip, int kind);
 int dnd_audio_dispose(int clip);
