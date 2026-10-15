@@ -50,6 +50,15 @@ internal static class NativeStorageBindings
         ["MeshUpdateTexture"]=("dnd_mesh_update","iaiii",false),
         ["MeshCreateNormal"]=("dnd_mesh_create","aaii",false),
         ["MeshUpdateNormal"]=("dnd_mesh_update","iaiii",false),
+        ["AudioInit"]=("dnd_audio_init","",false),
+        ["AudioBegin"]=("dnd_audio_begin","s",false),
+        ["AudioStep"]=("dnd_audio_step","i",false),
+        ["AudioStat"]=("dnd_audio_stat","ii",false),
+        ["AudioDispose"]=("dnd_audio_dispose","i",false),
+        ["AudioPlay"]=("dnd_audio_play","iiff",false),
+        ["AudioVoiceStat"]=("dnd_audio_voice_stat","i",false),
+        ["AudioVoiceControl"]=("dnd_audio_voice_control","iif",false),
+        ["AudioVoiceStop"]=("dnd_audio_voice_stop","i",false),
         ["TimingNow"]=("dnd_timing_now","",false),
         ["InputUpdate"]=("dnd_input_poll","",false),
         ["InputFlags"]=("dnd_input_flags","i",false),
@@ -105,7 +114,7 @@ internal static class NativeStorageBindings
         if(!Bindings.TryGetValue(call.Operation,out var binding)||binding.Types.Length!=call.Arguments.Count)throw new NotSupportedException($"Invalid native storage binding {call.Operation}.");
         var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'o'=>"DndObject*",'l'=>"int64_t",'f'=>"float",_=>"int"})})v{arg.Id}").ToList();
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
-        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd")
+        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||call.Operation.StartsWith("Audio",StringComparison.Ordinal)||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd")
             b.AppendLine("  dnd_async_require_application_thread();");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";
         if(call.Result is {} result)b.AppendLine($"  v{result.Id} = {(result.Kind==IrValueKind.ObjectReference?"(intptr_t)":"")}{expression};");else b.AppendLine($"  {expression};");
