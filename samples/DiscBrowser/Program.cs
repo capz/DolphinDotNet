@@ -10,13 +10,16 @@ internal static class Program
     }
     private static void ShowMountedGame()
     {
-        PrintFiles("dvd:/ FST",Storage.GetFiles(StorageDevice.DvdDrive,""));
-        if(Storage.FileExists(StorageDevice.DvdDrive,"opening.bnr"))
+        var identity=Storage.GetMountedDiscIdentity(DiscBannerLanguage.English);
+        DebugOverlay.WriteLine("Game ID: "+identity.GameId);
+        DebugOverlay.WriteLine("Title: "+identity.Title);
+        DebugOverlay.WriteLine("Description: "+identity.ShortDescription);
+        if(identity.Banner!=null)
         {
-            byte[] banner=Storage.ReadAllBytes(StorageDevice.DvdDrive,"opening.bnr");
-            DebugOverlay.WriteLine("Banner bytes: ");
-            DebugOverlay.WriteLine(banner.Length.ToString());
+            // 96x32 RGBA pixels can also be supplied to Texture2D.Create.
+            DebugOverlay.WriteLine("Banner RGBA size: "+identity.Banner.Rgba32.Length.ToString());
         }
+        PrintFiles("dvd:/ FST",Storage.GetFiles(StorageDevice.DvdDrive,""));
     }
     private static int Main()
     {
