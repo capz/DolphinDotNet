@@ -57,46 +57,44 @@ if (Storage.Mount(StorageDevice.SdSerialPort2))
 
 SD mounts register VFAT/exFAT and select the first mountable partition, with four cache pages of eight sectors (about 16 KiB per device). Mount returns false when no supported medium/filesystem can mount; it never formats media. ISO9660 uses its own pathname limits. `Storage.Mount(DvdDrive)` retains ISO9660 behavior. Use `Storage.MountDisc(DiscFormat.GameCubeFst)` for original GameCube discs, or `MountDisc(DiscFormat.Iso9660)` explicitly; unmount before changing formats. FST validates the disc magic, entry tree, names and data ranges and exposes files/directories through a read-only devoptab. GC Loader block filesystems remain outside this backend. Memory-card enums cannot be passed to Storage.GetPath or ordinary Directory operations.
 
-## GC Loader and GameCube disc image filesystems
+## GC Loader and unified GameCube DVD filesystems
 
-- `Storage.Mount(StorageDevice.GcLoader)` opens a libogc2 `__io_gcode`
-  block-device-backed FAT/exFAT volume at `gcloader:/`. This requires compatible
-  GC Loader firmware exposing raw SD sectors; it is **not** the selected
-  game disc. Some GC Loader firmware does not expose this facility. Mount may
-  fail; check its return value. Drive hardware may be shared with optical-disc
-  emulation: do not assume simultaneous reads from the mounted game's DVD view.
-- `GameCubeImage.Open("sd:/games/game.iso")` or `GameCubeImage.Open("gcloader:/games/game.iso")`
-  parses the native GameCube FST *inside an ordinary mounted image file*. Use
-  `FileExists`, `DirectoryExists`, `GetFiles`, `GetDirectories`, `ReadAllBytes`
-  or `OpenRead`. Returned directory names are immediate-child names. The
-  seekable `Dolphin.IO.Stream` is read-only. Close streams before disposing
-  the image, then unmount the image's backing volume.
-- `Storage.MountGameCubeDisc()` reads the original FST from the disc currently
-  presented by DVD hardware or an optical drive emulator, as `dvd:/`.
-  It is equivalent to `Storage.MountDisc(DiscFormat.GameCubeFst)`. Use
-  `DiscFormat.Iso9660` only for ordinary ISO9660 data discs.
-- Both FST readers validate GameCube disc magic, table extent, names,
-  hierarchy and file extents; malformed images are rejected.
-  They are read-only. ISO files larger than 32-bit seekable stdio permits,
-  compressed/repacked formats (RVZ/CISO/NKit), and Wii partitions are not
-  supported. Dolphin and host tests cannot validate GC Loader firmware,
-  media swaps or hardware-level drive arbitration.
+All original GameCube FST content is mounted as `dvd:/`, regardless of source.
+**The full image path is the only API difference.** The same `Storage` path,
+directory and stream operations are used after either mount:
 
 ```csharp
-if (Storage.Mount(StorageDevice.GcLoader)) {
-    using (var iso = GameCubeImage.Open("gcloader:/games/game.iso")) {
-        string[] files = iso.GetFiles("/");
-        using var entry = iso.OpenRead(files[0]);
-    }
-    Storage.Unmount(StorageDevice.GcLoader);
-}
+// Original game disc or ODE-selected disc:
 if (Storage.MountGameCubeDisc()) {
-    string[] files = Storage.GetFiles(StorageDevice.DvdDrive, "");
+    string[] names = Storage.GetFiles(StorageDevice.DvdDrive, "");
+    Storage.Unmount(StorageDevice.DvdDrive);
+}
+// ISO/GCM stored on a previously mounted SD, SD2SP2 or GC Loader volume:
+if (Storage.MountDisc("sd:/games/game.iso")) {
+    byte[] data = Storage.ReadAllBytes(StorageDevice.DvdDrive, "opening.bnr");
     Storage.Unmount(StorageDevice.DvdDrive);
 }
 ```
 
-See [DiscBrowser](../samples/DiscBrowser/README.md) for a compilable sample.
+`Storage.MountGameCubeDisc("sd:/games/game.iso")` is an equivalent overload.
+Both routes use the existing `dnd_fst` validation, read-only `dvd:/` devoptab,
+file streams, path normalization, stat, and directory enumeration. The
+`Storage.MountDisc(DiscFormat.Iso9660)` overload retains its separate meaning
+for an ISO9660 data disc. There is **no separate public ISO-file browsing API**.
+
+An ISO image is read in place without extraction. It requires a full
+volume-qualified path and a mounted, seekable storage source. Unmount `dvd:/`
+before unmounting that source; the runtime rejects an earlier source unmount.
+Only one `dvd:/` mount can exist at a time; close any `dvd:/` streams before
+unmounting. Original GameCube ISO/GCM format only (not compressed RVZ/CISO,
+Wii partition images or ISO9660-in-ISO). Native 32-bit `long` limits individual
+image files to below 2 GiB.
+
+GC Loader's optional raw SD access remains
+`Storage.Mount(StorageDevice.GcLoader)`, available at `gcloader:/` through
+libogc2 `__io_gcode` if supported by the installed GC Loader firmware.
+Availability and simultaneous ODE DVD use are hardware dependent; do not
+assume they can operate simultaneously. See [DiscBrowser](../samples/DiscBrowser/README.md).
 
 ## Native memory-card saves
 
