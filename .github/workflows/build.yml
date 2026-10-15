@@ -164,7 +164,7 @@ jobs:
       - name: Validate network fixture watchdog
         run: python3 -m unittest discover -s tests -p test_network_fixtures.py
       - name: Validate automatic async HTTP and ARAM without application pumps
-        timeout-minutes: 5
+        timeout-minutes: 8
         env:
           DND_ASYNC_MANUAL: "0"
         run: |
@@ -174,7 +174,7 @@ jobs:
           python3 tests/network_fixtures.py --timeout-seconds 120 /tmp/automatic-async
           python3 tests/network_fixtures.py --timeout-seconds 120 /tmp/automatic-async --gc-stress
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/automatic-async.c tests/automatic_async_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c source/aram.c -o /tmp/automatic-async32
-          # 32-bit GC stress and serialized executor handoffs can exceed the
+          # GC stress and serialized executor handoffs can exceed the
           # default 45-second fixture budget on shared runners; retain a watchdog.
           python3 tests/network_fixtures.py --timeout-seconds 120 /tmp/automatic-async32 --gc-stress
       - name: Validate cooperative async and namespace interoperability
