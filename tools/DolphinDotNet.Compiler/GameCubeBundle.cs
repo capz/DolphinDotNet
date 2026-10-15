@@ -168,7 +168,6 @@ internal static class GameCubeBundle
         builder.AppendLine("$(error DEVKITPPC must be set)");
         builder.AppendLine("endif");
         builder.AppendLine("include " + rules);
-        builder.AppendLine(".DEFAULT_GOAL := all");
         builder.AppendLine("TARGET := Game");
         builder.AppendLine("BUILD := build");
         builder.AppendLine("SOURCES := source");
@@ -181,6 +180,7 @@ internal static class GameCubeBundle
                 " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK"));
         builder.AppendLine("LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map");
         builder.AppendLine("ifneq ($(BUILD),$(notdir $(CURDIR)))");
+        builder.AppendLine(".DEFAULT_GOAL := all");
         builder.AppendLine("export OUTPUT := $(CURDIR)/$(TARGET)");
         builder.AppendLine("export VPATH := $(CURDIR)/source");
         builder.AppendLine("export DEPSDIR := $(CURDIR)/$(BUILD)");
@@ -204,6 +204,7 @@ internal static class GameCubeBundle
         builder.AppendLine("clean:");
         builder.AppendLine("\t@rm -rf $(BUILD) $(OUTPUT).elf $(OUTPUT)." + suffix);
         builder.AppendLine("else");
+        builder.AppendLine(".DEFAULT_GOAL := $(OUTPUT)." + suffix);
         builder.AppendLine("DEPENDS := $(OFILES:.o=.d)");
         if (isWiiU)
         {
