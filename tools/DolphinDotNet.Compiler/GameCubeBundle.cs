@@ -110,8 +110,10 @@ internal static class GameCubeBundle
         }
 
         var entry = compilation.ValueMethods.Single(m => m.Key == compilation.Entry);
+        var sourceMap = gdbTcp is null ? null : PortablePdbSourceMap.Load(compilation);
         File.WriteAllText(Path.Combine(directory, "source", "generated_program.c"),
-            ValueCBackend.EmitProgram(compilation.ValueMethods, entry.Key, compilation.Model, compilation.Graph));
+            ValueCBackend.EmitProgram(compilation.ValueMethods, entry.Key, compilation.Model,
+                compilation.Graph, sourceMap?.Methods));
         if (gdbTcp is not null)
         {
             // Never interpolate unvalidated addresses into generated C. Parse() accepts
@@ -127,7 +129,6 @@ internal static class GameCubeBundle
                 "}\n");
             // Portable PDB identity must match the exact assemblies being AOT compiled.
             // Source points are host-only; an ELF/native address map comes next.
-            var sourceMap = PortablePdbSourceMap.Load(compilation);
             var methods = compilation.ValueMethods
                 .Select(method => new
                 {

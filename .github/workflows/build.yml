@@ -466,6 +466,7 @@ jobs:
           test -s /tmp/dnd-gdb-ppc/Game.dol
           "$DEVKITPPC/bin/powerpc-eabi-readelf" -SW /tmp/dnd-gdb-ppc/Game.elf | grep -q '\.debug_info'
           "$DEVKITPPC/bin/powerpc-eabi-nm" /tmp/dnd-gdb-ppc/Game.elf | grep -q ' dnd_gdb_init$'
+          "$DEVKITPPC/bin/powerpc-eabi-readelf" --debug-dump=decodedline /tmp/dnd-gdb-ppc/Game.elf | grep -q 'ManagedGameCube.*\.cs'
       - name: Link managed AESND sample to a real GameCube DOL
         run: |
           dotnet build samples/AudioDemo/AudioDemo.csproj -c Release -p:DndBuildNative=false

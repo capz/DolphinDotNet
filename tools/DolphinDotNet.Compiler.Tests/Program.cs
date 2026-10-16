@@ -39,6 +39,7 @@ var gdbBundle = Path.Combine(tempDirectory, "gdb-bundle");
 Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{gdbBundle}\" --gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1 --gdb-port 2828");
 var debugMake = File.ReadAllText(Path.Combine(gdbBundle, "Makefile"));
 var debugC = File.ReadAllText(Path.Combine(gdbBundle, "source/debug_gamecube.c"));
+var generatedGdbC = File.ReadAllText(Path.Combine(gdbBundle, "source/generated_program.c"));
 if (!debugMake.Contains("-ldb ", StringComparison.Ordinal) ||
     !debugMake.Contains("-Og -g3 -gdwarf-4", StringComparison.Ordinal) ||
     !debugMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
@@ -47,6 +48,15 @@ if (!debugMake.Contains("-ldb ", StringComparison.Ordinal) ||
     !debugC.Contains("tcp_localip = \"192.0.2.10\"", StringComparison.Ordinal) ||
     !debugC.Contains("_break()", StringComparison.Ordinal))
     throw new Exception("GDB bundle is missing native debug settings or startup rendezvous.");
+if (!generatedGdbC.Contains("#line 7 ", StringComparison.Ordinal) ||
+    !generatedGdbC.Contains("#line 8 ", StringComparison.Ordinal) ||
+    !generatedGdbC.Contains("#line 9 ", StringComparison.Ordinal) ||
+    !generatedGdbC.Contains("HelloGameCube/Program.cs", StringComparison.Ordinal) ||
+    generatedGdbC.Contains("#line 16707566 ", StringComparison.Ordinal))
+    throw new Exception("GDB generated C is missing visible C# statement line directives.");
+if (File.ReadAllText(Path.Combine(normalBundle, "source/generated_program.c"))
+        .Contains("#line ", StringComparison.Ordinal))
+    throw new Exception("Normal AOT output unexpectedly contains managed #line directives.");
 if (File.Exists(Path.Combine(normalBundle, "dnd-il-debug.json")))
     throw new Exception("Default bundle unexpectedly contains debugger metadata.");
 var debugMapPath = Path.Combine(gdbBundle, "dnd-il-debug.json");

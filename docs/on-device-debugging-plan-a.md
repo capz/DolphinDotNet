@@ -1,7 +1,7 @@
 # Plan A: on-device GameCube native GDB debugging
 
-Status: **increments A1, A2a and A2b (Portable PDB source-location sidecar) implemented**.
-PowerPC source-address mapping and IDE attach are **not yet implemented**.
+Status: **increments A1, A2a, A2b and A2c (generated C source directives) implemented**.
+PowerPC breakpoint-address extraction and IDE attach are **not yet implemented**.
 
 ## Repository and dependency audit (2026-10-16)
 
@@ -33,7 +33,7 @@ PowerPC source-address mapping and IDE attach are **not yet implemented**.
 | A1 (this change) | Opt-in TCP GDB bootstrap, fixed static IPv4, `-ldb` linkage, debugger-friendly ELF flags, early `_break()` | Default bundle unaffected; generated C/Makefile checks; PowerPC linker CI proves libdb linkage and DWARF sections |
 | A2a (this change) | Preserve per-instruction CIL offsets on Value IR instructions and terminators; write deterministic `dnd-il-debug.json` in the native bundle when GDB enabled | Normal bundle unaffected; entry CIL offsets sorted and unique; compiler integration test |
 | A2b (this change) | Load and verify matching Portable PDB identity for each reachable assembly; correlate source sequence points with emitted IL offsets | Multiple statements in one basic block retain distinct source lines; missing/stale PDB fails explicitly; deterministic host-only JSON |
-| A2c | Emit native C `#line` directives from A2b source locations and verify DWARF/PPC line-table output | DWARF correlates PowerPC instruction addresses to C# files/lines |
+| A2c (this change) | Emit native C `#line` directives from verified A2b source locations | Generated C has per-statement source lines, default builds unchanged; ELF DWARF line records checked by CI |
 | A3 | Emit precise source debug locations and verify PowerPC address mapping using ELF/DWARF; handle multi-address source lines | Host lookup for C# file/line -> unique/ordered native breakable addresses, independently tested with `readelf` and `objdump` |
 | A4 | Extract host RSP client from existing Dolphin probe; target capability discovery and breakpoint lifecycle | Emulator breakpoint/continue/step and stop-PC tests pass; limited libdb command set tested against hardware |
 | A5 | Build host C# debug adapter implementing DAP, native-symbol map and source-level stepping | DAP protocol tests with fake RSP target; VS Code/Visual Studio integration spike; correct source stack locations |
@@ -103,6 +103,10 @@ identity for host-side build validation. This source map is **not yet mapped to
 PowerPC addresses**; A2c/A3 must generate and verify native line tables.
 The file remains in the generated native bundle and is not deployed on-device.
 Debug builds fail if a reachable assembly's Portable PDB is missing or stale.
+The generated C additionally receives `#line` directives in debug builds only,
+including resets around hidden IL and synthetic native instructions. GCC uses
+these directives to generate C# file/line records in ELF DWARF; **A3 must still
+extract and validate breakable PowerPC instruction addresses**.
 
 Do not claim source-level breakpoints or live hardware compatibility until the
 later acceptance tests pass.
