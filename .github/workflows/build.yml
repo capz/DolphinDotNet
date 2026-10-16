@@ -18,7 +18,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Select relevant checks
+    runs-on: ubuntu-24.04
+    outputs:
+      debugger: ${{ steps.select.outputs.debugger }}
+      managed: ${{ steps.select.outputs.managed }}
+      ide: ${{ steps.select.outputs.ide }}
+      portable: ${{ steps.select.outputs.portable }}
+      gamecube: ${{ steps.select.outputs.gamecube }}
+      dolphin: ${{ steps.select.outputs.dolphin }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Test CI dependency selection
+        run: python3 -m unittest discover -s tests -p test_ci_changes.py
+      - name: Select checks from the complete PR diff
+        id: select
+        run: python3 scripts/ci_changes.py
+
   debugger-protocol:
+    needs: changes
+    if: needs.changes.outputs.debugger == 'true'
     name: Host GDB protocol
     runs-on: ubuntu-24.04
     steps:
@@ -26,9 +48,13 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Build .NET debugger acceptance probe
+        run: dotnet build tools/DolphinDotNet.Debugger.Probe -c Release
       - name: Test RSP over loopback TCP and mock serial stream
         run: dotnet run --project tests/DebuggerTests/DebuggerTests.csproj -c Release
   managed:
+    needs: changes
+    if: needs.changes.outputs.managed == 'true'
     name: Managed compiler
     env:
       DND_ASYNC_MANUAL: "1"
@@ -387,6 +413,8 @@ jobs:
           timeout 30s /tmp/model-async32 /tmp/dnd-model-fixtures --gc-stress
 
   ide-workflow:
+    needs: changes
+    if: needs.changes.outputs.ide == 'true'
     name: IDE workflow (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -425,6 +453,8 @@ jobs:
           done
 
   portable-runtime:
+    needs: changes
+    if: needs.changes.outputs.portable == 'true'
     name: Portable runtime
     runs-on: ubuntu-latest
     steps:
@@ -436,6 +466,8 @@ jobs:
           make -C tests test CFLAGS='-O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -I../include'
 
   gamecube:
+    needs: changes
+    if: needs.changes.outputs.gamecube == 'true'
     name: GameCube DOL
     runs-on: ubuntu-latest
     container:
@@ -657,7 +689,8 @@ jobs:
   dolphin-smoke:
     name: Dolphin headless DOL boot
     runs-on: ubuntu-24.04
-    needs: gamecube
+    needs: [changes, gamecube]
+    if: needs.changes.outputs.dolphin == 'true'
     container:
       image: debian:trixie
       options: --shm-size=1g
@@ -746,10 +779,44 @@ jobs:
             dolphin-snake/
           if-no-files-found: warn
 
+  ci-result:
+    name: CI result
+    if: always()
+    runs-on: ubuntu-24.04
+    needs: [changes, debugger-protocol, managed, ide-workflow, portable-runtime, gamecube, dolphin-smoke]
+    steps:
+      - name: Require every selected check to pass
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          jobs = json.loads(os.environ['JOB_RESULTS'])
+          if jobs['changes']['result'] != 'success':
+              sys.exit('CI selection failed')
+          selected = jobs['changes']['outputs']
+          groups = {'debugger-protocol': 'debugger', 'managed': 'managed',
+                    'ide-workflow': 'ide', 'portable-runtime': 'portable',
+                    'gamecube': 'gamecube', 'dolphin-smoke': 'dolphin'}
+          failed = []
+          for job, group in groups.items():
+              if selected.get(group) not in ('true', 'false'):
+                  sys.exit('Missing or invalid selection for ' + group)
+              expected = 'success' if selected[group] == 'true' else 'skipped'
+              actual = jobs[job]['result']
+              print(f'{job}: {actual} (expected {expected})')
+              if actual != expected:
+                  failed.append(job)
+          if failed:
+              sys.exit('Unexpected CI results: ' + ', '.join(failed))
+          PY
+
   release-gamecube:
     name: Publish GameCube build release
     runs-on: ubuntu-latest
     needs:
+      - ci-result
+      - debugger-protocol
       - managed
       - ide-workflow
       - portable-runtime
