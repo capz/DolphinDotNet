@@ -132,7 +132,7 @@ jobs:
           dotnet run --project tests/PongRulesSmoke/PongRulesSmoke.csproj -c Release
       - name: Compile self-contained two-player Pong through managed AOT
         run: |
-          dotnet build samples/Pong/Pong.csproj -c Release
+          dotnet build samples/Pong/Pong.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-pong.c -o /tmp/dnd-pong.o
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong-bundle
@@ -366,6 +366,36 @@ jobs:
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-async.c tests/model_async_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/timing.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -Wl,--wrap=ufbx_load_memory -lm -o /tmp/model-async32
           timeout 30s /tmp/model-async32 /tmp/dnd-model-fixtures --gc-stress
 
+  ide-workflow:
+    name: IDE workflow (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the shared driver and launch probe
+        run: |
+          dotnet build tools/DolphinDotNet.Build
+          dotnet build tests/DolphinLaunchProbe
+      - name: Validate launch lifecycle and MSBuild integration
+        run: python tests/build_workflow_test.py
+      - name: Build the sample solution without a native toolchain
+        run: dotnet build samples/Pong/Pong.sln -p:DndBuildNative=false
+      - name: Build the sample with the container backend
+        if: runner.os == 'Linux'
+        run: |
+          dotnet build samples/Pong/Pong.sln -p:DndBuildBackend=Docker
+          python scripts/dol_sections.py samples/Pong/bin/Debug/net8.0/Pong.dol
+
   portable-runtime:
     name: Portable runtime
     runs-on: ubuntu-latest
@@ -381,7 +411,7 @@ jobs:
     name: GameCube DOL
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/extremscorner/libogc2:20260805
+      image: ghcr.io/extremscorner/libogc2:20260805@sha256:13bb658d3f18903816617223f5d7c6f776d3db3ea806aae67f8d35a7a69d4c85
     steps:
       - uses: actions/checkout@v4
       - name: Verify libogc2 storage and GX packages
@@ -430,14 +460,12 @@ jobs:
           python3 /tmp/dnd-audio-formats-ppc/scripts/dol_sections.py /tmp/dnd-audio-formats-ppc/Game.dol
       - name: Build and validate self-contained Pong GameCube DOL
         run: |
-          dotnet build samples/Pong/Pong.csproj -c Release
-          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong-gamecube --platform gamecube
-          make -C /tmp/dnd-pong-gamecube
-          test -s /tmp/dnd-pong-gamecube/Game.dol
-          python3 /tmp/dnd-pong-gamecube/scripts/dol_sections.py /tmp/dnd-pong-gamecube/Game.dol
+          dotnet build samples/Pong/Pong.sln -c Release -p:DndBuildBackend=Native
+          test -s samples/Pong/bin/Release/net8.0/Pong.dol
+          python3 scripts/dol_sections.py samples/Pong/bin/Release/net8.0/Pong.dol
           mkdir -p footprint
-          cp /tmp/dnd-pong-gamecube/Game.dol footprint/pong.dol
-          cp /tmp/dnd-pong-gamecube/Game.elf footprint/pong.elf
+          cp samples/Pong/bin/Release/net8.0/Pong.dol footprint/pong.dol
+          cp samples/Pong/bin/Release/net8.0/Pong.elf footprint/pong.elf
       - name: Build and validate Snake save/load GameCube DOL
         run: |
           dotnet build samples/Snake/Snake.csproj -c Release
@@ -654,6 +682,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - managed
+      - ide-workflow
       - portable-runtime
       - gamecube
       - dolphin-smoke

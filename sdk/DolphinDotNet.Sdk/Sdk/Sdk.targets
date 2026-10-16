@@ -1,0 +1,105 @@
+<Project>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <!-- A direct process invocation keeps spaces, quotes and shell metacharacters
+       in project/tool paths out of a command shell, on both MSBuild runtimes. -->
+  <UsingTask TaskName="DndRunTool" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <Task>
+      <Code Type="Class" Language="cs"><![CDATA[
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Text;
+using Microsoft.Build.Framework;
+public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask {
+  [Required] public string Tool { get; set; }
+  public ITaskItem[] Arguments { get; set; }
+  Process process;
+  static string Quote(string value) {
+    var text = new StringBuilder("\""); int slashes = 0;
+    foreach (char c in value) {
+      if (c == '\\') { slashes++; continue; }
+      text.Append('\\', c == '"' ? slashes * 2 + 1 : slashes);
+      text.Append(c); slashes = 0;
+    }
+    return text.Append('\\', slashes * 2).Append('"').ToString();
+  }
+  public override bool Execute() {
+    try {
+      var info = new ProcessStartInfo(Tool) { UseShellExecute = false,
+        RedirectStandardOutput = true, RedirectStandardError = true };
+      var property = typeof(ProcessStartInfo).GetProperty("ArgumentList");
+      var list = property == null ? null : property.GetValue(info, null) as ICollection<string>;
+      var quoted = new List<string>();
+      foreach (var arg in Arguments ?? new ITaskItem[0]) {
+        if (list != null) list.Add(arg.ItemSpec); else quoted.Add(Quote(arg.ItemSpec));
+      }
+      if (list == null) info.Arguments = string.Join(" ", quoted);
+      using (process = new Process { StartInfo = info }) {
+        process.OutputDataReceived += (s, e) => { if (e.Data != null) Log.LogMessageFromText(e.Data, MessageImportance.High); };
+        process.ErrorDataReceived += (s, e) => {
+          if (e.Data == null) return;
+          if (e.Data.StartsWith("dndc: ", StringComparison.Ordinal))
+            Log.LogError("DolphinDotNet", "DND002", null, null, 0, 0, 0, 0, e.Data.Substring(6));
+          else Log.LogMessageFromText(e.Data, MessageImportance.High);
+        };
+        process.Start(); process.BeginOutputReadLine(); process.BeginErrorReadLine();
+        process.WaitForExit();
+        if (process.ExitCode != 0 && !Log.HasLoggedErrors) Log.LogError("DolphinDotNet build failed with exit code {0}.", process.ExitCode);
+        return process.ExitCode == 0 && !Log.HasLoggedErrors;
+      }
+    } catch (Exception e) { Log.LogError("DolphinDotNet: {0}", e.Message); return false; }
+    finally { process = null; }
+  }
+  public void Cancel() {
+    try {
+      if (process == null || process.HasExited) return;
+      var kill = typeof(Process).GetMethod("Kill", new[] { typeof(bool) });
+      if (kill != null) kill.Invoke(process, new object[] { true }); else process.Kill();
+    } catch (Exception) { }
+  }
+}
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <PropertyGroup>
+    <_DndBuildProject>$(_DndRoot)/tools/DolphinDotNet.Build/DolphinDotNet.Build.csproj</_DndBuildProject>
+    <_DndCompilerProject>$(_DndRoot)/tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj</_DndCompilerProject>
+    <_DndTools>$(_DndRoot)/tools/DolphinDotNet.Build/bin/$(Configuration)/net8.0/</_DndTools>
+    <_DndCompiler>$(_DndRoot)/tools/DolphinDotNet.Compiler/bin/$(Configuration)/net8.0/DolphinDotNet.Compiler.dll</_DndCompiler>
+    <_DndDotnet Condition="'$(DotNetHostPath)' != ''">$(DotNetHostPath)</_DndDotnet>
+    <_DndDotnet Condition="'$(_DndDotnet)' == ''">dotnet</_DndDotnet>
+    <DolphinUserDirectory Condition="'$(DolphinUserDirectory)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(BaseIntermediateOutputPath)dolphin-user'))</DolphinUserDirectory>
+    <RunCommand>$(_DndDotnet)</RunCommand>
+    <RunArguments>&quot;$(TargetDir)DolphinDotNet.Build.dll&quot; run --config &quot;$(TargetDir)dolphin-run.json&quot;</RunArguments>
+    <RunWorkingDirectory>$(TargetDir)</RunWorkingDirectory>
+  </PropertyGroup>
+  <Target Name="BuildDol" AfterTargets="Build"
+          Condition="'$(DndBuildNative)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingProject)' != 'false' and '$(IsCrossTargetingBuild)' != 'true'">
+    <Delete Files="$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)dolphin-run.json" />
+    <MSBuild Projects="$(_DndBuildProject);$(_DndCompilerProject)" Targets="Restore;Rebuild"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="OutputPath;BaseOutputPath;BaseIntermediateOutputPath;IntermediateOutputPath;TargetFramework;RuntimeIdentifier;SelfContained;DndBuildNative" />
+    <PropertyGroup>
+      <_DndNative>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)native'))</_DndNative>
+    </PropertyGroup>
+    <ItemGroup>
+      <_DndArgs Include="$(_DndTools)DolphinDotNet.Build.dll;build;--assembly;$(TargetPath);--compiler;$(_DndCompiler);--native-directory;$(_DndNative);--dol;$(TargetDir)$(AssemblyName).dol;--elf;$(TargetDir)$(AssemblyName).elf;--run-config;$(TargetDir)dolphin-run.json;--backend;$(DndBuildBackend);--jobs;$(DndBuildJobs);--user-directory;$(DolphinUserDirectory)" />
+      <_DndArgs Include="--dolphin;$(DolphinPath)" Condition="'$(DolphinPath)' != ''" />
+    </ItemGroup>
+    <DndRunTool Tool="$(_DndDotnet)" Arguments="@(_DndArgs)" />
+    <ItemGroup>
+      <_DndLauncher Include="$(_DndTools)DolphinDotNet.Build.dll;$(_DndTools)DolphinDotNet.Build.deps.json;$(_DndTools)DolphinDotNet.Build.runtimeconfig.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_DndLauncher)" DestinationFolder="$(TargetDir)" />
+  </Target>
+  <Target Name="CleanDol" AfterTargets="Clean" Condition="'$(DesignTimeBuild)' != 'true'">
+    <RemoveDir Directories="$(IntermediateOutputPath)native" />
+    <Delete Files="$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)dolphin-run.json;$(TargetDir)DolphinDotNet.Build.dll;$(TargetDir)DolphinDotNet.Build.deps.json;$(TargetDir)DolphinDotNet.Build.runtimeconfig.json" />
+  </Target>
+  <Target Name="Run" DependsOnTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_DndRunArgs Include="$(TargetDir)DolphinDotNet.Build.dll;run;--config;$(TargetDir)dolphin-run.json" />
+    </ItemGroup>
+    <DndRunTool Tool="$(_DndDotnet)" Arguments="@(_DndRunArgs)" />
+  </Target>
+</Project>

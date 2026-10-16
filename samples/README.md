@@ -17,6 +17,12 @@ the GameCube runs generated native code, using only the supported AOT API subset
 
 ## Build a GameCube DOL
 
+For an IDE-integrated example, open [Pong/Pong.sln](Pong/Pong.sln): normal Build
+creates the DOL, and its Dolphin run profile starts the emulator. See
+[IDE setup](../docs/ide-workflow.md). The commands below remain the manual workflow;
+when using them for Pong, add `-p:DndBuildNative=false` to the managed build to
+avoid also running its automatic native build.
+
 Choose any sample directory name from the table:
 
 ```sh

@@ -1,5 +1,9 @@
 # DolphinDotNet
 
+Open [`samples/Pong/Pong.sln`](samples/Pong/Pong.sln) in Visual Studio or Rider
+to build a DOL and run it in Dolphin. See the [IDE setup guide](docs/ide-workflow.md)
+for prerequisites and the shared build/run workflow.
+
 An experimental C# AOT toolchain and managed runtime for Nintendo GameCube.
 DolphinDotNet compiles .NET assemblies to native C, then builds a GameCube DOL
 with devkitPPC and libogc2. Games run without a desktop CLR.

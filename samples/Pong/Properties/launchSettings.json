@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "Dolphin": {
+      "commandName": "Executable",
+      "executablePath": "dotnet",
+      "commandLineArgs": "\"$(TargetDir)DolphinDotNet.Build.dll\" run --config \"$(TargetDir)dolphin-run.json\"",
+      "workingDirectory": "$(TargetDir)"
+    },
+    "CLI": { "commandName": "Project" }
+  }
+}
