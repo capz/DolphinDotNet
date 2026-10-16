@@ -47,6 +47,28 @@ if (!debugMake.Contains("-ldb ", StringComparison.Ordinal) ||
     !debugC.Contains("tcp_localip = \"192.0.2.10\"", StringComparison.Ordinal) ||
     !debugC.Contains("_break()", StringComparison.Ordinal))
     throw new Exception("GDB bundle is missing native debug settings or startup rendezvous.");
+if (File.Exists(Path.Combine(normalBundle, "dnd-il-debug.json")))
+    throw new Exception("Default bundle unexpectedly contains debugger metadata.");
+var debugMapPath = Path.Combine(gdbBundle, "dnd-il-debug.json");
+using (var debugMap = System.Text.Json.JsonDocument.Parse(File.ReadAllText(debugMapPath)))
+{
+    if (debugMap.RootElement.GetProperty("schemaVersion").GetInt32() != 1)
+        throw new Exception("Unexpected debug IL map schema.");
+    var methods = debugMap.RootElement.GetProperty("methods").EnumerateArray();
+    bool entryFound = false;
+    foreach (var method in methods)
+    {
+        if (method.GetProperty("name").GetString() != "Main" ||
+            method.GetProperty("declaringType").GetString() != "Program")
+            continue;
+        var offsets = method.GetProperty("ilOffsets").EnumerateArray().Select(x => x.GetInt32()).ToArray();
+        if (offsets.Length < 2 || offsets[0] < 0 ||
+            !offsets.SequenceEqual(offsets.Distinct().OrderBy(x => x)))
+            throw new Exception("Managed entry method is missing deterministic per-instruction IL offsets.");
+        entryFound = true;
+    }
+    if (!entryFound) throw new Exception("Managed entry method absent from debug IL map.");
+}
 Directory.Delete(tempDirectory, recursive: true);
 
 var genericProject = Path.Combine(root, "tests/GenericSharingSmoke/GenericSharingSmoke.csproj");

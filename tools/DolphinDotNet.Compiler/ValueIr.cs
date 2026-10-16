@@ -18,7 +18,11 @@ internal readonly record struct IrValue(int Id,IrValueKind Kind)
     public override string ToString()=>$"v{Id}:{Kind}";
 }
 
-internal abstract record ValueIrInstruction;
+internal abstract record ValueIrInstruction
+{
+    // Original CIL location. Generated phi nodes and other synthetic IR use -1.
+    public int CilOffset { get; init; } = -1;
+}
 internal sealed record ValueIrFloatConstant(IrValue Result,long Bits,bool Single):ValueIrInstruction;
 internal sealed record ValueIrConstant(IrValue Result,long Value):ValueIrInstruction;
 internal sealed record ValueIrLoadString(IrValue Result,string Value):ValueIrInstruction;
@@ -91,7 +95,10 @@ internal sealed record ValueIrExceptionRegion(
     int FilterOffset,
     string? CatchType);
 
-internal abstract record ValueIrTerminator;
+internal abstract record ValueIrTerminator
+{
+    public int CilOffset { get; init; } = -1;
+}
 internal sealed record ValueIrJump(int TargetBlock):ValueIrTerminator;
 internal enum ValueIrComparison { NonZero,Equal,NotEqual,GreaterThan,GreaterOrEqual,LessThan,LessOrEqual }
 internal sealed record ValueIrBranch(IrValue Left,IrValue? Right,ValueIrComparison Comparison,bool Unsigned,int TrueBlock,int FalseBlock):ValueIrTerminator;

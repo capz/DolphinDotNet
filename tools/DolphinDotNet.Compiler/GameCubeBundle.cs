@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 
 namespace DolphinDotNet.Compiler;
 
@@ -124,6 +125,25 @@ internal static class GameCubeBundle
                 $"    DEBUG_Init(GDBSTUB_DEVICE_TCP, {gdbTcp.Port});\n" +
                 "    _break(); /* Wait at a deterministic startup rendezvous. */\n" +
                 "}\n");
+            // This first mapping stage tracks IR instructions to CIL precisely.
+            // Source/PDB and PowerPC instruction-address correlation follow later.
+            var methods = compilation.ValueMethods
+                .Select(method => new
+                {
+                    symbol = ValueCBackend.Symbol(method.Key),
+                    assembly = method.Key.AssemblyName,
+                    declaringType = method.Key.TypeName,
+                    name = method.Key.Name,
+                    signature = method.Key.Signature,
+                    ilOffsets = method.Blocks.SelectMany(block => block.Instructions)
+                        .Select(instruction => instruction.CilOffset)
+                        .Concat(method.Blocks.Select(block => block.Terminator?.CilOffset ?? -1))
+                        .Where(offset => offset >= 0).Distinct().OrderBy(offset => offset).ToArray()
+                })
+                .OrderBy(method => method.symbol, StringComparer.Ordinal).ToArray();
+            File.WriteAllText(Path.Combine(directory, "dnd-il-debug.json"),
+                JsonSerializer.Serialize(new { schemaVersion = 1, methods },
+                    new JsonSerializerOptions { WriteIndented = true }));
         }
 
         var sources = new[] {

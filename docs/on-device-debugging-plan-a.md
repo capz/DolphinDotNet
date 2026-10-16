@@ -1,6 +1,6 @@
 # Plan A: on-device GameCube native GDB debugging
 
-Status: **increment A1 bootstrap implemented**, source-level C# breakpoints and IDE attach **not yet implemented**.
+Status: **increment A1 bootstrap and A2a per-IR IL offsets implemented**, Portable PDB/source/native address mapping and IDE attach **not yet implemented**.
 
 ## Repository and dependency audit (2026-10-16)
 
@@ -30,7 +30,8 @@ Status: **increment A1 bootstrap implemented**, source-level C# breakpoints and 
 | Increment | Implementation | Acceptance criteria |
 | --- | --- | --- |
 | A1 (this change) | Opt-in TCP GDB bootstrap, fixed static IPv4, `-ldb` linkage, debugger-friendly ELF flags, early `_break()` | Default bundle unaffected; generated C/Makefile checks; PowerPC linker CI proves libdb linkage and DWARF sections |
-| A2 | Preserve per-instruction IL offsets through Value IR; read Roslyn Portable PDB sequence points; generate sidecar source map, build ID and compiler mappings | Multiple C# statements in one basic block receive distinct mappings; absent/mismatched PDB detected; deterministic output |
+| A2a (this change) | Preserve per-instruction CIL offsets on Value IR instructions and terminators; write deterministic `dnd-il-debug.json` in the native bundle when GDB enabled | Normal bundle unaffected; entry CIL offsets sorted and unique; compiler integration test |
+| A2b | Read and validate Roslyn Portable PDBs; map each reachable native codegen location to source file/line/column, with generated C `#line` directives | Multiple C# statements in one basic block receive distinct source mappings; absent/mismatched PDB detected; deterministic output |
 | A3 | Emit precise source debug locations and verify PowerPC address mapping using ELF/DWARF; handle multi-address source lines | Host lookup for C# file/line -> unique/ordered native breakable addresses, independently tested with `readelf` and `objdump` |
 | A4 | Extract host RSP client from existing Dolphin probe; target capability discovery and breakpoint lifecycle | Emulator breakpoint/continue/step and stop-PC tests pass; limited libdb command set tested against hardware |
 | A5 | Build host C# debug adapter implementing DAP, native-symbol map and source-level stepping | DAP protocol tests with fake RSP target; VS Code/Visual Studio integration spike; correct source stack locations |
@@ -92,6 +93,11 @@ isolated development LAN.
    expected stub and that the client accepts its stop reply format.
 5. **IDE:** Rider custom debugger plugin support must be prototyped rather
    than assumed; Visual Studio will require a DAP extension/host.
+
+The GDB-enabled bundle also writes `dnd-il-debug.json`, recording the reachable
+generated native function symbols and per-instruction IL offsets. This is
+**not** a C# source map; it has no Portable PDB sequence points or PowerPC
+addresses yet, and remains in the generated native bundle.
 
 Do not claim source-level breakpoints or live hardware compatibility until the
 later acceptance tests pass.
