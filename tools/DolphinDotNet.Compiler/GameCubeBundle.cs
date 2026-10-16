@@ -308,7 +308,7 @@ internal static class GameCubeBundle
             builder.AppendLine("\telf2dol $< $@");
             builder.AppendLine("\tpython3 \"$(DOL_VALIDATOR)\" --pad $@");
             if (gdbTcp)
-                builder.AppendLine("\tpython3 \"$(CURDIR)/scripts/dnd_debug_addresses.py\" --elf $(OUTPUT).elf --source-map \"$(CURDIR)/dnd-il-debug.json\" --output $(OUTPUT).dnd-addresses.json --readelf \"$(DEVKITPPC)/bin/powerpc-eabi-readelf\"");
+                builder.AppendLine("\tpython3 \"$(dir $(OUTPUT))scripts/dnd_debug_addresses.py\" --elf $(OUTPUT).elf --source-map \"$(dir $(OUTPUT))dnd-il-debug.json\" --output $(OUTPUT).dnd-addresses.json --readelf \"$(DEVKITPPC)/bin/powerpc-eabi-readelf\"");
         }
         builder.AppendLine("$(OUTPUT).elf: $(OFILES)");
         builder.AppendLine("\t$(CC) $^ $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@");
