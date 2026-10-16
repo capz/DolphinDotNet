@@ -6,7 +6,7 @@ using DolphinDotNet.Debugger;
 Check(RspStop.Parse("T0540:8000510c;thread:1;").ProgramCounter == 0x8000510c, "T stop PC");
 Check(RspStop.Parse("S05").ProgramCounter is null, "S stop without PC");
 Check(RspStop.Parse("W00").Exited, "exit event");
-Expect<InvalidDataException>(() => RspStop.Parse("T05bad"), "bad stop register ignored?"); // Invalid stop field is validated below.
+Expect<InvalidDataException>(() => RspStop.Parse("T0540:xyz;"), "invalid stop program counter");
 await TestTcpProtocolAsync();
 await TestChecksumsAndTimeoutsAsync();
 Console.WriteLine("DolphinDotNet GDB/RSP protocol tests passed.");
@@ -23,7 +23,7 @@ static void Expect<T>(Action run, string message) where T : Exception
 }
 static async Task TestTcpProtocolAsync()
 {
-    using var listener = new TcpListener(IPAddress.Loopback, 0);
+    var listener = new TcpListener(IPAddress.Loopback, 0);
     listener.Start();
     int port = ((IPEndPoint)listener.LocalEndpoint).Port;
     var server = Task.Run(async () =>
@@ -67,7 +67,7 @@ static async Task TestTcpProtocolAsync()
 
 static async Task TestChecksumsAndTimeoutsAsync()
 {
-    using var listener = new TcpListener(IPAddress.Loopback, 0);
+    var listener = new TcpListener(IPAddress.Loopback, 0);
     listener.Start();
     int port = ((IPEndPoint)listener.LocalEndpoint).Port;
     var server = Task.Run(async () =>
@@ -109,11 +109,10 @@ static async Task<string> ReadFrameAsync(Stream stream)
     var data = new List<byte>();
     int value;
     while ((value = await ReadByteAsync(stream)) != '#') data.Add((byte)value);
-    var checksum = (await ReadByteAsync(stream)).ToString("x2");
+    var hi = await ReadByteAsync(stream);
     var lo = await ReadByteAsync(stream);
-    var encoded = Encoding.ASCII.GetString(new byte[] { (byte)Convert.ToInt32(checksum, 16), (byte)lo });
-    // Reconstruct exactly the two checksum hex characters.
-    Check(Convert.ToInt32(encoded, 16) == (data.Sum(x => (int)x) & 255), "client frame checksum");
+    var receivedChecksum = Convert.ToInt32(new string(new[] { (char)hi, (char)lo }), 16);
+    Check(receivedChecksum == (data.Sum(x => (int)x) & 255), "client frame checksum");
     return Encoding.ASCII.GetString(data.ToArray());
 }
 static async Task SendReplyAsync(Stream stream, string content, bool corrupt = false)
