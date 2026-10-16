@@ -1,12 +1,49 @@
 # DolphinDotNet
 
-Open [`samples/Pong/Pong.sln`](samples/Pong/Pong.sln) in Visual Studio or Rider
-to build a DOL and run it in Dolphin. See the [IDE setup guide](docs/ide-workflow.md)
-for prerequisites and the shared build/run workflow.
-
 An experimental C# AOT toolchain and managed runtime for Nintendo GameCube.
 DolphinDotNet compiles .NET assemblies to native C, then builds a GameCube DOL
 with devkitPPC and libogc2. Games run without a desktop CLR.
+
+## Quick start: build and run Pong
+
+Install the **.NET 8 SDK**, **Dolphin**, and a native build backend:
+
+- **Windows, Linux or macOS:** Docker Desktop/Engine running Linux containers.
+  The first build downloads the pinned toolchain image used by CI.
+- **Linux or macOS alternative:** devkitPPC and libogc2, with `DEVKITPRO` and
+  `DEVKITPPC` configured, plus Make, Bash, Git and Python 3. See the
+  [IDE setup guide](docs/ide-workflow.md) for the required libraries.
+
+Open [`samples/Pong/Pong.sln`](samples/Pong/Pong.sln):
+
+- **Visual Studio 2022 (17.8+):** select Pong as the startup project, choose the
+  **Dolphin** launch profile, and press **Ctrl+F5**.
+- **Rider with .NET 8 support:** disable **Use ReSharper Build** under
+  **Settings → Build, Execution, Deployment → Toolset and Build**, select
+  **Pong in Dolphin**, and click **Run**.
+
+Or, from the repository root:
+
+```sh
+dotnet run --project samples/Pong
+```
+
+Build/Run compiles the managed project, generates native C, builds
+`samples/Pong/bin/Debug/net8.0/Pong.dol` and `Pong.elf`, and launches Dolphin.
+Every build performs the full native build; there is no native incremental
+cache. To build without launching, use `dotnet build samples/Pong/Pong.sln`.
+To launch the last successful build, use `dotnet run --project samples/Pong --no-build`.
+
+Dolphin is discovered automatically in standard locations or on `PATH`.
+For a portable installation, set `DOLPHIN_PATH` to its executable and restart
+the IDE. On first launch, configure both controller ports in Dolphin's
+**Controllers** dialog. Emulator settings persist in the sample's isolated
+`obj/dolphin-user/` directory.
+
+The [IDE setup guide](docs/ide-workflow.md) covers backend selection, local
+settings, troubleshooting and adding the workflow to another project.
+Running in Dolphin supports native execution; C# source debugging and Hot Reload
+are not implemented.
 
 ## Features
 
@@ -61,9 +98,10 @@ internal static class Program
 
 See the [samples](samples/README.md) for two-player Pong, memory-card Snake, rendering, automatic async networking and
 HTTP-to-ARAM streaming. Native platform APIs execute in the compiled console
-program; desktop `dotnet run` does not provide their backend.
+program. Pong's SDK integration makes `dotnet run` build and launch that program
+in Dolphin; other samples currently use the manual compilation steps below.
 
-## Compilation
+## Manual compilation
 
 The pipeline is C# → Roslyn assembly/CIL → control-flow and stack analysis → typed
 Value IR → native C → devkitPPC ELF → DOL.
