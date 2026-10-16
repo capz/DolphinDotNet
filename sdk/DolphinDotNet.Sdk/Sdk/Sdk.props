@@ -15,6 +15,7 @@
     <DndDebugSymbols Condition="'$(DndDebugSymbols)' == ''">false</DndDebugSymbols>
     <DndGdbTransport Condition="'$(DndGdbTransport)' == ''">Off</DndGdbTransport>
     <DndGdbPort Condition="'$(DndGdbPort)' == ''">2828</DndGdbPort>
+    <DndGdbChannel Condition="'$(DndGdbChannel)' == ''">1</DndGdbChannel>
   </PropertyGroup>
   <Import Project="$(MSBuildProjectDirectory)/DolphinDotNet.local.props" Condition="Exists('$(MSBuildProjectDirectory)/DolphinDotNet.local.props')" />
 </Project>

@@ -1,7 +1,7 @@
 # Plan A: on-device GameCube native GDB debugging
 
 Status: **increments A1, A2a–A2c and A3 (ELF/DWARF breakpoint-address extraction) implemented**.
-GDB host breakpoint control, IDE adapters and physical attach are **not yet implemented**.
+Hardware USB Gecko stub linkage now added; RSP host serial transport, IDE adapters and physical attach are **not yet implemented**.
 
 ## Repository and dependency audit (2026-10-16)
 
@@ -138,3 +138,58 @@ emulator's own GDB service. A source breakpoint host probe checks ELF and
 source-map SHA-256 identities, installs native breakpoints for two C# lines,
 and requires stopped PowerPC PCs to match those addresses. This verifies
 source breakpoints but does not yet provide managed stepping, DAP or an IDE.
+
+## A4 transport extension: USB Gecko
+
+USB Gecko is supported as a separate **physical target transport** sharing
+libogc2's native `libdb` GDB protocol and the same managed source/ELF maps as
+TCP. It does not require a Broadband Adapter or configured IP address.
+
+- The compiler accepts `--gdb-usb 0` (memory-card slot A) or `--gdb-usb 1`
+  (memory-card slot B). TCP and USB arguments are mutually exclusive.
+- The MSBuild SDK accepts `DndGdbTransport=UsbGecko` and
+  `DndGdbChannel=0|1`, defaulting to channel 1 / slot B.
+- USB builds link `-ldb`, initialize
+  `DEBUG_Init(GDBSTUB_DEVICE_USB, channel)`, then call `_break()`.
+- USB mode **does not force-disable application networking**. Automatic
+  networking remains driven by the original usage-based build configuration;
+  unlike the BBA TCP stub, it does not reserve the network stack.
+- CI verifies both USB and TCP GDB executables link and contain DWARF/address
+  metadata. **CI does not prove host serial connectivity or real hardware**.
+
+Example:
+
+```sh
+dotnet build samples/HelloGameCube/HelloGameCube.csproj -c Debug \
+  -p:DndGdbTransport=UsbGecko -p:DndGdbChannel=1
+```
+
+The GameCube must have a compatible USB Gecko in the selected slot. Host-side
+PowerPC GDB can be used with its supported serial device name, for example
+`target remote COM5` on Windows or `target remote /dev/ttyUSB0` on Linux.
+These are examples, not discovered ports; serial permissions, USB adapters,
+GDB framing, detach and reconnect **require hardware testing**.
+
+### Remaining tasks (updated)
+
+1. **A4.1 (implemented, pending CI):** opt-in USB Gecko init, strict channel
+   validation, symbols and PowerPC linking, shared debugger path.
+2. **A4.2:** reusable .NET RSP client with pluggable TCP and serial transports.
+   Specify UART/FTDI settings from hardware tests rather than assuming baud.
+3. **A4.3:** emulator RSP breakpoint/step/continue tests; regression checks on
+   PC and breakpoint lifetimes, including target capability differences.
+4. **A4.4 (hardware gate):** USB Gecko slot A/B, BBA TCP attach, break/step,
+   disconnect/reconnect, network coexistence, serial-port drivers and permissions.
+5. **A4.5:** native C# source-aware stepping, managed method frame mapping,
+   helper-frame filtering, optimized/hidden sequence-point handling.
+6. **A5:** DAP adapter exposing attach/launch, source breakpoints, stepping
+   and managed call stacks using a single backend.
+7. **A6:** Visual Studio VSIX and Rider integration, emulator and physical
+   console launch/attach configurations; mock up any custom UI first.
+8. **A7:** locals/arguments/objects, exceptions, async diagnostics and
+   resilience. Keep unsupported features explicit rather than fabricating state.
+
+**Release gates:** First emulator source breakpoints and stepping; second
+USB Gecko and TCP physical debug proof; third IDE integration; fourth
+managed inspection and reliability. No claim of physical USB Gecko debugging
+until a real-device serial session passes the acceptance suite.

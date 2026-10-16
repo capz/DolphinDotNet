@@ -24,7 +24,7 @@ internal static class Driver
                     "  doctor [--backend Auto|Native|Docker] [--dolphin PATH] [--build-only true]\n" +
                     "  build --assembly DLL --compiler DLL --native-directory DIR --dol DOL --elf ELF --run-config JSON\n" +
                     "        [--backend Auto|Native|Docker] [--dolphin PATH] [--user-directory DIR] [--jobs N]\n" +
-                     "        [--debug-symbols true|false] [--gdb-transport Off|Tcp] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
+                     "        [--debug-symbols true|false] [--gdb-transport Off|Tcp|UsbGecko] [--gdb-channel 0|1] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
                     "  run --config JSON [--dolphin PATH]");
                 return 0;
             }
@@ -56,7 +56,7 @@ internal static class Driver
             if (args[0] is not ("build" or "doctor")) throw new ArgumentException("Unknown command: " + args[0]);
             Allow(options, args[0] == "doctor" ? ["backend", "dolphin", "build-only"] :
                 ["assembly", "compiler", "native-directory", "dol", "elf", "run-config", "backend", "dolphin", "user-directory", "jobs",
-                  "debug-symbols", "gdb-transport", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
+                  "debug-symbols", "gdb-transport", "gdb-channel", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
             string? native = null, dol = null, elf = null, runConfig = null, assembly = null, compiler = null;
             if (args[0] == "build")
             {
@@ -78,15 +78,20 @@ internal static class Driver
             }
             string gdbTransport = Get("gdb-transport", "Off");
             bool gdbTcp = gdbTransport.Equals("Tcp", StringComparison.OrdinalIgnoreCase);
-            if (!gdbTcp && !gdbTransport.Equals("Off", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException("--gdb-transport must be Off or Tcp.");
+            bool gdbUsb = gdbTransport.Equals("UsbGecko", StringComparison.OrdinalIgnoreCase);
+            if (!gdbTcp && !gdbUsb && !gdbTransport.Equals("Off", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("--gdb-transport must be Off, Tcp or UsbGecko.");
             if (gdbTcp && new[] { "gdb-ip", "gdb-netmask", "gdb-gateway" }.Any(key => string.IsNullOrEmpty(Get(key))))
                 throw new ArgumentException("TCP debugging requires --gdb-ip, --gdb-netmask and --gdb-gateway.");
             if (!gdbTcp && new[] { "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port" }.Any(options.ContainsKey))
                 throw new ArgumentException("GDB TCP settings require --gdb-transport Tcp.");
+            if (!gdbUsb && options.ContainsKey("gdb-channel"))
+                throw new ArgumentException("--gdb-channel requires --gdb-transport UsbGecko.");
+            if (gdbUsb && Get("gdb-channel", "1") is not ("0" or "1"))
+                throw new ArgumentException("USB Gecko channel must be 0 (slot A) or 1 (slot B).");
             if (!bool.TryParse(Get("debug-symbols", "false"), out bool debugSymbols))
                 throw new ArgumentException("--debug-symbols must be true or false.");
-            debugSymbols |= gdbTcp;
+            debugSymbols |= gdbTcp || gdbUsb;
             string backend = Get("backend", "Auto");
             if (backend.Equals("Auto", StringComparison.OrdinalIgnoreCase))
                 backend = !OperatingSystem.IsWindows() && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DEVKITPRO")) ? "Native" : "Docker";
@@ -139,6 +144,7 @@ internal static class Driver
             var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
             var compilerArgs = new List<string> { compiler!, "--bundle", assembly!, native! };
             if (debugSymbols) compilerArgs.Add("--debug-symbols");
+            if (gdbUsb) compilerArgs.AddRange(["--gdb-usb", Get("gdb-channel", "1")]);
             if (gdbTcp)
                 compilerArgs.AddRange(["--gdb-tcp", Get("gdb-ip"), "--gdb-netmask", Get("gdb-netmask"),
                     "--gdb-gateway", Get("gdb-gateway"), "--gdb-port", Get("gdb-port", "2828")]);

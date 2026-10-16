@@ -88,6 +88,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
       <_DndArgs Include="--debug-symbols;$(DndDebugSymbols);--gdb-transport;$(DndGdbTransport)" />
       <_DndArgs Include="--gdb-ip;$(DndGdbIp);--gdb-netmask;$(DndGdbNetmask);--gdb-gateway;$(DndGdbGateway);--gdb-port;$(DndGdbPort)"
                 Condition="'$(DndGdbTransport)' == 'Tcp' or '$(DndGdbTransport)' == 'tcp' or '$(DndGdbTransport)' == 'TCP'" />
+      <_DndArgs Include="--gdb-channel;$(DndGdbChannel)" Condition="'$(DndGdbTransport)' == 'UsbGecko' or '$(DndGdbTransport)' == 'usbgecko' or '$(DndGdbTransport)' == 'USBGECKO'" />
     </ItemGroup>
     <DndRunTool Tool="$(_DndDotnet)" Arguments="@(_DndArgs)" />
     <ItemGroup>

@@ -47,6 +47,21 @@ if (symbolsMake.Contains("-ldb ", StringComparison.Ordinal) ||
     !File.Exists(Path.Combine(symbolsBundle, "dnd-il-debug.json")))
     throw new Exception("Emulator symbols-only build links a device debugger or lacks source locations.");
 
+var usbBundle = Path.Combine(tempDirectory, "usb-gecko-bundle");
+Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{usbBundle}\" --gdb-usb 1");
+var usbMake = File.ReadAllText(Path.Combine(usbBundle, "Makefile"));
+var usbC = File.ReadAllText(Path.Combine(usbBundle, "source/debug_gamecube.c"));
+if (!usbMake.Contains("-ldb ", StringComparison.Ordinal) ||
+    !usbMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
+    !usbC.Contains("DEBUG_Init(GDBSTUB_DEVICE_USB, 1)", StringComparison.Ordinal) ||
+    !usbC.Contains("_break()", StringComparison.Ordinal) ||
+    !File.Exists(Path.Combine(usbBundle, "dnd-il-debug.json")) ||
+    !usbMake.Contains("-Og -g3 -gdwarf-4", StringComparison.Ordinal))
+    throw new Exception("USB Gecko bundle is missing debugger linkage, source symbols or EXI channel selection.");
+if (usbC.Contains("DEBUG_Init(GDBSTUB_DEVICE_TCP", StringComparison.Ordinal) ||
+    usbC.Contains("tcp_localip = \"192.0.2.10\"", StringComparison.Ordinal))
+    throw new Exception("USB Gecko bundle unexpectedly starts the TCP debugger.");
+
 var gdbBundle = Path.Combine(tempDirectory, "gdb-bundle");
 Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{gdbBundle}\" --gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1 --gdb-port 2828");
 var debugMake = File.ReadAllText(Path.Combine(gdbBundle, "Makefile"));
@@ -122,6 +137,9 @@ var unrelatedPdb = Directory.GetFiles(staleDirectory, "*.pdb")
     .First(path => !Path.GetFileName(path).Equals("HelloGameCube.pdb", StringComparison.OrdinalIgnoreCase));
 File.Copy(unrelatedPdb, Path.Combine(staleDirectory, "HelloGameCube.pdb"));
 AssertPdbRejected(staleDll, Path.Combine(tempDirectory, "wrong-pdb"));
+// USB Gecko rejects invalid channels and contradictory TCP options before AOT.
+RunFailure("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{Path.Combine(tempDirectory, "usb-invalid")}\" --gdb-usb 2");
+RunFailure("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{Path.Combine(tempDirectory, "usb-tcp-mixed")}\" --gdb-usb 1 --gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1");
 Directory.Delete(tempDirectory, recursive: true);
 
 var genericProject = Path.Combine(root, "tests/GenericSharingSmoke/GenericSharingSmoke.csproj");

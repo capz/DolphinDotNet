@@ -24,6 +24,17 @@ internal sealed record GdbTcpOptions(string Ip, string Netmask, string Gateway, 
     }
 }
 
+// USB Gecko uses the existing libogc2 GDB stub on EXI slot A (0) or B (1).
+internal sealed record GdbUsbOptions(int Channel)
+{
+    internal static GdbUsbOptions Parse(string channel)
+    {
+        if (channel is not ("0" or "1"))
+            throw new ArgumentException("USB Gecko EXI channel must be 0 (slot A) or 1 (slot B).");
+        return new GdbUsbOptions(int.Parse(channel, System.Globalization.CultureInfo.InvariantCulture));
+    }
+}
+
 /// <summary>
 /// Produces a relocatable native build directory using the reachable AOT
 /// method graph. Native libraries are conservative until the monolithic
@@ -43,11 +54,13 @@ internal static class GameCubeBundle
         ("unsupported-sound", new[] {"System.Media.", "Dolphin.Sound."}, Array.Empty<string>())
     };
 
-    internal static void Emit(string assembly, string directory, AotCompilation compilation, string platform, GdbTcpOptions? gdbTcp = null, bool debugSymbols = false)
+    internal static void Emit(string assembly, string directory, AotCompilation compilation, string platform, GdbTcpOptions? gdbTcp = null, bool debugSymbols = false, GdbUsbOptions? gdbUsb = null)
     {
-        if (gdbTcp is not null && platform != "gamecube")
+        if (gdbTcp is not null && gdbUsb is not null)
+            throw new ArgumentException("TCP and USB Gecko debugger transports are mutually exclusive.");
+        if ((gdbTcp is not null || gdbUsb is not null) && platform != "gamecube")
             throw new NotSupportedException("The libogc2 GDB TCP stub is supported only for GameCube builds.");
-        debugSymbols |= gdbTcp is not null;
+        debugSymbols |= gdbTcp is not null || gdbUsb is not null;
         if (debugSymbols && platform != "gamecube")
             throw new NotSupportedException("Native C# source mapping requires the GameCube target.");
         var root = FindRoot();
@@ -163,16 +176,24 @@ internal static class GameCubeBundle
                     new JsonSerializerOptions { WriteIndented = true }));
         }
 
-        if (gdbTcp is not null)
+        if (gdbTcp is not null || gdbUsb is not null)
         {
-            // A debug-symbols-only emulator build must not link libdb or trap at startup.
+            // A symbols-only emulator build must not link libdb or trap at startup.
+            // libdb references the TCP settings from DEBUG_Init's other branch
+            // even when USB is selected; provide inert link-time defaults.
+            var tcpIp = gdbTcp?.Ip ?? "0.0.0.0";
+            var tcpMask = gdbTcp?.Netmask ?? "0.0.0.0";
+            var tcpGateway = gdbTcp?.Gateway ?? "0.0.0.0";
+            var init = gdbUsb is not null
+                ? $"DEBUG_Init(GDBSTUB_DEVICE_USB, {gdbUsb.Channel});"
+                : $"DEBUG_Init(GDBSTUB_DEVICE_TCP, {gdbTcp!.Port});";
             File.WriteAllText(Path.Combine(directory, "source", "debug_gamecube.c"),
                 "#include <debug.h>\n" +
-                $"const char *tcp_localip = \"{gdbTcp.Ip}\";\n" +
-                $"const char *tcp_netmask = \"{gdbTcp.Netmask}\";\n" +
-                $"const char *tcp_gateway = \"{gdbTcp.Gateway}\";\n" +
+                $"const char *tcp_localip = \"{tcpIp}\";\n" +
+                $"const char *tcp_netmask = \"{tcpMask}\";\n" +
+                $"const char *tcp_gateway = \"{tcpGateway}\";\n" +
                 "void dnd_gdb_init(void) {\n" +
-                $"    DEBUG_Init(GDBSTUB_DEVICE_TCP, {gdbTcp.Port});\n" +
+                $"    {init}\n" +
                 "    _break(); /* Wait at a deterministic startup rendezvous. */\n" +
                 "}\n");
         }
@@ -204,13 +225,13 @@ internal static class GameCubeBundle
             File.Copy(Path.Combine(root, "source", name + ".c"),
                 Path.Combine(directory, "source", name + ".c"), true);
 
-        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null, debugSymbols));
+        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null, gdbUsb is not null, debugSymbols));
         var report = new StringBuilder();
         report.AppendLine("DolphinDotNet AOT Native Dependencies");
         report.AppendLine("Target: " + platform);
         report.AppendLine("Assembly: " + Path.GetFileName(assembly));
         report.AppendLine("Managed source symbols: " + (debugSymbols ? "enabled" : "disabled"));
-        report.AppendLine("GDB TCP stub: " + (gdbTcp is null ? "disabled" : $"enabled on {gdbTcp.Ip}:{gdbTcp.Port}"));
+        report.AppendLine("GDB debugger: " + (gdbTcp is not null ? $"TCP {gdbTcp.Ip}:{gdbTcp.Port}" : gdbUsb is not null ? $"USB Gecko EXI channel {gdbUsb.Channel}" : "disabled"));
         if (gdbTcp is not null)
             report.AppendLine("Normal automatic BBA initialization is disabled; the GDB stub owns a separate polling network stack. Concurrent application networking is not validated.");
         report.AppendLine("Allowed managed API platforms: " + string.Join(", ", supportedApiPlatforms));
@@ -247,13 +268,13 @@ internal static class GameCubeBundle
         throw new DirectoryNotFoundException("The DolphinDotNet repository's native sources are required to emit a self-contained build directory.");
     }
 
-    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool debugSymbols)
+    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool gdbUsb, bool debugSymbols)
     {
         var isWiiU = platform == "wiiu";
         var rules = isWiiU ? "$(DEVKITPRO)/wut/share/wut_rules"
             : "$(DEVKITPRO)/libogc2/" + (platform == "wii" ? "wii_rules" : "gamecube_rules");
         var suffix = isWiiU ? "rpx" : "dol";
-        var libs = isWiiU ? "-lwut -lm" : (gdbTcp ? "-ldb " : "") + "-lfat -ldvm -liso9660 -lbba -laesnd -logc -lm";
+        var libs = isWiiU ? "-lwut -lm" : (gdbTcp || gdbUsb ? "-ldb " : "") + "-lfat -ldvm -liso9660 -lbba -laesnd -logc -lm";
         var library = isWiiU ? "$(DEVKITPRO)/wut"
             : "$(DEVKITPRO)/libogc2/" + (platform == "wii" ? "wii" : "gamecube");
         var builder = new StringBuilder();
@@ -274,6 +295,8 @@ internal static class GameCubeBundle
         builder.AppendLine("CFLAGS := " + symbols + " -Wall -Wextra $(MACHDEP) $(INCLUDE)" +
             (isWiiU ? " -D__WIIU__ -D__WUT__" :
                 gdbTcp ? " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK -DDND_GDB_ENABLED" :
+                gdbUsb ? " -DDND_GAMECUBE_STORAGE -DDND_GDB_ENABLED" +
+                    (usesNetworking ? "" : " -DDND_NO_AUTONETWORK") :
                 usesNetworking ? " -DDND_GAMECUBE_STORAGE" :
                 " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK"));
         builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");

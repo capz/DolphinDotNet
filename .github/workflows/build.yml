@@ -474,6 +474,15 @@ jobs:
           test ! -f /tmp/dnd-emulator-debug/source/debug_gamecube.c
           mkdir -p footprint/debug-symbols
           cp /tmp/dnd-emulator-debug/Game.dol /tmp/dnd-emulator-debug/Game.elf /tmp/dnd-emulator-debug/dnd-il-debug.json /tmp/dnd-emulator-debug/Game.dnd-addresses.json footprint/debug-symbols/
+      - name: Link USB Gecko debugger GameCube bundle
+        run: |
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-usb-gecko --gdb-usb 1
+          make -C /tmp/dnd-usb-gecko
+          test -s /tmp/dnd-usb-gecko/Game.dol
+          test -s /tmp/dnd-usb-gecko/Game.dnd-addresses.json
+          grep -q 'DEBUG_Init(GDBSTUB_DEVICE_USB, 1)' /tmp/dnd-usb-gecko/source/debug_gamecube.c
+          grep -q '\-ldb' /tmp/dnd-usb-gecko/Makefile
+          "$DEVKITPPC/bin/powerpc-eabi-nm" /tmp/dnd-usb-gecko/Game.elf | grep -q ' dnd_gdb_init$'
       - name: Link opt-in GDB TCP GameCube bundle
         run: |
           test -f "$DEVKITPRO/libogc2/gamecube/lib/libdb.a"
