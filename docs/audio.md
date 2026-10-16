@@ -90,3 +90,69 @@ The audio module targets libogc2 AESND on GameCube; standalone Wii builds
 
 GameCube applications and bundles link `-laesnd` before `-logc`. There is
 no desktop runtime for sound; host tests inject a fake DSP backend.
+
+## MP3 to ADX with named loop sidecars
+
+The host-side asset tool converts audio with FFmpeg (`ffmpeg` on PATH, including
+MP3 decoding and the `adpcm_adx` encoder). This does not add ADX playback to the
+GameCube runtime; the playback formats listed above still apply.
+
+Keep a UTF-8 JSON sidecar beside the source: `forest.mp3.loops.json`.
+
+```json
+{
+  "version": 1,
+  "defaultLoop": "exploration",
+  "loops": [
+    { "name": "exploration", "startSeconds": 8.0, "endSeconds": 40.0 },
+    { "name": "combat", "startSeconds": 42.0, "endSeconds": 74.0 }
+  ]
+}
+```
+
+```sh
+dnd-assets audio forest.mp3 forest.adx
+dnd-assets audio forest.mp3 forest-combat.adx --loop combat --sample-rate 48000
+# Explicit sidecar and FFmpeg executable paths are also supported:
+dnd-assets audio forest.mp3 forest.adx --loops forest.mp3.loops.json --ffmpeg /usr/bin/ffmpeg
+```
+
+- Source positions are seconds on the decoded, gapless-trimmed MP3 timeline,
+  before codec block padding. No silence detection, trimming or normalization is
+  applied. Other FFmpeg-readable sources, including WAV/FLAC, are accepted.
+- Output is stereo ADX at 32000 Hz by default; `--sample-rate` accepts 8000–48000.
+- Ranges are start-inclusive/end-exclusive. Decimal seconds are rounded to the
+  nearest output sample frame, with midpoint ties rounded away from zero.
+- Names are nonempty, unique and case-sensitive. Overlapping ranges are allowed.
+  Unsupported versions, unknown JSON fields, invalid ranges, missing names and
+  positions beyond decoded duration fail conversion before publishing outputs.
+- ADX stores one built-in loop. `--loop` overrides `defaultLoop`; omitting both
+  produces a nonlooping ADX. The complete track, including intro/outro, is kept.
+- `forest.adx.loops.json` preserves every name with resolved `startSample` and
+  `endSample`, plus `sampleRate`, `sampleCount` and the selected `defaultLoop`.
+  Sample positions count frames, not individual interleaved channel values.
+  This is conversion metadata for future runtime support, not a current
+  `Music.PlayLoop` API. Unmodified ADX players only see the embedded loop.
+- Sample indices are exact; seamless musical joins still require auditioning.
+  The encoded blocks are not modified to force matching predictor history at a
+  loop boundary. No crossfading or adaptive music transitions are generated.
+
+Encoding is performed by your installed FFmpeg, so record its version alongside
+release build tooling when reproducible encoded bytes matter.
+
+### Authoring ranges in Audacity
+
+Open the same source audio in Audacity, select a time range, and add a label at
+that selection (Ctrl+B on Windows/Linux). Give each region a unique name. Export
+labels as a standard tab-delimited text file, then use it directly:
+
+```sh
+dnd-assets audio forest.mp3 forest.adx --loops forest.labels.txt --loop exploration
+```
+
+Each exported row is `startSeconds<TAB>endSeconds<TAB>name`. Point labels are
+ignored; spectral selection continuation rows are rejected. Text sidecars have
+no default-loop field, so specify `--loop` to embed a loop. Keep the labels and
+source audio on the same timeline: if you edit, trim or move the audio in
+Audacity, export the edited audio (preferably WAV) and author labels against it.
+Audacity labels alone do not embed looping instructions into ADX audio.
