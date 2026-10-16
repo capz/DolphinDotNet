@@ -12,11 +12,17 @@ while (connected is null)
     catch (SocketException) { await Task.Delay(150, deadline.Token); }
 }
 await using var client = connected;
+var specifications = args.Skip(4).Where(argument => argument != "--stack-steps").ToArray();
+if (args.Contains("--stack-steps"))
+{
+    await StackProbe.RunAsync(client, symbols, specifications, deadline.Token);
+    return;
+}
 var breakpoints = new SourceBreakpoints(client, symbols);
 var stepper = new SourceStepper(client, symbols);
 var hits = new HashSet<uint>();
 uint before = 0;
-foreach (var specification in args.Skip(4))
+foreach (var specification in specifications)
 {
     var colon = specification.LastIndexOf(':');
     if (colon < 1) throw new ArgumentException("Expected FILE:LINE: " + specification);

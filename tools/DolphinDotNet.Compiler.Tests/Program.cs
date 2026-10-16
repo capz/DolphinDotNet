@@ -43,6 +43,7 @@ if (symbolsMake.Contains("-ldb ", StringComparison.Ordinal) ||
     symbolsMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
     File.Exists(Path.Combine(symbolsBundle, "source/debug_gamecube.c")) ||
     !symbolsMake.Contains("-Og -g3 -gdwarf-4", StringComparison.Ordinal) ||
+    !symbolsMake.Contains("-fno-optimize-sibling-calls", StringComparison.Ordinal) ||
     !symbolsC.Contains("#line 8 ", StringComparison.Ordinal) ||
     !File.Exists(Path.Combine(symbolsBundle, "dnd-il-debug.json")))
     throw new Exception("Emulator symbols-only build links a device debugger or lacks source locations.");

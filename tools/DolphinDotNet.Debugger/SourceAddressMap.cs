@@ -13,6 +13,8 @@ public sealed class SourceAddressMap
 {
     private readonly List<(string Document, int Line, uint Address)> _points = new();
     private readonly Dictionary<uint, List<SourceLocation>> _locations = new();
+    private readonly List<NativeMethod> _methods = new();
+    private readonly List<UnwindRule> _unwind = new();
 
     public static SourceAddressMap Load(string elf, string sourceMap, string addressMap)
     {
@@ -39,6 +41,14 @@ public sealed class SourceAddressMap
             string? methodName = symbol;
             if (symbol is not null && identities.TryGetValue(symbol, out var identity))
                 methodName = identity.GetProperty("declaringType").GetString() + "." + identity.GetProperty("name").GetString();
+            if (method.TryGetProperty("nativeStart", out var nativeStart) && method.TryGetProperty("nativeSize", out var nativeSize))
+            {
+                var begin = ParseAddress(nativeStart.GetString());
+                var size = nativeSize.GetUInt32();
+                if (size == 0 || (ulong)begin + size > uint.MaxValue)
+                    throw new InvalidDataException("Invalid native method extent.");
+                result._methods.Add(new NativeMethod(begin, begin + size, symbol, assembly, methodToken, methodName));
+            }
             foreach (var point in method.GetProperty("breakpoints").EnumerateArray())
             {
                 var originalDocument = point.GetProperty("document").GetString() ?? "";
@@ -60,6 +70,34 @@ public sealed class SourceAddressMap
                 }
             }
         }
+        if (root.TryGetProperty("unwind", out var unwind))
+        foreach (var row in unwind.EnumerateArray())
+        {
+            var begin = ParseAddress(row.GetProperty("start").GetString());
+            var end = ParseAddress(row.GetProperty("end").GetString());
+            if (end <= begin) throw new InvalidDataException("Invalid unwind extent.");
+            var supported = row.GetProperty("supported").GetBoolean();
+            var rules = new Dictionary<int, RegisterRule>();
+            int cfaRegister = 0, cfaOffset = 0;
+            if (supported)
+            {
+                cfaRegister = row.GetProperty("cfaRegister").GetInt32();
+                cfaOffset = row.GetProperty("cfaOffset").GetInt32();
+                if (cfaRegister is < 0 or > 31) throw new InvalidDataException("Unsupported CFA register.");
+                foreach (var register in row.GetProperty("registers").EnumerateObject())
+                {
+                    if (!int.TryParse(register.Name, out var number) || (number is < 0 or > 31 && number != 65))
+                        throw new InvalidDataException("Unsupported unwind register.");
+                    var kind = register.Value.GetProperty("kind").GetString();
+                    if (kind is not ("same" or "undefined" or "register" or "memory"))
+                        throw new InvalidDataException("Unsupported unwind rule.");
+                    rules.Add(number, new RegisterRule(kind,
+                        register.Value.TryGetProperty("offset", out var offset) ? offset.GetInt32() : 0,
+                        register.Value.TryGetProperty("register", out var source) ? source.GetInt32() : number));
+                }
+            }
+            result._unwind.Add(new UnwindRule(begin, end, supported, cfaRegister, cfaOffset, rules));
+        }
         return result;
     }
 
@@ -79,5 +117,31 @@ public sealed class SourceAddressMap
     public IReadOnlyList<SourceLocation> FindExact(uint programCounter)
         => _locations.TryGetValue(programCounter, out var locations) ? locations.ToArray() : Array.Empty<SourceLocation>();
 
+    public NativeMethod? FindMethod(uint address)
+    {
+        var methods = _methods.Where(method => method.Start <= address && address < method.End).ToArray();
+        return methods.Length == 1 ? methods[0] : null;
+    }
+
+    public UnwindRule? FindUnwindRule(uint address)
+    {
+        var rows = _unwind.Where(row => row.Start <= address && address < row.End).ToArray();
+        return rows.Length == 1 && rows[0].Supported ? rows[0] : null;
+    }
+
+    private static uint ParseAddress(string? text)
+    {
+        if (text is null || !text.StartsWith("0x", StringComparison.Ordinal) ||
+            !uint.TryParse(text.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var address) ||
+            address == 0 || (address & 3) != 0)
+            throw new InvalidDataException("Invalid PowerPC metadata address.");
+        return address;
+    }
+
     private static string Normalize(string path) => string.Join('/', path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
 }
+
+public sealed record NativeMethod(uint Start, uint End, string? Symbol, string? Assembly, int? MethodToken, string? Name);
+public sealed record RegisterRule(string Kind, int Offset, int Register);
+public sealed record UnwindRule(uint Start, uint End, bool Supported, int CfaRegister, int CfaOffset,
+    IReadOnlyDictionary<int, RegisterRule> Registers);

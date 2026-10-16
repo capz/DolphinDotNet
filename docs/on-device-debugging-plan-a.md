@@ -265,3 +265,40 @@ cancellation. Real-Dolphin CI remains required for this new increment.
 
 Next: managed stack unwinding and reliable call-depth tracking for Step Over/Out,
 then DAP and Rider integration. **A4.4 remains deferred until hardware is available.**
+
+
+## A4.5 second increment: DWARF stack frames and Step Over/Out
+
+The address resolver now retains managed native-symbol extents and interpreted
+PowerPC DWARF call-frame rules. Its supported subset covers CFA register plus
+constant offset, same/undefined registers, register-to-register saves, and
+CFA-relative memory saves. It preserves unsupported rows as explicit gaps;
+no prior row is extended across an unsupported expression. FDEs without their
+own rows inherit the matching PowerPC CIE. Debug builds additionally disable
+sibling-call optimization to keep generated managed callers visible.
+
+`PowerPcUnwinder` reads 32-bit big-endian PowerPC state. DWARF LR register 65 is
+translated to GDB register 67; CFA registers retain their general-register
+numbers. Caller methods/source locations use the return PC minus four to refer
+to the PowerPC call instruction. Frame recovery is bounded and validates
+MEM1 pointers, checked address arithmetic and repeated PC/SP pairs. Missing CFI,
+unsupported register recovery and invalid frames return partial stacks with an
+explicit reason. Unmapped native frames are retained, not labeled as managed.
+This is not a general DWARF-expression evaluator or exception/async unwinder.
+
+Step Over accepts a new mapped statement in the same CFA or after returning to
+a greater CFA, and skips mapped statements in deeper frames. Step Out waits for
+a mapped statement with a greater CFA. Both stop with `UnwindUnavailable` when
+needed rules are missing rather than guessing a return address. Native signals,
+limits and ambiguity retain the behavior of bounded Step Into. All calls require
+a stopped target, serialized session control and removed breakpoints. Arbitrary
+fiber-stack switches, user breakpoint arbitration and advanced optimized frames
+remain unsupported.
+
+`tests/DebuggerStackSmoke` supplies a dedicated Main -> Outer -> Inner program.
+A separate real-Dolphin probe must show these three managed frames, step out of
+Inner, then step over a second Inner call while staying in Outer. Fake RSP tests
+exercise saved LR/r31 recovery, leaf LR translation, caller-source attribution,
+partial stacks, CFA depth comparisons and invalid/missing unwind information.
+The parser also has prologue/body/epilogue and CIE-inheritance regressions.
+These new behaviors require their own passing CI run; A4.4 remains deferred.

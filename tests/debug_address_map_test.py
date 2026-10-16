@@ -53,6 +53,67 @@ class AddressResolution(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Ambiguous DWARF basename'):
             module.resolve(ambiguous, LINES.replace('C:/project/Program.cs:\n', ''), SYMBOLS)
 
+    def test_native_method_extent(self):
+        method = module.resolve(MAP, LINES, SYMBOLS)['methods'][0]
+        self.assertEqual((method['nativeStart'], method['nativeSize']), ('0x80001000', 64))
+
+    def test_powerpc_cfi_prologue_body_and_epilogue(self):
+        frames = """Contents of the .debug_frame section:
+00000000 00000010 ffffffff CIE "" cf=1 df=-4 ra=65
+   LOC   CFA  r31 ra
+00000000 r1+0 u s
+00000014 00000030 00000000 FDE cie=00000000 pc=80001000..80001030
+   LOC   CFA    r31 ra
+80001000 r1+0   u   s
+80001004 r1+32  u   s
+8000100c r31+32 c-4 c+4
+80001028 r1+0   s   s
+00000048 00000010 00000000 FDE cie=00000000 pc=80001100..80001110
+"""
+        rows = module.parse_unwind(frames)
+        self.assertEqual(len(rows), 5)
+        self.assertEqual(rows[0]['registers']['65']['kind'], 'same')
+        self.assertEqual(rows[2]['cfaRegister'], 31)
+        self.assertEqual(rows[2]['registers']['65'], {'kind': 'memory', 'offset': 4})
+        self.assertEqual(rows[2]['end'], '0x80001028')
+        self.assertEqual(rows[4]['cfaOffset'], 0)  # CIE inheritance for leaf FDE
+
+    def test_unsupported_cfi_never_extends_previous_rule(self):
+        frames = """00000000 00000010 ffffffff CIE "" cf=1 df=-4 ra=65
+   LOC CFA ra
+00000000 r1+0 s
+00000014 00000030 00000000 FDE cie=00000000 pc=80001000..80001010
+   LOC CFA ra
+80001000 r1+0 s
+80001008 exp exp
+"""
+        rows = module.parse_unwind(frames)
+        self.assertEqual(rows[0]['end'], '0x80001008')
+        self.assertFalse(rows[1]['supported'])
+
+    def test_register_saved_lr_and_unknown_cie(self):
+        frames = """00000000 00000010 ffffffff CIE "" cf=1 df=-4 ra=65
+   CFA ra
+   r1+0 s
+00000014 00000030 00000000 FDE cie=00000000 pc=80001000..80001010
+   LOC CFA ra
+80001000 r1+0 r0
+00000048 00000010 00000000 FDE cie=000000ff pc=80002000..80002010
+   LOC CFA ra
+80002000 r1+0 s
+"""
+        rows = module.parse_unwind(frames)
+        self.assertEqual(rows[0]['registers']['65'], {'kind': 'register', 'register': 0})
+        self.assertFalse(rows[1]['supported'])
+
+    def test_non_powerpc_cie_is_not_guessed(self):
+        rows = module.parse_unwind("""00000000 00000010 00000000 CIE "zR" cf=1 df=-8 ra=16
+   LOC CFA ra
+00000000 rsp+8 c-8
+00000014 00000010 00000000 FDE cie=00000000 pc=00001000..00001010
+""")
+        self.assertFalse(rows[0]['supported'])
+
     def test_real_gcc_dwarf_fixture(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)

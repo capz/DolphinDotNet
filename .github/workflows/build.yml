@@ -516,6 +516,13 @@ jobs:
           test ! -f /tmp/dnd-emulator-debug/source/debug_gamecube.c
           mkdir -p footprint/debug-symbols
           cp /tmp/dnd-emulator-debug/Game.dol /tmp/dnd-emulator-debug/Game.elf /tmp/dnd-emulator-debug/dnd-il-debug.json /tmp/dnd-emulator-debug/Game.dnd-addresses.json footprint/debug-symbols/
+      - name: Build managed stack and source-stepping debugger fixture
+        run: |
+          dotnet build tests/DebuggerStackSmoke/DebuggerStackSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle tests/DebuggerStackSmoke/bin/Release/net8.0/DebuggerStackSmoke.dll /tmp/dnd-debug-stack --platform gamecube --debug-symbols
+          make -C /tmp/dnd-debug-stack
+          mkdir -p footprint/debug-stack
+          cp /tmp/dnd-debug-stack/Game.dol /tmp/dnd-debug-stack/Game.elf /tmp/dnd-debug-stack/Game.dnd-addresses.json /tmp/dnd-debug-stack/dnd-il-debug.json footprint/debug-stack/
       - name: Link USB Gecko debugger GameCube bundle
         run: |
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-usb-gecko --gdb-usb 1
@@ -737,6 +744,9 @@ jobs:
       - name: Verify two consecutive C# source breakpoints in Dolphin
         id: cs_breakpoints
         run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2165 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:8 --expect-source ManagedGameCube/Program.cs:9 --logs dolphin-csharp-breakpoints --require-boot --dotnet-probe tools/DolphinDotNet.Debugger.Probe/bin/Release/net8.0/DolphinDotNet.Debugger.Probe.dll
+      - name: Verify managed stack and C# Step Over/Out in Dolphin
+        id: cs_stack_steps
+        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-stack/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2166 --elf dist/footprint/debug-stack/Game.elf --source-map dist/footprint/debug-stack/dnd-il-debug.json --address-map dist/footprint/debug-stack/Game.dnd-addresses.json --expect-source DebuggerStackSmoke/Program.cs:20 --expect-source DebuggerStackSmoke/Program.cs:15 --logs dolphin-csharp-stack --require-boot --dotnet-probe tools/DolphinDotNet.Debugger.Probe/bin/Release/net8.0/DolphinDotNet.Debugger.Probe.dll --stack-steps
       - name: Verify native and managed main() executed in Dolphin
         id: app_boot
         continue-on-error: true
@@ -759,6 +769,7 @@ jobs:
           test "${{ steps.control_boot.outcome }}" = success
           test "${{ steps.app_boot.outcome }}" = success
           test "${{ steps.cs_breakpoints.outcome }}" = success
+          test "${{ steps.cs_stack_steps.outcome }}" = success
           test "${{ steps.async_boot.outcome }}" = success
           test "${{ steps.timing_boot.outcome }}" = success
           test "${{ steps.pong_boot.outcome }}" = success
@@ -773,6 +784,7 @@ jobs:
             dolphin-control/
             dolphin-smoke/
             dolphin-csharp-breakpoints/
+            dolphin-csharp-stack/
             dolphin-async/
             dolphin-timing/
             dolphin-pong/

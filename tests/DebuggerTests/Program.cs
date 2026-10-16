@@ -7,6 +7,7 @@ Check(RspStop.Parse("T0540:8000510c;thread:1;").ProgramCounter == 0x8000510c, "T
 Check(RspStop.Parse("S05").ProgramCounter is null, "S stop without PC");
 Check(RspStop.Parse("W00").Exited, "exit event");
 Expect<InvalidDataException>(() => RspStop.Parse("T0540:xyz;"), "invalid stop program counter");
+await TestUnwindingAndDepthAsync();
 await TestSourceSteppingAsync();
 await TestSourceBreakpointsAsync();
 await TestTcpProtocolAsync();
@@ -265,6 +266,84 @@ static async Task TestSourceSteppingAsync()
         canceled.Cancel();
         try { await stepper.StepIntoAsync(start, 1, canceled.Token); throw new Exception("Expected canceled source step"); }
         catch (OperationCanceledException) { }
+        await server.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+    finally { listener.Stop(); Directory.Delete(directory, true); }
+}
+
+static async Task TestUnwindingAndDepthAsync()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "dnd-unwind-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    var listener = new TcpListener(IPAddress.Loopback, 0);
+    try
+    {
+        var elf = Path.Combine(directory, "Game.elf");
+        var source = Path.Combine(directory, "source.json");
+        var native = Path.Combine(directory, "addresses.json");
+        File.WriteAllText(elf, "unwind fixture");
+        File.WriteAllText(source, "{\"schemaVersion\":2}");
+        string Hash(string path) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+        var data = new {
+            schemaVersion = 1, elfSha256 = Hash(elf), sourceMapSha256 = Hash(source),
+            methods = new[] {
+                new { symbol = "A", assembly = "Demo", methodToken = 1, nativeStart = "0x80001000", nativeSize = 64, breakpoints = new[] {
+                    new { document = "/Program.cs", line = 10, addresses = new[] { "0x80001000" } },
+                    new { document = "/Program.cs", line = 11, addresses = new[] { "0x80001004" } }
+                } },
+                new { symbol = "B", assembly = "Demo", methodToken = 2, nativeStart = "0x80002000", nativeSize = 64, breakpoints = new[] {
+                    new { document = "/Program.cs", line = 20, addresses = new[] { "0x80002000", "0x80002004" } }
+                } }
+            },
+            unwind = new object[] {
+                new { start = "0x80001000", end = "0x80001040", supported = true, cfaRegister = 1, cfaOffset = 32,
+                    registers = new Dictionary<string, object> { ["31"] = new { kind = "memory", offset = -4 }, ["65"] = new { kind = "memory", offset = 4 } } },
+                new { start = "0x80002000", end = "0x80002004", supported = true, cfaRegister = 1, cfaOffset = 0,
+                    registers = new Dictionary<string, object> { ["65"] = new { kind = "same" } } },
+                new { start = "0x80002004", end = "0x80002040", supported = true, cfaRegister = 31, cfaOffset = 32,
+                    registers = new Dictionary<string, object> { ["65"] = new { kind = "undefined" } } },
+                new { start = "0x80003000", end = "0x80003010", supported = true, cfaRegister = 1, cfaOffset = 0,
+                    registers = new Dictionary<string, object> { ["65"] = new { kind = "same" } } }
+            }
+        };
+        File.WriteAllText(native, System.Text.Json.JsonSerializer.Serialize(data));
+        var symbols = SourceAddressMap.Load(elf, source, native);
+        Check(symbols.FindMethod(0x8000103c)?.Symbol == "A" && symbols.FindMethod(0x80001040) is null, "native method extent boundary");
+        listener.Start();
+        var server = Task.Run(async () => {
+            using var peer = await listener.AcceptTcpClientAsync();
+            using var stream = peer.GetStream();
+            foreach (var (command, reply) in new[] {
+                ("p1", "81700000"), ("m8170001c,4", "81700020"), ("m81700024,4", "80002008"), // two-frame unwind
+                ("p1", "81700000"), ("p43", "80002008"), // leaf: DWARF LR 65 maps to RSP 67
+                ("p1", "81700000"), // over origin CFA
+                ("s", "T0540:80002000;"), ("p1", "81700000"), // deeper leaf skipped
+                ("s", "T0540:80001004;"), ("p1", "81700000"), // same frame next line
+                ("p1", "81700000"), // out origin CFA
+                ("s", "T0540:80002004;"), ("p1f", "81700020"), // caller CFA greater
+                ("p1", "90000000") // invalid origin never executes
+            }) {
+                Check(await ReadFrameAsync(stream) == command, "unwind/depth command " + command);
+                await SendReplyAsync(stream, reply);
+                Check(await ReadByteAsync(stream) == '+', "unwind ACK");
+            }
+        });
+        await using var client = await RspClient.ConnectTcpAsync("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
+        var unwinder = new PowerPcUnwinder(client, symbols);
+        var trace = await unwinder.ReadStackAsync(0x80001000);
+        Check(trace.Frames.Count == 2 && trace.Reason == UnwindStopReason.EndOfStack, "two DWARF frames");
+        Check(trace.Frames[0].CanonicalFrameAddress == 0x81700020, "current CFA");
+        Check(trace.Frames[1].ProgramCounter == 0x80002008 && trace.Frames[1].Method?.Symbol == "B" && trace.Frames[1].SourceLocations.Single().Line == 20, "caller attributed at PPC return PC minus four");
+        var partial = await unwinder.ReadStackAsync(0x80003000);
+        Check(partial.Frames.Count == 2 && partial.Reason == UnwindStopReason.UnavailableRegister, "leaf LR read and partial stack rather than guessed caller register");
+        var stepper = new SourceStepper(client, symbols);
+        var origin = RspStop.Parse("T0540:80001000;");
+        var over = await stepper.StepOverAsync(origin, 3);
+        Check(over.Reason == SourceStepReason.SourceLocation && over.Instructions == 2 && over.Location?.Line == 11, "step over skips deeper CFA");
+        var exit = await stepper.StepOutAsync(origin, 2);
+        Check(exit.Reason == SourceStepReason.SourceLocation && exit.Instructions == 1 && exit.Location?.Line == 20, "step out reaches greater caller CFA");
+        Check((await stepper.StepOutAsync(RspStop.Parse("T0540:80004000;"), 1)).Reason == SourceStepReason.UnwindUnavailable, "missing CFA never guessed");
+        Check((await stepper.StepOverAsync(origin, 1)).Reason == SourceStepReason.UnwindUnavailable, "invalid stack origin never executes");
         await server.WaitAsync(TimeSpan.FromSeconds(5));
     }
     finally { listener.Stop(); Directory.Delete(directory, true); }

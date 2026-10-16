@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 
 namespace DolphinDotNet.Debugger;
 
-public enum SourceStepReason { SourceLocation, Signal, Exited, InstructionLimit, AmbiguousSource }
+public enum SourceStepReason { SourceLocation, Signal, Exited, InstructionLimit, AmbiguousSource, UnwindUnavailable }
 
 public sealed record SourceStepResult(RspStop Stop, SourceLocation? Location,
     SourceStepReason Reason, int Instructions);
@@ -13,6 +13,7 @@ public sealed record SourceStepResult(RspStop Stop, SourceLocation? Location,
 /// </summary>
 public sealed class SourceStepper(RspClient client, SourceAddressMap symbols)
 {
+    private enum StepMode { Into, Over, Out }
     public async Task<RspStop> ReadProgramCounterAsync(RspStop stop, CancellationToken token = default)
     {
         if (stop.Exited || stop.ProgramCounter.HasValue) return stop;
@@ -27,8 +28,17 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols)
     /// Breakpoints must be removed before stepping; breakpoint arbitration belongs to the session.
     /// A limit result leaves the target stopped and permits a further bounded attempt.
     /// </summary>
-    public async Task<SourceStepResult> StepIntoAsync(RspStop current, int instructionLimit = 4096,
-        CancellationToken token = default)
+    public Task<SourceStepResult> StepIntoAsync(RspStop current, int instructionLimit = 4096,
+        CancellationToken token = default) => StepAsync(StepMode.Into, current, instructionLimit, token);
+
+    public Task<SourceStepResult> StepOverAsync(RspStop current, int instructionLimit = 4096,
+        CancellationToken token = default) => StepAsync(StepMode.Over, current, instructionLimit, token);
+
+    public Task<SourceStepResult> StepOutAsync(RspStop current, int instructionLimit = 4096,
+        CancellationToken token = default) => StepAsync(StepMode.Out, current, instructionLimit, token);
+
+    private async Task<SourceStepResult> StepAsync(StepMode mode, RspStop current, int instructionLimit,
+        CancellationToken token)
     {
         if (instructionLimit is < 1 or > 100000) throw new ArgumentOutOfRangeException(nameof(instructionLimit));
         current = await ReadProgramCounterAsync(current, token).ConfigureAwait(false);
@@ -36,6 +46,13 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols)
         var start = symbols.FindExact(current.ProgramCounter!.Value);
         if (start.Count > 1) return new(current, null, SourceStepReason.AmbiguousSource, 0);
         var origin = start.SingleOrDefault();
+        var unwinder = new PowerPcUnwinder(client, symbols);
+        uint? originCfa = null;
+        if (mode != StepMode.Into)
+        {
+            originCfa = await unwinder.ReadCanonicalFrameAddressAsync(current.ProgramCounter.Value, token).ConfigureAwait(false);
+            if (!originCfa.HasValue) return new(current, origin, SourceStepReason.UnwindUnavailable, 0);
+        }
         for (var count = 1; count <= instructionLimit; count++)
         {
             token.ThrowIfCancellationRequested();
@@ -46,7 +63,15 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols)
             if (current.Signal != 5) return new(current, null, SourceStepReason.Signal, count);
             var locations = symbols.FindExact(current.ProgramCounter!.Value);
             if (locations.Count > 1) return new(current, null, SourceStepReason.AmbiguousSource, count);
-            if (locations.Count == 1 && locations[0] != origin)
+            if (locations.Count != 1) continue;
+            if (mode == StepMode.Into)
+            {
+                if (locations[0] != origin) return new(current, locations[0], SourceStepReason.SourceLocation, count);
+                continue;
+            }
+            var cfa = await unwinder.ReadCanonicalFrameAddressAsync(current.ProgramCounter.Value, token).ConfigureAwait(false);
+            if (!cfa.HasValue) return new(current, locations[0], SourceStepReason.UnwindUnavailable, count);
+            if (cfa > originCfa || (mode == StepMode.Over && cfa == originCfa && locations[0] != origin))
                 return new(current, locations[0], SourceStepReason.SourceLocation, count);
         }
         return new(current, null, SourceStepReason.InstructionLimit, instructionLimit);

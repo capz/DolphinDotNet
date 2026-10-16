@@ -43,6 +43,7 @@ def main() -> int:
     parser.add_argument("--expect-symbol", action="append", default=[], help="Required guest function symbol")
     parser.add_argument("--source-map", type=Path, help="Matching Portable PDB source map")
     parser.add_argument("--address-map", type=Path, help="PowerPC address map")
+    parser.add_argument("--stack-steps", action="store_true", help="Verify DWARF managed stack and Step Over/Out")
     parser.add_argument("--dotnet-probe", type=Path, help="Published .NET probe DLL for source checks")
     parser.add_argument("--expect-source", action="append", default=[], help="C# FILE:LINE in stop order")
     parser.add_argument("--expect-word", action="append", default=[], help="Require guest RAM SYMBOL=0xVALUE")
@@ -64,6 +65,8 @@ def main() -> int:
         parser.error("Choose ELF breakpoints or guest-memory checks, not both")
     if args.memory_after_symbol and not (args.expect_word or args.expect_text):
         parser.error("--memory-after-symbol requires a guest-memory expectation")
+    if args.stack_steps and not args.dotnet_probe:
+        parser.error("--stack-steps requires --dotnet-probe")
     if args.dotnet_probe and not args.expect_source:
         parser.error("--dotnet-probe requires --expect-source")
     expected = resolve_symbols(args.elf, args.expect_symbol) if args.expect_symbol else []
@@ -104,7 +107,8 @@ def main() -> int:
             if args.dotnet_probe:
                 try:
                     result = subprocess.run(["dotnet", str(args.dotnet_probe), str(args.gdb_port),
-                        str(args.elf), str(args.source_map), str(args.address_map), *args.expect_source],
+                        str(args.elf), str(args.source_map), str(args.address_map), *args.expect_source,
+                        *(["--stack-steps"] if args.stack_steps else [])],
                         capture_output=True, text=True, timeout=max(2, args.seconds - 2))
                     guest_state.append(ProbeResult(result.returncode == 0, result.stdout + result.stderr))
                 except (OSError, subprocess.TimeoutExpired) as error:

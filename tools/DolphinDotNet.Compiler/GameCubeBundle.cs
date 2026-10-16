@@ -291,7 +291,7 @@ internal static class GameCubeBundle
         builder.AppendLine("INCLUDES := include");
         builder.AppendLine("LIBDIRS := " + library);
         builder.AppendLine("LIBS := " + libs);
-        var symbols = debugSymbols ? "-Og -g3 -gdwarf-4 -fno-inline -fno-omit-frame-pointer" : "-O2 -g";
+        var symbols = debugSymbols ? "-Og -g3 -gdwarf-4 -fno-inline -fno-omit-frame-pointer -fno-optimize-sibling-calls" : "-O2 -g";
         builder.AppendLine("CFLAGS := " + symbols + " -Wall -Wextra $(MACHDEP) $(INCLUDE)" +
             (isWiiU ? " -D__WIIU__ -D__WUT__" :
                 gdbTcp ? " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK -DDND_GDB_ENABLED" :
