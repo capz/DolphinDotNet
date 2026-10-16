@@ -116,6 +116,8 @@ internal static class GameCubeBundle
                 compilation.Graph, sourceMap?.Methods));
         if (gdbTcp is not null)
         {
+            File.Copy(Path.Combine(root, "scripts", "dnd_debug_addresses.py"),
+                Path.Combine(directory, "scripts", "dnd_debug_addresses.py"), true);
             // Never interpolate unvalidated addresses into generated C. Parse() accepts
             // only canonical dotted-decimal IPv4 and a numeric 16-bit TCP port.
             File.WriteAllText(Path.Combine(directory, "source", "debug_gamecube.c"),
@@ -305,6 +307,8 @@ internal static class GameCubeBundle
             builder.AppendLine("$(OUTPUT).dol: $(OUTPUT).elf");
             builder.AppendLine("\telf2dol $< $@");
             builder.AppendLine("\tpython3 \"$(DOL_VALIDATOR)\" --pad $@");
+            if (gdbTcp)
+                builder.AppendLine("\tpython3 \"$(CURDIR)/scripts/dnd_debug_addresses.py\" --elf $(OUTPUT).elf --source-map \"$(CURDIR)/dnd-il-debug.json\" --output $(OUTPUT).dnd-addresses.json --readelf \"$(DEVKITPPC)/bin/powerpc-eabi-readelf\"");
         }
         builder.AppendLine("$(OUTPUT).elf: $(OFILES)");
         builder.AppendLine("\t$(CC) $^ $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@");

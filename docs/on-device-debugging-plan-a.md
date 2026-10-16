@@ -1,7 +1,7 @@
 # Plan A: on-device GameCube native GDB debugging
 
-Status: **increments A1, A2a, A2b and A2c (generated C source directives) implemented**.
-PowerPC breakpoint-address extraction and IDE attach are **not yet implemented**.
+Status: **increments A1, A2a–A2c and A3 (ELF/DWARF breakpoint-address extraction) implemented**.
+GDB host breakpoint control, IDE adapters and physical attach are **not yet implemented**.
 
 ## Repository and dependency audit (2026-10-16)
 
@@ -34,7 +34,7 @@ PowerPC breakpoint-address extraction and IDE attach are **not yet implemented**
 | A2a (this change) | Preserve per-instruction CIL offsets on Value IR instructions and terminators; write deterministic `dnd-il-debug.json` in the native bundle when GDB enabled | Normal bundle unaffected; entry CIL offsets sorted and unique; compiler integration test |
 | A2b (this change) | Load and verify matching Portable PDB identity for each reachable assembly; correlate source sequence points with emitted IL offsets | Multiple statements in one basic block retain distinct source lines; missing/stale PDB fails explicitly; deterministic host-only JSON |
 | A2c (this change) | Emit native C `#line` directives from verified A2b source locations | Generated C has per-statement source lines, default builds unchanged; ELF DWARF line records checked by CI |
-| A3 | Emit precise source debug locations and verify PowerPC address mapping using ELF/DWARF; handle multi-address source lines | Host lookup for C# file/line -> unique/ordered native breakable addresses, independently tested with `readelf` and `objdump` |
+| A3 (this change) | Verify ELF DWARF line addresses within native function symbol extents and publish address sidecar | Parser regression tests, GCC DWARF fixture, PowerPC ELF CI validation, explicit ambiguity/mismatch failures |
 | A4 | Extract host RSP client from existing Dolphin probe; target capability discovery and breakpoint lifecycle | Emulator breakpoint/continue/step and stop-PC tests pass; limited libdb command set tested against hardware |
 | A5 | Build host C# debug adapter implementing DAP, native-symbol map and source-level stepping | DAP protocol tests with fake RSP target; VS Code/Visual Studio integration spike; correct source stack locations |
 | A6 | Rider/Visual Studio installation and attach packaging | Both IDEs set C# breakpoints, pause/resume and step on emulator and a physical console |
@@ -113,3 +113,15 @@ extract and validate breakable PowerPC instruction addresses**.
 
 Do not claim source-level breakpoints or live hardware compatibility until the
 later acceptance tests pass.
+
+## A3 native breakpoint addresses
+
+GameCube GDB builds generate `Game.dnd-addresses.json` after the ELF link. The
+build driver publishes `<AssemblyName>.dnd-addresses.json` next to the ELF.
+The table includes native function symbols, managed method tokens, C# document
+and line, original IL offsets, and verified PPC instruction addresses. It
+records SHA-256 hashes of the source-map input and ELF to allow a host adapter
+to reject mismatched artifacts. The resolver discards unaligned, zero and
+out-of-function addresses and rejects ambiguous source basenames. Optimized
+source statements may lack an address or share one with another statement.
+This is host-side lookup metadata, **not** a functioning IDE debug adapter.

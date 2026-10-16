@@ -458,6 +458,8 @@ jobs:
           test -s /tmp/dnd-standalone/Game.elf
           test -s /tmp/dnd-standalone/Game.dol
           python3 /tmp/dnd-standalone/scripts/dol_sections.py /tmp/dnd-standalone/Game.dol
+      - name: Test native source-to-ELF address resolver
+        run: python3 -m unittest discover -s tests -p debug_address_map_test.py -v
       - name: Link opt-in GDB TCP GameCube bundle
         run: |
           test -f "$DEVKITPRO/libogc2/gamecube/lib/libdb.a"
@@ -467,6 +469,8 @@ jobs:
           "$DEVKITPPC/bin/powerpc-eabi-readelf" -SW /tmp/dnd-gdb-ppc/Game.elf | grep -q '\.debug_info'
           "$DEVKITPPC/bin/powerpc-eabi-nm" /tmp/dnd-gdb-ppc/Game.elf | grep -q ' dnd_gdb_init$'
           "$DEVKITPPC/bin/powerpc-eabi-readelf" --debug-dump=decodedline /tmp/dnd-gdb-ppc/Game.elf | grep -q 'ManagedGameCube.*\.cs'
+          test -s /tmp/dnd-gdb-ppc/Game.dnd-addresses.json
+          python3 scripts/dnd_debug_addresses.py --elf /tmp/dnd-gdb-ppc/Game.elf --source-map /tmp/dnd-gdb-ppc/dnd-il-debug.json --output /tmp/dnd-gdb-ppc/manual-addresses.json --readelf "$DEVKITPPC/bin/powerpc-eabi-readelf" --require-source ManagedGameCube/Program.cs
       - name: Link managed AESND sample to a real GameCube DOL
         run: |
           dotnet build samples/AudioDemo/AudioDemo.csproj -c Release -p:DndBuildNative=false

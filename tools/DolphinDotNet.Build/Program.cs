@@ -65,10 +65,13 @@ internal static class Driver
                 runConfig = Required("run-config");
                 if (Path.GetExtension(dol) != ".dol" || Path.GetExtension(elf) != ".elf")
                     throw new ArgumentException("Native outputs must use .dol and .elf extensions.");
-                foreach (var path in new[] { assembly, compiler, dol, elf, runConfig, Path.ChangeExtension(elf, ".dnd-debug.json"), AppContext.BaseDirectory })
+                foreach (var path in new[] { assembly, compiler, dol, elf, runConfig,
+                    Path.ChangeExtension(elf, ".dnd-debug.json"), Path.ChangeExtension(elf, ".dnd-addresses.json"),
+                    AppContext.BaseDirectory })
                     if (Within(native, path)) throw new ArgumentException("The native work directory must not contain inputs, tools or published outputs.");
                 // Never allow a failed native rebuild to leave an old runnable artifact.
-                foreach (var path in new[] { dol, elf, runConfig, Path.ChangeExtension(elf, ".dnd-debug.json") })
+                foreach (var path in new[] { dol, elf, runConfig,
+                    Path.ChangeExtension(elf, ".dnd-debug.json"), Path.ChangeExtension(elf, ".dnd-addresses.json") })
                     try { File.Delete(path); } catch (DirectoryNotFoundException) { }
                 if (!File.Exists(assembly) || !File.Exists(compiler))
                     throw new FileNotFoundException("Managed assembly or compiler missing. Build through the sample project/solution.");
@@ -164,8 +167,11 @@ internal static class Driver
             if (!File.Exists(Path.Combine(native!, "Game.dol")) || !File.Exists(Path.Combine(native!, "Game.elf")))
                 throw new FileNotFoundException("Native build did not produce both Game.dol and Game.elf.");
             var bundleDebugMap = Path.Combine(native!, "dnd-il-debug.json");
+            var bundleAddresses = Path.Combine(native!, "Game.dnd-addresses.json");
             if (gdbTcp && !File.Exists(bundleDebugMap))
                 throw new FileNotFoundException("Debug native build did not produce source mapping metadata.", bundleDebugMap);
+            if (gdbTcp && !File.Exists(bundleAddresses))
+                throw new FileNotFoundException("Debug native build did not produce ELF address metadata.", bundleAddresses);
             foreach (var pair in new[] { ("Game.dol", dol!), ("Game.elf", elf!) })
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(pair.Item2)!);
@@ -175,7 +181,10 @@ internal static class Driver
             {
                 var publishedDebugMap = Path.ChangeExtension(elf!, ".dnd-debug.json");
                 File.Copy(bundleDebugMap, publishedDebugMap, true);
-                Console.WriteLine("Managed debug map: " + publishedDebugMap);
+                var publishedAddresses = Path.ChangeExtension(elf!, ".dnd-addresses.json");
+                File.Copy(bundleAddresses, publishedAddresses, true);
+                Console.WriteLine("Managed debug map: " + publishedDebugMap +
+                    "\nPowerPC breakpoint addresses: " + publishedAddresses);
             }
             var user = Path.GetFullPath(Get("user-directory", Path.Combine(Path.GetDirectoryName(native!)!, "dolphin-user")));
             Directory.CreateDirectory(Path.GetDirectoryName(runConfig!)!);
