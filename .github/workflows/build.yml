@@ -28,6 +28,11 @@ jobs:
           dotnet build src/DolphinDotNet.Core/DolphinDotNet.Core.csproj -c Release
           dotnet build src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj -c Release
           dotnet build tools/DolphinDotNet.ApiCompat/DolphinDotNet.ApiCompat.csproj -c Release
+      - name: Validate audio conversion and named loop sidecars
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          dotnet run --project tests/AudioAssetTests/AudioAssetTests.csproj -c Release
       - name: Test and package save-image command-line tool
         run: |
           dotnet run --project tests/SaveImageTests/SaveImageTests.csproj -c Release -- --emit-source /tmp/embedded-icon
