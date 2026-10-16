@@ -25,6 +25,28 @@ if (File.ReadAllText(temp) != generated)
 var helloHost = Path.Combine(tempDirectory, "hello-host");
 Run("cc", $"-pthread -std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" \"{temp}\" \"{Path.Combine(root, "tests/hello_gamecube_host.c")}\" \"{Path.Combine(root, "source/managed_runtime.c")}\" \"{Path.Combine(root, "source/async_runtime.c")}\" -o \"{helloHost}\"");
 Run(helloHost, "");
+// Both bundle modes must compile from the same managed assembly. GDB is
+// strictly opt-in; a normal DOL must not link libdb or install a trap.
+var normalBundle = Path.Combine(tempDirectory, "normal-bundle");
+Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{normalBundle}\"");
+var normalMake = File.ReadAllText(Path.Combine(normalBundle, "Makefile"));
+if (normalMake.Contains("-ldb ", StringComparison.Ordinal) ||
+    normalMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
+    File.Exists(Path.Combine(normalBundle, "source/debug_gamecube.c")))
+    throw new Exception("Normal bundle unexpectedly enables the GDB debugger.");
+
+var gdbBundle = Path.Combine(tempDirectory, "gdb-bundle");
+Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{gdbBundle}\" --gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1 --gdb-port 2828");
+var debugMake = File.ReadAllText(Path.Combine(gdbBundle, "Makefile"));
+var debugC = File.ReadAllText(Path.Combine(gdbBundle, "source/debug_gamecube.c"));
+if (!debugMake.Contains("-ldb ", StringComparison.Ordinal) ||
+    !debugMake.Contains("-Og -g3 -gdwarf-4", StringComparison.Ordinal) ||
+    !debugMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
+    !debugMake.Contains("DND_NO_AUTONETWORK", StringComparison.Ordinal) ||
+    !debugC.Contains("DEBUG_Init(GDBSTUB_DEVICE_TCP, 2828)", StringComparison.Ordinal) ||
+    !debugC.Contains("tcp_localip = \"192.0.2.10\"", StringComparison.Ordinal) ||
+    !debugC.Contains("_break()", StringComparison.Ordinal))
+    throw new Exception("GDB bundle is missing native debug settings or startup rendezvous.");
 Directory.Delete(tempDirectory, recursive: true);
 
 var genericProject = Path.Combine(root, "tests/GenericSharingSmoke/GenericSharingSmoke.csproj");

@@ -12,6 +12,8 @@
     <DndBuildNative Condition="'$(DndBuildNative)' == ''">true</DndBuildNative>
     <DndBuildBackend Condition="'$(DndBuildBackend)' == ''">Auto</DndBuildBackend>
     <DndBuildJobs Condition="'$(DndBuildJobs)' == ''">2</DndBuildJobs>
+    <DndGdbTransport Condition="'$(DndGdbTransport)' == ''">Off</DndGdbTransport>
+    <DndGdbPort Condition="'$(DndGdbPort)' == ''">2828</DndGdbPort>
   </PropertyGroup>
   <Import Project="$(MSBuildProjectDirectory)/DolphinDotNet.local.props" Condition="Exists('$(MSBuildProjectDirectory)/DolphinDotNet.local.props')" />
 </Project>

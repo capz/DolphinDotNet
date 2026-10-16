@@ -2,6 +2,27 @@ using System.Text;
 
 namespace DolphinDotNet.Compiler;
 
+// TCP debugging uses libogc2's separate uIP/BBA stack. Keep addresses on the
+// host build configuration rather than silently embedding a LAN-specific IP.
+internal sealed record GdbTcpOptions(string Ip, string Netmask, string Gateway, int Port)
+{
+    internal static GdbTcpOptions Parse(string ip, string netmask, string gateway, string port)
+    {
+        static string Address(string value, string name)
+        {
+            if (!System.Net.IPAddress.TryParse(value, out var address) ||
+                address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork ||
+                value != address.ToString())
+                throw new ArgumentException(name + " must be a dotted-decimal IPv4 address.");
+            return address.ToString();
+        }
+        if (!int.TryParse(port, out int parsedPort) || parsedPort is < 1 or > 65535)
+            throw new ArgumentException("GDB TCP port must be between 1 and 65535.");
+        return new GdbTcpOptions(Address(ip, "GDB IP"), Address(netmask, "GDB netmask"),
+            Address(gateway, "GDB gateway"), parsedPort);
+    }
+}
+
 /// <summary>
 /// Produces a relocatable native build directory using the reachable AOT
 /// method graph. Native libraries are conservative until the monolithic
@@ -21,8 +42,10 @@ internal static class GameCubeBundle
         ("unsupported-sound", new[] {"System.Media.", "Dolphin.Sound."}, Array.Empty<string>())
     };
 
-    internal static void Emit(string assembly, string directory, AotCompilation compilation, string platform)
+    internal static void Emit(string assembly, string directory, AotCompilation compilation, string platform, GdbTcpOptions? gdbTcp = null)
     {
+        if (gdbTcp is not null && platform != "gamecube")
+            throw new NotSupportedException("The libogc2 GDB TCP stub is supported only for GameCube builds.");
         var root = FindRoot();
         var reachable = compilation.ValueMethods.Select(x => x.Key.TypeName)
             .Distinct(StringComparer.Ordinal).ToArray();
@@ -88,6 +111,20 @@ internal static class GameCubeBundle
         var entry = compilation.ValueMethods.Single(m => m.Key == compilation.Entry);
         File.WriteAllText(Path.Combine(directory, "source", "generated_program.c"),
             ValueCBackend.EmitProgram(compilation.ValueMethods, entry.Key, compilation.Model, compilation.Graph));
+        if (gdbTcp is not null)
+        {
+            // Never interpolate unvalidated addresses into generated C. Parse() accepts
+            // only canonical dotted-decimal IPv4 and a numeric 16-bit TCP port.
+            File.WriteAllText(Path.Combine(directory, "source", "debug_gamecube.c"),
+                "#include <debug.h>\n" +
+                $"const char *tcp_localip = \"{gdbTcp.Ip}\";\n" +
+                $"const char *tcp_netmask = \"{gdbTcp.Netmask}\";\n" +
+                $"const char *tcp_gateway = \"{gdbTcp.Gateway}\";\n" +
+                "void dnd_gdb_init(void) {\n" +
+                $"    DEBUG_Init(GDBSTUB_DEVICE_TCP, {gdbTcp.Port});\n" +
+                "    _break(); /* Wait at a deterministic startup rendezvous. */\n" +
+                "}\n");
+        }
 
         var sources = new[] {
             "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "fst",
@@ -116,11 +153,14 @@ internal static class GameCubeBundle
             File.Copy(Path.Combine(root, "source", name + ".c"),
                 Path.Combine(directory, "source", name + ".c"), true);
 
-        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking")));
+        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null));
         var report = new StringBuilder();
         report.AppendLine("DolphinDotNet AOT Native Dependencies");
         report.AppendLine("Target: " + platform);
         report.AppendLine("Assembly: " + Path.GetFileName(assembly));
+        report.AppendLine("GDB TCP stub: " + (gdbTcp is null ? "disabled" : $"enabled on {gdbTcp.Ip}:{gdbTcp.Port}"));
+        if (gdbTcp is not null)
+            report.AppendLine("Normal automatic BBA initialization is disabled; the GDB stub owns a separate polling network stack. Concurrent application networking is not validated.");
         report.AppendLine("Allowed managed API platforms: " + string.Join(", ", supportedApiPlatforms));
         report.AppendLine("Managed API compatibility does not imply native binary/library compatibility.");
         report.AppendLine("Detection: declaring types of reachable AOT methods; unused using directives are ignored.");
@@ -155,13 +195,13 @@ internal static class GameCubeBundle
         throw new DirectoryNotFoundException("The DolphinDotNet repository's native sources are required to emit a self-contained build directory.");
     }
 
-    private static string Makefile(string platform, bool usesNetworking)
+    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp)
     {
         var isWiiU = platform == "wiiu";
         var rules = isWiiU ? "$(DEVKITPRO)/wut/share/wut_rules"
             : "$(DEVKITPRO)/libogc2/" + (platform == "wii" ? "wii_rules" : "gamecube_rules");
         var suffix = isWiiU ? "rpx" : "dol";
-        var libs = isWiiU ? "-lwut -lm" : "-lfat -ldvm -liso9660 -lbba -laesnd -logc -lm";
+        var libs = isWiiU ? "-lwut -lm" : (gdbTcp ? "-ldb " : "") + "-lfat -ldvm -liso9660 -lbba -laesnd -logc -lm";
         var library = isWiiU ? "$(DEVKITPRO)/wut"
             : "$(DEVKITPRO)/libogc2/" + (platform == "wii" ? "wii" : "gamecube");
         var builder = new StringBuilder();
@@ -178,11 +218,13 @@ internal static class GameCubeBundle
         builder.AppendLine("INCLUDES := include");
         builder.AppendLine("LIBDIRS := " + library);
         builder.AppendLine("LIBS := " + libs);
-        builder.AppendLine("CFLAGS := -O2 -g -Wall -Wextra $(MACHDEP) $(INCLUDE)" +
+        var symbols = gdbTcp ? "-Og -g3 -gdwarf-4 -fno-inline -fno-omit-frame-pointer" : "-O2 -g";
+        builder.AppendLine("CFLAGS := " + symbols + " -Wall -Wextra $(MACHDEP) $(INCLUDE)" +
             (isWiiU ? " -D__WIIU__ -D__WUT__" :
+                gdbTcp ? " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK -DDND_GDB_ENABLED" :
                 usesNetworking ? " -DDND_GAMECUBE_STORAGE" :
                 " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK"));
-        builder.AppendLine("LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map");
+        builder.AppendLine("LDFLAGS := " + (gdbTcp ? "-g3 -gdwarf-4" : "-g") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
         builder.AppendLine("ifneq ($(BUILD),$(notdir $(CURDIR)))");
         builder.AppendLine(".DEFAULT_GOAL := all");
         builder.AppendLine("export OUTPUT := $(CURDIR)/$(TARGET)");

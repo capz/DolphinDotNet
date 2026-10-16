@@ -24,6 +24,7 @@ internal static class Driver
                     "  doctor [--backend Auto|Native|Docker] [--dolphin PATH] [--build-only true]\n" +
                     "  build --assembly DLL --compiler DLL --native-directory DIR --dol DOL --elf ELF --run-config JSON\n" +
                     "        [--backend Auto|Native|Docker] [--dolphin PATH] [--user-directory DIR] [--jobs N]\n" +
+                     "        [--gdb-transport Off|Tcp] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
                     "  run --config JSON [--dolphin PATH]");
                 return 0;
             }
@@ -54,7 +55,8 @@ internal static class Driver
             }
             if (args[0] is not ("build" or "doctor")) throw new ArgumentException("Unknown command: " + args[0]);
             Allow(options, args[0] == "doctor" ? ["backend", "dolphin", "build-only"] :
-                ["assembly", "compiler", "native-directory", "dol", "elf", "run-config", "backend", "dolphin", "user-directory", "jobs"]);
+                ["assembly", "compiler", "native-directory", "dol", "elf", "run-config", "backend", "dolphin", "user-directory", "jobs",
+                  "gdb-transport", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
             string? native = null, dol = null, elf = null, runConfig = null, assembly = null, compiler = null;
             if (args[0] == "build")
             {
@@ -71,6 +73,14 @@ internal static class Driver
                 if (!File.Exists(assembly) || !File.Exists(compiler))
                     throw new FileNotFoundException("Managed assembly or compiler missing. Build through the sample project/solution.");
             }
+            string gdbTransport = Get("gdb-transport", "Off");
+            bool gdbTcp = gdbTransport.Equals("Tcp", StringComparison.OrdinalIgnoreCase);
+            if (!gdbTcp && !gdbTransport.Equals("Off", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("--gdb-transport must be Off or Tcp.");
+            if (gdbTcp && new[] { "gdb-ip", "gdb-netmask", "gdb-gateway" }.Any(key => string.IsNullOrEmpty(Get(key))))
+                throw new ArgumentException("TCP debugging requires --gdb-ip, --gdb-netmask and --gdb-gateway.");
+            if (!gdbTcp && new[] { "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port" }.Any(options.ContainsKey))
+                throw new ArgumentException("GDB TCP settings require --gdb-transport Tcp.");
             string backend = Get("backend", "Auto");
             if (backend.Equals("Auto", StringComparison.OrdinalIgnoreCase))
                 backend = !OperatingSystem.IsWindows() && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DEVKITPRO")) ? "Native" : "Docker";
@@ -121,7 +131,11 @@ internal static class Driver
             Directory.CreateDirectory(native!);
             File.WriteAllText(marker, "DolphinDotNet generated build directory\n");
             var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
-            int result = await Run(dotnet, [compiler!, "--bundle", assembly!, native!], Directory.GetCurrentDirectory());
+            var compilerArgs = new List<string> { compiler!, "--bundle", assembly!, native! };
+            if (gdbTcp)
+                compilerArgs.AddRange(["--gdb-tcp", Get("gdb-ip"), "--gdb-netmask", Get("gdb-netmask"),
+                    "--gdb-gateway", Get("gdb-gateway"), "--gdb-port", Get("gdb-port", "2828")]);
+            int result = await Run(dotnet, compilerArgs, Directory.GetCurrentDirectory());
             if (result != 0) return result;
             if (backend.Equals("Native", StringComparison.OrdinalIgnoreCase))
                 result = await Run("make", ["-j" + jobs], native!);
