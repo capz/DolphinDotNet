@@ -1259,7 +1259,7 @@ These constants correspond to the IDs and enum values in [GXConstants.Generated.
 ### Build a GameCube sample
 
 ~~~sh
-dotnet build samples/Snake/Snake.csproj -c Release
+dotnet build samples/Snake/Snake.csproj -c Release -p:DndBuildNative=false
 dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Snake/bin/Release/net8.0/Snake.dll out/Snake --platform gamecube
 make -C out/Snake
 ~~~

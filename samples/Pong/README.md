@@ -25,10 +25,26 @@ Press **A** after a player reaches seven to reset and serve a new match.
 
 ## Compile and run
 
+Open **[Pong.sln](Pong.sln)** in Visual Studio or Rider. Select the **Dolphin**
+launch profile in Visual Studio and use **Ctrl+F5**, or **Pong in Dolphin → Run**
+in Rider. Build produces `bin/Debug/net8.0/Pong.dol` and `.elf`, and Run launches
+Dolphin. See the [IDE setup guide](../../docs/ide-workflow.md) for the one-time
+toolchain/Dolphin setup, local settings and controller configuration.
+
+```sh
+dotnet build samples/Pong/Pong.sln
+dotnet run --project samples/Pong
+```
+
+Every build regenerates and fully rebuilds the native output. No native incremental
+cache is used. IntelliSense/design-time builds skip the native pipeline.
+
+### Manual bundle generation
+
 From repository root, with .NET 8, devkitPPC and libogc2:
 
 ```sh
-dotnet build samples/Pong/Pong.csproj -c Release
+dotnet build samples/Pong/Pong.csproj -c Release -p:DndBuildNative=false
 dotnet run --project tools/DolphinDotNet.Compiler -- \
   --bundle samples/Pong/bin/Release/net8.0/Pong.dll out/Pong --platform gamecube
 make -C out/Pong

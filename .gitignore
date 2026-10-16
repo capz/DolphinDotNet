@@ -6,6 +6,11 @@ out/
 
 **/bin/
 **/obj/
+**/DolphinDotNet.local.props
+**/*.csproj.user
+**/*.suo
+**/.vs/
+**/.idea/
 tests/managed_runtime_tests
 
 tests/aram_test
