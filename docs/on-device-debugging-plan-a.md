@@ -1,7 +1,10 @@
 # Plan A: on-device GameCube native GDB debugging
 
-Status: **increments A1, A2a–A2c and A3 (ELF/DWARF breakpoint-address extraction) implemented**.
-Hardware USB Gecko stub linkage now added; RSP host serial transport, IDE adapters and physical attach are **not yet implemented**.
+Status: **A1–A4.3 implemented and emulator CI validated** (run 38910696313).
+A4.5 source stepping is in progress. A4.4 physical USB Gecko/BBA validation is
+**deferred: the user currently has no access to hardware**. Continue emulator,
+DAP and Rider milestones without requiring hardware validation first. Physical
+attachment remains unverified; host TCP/serial transports are implemented.
 
 ## Repository and dependency audit (2026-10-16)
 
@@ -178,7 +181,7 @@ GDB framing, detach and reconnect **require hardware testing**.
    Specify UART/FTDI settings from hardware tests rather than assuming baud.
 3. **A4.3:** emulator RSP breakpoint/step/continue tests; regression checks on
    PC and breakpoint lifetimes, including target capability differences.
-4. **A4.4 (hardware gate):** USB Gecko slot A/B, BBA TCP attach, break/step,
+4. **A4.4 (deferred: no hardware available):** USB Gecko slot A/B, BBA TCP attach, break/step,
    disconnect/reconnect, network coexistence, serial-port drivers and permissions.
 5. **A4.5:** native C# source-aware stepping, managed method frame mapping,
    helper-frame filtering, optimized/hidden sequence-point handling.
@@ -232,6 +235,33 @@ advance one native instruction, then interrupt a pending Continue and read the
 stopped PC (falling back to big-endian PowerPC register 0x40 if necessary).
 The harness owns emulator termination; the probe leaves the guest stopped.
 
-This increment requires a passing real-Dolphin CI run before A4.3 is marked
-validated. Native instruction stepping is not yet C# statement stepping.
+A4.3 passed real-Dolphin CI in run 38910696313. Native instruction stepping
+was verified separately from the A4.5 source-step increment below.
 Hardware, DAP, Rider integration and variable inspection remain separate gates.
+
+
+## A4.5 first increment: bounded source Step Into
+
+`SourceAddressMap.FindExact` maps a stopped PC only at verified DWARF addresses,
+preserves original document case, and joins method symbols to the matching
+managed metadata for display names. It retains all locations for ambiguous PCs;
+it never invents a source line for an unmapped native instruction.
+
+`SourceStepper.StepIntoAsync` advances native instructions until reaching another
+mapped C# line or method. Multiple native addresses on the same line are skipped,
+as are unmapped native helpers. A finite instruction budget, cancellation, target
+exit, unexpected signals and ambiguous mappings all have explicit outcomes. The
+caller must serialize session operations and remove breakpoints before stepping.
+This initial engine does not arbitrate existing user breakpoints or reconstruct
+managed recursion depth, async continuations, inline frames or multiple statements
+on one line. Long native calls may exhaust the budget while still stopped in
+native code. Retrying a bounded step is allowed; no unbounded execution is hidden.
+
+The Dolphin .NET acceptance probe now requires a mapped source-step result and
+prints method/file/line/PC plus the number of native instructions. Fake-target
+regressions cover same-line addresses, native helpers, managed calls, fallback
+register reads, ambiguous source locations, budget limits, crashes, exits and
+cancellation. Real-Dolphin CI remains required for this new increment.
+
+Next: managed stack unwinding and reliable call-depth tracking for Step Over/Out,
+then DAP and Rider integration. **A4.4 remains deferred until hardware is available.**

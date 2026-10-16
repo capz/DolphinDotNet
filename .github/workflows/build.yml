@@ -736,7 +736,7 @@ jobs:
         run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_control.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2159 --elf dist/footprint/dolphin_control.elf --expect-symbol main --logs dolphin-control --require-boot
       - name: Verify two consecutive C# source breakpoints in Dolphin
         id: cs_breakpoints
-        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 35 --cpu-core 1 --gdb-port 2165 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:8 --expect-source ManagedGameCube/Program.cs:9 --logs dolphin-csharp-breakpoints --require-boot --dotnet-probe tools/DolphinDotNet.Debugger.Probe/bin/Release/net8.0/DolphinDotNet.Debugger.Probe.dll
+        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2165 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:8 --expect-source ManagedGameCube/Program.cs:9 --logs dolphin-csharp-breakpoints --require-boot --dotnet-probe tools/DolphinDotNet.Debugger.Probe/bin/Release/net8.0/DolphinDotNet.Debugger.Probe.dll
       - name: Verify native and managed main() executed in Dolphin
         id: app_boot
         continue-on-error: true

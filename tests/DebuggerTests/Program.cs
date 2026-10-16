@@ -7,6 +7,7 @@ Check(RspStop.Parse("T0540:8000510c;thread:1;").ProgramCounter == 0x8000510c, "T
 Check(RspStop.Parse("S05").ProgramCounter is null, "S stop without PC");
 Check(RspStop.Parse("W00").Exited, "exit event");
 Expect<InvalidDataException>(() => RspStop.Parse("T0540:xyz;"), "invalid stop program counter");
+await TestSourceSteppingAsync();
 await TestSourceBreakpointsAsync();
 await TestTcpProtocolAsync();
 await TestChecksumsAndTimeoutsAsync();
@@ -186,6 +187,84 @@ static async Task TestSourceBreakpointsAsync()
         var running = client.ContinueAsync();
         await client.InterruptAsync();
         Check((await running).Signal == 2, "pause while continue waits");
+        await server.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+    finally { listener.Stop(); Directory.Delete(directory, true); }
+}
+
+static async Task TestSourceSteppingAsync()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "dnd-steps-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    var listener = new TcpListener(IPAddress.Loopback, 0);
+    try
+    {
+        var elf = Path.Combine(directory, "Game.elf");
+        var source = Path.Combine(directory, "source.json");
+        var native = Path.Combine(directory, "addresses.json");
+        File.WriteAllText(elf, "step fixture");
+        File.WriteAllText(source, System.Text.Json.JsonSerializer.Serialize(new {
+            schemaVersion = 2, methods = new[] {
+                new { symbol = "A", declaringType = "Demo.Program", name = "Main" },
+                new { symbol = "B", declaringType = "Demo.Program", name = "Called" }
+            }
+        }));
+        string Hash(string path) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+        File.WriteAllText(native, System.Text.Json.JsonSerializer.Serialize(new {
+            schemaVersion = 1, elfSha256 = Hash(elf), sourceMapSha256 = Hash(source),
+            methods = new[] {
+                new { symbol = "A", assembly = "Demo", methodToken = 1, breakpoints = new[] {
+                    new { document = "/Build/Program.cs", line = 10, addresses = new[] { "0x80001000", "0x80001004" } },
+                    new { document = "/Build/Program.cs", line = 11, addresses = new[] { "0x80001020" } },
+                    new { document = "/Build/Program.cs", line = 12, addresses = new[] { "0x80001020" } }
+                } },
+                new { symbol = "B", assembly = "Demo", methodToken = 2, breakpoints = new[] {
+                    new { document = "/Build/Program.cs", line = 10, addresses = new[] { "0x80001100" } }
+                } }
+            }
+        }));
+        var symbols = SourceAddressMap.Load(elf, source, native);
+        Check(symbols.FindExact(0x80001008).Count == 0, "unmapped helpers never inherit a source line");
+        Check(symbols.FindExact(0x80001020).Count == 2, "ambiguous native address retained");
+        Check(symbols.FindExact(0x80001000).Single().Document == "/Build/Program.cs", "preserve document case for IDE source opening");
+        listener.Start();
+        var server = Task.Run(async () => {
+            using var peer = await listener.AcceptTcpClientAsync();
+            using var stream = peer.GetStream();
+            foreach (var (command, reply) in new[] {
+                ("s", "S05"), ("p40", "80001004"), // same statement, fallback PC
+                ("s", "T0540:80001008;"), // unmapped native helper
+                ("s", "T0540:80001100;"), // called method, even on same C# line
+                ("s", "T0540:80001104;"), // bounded limit leaves target stopped
+                ("s", "T0b40:80001108;"), // crash must not be hidden
+                ("s", "W00"),
+                ("s", "T0540:80001020;"), // ambiguous source mapping
+                ("s", "T0540:80001000;") // unmapped start reaches a visible location
+            }) {
+                Check(await ReadFrameAsync(stream) == command, "source step command");
+                await SendReplyAsync(stream, reply);
+                Check(await ReadByteAsync(stream) == '+', "source step ACK");
+            }
+        });
+        await using var client = await RspClient.ConnectTcpAsync("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
+        var stepper = new SourceStepper(client, symbols);
+        var start = RspStop.Parse("T0540:80001000;");
+        var result = await stepper.StepIntoAsync(start, 4);
+        Check(result.Reason == SourceStepReason.SourceLocation && result.Instructions == 3, "source step skips same line and unmapped helpers");
+        Check(result.Location?.MethodName == "Demo.Program.Called" && result.Location.MethodToken == 2, "called managed method identity");
+        var limited = await stepper.StepIntoAsync(result.Stop, 1);
+        Check(limited.Reason == SourceStepReason.InstructionLimit && limited.Stop.ProgramCounter == 0x80001104, "bounded source step");
+        var crash = await stepper.StepIntoAsync(limited.Stop, 1);
+        Check(crash.Reason == SourceStepReason.Signal && crash.Stop.Signal == 11, "source stepping exposes native crash");
+        Check((await stepper.StepIntoAsync(crash.Stop, 1)).Reason == SourceStepReason.Exited, "target exit");
+        Check((await stepper.StepIntoAsync(start, 1)).Reason == SourceStepReason.AmbiguousSource, "ambiguous destination");
+        Check((await stepper.StepIntoAsync(RspStop.Parse("T0540:80001020;"), 1)).Instructions == 0, "ambiguous origin does not execute");
+        Check((await stepper.StepIntoAsync(RspStop.Parse("T0540:80002000;"), 1)).Location?.MethodName == "Demo.Program.Main", "unmapped origin");
+        Expect<ArgumentOutOfRangeException>(() => stepper.StepIntoAsync(start, 0).GetAwaiter().GetResult(), "invalid step budget");
+        using var canceled = new CancellationTokenSource();
+        canceled.Cancel();
+        try { await stepper.StepIntoAsync(start, 1, canceled.Token); throw new Exception("Expected canceled source step"); }
+        catch (OperationCanceledException) { }
         await server.WaitAsync(TimeSpan.FromSeconds(5));
     }
     finally { listener.Stop(); Directory.Delete(directory, true); }
