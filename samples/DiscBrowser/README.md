@@ -27,10 +27,13 @@ ISO/GCM only, not RVZ/CISO/Wii; the file must fit native 32-bit stdio seeking.
 
 Build:
 
+Open [DiscBrowser.sln](DiscBrowser.sln) in Visual Studio or Rider and use the Dolphin
+launch profile, or build and run from the repository root:
+
 ```sh
-dotnet build samples/DiscBrowser/DiscBrowser.csproj -c Release
-dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/DiscBrowser/bin/Release/net8.0/DiscBrowser.dll out/DiscBrowser --platform gamecube
-make -C out/DiscBrowser
+dotnet run --project samples/DiscBrowser -c Release
 ```
+
+See [IDE setup](../../docs/ide-workflow.md) for prerequisites and local settings.
 
 GC Loader and physical drive behavior require hardware testing.

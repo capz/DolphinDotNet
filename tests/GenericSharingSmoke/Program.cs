@@ -342,8 +342,14 @@ internal static class Program
         return 0;
     }
 
+    private static int ReadConstrained<T>(ref T value) where T : ILifecycle => value.Read();
+
     private static int Main()
     {
+        var firstReader=new ConstrainedReader(17);
+        var secondReader=new OtherConstrainedReader();
+        var valueReader=new ConstrainedValueReader();
+        if(ReadConstrained(ref firstReader)!=17||ReadConstrained(ref secondReader)!=29||ReadConstrained(ref valueReader)!=31)return 980;
         var comparisonContracts = ComparisonContractsProbe(); if(comparisonContracts!=0)return 950+comparisonContracts;
         if(AllocationAndNullProbe()!=0) return 900;
         var holder = new GenericHolder<string>(string.Concat("rooted", " value"));
@@ -614,6 +620,14 @@ internal static class Shared<T>
 internal sealed class PairHolder { public KeyValuePair<string,string> Pair; }
 
 internal interface ILifecycle { int Read(); }
+internal sealed class ConstrainedReader : ILifecycle
+{
+    private int value;
+    public ConstrainedReader(int value) { this.value=value; }
+    public int Read() => value;
+}
+internal sealed class OtherConstrainedReader : ILifecycle { public int Read() => 29; }
+internal struct ConstrainedValueReader : ILifecycle { public int Read() => 31; }
 internal class LifecycleBase
 {
     public static int Created=10;

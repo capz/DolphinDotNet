@@ -356,9 +356,20 @@ internal static class ValueIrImporter
                         }
                         var count=target.ParameterCount+(target.IsStatic?0:1);var args=new IrValue[count];
                         for(var ai=count-1;ai>=0;ai--)args[ai]=Pop(stack,cil);
+                        // A constrained reference receiver is an address of an object
+                        // reference, not a value-type receiver for a direct call.
+                        var referenceConstraint=constraint is not null&&
+                            (resolveGenericTypeParameter(constraint)?.IsReference??
+                             (resolveType(constraint) is {} receiverType&&valueLayout(receiverType).Size==0&&IsReferenceType(receiverType)));
+                        if(referenceConstraint&&!target.IsStatic)
+                        {
+                            var receiver=New(CilStackKind.ObjectReference);
+                            instructions.Add(new ValueIrLoadIndirect(receiver,args[0],4,true));
+                            args[0]=receiver;
+                        }
                         IrValue? result=null;if(target.ReturnsValue){var value=New(ResultKind(analysis,cil));result=value;stack.Add(value);}
                         if(target.DeclaringTypeIsDelegate&&target.Key.Name=="Invoke"){instructions.Add(new ValueIrDelegateInvoke(result,args[0],args.Skip(1).ToArray()));break;}
-                        var interfaceCall=cil.OpCode==0x6f&&target.DeclaringTypeIsInterface; instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual&&constraint is null,interfaceCall&&constraint is null,interfaceCall&&target.Key.TypeName=="System.Collections.Generic.IEnumerable`1"&&target.Key.Name=="GetEnumerator"?arrayEnumerator(cil):null));break;
+                        var interfaceCall=cil.OpCode==0x6f&&target.DeclaringTypeIsInterface; instructions.Add(new ValueIrCall(result,target.Key,args,cil.OpCode==0x6f&&target.IsVirtual&&(constraint is null||referenceConstraint),interfaceCall&&(constraint is null||referenceConstraint),interfaceCall&&target.Key.TypeName=="System.Collections.Generic.IEnumerable`1"&&target.Key.Name=="GetEnumerator"?arrayEnumerator(cil):null));break;
                     }
                     case 0x73:
                     {

@@ -40,6 +40,9 @@ the IDE. On first launch, configure both controller ports in Dolphin's
 **Controllers** dialog. Emulator settings persist in the sample's isolated
 `obj/dolphin-user/` directory.
 
+Every [sample](samples/README.md) includes its own `.sln` and Dolphin launch
+profiles, using the same workflow.
+
 The [IDE setup guide](docs/ide-workflow.md) covers backend selection, local
 settings, troubleshooting and adding the workflow to another project.
 Running in Dolphin supports native execution; C# source debugging and Hot Reload
@@ -98,8 +101,8 @@ internal static class Program
 
 See the [samples](samples/README.md) for two-player Pong, memory-card Snake, rendering, automatic async networking and
 HTTP-to-ARAM streaming. Native platform APIs execute in the compiled console
-program. Pong's SDK integration makes `dotnet run` build and launch that program
-in Dolphin; other samples currently use the manual compilation steps below.
+program. Every sample integrates the shared SDK so `dotnet run` builds the DOL
+and launches it in Dolphin.
 
 ## Manual compilation
 
@@ -111,7 +114,7 @@ native GX, FAT/libdvm and ISO9660. Configure `DEVKITPRO` and `DEVKITPPC` for the
 From the repository root:
 
 ```sh
-dotnet build samples/HelloGameCube/HelloGameCube.csproj -c Release
+dotnet build samples/HelloGameCube/HelloGameCube.csproj -c Release -p:DndBuildNative=false
 dotnet run --project tools/DolphinDotNet.Compiler -- \
   --bundle samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll \
   out/HelloGameCube --platform gamecube

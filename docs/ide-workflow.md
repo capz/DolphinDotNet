@@ -2,6 +2,9 @@
 
 Open **`samples/Pong/Pong.sln`** in Visual Studio 2022 (17.8+) or Rider with
 .NET 8 support. Pong is the startup project and needs no external assets.
+Every other sample has the same layout: open `samples/<sample>/<sample>.sln`
+and select **<sample> in Dolphin** in Rider or the **Dolphin** profile in Visual
+Studio. See the [sample catalog](../samples/README.md) for runtime requirements.
 
 Install the **.NET 8 SDK**, **Dolphin**, and one build backend:
 
@@ -145,5 +148,5 @@ output name. A Rider shared configuration must point at the new `.csproj`.
 
 For compiler/host tests that only need the managed assembly, explicitly set
 `-p:DndBuildNative=false`. Such builds do not create or update a runnable DOL.
-Other samples keep their existing manual build workflow until they adopt these
-imports; this avoids unexpectedly requiring a console toolchain for all tests.
+All samples use these imports. Compiler/host CI paths explicitly disable native
+building; the IDE workflow jobs build every sample solution and native DOL.

@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-dotnet build "$ROOT/samples/HelloGameCube/HelloGameCube.csproj" -c Release
+dotnet build "$ROOT/samples/HelloGameCube/HelloGameCube.csproj" -c Release -p:DndBuildNative=false
 dotnet run --project "$ROOT/tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj" -- \
   --bundle \
   "$ROOT/samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll" \
