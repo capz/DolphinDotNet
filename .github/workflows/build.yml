@@ -465,6 +465,15 @@ jobs:
           python3 /tmp/dnd-standalone/scripts/dol_sections.py /tmp/dnd-standalone/Game.dol
       - name: Test native source-to-ELF address resolver
         run: python3 -m unittest discover -s tests -p debug_address_map_test.py -v
+      - name: Build C# source-symbols-only Dolphin Emulator DOL
+        run: |
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-emulator-debug --debug-symbols
+          make -C /tmp/dnd-emulator-debug
+          test -s /tmp/dnd-emulator-debug/Game.dnd-addresses.json
+          ! grep -q '\-ldb' /tmp/dnd-emulator-debug/Makefile
+          test ! -f /tmp/dnd-emulator-debug/source/debug_gamecube.c
+          mkdir -p footprint/debug-symbols
+          cp /tmp/dnd-emulator-debug/Game.dol /tmp/dnd-emulator-debug/Game.elf /tmp/dnd-emulator-debug/dnd-il-debug.json /tmp/dnd-emulator-debug/Game.dnd-addresses.json footprint/debug-symbols/
       - name: Link opt-in GDB TCP GameCube bundle
         run: |
           test -f "$DEVKITPRO/libogc2/gamecube/lib/libdb.a"
@@ -668,6 +677,9 @@ jobs:
         id: control_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_control.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2159 --elf dist/footprint/dolphin_control.elf --expect-symbol main --logs dolphin-control --require-boot
+      - name: Verify two consecutive C# source breakpoints in Dolphin
+        id: cs_breakpoints
+        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 35 --cpu-core 1 --gdb-port 2165 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:8 --expect-source ManagedGameCube/Program.cs:9 --logs dolphin-csharp-breakpoints --require-boot
       - name: Verify native and managed main() executed in Dolphin
         id: app_boot
         continue-on-error: true
@@ -689,6 +701,7 @@ jobs:
           test "${{ steps.minimal_boot.outcome }}" = success
           test "${{ steps.control_boot.outcome }}" = success
           test "${{ steps.app_boot.outcome }}" = success
+          test "${{ steps.cs_breakpoints.outcome }}" = success
           test "${{ steps.async_boot.outcome }}" = success
           test "${{ steps.timing_boot.outcome }}" = success
           test "${{ steps.pong_boot.outcome }}" = success
@@ -702,6 +715,7 @@ jobs:
             dolphin-minimal/
             dolphin-control/
             dolphin-smoke/
+            dolphin-csharp-breakpoints/
             dolphin-async/
             dolphin-timing/
             dolphin-pong/

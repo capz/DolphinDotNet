@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import threading
-from dolphin_gdb_probe import probe, probe_memory, resolve_symbols, resolve_memory_expectations
+from dolphin_gdb_probe import probe, probe_memory, probe_source, resolve_source, resolve_symbols, resolve_memory_expectations
 import sys
 
 FATAL = [
@@ -41,6 +41,9 @@ def main() -> int:
                         help="Capture guest PC/LR through Dolphin GDB stub")
     parser.add_argument("--elf", type=Path, help="Matching symbol-bearing ELF")
     parser.add_argument("--expect-symbol", action="append", default=[], help="Required guest function symbol")
+    parser.add_argument("--source-map", type=Path, help="Matching Portable PDB source map")
+    parser.add_argument("--address-map", type=Path, help="PowerPC address map")
+    parser.add_argument("--expect-source", action="append", default=[], help="C# FILE:LINE in stop order")
     parser.add_argument("--expect-word", action="append", default=[], help="Require guest RAM SYMBOL=0xVALUE")
     parser.add_argument("--expect-text", action="append", default=[], help="Require text in guest RAM SYMBOL=TEXT")
     parser.add_argument("--memory-after-symbol", help="Read guest RAM at this completion breakpoint")
@@ -49,14 +52,19 @@ def main() -> int:
     args = parser.parse_args()
     if not args.dol.is_file() or args.dol.stat().st_size < 256:
         parser.error("missing or truncated DOL")
-    requires_gdb = bool(args.expect_symbol or args.expect_word or args.expect_text)
+    requires_gdb = bool(args.expect_symbol or args.expect_word or args.expect_text or args.expect_source)
     if requires_gdb and (not args.gdb_port or not args.elf):
         parser.error("Guest entry checks require --gdb-port and --elf")
+    if args.expect_source and (args.expect_symbol or args.expect_word or args.expect_text):
+        parser.error("Use either C# breakpoints, ELF symbols, or memory checks")
+    if args.expect_source and (not args.source_map or not args.address_map):
+        parser.error("--expect-source requires --source-map and --address-map")
     if args.expect_symbol and (args.expect_word or args.expect_text):
         parser.error("Choose ELF breakpoints or guest-memory checks, not both")
     if args.memory_after_symbol and not (args.expect_word or args.expect_text):
         parser.error("--memory-after-symbol requires a guest-memory expectation")
     expected = resolve_symbols(args.elf, args.expect_symbol) if args.expect_symbol else []
+    source_points = resolve_source(args.elf, args.source_map, args.address_map, args.expect_source) if args.expect_source else []
     memory_expected = resolve_memory_expectations(args.elf, args.expect_word, args.expect_text) if (args.expect_word or args.expect_text) else []
     completion = resolve_symbols(args.elf, [args.memory_after_symbol])[0] if args.memory_after_symbol else None
     args.logs.mkdir(parents=True, exist_ok=True)
@@ -92,6 +100,8 @@ def main() -> int:
         def capture_guest_state():
             guest_state.append(probe_memory(args.gdb_port, memory_expected, seconds=max(2, args.seconds - 2), stop_symbol=completion)
                                if memory_expected else
+                               probe_source(args.gdb_port, source_points, seconds=max(2, args.seconds - 2))
+                               if source_points else
                                probe(args.gdb_port, expected, seconds=max(2, args.seconds - 2)))
         diagnostic = threading.Thread(target=capture_guest_state, daemon=True)
         diagnostic.start()

@@ -24,7 +24,7 @@ internal static class Driver
                     "  doctor [--backend Auto|Native|Docker] [--dolphin PATH] [--build-only true]\n" +
                     "  build --assembly DLL --compiler DLL --native-directory DIR --dol DOL --elf ELF --run-config JSON\n" +
                     "        [--backend Auto|Native|Docker] [--dolphin PATH] [--user-directory DIR] [--jobs N]\n" +
-                     "        [--gdb-transport Off|Tcp] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
+                     "        [--debug-symbols true|false] [--gdb-transport Off|Tcp] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
                     "  run --config JSON [--dolphin PATH]");
                 return 0;
             }
@@ -56,7 +56,7 @@ internal static class Driver
             if (args[0] is not ("build" or "doctor")) throw new ArgumentException("Unknown command: " + args[0]);
             Allow(options, args[0] == "doctor" ? ["backend", "dolphin", "build-only"] :
                 ["assembly", "compiler", "native-directory", "dol", "elf", "run-config", "backend", "dolphin", "user-directory", "jobs",
-                  "gdb-transport", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
+                  "debug-symbols", "gdb-transport", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
             string? native = null, dol = null, elf = null, runConfig = null, assembly = null, compiler = null;
             if (args[0] == "build")
             {
@@ -84,6 +84,9 @@ internal static class Driver
                 throw new ArgumentException("TCP debugging requires --gdb-ip, --gdb-netmask and --gdb-gateway.");
             if (!gdbTcp && new[] { "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port" }.Any(options.ContainsKey))
                 throw new ArgumentException("GDB TCP settings require --gdb-transport Tcp.");
+            if (!bool.TryParse(Get("debug-symbols", "false"), out bool debugSymbols))
+                throw new ArgumentException("--debug-symbols must be true or false.");
+            debugSymbols |= gdbTcp;
             string backend = Get("backend", "Auto");
             if (backend.Equals("Auto", StringComparison.OrdinalIgnoreCase))
                 backend = !OperatingSystem.IsWindows() && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DEVKITPRO")) ? "Native" : "Docker";
@@ -135,6 +138,7 @@ internal static class Driver
             File.WriteAllText(marker, "DolphinDotNet generated build directory\n");
             var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
             var compilerArgs = new List<string> { compiler!, "--bundle", assembly!, native! };
+            if (debugSymbols) compilerArgs.Add("--debug-symbols");
             if (gdbTcp)
                 compilerArgs.AddRange(["--gdb-tcp", Get("gdb-ip"), "--gdb-netmask", Get("gdb-netmask"),
                     "--gdb-gateway", Get("gdb-gateway"), "--gdb-port", Get("gdb-port", "2828")]);
@@ -168,16 +172,16 @@ internal static class Driver
                 throw new FileNotFoundException("Native build did not produce both Game.dol and Game.elf.");
             var bundleDebugMap = Path.Combine(native!, "dnd-il-debug.json");
             var bundleAddresses = Path.Combine(native!, "Game.dnd-addresses.json");
-            if (gdbTcp && !File.Exists(bundleDebugMap))
+            if (debugSymbols && !File.Exists(bundleDebugMap))
                 throw new FileNotFoundException("Debug native build did not produce source mapping metadata.", bundleDebugMap);
-            if (gdbTcp && !File.Exists(bundleAddresses))
+            if (debugSymbols && !File.Exists(bundleAddresses))
                 throw new FileNotFoundException("Debug native build did not produce ELF address metadata.", bundleAddresses);
             foreach (var pair in new[] { ("Game.dol", dol!), ("Game.elf", elf!) })
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(pair.Item2)!);
                 File.Copy(Path.Combine(native!, pair.Item1), pair.Item2, true);
             }
-            if (gdbTcp)
+            if (debugSymbols)
             {
                 var publishedDebugMap = Path.ChangeExtension(elf!, ".dnd-debug.json");
                 File.Copy(bundleDebugMap, publishedDebugMap, true);

@@ -43,10 +43,13 @@ internal static class GameCubeBundle
         ("unsupported-sound", new[] {"System.Media.", "Dolphin.Sound."}, Array.Empty<string>())
     };
 
-    internal static void Emit(string assembly, string directory, AotCompilation compilation, string platform, GdbTcpOptions? gdbTcp = null)
+    internal static void Emit(string assembly, string directory, AotCompilation compilation, string platform, GdbTcpOptions? gdbTcp = null, bool debugSymbols = false)
     {
         if (gdbTcp is not null && platform != "gamecube")
             throw new NotSupportedException("The libogc2 GDB TCP stub is supported only for GameCube builds.");
+        debugSymbols |= gdbTcp is not null;
+        if (debugSymbols && platform != "gamecube")
+            throw new NotSupportedException("Native C# source mapping requires the GameCube target.");
         var root = FindRoot();
         var reachable = compilation.ValueMethods.Select(x => x.Key.TypeName)
             .Distinct(StringComparer.Ordinal).ToArray();
@@ -110,25 +113,14 @@ internal static class GameCubeBundle
         }
 
         var entry = compilation.ValueMethods.Single(m => m.Key == compilation.Entry);
-        var sourceMap = gdbTcp is null ? null : PortablePdbSourceMap.Load(compilation);
+        var sourceMap = debugSymbols ? PortablePdbSourceMap.Load(compilation) : null;
         File.WriteAllText(Path.Combine(directory, "source", "generated_program.c"),
             ValueCBackend.EmitProgram(compilation.ValueMethods, entry.Key, compilation.Model,
                 compilation.Graph, sourceMap?.Methods));
-        if (gdbTcp is not null)
+        if (debugSymbols)
         {
             File.Copy(Path.Combine(root, "scripts", "dnd_debug_addresses.py"),
                 Path.Combine(directory, "scripts", "dnd_debug_addresses.py"), true);
-            // Never interpolate unvalidated addresses into generated C. Parse() accepts
-            // only canonical dotted-decimal IPv4 and a numeric 16-bit TCP port.
-            File.WriteAllText(Path.Combine(directory, "source", "debug_gamecube.c"),
-                "#include <debug.h>\n" +
-                $"const char *tcp_localip = \"{gdbTcp.Ip}\";\n" +
-                $"const char *tcp_netmask = \"{gdbTcp.Netmask}\";\n" +
-                $"const char *tcp_gateway = \"{gdbTcp.Gateway}\";\n" +
-                "void dnd_gdb_init(void) {\n" +
-                $"    DEBUG_Init(GDBSTUB_DEVICE_TCP, {gdbTcp.Port});\n" +
-                "    _break(); /* Wait at a deterministic startup rendezvous. */\n" +
-                "}\n");
             // Portable PDB identity must match the exact assemblies being AOT compiled.
             // Source points are host-only; an ELF/native address map comes next.
             var methods = compilation.ValueMethods
@@ -171,6 +163,20 @@ internal static class GameCubeBundle
                     new JsonSerializerOptions { WriteIndented = true }));
         }
 
+        if (gdbTcp is not null)
+        {
+            // A debug-symbols-only emulator build must not link libdb or trap at startup.
+            File.WriteAllText(Path.Combine(directory, "source", "debug_gamecube.c"),
+                "#include <debug.h>\n" +
+                $"const char *tcp_localip = \"{gdbTcp.Ip}\";\n" +
+                $"const char *tcp_netmask = \"{gdbTcp.Netmask}\";\n" +
+                $"const char *tcp_gateway = \"{gdbTcp.Gateway}\";\n" +
+                "void dnd_gdb_init(void) {\n" +
+                $"    DEBUG_Init(GDBSTUB_DEVICE_TCP, {gdbTcp.Port});\n" +
+                "    _break(); /* Wait at a deterministic startup rendezvous. */\n" +
+                "}\n");
+        }
+
         var sources = new[] {
             "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "fst",
             "fst_gamecube", "iso_file", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
@@ -198,11 +204,12 @@ internal static class GameCubeBundle
             File.Copy(Path.Combine(root, "source", name + ".c"),
                 Path.Combine(directory, "source", name + ".c"), true);
 
-        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null));
+        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null, debugSymbols));
         var report = new StringBuilder();
         report.AppendLine("DolphinDotNet AOT Native Dependencies");
         report.AppendLine("Target: " + platform);
         report.AppendLine("Assembly: " + Path.GetFileName(assembly));
+        report.AppendLine("Managed source symbols: " + (debugSymbols ? "enabled" : "disabled"));
         report.AppendLine("GDB TCP stub: " + (gdbTcp is null ? "disabled" : $"enabled on {gdbTcp.Ip}:{gdbTcp.Port}"));
         if (gdbTcp is not null)
             report.AppendLine("Normal automatic BBA initialization is disabled; the GDB stub owns a separate polling network stack. Concurrent application networking is not validated.");
@@ -240,7 +247,7 @@ internal static class GameCubeBundle
         throw new DirectoryNotFoundException("The DolphinDotNet repository's native sources are required to emit a self-contained build directory.");
     }
 
-    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp)
+    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool debugSymbols)
     {
         var isWiiU = platform == "wiiu";
         var rules = isWiiU ? "$(DEVKITPRO)/wut/share/wut_rules"
@@ -263,13 +270,13 @@ internal static class GameCubeBundle
         builder.AppendLine("INCLUDES := include");
         builder.AppendLine("LIBDIRS := " + library);
         builder.AppendLine("LIBS := " + libs);
-        var symbols = gdbTcp ? "-Og -g3 -gdwarf-4 -fno-inline -fno-omit-frame-pointer" : "-O2 -g";
+        var symbols = debugSymbols ? "-Og -g3 -gdwarf-4 -fno-inline -fno-omit-frame-pointer" : "-O2 -g";
         builder.AppendLine("CFLAGS := " + symbols + " -Wall -Wextra $(MACHDEP) $(INCLUDE)" +
             (isWiiU ? " -D__WIIU__ -D__WUT__" :
                 gdbTcp ? " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK -DDND_GDB_ENABLED" :
                 usesNetworking ? " -DDND_GAMECUBE_STORAGE" :
                 " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK"));
-        builder.AppendLine("LDFLAGS := " + (gdbTcp ? "-g3 -gdwarf-4" : "-g") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
+        builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
         builder.AppendLine("ifneq ($(BUILD),$(notdir $(CURDIR)))");
         builder.AppendLine(".DEFAULT_GOAL := all");
         builder.AppendLine("export OUTPUT := $(CURDIR)/$(TARGET)");
@@ -307,7 +314,7 @@ internal static class GameCubeBundle
             builder.AppendLine("$(OUTPUT).dol: $(OUTPUT).elf");
             builder.AppendLine("\telf2dol $< $@");
             builder.AppendLine("\tpython3 \"$(DOL_VALIDATOR)\" --pad $@");
-            if (gdbTcp)
+            if (debugSymbols)
                 builder.AppendLine("\tpython3 \"$(dir $(OUTPUT))scripts/dnd_debug_addresses.py\" --elf $(OUTPUT).elf --source-map \"$(dir $(OUTPUT))dnd-il-debug.json\" --output $(OUTPUT).dnd-addresses.json --readelf \"$(DEVKITPPC)/bin/powerpc-eabi-readelf\"");
         }
         builder.AppendLine("$(OUTPUT).elf: $(OFILES)");

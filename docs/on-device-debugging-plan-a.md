@@ -125,3 +125,16 @@ to reject mismatched artifacts. The resolver discards unaligned, zero and
 out-of-function addresses and rejects ambiguous source basenames. Optimized
 source statements may lack an address or share one with another statement.
 This is host-side lookup metadata, **not** a functioning IDE debug adapter.
+
+## A4: emulator C# source-breakpoint probe
+
+Use `-p:DndDebugSymbols=true` (or `dndc --bundle ... --debug-symbols`)
+to emit PDB-based C# file/line addresses without libogc2 `libdb` or an early
+device-side `_break()`. `DndGdbTransport=Tcp` still implicitly requests
+debug symbols when targeting actual GameCube hardware.
+
+CI builds a source-symbols-only DOL and boots it in Dolphin Emulator with the
+emulator's own GDB service. A source breakpoint host probe checks ELF and
+source-map SHA-256 identities, installs native breakpoints for two C# lines,
+and requires stopped PowerPC PCs to match those addresses. This verifies
+source breakpoints but does not yet provide managed stepping, DAP or an IDE.

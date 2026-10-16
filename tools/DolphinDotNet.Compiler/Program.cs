@@ -9,13 +9,18 @@ if (bundleMode)
         var positional = new List<string>();
         string? gdbIp = null, gdbNetmask = null, gdbGateway = null;
         var gdbPort = "2828";
-        bool gdbPortSpecified = false;
+        bool gdbPortSpecified = false, debugSymbols = false;
         for (int i = 1; i < args.Length; i++)
         {
             if (args[i] == "--platform")
             {
                 if (++i >= args.Length) throw new ArgumentException("--platform requires gamecube, wii or wiiu");
                 platform = args[i].ToLowerInvariant();
+            }
+            else if (args[i] == "--debug-symbols")
+            {
+                if (debugSymbols) throw new ArgumentException("Duplicate --debug-symbols.");
+                debugSymbols = true;
             }
             else if (args[i] is "--gdb-tcp" or "--gdb-netmask" or "--gdb-gateway" or "--gdb-port")
             {
@@ -47,7 +52,7 @@ if (bundleMode)
             else positional.Add(args[i]);
         }
         if (positional.Count != 2 || platform is not ("gamecube" or "wii" or "wiiu"))
-            throw new ArgumentException("Usage: dndc --bundle <assembly.dll> <output-directory> [--platform gamecube|wii|wiiu] [--gdb-tcp IPv4 --gdb-netmask IPv4 --gdb-gateway IPv4 [--gdb-port PORT]]");
+            throw new ArgumentException("Usage: dndc --bundle <assembly.dll> <output-directory> [--platform gamecube|wii|wiiu] [--debug-symbols] [--gdb-tcp IPv4 --gdb-netmask IPv4 --gdb-gateway IPv4 [--gdb-port PORT]]");
         if (gdbIp is null && (gdbNetmask is not null || gdbGateway is not null || gdbPortSpecified))
             throw new ArgumentException("GDB TCP settings require --gdb-tcp.");
         if (gdbIp is not null && (gdbNetmask is null || gdbGateway is null))
@@ -56,7 +61,7 @@ if (bundleMode)
         if (gdb is not null && platform != "gamecube")
             throw new ArgumentException("GDB TCP support currently requires --platform gamecube.");
         var compiled = AotCompiler.Compile(positional[0]);
-        GameCubeBundle.Emit(positional[0], positional[1], compiled, platform, gdb);
+        GameCubeBundle.Emit(positional[0], positional[1], compiled, platform, gdb, debugSymbols);
         Console.WriteLine($"Generated {platform} build bundle: {positional[1]}");
         return 0;
     }

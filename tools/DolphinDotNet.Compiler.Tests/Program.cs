@@ -35,6 +35,18 @@ if (normalMake.Contains("-ldb ", StringComparison.Ordinal) ||
     File.Exists(Path.Combine(normalBundle, "source/debug_gamecube.c")))
     throw new Exception("Normal bundle unexpectedly enables the GDB debugger.");
 
+var symbolsBundle = Path.Combine(tempDirectory, "symbols-only");
+Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{symbolsBundle}\" --debug-symbols");
+var symbolsMake = File.ReadAllText(Path.Combine(symbolsBundle, "Makefile"));
+var symbolsC = File.ReadAllText(Path.Combine(symbolsBundle, "source/generated_program.c"));
+if (symbolsMake.Contains("-ldb ", StringComparison.Ordinal) ||
+    symbolsMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
+    File.Exists(Path.Combine(symbolsBundle, "source/debug_gamecube.c")) ||
+    !symbolsMake.Contains("-Og -g3 -gdwarf-4", StringComparison.Ordinal) ||
+    !symbolsC.Contains("#line 8 ", StringComparison.Ordinal) ||
+    !File.Exists(Path.Combine(symbolsBundle, "dnd-il-debug.json")))
+    throw new Exception("Emulator symbols-only build links a device debugger or lacks source locations.");
+
 var gdbBundle = Path.Combine(tempDirectory, "gdb-bundle");
 Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{gdbBundle}\" --gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1 --gdb-port 2828");
 var debugMake = File.ReadAllText(Path.Combine(gdbBundle, "Makefile"));
