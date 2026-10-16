@@ -20,22 +20,32 @@ def norm(path):
 
 def parse_lines(output):
     rows, heading = [], ''
+    pending = None
     for text in output.splitlines():
         line = text.strip()
         if line.endswith(('.cs:', '.c:', '.cpp:')):
             heading = line[:-1].removeprefix('CU: ').strip()
         match = ROW.match(text)
-        if not match or match['line'] == '-':
+        if not match:
             continue
-        number, address = int(match['line']), int(match['address'], 16)
-        if number < 1 or address == 0 or address % 4:
+        address = int(match['address'], 16)
+        # DWARF rows describe [address, next address). Equal-PC views before
+        # the last row have no executable extent. Include native/hidden rows
+        # in this ordering so they can supersede an earlier C# row as well.
+        if pending is not None and address > pending[2]:
+            if pending[1] > 0 and pending[2] != 0 and pending[2] % 4 == 0:
+                rows.append(pending)
+        pending = None
+        if match['line'] == '-':  # end_sequence is an exclusive boundary
             continue
+        number = int(match['line'])
         file = norm(match['file'])
         context = norm(heading)
         # GNU readelf may put the full path only in a section heading.
         if '/' not in file and context.endswith('/' + file):
             file = context
-        rows.append((file, number, address))
+        pending = (file, number, address)
+    # A final row without a successor/end_sequence has no proven extent.
     return rows
 
 

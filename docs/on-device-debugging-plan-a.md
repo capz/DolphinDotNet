@@ -326,3 +326,24 @@ route is only a candidate and currently documents a Pause limitation. No custom 
 physical compatibility, variable inspection or Rider release is claimed.
 See `docs/rider-debugging.md` for attach arguments, responsibilities, acceptance
 commands and remaining integration gates.
+
+### A5 source-step CI correction
+
+Run 38930010375 exposed equal-PC DWARF views at 0x80005168: the resolver
+incorrectly retained both ManagedGameCube line 9 (empty extent) and line 10
+(the final effective row). The resolver now respects row ordering and exclusive
+end-sequence boundaries, including superseding hidden/native rows. It never
+chooses between genuinely overlapping independent sequences.
+
+Debug C generation now emits a volatile NOP source rendezvous before visible IL
+instructions, with a memory clobber, so optimized-away assignments/returns still
+have an executable source position. These markers affect debug builds only;
+they add code size and stepping work, not runtime service dependencies. The
+source directive is repeated after each marker to avoid shifting C# line numbers.
+
+DAP acceptance now requires `SourceLocation`, not merely a generic `step` event:
+ambiguity, instruction limits and missing unwind rules remain diagnostic stops.
+Both source probes step from the first short statement before the rendering call;
+the stack probe accepts returning to the current caller statement before stepping
+to the second call and proving Step Over. New CI is required for the corrected
+PowerPC maps and full DAP source/pause/stack flow. A4.4 remains deferred.

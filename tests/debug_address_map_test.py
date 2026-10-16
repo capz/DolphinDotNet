@@ -30,6 +30,51 @@ Program.cs - 0x80001040
 
 
 class AddressResolution(unittest.TestCase):
+    def test_equal_pc_views_keep_only_the_row_with_instruction_extent(self):
+        # Reduced from CI run 38930010375: line 9 has an empty range at
+        # 0x80005168, while the final line-10 view owns the instruction.
+        rows = module.parse_lines('''/__w/samples/ManagedGameCube/Program.cs:
+Program.cs 9 0x80005160 x
+Program.cs 9 0x80005168
+Program.cs 10 0x80005168 1 x
+Program.cs 10 0x80005168 2 x
+./generated_program.c:[++]
+generated_program.c 1 0x80005168 3 x
+/__w/samples/ManagedGameCube/Program.cs:
+Program.cs 10 0x80005168 4
+./generated_program.c:[++]
+generated_program.c 2 0x8000516c x
+generated_program.c - 0x80005170
+''')
+        self.assertEqual([r for r in rows if r[2] == 0x80005168],
+                         [('/__w/samples/managedgamecube/program.cs', 10, 0x80005168)])
+        self.assertNotIn(('/__w/samples/managedgamecube/program.cs', 9, 0x80005168), rows)
+
+    def test_hidden_row_and_end_sequence_supersede_empty_source_views(self):
+        rows = module.parse_lines('''/project/Program.cs:
+Program.cs 7 0x80001000 x
+generated_program.c 1 0x80001000 1 x
+generated_program.c 2 0x80001004 x
+Program.cs 8 0x80001008 x
+Program.cs - 0x80001008
+Program.cs 9 0x80001008 x
+Program.cs - 0x8000100c
+''')
+        self.assertFalse(any(line in (7, 8) and file.endswith('program.cs') for file, line, _ in rows))
+        self.assertIn(('/project/program.cs', 9, 0x80001008), rows)
+
+    def test_overlapping_sequences_retain_real_ambiguity(self):
+        rows = module.parse_lines('''/project/Program.cs:
+Program.cs 7 0x80001000 x
+Program.cs - 0x80001004
+Program.cs 8 0x80001000 x
+Program.cs - 0x80001004
+''')
+        self.assertEqual([line for _, line, _ in rows], [7, 8])
+
+    def test_unterminated_row_has_no_proven_instruction_extent(self):
+        self.assertEqual(module.parse_lines('Program.cs 7 0x80001000 x\n'), [])
+
     def test_deduplication_multiple_pcs_and_native_function_bounds(self):
         points = module.resolve(MAP, LINES, SYMBOLS)['methods'][0]['breakpoints']
         self.assertEqual(points[0]['addresses'], ['0x80001000', '0x80001008'])

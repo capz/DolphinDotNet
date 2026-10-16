@@ -32,15 +32,18 @@ foreach (var specification in specifications)
     before = pc;
     Console.WriteLine($"DND_DOTNET_SOURCE_BREAKPOINT {specification} PC=0x{pc:x8}");
     await breakpoints.ClearAsync(deadline.Token);
+    if (hits.Count == 1)
+    {
+        var sourceStep = await stepper.StepIntoAsync(RspStop.Parse($"T0540:{pc:x8};"), 8192, deadline.Token);
+        if (sourceStep.Reason != SourceStepReason.SourceLocation || sourceStep.Location?.MethodName is null)
+            throw new InvalidDataException($"C# Step Into failed: {sourceStep.Reason} after {sourceStep.Instructions} instructions.");
+        Console.WriteLine($"DND_DOTNET_SOURCE_STEP {sourceStep.Location.MethodName} {sourceStep.Location.Document}:{sourceStep.Location.Line} PC=0x{sourceStep.Stop.ProgramCounter:x8} instructions={sourceStep.Instructions}");
+    }
 }
 var instructionStop = await stepper.ReadProgramCounterAsync(await client.StepInstructionAsync(deadline.Token), deadline.Token);
 var stepped = instructionStop.ProgramCounter!.Value;
 if (stepped == before) throw new InvalidDataException("Single step did not advance execution.");
 Console.WriteLine($"DND_DOTNET_INSTRUCTION_STEP PC=0x{stepped:x8}");
-var sourceStep = await stepper.StepIntoAsync(instructionStop, 8192, deadline.Token);
-if (sourceStep.Reason != SourceStepReason.SourceLocation || sourceStep.Location?.MethodName is null)
-    throw new InvalidDataException($"C# Step Into failed: {sourceStep.Reason} after {sourceStep.Instructions} instructions.");
-Console.WriteLine($"DND_DOTNET_SOURCE_STEP {sourceStep.Location.MethodName} {sourceStep.Location.Document}:{sourceStep.Location.Line} PC=0x{sourceStep.Stop.ProgramCounter:x8} instructions={sourceStep.Instructions}");
 var running = client.ContinueAsync(deadline.Token);
 await Task.Delay(200, deadline.Token);
 await client.InterruptAsync(deadline.Token);

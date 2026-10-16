@@ -17,6 +17,14 @@ spec.loader.exec_module(probe)
 ADAPTER = Path(__file__).resolve().parents[1] / "tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll"
 
 
+class ProbeTests(unittest.TestCase):
+    def test_only_actual_source_advancement_passes_acceptance(self):
+        probe.require_source_step(dict(reason="step", description="SourceLocation"))
+        for description in ["AmbiguousSource", "InstructionLimit", "UnwindUnavailable", None]:
+            with self.subTest(description=description), self.assertRaises(AssertionError):
+                probe.require_source_step(dict(reason="step", description=description))
+
+
 class Target:
     def __init__(self):
         self.listener = socket.socket()

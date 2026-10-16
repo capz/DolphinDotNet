@@ -512,6 +512,14 @@ internal static class ValueCBackend
                 .Replace("\r", "\\r", StringComparison.Ordinal)
                 .Replace("\n", "\\n", StringComparison.Ordinal);
             output.AppendLine($"#line {source.StartLine} \"{path}\"");
+            // A visible IL instruction can disappear entirely under -Og, leaving
+            // only zero-length DWARF views shared with the following statement
+            // or hidden cleanup. Give debug builds a real instruction to stop
+            // on, even for a folded assignment or return. Normal builds never
+            // call this emitter. The memory clobber prevents movement of memory
+            // effects across the source rendezvous; it is not a runtime hook.
+            output.AppendLine("  __asm__ volatile (\"nop\" ::: \"memory\"); /* DND_SOURCE_ANCHOR */");
+            output.AppendLine($"#line {source.StartLine} \"{path}\"");
         }
         else
         {

@@ -80,10 +80,13 @@ if (!generatedGdbC.Contains("#line 7 ", StringComparison.Ordinal) ||
     !generatedGdbC.Contains("#line 8 ", StringComparison.Ordinal) ||
     !generatedGdbC.Contains("#line 9 ", StringComparison.Ordinal) ||
     !generatedGdbC.Contains("HelloGameCube/Program.cs", StringComparison.Ordinal) ||
+    !generatedGdbC.Contains("DND_SOURCE_ANCHOR", StringComparison.Ordinal) ||
     generatedGdbC.Contains("#line 16707566 ", StringComparison.Ordinal))
     throw new Exception("GDB generated C is missing visible C# statement line directives.");
 if (File.ReadAllText(Path.Combine(normalBundle, "source/generated_program.c"))
-        .Contains("#line ", StringComparison.Ordinal))
+        .Contains("#line ", StringComparison.Ordinal) ||
+    File.ReadAllText(Path.Combine(normalBundle, "source/generated_program.c"))
+        .Contains("DND_SOURCE_ANCHOR", StringComparison.Ordinal))
     throw new Exception("Normal AOT output unexpectedly contains managed #line directives.");
 if (File.Exists(Path.Combine(normalBundle, "dnd-il-debug.json")))
     throw new Exception("Default bundle unexpectedly contains debugger metadata.");

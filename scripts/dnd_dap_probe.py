@@ -95,6 +95,12 @@ class DapProcess:
         self.process.stderr.close()
 
 
+def require_source_step(stop):
+    # 'step' alone also describes bounded/ambiguous stops, which must not be
+    # accepted as successful source advancement. Retain the actual reason in CI.
+    assert stop.get("reason") == "step" and stop.get("description") == "SourceLocation", stop
+
+
 def run_probe(args):
     client = DapProcess(args.adapter)
     try:
@@ -123,7 +129,7 @@ def run_probe(args):
         specifications = [s.rsplit(":", 1) for s in args.sources]
         if args.stack:
             specifications = specifications[:1]
-        for path, line in specifications:
+        for index, (path, line) in enumerate(specifications):
             response = client.request("setBreakpoints", dict(source=dict(path=path), breakpoints=[dict(line=int(line))]))
             assert all(b["verified"] for b in response["body"]["breakpoints"]), response
             client.request("continue", dict(threadId=1))
@@ -133,26 +139,33 @@ def run_probe(args):
             assert frames and frames[0]["line"] == int(line), frames
             print(f"DND_DAP_SOURCE_BREAKPOINT {path}:{line}", flush=True)
             client.request("setBreakpoints", dict(source=dict(path=path), breakpoints=[]))
+            if not args.stack and index == 0:
+                # Step from the first short statement, before the next statement
+                # enters console/rendering code with an intentionally bounded step budget.
+                client.request("stepIn", dict(threadId=1))
+                require_source_step(client.event("stopped"))
+                stepped = client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]
+                assert stepped and stepped[0]["source"] and stepped[0]["line"] > 0, stepped
+                print("DND_DAP_SOURCE_STEP", flush=True)
         if args.stack:
             names = [frame["name"] for frame in frames]
             assert names[:3] == ["Program.Inner", "Program.Outer", "Program.Main"], names
             print("DND_DAP_MANAGED_STACK " + " -> ".join(names[:3]), flush=True)
             client.request("stepOut", dict(threadId=1))
-            assert client.event("stopped")["reason"] == "step"
+            require_source_step(client.event("stopped"))
             frames = client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]
+            assert frames[0]["name"] == "Program.Outer" and frames[0]["line"] in (13, 14), frames
+            print(f"DND_DAP_STEP_OUT Program.Outer:{frames[0]['line']}", flush=True)
+            if frames[0]["line"] == 13:
+                client.request("next", dict(threadId=1))
+                require_source_step(client.event("stopped"))
+                frames = client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]
             assert frames[0]["name"] == "Program.Outer" and frames[0]["line"] == 14, frames
-            print("DND_DAP_STEP_OUT Program.Outer:14", flush=True)
             client.request("next", dict(threadId=1))
-            assert client.event("stopped")["reason"] == "step"
+            require_source_step(client.event("stopped"))
             frames = client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]
             assert frames[0]["name"] == "Program.Outer" and frames[0]["line"] == 15, frames
             print("DND_DAP_STEP_OVER Program.Outer:15", flush=True)
-        else:
-            client.request("stepIn", dict(threadId=1))
-            assert client.event("stopped")["reason"] == "step"
-            frames = client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]
-            assert frames and frames[0]["source"] and frames[0]["line"] > 0, frames
-            print("DND_DAP_SOURCE_STEP", flush=True)
         client.request("continue", dict(threadId=1))
         time.sleep(.2)
         client.request("pause", dict(threadId=1))
