@@ -172,9 +172,9 @@ GDB framing, detach and reconnect **require hardware testing**.
 
 ### Remaining tasks (updated)
 
-1. **A4.1 (implemented, pending CI):** opt-in USB Gecko init, strict channel
+1. **A4.1 (implemented, CI passed):** opt-in USB Gecko init, strict channel
    validation, symbols and PowerPC linking, shared debugger path.
-2. **A4.2:** reusable .NET RSP client with pluggable TCP and serial transports.
+2. **A4.2 (implemented, CI passed):** reusable .NET RSP client with pluggable TCP and serial transports.
    Specify UART/FTDI settings from hardware tests rather than assuming baud.
 3. **A4.3:** emulator RSP breakpoint/step/continue tests; regression checks on
    PC and breakpoint lifetimes, including target capability differences.
@@ -184,14 +184,14 @@ GDB framing, detach and reconnect **require hardware testing**.
    helper-frame filtering, optimized/hidden sequence-point handling.
 6. **A5:** DAP adapter exposing attach/launch, source breakpoints, stepping
    and managed call stacks using a single backend.
-7. **A6:** Visual Studio VSIX and Rider integration, emulator and physical
+7. **A6:** Rider integration first (Visual Studio VSIX optional later), emulator and physical
    console launch/attach configurations; mock up any custom UI first.
 8. **A7:** locals/arguments/objects, exceptions, async diagnostics and
    resilience. Keep unsupported features explicit rather than fabricating state.
 
-**Release gates:** First emulator source breakpoints and stepping; second
-USB Gecko and TCP physical debug proof; third IDE integration; fourth
-managed inspection and reliability. No claim of physical USB Gecko debugging
+**Delivery order:** First emulator source breakpoints, stepping and DAP; second
+Rider integration; third USB Gecko and TCP physical debug proof; fourth
+managed inspection and reliability. Prototype Rider compatibility early during A5. No claim of physical USB Gecko debugging
 until a real-device serial session passes the acceptance suite.
 
 ## A4.2 .NET host RSP transport foundation
@@ -213,3 +213,25 @@ must be validated separately before an IDE adapter is claimed.
 `tests/DebuggerTests` uses a loopback fake GDB server to validate packet
 framing, stop PCs, breakpoint lifecycle, checksum retry, memory/register
 reads and cancellation. No custom debug UI or DAP support is in this increment.
+
+
+## A4.3 .NET source breakpoint integration
+
+`SourceAddressMap.Load` verifies ELF/source-map SHA-256 identity and schema
+versions before resolving C# lines. Document suffixes match path components;
+ambiguous basenames and unmapped lines fail explicitly. All aligned native
+addresses for a source line are deduplicated. `SourceBreakpoints` tracks native
+installations, including successful partial writes and failed removals, so callers
+can retry cleanup while the target remains stopped. Calls must be serialized by
+the session owner; this layer does not yet implement per-IDE breakpoint ownership.
+
+`tools/DolphinDotNet.Debugger.Probe` is a CI acceptance executable. The existing
+Dolphin smoke harness can invoke it with `--dotnet-probe PATH_TO_DLL`. The probe
+must hit two distinct C# source PCs using the .NET client, remove all breakpoints,
+advance one native instruction, then interrupt a pending Continue and read the
+stopped PC (falling back to big-endian PowerPC register 0x40 if necessary).
+The harness owns emulator termination; the probe leaves the guest stopped.
+
+This increment requires a passing real-Dolphin CI run before A4.3 is marked
+validated. Native instruction stepping is not yet C# statement stepping.
+Hardware, DAP, Rider integration and variable inspection remain separate gates.

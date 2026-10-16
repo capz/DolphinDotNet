@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import threading
-from dolphin_gdb_probe import probe, probe_memory, probe_source, resolve_source, resolve_symbols, resolve_memory_expectations
+from dolphin_gdb_probe import ProbeResult, probe, probe_memory, probe_source, resolve_source, resolve_symbols, resolve_memory_expectations
 import sys
 
 FATAL = [
@@ -43,6 +43,7 @@ def main() -> int:
     parser.add_argument("--expect-symbol", action="append", default=[], help="Required guest function symbol")
     parser.add_argument("--source-map", type=Path, help="Matching Portable PDB source map")
     parser.add_argument("--address-map", type=Path, help="PowerPC address map")
+    parser.add_argument("--dotnet-probe", type=Path, help="Published .NET probe DLL for source checks")
     parser.add_argument("--expect-source", action="append", default=[], help="C# FILE:LINE in stop order")
     parser.add_argument("--expect-word", action="append", default=[], help="Require guest RAM SYMBOL=0xVALUE")
     parser.add_argument("--expect-text", action="append", default=[], help="Require text in guest RAM SYMBOL=TEXT")
@@ -63,6 +64,8 @@ def main() -> int:
         parser.error("Choose ELF breakpoints or guest-memory checks, not both")
     if args.memory_after_symbol and not (args.expect_word or args.expect_text):
         parser.error("--memory-after-symbol requires a guest-memory expectation")
+    if args.dotnet_probe and not args.expect_source:
+        parser.error("--dotnet-probe requires --expect-source")
     expected = resolve_symbols(args.elf, args.expect_symbol) if args.expect_symbol else []
     source_points = resolve_source(args.elf, args.source_map, args.address_map, args.expect_source) if args.expect_source else []
     memory_expected = resolve_memory_expectations(args.elf, args.expect_word, args.expect_text) if (args.expect_word or args.expect_text) else []
@@ -98,6 +101,15 @@ def main() -> int:
     guest_state = []
     if args.gdb_port:
         def capture_guest_state():
+            if args.dotnet_probe:
+                try:
+                    result = subprocess.run(["dotnet", str(args.dotnet_probe), str(args.gdb_port),
+                        str(args.elf), str(args.source_map), str(args.address_map), *args.expect_source],
+                        capture_output=True, text=True, timeout=max(2, args.seconds - 2))
+                    guest_state.append(ProbeResult(result.returncode == 0, result.stdout + result.stderr))
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    guest_state.append(ProbeResult(False, str(error)))
+                return
             guest_state.append(probe_memory(args.gdb_port, memory_expected, seconds=max(2, args.seconds - 2), stop_symbol=completion)
                                if memory_expected else
                                probe_source(args.gdb_port, source_points, seconds=max(2, args.seconds - 2))

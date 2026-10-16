@@ -7,6 +7,7 @@ Check(RspStop.Parse("T0540:8000510c;thread:1;").ProgramCounter == 0x8000510c, "T
 Check(RspStop.Parse("S05").ProgramCounter is null, "S stop without PC");
 Check(RspStop.Parse("W00").Exited, "exit event");
 Expect<InvalidDataException>(() => RspStop.Parse("T0540:xyz;"), "invalid stop program counter");
+await TestSourceBreakpointsAsync();
 await TestTcpProtocolAsync();
 await TestChecksumsAndTimeoutsAsync();
 Console.WriteLine("DolphinDotNet GDB/RSP protocol tests passed.");
@@ -122,4 +123,70 @@ static async Task SendReplyAsync(Stream stream, string content, bool corrupt = f
     if (corrupt) sum = (sum + 1) & 255;
     var frame = Encoding.ASCII.GetBytes("$" + content + "#" + sum.ToString("x2"));
     await stream.WriteAsync(frame);
+}
+
+static async Task TestSourceBreakpointsAsync()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "dnd-symbols-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    var listener = new TcpListener(IPAddress.Loopback, 0);
+    try
+    {
+        var elf = Path.Combine(directory, "Game.elf");
+        var source = Path.Combine(directory, "source.json");
+        var native = Path.Combine(directory, "addresses.json");
+        File.WriteAllText(elf, "test ELF identity");
+        File.WriteAllText(source, "{\"schemaVersion\":2}");
+        string Hash(string path) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+        var map = new
+        {
+            schemaVersion = 1, elfSha256 = Hash(elf), sourceMapSha256 = Hash(source),
+            methods = new[] { new { breakpoints = new[] {
+                new { document = "/build/samples/Game/Program.cs", line = 8, addresses = new[] { "0x8000510c", "0x8000510c", "0x80005110" } },
+                new { document = "/build/other/Program.cs", line = 9, addresses = new[] { "0x80005200" } }
+            } } }
+        };
+        File.WriteAllText(native, System.Text.Json.JsonSerializer.Serialize(map));
+        var symbols = SourceAddressMap.Load(elf, source, native);
+        Check(symbols.Resolve(@"Game\Program.cs", 8).SequenceEqual(new uint[] { 0x8000510c, 0x80005110 }), "normalized/deduplicated source lookup");
+        Expect<InvalidDataException>(() => symbols.Resolve("Program.cs", 8), "ambiguous document even if only one has requested line");
+        Expect<InvalidDataException>(() => symbols.Resolve("NotProgram.cs", 8), "path-component boundary");
+        Expect<InvalidDataException>(() => symbols.Resolve("Game/Program.cs", 7), "unmapped line");
+        File.AppendAllText(elf, "stale");
+        Expect<InvalidDataException>(() => SourceAddressMap.Load(elf, source, native), "ELF build mismatch");
+        listener.Start();
+        var server = Task.Run(async () =>
+        {
+            using var peer = await listener.AcceptTcpClientAsync();
+            using var stream = peer.GetStream();
+            foreach (var (command, reply) in new[] {
+                ("Z0,8000510c,4", "OK"), ("Z0,80005110,4", ""),
+                ("z0,8000510c,4", "E01"), ("z0,8000510c,4", "OK") })
+            {
+                Check(await ReadFrameAsync(stream) == command, "source breakpoint lifecycle command");
+                await SendReplyAsync(stream, reply);
+                Check(await ReadByteAsync(stream) == '+', "source breakpoint ACK");
+            }
+            Check(await ReadFrameAsync(stream) == "c", "pause test continue");
+            await stream.WriteAsync(new byte[] { (byte)'+' });
+            Check(await ReadByteAsync(stream) == 3, "asynchronous interrupt byte");
+            await SendReplyAsync(stream, "S02");
+            Check(await ReadByteAsync(stream) == '+', "pause ACK");
+        });
+        await using var client = await RspClient.ConnectTcpAsync("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
+        var breakpoints = new SourceBreakpoints(client, symbols);
+        try { await breakpoints.AddAsync("Game/Program.cs", 8); throw new Exception("Expected unsupported breakpoint failure"); }
+        catch (IOException) { }
+        Check(breakpoints.Installed.SequenceEqual(new uint[] { 0x8000510c }), "successful partial install remains tracked");
+        try { await breakpoints.ClearAsync(); throw new Exception("Expected removal failure"); }
+        catch (IOException) { }
+        Check(breakpoints.Installed.Count == 1, "failed removal remains tracked");
+        await breakpoints.ClearAsync();
+        Check(breakpoints.Installed.Count == 0, "successful removal cleared ownership");
+        var running = client.ContinueAsync();
+        await client.InterruptAsync();
+        Check((await running).Signal == 2, "pause while continue waits");
+        await server.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+    finally { listener.Stop(); Directory.Delete(directory, true); }
 }
