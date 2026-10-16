@@ -12,6 +12,9 @@ The managed Core project targets `netstandard2.0`, while the compiler smoke appl
 - **Missing:** no end-to-end implementation was found in the audited production compiler/Core library.
 - **Excluded:** permanently outside the project's stated scope.
 
+## Wishlist
+NM01, NM02, CL05, ST01, ST02, ST03, ST04, AR01, AR02
+
 ## Developer-facing inventory
 
 | ID | Area / APIs | State | Established scope and gaps |
