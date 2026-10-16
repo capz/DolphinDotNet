@@ -12,9 +12,9 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
 - **Provide for a full-featured development environment for writing apps and games using dotnet and C#**
   - Compiles Ahead-of-Time, into devkitppc+libogc2 C/++ code, then uses devkitppc to compile into a functional dol executable
   - Allows for on-device debugging using visual studio and rider, using gdb over BBA or USB Gecko
-  - **Support many assets from retail games**
+- **Support many assets from retail games**
   - Out of the box support for meshes, textures, animations, sound files
-- **Support some common asset formats*
+- **Support common asset formats for easy homebrewing*
   - Out of the box support for obj, fbx, glb 3d models with meshes, animations, textures
   - Out of the box support for adx, with looping regions converted from mp3 with sidecart metadata using supplied tooling
 
