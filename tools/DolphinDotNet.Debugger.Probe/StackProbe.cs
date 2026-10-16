@@ -27,15 +27,29 @@ internal static class StackProbe
         if (returned.Reason != SourceStepReason.SourceLocation || returned.Location?.MethodName != "Program.Outer")
             throw new InvalidDataException("Step Out did not return to Outer: " + returned.Reason);
         Console.WriteLine($"DND_DOTNET_STEP_OUT {returned.Location.MethodName}:{returned.Location.Line}");
-        // Finish the first call statement, then step over the second Inner call.
-        var second = await stepper.StepOverAsync(returned.Stop, 4096, token);
-        if (second.Reason != SourceStepReason.SourceLocation || second.Location?.MethodName != "Program.Outer")
-            throw new InvalidDataException("Step Over did not reach the second caller statement: " + second.Reason);
-        var final = await stepper.StepOverAsync(second.Stop, 4096, token);
+        // Step Out can already stop at the next statement. Advance by source
+        // location rather than assuming a fixed number of Step Over operations.
         var expected = Parse(specifications[1]);
-        if (final.Reason != SourceStepReason.SourceLocation || final.Location?.MethodName != "Program.Outer" ||
-            !symbols.Resolve(expected.File, expected.Line).Contains(final.Stop.ProgramCounter!.Value))
-            throw new InvalidDataException($"Step Over entered a callee or missed Outer return: {final.Reason} {final.Location}.");
-        Console.WriteLine($"DND_DOTNET_STEP_OVER {final.Location.MethodName}:{final.Location.Line}");
+        var returnPoints = symbols.Resolve(expected.File, expected.Line);
+        var secondCallPoints = symbols.Resolve(expected.File, expected.Line - 1);
+        var current = returned;
+        var crossedSecondCall = false;
+        for (var count = 0; count < 4; count++)
+        {
+            if (current.Reason != SourceStepReason.SourceLocation || current.Location?.MethodName != "Program.Outer" ||
+                current.Stop.ProgramCounter is not uint pc)
+                throw new InvalidDataException($"Step Over left Outer before its return statement: {current.Reason} {current.Location}.");
+            if (returnPoints.Contains(pc))
+            {
+                if (!crossedSecondCall)
+                    throw new InvalidDataException("Reached Outer return without proving Step Over of the second Inner call.");
+                Console.WriteLine($"DND_DOTNET_STEP_OVER {current.Location.MethodName}:{current.Location.Line}");
+                return;
+            }
+            crossedSecondCall |= secondCallPoints.Contains(pc);
+            Console.WriteLine($"DND_DOTNET_STEP_OVER_FROM {current.Location.MethodName}:{current.Location.Line} PC=0x{pc:x8}");
+            current = await stepper.StepOverAsync(current.Stop, 4096, token);
+        }
+        throw new InvalidDataException("Step Over did not reach Outer return within the source-step budget.");
     }
 }
