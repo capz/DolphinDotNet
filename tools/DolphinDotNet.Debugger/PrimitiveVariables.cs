@@ -32,7 +32,10 @@ public sealed class PrimitiveVariableReader(RspClient client)
             "System.Boolean" => (bits != 0).ToString().ToLowerInvariant(),
             "System.Byte" => ((byte)bits).ToString(CultureInfo.InvariantCulture),
             "System.SByte" => unchecked((sbyte)bits).ToString(CultureInfo.InvariantCulture),
-            "System.Char" => JsonSerializer.Serialize(((char)bits).ToString()),
+            // JSON replaces isolated UTF-16 surrogates; preserve the actual
+            // Char code unit instead of displaying a replacement character.
+            "System.Char" => char.IsSurrogate((char)bits) ? "\"\\u" + ((ushort)bits).ToString("X4", CultureInfo.InvariantCulture) + "\""
+                : JsonSerializer.Serialize(((char)bits).ToString()),
             "System.Int16" => unchecked((short)bits).ToString(CultureInfo.InvariantCulture),
             "System.UInt16" => ((ushort)bits).ToString(CultureInfo.InvariantCulture),
             "System.Int32" or "System.IntPtr" => unchecked((int)bits).ToString(CultureInfo.InvariantCulture),

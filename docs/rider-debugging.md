@@ -25,6 +25,10 @@ cd plugins/rider
 ./gradlew -PriderSdk=/absolute/path/to/Rider test buildPlugin
 ```
 
+The 0.2 development plugin uses ID `com.dolphindotnet.debugger` for Plugin
+Verifier compatibility. Remove an older 0.1 development installation before
+installing this ZIP, since its earlier ID was `com.dolphindotnet.rider`.
+
 Install the ZIP from `plugins/rider/build/distributions` via Rider **Settings →
 Plugins → Install Plugin from Disk** and restart. The ZIP includes the adapter and
 its managed/native serial dependencies. The Rider process needs `dotnet` (.NET 8
@@ -166,6 +170,8 @@ Automated host checks:
   resume/pause/Step Into/Over/Out/disconnect sequence. Fault tests cover adapter exit,
   lost stdout, rejected attach, timeout and cancellation. The Java client also runs
   against the actual .NET adapter over fake TCP and Linux PTY RSP targets.
+- A packaged-JAR test verifies adapter discovery from custom install paths with
+  spaces/Unicode and the error for a missing adapter payload.
 - CI builds the pinned Rider plugin, runs tests and Plugin Verifier, and uploads the
   installable ZIP plus failure reports.
   Source-only plugin changes select that job; debugger changes also build its consumer.

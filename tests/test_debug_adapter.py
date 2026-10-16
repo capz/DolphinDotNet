@@ -38,7 +38,7 @@ class Target:
         self.breakpoints = set()
         self.commands = []
         self.memory = {0x81700004: bytes.fromhex("00000003"), 0x81700008: bytes.fromhex("ffffffff"),
-                       0x81700010: bytes.fromhex("400c000000000000")}
+                       0x81700010: bytes.fromhex("400c000000000000"), 0x81700018: bytes.fromhex("0000d83d")}
         self.errors = []
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
@@ -280,7 +280,8 @@ class AdapterTests(unittest.TestCase):
             variable("signed", "System.Int32", "Locals", 4, dict(kind="cfaOffset", offset=8), ("0x8000400c",)),
             variable("fraction", "System.Double", "Locals", 8, dict(kind="cfaOffset", offset=16)),
             variable("optimized", "System.Int32", "Locals", 4, dict(kind="unavailable", reason="Unsupported expression")),
-            variable("register", "System.UInt32", "Locals", 4, dict(kind="register", register=3))]
+            variable("register", "System.UInt32", "Locals", 4, dict(kind="register", register=3)),
+            variable("surrogate", "System.Char", "Locals", 4, dict(kind="cfaOffset", offset=24))]
         self.address.write_text(json.dumps(data))
         self.attach()
         self.bp(lines=(11,))
@@ -292,10 +293,11 @@ class AdapterTests(unittest.TestCase):
         value = self.client.request("variables", dict(variablesReference=refs["Arguments"]))["body"]["variables"][0]
         self.assertEqual(("value", "3", 0), (value["name"], value["value"], value["variablesReference"]))
         local = self.client.request("variables", dict(variablesReference=refs["Locals"]))["body"]["variables"]
-        self.assertEqual(["fraction", "optimized", "register"], [v["name"] for v in local])
+        self.assertEqual(["fraction", "optimized", "register", "surrogate"], [v["name"] for v in local])
         self.assertEqual("3.5", local[0]["value"])
         self.assertIn("unavailable", local[1]["value"])
         self.assertEqual("42", local[2]["value"])
+        self.assertEqual('"\\uD83D"', local[3]["value"])
         self.assertEqual(1, len(self.client.request("variables", dict(variablesReference=refs["Locals"], start=1, count=1))["body"]["variables"]))
         self.bp(lines=())
         self.client.request("stepIn", dict(threadId=1))

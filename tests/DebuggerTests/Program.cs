@@ -295,7 +295,7 @@ static async Task TestUnwindingAndDepthAsync()
             schemaVersion = 1, elfSha256 = Hash(elf), sourceMapSha256 = Hash(source),
             methods = new[] {
                 new { symbol = "A", assembly = "Demo", methodToken = 1, nativeStart = "0x80001000", nativeSize = 64, breakpoints = new[] {
-                    new { document = "/Program.cs", line = 10, addresses = new[] { "0x80001000" } },
+                    new { document = "/Program.cs", line = 10, addresses = new[] { "0x80001000", "0x80001008" } },
                     new { document = "/Program.cs", line = 11, addresses = new[] { "0x80001004" } }
                 } },
                 new { symbol = "B", assembly = "Demo", methodToken = 2, nativeStart = "0x80002000", nativeSize = 64, breakpoints = new[] {
@@ -325,6 +325,7 @@ static async Task TestUnwindingAndDepthAsync()
                 ("p1", "81700000"), ("p43", "80002008"), // leaf: DWARF LR 65 maps to RSP 67
                 ("p1", "81700000"), // over origin CFA
                 ("s", "T0540:80002000;"), ("p1", "81700000"), // deeper leaf skipped
+                ("s", "T0540:80001008;"), ("p1", "81700000"), // ordinary call return on original line
                 ("s", "T0540:80001004;"), ("p1", "81700000"), // same frame next line
                 ("p1", "81700000"), // out origin CFA
                 ("s", "T0540:80002004;"), ("p1f", "81700020"), // caller CFA greater
@@ -345,8 +346,8 @@ static async Task TestUnwindingAndDepthAsync()
         Check(partial.Frames.Count == 2 && partial.Reason == UnwindStopReason.UnavailableRegister, "leaf LR read and partial stack rather than guessed caller register");
         var stepper = new SourceStepper(client, symbols);
         var origin = RspStop.Parse("T0540:80001000;");
-        var over = await stepper.StepOverAsync(origin, 3);
-        Check(over.Reason == SourceStepReason.SourceLocation && over.Instructions == 2 && over.Location?.Line == 11, "step over skips deeper CFA");
+        var over = await stepper.StepOverAsync(origin, 4);
+        Check(over.Reason == SourceStepReason.SourceLocation && over.Instructions == 3 && over.Location?.Line == 11, "ordinary step over skips deeper CFA and same-line call return");
         var exit = await stepper.StepOutAsync(origin, 2);
         Check(exit.Reason == SourceStepReason.SourceLocation && exit.Instructions == 1 && exit.Location?.Line == 20, "step out reaches greater caller CFA");
         Check((await stepper.StepOutAsync(RspStop.Parse("T0540:80004000;"), 1)).Reason == SourceStepReason.UnwindUnavailable, "missing CFA never guessed");

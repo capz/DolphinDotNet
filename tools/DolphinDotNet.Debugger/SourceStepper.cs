@@ -53,7 +53,7 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
             originCfa = await unwinder.ReadCanonicalFrameAddressAsync(current.ProgramCounter.Value, token).ConfigureAwait(false);
             if (mode != StepMode.Into && !originCfa.HasValue) return new(current, origin, SourceStepReason.UnwindUnavailable, 0);
         }
-        var enteredCallee = false;
+        var enteredSameSourceCallee = false;
         for (var count = 1; count <= instructionLimit; count++)
         {
             token.ThrowIfCancellationRequested();
@@ -82,10 +82,10 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
             }
             var cfa = await unwinder.ReadCanonicalFrameAddressAsync(current.ProgramCounter.Value, token).ConfigureAwait(false);
             if (!cfa.HasValue) return new(current, locations[0], SourceStepReason.UnwindUnavailable, count);
-            enteredCallee |= cfa < originCfa;
-            // Returning from a call may land on the same caller line. Stop after
-            // a proven activation transition, not on every native instruction.
-            if (cfa > originCfa || (mode == StepMode.Over && cfa == originCfa && (locations[0] != origin || enteredCallee)))
+            enteredSameSourceCallee |= cfa < originCfa && locations[0] == origin;
+            // A recursive call can return to the same source identity. Ordinary
+            // calls must still advance past their current caller statement.
+            if (cfa > originCfa || (mode == StepMode.Over && cfa == originCfa && (locations[0] != origin || enteredSameSourceCallee)))
                 return new(current, locations[0], SourceStepReason.SourceLocation, count);
         }
         return new(current, null, SourceStepReason.InstructionLimit, instructionLimit);
