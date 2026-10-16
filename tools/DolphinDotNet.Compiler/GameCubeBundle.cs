@@ -125,8 +125,9 @@ internal static class GameCubeBundle
                 $"    DEBUG_Init(GDBSTUB_DEVICE_TCP, {gdbTcp.Port});\n" +
                 "    _break(); /* Wait at a deterministic startup rendezvous. */\n" +
                 "}\n");
-            // This first mapping stage tracks IR instructions to CIL precisely.
-            // Source/PDB and PowerPC instruction-address correlation follow later.
+            // Portable PDB identity must match the exact assemblies being AOT compiled.
+            // Source points are host-only; an ELF/native address map comes next.
+            var sourceMap = PortablePdbSourceMap.Load(compilation);
             var methods = compilation.ValueMethods
                 .Select(method => new
                 {
@@ -135,6 +136,20 @@ internal static class GameCubeBundle
                     declaringType = method.Key.TypeName,
                     name = method.Key.Name,
                     signature = method.Key.Signature,
+                    methodToken = System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(
+                        compilation.Model.Methods[method.Key].Handle),
+                    sourceLocations = sourceMap.Methods[method.Key]
+                        .OrderBy(location => location.Key)
+                        .Select(location => new
+                        {
+                            ilOffset = location.Key,
+                            sequencePointIlOffset = location.Value.SequencePointIlOffset,
+                            document = location.Value.Document,
+                            startLine = location.Value.StartLine,
+                            startColumn = location.Value.StartColumn,
+                            endLine = location.Value.EndLine,
+                            endColumn = location.Value.EndColumn
+                        }).ToArray(),
                     ilOffsets = method.Blocks.SelectMany(block => block.Instructions)
                         .Select(instruction => instruction.CilOffset)
                         .Concat(method.Blocks.Select(block => block.Terminator?.CilOffset ?? -1))
@@ -142,7 +157,14 @@ internal static class GameCubeBundle
                 })
                 .OrderBy(method => method.symbol, StringComparer.Ordinal).ToArray();
             File.WriteAllText(Path.Combine(directory, "dnd-il-debug.json"),
-                JsonSerializer.Serialize(new { schemaVersion = 1, methods },
+                JsonSerializer.Serialize(new
+                {
+                    schemaVersion = 2,
+                    assemblies = sourceMap.Assemblies
+                        .Select(identity => new { name = identity.Name,
+                            moduleVersionId = identity.ModuleVersionId, pdbId = identity.PdbId }),
+                    methods
+                },
                     new JsonSerializerOptions { WriteIndented = true }));
         }
 

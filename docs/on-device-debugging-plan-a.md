@@ -1,14 +1,15 @@
 # Plan A: on-device GameCube native GDB debugging
 
-Status: **increment A1 bootstrap and A2a per-IR IL offsets implemented**, Portable PDB/source/native address mapping and IDE attach **not yet implemented**.
+Status: **increments A1, A2a and A2b (Portable PDB source-location sidecar) implemented**.
+PowerPC source-address mapping and IDE attach are **not yet implemented**.
 
 ## Repository and dependency audit (2026-10-16)
 
 - Managed compilation: `tools/DolphinDotNet.Compiler`, with `AotCompiler`,
   `ValueIrImporter`, `ValueCBackend`, and `GameCubeBundle`.
-  `ValueIrBlock.CilOffset` survives lowering, but individual `ValueIrInstruction`
-  instances do not retain IL offsets; a block-level `#line` is not sufficient
-  for statement breakpoints.
+  `ValueIrBlock.CilOffset` and A2a's per-instruction `ValueIrInstruction.CilOffset`
+  now survive lowering. A2b reads matching Portable PDBs and resolves visible
+  source sequence points to emitted IL offsets; PowerPC mapping remains outstanding.
 - Build route: shared MSBuild SDK -> `DolphinDotNet.Build` ->
   `dndc --bundle` -> Makefile -> devkitPPC/ELF -> DOL.
   The driver uses a pinned libogc2 container digest or a local toolchain.
@@ -31,7 +32,8 @@ Status: **increment A1 bootstrap and A2a per-IR IL offsets implemented**, Portab
 | --- | --- | --- |
 | A1 (this change) | Opt-in TCP GDB bootstrap, fixed static IPv4, `-ldb` linkage, debugger-friendly ELF flags, early `_break()` | Default bundle unaffected; generated C/Makefile checks; PowerPC linker CI proves libdb linkage and DWARF sections |
 | A2a (this change) | Preserve per-instruction CIL offsets on Value IR instructions and terminators; write deterministic `dnd-il-debug.json` in the native bundle when GDB enabled | Normal bundle unaffected; entry CIL offsets sorted and unique; compiler integration test |
-| A2b | Read and validate Roslyn Portable PDBs; map each reachable native codegen location to source file/line/column, with generated C `#line` directives | Multiple C# statements in one basic block receive distinct source mappings; absent/mismatched PDB detected; deterministic output |
+| A2b (this change) | Load and verify matching Portable PDB identity for each reachable assembly; correlate source sequence points with emitted IL offsets | Multiple statements in one basic block retain distinct source lines; missing/stale PDB fails explicitly; deterministic host-only JSON |
+| A2c | Emit native C `#line` directives from A2b source locations and verify DWARF/PPC line-table output | DWARF correlates PowerPC instruction addresses to C# files/lines |
 | A3 | Emit precise source debug locations and verify PowerPC address mapping using ELF/DWARF; handle multi-address source lines | Host lookup for C# file/line -> unique/ordered native breakable addresses, independently tested with `readelf` and `objdump` |
 | A4 | Extract host RSP client from existing Dolphin probe; target capability discovery and breakpoint lifecycle | Emulator breakpoint/continue/step and stop-PC tests pass; limited libdb command set tested against hardware |
 | A5 | Build host C# debug adapter implementing DAP, native-symbol map and source-level stepping | DAP protocol tests with fake RSP target; VS Code/Visual Studio integration spike; correct source stack locations |
@@ -95,9 +97,12 @@ isolated development LAN.
    than assumed; Visual Studio will require a DAP extension/host.
 
 The GDB-enabled bundle also writes `dnd-il-debug.json`, recording the reachable
-generated native function symbols and per-instruction IL offsets. This is
-**not** a C# source map; it has no Portable PDB sequence points or PowerPC
-addresses yet, and remains in the generated native bundle.
+generated native function symbols, per-instruction IL offsets and A2b's
+matching Portable PDB source locations. It also includes assembly MVID and PDB
+identity for host-side build validation. This source map is **not yet mapped to
+PowerPC addresses**; A2c/A3 must generate and verify native line tables.
+The file remains in the generated native bundle and is not deployed on-device.
+Debug builds fail if a reachable assembly's Portable PDB is missing or stale.
 
 Do not claim source-level breakpoints or live hardware compatibility until the
 later acceptance tests pass.
