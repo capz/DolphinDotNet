@@ -235,6 +235,18 @@ static void Run(string file, string args)
     if (p.ExitCode != 0) throw new Exception($"{file} {args} failed with exit code {p.ExitCode}.");
 }
 
+static void RunFailure(string file, string args)
+{
+    using var process = Process.Start(new ProcessStartInfo(file, args)
+    {
+        UseShellExecute = false, RedirectStandardError = true
+    }) ?? throw new Exception($"Could not start {file}.");
+    var stderr = process.StandardError.ReadToEnd();
+    process.WaitForExit();
+    if (process.ExitCode == 0)
+        throw new Exception($"Expected invalid debugger arguments to be rejected: {file} {args}. {stderr}");
+}
+
 static void AssertPdbRejected(string dll, string directory)
 {
     var compiler = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
