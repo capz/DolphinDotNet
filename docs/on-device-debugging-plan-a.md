@@ -193,3 +193,23 @@ GDB framing, detach and reconnect **require hardware testing**.
 USB Gecko and TCP physical debug proof; third IDE integration; fourth
 managed inspection and reliability. No claim of physical USB Gecko debugging
 until a real-device serial session passes the acceptance suite.
+
+## A4.2 .NET host RSP transport foundation
+
+A new `tools/DolphinDotNet.Debugger` .NET 8 library implements RSP
+packet checksums and acknowledgements (including checksum retransmission),
+TCP connection, explicitly configured serial-port connection for USB Gecko,
+software breakpoints, stop/continue, instruction stepping, memory/register
+reads, and asynchronous interruption. It accepts arbitrary duplex `Stream`
+instances so the protocol can be exercised without a physical GameCube.
+
+The USB Gecko host serial baud rate is **deliberately not hardcoded**: it must
+be supplied explicitly and verified with real FTDI hardware and driver setup.
+`System.IO.Ports` supplies the serial port adapter, not a USB Gecko EXI driver.
+TCP and serial share one RSP client, but legacy libdb may not implement
+qSupported or stop-register reporting. Emulator and hardware feature profiles
+must be validated separately before an IDE adapter is claimed.
+
+`tests/DebuggerTests` uses a loopback fake GDB server to validate packet
+framing, stop PCs, breakpoint lifecycle, checksum retry, memory/register
+reads and cancellation. No custom debug UI or DAP support is in this increment.

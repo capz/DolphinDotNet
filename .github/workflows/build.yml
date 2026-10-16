@@ -18,6 +18,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  debugger-protocol:
+    name: Host GDB protocol
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test RSP over loopback TCP and mock serial stream
+        run: dotnet run --project tests/DebuggerTests/DebuggerTests.csproj -c Release
   managed:
     name: Managed compiler
     env:
