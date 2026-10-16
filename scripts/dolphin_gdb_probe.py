@@ -6,6 +6,8 @@ A loader log, a live emulator process, or a successful debugger connection alone
 is never sufficient to mark an entry point as reached.
 """
 from dataclasses import dataclass
+import hashlib
+import json
 import fnmatch
 from pathlib import Path
 import re
@@ -270,3 +272,73 @@ def probe_memory(port: int, expectations: list[MemoryExpectation],
                                f"Missing guest-written values: {[w.name for w in missing]}; no guest PC")
     except (OSError, ValueError, TimeoutError) as error:
         return ProbeResult(False, "\n".join(lines + [f"DND_GDB_MEMORY_FAILED: {error}"]))
+
+def resolve_source(elf: Path, source_map: Path, address_map: Path,
+                   specifications: list[str]) -> list[tuple[str, tuple[int, ...]]]:
+    """Verify SHA-256 metadata identities and map source files/lines to PPC PCs."""
+    source_bytes = source_map.read_bytes()
+    native_map = json.loads(address_map.read_text())
+    if (native_map.get("schemaVersion") != 1 or
+            native_map.get("elfSha256") != hashlib.sha256(elf.read_bytes()).hexdigest() or
+            native_map.get("sourceMapSha256") != hashlib.sha256(source_bytes).hexdigest()):
+        raise ValueError("C# debug metadata or ELF belongs to a different build")
+    if json.loads(source_bytes).get("schemaVersion") != 2:
+        raise ValueError("Unsupported managed source map schema")
+    points = []
+    for spec in specifications:
+        document, separator, raw_line = spec.rpartition(":")
+        if not separator or not document or not raw_line.isdecimal():
+            raise ValueError("Expected C# breakpoint FILE:LINE: " + spec)
+        suffix = document.replace("\\", "/").lower()
+        line = int(raw_line)
+        rows = [(bp["document"].replace("\\", "/").lower(), int(pc, 16))
+                for method in native_map["methods"]
+                for bp in method["breakpoints"] if bp["line"] == line
+                and bp["document"].replace("\\", "/").lower().endswith(suffix)
+                for pc in bp["addresses"]]
+        documents = {path for path, _ in rows}
+        if len(documents) != 1 or not rows:
+            raise ValueError(f"Source breakpoint {spec}: expected one document, found {documents}")
+        addresses = tuple(sorted({pc for _, pc in rows}))
+        if any(pc == 0 or pc % 4 for pc in addresses):
+            raise ValueError("Invalid unaligned PPC address in " + spec)
+        points.append((spec, addresses))
+    return points
+
+
+def probe_source(port: int, breakpoints: list[tuple[str, tuple[int, ...]]],
+                 seconds: float = 20) -> ProbeResult:
+    """Require real guest PC hits, rather than merely verifying a GDB connection."""
+    deadline = time.monotonic() + seconds
+    output = []
+    try:
+        conn = None
+        while time.monotonic() < deadline:
+            try:
+                conn = socket.create_connection(("127.0.0.1", port), timeout=0.4)
+                break
+            except OSError:
+                time.sleep(0.15)
+        if conn is None:
+            raise TimeoutError("Dolphin GDB stub never opened")
+        with conn:
+            for spec, addresses in breakpoints:
+                for address in addresses:
+                    _send(conn, f"Z0,{address:08x},4")
+                    if _reply(conn, deadline) != "OK":
+                        raise ValueError(f"Cannot install source breakpoint {spec} at 0x{address:08x}")
+                _send(conn, "c")
+                stopped = parse_stop_pc(_reply(conn, deadline))
+                if stopped not in addresses:
+                    raise ValueError(f"C# {spec}: stopped at 0x{stopped:08x} rather than {addresses}")
+                output.append(f"DND_CSHARP_BREAKPOINT_REACHED {spec} PC=0x{stopped:08x}")
+                for address in addresses:
+                    _send(conn, f"z0,{address:08x},4")
+                    if _reply(conn, deadline) != "OK":
+                        raise ValueError(f"Cannot remove source breakpoint {spec}")
+            _send(conn, "c")
+        if len({line.split("PC=")[1] for line in output}) != len(output):
+            raise ValueError("Two different C# source statements mapped to the same guest PC")
+        return ProbeResult(True, "\n".join(output))
+    except (OSError, ValueError, TimeoutError) as error:
+        return ProbeResult(False, "\n".join(output + [f"DND_CSHARP_BREAKPOINT_FAILED: {error}"]))

@@ -9,12 +9,20 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#ifdef DND_GDB_ENABLED
+extern void dnd_gdb_init(void);
+#endif
+
 static uint8_t managed_heap_memory[256 * 1024];
 extern intptr_t dnd_aot_entry(DndManagedHeap *heap);
 
 int main(void) {
     DndManagedHeap heap;
     dnd_platform_init();
+#ifdef DND_GDB_ENABLED
+    // Debugger rendezvous occurs before managed code and normal BBA init.
+    dnd_gdb_init();
+#endif
     dnd_managed_heap_init(&heap,managed_heap_memory,sizeof(managed_heap_memory));
     dnd_console_write_line("DOLPHINDOTNET");
     dnd_console_write_line("MANAGED C# AOT / GX / PAD");

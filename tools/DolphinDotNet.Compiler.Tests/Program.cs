@@ -25,6 +25,125 @@ if (File.ReadAllText(temp) != generated)
 var helloHost = Path.Combine(tempDirectory, "hello-host");
 Run("cc", $"-pthread -std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" \"{temp}\" \"{Path.Combine(root, "tests/hello_gamecube_host.c")}\" \"{Path.Combine(root, "source/managed_runtime.c")}\" \"{Path.Combine(root, "source/async_runtime.c")}\" -o \"{helloHost}\"");
 Run(helloHost, "");
+// Both bundle modes must compile from the same managed assembly. GDB is
+// strictly opt-in; a normal DOL must not link libdb or install a trap.
+var normalBundle = Path.Combine(tempDirectory, "normal-bundle");
+Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{normalBundle}\"");
+var normalMake = File.ReadAllText(Path.Combine(normalBundle, "Makefile"));
+if (normalMake.Contains("-ldb ", StringComparison.Ordinal) ||
+    normalMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
+    File.Exists(Path.Combine(normalBundle, "source/debug_gamecube.c")))
+    throw new Exception("Normal bundle unexpectedly enables the GDB debugger.");
+
+var symbolsBundle = Path.Combine(tempDirectory, "symbols-only");
+Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{symbolsBundle}\" --debug-symbols");
+var symbolsMake = File.ReadAllText(Path.Combine(symbolsBundle, "Makefile"));
+var symbolsC = File.ReadAllText(Path.Combine(symbolsBundle, "source/generated_program.c"));
+if (symbolsMake.Contains("-ldb ", StringComparison.Ordinal) ||
+    symbolsMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
+    File.Exists(Path.Combine(symbolsBundle, "source/debug_gamecube.c")) ||
+    !symbolsMake.Contains("-Og -g3 -gdwarf-4", StringComparison.Ordinal) ||
+    !symbolsMake.Contains("-fno-optimize-sibling-calls", StringComparison.Ordinal) ||
+    !symbolsC.Contains("#line 8 ", StringComparison.Ordinal) ||
+    !File.Exists(Path.Combine(symbolsBundle, "dnd-il-debug.json")))
+    throw new Exception("Emulator symbols-only build links a device debugger or lacks source locations.");
+
+var usbBundle = Path.Combine(tempDirectory, "usb-gecko-bundle");
+Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{usbBundle}\" --gdb-usb 1");
+var usbMake = File.ReadAllText(Path.Combine(usbBundle, "Makefile"));
+var usbC = File.ReadAllText(Path.Combine(usbBundle, "source/debug_gamecube.c"));
+if (!usbMake.Contains("-ldb ", StringComparison.Ordinal) ||
+    !usbMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
+    !usbC.Contains("DEBUG_Init(GDBSTUB_DEVICE_USB, 1)", StringComparison.Ordinal) ||
+    !usbC.Contains("_break()", StringComparison.Ordinal) ||
+    !File.Exists(Path.Combine(usbBundle, "dnd-il-debug.json")) ||
+    !usbMake.Contains("-Og -g3 -gdwarf-4", StringComparison.Ordinal))
+    throw new Exception("USB Gecko bundle is missing debugger linkage, source symbols or EXI channel selection.");
+if (usbC.Contains("DEBUG_Init(GDBSTUB_DEVICE_TCP", StringComparison.Ordinal) ||
+    usbC.Contains("tcp_localip = \"192.0.2.10\"", StringComparison.Ordinal))
+    throw new Exception("USB Gecko bundle unexpectedly starts the TCP debugger.");
+
+var gdbBundle = Path.Combine(tempDirectory, "gdb-bundle");
+Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{gdbBundle}\" --gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1 --gdb-port 2828");
+var debugMake = File.ReadAllText(Path.Combine(gdbBundle, "Makefile"));
+var debugC = File.ReadAllText(Path.Combine(gdbBundle, "source/debug_gamecube.c"));
+var generatedGdbC = File.ReadAllText(Path.Combine(gdbBundle, "source/generated_program.c"));
+if (!debugMake.Contains("-ldb ", StringComparison.Ordinal) ||
+    !debugMake.Contains("-Og -g3 -gdwarf-4", StringComparison.Ordinal) ||
+    !debugMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
+    !debugMake.Contains("DND_NO_AUTONETWORK", StringComparison.Ordinal) ||
+    !debugC.Contains("DEBUG_Init(GDBSTUB_DEVICE_TCP, 2828)", StringComparison.Ordinal) ||
+    !debugC.Contains("tcp_localip = \"192.0.2.10\"", StringComparison.Ordinal) ||
+    !debugC.Contains("_break()", StringComparison.Ordinal))
+    throw new Exception("GDB bundle is missing native debug settings or startup rendezvous.");
+if (!generatedGdbC.Contains("#line 7 ", StringComparison.Ordinal) ||
+    !generatedGdbC.Contains("#line 8 ", StringComparison.Ordinal) ||
+    !generatedGdbC.Contains("#line 9 ", StringComparison.Ordinal) ||
+    !generatedGdbC.Contains("HelloGameCube/Program.cs", StringComparison.Ordinal) ||
+    !generatedGdbC.Contains("DND_SOURCE_ANCHOR", StringComparison.Ordinal) ||
+    generatedGdbC.Contains("#line 16707566 ", StringComparison.Ordinal))
+    throw new Exception("GDB generated C is missing visible C# statement line directives.");
+if (File.ReadAllText(Path.Combine(normalBundle, "source/generated_program.c"))
+        .Contains("#line ", StringComparison.Ordinal) ||
+    File.ReadAllText(Path.Combine(normalBundle, "source/generated_program.c"))
+        .Contains("DND_SOURCE_ANCHOR", StringComparison.Ordinal))
+    throw new Exception("Normal AOT output unexpectedly contains managed #line directives.");
+if (File.Exists(Path.Combine(normalBundle, "dnd-il-debug.json")))
+    throw new Exception("Default bundle unexpectedly contains debugger metadata.");
+var debugMapPath = Path.Combine(gdbBundle, "dnd-il-debug.json");
+using (var debugMap = System.Text.Json.JsonDocument.Parse(File.ReadAllText(debugMapPath)))
+{
+    if (debugMap.RootElement.GetProperty("schemaVersion").GetInt32() != 2)
+        throw new Exception("Unexpected debug IL map schema.");
+    if (!debugMap.RootElement.GetProperty("assemblies").EnumerateArray()
+        .Any(module => module.GetProperty("name").GetString() == "HelloGameCube" &&
+            module.GetProperty("pdbId").GetString()!.Length == 40 &&
+            Guid.TryParse(module.GetProperty("moduleVersionId").GetString(), out _)))
+        throw new Exception("Missing verified managed assembly / Portable PDB identity.");
+    var methods = debugMap.RootElement.GetProperty("methods").EnumerateArray();
+    bool entryFound = false;
+    foreach (var method in methods)
+    {
+        if (method.GetProperty("name").GetString() != "Main" ||
+            method.GetProperty("declaringType").GetString() != "Program")
+            continue;
+        var offsets = method.GetProperty("ilOffsets").EnumerateArray().Select(x => x.GetInt32()).ToArray();
+        if (offsets.Length < 2 || offsets[0] < 0 ||
+            !offsets.SequenceEqual(offsets.Distinct().OrderBy(x => x)))
+            throw new Exception("Managed entry method is missing deterministic per-instruction IL offsets.");
+        var locations = method.GetProperty("sourceLocations").EnumerateArray().ToArray();
+        var visibleLines = locations
+            .Where(location => location.GetProperty("document").GetString()!
+                .Replace('\\', '/').EndsWith("HelloGameCube/Program.cs", StringComparison.Ordinal))
+            .Select(location => location.GetProperty("startLine").GetInt32())
+            .Distinct().ToArray();
+        if (visibleLines.Length < 3 || !visibleLines.Contains(7) || !visibleLines.Contains(8) ||
+            !visibleLines.Contains(9))
+            throw new Exception("Distinct C# statement locations were not recovered from the Portable PDB.");
+        if (locations.Any(location => location.GetProperty("ilOffset").GetInt32() <
+                location.GetProperty("sequencePointIlOffset").GetInt32()))
+            throw new Exception("A mapped IL offset precedes its sequence point.");
+        entryFound = true;
+    }
+    if (!entryFound) throw new Exception("Managed entry method absent from debug IL map.");
+}
+// Missing and mismatched PDBs must fail rather than returning misleading
+// source coordinates to the IDE; normal builds continue to ignore PDBs.
+var staleDirectory = Path.Combine(tempDirectory, "stale-pdb");
+Directory.CreateDirectory(staleDirectory);
+foreach (var file in Directory.GetFiles(Path.GetDirectoryName(dll)!, "*.dll")
+             .Concat(Directory.GetFiles(Path.GetDirectoryName(dll)!, "*.pdb")))
+    File.Copy(file, Path.Combine(staleDirectory, Path.GetFileName(file)), true);
+var staleDll = Path.Combine(staleDirectory, "HelloGameCube.dll");
+File.Delete(Path.Combine(staleDirectory, "HelloGameCube.pdb"));
+AssertPdbRejected(staleDll, Path.Combine(tempDirectory, "no-pdb"));
+var unrelatedPdb = Directory.GetFiles(staleDirectory, "*.pdb")
+    .First(path => !Path.GetFileName(path).Equals("HelloGameCube.pdb", StringComparison.OrdinalIgnoreCase));
+File.Copy(unrelatedPdb, Path.Combine(staleDirectory, "HelloGameCube.pdb"));
+AssertPdbRejected(staleDll, Path.Combine(tempDirectory, "wrong-pdb"));
+// USB Gecko rejects invalid channels and contradictory TCP options before AOT.
+RunFailure("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{Path.Combine(tempDirectory, "usb-invalid")}\" --gdb-usb 2");
+RunFailure("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{Path.Combine(tempDirectory, "usb-tcp-mixed")}\" --gdb-usb 1 --gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1");
 Directory.Delete(tempDirectory, recursive: true);
 
 var genericProject = Path.Combine(root, "tests/GenericSharingSmoke/GenericSharingSmoke.csproj");
@@ -118,4 +237,32 @@ static void Run(string file, string args)
         ?? throw new Exception($"Could not start {file}.");
     p.WaitForExit();
     if (p.ExitCode != 0) throw new Exception($"{file} {args} failed with exit code {p.ExitCode}.");
+}
+
+static void RunFailure(string file, string args)
+{
+    using var process = Process.Start(new ProcessStartInfo(file, args)
+    {
+        UseShellExecute = false, RedirectStandardError = true
+    }) ?? throw new Exception($"Could not start {file}.");
+    var stderr = process.StandardError.ReadToEnd();
+    process.WaitForExit();
+    if (process.ExitCode == 0)
+        throw new Exception($"Expected invalid debugger arguments to be rejected: {file} {args}. {stderr}");
+}
+
+static void AssertPdbRejected(string dll, string directory)
+{
+    var compiler = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+        "../../../../../tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj"));
+    var arguments = $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{directory}\" " +
+        "--gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1";
+    using var process = Process.Start(new ProcessStartInfo("dotnet", arguments)
+    {
+        UseShellExecute = false, RedirectStandardError = true
+    }) ?? throw new Exception("Failed to launch debug PDB validation.");
+    var diagnostics = process.StandardError.ReadToEnd();
+    process.WaitForExit();
+    if (process.ExitCode == 0 || !diagnostics.Contains("No matching Portable PDB", StringComparison.Ordinal))
+        throw new Exception("Missing/stale PDB was accepted: " + diagnostics);
 }

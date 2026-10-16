@@ -12,8 +12,100 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded runs for the same PR/branch, not unrelated PRs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    name: Select relevant checks
+    runs-on: ubuntu-24.04
+    outputs:
+      debugger: ${{ steps.select.outputs.debugger }}
+      rider: ${{ steps.select.outputs.rider }}
+      managed: ${{ steps.select.outputs.managed }}
+      ide: ${{ steps.select.outputs.ide }}
+      portable: ${{ steps.select.outputs.portable }}
+      gamecube: ${{ steps.select.outputs.gamecube }}
+      dolphin: ${{ steps.select.outputs.dolphin }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Test CI dependency selection
+        run: python3 -m unittest discover -s tests -p test_ci_changes.py
+      - name: Select checks from the complete PR diff
+        id: select
+        run: python3 scripts/ci_changes.py
+
+  debugger-protocol:
+    needs: changes
+    if: needs.changes.outputs.debugger == 'true'
+    name: Host GDB protocol
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build .NET debugger acceptance probe
+        run: dotnet build tools/DolphinDotNet.Debugger.Probe -c Release
+      - name: Test RSP over loopback TCP and mock serial stream
+        run: dotnet run --project tests/DebuggerTests/DebuggerTests.csproj -c Release
+      - name: Build attach-only DAP adapter
+        run: dotnet build tools/DolphinDotNet.DebugAdapter -c Release
+      - name: Test DAP process against fake RSP target
+        run: python3 -m unittest discover -s tests -p test_debug_adapter.py
+  rider-plugin:
+    needs: changes
+    if: needs.changes.outputs.rider == 'true'
+    name: Rider attach plugin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.1.0'
+      - name: Compile Rider bridge, test target profiles and DAP lifecycle, package adapter
+        working-directory: plugins/rider
+        run: gradle --no-daemon test buildPlugin
+      - name: Verify plugin ZIP includes the adapter and serial runtime dependencies
+        run: |
+          python3 - <<'PYZIP'
+          from pathlib import Path
+          from zipfile import ZipFile
+          packages = list(Path('plugins/rider/build/distributions').glob('*.zip'))
+          assert len(packages) == 1, packages
+          with ZipFile(packages[0]) as archive:
+              names = archive.namelist()
+              for required in ['DolphinDotNet.DebugAdapter.dll', 'DolphinDotNet.DebugAdapter.deps.json',
+                               'DolphinDotNet.DebugAdapter.runtimeconfig.json', 'DolphinDotNet.Debugger.dll', 'System.IO.Ports.dll']:
+                  assert any(name.endswith('/adapter/' + required) for name in names), required
+              assert any('Ports.Native' in name for name in names), 'Missing serial native runtimes'
+          PYZIP
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DolphinDotNet-Rider-plugin
+          path: plugins/rider/build/distributions/*.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: Rider-plugin-test-reports
+          path: plugins/rider/build/reports/tests/
+
   managed:
+    needs: changes
+    if: needs.changes.outputs.managed == 'true'
     name: Managed compiler
     env:
       DND_ASYNC_MANUAL: "1"
@@ -372,6 +464,8 @@ jobs:
           timeout 30s /tmp/model-async32 /tmp/dnd-model-fixtures --gc-stress
 
   ide-workflow:
+    needs: changes
+    if: needs.changes.outputs.ide == 'true'
     name: IDE workflow (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -410,6 +504,8 @@ jobs:
           done
 
   portable-runtime:
+    needs: changes
+    if: needs.changes.outputs.portable == 'true'
     name: Portable runtime
     runs-on: ubuntu-latest
     steps:
@@ -421,6 +517,8 @@ jobs:
           make -C tests test CFLAGS='-O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -I../include'
 
   gamecube:
+    needs: changes
+    if: needs.changes.outputs.gamecube == 'true'
     name: GameCube DOL
     runs-on: ubuntu-latest
     container:
@@ -458,6 +556,44 @@ jobs:
           test -s /tmp/dnd-standalone/Game.elf
           test -s /tmp/dnd-standalone/Game.dol
           python3 /tmp/dnd-standalone/scripts/dol_sections.py /tmp/dnd-standalone/Game.dol
+      - name: Test native source-to-ELF address resolver
+        run: python3 -m unittest discover -s tests -p debug_address_map_test.py -v
+      - name: Build C# source-symbols-only Dolphin Emulator DOL
+        run: |
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-emulator-debug --debug-symbols
+          make -C /tmp/dnd-emulator-debug
+          test -s /tmp/dnd-emulator-debug/Game.dnd-addresses.json
+          ! grep -q '\-ldb' /tmp/dnd-emulator-debug/Makefile
+          test ! -f /tmp/dnd-emulator-debug/source/debug_gamecube.c
+          mkdir -p footprint/debug-symbols
+          cp /tmp/dnd-emulator-debug/Game.dol /tmp/dnd-emulator-debug/Game.elf /tmp/dnd-emulator-debug/dnd-il-debug.json /tmp/dnd-emulator-debug/Game.dnd-addresses.json footprint/debug-symbols/
+      - name: Build managed stack and source-stepping debugger fixture
+        run: |
+          dotnet build tests/DebuggerStackSmoke/DebuggerStackSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle tests/DebuggerStackSmoke/bin/Release/net8.0/DebuggerStackSmoke.dll /tmp/dnd-debug-stack --platform gamecube --debug-symbols
+          make -C /tmp/dnd-debug-stack
+          mkdir -p footprint/debug-stack
+          cp /tmp/dnd-debug-stack/Game.dol /tmp/dnd-debug-stack/Game.elf /tmp/dnd-debug-stack/Game.dnd-addresses.json /tmp/dnd-debug-stack/dnd-il-debug.json footprint/debug-stack/
+      - name: Link USB Gecko debugger GameCube bundle
+        run: |
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-usb-gecko --gdb-usb 1
+          make -C /tmp/dnd-usb-gecko
+          test -s /tmp/dnd-usb-gecko/Game.dol
+          test -s /tmp/dnd-usb-gecko/Game.dnd-addresses.json
+          grep -q 'DEBUG_Init(GDBSTUB_DEVICE_USB, 1)' /tmp/dnd-usb-gecko/source/debug_gamecube.c
+          grep -q '\-ldb' /tmp/dnd-usb-gecko/Makefile
+          "$DEVKITPPC/bin/powerpc-eabi-nm" /tmp/dnd-usb-gecko/Game.elf | grep -q ' dnd_gdb_init$'
+      - name: Link opt-in GDB TCP GameCube bundle
+        run: |
+          test -f "$DEVKITPRO/libogc2/gamecube/lib/libdb.a"
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-gdb-ppc --gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1
+          make -C /tmp/dnd-gdb-ppc
+          test -s /tmp/dnd-gdb-ppc/Game.dol
+          "$DEVKITPPC/bin/powerpc-eabi-readelf" -SW /tmp/dnd-gdb-ppc/Game.elf | grep -q '\.debug_info'
+          "$DEVKITPPC/bin/powerpc-eabi-nm" /tmp/dnd-gdb-ppc/Game.elf | grep -q ' dnd_gdb_init$'
+          "$DEVKITPPC/bin/powerpc-eabi-readelf" --debug-dump=decodedline /tmp/dnd-gdb-ppc/Game.elf | grep -q 'ManagedGameCube.*\.cs'
+          test -s /tmp/dnd-gdb-ppc/Game.dnd-addresses.json
+          python3 scripts/dnd_debug_addresses.py --elf /tmp/dnd-gdb-ppc/Game.elf --source-map /tmp/dnd-gdb-ppc/dnd-il-debug.json --output /tmp/dnd-gdb-ppc/manual-addresses.json --readelf "$DEVKITPPC/bin/powerpc-eabi-readelf" --require-source ManagedGameCube/Program.cs
       - name: Link managed AESND sample to a real GameCube DOL
         run: |
           dotnet build samples/AudioDemo/AudioDemo.csproj -c Release -p:DndBuildNative=false
@@ -611,7 +747,8 @@ jobs:
   dolphin-smoke:
     name: Dolphin headless DOL boot
     runs-on: ubuntu-24.04
-    needs: gamecube
+    needs: [changes, gamecube]
+    if: needs.changes.outputs.dolphin == 'true'
     container:
       image: debian:trixie
       options: --shm-size=1g
@@ -624,9 +761,16 @@ jobs:
       - name: Install Dolphin and virtual display
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth python3 binutils libxcb-cursor0
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth python3 binutils libxcb-cursor0 curl ca-certificates
           test -x /usr/games/dolphin-emu-nogui
           xvfb-run -a /usr/games/dolphin-emu-nogui --version
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build .NET source debugger acceptance probe
+        run: dotnet build tools/DolphinDotNet.Debugger.Probe -c Release
+      - name: Build attach-only DAP adapter
+        run: dotnet build tools/DolphinDotNet.DebugAdapter -c Release
       - name: Download GameCube DOL
         uses: actions/download-artifact@v4
         with:
@@ -650,6 +794,16 @@ jobs:
         id: control_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/footprint/dolphin_control.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2159 --elf dist/footprint/dolphin_control.elf --expect-symbol main --logs dolphin-control --require-boot
+      - name: Verify two consecutive C# source breakpoints in Dolphin
+        id: cs_breakpoints
+        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2165 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:8 --expect-source ManagedGameCube/Program.cs:9 --logs dolphin-csharp-breakpoints --require-boot --dotnet-probe tools/DolphinDotNet.Debugger.Probe/bin/Release/net8.0/DolphinDotNet.Debugger.Probe.dll
+      - name: Verify managed stack and C# Step Over/Out in Dolphin
+        id: cs_stack_steps
+        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-stack/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2166 --elf dist/footprint/debug-stack/Game.elf --source-map dist/footprint/debug-stack/dnd-il-debug.json --address-map dist/footprint/debug-stack/Game.dnd-addresses.json --expect-source DebuggerStackSmoke/Program.cs:20 --expect-source DebuggerStackSmoke/Program.cs:15 --logs dolphin-csharp-stack --require-boot --dotnet-probe tools/DolphinDotNet.Debugger.Probe/bin/Release/net8.0/DolphinDotNet.Debugger.Probe.dll --stack-steps
+      - name: Verify DAP Csharp breakpoints and pause in Dolphin
+        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2167 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:8 --expect-source ManagedGameCube/Program.cs:9 --logs dolphin-dap-source --require-boot --dap-adapter tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll
+      - name: Verify DAP managed stack and Step Over/Out in Dolphin
+        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-stack/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2168 --elf dist/footprint/debug-stack/Game.elf --source-map dist/footprint/debug-stack/dnd-il-debug.json --address-map dist/footprint/debug-stack/Game.dnd-addresses.json --expect-source DebuggerStackSmoke/Program.cs:20 --expect-source DebuggerStackSmoke/Program.cs:15 --logs dolphin-dap-stack --require-boot --dap-adapter tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll --stack-steps
       - name: Verify native and managed main() executed in Dolphin
         id: app_boot
         continue-on-error: true
@@ -671,6 +825,8 @@ jobs:
           test "${{ steps.minimal_boot.outcome }}" = success
           test "${{ steps.control_boot.outcome }}" = success
           test "${{ steps.app_boot.outcome }}" = success
+          test "${{ steps.cs_breakpoints.outcome }}" = success
+          test "${{ steps.cs_stack_steps.outcome }}" = success
           test "${{ steps.async_boot.outcome }}" = success
           test "${{ steps.timing_boot.outcome }}" = success
           test "${{ steps.pong_boot.outcome }}" = success
@@ -684,16 +840,54 @@ jobs:
             dolphin-minimal/
             dolphin-control/
             dolphin-smoke/
+            dolphin-csharp-breakpoints/
+            dolphin-csharp-stack/
+            dolphin-dap-source/
+            dolphin-dap-stack/
             dolphin-async/
             dolphin-timing/
             dolphin-pong/
             dolphin-snake/
           if-no-files-found: warn
 
+  ci-result:
+    name: CI result
+    if: always()
+    runs-on: ubuntu-24.04
+    needs: [changes, debugger-protocol, rider-plugin, managed, ide-workflow, portable-runtime, gamecube, dolphin-smoke]
+    steps:
+      - name: Require every selected check to pass
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          jobs = json.loads(os.environ['JOB_RESULTS'])
+          if jobs['changes']['result'] != 'success':
+              sys.exit('CI selection failed')
+          selected = jobs['changes']['outputs']
+          groups = {'debugger-protocol': 'debugger', 'rider-plugin': 'rider', 'managed': 'managed',
+                    'ide-workflow': 'ide', 'portable-runtime': 'portable',
+                    'gamecube': 'gamecube', 'dolphin-smoke': 'dolphin'}
+          failed = []
+          for job, group in groups.items():
+              if selected.get(group) not in ('true', 'false'):
+                  sys.exit('Missing or invalid selection for ' + group)
+              expected = 'success' if selected[group] == 'true' else 'skipped'
+              actual = jobs[job]['result']
+              print(f'{job}: {actual} (expected {expected})')
+              if actual != expected:
+                  failed.append(job)
+          if failed:
+              sys.exit('Unexpected CI results: ' + ', '.join(failed))
+          PY
+
   release-gamecube:
     name: Publish GameCube build release
     runs-on: ubuntu-latest
     needs:
+      - ci-result
+      - debugger-protocol
       - managed
       - ide-workflow
       - portable-runtime

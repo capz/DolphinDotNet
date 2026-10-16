@@ -75,7 +75,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
   </PropertyGroup>
   <Target Name="BuildDol" AfterTargets="Build"
           Condition="'$(DndBuildNative)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingProject)' != 'false' and '$(IsCrossTargetingBuild)' != 'true'">
-    <Delete Files="$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)dolphin-run.json" />
+    <Delete Files="$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)$(AssemblyName).dnd-debug.json;$(TargetDir)$(AssemblyName).dnd-addresses.json;$(TargetDir)dolphin-run.json" />
     <MSBuild Projects="$(_DndBuildProject);$(_DndCompilerProject)" Targets="Restore;Rebuild"
              Properties="Configuration=$(Configuration)"
              RemoveProperties="OutputPath;BaseOutputPath;BaseIntermediateOutputPath;IntermediateOutputPath;TargetFramework;RuntimeIdentifier;SelfContained;DndBuildNative" />
@@ -85,6 +85,10 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
     <ItemGroup>
       <_DndArgs Include="$(_DndTools)DolphinDotNet.Build.dll;build;--assembly;$(TargetPath);--compiler;$(_DndCompiler);--native-directory;$(_DndNative);--dol;$(TargetDir)$(AssemblyName).dol;--elf;$(TargetDir)$(AssemblyName).elf;--run-config;$(TargetDir)dolphin-run.json;--backend;$(DndBuildBackend);--jobs;$(DndBuildJobs);--user-directory;$(DolphinUserDirectory)" />
       <_DndArgs Include="--dolphin;$(DolphinPath)" Condition="'$(DolphinPath)' != ''" />
+      <_DndArgs Include="--debug-symbols;$(DndDebugSymbols);--gdb-transport;$(DndGdbTransport)" />
+      <_DndArgs Include="--gdb-ip;$(DndGdbIp);--gdb-netmask;$(DndGdbNetmask);--gdb-gateway;$(DndGdbGateway);--gdb-port;$(DndGdbPort)"
+                Condition="'$(DndGdbTransport)' == 'Tcp' or '$(DndGdbTransport)' == 'tcp' or '$(DndGdbTransport)' == 'TCP'" />
+      <_DndArgs Include="--gdb-channel;$(DndGdbChannel)" Condition="'$(DndGdbTransport)' == 'UsbGecko' or '$(DndGdbTransport)' == 'usbgecko' or '$(DndGdbTransport)' == 'USBGECKO'" />
     </ItemGroup>
     <DndRunTool Tool="$(_DndDotnet)" Arguments="@(_DndArgs)" />
     <ItemGroup>
@@ -94,7 +98,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
   </Target>
   <Target Name="CleanDol" AfterTargets="Clean" Condition="'$(DesignTimeBuild)' != 'true'">
     <RemoveDir Directories="$(IntermediateOutputPath)native" />
-    <Delete Files="$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)dolphin-run.json;$(TargetDir)DolphinDotNet.Build.dll;$(TargetDir)DolphinDotNet.Build.deps.json;$(TargetDir)DolphinDotNet.Build.runtimeconfig.json" />
+    <Delete Files="$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)$(AssemblyName).dnd-debug.json;$(TargetDir)$(AssemblyName).dnd-addresses.json;$(TargetDir)dolphin-run.json;$(TargetDir)DolphinDotNet.Build.dll;$(TargetDir)DolphinDotNet.Build.deps.json;$(TargetDir)DolphinDotNet.Build.runtimeconfig.json" />
   </Target>
   <Target Name="Run" DependsOnTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
     <ItemGroup>

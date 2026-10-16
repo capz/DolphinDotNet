@@ -3,7 +3,8 @@ namespace DolphinDotNet.Compiler;
 
 internal static class ValueCBackend
 {
-    public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry,CompilationModel model,DependencyGraph graph)
+    public static string EmitProgram(IReadOnlyList<ValueIrMethod> methods,MethodKey entry,CompilationModel model,DependencyGraph graph,
+        IReadOnlyDictionary<MethodKey, IReadOnlyDictionary<int, ManagedSourceLocation>>? sourceLocations = null)
     {
         var b=new StringBuilder();b.AppendLine("#include <stdint.h>\n#include <math.h>\n#include <string.h>\n#include \"dnd_managed.h\"\n#include \"dnd_console.h\"\n#include \"dnd_performance.h\"\n#include \"dnd_input.h\"\n#include \"dnd_graphics.h\"\n#include \"dnd_draw.h\"\n#include \"dnd_gx_raw.h\"\n#include \"dnd_storage.h\"\n#include \"dnd_text.h\"\n#include \"dnd_aram.h\"\n#include \"dnd_audio.h\"\n#include \"dnd_model.h\"\nstatic DndManagedHeap *dnd_value_heap;");
         b.AppendLine("static inline float dnd_read_float(const void *p) {float v;memcpy(&v,p,4);return v;}\nstatic inline double dnd_read_double(const void *p) {double v;memcpy(&v,p,8);return v;}\nstatic inline uint64_t dnd_float_bits(double v,bool single) {if(single){float f=(float)v;uint32_t bits;memcpy(&bits,&f,4);return bits;}uint64_t bits;memcpy(&bits,&v,8);return bits;}\nstatic inline double dnd_float_value(uint64_t bits,bool single) {if(single){uint32_t b=(uint32_t)bits;return dnd_read_float(&b);}return dnd_read_double(&bits);}");
@@ -61,7 +62,9 @@ internal static class ValueCBackend
         foreach(var type in initializedTypes){b.AppendLine($"static uint8_t dnd_cctor_state_{Id(type)};");b.AppendLine($"static void {EnsureSymbol(type)}(void);");}
         foreach(var m in methods)b.AppendLine($"{ReturnCType(m,model)} {Symbol(m.Key)}({Parameters(m,model)});");
         b.AppendLine(ComparisonBindings.EmitHelpers(methods,model,graph));
-        foreach(var m in methods)b.AppendLine(Emit(m,model,Symbol(m.Key),false,stringIds,automaticAsync));
+        foreach(var m in methods)
+            b.AppendLine(Emit(m,model,Symbol(m.Key),false,stringIds,automaticAsync,
+                sourceLocations is not null ? sourceLocations[m.Key] : null));
         foreach(var type in initializedTypes)
         {
             var cctor=TypeInitializer(type,model)!;
@@ -129,7 +132,8 @@ internal static class ValueCBackend
         b.AppendLine("intptr_t dnd_value_aot_entry(DndManagedHeap *heap) { return dnd_aot_entry(heap); }");return b.ToString();
     }
 
-    public static string Emit(ValueIrMethod method,CompilationModel model,string functionName="dnd_value_ir_test",bool includeHeader=true,IReadOnlyDictionary<string,int>? stringIds=null,bool automaticAsync=false)
+    public static string Emit(ValueIrMethod method,CompilationModel model,string functionName="dnd_value_ir_test",bool includeHeader=true,IReadOnlyDictionary<string,int>? stringIds=null,bool automaticAsync=false,
+        IReadOnlyDictionary<int, ManagedSourceLocation>? sourceLocations=null)
     {
         var b=new StringBuilder();
         var values=Collect(method).GroupBy(v=>v.Id).Select(g=>g.First()).OrderBy(v=>v.Id).ToArray();
@@ -212,6 +216,7 @@ internal static class ValueCBackend
         if(method.Blocks.Count>0)b.AppendLine($"  goto block_{method.Blocks[0].Id};");
         foreach(var block in method.Blocks)
         {
+            if (sourceLocations is not null) b.AppendLine("#line 1 \"generated_program.c\"");
             b.AppendLine($"block_{block.Id}:");
             // Every AOT block entry is a cooperative safepoint, including loop backedges.
             // The hook is a no-op until the native runtime installs a coordinator.
@@ -225,6 +230,8 @@ internal static class ValueCBackend
             }
             foreach(var i in block.Instructions)
             {
+                if (sourceLocations is not null)
+                    EmitLineDirective(b, sourceLocations, i.CilOffset);
                 switch(i)
                 {
                     case ValueIrConstant x:b.AppendLine($"  v{x.Result.Id} = {x.Value};");break;
@@ -483,10 +490,43 @@ internal static class ValueCBackend
                     case ValueIrPhi: break; // Assigned on predecessor edges.
                 }
             }
+            if (sourceLocations is not null)
+                EmitLineDirective(b, sourceLocations, block.Terminator?.CilOffset ?? -1);
             EmitTerminator(b,method,block,model,leavePaths.Select(x=>(x.Block.Id,x.Leave,x.Id)).ToArray());
         }
+        if (sourceLocations is not null) b.AppendLine("#line 1 \"generated_program.c\"");
         b.AppendLine("}");
         return b.ToString();
+    }
+
+    // #line directives preserve managed source filenames and statement lines
+    // in GCC's DWARF line table. They intentionally do not invent PowerPC
+    // addresses; A3 will extract and validate that table from the linked ELF.
+    private static void EmitLineDirective(StringBuilder output,
+        IReadOnlyDictionary<int, ManagedSourceLocation> sourceLocations, int ilOffset)
+    {
+        if (ilOffset >= 0 && sourceLocations.TryGetValue(ilOffset, out var source))
+        {
+            var path = source.Document.Replace("\\", "\\\\", StringComparison.Ordinal)
+                .Replace("\"", "\\\"", StringComparison.Ordinal)
+                .Replace("\r", "\\r", StringComparison.Ordinal)
+                .Replace("\n", "\\n", StringComparison.Ordinal);
+            output.AppendLine($"#line {source.StartLine} \"{path}\"");
+            // A visible IL instruction can disappear entirely under -Og, leaving
+            // only zero-length DWARF views shared with the following statement
+            // or hidden cleanup. Give debug builds a real instruction to stop
+            // on, even for a folded assignment or return. Normal builds never
+            // call this emitter. The memory clobber prevents movement of memory
+            // effects across the source rendezvous; it is not a runtime hook.
+            output.AppendLine("  __asm__ volatile (\"nop\" ::: \"memory\"); /* DND_SOURCE_ANCHOR */");
+            output.AppendLine($"#line {source.StartLine} \"{path}\"");
+        }
+        else
+        {
+            // An unmapped / hidden instruction must not inherit an unrelated
+            // C# line from a previous sequence point.
+            output.AppendLine("#line 1 \"generated_program.c\"");
+        }
     }
 
     // Dispatch slots are pointer-sized on GameCube. Wide values travel by

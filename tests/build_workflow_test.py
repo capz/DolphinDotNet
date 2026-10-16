@@ -93,10 +93,12 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
     assembly.write_bytes(b"unused")
     elf = work / "Pong.elf"
     elf.write_bytes(b"old output")
+    debug_map = work / "Pong.dnd-debug.json"
+    debug_map.write_text('{"stale": true}')
     output = call("build", "--assembly", assembly, "--compiler", assembly,
                   "--native-directory", work / "obj/native", "--dol", dol, "--elf", elf,
                   "--run-config", config, "--backend", "Invalid", expected=1)
-    assert not dol.exists() and not elf.exists() and not config.exists()
+    assert not dol.exists() and not elf.exists() and not config.exists() and not debug_map.exists()
     output = call("build", "--assembly", assembly, "--compiler", assembly,
                   "--native-directory", work / "fresh/native", "--dol", work / "fresh/Pong.dol",
                   "--elf", work / "fresh/Pong.elf", "--run-config", work / "fresh/run.json",

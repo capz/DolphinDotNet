@@ -14,5 +14,6 @@
     <Content Include="../../vendor/libogc2/exi.c" Link="native/vendor/libogc2/exi.c" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../vendor/ufbx/LICENSE" Link="native/vendor/ufbx/LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../scripts/dol_sections.py" Link="native/scripts/dol_sections.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../scripts/dnd_debug_addresses.py" Link="native/scripts/dnd_debug_addresses.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

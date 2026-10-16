@@ -47,6 +47,7 @@ internal static class ValueIrImporter
             foreach(var cil in block.Instructions)
             {
                 var beforeCount=stack.Count;
+                var beforeInstructions=instructions.Count;
                 switch(cil.OpCode)
                 {
                     case 0x00: break;
@@ -478,6 +479,13 @@ internal static class ValueIrImporter
                         break;
                     }
                 }
+                // A single CIL operation may lower into multiple Value IR
+                // instructions. Preserve its exact IL offset on every result.
+                // Phi nodes inserted below deliberately keep the -1 sentinel.
+                for (var emitted = beforeInstructions; emitted < instructions.Count; emitted++)
+                    instructions[emitted] = instructions[emitted] with { CilOffset = cil.Offset };
+                if (terminator is { CilOffset: < 0 })
+                    terminator = terminator with { CilOffset = cil.Offset };
             }
             if(terminator is null&&block.Successors.Count==1)terminator=new ValueIrJump(block.Successors[0]);
             exitValues[block.Id]=stack.ToList();
