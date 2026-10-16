@@ -141,6 +141,17 @@ internal static class ValueCBackend
         b.Append($"{ReturnCType(method,model)} {functionName}(");
         b.Append(Parameters(method,model,sourceLocations is not null));
         b.AppendLine(") {");
+        // GCC may describe even volatile formal parameters using entry_value,
+        // which requires historical register state. Debug targets use explicit
+        // volatile local copies so their current DWARF locations are readable.
+        if(sourceLocations is not null) {
+            model.Methods.TryGetValue(method.Key,out var debugMethod);var abi=debugMethod?.Abi;
+            for(var ai=0;ai<method.ParameterCount+(method.HasThis?1:0);ai++) {
+                var pi=ai-(method.HasThis?1:0);
+                var kind=pi>=0&&abi is not null&&pi<abi.Parameters.Count?abi.Parameters[pi]:CilStackKind.NativeInt;
+                b.AppendLine($"  volatile {AbiCType(kind)} a{ai} = dnd_in_a{ai};");
+            }
+        }
         for(var ai=0;ai<method.ParameterCount+(method.HasThis?1:0);ai++)b.AppendLine($"  (void)a{ai};");
         // Struct arguments travel as addresses, but are private value copies in
         // the callee. ldarga must address the copy, never the ABI pointer slot.
@@ -699,9 +710,10 @@ internal static class ValueCBackend
         var n=m.ParameterCount+(m.HasThis?1:0);if(n==0)return ReturnSize(m.Key,model)>0?"intptr_t dnd_ret":"void";
         model.Methods.TryGetValue(m.Key,out var mm);var abi=mm?.Abi;
         return string.Join(", ",Enumerable.Range(0,n).Select(i=>{
-            if(m.HasThis&&i==0)return $"{(m.ExceptionRegions.Count>0 || debug?"volatile ":"")}intptr_t a{i}";
+            var name=debug?$"dnd_in_a{i}":$"a{i}";
+            if(m.HasThis&&i==0)return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}intptr_t {name}";
             var pi=i-(m.HasThis?1:0);var kind=abi is not null&&pi<abi.Parameters.Count?abi.Parameters[pi]:CilStackKind.NativeInt;
-            return $"{(m.ExceptionRegions.Count>0 || debug?"volatile ":"")}{AbiCType(kind)} a{i}";
+            return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}{AbiCType(kind)} {name}";
         }))+(ReturnSize(m.Key,model)>0?", intptr_t dnd_ret":"");
     }
     private static int ReturnSize(MethodKey key,CompilationModel model)=>model.Methods.TryGetValue(key,out var mm)?mm.Abi?.ReturnStorage?.Size??0:0;

@@ -7,7 +7,7 @@ import java.nio.file.*;
 
 final class AdapterCommand {
     static GeneralCommandLine create(String... arguments) {
-        var descriptor = PluginManagerCore.getPlugin(PluginId.getId("com.dolphindotnet.rider"));
+        var descriptor = PluginManagerCore.getPlugin(PluginId.getId("com.dolphindotnet.debugger"));
         if (descriptor == null) throw new IllegalStateException("DolphinDotNet plugin is unavailable.");
         Path adapter = descriptor.getPluginPath().resolve("adapter/DolphinDotNet.DebugAdapter.dll");
         if (!Files.isRegularFile(adapter)) throw new IllegalStateException("The plugin package is missing its debug adapter.");
