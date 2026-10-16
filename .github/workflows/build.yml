@@ -46,14 +46,14 @@ jobs:
           /tmp/dnd-tool-install/dnd-save-image --help
       - name: Validate HelloGameCube through current AOT path
         run: |
-          dotnet build samples/HelloGameCube/HelloGameCube.csproj -c Release
+          dotnet build samples/HelloGameCube/HelloGameCube.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll /tmp/hello-gamecube.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/hello-gamecube.c tests/hello_gamecube_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/hello-gamecube-test
           /tmp/hello-gamecube-test
           sh scripts/compile-sample.sh /tmp/hello-gamecube-bundle
           test -s /tmp/hello-gamecube-bundle/source/generated_program.c
       - name: Build managed GameCube sample
-        run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
+        run: dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release -p:DndBuildNative=false
       - name: Lower managed GameCube dependency graph
         run: |
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/managed_gamecube.c
@@ -107,9 +107,26 @@ jobs:
         run: |
           cc -std=gnu11 -Wall -Wextra -Werror -O2 -Iinclude tests/audio_native_test.c source/audio.c -lm -o /tmp/dnd-audio-native
           /tmp/dnd-audio-native
+      - name: Validate GameCube audio containers, decoders and AESND callbacks
+        run: |
+          python3 tests/generate_audio_fixtures.py /tmp/dnd-audio-fixtures/sd/audio
+          cc -std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all -Iinclude tests/audio_formats_test.c source/audio.c -lm -o /tmp/dnd-audio-formats
+          /tmp/dnd-audio-formats /tmp/dnd-audio-fixtures/sd/audio
+          cc -m32 -std=c11 -Wall -Wextra -Werror -O2 -Iinclude tests/audio_formats_test.c source/audio.c -lm -o /tmp/dnd-audio-formats32
+          /tmp/dnd-audio-formats32 /tmp/dnd-audio-fixtures/sd/audio
+          cc -std=c11 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -Itests/audio_sdk -Iinclude tests/audio_backend_test.c source/audio_gamecube.c -lm -o /tmp/dnd-audio-callbacks
+          /tmp/dnd-audio-callbacks
+      - name: Validate GameCube audio awaits, background loading and cancellation
+        env:
+          DND_ASYNC_MANUAL: "0"
+        run: |
+          dotnet build tests/AudioFormatsSmoke -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/AudioFormatsSmoke/bin/Release/net8.0/AudioFormatsSmoke.dll /tmp/dnd-audio-formats-aot.c
+          cc -pthread -std=c11 -Wall -Wextra -Werror -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -Iinclude /tmp/dnd-audio-formats-aot.c tests/audio_formats_host.c source/audio.c source/managed_runtime.c source/async_runtime.c source/storage.c source/performance.c -lm -o /tmp/dnd-audio-formats-aot
+          /tmp/dnd-audio-formats-aot /tmp/dnd-audio-fixtures --gc-stress
       - name: Compile managed AESND audio sample through current AOT pipeline
         run: |
-          dotnet build samples/AudioDemo/AudioDemo.csproj -c Release
+          dotnet build samples/AudioDemo/AudioDemo.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/AudioDemo/bin/Release/net8.0/AudioDemo.dll /tmp/dnd-audio-demo.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-audio-demo.c -o /tmp/dnd-audio-demo.o
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/AudioDemo/bin/Release/net8.0/AudioDemo.dll /tmp/dnd-audio-bundle
@@ -120,7 +137,7 @@ jobs:
           dotnet run --project tests/PongRulesSmoke/PongRulesSmoke.csproj -c Release
       - name: Compile self-contained two-player Pong through managed AOT
         run: |
-          dotnet build samples/Pong/Pong.csproj -c Release
+          dotnet build samples/Pong/Pong.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-pong.c -o /tmp/dnd-pong.o
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong-bundle
@@ -134,7 +151,7 @@ jobs:
         run: dotnet run --project tests/SnakeRulesSmoke/SnakeRulesSmoke.csproj -c Release
       - name: Compile Snake save/load game through managed AOT
         run: |
-          dotnet build samples/Snake/Snake.csproj -c Release
+          dotnet build samples/Snake/Snake.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/Snake/bin/Release/net8.0/Snake.dll /tmp/dnd-snake.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-snake.c -o /tmp/dnd-snake.o
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Snake/bin/Release/net8.0/Snake.dll /tmp/dnd-snake-bundle --platform gamecube
@@ -145,7 +162,7 @@ jobs:
       - name: Compile Google logo ARAM example through AOT
         timeout-minutes: 4
         run: |
-          dotnet build samples/GoogleLogoAram/GoogleLogoAram.csproj -c Release
+          dotnet build samples/GoogleLogoAram/GoogleLogoAram.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/GoogleLogoAram/bin/Release/net8.0/GoogleLogoAram.dll /tmp/google-logo-aram.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/google-logo-aram.c -o /tmp/google-logo-aram.o
       - name: Validate clocks, frame timing, Task.Delay and captured timers
@@ -235,7 +252,7 @@ jobs:
         run: |
           cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/hardware_native_test.c source/hardware.c -o /tmp/dnd-hardware-native
           /tmp/dnd-hardware-native
-          dotnet build samples/HardwareDiagnostics/HardwareDiagnostics.csproj -c Release
+          dotnet build samples/HardwareDiagnostics/HardwareDiagnostics.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/HardwareDiagnostics/bin/Release/net8.0/HardwareDiagnostics.dll /tmp/dnd-hardware-aot.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-hardware-aot.c -o /tmp/dnd-hardware-aot.o
           grep -q 'dnd_hardware_probe' /tmp/dnd-hardware-aot.c
@@ -250,7 +267,7 @@ jobs:
         run: |
           cc -std=c11 -O2 -g -Wall -Wextra -Werror -Iinclude tests/iso_image_test.c source/iso_file.c source/fst.c -o /tmp/dnd-iso-image
           /tmp/dnd-iso-image
-          dotnet build samples/DiscBrowser/DiscBrowser.csproj -c Release
+          dotnet build samples/DiscBrowser/DiscBrowser.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/DiscBrowser/bin/Release/net8.0/DiscBrowser.dll /tmp/dnd-disc-browser.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-disc-browser.c -o /tmp/dnd-disc-browser.o
           grep -q 'dnd_storage_mount_disc_image' /tmp/dnd-disc-browser.c
@@ -299,7 +316,7 @@ jobs:
           DND_ASYNC_MANUAL: "0"
         timeout-minutes: 4
         run: |
-          dotnet build samples/AsyncNetworking/AsyncNetworking.csproj -c Release
+          dotnet build samples/AsyncNetworking/AsyncNetworking.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --aot samples/AsyncNetworking/bin/Release/net8.0/AsyncNetworking.dll /tmp/async-networking.c
           cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-networking.c tests/network_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/async-networking
           python3 tests/network_fixtures.py /tmp/async-networking
@@ -318,6 +335,8 @@ jobs:
           /tmp/dnd-tool-install/dnd-assets --help
           dotnet build /tmp/dnd-model-fixtures/Build.csproj -c Release -p:DndAssetsCommand=/tmp/dnd-tool-install/dnd-assets
           cmp /tmp/dnd-model-fixtures/sd/animated.dndmodel /tmp/dnd-model-fixtures/sd/built.dndmodel
+          cc -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_inflate_test.c source/model_ufbx.c -lm -o /tmp/model-inflate
+          /tmp/model-inflate
           cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native
           timeout 30s /tmp/model-native /tmp/dnd-model-fixtures
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native32
@@ -327,13 +346,68 @@ jobs:
         run: |
           dotnet build tests/ModelSmoke/ModelSmoke.csproj -c Release
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll /tmp/model-smoke.c
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke
+          # Avoid pathological sanitizer compile times for large generated state machines.
+          # Native code stays optimized; the 32-bit pass below also optimizes generated C.
+          cc -pthread -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/model-smoke.c -o /tmp/model-smoke-generated.o
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke-generated.o tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures --gc-stress
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke32
           timeout 30s /tmp/model-smoke32 /tmp/dnd-model-fixtures --gc-stress
+
+      - name: Validate background model awaits, rendering and in-flight cancellation
+        timeout-minutes: 5
+        env:
+          DND_ASYNC_MANUAL: "0"
+        run: |
+          dotnet build tests/ModelAsyncSmoke/ModelAsyncSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/ModelAsyncSmoke/bin/Release/net8.0/ModelAsyncSmoke.dll /tmp/model-async.c
+          cc -pthread -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/model-async.c -o /tmp/model-async-generated.o
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-async-generated.o tests/model_async_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/timing.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -Wl,--wrap=ufbx_load_memory -lm -o /tmp/model-async
+          timeout 30s /tmp/model-async /tmp/dnd-model-fixtures
+          timeout 30s /tmp/model-async /tmp/dnd-model-fixtures --gc-stress
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-async.c tests/model_async_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/timing.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -Wl,--wrap=ufbx_load_memory -lm -o /tmp/model-async32
+          timeout 30s /tmp/model-async32 /tmp/dnd-model-fixtures --gc-stress
+
+  ide-workflow:
+    name: IDE workflow (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the shared driver and launch probe
+        run: |
+          dotnet build tools/DolphinDotNet.Build
+          dotnet build tests/DolphinLaunchProbe
+      - name: Validate launch lifecycle and MSBuild integration
+        run: python tests/build_workflow_test.py
+      - name: Build every sample solution without a native toolchain
+        shell: pwsh
+        run: |
+          Get-ChildItem samples/*/*.sln | ForEach-Object {
+            dotnet build $_.FullName -p:DndBuildNative=false
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Build every sample with the container backend
+        if: runner.os == 'Linux'
+        run: |
+          for solution in samples/*/*.sln; do
+            dotnet build "$solution" -p:DndBuildBackend=Docker
+            sample=$(basename "$solution" .sln)
+            python scripts/dol_sections.py "samples/$sample/bin/Debug/net8.0/$sample.dol"
+          done
 
   portable-runtime:
     name: Portable runtime
@@ -350,7 +424,7 @@ jobs:
     name: GameCube DOL
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/extremscorner/libogc2:20260805
+      image: ghcr.io/extremscorner/libogc2:20260805@sha256:13bb658d3f18903816617223f5d7c6f776d3db3ea806aae67f8d35a7a69d4c85
     steps:
       - uses: actions/checkout@v4
       - name: Verify libogc2 storage and GX packages
@@ -375,7 +449,7 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Generate managed GameCube AOT source
         run: |
-          dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release
+          dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj -- --aot samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll generated/managed_gamecube.c
       - name: Build generated standalone GameCube project
         run: |
@@ -386,24 +460,28 @@ jobs:
           python3 /tmp/dnd-standalone/scripts/dol_sections.py /tmp/dnd-standalone/Game.dol
       - name: Link managed AESND sample to a real GameCube DOL
         run: |
-          dotnet build samples/AudioDemo/AudioDemo.csproj -c Release
+          dotnet build samples/AudioDemo/AudioDemo.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/AudioDemo/bin/Release/net8.0/AudioDemo.dll /tmp/dnd-audio-demo-ppc --platform gamecube
           make -C /tmp/dnd-audio-demo-ppc
           test -s /tmp/dnd-audio-demo-ppc/Game.dol
           python3 /tmp/dnd-audio-demo-ppc/scripts/dol_sections.py /tmp/dnd-audio-demo-ppc/Game.dol
+      - name: Link GameCube audio format loaders and async API
+        run: |
+          dotnet build tests/AudioFormatsSmoke -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle tests/AudioFormatsSmoke/bin/Release/net8.0/AudioFormatsSmoke.dll /tmp/dnd-audio-formats-ppc --platform gamecube
+          make -C /tmp/dnd-audio-formats-ppc
+          python3 /tmp/dnd-audio-formats-ppc/scripts/dol_sections.py /tmp/dnd-audio-formats-ppc/Game.dol
       - name: Build and validate self-contained Pong GameCube DOL
         run: |
-          dotnet build samples/Pong/Pong.csproj -c Release
-          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Pong/bin/Release/net8.0/Pong.dll /tmp/dnd-pong-gamecube --platform gamecube
-          make -C /tmp/dnd-pong-gamecube
-          test -s /tmp/dnd-pong-gamecube/Game.dol
-          python3 /tmp/dnd-pong-gamecube/scripts/dol_sections.py /tmp/dnd-pong-gamecube/Game.dol
+          dotnet build samples/Pong/Pong.sln -c Release -p:DndBuildBackend=Native
+          test -s samples/Pong/bin/Release/net8.0/Pong.dol
+          python3 scripts/dol_sections.py samples/Pong/bin/Release/net8.0/Pong.dol
           mkdir -p footprint
-          cp /tmp/dnd-pong-gamecube/Game.dol footprint/pong.dol
-          cp /tmp/dnd-pong-gamecube/Game.elf footprint/pong.elf
+          cp samples/Pong/bin/Release/net8.0/Pong.dol footprint/pong.dol
+          cp samples/Pong/bin/Release/net8.0/Pong.elf footprint/pong.elf
       - name: Build and validate Snake save/load GameCube DOL
         run: |
-          dotnet build samples/Snake/Snake.csproj -c Release
+          dotnet build samples/Snake/Snake.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Snake/bin/Release/net8.0/Snake.dll /tmp/dnd-snake-gamecube --platform gamecube
           make -C /tmp/dnd-snake-gamecube
           test -s /tmp/dnd-snake-gamecube/Game.dol
@@ -413,13 +491,13 @@ jobs:
           cp /tmp/dnd-snake-gamecube/Game.elf footprint/snake.elf
       - name: Build GameCube hardware discovery and reboot demo DOL
         run: |
-          dotnet build samples/HardwareDiagnostics/HardwareDiagnostics.csproj -c Release
+          dotnet build samples/HardwareDiagnostics/HardwareDiagnostics.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/HardwareDiagnostics/bin/Release/net8.0/HardwareDiagnostics.dll /tmp/dnd-hardware-demo --platform gamecube
           make -C /tmp/dnd-hardware-demo
           test -s /tmp/dnd-hardware-demo/Game.dol
       - name: Build GameCube disc browser with libogc2 GC Loader sectors
         run: |
-          dotnet build samples/DiscBrowser/DiscBrowser.csproj -c Release
+          dotnet build samples/DiscBrowser/DiscBrowser.csproj -c Release -p:DndBuildNative=false
           dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/DiscBrowser/bin/Release/net8.0/DiscBrowser.dll /tmp/dnd-disc-browser-bundle --platform gamecube
           test -s /tmp/dnd-disc-browser-bundle/source/iso_file.c
           test -s /tmp/dnd-disc-browser-bundle/source/hardware.c
@@ -617,6 +695,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - managed
+      - ide-workflow
       - portable-runtime
       - gamecube
       - dolphin-smoke

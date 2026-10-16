@@ -17,22 +17,46 @@ the GameCube runs generated native code, using only the supported AOT API subset
 
 ## Build a GameCube DOL
 
-Choose any sample directory name from the table:
+Every sample has a solution named after its directory, such as
+[Snake/Snake.sln](Snake/Snake.sln) or [Pong/Pong.sln](Pong/Pong.sln).
+Install .NET 8, Dolphin, and Docker with Linux containers, or a native
+Linux/macOS devkitPPC/libogc2 toolchain; see [IDE setup](../docs/ide-workflow.md).
+
+- **Visual Studio:** open the sample's `.sln`, select its executable as the
+  startup project, choose **Dolphin**, and press **Ctrl+F5**.
+- **Rider:** open the sample's `.sln`, disable **Use ReSharper Build**, select
+  **<sample> in Dolphin**, and click **Run**.
+
+Choose any sample directory name from the table for the CLI:
 
 ```sh
 sample=ManagedGameCube
-dotnet build "samples/$sample/$sample.csproj" -c Release
+dotnet build "samples/$sample/$sample.sln" -c Release
+dotnet run --project "samples/$sample" -c Release --no-build
+```
+
+Build produces `samples/<sample>/bin/Release/net8.0/<sample>.dol` and the
+matching `.elf`. Every real build regenerates and fully rebuilds native code.
+Omit `--no-build` to build and launch in one command. Each sample preserves its
+own Dolphin settings in `obj/dolphin-user/`. Configure controllers, storage and
+networking as required by the table above; building does not provision external
+assets or network services.
+
+### Manual bundle generation
+
+For a standalone bundle, opt out of the integrated native build first:
+
+```sh
+dotnet build "samples/$sample/$sample.csproj" -c Release -p:DndBuildNative=false
 dotnet run --project tools/DolphinDotNet.Compiler -- \
   --bundle "samples/$sample/bin/Release/net8.0/$sample.dll" "out/$sample" \
   --platform gamecube
 make -C "out/$sample"
 ```
 
-Bundle compilation requires devkitPPC and libogc2. See the
-[standalone build guide](../docs/standalone-native-builds.md) for dependencies and
-output details. Load the resulting `.dol` in Dolphin or on a GameCube. Desktop
-`dotnet run` does not provide the native backend needed by these samples.
-`sh scripts/compile-sample.sh` is a shortcut for generating HelloGameCube's bundle.
+See the [standalone build guide](../docs/standalone-native-builds.md) for SDK
+dependencies. Load `out/<sample>/Game.dol` in Dolphin or on a GameCube.
+`sh scripts/compile-sample.sh` generates HelloGameCube's standalone bundle.
 
 To inspect generated C without the console SDK:
 

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 namespace Dolphin.Storage;
 public enum StorageDevice { SdSlotA, SdSlotB, SdSerialPort2, DvdDrive, MemoryCardSlotA, MemoryCardSlotB, GcLoader }
-public enum DiscFormat { Iso9660=1, GameCubeFst=2 }
+public enum DiscFormat { Iso9660=1, Fst=2 }
 public static class Storage
 {
     public static bool Mount(StorageDevice device)=>NativeStorage.Mount((int)device);
@@ -14,9 +14,8 @@ public static class Storage
         if(imagePath==null)throw new ArgumentNullException("imagePath");
         return NativeStorage.MountDiscImage(imagePath);
     }
-    /// <summary>Mount the currently loaded GameCube game, or an ISO at a full path.</summary>
-    public static bool MountGameCubeDisc(string? imagePath=null)=>
-        imagePath==null ? MountDisc(DiscFormat.GameCubeFst) : MountDisc(imagePath);
+    /// <summary>Mount the currently loaded game disc or ODE-selected game.</summary>
+    public static bool MountDisc()=>MountDisc(DiscFormat.Fst);
     /// <summary>Read the mounted GameCube boot header and optional opening.bnr
     /// artwork/text. Works for real media, ODE-loaded discs and ISO-backed dvd:/.
     /// Use the selected PAL language for BNR2; BNR1 has one language record.

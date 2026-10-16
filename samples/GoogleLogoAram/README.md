@@ -24,7 +24,8 @@ GameCube HTTP support currently **does not include TLS/HTTPS**. Because the offi
 
 1. On a development PC with internet access, run `python3 samples/GoogleLogoAram/logo_proxy.py`.
 2. Change `LogoUrl` in `Program.cs` to the PC's LAN IPv4 address (port 18081).
-3. Follow the [standalone sample build instructions](../README.md#build-a-gamecube-dol), choosing `GoogleLogoAram`.
-4. Run it on the GameCube with networking enabled. Exit code 0 means the streamed image's PNG signature was validated. Exit code 1 indicates a failure.
+3. Open [GoogleLogoAram.sln](GoogleLogoAram.sln) and use the Dolphin launch profile,
+   or run `dotnet run --project samples/GoogleLogoAram`. See [IDE setup](../../docs/ide-workflow.md).
+4. Run it in Dolphin or on the GameCube with networking enabled. Exit code 0 means the streamed image's PNG signature was validated. Exit code 1 indicates a failure.
 
 The example allocates **256 KiB of ARAM capacity** as an upper bound, not as a claim that the image occupies that much data. The 4 KiB staging buffer is reused for every segment. CI checks compilation and AOT generation; live network/ARAM hardware operation still needs testing.

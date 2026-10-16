@@ -371,6 +371,69 @@ DndString *dnd_fs_full_path(DndManagedHeap *heap, DndString *path) {
     return NULL;
   return dnd_string_from_utf8(heap, out);
 }
+bool dnd_fs_path_utf8_native(DndString *path, char *output, unsigned capacity) {
+  char raw[PATH_CAP], canonical[PATH_CAP];
+  if (!output || !utf8(path, raw) || normalize(raw, canonical) < 0)
+    return false;
+  size_t length = strlen(canonical);
+  if (length >= capacity) {
+    fail(ENAMETOOLONG, "Path too long.");
+    return false;
+  }
+  memcpy(output, canonical, length + 1);
+  return true;
+}
+int dnd_fs_open_utf8_native(const char *path, int mode, int access, int share) {
+  if (!path) {
+    fail(EINVAL, "Null native asset path.");
+    return 0;
+  }
+  struct {
+    DndObject object;
+    uint32_t length;
+    uint16_t chars[PATH_CAP];
+  } text = {0};
+  text.object.type = &DND_TYPE_STRING;
+  const unsigned char *p = (const unsigned char *)path;
+  while (*p) {
+    uint32_t c = *p++;
+    unsigned continuation = 0;
+    uint32_t minimum = 0;
+    if (c >= 0xc2 && c <= 0xdf) {
+      c &= 31;
+      continuation = 1;
+      minimum = 0x80;
+    } else if (c >= 0xe0 && c <= 0xef) {
+      c &= 15;
+      continuation = 2;
+      minimum = 0x800;
+    } else if (c >= 0xf0 && c <= 0xf4) {
+      c &= 7;
+      continuation = 3;
+      minimum = 0x10000;
+    } else if (c >= 0x80)
+      goto invalid;
+    for (unsigned i = 0; i < continuation; i++) {
+      if ((*p & 0xc0) != 0x80)
+        goto invalid;
+      c = (c << 6) | (*p++ & 63);
+    }
+    if (c < minimum || c > 0x10ffff || (c >= 0xd800 && c <= 0xdfff))
+      goto invalid;
+    if (text.length + 2 >= PATH_CAP)
+      goto invalid;
+    if (c > 0xffff) {
+      c -= 0x10000;
+      text.chars[text.length++] = (uint16_t)(0xd800 + (c >> 10));
+      text.chars[text.length++] = (uint16_t)(0xdc00 + (c & 1023));
+    } else
+      text.chars[text.length++] = (uint16_t)c;
+  }
+  return dnd_fs_open((DndString *)&text, mode, access, share);
+invalid:
+  fail(EINVAL, "Invalid UTF-8 native asset path.");
+  return 0;
+}
 DndString *dnd_storage_path(DndManagedHeap *heap, int d, DndString *path) {
   if (!valid_device(d))
     return NULL;

@@ -38,17 +38,17 @@ score and food before accepting Continue.
 
 ## Build
 
-With .NET 8, devkitPPC and libogc2 installed, from the repository root:
+Open [Snake.sln](Snake.sln) in Visual Studio or Rider and use the Dolphin
+launch profile, or build and run from the repository root:
 
 ```sh
-dotnet build samples/Snake/Snake.csproj -c Release
-dotnet run --project tools/DolphinDotNet.Compiler -- \
-  --bundle samples/Snake/bin/Release/net8.0/Snake.dll out/Snake --platform gamecube
-make -C out/Snake
+dotnet run --project samples/Snake -c Release
 ```
 
-Load `out/Snake/Game.dol` in Dolphin or on a GameCube. The standalone bundle
-includes the project's verified libogc2 EXI override.
+See [IDE setup](../../docs/ide-workflow.md) for prerequisites and local settings.
+
+The build produces `samples/Snake/bin/Release/net8.0/Snake.dol`, also suitable
+for loading on a GameCube, with the project's verified libogc2 EXI override.
 
 Host-side logic and serialization tests:
 

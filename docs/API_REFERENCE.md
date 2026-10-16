@@ -390,9 +390,11 @@ Dolphin.Audio.Audio.Initialize();
 
 ### Sound
 
-Owned native PCM clip, loaded from a mounted WAV file or synthesized unsigned mono PCM8. The native backend copies managed PCM bytes to aligned memory.
+Owned native clip, loaded from WAV, supported GameCube containers, or synthesized PCM8. GameCube sources remain compressed in native memory and decode bounded AESND buffers. See [format and game coverage](gamecube-audio-formats.md).
 
-**API:** `Sound.Load(path)`, `Sound.LoadAsync(path[,token])`, `Sound.FromPcm8(byte[],sampleRate)`, `SampleRate`, `LengthBytes`, `Volume`, `Pitch`, `Play([loop])`, `Dispose()`.
+**API:** `Sound.Load(path[,format,dataPath,entryIndex,nativeBudgetBytes])`, `LoadAsync(path[,format,dataPath,entryIndex,cancellationToken,nativeBudgetBytes])`, `LoadAsync(path,cancellation)`, `AudioFormat`, `FromPcm8(byte[],sampleRate)`, `SampleRate`, `LengthBytes`, `Channels`, `SampleCount`, `HasLoop`, `LoopStartSample`, `LoopEndSample`, `NativeBytes`, `Volume`, `Pitch`, `Play([loop])`, `PlayLoop(loopStartSample,loopEndSample)`, `Dispose()`.
+
+`Load`/`LoadAsync` recognize file headers, including WAV, automatically; headerless or paired inputs require an explicit `AudioFormat`. `PlayLoop` supports imported source codecs except WAV; it plays the intro once, then repeats `[start,end)` in sample frames per channel. Ranges are per voice and sample-exact, including ADX partial frames; embedded loop metadata stays unchanged. Require `0 <= start < end <= SampleCount`.
 
 ~~~csharp
 using var sound = Sound.FromPcm8(new byte[] { 128, 255, 128, 0 }, 22050);
@@ -415,9 +417,9 @@ channel.Stop();
 
 ### Music
 
-Convenience long-lived sound owner for looping background WAV playback **preloaded into native memory**; it is not an MP3/Ogg decoder or streaming player.
+Convenience sound owner for a looping background track. WAV uses resident PCM; supported GameCube sources use compressed resident playback. Disk streaming and MP3/Ogg/AHX decoding are unavailable.
 
-**API:** `Load(path)`, `LoadAsync(path[,token])`, `Volume`, `Pitch`, `IsPlaying`, `Play([loop=true])`, `Stop()`, `Dispose()`.
+**API:** `Load(...)`, `LoadAsync(...)` (same source options and cancellation overload as Sound), `Volume`, `Pitch`, `IsPlaying`, `Play([loop=true])`, `PlayLoop(loopStartSample,loopEndSample)` (same range semantics as Sound), `Stop()`, `Dispose()`.
 
 ~~~csharp
 using var music = Music.Load("sd:/audio/loop.wav");
@@ -433,7 +435,7 @@ GameCube `StorageDevice` values: `SdSlotA` (`carda:/` SD adapter), `SdSlotB` (`c
 
 Mount/unmount SD or disc devices, switch ISO9660 versus GameCube original-disc FST, and use device-scoped file/directory helpers.
 
-**API:** `Mount(device)`, `MountDisc(format)`, `IsMounted(device)`, `Unmount(device)`, `GetPath(device,path)`, `FileExists/DirectoryExists`, `ReadAllBytes/WriteAllBytes`, `Open(...)`, `CreateDirectory(...)`, `EnumerateFiles/EnumerateDirectories`, `GetFiles/GetDirectories`, `DeleteFile/DeleteDirectory`, `DiscFormat.Iso9660/GameCubeFst`.
+**API:** `Mount(device)`, `MountDisc(format)`, `IsMounted(device)`, `Unmount(device)`, `GetPath(device,path)`, `FileExists/DirectoryExists`, `ReadAllBytes/WriteAllBytes`, `Open(...)`, `CreateDirectory(...)`, `EnumerateFiles/EnumerateDirectories`, `GetFiles/GetDirectories`, `DeleteFile/DeleteDirectory`, `DiscFormat.Iso9660/Fst`.
 
 ~~~csharp
 if (Storage.Mount(StorageDevice.SdSerialPort2)) {
@@ -598,13 +600,13 @@ if (disc.Banner != null) {
 ### Storage — unified GameCube game disc and ISO mounts
 
 Every original GameCube FST uses `dvd:/`. For a physical or ODE-presented disc
-call `MountGameCubeDisc()`; for a plain ISO/GCM image, give a full mounted
-filesystem path to `MountDisc(path)` or `MountGameCubeDisc(path)`. Continue
+call `MountDisc()`; for a plain ISO/GCM image, give a full mounted
+filesystem path to `MountDisc(path)`. Continue
 using normal `Storage.GetFiles`, `ReadAllBytes` and `Open` on
 `StorageDevice.DvdDrive`. GC Loader's optional SD filesystem mounts at
 `gcloader:/` via `StorageDevice.GcLoader`.
 
-**API:** `Storage.MountGameCubeDisc([isoPath])`,
+**API:** `Storage.MountDisc()`,
 `Storage.MountDisc(DiscFormat)`, `Storage.MountDisc(string imagePath)`,
 `Storage.Unmount(StorageDevice.DvdDrive)`.
 
@@ -1250,14 +1252,14 @@ These constants correspond to the IDs and enum values in [GXConstants.Generated.
 - **Storage:** ordinary files require a mounted filesystem and are not power-loss atomic. GameCube memory-card entries are separate, journaled native saves. Media and free capacity matter.
 - **Graphics:** only one frame and pass at once, native resources need Dispose, and raw GPU commands require manual state and pointer correctness.
 - **Async:** no manual Scheduler.Pump call is needed for regular async/await; graphics and input stay on the application executor.
-- **Audio:** AESND PCM/WAV; Music is preloaded WAV (not streamed MP3/Ogg).
+- **Audio:** AESND PCM/WAV and [native GameCube game audio](gamecube-audio-formats.md), with compressed resident playback; no disk streaming or MP3/Ogg/AHX decoder.
 - **Validation:** AOT and Dolphin emulator smoke tests do not prove correct physical memory-card writes, peripherals, or audio output on real hardware.
 - **Authoritative details:** the source in src/ and the focused technical docs govern any edge cases, method overloads and platform limits.
 
 ### Build a GameCube sample
 
 ~~~sh
-dotnet build samples/Snake/Snake.csproj -c Release
+dotnet build samples/Snake/Snake.csproj -c Release -p:DndBuildNative=false
 dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/Snake/bin/Release/net8.0/Snake.dll out/Snake --platform gamecube
 make -C out/Snake
 ~~~

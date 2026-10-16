@@ -1,7 +1,7 @@
-#include "dnd_graphics.h"
 #include "dnd_draw.h"
-#include "dnd_performance.h"
+#include "dnd_graphics.h"
 #include "dnd_model_internal.h"
+#include "dnd_performance.h"
 #include <math.h>
 #include <string.h>
 #ifdef DND_GAMECUBE_STORAGE
@@ -23,10 +23,12 @@ int dnd_model_frame_begin(DndArray *view, DndArray *projection) {
   if (dnd_model_frame_active || !matrix_array(view, frame_view) ||
       !matrix_array(projection, frame_projection))
     return -1;
-  owns_frame=!dnd_device_active();
-  if(owns_frame && dnd_device_begin(0.025f,0.035f,0.06f,1)<0) return -1;
-  if(dnd_device_pass_begin(1)<0) return -1;
-  dnd_draw_set_camera(frame_view,frame_projection);
+  owns_frame = !dnd_device_active();
+  if (owns_frame && dnd_device_begin(0.025f, 0.035f, 0.06f, 1) < 0)
+    return -1;
+  if (dnd_device_pass_begin(1) < 0)
+    return -1;
+  dnd_draw_set_camera(frame_view, frame_projection);
 #ifdef DND_GAMECUBE_STORAGE
   Mtx44 p;
   for (int r = 0; r < 4; r++)
@@ -40,10 +42,68 @@ int dnd_model_frame_begin(DndArray *view, DndArray *projection) {
 int dnd_model_frame_end(void) {
   if (!dnd_model_frame_active)
     return -1;
-  if(dnd_device_pass_end(1)<0) return -1;
+  if (dnd_device_pass_end(1) < 0)
+    return -1;
   dnd_model_frame_active = false;
-  if(owns_frame) return dnd_device_end();
+  if (owns_frame)
+    return dnd_device_end();
   return 0;
+}
+/* Opaque geometry precedes depth-sorted translucency within each model draw.
+ * Buffers belong to the instance and are budgeted once, never per frame. */
+static bool draw_later(DndInstance *in, unsigned a, unsigned b) {
+  return in->draw_depth[a] > in->draw_depth[b] ||
+         (in->draw_depth[a] == in->draw_depth[b] && a > b);
+}
+static void draw_sift(DndInstance *in, unsigned *order, unsigned count,
+                      unsigned root) {
+  for (;;) {
+    unsigned child = root * 2 + 1;
+    if (child >= count)
+      return;
+    if (child + 1 < count && draw_later(in, order[child + 1], order[child]))
+      child++;
+    if (!draw_later(in, order[child], order[root]))
+      return;
+    unsigned swap = order[root];
+    order[root] = order[child];
+    order[child] = swap;
+    root = child;
+  }
+}
+void dnd_model_sort_draws(DndInstance *in, const float world[16],
+                          const float view[16]) {
+  if (!in->draw_order)
+    return;
+  DndModel *m = in->model;
+  unsigned opaque = 0;
+  for (unsigned i = 0; i < m->meshes; i++)
+    if (!(m->material[m->mesh[i].material].mode & 4))
+      in->draw_order[opaque++] = i;
+  unsigned count = 0;
+  for (unsigned i = 0; i < m->meshes; i++) {
+    DndMesh *mesh = &m->mesh[i];
+    if (!(m->material[mesh->material].mode & 4))
+      continue;
+    float object[16], mv[16];
+    if (mesh->skin < 0)
+      dnd_model_multiply(object, world, in->global + (unsigned)mesh->node * 16);
+    else
+      memcpy(object, world, 64);
+    dnd_model_multiply(mv, view, object);
+    in->draw_depth[i] = mv[2] * mesh->center[0] + mv[6] * mesh->center[1] +
+                        mv[10] * mesh->center[2] + mv[14];
+    in->draw_order[opaque + count++] = i;
+  }
+  unsigned *order = in->draw_order + opaque;
+  for (unsigned i = count / 2; i > 0; i--)
+    draw_sift(in, order, count, i - 1);
+  for (unsigned end = count; end > 1; end--) {
+    unsigned swap = order[0];
+    order[0] = order[end - 1];
+    order[end - 1] = swap;
+    draw_sift(in, order, end - 1, 0);
+  }
 }
 int dnd_model_draw(int token, DndArray *transform) {
   DndInstance *in = dnd_instance_find(token);
@@ -52,7 +112,9 @@ int dnd_model_draw(int token, DndArray *transform) {
       !matrix_array(transform, world))
     return -1;
   DndModel *model = in->model;
-  for (unsigned mi = 0; mi < model->meshes; mi++) {
+  dnd_model_sort_draws(in, world, frame_view);
+  for (unsigned draw = 0; draw < model->meshes; draw++) {
+    unsigned mi = in->draw_order ? in->draw_order[draw] : draw;
     DndMesh *mesh = &model->mesh[mi];
     float object[16], mv[16], normal[16];
     if (mesh->skin < 0)
@@ -82,8 +144,16 @@ int dnd_model_draw(int token, DndArray *transform) {
     GX_SetCullMode(mat->two          ? GX_CULL_NONE
                    : determinant < 0 ? GX_CULL_FRONT
                                      : GX_CULL_BACK);
-    GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
+    GX_SetZMode(GX_TRUE, GX_LEQUAL, (mat->mode & 4) ? GX_FALSE : GX_TRUE);
+    GX_SetBlendMode((mat->mode & 4) ? GX_BM_BLEND : GX_BM_NONE,
+                    (mat->mode & 16)  ? (mat->mode >> 5) & 7
+                    : (mat->mode & 4) ? GX_BL_SRCALPHA
+                                      : GX_BL_ONE,
+                    (mat->mode & 16)  ? (mat->mode >> 8) & 7
+                    : (mat->mode & 8) ? GX_BL_ONE
+                    : (mat->mode & 4) ? GX_BL_INVSRCALPHA
+                                      : GX_BL_ZERO,
+                    GX_LO_CLEAR);
     GX_SetAlphaCompare(mat->mode & 1 ? GX_GEQUAL : GX_ALWAYS,
                        (u8)(mat->cutoff * 255), GX_AOP_AND, GX_ALWAYS, 0);
     GX_ClearVtxDesc();

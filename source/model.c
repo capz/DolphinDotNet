@@ -279,7 +279,12 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
     mat->cutoff = scalar(&r[2]);
     mat->two = (int)number(&r[2]);
     if (mat->texture < -1 || mat->texture >= (int)m->textures ||
-        mat->mode < 0 || mat->mode > 3 || mat->two < 0 || mat->two > 1 ||
+        mat->mode < 0 || (mat->mode & ~0x7ff) ||
+        ((mat->mode & 0x7e0) && !(mat->mode & 16)) ||
+        ((mat->mode & 16) && (!(mat->mode & 4) || (mat->mode & 8))) ||
+        ((mat->mode & 8) && !(mat->mode & 4)) ||
+        ((mat->mode & 4) && (mat->mode & 1)) ||
+        mat->two < 0 || mat->two > 1 ||
         mat->cutoff < 0 || mat->cutoff > 1)
       return false;
     for (int j = 0; j < 4; j++)
@@ -338,6 +343,10 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
     mesh->indices = number(&r[1]);
     float bounds[6];
     floats(&r[1], bounds, 6);
+    for (unsigned c = 0; c < 3; c++) {
+      if (bounds[c] > bounds[c + 3]) return false;
+      mesh->center[c] = bounds[c] * .5f + bounds[c + 3] * .5f;
+    }
     if (mesh->node < 0 || mesh->node >= (int)m->nodes || mesh->skin < -1 ||
         mesh->skin >= (int)m->skins || mesh->material < 0 ||
         mesh->material >= (int)m->materials || !mesh->vertices ||

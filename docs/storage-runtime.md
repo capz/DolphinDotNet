@@ -55,7 +55,7 @@ if (Storage.Mount(StorageDevice.SdSerialPort2))
 | MemoryCardSlotA / MemoryCardSlotB | Separate MemoryCard API; no filesystem path |
 | GcLoader | gcloader:/ (GC Loader SD via libogc2 `__io_gcode`, when firmware exposes sectors) |
 
-SD mounts register VFAT/exFAT and select the first mountable partition, with four cache pages of eight sectors (about 16 KiB per device). Mount returns false when no supported medium/filesystem can mount; it never formats media. ISO9660 uses its own pathname limits. `Storage.Mount(DvdDrive)` retains ISO9660 behavior. Use `Storage.MountDisc(DiscFormat.GameCubeFst)` for original GameCube discs, or `MountDisc(DiscFormat.Iso9660)` explicitly; unmount before changing formats. FST validates the disc magic, entry tree, names and data ranges and exposes files/directories through a read-only devoptab. GC Loader block filesystems remain outside this backend. Memory-card enums cannot be passed to Storage.GetPath or ordinary Directory operations.
+SD mounts register VFAT/exFAT and select the first mountable partition, with four cache pages of eight sectors (about 16 KiB per device). Mount returns false when no supported medium/filesystem can mount; it never formats media. ISO9660 uses its own pathname limits. `Storage.Mount(DvdDrive)` retains ISO9660 behavior. Use `Storage.MountDisc(DiscFormat.Fst)` for original GameCube discs, or `MountDisc(DiscFormat.Iso9660)` explicitly; unmount before changing formats. FST validates the disc magic, entry tree, names and data ranges and exposes files/directories through a read-only devoptab. GC Loader block filesystems remain outside this backend. Memory-card enums cannot be passed to Storage.GetPath or ordinary Directory operations.
 
 ## GC Loader and unified GameCube DVD filesystems
 
@@ -74,7 +74,7 @@ directory and stream operations are used after either mount:
 
 ```csharp
 // Original game disc or ODE-selected disc:
-if (Storage.MountGameCubeDisc()) {
+if (Storage.MountDisc()) {
     string[] names = Storage.GetFiles(StorageDevice.DvdDrive, "");
     Storage.Unmount(StorageDevice.DvdDrive);
 }
@@ -85,7 +85,6 @@ if (Storage.MountDisc("sd:/games/game.iso")) {
 }
 ```
 
-`Storage.MountGameCubeDisc("sd:/games/game.iso")` is an equivalent overload.
 Both routes use the existing `dnd_fst` validation, read-only `dvd:/` devoptab,
 file streams, path normalization, stat, and directory enumeration. The
 `Storage.MountDisc(DiscFormat.Iso9660)` overload retains its separate meaning

@@ -1,6 +1,6 @@
 # Model assets and animation
 
-The desktop `DolphinDotNet.Assets` .NET tool compiles FBX, OBJ/MTL, glTF, GLB and PSO GJ/XJ model geometry to self-contained `.dndmodel` files. The GameCube loads compiled packages, *or* directly imports static OBJ geometry at runtime through `Model.LoadObjAsync`. An already compiled package may also be loaded from bytes with `Model.FromPackage`. See [live loading and GameCube format matrix](live-model-formats.md). Model, animation and transform APIs live in `Dolphin.Graphics` in the GameCube assembly.
+The desktop `DolphinDotNet.Assets` .NET tool compiles FBX, OBJ/MTL, glTF, GLB and PSO GJ/XJ model geometry to self-contained `.dndmodel` files. The GameCube loads compiled packages or directly imports bounded original PSO GJ/GVM/NMDM, FBX, OBJ/MTL, embedded GLB and F-Zero GX GMA/GCMF/TPL assets through `Model.LoadPsoAsync`, `Model.LoadFbxAsync`, `Model.LoadObjAsync`, `Model.LoadGlbAsync` and `Model.LoadFZeroGxAsync`. Sunshine J3D BMD/BDL/BTI/BCK/BCA and GameCube RE4 BIN/TPL/FK-FCV have on-device entry points `Model.LoadJ3dAsync` and `Model.LoadResidentEvil4Async`; see [format profiles](gamecube-model-formats.md). See the [on-device source loading guide](model-source-import.md) for exact supported profiles and memory limits. An already compiled package may also be loaded from bytes with `Model.FromPackage`. See [live loading and GameCube format matrix](live-model-formats.md). Model, animation and transform APIs live in `Dolphin.Graphics` in the GameCube assembly.
 
 ## Conversion
 
@@ -32,19 +32,16 @@ Override `DndAssetsCommand` if the tool is not on PATH. Conversion currently run
 
 ## Load, animate and draw
 
-Mount the desired device before loading. Async operations use Dolphin's cooperative task scheduler; pump it on the application thread. Large package, texture, pose and skinned-vertex allocations are native, outside the 256 KiB managed heap.
+Mount the desired device before loading. Async loads run on the runtime background executor; use `await` without an application pump. Source parsing releases the managed execution gate; storage and final publication remain serialized. See [async source loading](model-source-import.md#shared-execution-and-memory-contract) for cancellation and scheduling details. Large package, texture, pose and skinned-vertex allocations are native, outside the 256 KiB managed heap.
 
 ```csharp
 using Dolphin.Graphics;
 using Dolphin.Memory;
 using Dolphin.Storage;
-using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 
 Storage.Mount(StorageDevice.SdSerialPort2);
 Aram.Initialize(); // before audio or another ARAM owner
-var loading = Model.LoadAsync("sd:/assets/player.dndmodel");
-// Pump Scheduler.Pump() each iteration while loading.
-using var model = loading.Result; // Result also pumps while waiting
+using var model = await Model.LoadAsync("sd:/assets/player.dndmodel");
 foreach (var clip in model.Animations)
     Console.WriteLine(clip.Name);
 
@@ -69,7 +66,7 @@ renderer.EndFrame();
 
 Playback supports `Play`, `CrossFade`, `Pause`, `Resume`, `Stop`, `Seek` and `SetSpeed`. Speeds and time deltas must be nonnegative and finite. Crossfades blend two clips; starting a third while a fade is active fails. Missing channels use the rest pose; quaternion LINEAR tracks use shortest-path slerp, cubic tracks use the glTF Hermite/tangent rule followed by quaternion normalization. Root motion stays in the pose. `GetNodeName` and `ModelInstance.GetNodeTransform(index, float[16])` support bone/socket attachments; matrices are column-major, in model space. Multiply by the object's world matrix to obtain world coordinates. Stop restores the rest pose.
 
-CPU skinning supports four influences per vertex, up to 256 joints per skin and independently animated node ancestors. It computes skinned positions and inverse-transpose weighted normals into reusable aligned native buffers. Active pose evaluation and geometry stay in main RAM. Rendering uses native GX immediate triangle submission, RGB/alpha modulation, a fixed camera-facing diffuse direction plus ambient light, and restores the GX state required by the existing diagnostic overlay at frame end. Hardware rendering/performance acceptance remains necessary; CI builds do not prove visual correctness. Use the shared GraphicsDevice and explicit pass boundaries when mixing model, mesh, raw GX and Draw2D submissions; see [Graphics APIs](graphics.md).
+CPU skinning supports four influences per vertex, up to 256 joints per skin and independently animated node ancestors. It computes skinned positions and inverse-transpose weighted normals into reusable aligned native buffers. Active pose evaluation and geometry stay in main RAM. Rendering uses native GX immediate triangle submission, RGB/alpha modulation, a fixed camera-facing diffuse direction plus ambient light, and restores the GX state required by the existing diagnostic overlay at frame end. F-Zero imports also support alpha/additive/custom GX blending with per-model mesh depth sorting; see [F-Zero loading](fzero-gx-loading.md). Hardware rendering/performance acceptance remains necessary; CI builds do not prove visual correctness. Use the shared GraphicsDevice and explicit pass boundaries when mixing model, mesh, raw GX and Draw2D submissions; see [Graphics APIs](graphics.md).
 
 ## Transforms and lifetime
 
@@ -77,7 +74,7 @@ CPU skinning supports four influences per vertex, up to 256 joints per skin and 
 
 The lower-level `Renderer.BeginFrame(float[16] view, float[16] projection)` and `DrawModel(instance, float[16] world)` remain available. Raw projection matrices must follow GX's right-handed depth convention (near -1, far 0); the Camera helper builds this convention. `DrawModel(instance, Transform)` also accepts cached transforms.
 
-Update, playback mutation, unloading and instance disposal are rejected while a model frame is active. `EndFrame` waits for GX completion before buffers can be reused/freed. Dispose instances before disposing the shared model; existing instances retain native resources if the model wrapper is disposed early, but metadata lookup and new instance creation then fail. Operations are single-threaded/application-thread only. Native handles use monotonic tokens, never recycled identities.
+Update, playback mutation, unloading and instance disposal are rejected while a model frame is active. `EndFrame` waits for GX completion before buffers can be reused/freed. Dispose instances before disposing the shared model; existing instances retain native resources if the model wrapper is disposed early, but metadata lookup and new instance creation then fail. Rendering requires the application thread. Shared managed/model operations use the runtime execution gate; native source parsing runs outside it on the service thread. Native handles use monotonic tokens, never recycled identities.
 
 ## ARAM unload and reload
 
@@ -92,7 +89,7 @@ renderer.EndFrame();
 
 `UnloadToAramAsync` preserves the old resident resources until the whole ARAM upload succeeds; cancellation/failure leaves the original residency intact. `PrepareAsync` validates the ARAM snapshot and rebuilds texture/skinning buffers transactionally; failure leaves the model cold. Existing instances resume at their preserved times. `PrepareAnimationAsync(name)` validates the clip and prepares its whole model. Selective clip-only eviction, compression and automatic LOD streaming are future optimizations.
 
-Drawing/updating a cold model fails rather than hiding DMA. Call `PrepareAsync` ahead of need and pump the scheduler over intervening frames. Operations on an instance fail during its model's residency transition. Model disposal during a transition drains active DMA and cleans up without publishing the result. Transitions are serialized per model; DMA is globally serialized by the existing ARAM queue.
+Drawing/updating a cold model fails rather than hiding DMA. Await `PrepareAsync` ahead of need while the application continues its frame loop. Operations on an instance fail during its model's residency transition. Model disposal during a transition drains active DMA and cleans up without publishing the result. Transitions are serialized per model; DMA is globally serialized by the existing ARAM queue.
 
 Backing packages remain in ARAM after restoration, so later unloads reuse the snapshot without another upload. These allocations are pinned until model disposal, not subject to priority asset-cache eviction. `IsResident`, `NativeBytes` and `AramBytes` report residency and per-model memory charges (shared texture payloads are charged to each model's budget). `ModelInstance.NativeBytes` reports its pose, palette and output-buffer charge. Small model metadata, node transforms and instance playback/pose state remain in main RAM while cold; textures, package bytes, skin palettes and skinned outputs are freed. Keeping an ARAM backup consumes both memories while resident, but avoids disk reads after eviction.
 
