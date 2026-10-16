@@ -8,6 +8,7 @@ Check(RspStop.Parse("S05").ProgramCounter is null, "S stop without PC");
 Check(RspStop.Parse("W00").Exited, "exit event");
 Expect<InvalidDataException>(() => RspStop.Parse("T0540:xyz;"), "invalid stop program counter");
 await TestUnwindingAndDepthAsync();
+await TestRecursiveAndSameLineAsync();
 await TestSourceSteppingAsync();
 await TestSourceBreakpointsAsync();
 await TestTcpProtocolAsync();
@@ -350,6 +351,47 @@ static async Task TestUnwindingAndDepthAsync()
         Check(exit.Reason == SourceStepReason.SourceLocation && exit.Instructions == 1 && exit.Location?.Line == 20, "step out reaches greater caller CFA");
         Check((await stepper.StepOutAsync(RspStop.Parse("T0540:80004000;"), 1)).Reason == SourceStepReason.UnwindUnavailable, "missing CFA never guessed");
         Check((await stepper.StepOverAsync(origin, 1)).Reason == SourceStepReason.UnwindUnavailable, "invalid stack origin never executes");
+        await server.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+    finally { listener.Stop(); Directory.Delete(directory, true); }
+}
+
+static async Task TestRecursiveAndSameLineAsync()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "dnd-recursive-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    var listener = new TcpListener(IPAddress.Loopback, 0);
+    try
+    {
+        var elf = Path.Combine(directory, "Game.elf"); var source = Path.Combine(directory, "source.json"); var native = Path.Combine(directory, "addresses.json");
+        File.WriteAllText(elf, "recursive fixture"); File.WriteAllText(source, "{\"schemaVersion\":2}");
+        string Hash(string path) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+        File.WriteAllText(native, System.Text.Json.JsonSerializer.Serialize(new {
+            schemaVersion = 1, elfSha256 = Hash(elf), sourceMapSha256 = Hash(source),
+            methods = new[] { new { symbol = "A", assembly = "Demo", methodToken = 1, nativeStart = "0x80001000", nativeSize = 64,
+                breakpoints = new[] { new { document = "/Program.cs", line = 10, addresses = new[] { "0x80001000", "0x80001004" } } } } },
+            unwind = new[] { new { start = "0x80001000", end = "0x80001040", supported = true, cfaRegister = 1, cfaOffset = 0,
+                registers = new Dictionary<string, object> { ["65"] = new { kind = "same" } } } }
+        }));
+        listener.Start();
+        var server = Task.Run(async () => {
+            using var peer = await listener.AcceptTcpClientAsync(); using var stream = peer.GetStream();
+            foreach (var (command, reply) in new[] {
+                ("p1", "81700100"), ("s", "T0540:80001000;"), ("p1", "817000e0"),
+                ("p1", "81700100"), ("s", "T0540:80001000;"), ("p1", "817000e0"),
+                ("s", "T0540:80001004;"), ("p1", "81700100"),
+                ("p1", "81700100"), ("s", "T0540:80001000;")
+            }) { Check(await ReadFrameAsync(stream) == command, "recursive depth command " + command); await SendReplyAsync(stream, reply); Check(await ReadByteAsync(stream) == '+', "recursive ACK"); }
+        });
+        var symbols = SourceAddressMap.Load(elf, source, native);
+        await using var client = await RspClient.ConnectTcpAsync("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
+        var start = RspStop.Parse("T0540:80001000;"); var stepper = new SourceStepper(client, symbols);
+        var into = await stepper.StepIntoAsync(start, 2);
+        Check(into.Reason == SourceStepReason.SourceLocation && into.Instructions == 1, "recursive entry at identical PC/line is a new activation");
+        var over = await stepper.StepOverAsync(start, 3);
+        Check(over.Reason == SourceStepReason.SourceLocation && over.Instructions == 2 && over.Stop.ProgramCounter == 0x80001004, "same-line call return stops after proven CFA transition");
+        var hit = await new SourceStepper(client, symbols, pc => pc == 0x80001000).StepOverAsync(start, 2);
+        Check(hit.Reason == SourceStepReason.UserBreakpoint && hit.Instructions == 1, "recursive breakpoint wins over depth/source arbitration");
         await server.WaitAsync(TimeSpan.FromSeconds(5));
     }
     finally { listener.Stop(); Directory.Delete(directory, true); }

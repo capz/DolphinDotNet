@@ -16,7 +16,10 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     private bool _initialized, _configured, _closed, _pauseRequested;
     private int _lineBase = 1, _columnBase = 1, _nextFrame;
     private bool _uriPaths;
-    private readonly HashSet<int> _frames = new();
+    private sealed record FrameState(NativeStackFrame Frame, bool TopFrame, uint Lookup);
+    private readonly Dictionary<int, FrameState> _frames = new();
+    private readonly Dictionary<int, (FrameState Frame, DebugVariable[] Variables)> _variableScopes = new();
+    private int _nextVariable;
     private readonly CancellationTokenSource _lifetime = new();
 
     public async Task RunAsync()
@@ -81,6 +84,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             if (_client is not null) throw new InvalidOperationException("Already attached.");
             _configured = false;
             _frames.Clear();
+            _variableScopes.Clear();
             _symbols = SourceAddressMap.Load(Required(args, "elf"), Required(args, "sourceMap"), Required(args, "addressMap"));
             _paths = new SourcePathMapper(args);
             var transport = AttachTransport.Parse(args);
@@ -144,10 +148,11 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 var start = args.TryGetProperty("startFrame", out var sf) ? sf.GetInt32() : 0;
                 var levels = args.TryGetProperty("levels", out var lv) ? lv.GetInt32() : 0;
                 if (start < 0 || levels < 0) throw new ArgumentException("Invalid stack pagination.");
-                var frames = trace.Frames.Skip(start).Take(levels == 0 ? int.MaxValue : levels).Select(frame =>
+                var frames = trace.Frames.Skip(start).Take(levels == 0 ? int.MaxValue : levels).Select((frame, index) =>
                 {
                     var id = ++_nextFrame;
-                    _frames.Add(id);
+                    var top = start + index == 0;
+                    _frames.Add(id, new(frame, top, top ? frame.ProgramCounter : frame.ProgramCounter >= 4 ? frame.ProgramCounter - 4 : 0));
                     var source = frame.SourceLocations.Count == 1 ? frame.SourceLocations[0] : null;
                     var local = source is null ? null : _paths!.ToLocal(source.Document);
                     return new
@@ -163,8 +168,33 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                     await connection.EventAsync("output", new { category = "console", output = $"Partial stack: {trace.Reason}\n" });
                 break;
             case "scopes":
-                if (!_frames.Contains(args.GetProperty("frameId").GetInt32())) throw new ArgumentException("Unknown or stale frameId.");
-                await connection.RespondAsync(request, new { scopes = Array.Empty<object>() });
+                if (!_frames.TryGetValue(args.GetProperty("frameId").GetInt32(), out var frameState)) throw new ArgumentException("Unknown or stale frameId.");
+                var scopes = _symbols.FindVariables(frameState.Lookup).GroupBy(v => v.Group).Select(group =>
+                {
+                    var id = ++_nextVariable;
+                    var variables = group.ToArray();
+                    _variableScopes.Add(id, (frameState, variables));
+                    return new { name = group.Key, variablesReference = id, namedVariables = variables.Length, expensive = false,
+                        presentationHint = group.Key == "Arguments" ? "arguments" : "locals" };
+                }).ToArray();
+                await connection.RespondAsync(request, new { scopes });
+                break;
+            case "variables":
+                if (!_variableScopes.TryGetValue(args.GetProperty("variablesReference").GetInt32(), out var scope))
+                    throw new ArgumentException("Unknown or stale variablesReference.");
+                var first = args.TryGetProperty("start", out var begin) ? begin.GetInt32() : 0;
+                var count = args.TryGetProperty("count", out var amount) ? amount.GetInt32() : 0;
+                if (first < 0 || count < 0) throw new ArgumentException("Invalid variable pagination.");
+                var selected = args.TryGetProperty("filter", out var filter) && filter.GetString() == "indexed"
+                    ? Array.Empty<DebugVariable>() : scope.Variables.Skip(first).Take(count == 0 ? int.MaxValue : count).ToArray();
+                var values = new List<object>();
+                foreach (var variable in selected)
+                {
+                    var value = await new PrimitiveVariableReader(_client).ReadAsync(variable, scope.Frame.Frame, scope.Frame.TopFrame, _lifetime.Token);
+                    values.Add(new { name = value.Name, type = value.Type, value = value.Value, variablesReference = 0,
+                        presentationHint = new { attributes = new[] { "readOnly" }, kind = "data" } });
+                }
+                await connection.RespondAsync(request, new { variables = values });
                 break;
             case "continue":
             case "stepIn":
@@ -173,6 +203,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 ThreadId(args);
                 if (!_configured) throw new InvalidOperationException("Finish configuration first.");
                 _frames.Clear();
+                _variableScopes.Clear();
                 _running = true;
                 _pauseRequested = false;
                 await connection.RespondAsync(request, command == "continue" ? new { allThreadsContinued = true } : null);
@@ -180,7 +211,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 _execution = ExecuteAsync(command);
                 break;
             default:
-                throw new NotSupportedException($"Unsupported DAP request: {command}. Variable inspection and launch are not implemented.");
+                throw new NotSupportedException($"Unsupported DAP request: {command}. Only read-only primitive inspection is supported; launch and evaluation are not implemented.");
         }
     }
 

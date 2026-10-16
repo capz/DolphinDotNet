@@ -48,11 +48,12 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
         var origin = start.SingleOrDefault();
         var unwinder = new PowerPcUnwinder(client, symbols);
         uint? originCfa = null;
-        if (mode != StepMode.Into)
+        if (mode != StepMode.Into || symbols.FindUnwindRule(current.ProgramCounter.Value) is not null)
         {
             originCfa = await unwinder.ReadCanonicalFrameAddressAsync(current.ProgramCounter.Value, token).ConfigureAwait(false);
-            if (!originCfa.HasValue) return new(current, origin, SourceStepReason.UnwindUnavailable, 0);
+            if (mode != StepMode.Into && !originCfa.HasValue) return new(current, origin, SourceStepReason.UnwindUnavailable, 0);
         }
+        var enteredCallee = false;
         for (var count = 1; count <= instructionLimit; count++)
         {
             token.ThrowIfCancellationRequested();
@@ -69,11 +70,22 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
             if (mode == StepMode.Into)
             {
                 if (locations[0] != origin) return new(current, locations[0], SourceStepReason.SourceLocation, count);
+                // Recursive calls can enter the identical source identity. CFA
+                // distinguishes the activation; source-line equality cannot.
+                if (originCfa.HasValue)
+                {
+                    var activation = await unwinder.ReadCanonicalFrameAddressAsync(current.ProgramCounter.Value, token).ConfigureAwait(false);
+                    if (activation.HasValue && activation != originCfa)
+                        return new(current, locations[0], SourceStepReason.SourceLocation, count);
+                }
                 continue;
             }
             var cfa = await unwinder.ReadCanonicalFrameAddressAsync(current.ProgramCounter.Value, token).ConfigureAwait(false);
             if (!cfa.HasValue) return new(current, locations[0], SourceStepReason.UnwindUnavailable, count);
-            if (cfa > originCfa || (mode == StepMode.Over && cfa == originCfa && locations[0] != origin))
+            enteredCallee |= cfa < originCfa;
+            // Returning from a call may land on the same caller line. Stop after
+            // a proven activation transition, not on every native instruction.
+            if (cfa > originCfa || (mode == StepMode.Over && cfa == originCfa && (locations[0] != origin || enteredCallee)))
                 return new(current, locations[0], SourceStepReason.SourceLocation, count);
         }
         return new(current, null, SourceStepReason.InstructionLimit, instructionLimit);

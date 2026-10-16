@@ -9,8 +9,9 @@ public sealed class BreakpointRegistry(RspClient client)
     private readonly Dictionary<string, Entry[]> _sources = new(StringComparer.Ordinal);
     private readonly HashSet<uint> _installed = new();
     private int _nextId;
-    public bool Contains(uint pc) => _sources.Values.SelectMany(e => e).Any(e => e.Addresses.Contains(pc));
-    public int[] HitIds(uint pc) => _sources.Values.SelectMany(e => e).Where(e => e.Addresses.Contains(pc)).Select(e => e.Id).ToArray();
+    private Dictionary<uint, int[]> _wanted = new();
+    public bool Contains(uint pc) => _wanted.ContainsKey(pc);
+    public int[] HitIds(uint pc) => _wanted.TryGetValue(pc, out var ids) ? ids.ToArray() : Array.Empty<int>();
 
     public async Task<Entry[]> ReplaceAsync(string source, int[] lines, SourceAddressMap symbols)
     {
@@ -23,6 +24,8 @@ public sealed class BreakpointRegistry(RspClient client)
             { return new Entry(id, line, Array.Empty<uint>(), error.Message); }
         }).ToArray();
         _sources[source] = entries;
+        _wanted = _sources.Values.SelectMany(e => e).SelectMany(e => e.Addresses.Select(address => (address, e.Id)))
+            .GroupBy(p => p.address).ToDictionary(g => g.Key, g => g.Select(p => p.Id).Distinct().ToArray());
         await RestoreAsync();
         return entries;
     }
@@ -38,7 +41,7 @@ public sealed class BreakpointRegistry(RspClient client)
 
     public async Task RestoreAsync()
     {
-        var wanted = _sources.Values.SelectMany(e => e).SelectMany(e => e.Addresses).ToHashSet();
+        var wanted = _wanted.Keys.ToHashSet();
         foreach (var address in _installed.Where(a => !wanted.Contains(a)).ToArray())
         {
             await client.ClearSoftwareBreakpointAsync(address);

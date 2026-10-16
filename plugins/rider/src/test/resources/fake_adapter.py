@@ -1,7 +1,16 @@
 """Small DAP peer for testing the Java client, not a target/hardware simulator."""
 import json
 import sys
+import os
+import time
 
+mode = sys.argv[2] if len(sys.argv) > 2 else "normal"
+if mode == "earlyExit":
+    sys.exit(7)
+if mode == "closeStdout":
+    os.close(1)
+    while True:
+        time.sleep(3600)
 seq = 0
 log = open(sys.argv[1], "w")
 
@@ -29,6 +38,12 @@ while True:
     log.write(json.dumps(req) + "\n")
     log.flush()
     cmd = req["command"]
+    if mode == "unresponsive":
+        while True:
+            time.sleep(3600)
+    if cmd == "attach" and mode == "rejectAttach":
+        send(dict(type="response", request_seq=req["seq"], command=cmd, success=False, message="attach refused"))
+        continue
     body = {}
     if cmd == "initialize":
         body = dict(supportsConfigurationDoneRequest=True)
@@ -41,10 +56,12 @@ while True:
     elif cmd == "continue":
         body = dict(allThreadsContinued=True)
     send(dict(type="response", request_seq=req["seq"], command=cmd, success=True, body=body))
-    if cmd == "attach":
+    if cmd == "attach" and mode != "missingInitialized":
         event("initialized")
     elif cmd == "configurationDone":
         event("stopped", reason="entry", threadId=1, allThreadsStopped=True)
+        if mode == "crashAfterConfigure":
+            sys.exit(9)
     elif cmd == "continue":
         event("continued", threadId=1, allThreadsContinued=True)
     elif cmd in ("pause", "stepIn", "next", "stepOut"):

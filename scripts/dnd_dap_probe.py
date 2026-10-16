@@ -101,6 +101,14 @@ def require_source_step(stop):
     assert stop.get("reason") == "step" and stop.get("description") == "SourceLocation", stop
 
 
+
+def primitive_values(client, frame):
+    values = {}
+    for scope in client.request("scopes", dict(frameId=frame["id"]))["body"]["scopes"]:
+        for value in client.request("variables", dict(variablesReference=scope["variablesReference"]))["body"]["variables"]:
+            values[value["name"]] = value["value"]
+    return values
+
 def run_probe(args):
     client = DapProcess(args.adapter)
     try:
@@ -151,6 +159,9 @@ def run_probe(args):
             names = [frame["name"] for frame in frames]
             assert names[:3] == ["Program.Inner", "Program.Outer", "Program.Main"], names
             print("DND_DAP_MANAGED_STACK " + " -> ".join(names[:3]), flush=True)
+            values = primitive_values(client, frames[0])
+            assert values.get("value") == "3", values
+            print("DND_DAP_ARGUMENT value=3", flush=True)
             client.request("stepOut", dict(threadId=1))
             require_source_step(client.event("stopped"))
             frames = client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]
@@ -161,6 +172,9 @@ def run_probe(args):
                 require_source_step(client.event("stopped"))
                 frames = client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]
             assert frames[0]["name"] == "Program.Outer" and frames[0]["line"] == 14, frames
+            values = primitive_values(client, frames[0])
+            assert values.get("first") == "4", values
+            print("DND_DAP_LOCAL first=4", flush=True)
             client.request("next", dict(threadId=1))
             require_source_step(client.event("stopped"))
             frames = client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]

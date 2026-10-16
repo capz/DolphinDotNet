@@ -146,6 +146,7 @@ internal static class GameCubeBundle
                     signature = method.Key.Signature,
                     methodToken = System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(
                         compilation.Model.Methods[method.Key].Handle),
+                    variables = sourceMap!.Variables[method.Key].Select(v => new { nativeName = v.NativeName, name = v.Name, type = v.Type, group = v.Group, storageBytes = v.StorageBytes, scopeStart = v.ScopeStart, scopeEnd = v.ScopeEnd }),
                     sourceLocations = sourceMap.Methods[method.Key]
                         .OrderBy(location => location.Key)
                         .Select(location => new

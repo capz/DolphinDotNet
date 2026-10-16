@@ -138,6 +138,7 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
     private void execute(String command) {
         if (!ready || running) return;
         submit(() -> {
+            if (!ready || running) return;
             syncBreakpoints(); running = true; ++generation;
             switch (command) {
                 case "continue" -> { var a = new ContinueArguments(); a.setThreadId(1); await(dap.server.continue_(a)); }
@@ -161,7 +162,7 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
     }
     private static <T> T await(CompletableFuture<T> future) throws Exception { return future.get(135, TimeUnit.SECONDS); }
 
-    private static final class TargetSuspendContext extends XSuspendContext {
+    private final class TargetSuspendContext extends XSuspendContext {
         private final XExecutionStack stack;
         TargetSuspendContext(StackFrame[] frames) {
             var converted = Arrays.stream(frames).map(TargetFrame::new).map(f -> (XStackFrame)f).toList();
@@ -175,8 +176,9 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
         @Override public XExecutionStack getActiveExecutionStack() { return stack; }
         @Override public XExecutionStack @NotNull [] getExecutionStacks() { return new XExecutionStack[]{stack}; }
     }
-    private static final class TargetFrame extends XStackFrame {
+    private final class TargetFrame extends XStackFrame {
         private final StackFrame frame;
+        private final long frameGeneration = generation;
         TargetFrame(StackFrame frame) { this.frame = frame; }
         @Override public XSourcePosition getSourcePosition() {
             if (frame.getSource() == null || frame.getSource().getPath() == null || frame.getLine() < 1) return null;
@@ -188,7 +190,34 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
             if (frame.getLine() > 0) component.append(":" + frame.getLine(), com.intellij.ui.SimpleTextAttributes.GRAYED_ATTRIBUTES);
         }
         @Override public void computeChildren(@NotNull XCompositeNode node) {
-            node.addChildren(XValueChildrenList.EMPTY, true);
+            submit(() -> {
+                if (node.isObsolete()) return;
+                if (running || generation != frameGeneration) { node.setErrorMessage("Frame is no longer stopped."); return; }
+                var request = new ScopesArguments(); request.setFrameId(frame.getId());
+                var children = new XValueChildrenList();
+                for (var scope : await(dap.server.scopes(request)).getScopes()) {
+                    children.addTopGroup(new XValueGroup(scope.getName()) {
+                        @Override public boolean isAutoExpand() { return true; }
+                        @Override public void computeChildren(@NotNull XCompositeNode target) {
+                            submit(() -> {
+                                if (target.isObsolete()) return;
+                                if (running || generation != frameGeneration) { target.setErrorMessage("Frame is no longer stopped."); return; }
+                                var args = new VariablesArguments(); args.setVariablesReference(scope.getVariablesReference());
+                                var values = new XValueChildrenList();
+                                for (var variable : await(dap.server.variables(args)).getVariables()) {
+                                    values.add(variable.getName(), new XValue() {
+                                        @Override public void computePresentation(@NotNull XValueNode value, @NotNull XValuePlace place) {
+                                            value.setPresentation(null, variable.getType(), variable.getValue(), false);
+                                        }
+                                    });
+                                }
+                                if (!target.isObsolete() && generation == frameGeneration) target.addChildren(values, true);
+                            });
+                        }
+                    });
+                }
+                if (!node.isObsolete() && generation == frameGeneration) node.addChildren(children, true);
+            });
         }
     }
 }

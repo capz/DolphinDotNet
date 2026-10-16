@@ -391,3 +391,39 @@ The dedicated `Rider attach plugin` job builds/tests/packages the pinned SDK and
 uploads the plugin ZIP. See `docs/rider-debugging.md` for the exact install/attach
 procedure and manual acceptance checklist. A6 remains unvalidated interactively;
 A4.4 physical USB Gecko/BBA remains deferred. Do not infer either from emulator CI.
+
+
+## A6 reliability and first A7 primitive slice
+
+PR #77 merged after [CI 38944870062](https://github.com/capz/DolphinDotNet/actions/runs/38944870062)
+passed, including Gradle packaging, host TCP/PTY and real-Dolphin DAP acceptance.
+The follow-up keeps the approved saved-target UI and uses Rider's existing Variables
+pane; no new custom UI is introduced. Debugger target builds are managed **Debug**
+with Portable PDBs. Release optimization remains unchanged and Release-mode
+debugging is not supported by this acceptance scope.
+
+- A6 lifecycle: bounded startup/disconnect, cancellation and failed-attach cleanup,
+  adapter exit/stdout EOF notification, and queued execution guards. Cleanup owns
+  the adapter process only; the target is never killed.
+- A6 packaging: Plugin Verifier against the pinned Rider SDK, and the Java DAP
+  client against the real packaged .NET adapter over TCP and Linux PTY fixtures.
+- A4.5 robustness: CFA transitions distinguish recursive/same-line calls; user
+  breakpoints retain priority and desired-breakpoint hit lookup is indexed.
+- A7 primitives: Portable PDB names/scopes → generated native slots → conservative
+  DWARF register/CFA locations → big-endian values → DAP scopes/variables → native
+  Rider Variables pane. References expire on resume; unsupported values are explicit.
+  Real-Dolphin acceptance additionally checks Inner's argument and Outer's local.
+
+Relevant implementation: `PortablePdbSourceMap.cs`, `ValueCBackend.cs` and
+`GameCubeBundle.cs` in the compiler; `scripts/dnd_debug_addresses.py`; debugger
+`PrimitiveVariables.cs`, `SourceAddressMap.cs` and `SourceStepper.cs`; adapter
+`DebugSession.cs` and `BreakpointRegistry.cs`; Rider `DapClient.java` and
+`RiderDebugProcess.java`. Host/protocol tests, Python DWARF/adapter tests, Java
+integration/fault tests and emulator probes cover these responsibilities.
+
+Next acceptance outside this environment is interactive Rider on the pinned SDK:
+C# gutter coexistence, configuration persistence, target management, navigation,
+step controls and Variables presentation. Physical A4.4 USB Gecko/BBA remains
+deferred separately. Neither is proven by fake peers, Plugin Verifier or emulator
+success. Objects, evaluation, mutation, exception/async diagnostics, Release target
+builds, automatic reconnect and Visual Studio remain outside this slice.

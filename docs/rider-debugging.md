@@ -1,4 +1,4 @@
-# Rider attach debugging (A5 / A6 first implementation)
+# Rider attach debugging (A6 / primitive A7 inspection)
 
 `plugins/rider` implements the approved native Rider attach configuration and target
 editor. It uses public XDebugger APIs and Eclipse LSP4J DAP over stdio to the bundled
@@ -6,8 +6,10 @@ editor. It uses public XDebugger APIs and Eclipse LSP4J DAP over stdio to the bu
 (build 262)**, Java 25, Gradle 9.1.0 and IntelliJ Platform Gradle Plugin 2.19.0;
 LSP4J debug is pinned to 0.24.0. Compatibility is currently limited to 262.*.
 
-**Status:** source compiles against that Rider SDK; host profile and DAP tests pass.
-The complete Gradle plugin package must pass the `Rider attach plugin` CI job.
+**Baseline:** PR #77 passed the complete Gradle package, host protocol/PTY and
+real-Dolphin checks in [run 38944870062](https://github.com/capz/DolphinDotNet/actions/runs/38944870062).
+This follow-up adds lifecycle fault handling, Plugin Verifier and primitive inspection;
+its CI results must be checked separately.
 Interactive Rider C# gutter coexistence, Debug window behavior and physical console
 attach remain separate acceptance gates. Do not describe SDK compilation, fake
 peers or emulator CI as interactive Rider or USB Gecko/BBA hardware validation.
@@ -18,7 +20,7 @@ Requires JDK 25, a .NET 8 SDK to build the adapter, and Python 3 for tests:
 
 ```sh
 cd plugins/rider
-./gradlew test buildPlugin
+./gradlew test buildPlugin verifyPlugin
 # Optional: reuse an extracted matching Rider SDK instead of downloading it:
 ./gradlew -PriderSdk=/absolute/path/to/Rider test buildPlugin
 ```
@@ -29,6 +31,11 @@ its managed/native serial dependencies. The Rider process needs `dotnet` (.NET 8
 runtime) on PATH. Use a .NET SDK when rebuilding the adapter, not just its runtime.
 The plugin starts the adapter directly; its stdout is reserved for DAP, and stderr
 is shown in the Debug console. It never starts or kills Dolphin/the console.
+
+Debugger target artifacts must come from **managed Debug builds** (`-c Debug`), with
+Portable PDBs and native debug symbols. Release-mode debugging is out of scope;
+Release optimization is unchanged. The adapter/plugin may themselves be packaged
+in Release: that does not change the target configuration.
 
 1. Start the matching debug DOL in Dolphin or on the console with its GDB stub
    waiting/stopped. Build, upload and emulator launch remain external steps.
@@ -120,7 +127,9 @@ Rider keeps desired breakpoint changes while running and applies them at the nex
 stop (or before resume); direct DAP clients must pause before changing breakpoints.
 Conditional breakpoints/logpoints remain explicitly unsupported. Native frames keep
 PCs without invented source positions; partial unwind/step-limit reasons go to the
-console. Scopes are empty and evaluation is disabled. Stack frame IDs expire on resume.
+console. `scopes`/`variables` expose read-only primitive Arguments and Locals in
+Rider’s existing Variables pane. Stack and variable handles expire on resume.
+Evaluation and mutation are disabled.
 
 Disconnect interrupts a running target, waits for its stop reply, removes owned
 breakpoints and closes the connection. It sends no kill command and normally leaves
@@ -128,21 +137,37 @@ the target stopped. Failed cleanup closes the adapter session and reports an err
 reliable physical reconnect is not yet claimed. The Rider bridge waits for graceful
 adapter exit, then forcibly closes only the adapter if it is unresponsive.
 
+## Primitive inspection contract
+
+The compiler joins Portable PDB parameter/local names and lexical IL scopes to
+generated native slots. The address resolver accepts verified CFA-relative
+locations and PowerPC register locations, including bounded DWARF location lists.
+Values are decoded as big-endian Boolean, Char, signed/unsigned integers, native
+integers, Single or Double. Caller frames permit proven CFA-relative memory only;
+register-backed values are restricted to the top frame. Missing, ambiguous or
+unsupported locations display an explicit unavailable reason. No expression is
+evaluated to recover a value. Objects, strings, arrays, fields and properties are
+not expanded. Scope visibility is restricted to proven mapped statement addresses.
+
 ## Acceptance evidence and remaining checks
 
 Automated host checks:
 
 - `tests/test_debug_adapter.py`: real adapter subprocess with fake RSP TCP target;
   protocol framing, source identity/maps, breakpoint ownership, stack/stepping,
-  pause/resume/disconnect, invalid transports and serial enumeration.
+  pause/resume/disconnect, primitive values, pagination, expired handles, invalid
+  transports and serial enumeration.
 - Its Linux PTY test exercises actual `System.IO.Ports` open/read/write, source
   breakpoint, stack, pause and cleanup against a byte relay to a fake RSP peer.
   This validates host serial plumbing, **not** FTDI USB enumeration, EXI or hardware.
 - `plugins/rider/src/test`: TCP/USB argument separation, slot exclusion, input
   validation, stable IDs/deep-copy state, deletion without fallback, native and
   MSBuild artifact discovery, and the LSP4J subprocess initialize/configure/stack/
-  resume/pause/Step Into/Over/Out/disconnect sequence.
-- CI builds the pinned Rider plugin, runs its tests and uploads the installable ZIP.
+  resume/pause/Step Into/Over/Out/disconnect sequence. Fault tests cover adapter exit,
+  lost stdout, rejected attach, timeout and cancellation. The Java client also runs
+  against the actual .NET adapter over fake TCP and Linux PTY RSP targets.
+- CI builds the pinned Rider plugin, runs tests and Plugin Verifier, and uploads the
+  installable ZIP plus failure reports.
   Source-only plugin changes select that job; debugger changes also build its consumer.
 
 Real-Dolphin DAP acceptance passed run
@@ -160,10 +185,11 @@ real Dolphin fixture. Verify Stop leaves the emulator alive and no owned breakpo
 installed. Keep A4.4 physical BBA and USB Gecko validation deferred separately.
 
 Out of scope: DAP launch/build/upload orchestration, automatic target discovery or
-slot negotiation, verified hardware compatibility, reconnect, locals/objects,
+slot negotiation, verified hardware compatibility, reconnect, object inspection,
 expressions, managed exception filters, async stacks, real thread enumeration,
-reverse execution, Visual Studio integration and Marketplace publishing. A4.5's
-same-line/recursion/optimized-frame and stepping-performance limitations remain.
+reverse execution, Release target debugging, Visual Studio integration and Marketplace
+publishing. Recursive Step Into and same-line Step Over use CFA transitions;
+unsupported unwind states and instruction budgets still produce diagnostic stops.
 
 ## Route decision
 

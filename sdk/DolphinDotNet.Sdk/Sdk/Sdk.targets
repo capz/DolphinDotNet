@@ -1,5 +1,11 @@
 <Project>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <!-- Preserve PDB locals before CIL lowering for an explicitly requested debug build.
+       Release builds keep their existing optimization policy. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug' and ('$(DndDebugSymbols)' == 'true' or '$(DndGdbTransport)' == 'Tcp' or '$(DndGdbTransport)' == 'UsbGecko')">
+    <Optimize>false</Optimize>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
   <!-- A direct process invocation keeps spaces, quotes and shell metacharacters
        in project/tool paths out of a command shell, on both MSBuild runtimes. -->
   <UsingTask TaskName="DndRunTool" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">

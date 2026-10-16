@@ -17,7 +17,9 @@ def select(paths):
             continue
         if path.startswith("plugins/rider/"):
             selected.add("rider")
-        elif path.startswith("tests/DebuggerTests/") or path == "tests/test_debug_adapter.py":
+        elif path in {"tests/test_debug_adapter.py", "tests/rider_dap_fixture.py"}:
+            selected.update({"debugger", "rider"})
+        elif path.startswith("tests/DebuggerTests/"):
             selected.add("debugger")
         elif path.startswith(("tools/DolphinDotNet.Debugger/", "tools/DolphinDotNet.Debugger.Probe/", "tools/DolphinDotNet.DebugAdapter/")) or path == "scripts/dnd_dap_probe.py":
             selected.update({"debugger", "rider", "gamecube", "dolphin"})

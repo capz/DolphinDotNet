@@ -29,6 +29,83 @@ Program.cs - 0x80001040
 """
 
 
+class VariableLocations(unittest.TestCase):
+    def test_native_dwarf_locations_and_unsupported_expressions(self):
+        text = f"""
+ <1><10>: Abbrev Number: 3 (DW_TAG_subprogram)
+    <11> DW_AT_name : (indirect string, offset: 0x10): {SYMBOL}
+    <12> DW_AT_low_pc : 0x80001000
+    <13> DW_AT_frame_base : 1 byte block: 9c (DW_OP_call_frame_cfa)
+ <2><20>: Abbrev Number: 4 (DW_TAG_formal_parameter)
+    <21> DW_AT_name : a0
+    <22> DW_AT_location : 2 byte block: 91 7c (DW_OP_fbreg: -4)
+ <2><30>: Abbrev Number: 5 (DW_TAG_variable)
+    <31> DW_AT_name : l0
+    <32> DW_AT_location : 1 byte block: 53 (DW_OP_reg3 (r3))
+ <2><40>: Abbrev Number: 5 (DW_TAG_variable)
+    <41> DW_AT_name : l1
+    <42> DW_AT_location : 3 byte block (DW_OP_fbreg: -8; DW_OP_deref)
+ <2><50>: Abbrev Number: 0
+"""
+        result = module.parse_variable_locations(text)[SYMBOL]
+        self.assertEqual(dict(kind='cfaOffset', offset=-4), result['a0'])
+        self.assertEqual(dict(kind='register', register=3), result['l0'])
+        self.assertEqual('unavailable', result['l1']['kind'])
+
+    def test_scope_crossing_same_source_line_is_not_guessed(self):
+        source = json.loads(json.dumps(MAP))
+        source['methods'][0]['variables'] = [dict(nativeName='l0', name='first', type='System.Int32',
+            group='Locals', storageBytes=4, scopeStart=5, scopeEnd=6)]
+        mapped = module.resolve(source, LINES, SYMBOLS)
+        module.attach_variables(mapped, source, '')
+        value = mapped['methods'][0]['variables'][0]
+        self.assertEqual([], value['visibleAddresses'])
+        self.assertEqual('unavailable', value['location']['kind'])
+
+    def test_location_lists_split_views_and_missing_or_ambiguous_ranges(self):
+        source = json.loads(json.dumps(MAP))
+        source['methods'][0]['variables'] = [dict(nativeName='a0', name='value', type='System.Int32',
+            group='Arguments', storageBytes=4, scopeStart=0, scopeEnd=100)]
+        info = f"""
+ <1><10>: Abbrev Number: 3 (DW_TAG_subprogram)
+    <11> DW_AT_name : {SYMBOL}
+    <12> DW_AT_low_pc : 0x80001000
+    <13> DW_AT_frame_base : 1 byte block: 9c (DW_OP_call_frame_cfa)
+ <2><20>: Abbrev Number: 4 (DW_TAG_formal_parameter)
+    <21> DW_AT_name : a0
+    <22> DW_AT_location : 0x10 (location list)
+"""
+        locations = """
+    00000010 v0000000 v0000001 views at 00000000 for:
+             80001000 80001004 (DW_OP_reg3 (r3))
+    00000018 v0000000 v0000001 views at 00000002 for:
+             80001008 80001010 (DW_OP_fbreg: -8)
+    00000020 v0000000 v0000001 views at 00000004 for:
+             8000100c 80001010 (DW_OP_reg4 (r4))
+    00000028 <End of list>
+"""
+        mapped = module.resolve(source, LINES, SYMBOLS)
+        module.attach_variables(mapped, source, info, locations)
+        values = {pc: v['location'] for v in mapped['methods'][0]['variables'] for pc in v['visibleAddresses']}
+        self.assertEqual(dict(kind='register', register=3), values['0x80001000'])
+        self.assertEqual(dict(kind='cfaOffset', offset=-8), values['0x80001008'])
+        self.assertEqual('unavailable', values['0x8000100c']['kind'])
+        # A range never leaks across the terminating entry or fills a gap.
+        self.assertEqual(3, len(module.parse_location_lists(locations)[0x10]))
+        self.assertEqual({}, module.parse_location_lists('80001000 80001004 (DW_OP_reg3 (r3))'))
+
+    def test_real_gcc_volatile_slot_has_a_frame_relative_location(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            c = root / 'value.c'
+            c.write_text('int ' + SYMBOL + '(volatile int a0) { volatile int l0 = a0 + 1; return l0; }')
+            subprocess.run(['cc', '-Og', '-gdwarf-4', '-fno-omit-frame-pointer', '-c', str(c), '-o', str(root / 'value.o')], check=True)
+            dump = subprocess.check_output(['readelf', '--wide', '--debug-dump=info', str(root / 'value.o')], text=True)
+            values = module.parse_variable_locations(dump)[SYMBOL]
+            self.assertEqual('unavailable', values['a0']['kind'])  # x86-64 register annotations are not PPC register locations
+            self.assertEqual('cfaOffset', values['l0']['kind'])
+
+
 class AddressResolution(unittest.TestCase):
     def test_equal_pc_views_keep_only_the_row_with_instruction_extent(self):
         # Reduced from CI run 38930010375: line 9 has an empty range at

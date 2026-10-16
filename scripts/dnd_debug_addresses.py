@@ -219,6 +219,136 @@ def parse_unwind(output):
     return [result[key] for key in sorted(result)]
 
 
+
+def parse_location_lists(output):
+    """Bounded DWARF4 .debug_loc ranges, including readelf's split view rows."""
+    lists, active, pending = {}, None, None
+    for line in output.splitlines():
+        if '<End of list>' in line:
+            active, pending = None, None
+            continue
+        if 'location view pair' in line:
+            continue
+        view = re.match(r'^\s*([0-9a-fA-F]+)\s+v[0-9a-fA-F]+\s+v[0-9a-fA-F]+\s+views at .*for:', line)
+        if view:
+            pending = int(view[1], 16)
+            if active is None:
+                active = pending; lists[active] = []
+            continue
+        row = re.match(r'^\s*(?:([0-9a-fA-F]+)\s+)?([0-9a-fA-F]{8,16})\s+([0-9a-fA-F]{8,16})\s+(\(DW_OP_.*\))\s*$', line)
+        if not row:
+            continue
+        if active is None:
+            if row[1] is None and pending is None:
+                continue
+            active = int(row[1], 16) if row[1] else pending
+            lists[active] = []
+        begin, end = int(row[2], 16), int(row[3], 16)
+        if begin < end:
+            lists[active].append((begin, end, row[4]))
+    return lists
+
+
+def parse_variable_locations(output, location_dump=''):
+    """Read a conservative DIE subset and bounded location lists; unsupported expressions stay unavailable."""
+    stack, methods, current = [], {}, None
+    location_lists = parse_location_lists(location_dump)
+    for line in output.splitlines():
+        match = re.match(r'^\s*<(\d+)><[0-9a-fA-F]+>:\s+Abbrev Number:\s+\d+(?:\s+\((DW_TAG_\w+)\))?', line)
+        if match:
+            depth, tag = int(match[1]), match[2]
+            while stack and stack[-1]['depth'] >= depth:
+                stack.pop()
+            current = {'depth': depth, 'tag': tag, 'attrs': {}, 'children': []}
+            if stack:
+                stack[-1]['children'].append(current)
+            if tag:
+                stack.append(current)
+            if tag == 'DW_TAG_subprogram':
+                methods[id(current)] = current
+            continue
+        attr = re.match(r'^\s*<[0-9a-fA-F]+>\s+(DW_AT_\w+)\s*:\s*(.*)', line)
+        if current is not None and attr:
+            current['attrs'][attr[1]] = attr[2].strip()
+    result = {}
+    def name(value):
+        # readelf --wide emits optional (strp)/(string)/offset decorations.
+        return re.sub(r'^.*?\):\s*', '', value).strip() if '):' in value else re.sub(r'^\([^)]*\)\s*', '', value).strip()
+    for method in methods.values():
+        attrs = method['attrs']
+        symbol = name(attrs.get('DW_AT_name', ''))
+        if not symbol.startswith('dnd_value_') or 'DW_AT_low_pc' not in attrs:
+            continue
+        frame = attrs.get('DW_AT_frame_base', '')
+        variables = {}
+        # Generated ABI/local names belong directly to this generated C function;
+        # do not accidentally collect inlined/nested function variables.
+        for child in method['children']:
+            if child['tag'] not in ('DW_TAG_variable', 'DW_TAG_formal_parameter'):
+                continue
+            a = child['attrs']
+            native_name = name(a.get('DW_AT_name', ''))
+            loc = a.get('DW_AT_location', '')
+            def convert(expression):
+                start = expression.find('(DW_OP_')
+                text = expression[start + 1:-1].strip() if start >= 0 and expression.endswith(')') else ''
+                location = {'kind': 'unavailable', 'reason': 'Unsupported or optimized-away DWARF location'}
+                if m := re.fullmatch(r'DW_OP_fbreg:\s*(-?\d+)', text):
+                    if re.search(r'\(DW_OP_call_frame_cfa\)\s*$', frame):
+                        location = {'kind': 'cfaOffset', 'offset': int(m[1])}
+                elif m := re.fullmatch(r'DW_OP_reg(\d+)(?:\s+\(r\d+\))?', text):
+                    if int(m[1]) <= 31:
+                        location = {'kind': 'register', 'register': int(m[1])}
+                return location
+            location = convert(loc)
+            if '(location list)' in loc:
+                offset = re.search(r'(?:\(sec_offset\)\s*)?(0x[0-9a-fA-F]+)\s*\(location list\)', loc)
+                ranges = location_lists.get(int(offset[1], 16), []) if offset else []
+                location = {'kind': 'rangeList', 'ranges': [(a, b, convert(e)) for a, b, e in ranges]}
+            # Duplicate/aliased DIEs are ambiguous; never pick the final value.
+            if native_name in variables:
+                location = {'kind': 'unavailable', 'reason': 'Ambiguous DWARF variable'}
+            variables[native_name] = location
+        if symbol in result:
+            result[symbol] = {}  # Conflicting function instances must not be guessed.
+        else:
+            result[symbol] = variables
+    return result
+
+
+def attach_variables(mapped, source_map, info_dump, location_dump=''):
+    locations = parse_variable_locations(info_dump, location_dump)
+    sources = {m['symbol']: m for m in source_map['methods']}
+    for method in mapped['methods']:
+        source = sources[method['symbol']]
+        variables = []
+        for variable in source.get('variables', []):
+            value = dict(variable)
+            value['location'] = locations.get(method['symbol'], {}).get(variable['nativeName'],
+                {'kind': 'unavailable', 'reason': 'Missing native DWARF variable'})
+            visible = []
+            for point in method['breakpoints']:
+                offsets = [p['ilOffset'] for p in source.get('sourceLocations', [])
+                           if p['document'] == point['document'] and p['startLine'] == point['line']]
+                # A source line spanning multiple lexical scopes is deliberately
+                # unavailable rather than guessed from the line number alone.
+                if offsets and all(variable['scopeStart'] <= i < variable['scopeEnd'] for i in offsets):
+                    visible.extend(point['addresses'])
+            location = value['location']
+            if location['kind'] == 'rangeList':
+                by_location = {}
+                for pc in sorted(set(visible)):
+                    candidates = [loc for begin, end, loc in location['ranges'] if begin <= int(pc, 16) < end]
+                    resolved = candidates[0] if len(candidates) == 1 else {'kind': 'unavailable', 'reason': 'Missing or ambiguous DWARF location range'}
+                    key = json.dumps(resolved, sort_keys=True)
+                    by_location.setdefault(key, (resolved, []))[1].append(pc)
+                for resolved, pcs in by_location.values():
+                    variables.append(dict(value, location=resolved, visibleAddresses=pcs))
+            else:
+                value['visibleAddresses'] = sorted(set(visible))
+                variables.append(value)
+        method['variables'] = variables
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--elf', required=True, type=Path)
@@ -239,6 +369,11 @@ def main():
     frames = subprocess.run([args.readelf, '--debug-dump=frames-interp', str(args.elf)],
                             capture_output=True, text=True, check=True).stdout
     mapped['unwind'] = parse_unwind(frames)
+    info = subprocess.run([args.readelf, '--wide', '--debug-dump=info', str(args.elf)],
+                          capture_output=True, text=True, check=True).stdout
+    locs = subprocess.run([args.readelf, '--wide', '--debug-dump=loc', str(args.elf)],
+                          capture_output=True, text=True, check=True).stdout
+    attach_variables(mapped, json.loads(source_bytes), info, locs)
     mapped['elfSha256'] = hashlib.sha256(args.elf.read_bytes()).hexdigest()
     mapped['sourceMapSha256'] = hashlib.sha256(source_bytes).hexdigest()
     count = sum(len(method['breakpoints']) for method in mapped['methods'])

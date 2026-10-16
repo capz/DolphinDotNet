@@ -15,6 +15,7 @@ public sealed class SourceAddressMap
     private readonly Dictionary<uint, List<SourceLocation>> _locations = new();
     private readonly List<NativeMethod> _methods = new();
     private readonly List<UnwindRule> _unwind = new();
+    private readonly Dictionary<string, List<DebugVariable>> _variables = new(StringComparer.Ordinal);
 
     public static SourceAddressMap Load(string elf, string sourceMap, string addressMap)
     {
@@ -48,6 +49,27 @@ public sealed class SourceAddressMap
                 if (size == 0 || (ulong)begin + size > uint.MaxValue)
                     throw new InvalidDataException("Invalid native method extent.");
                 result._methods.Add(new NativeMethod(begin, begin + size, symbol, assembly, methodToken, methodName));
+            }
+            if (symbol is not null && method.TryGetProperty("variables", out var variables))
+            {
+                var entries = new List<DebugVariable>();
+                foreach (var variable in variables.EnumerateArray())
+                {
+                    var storage = variable.GetProperty("storageBytes").GetInt32();
+                    var group = variable.GetProperty("group").GetString()!;
+                    if (storage is not (4 or 8) || group is not ("Arguments" or "Locals"))
+                        throw new InvalidDataException("Unsupported debug variable metadata.");
+                    var location = variable.GetProperty("location");
+                    var kind = location.GetProperty("kind").GetString()!;
+                    if (kind is not ("cfaOffset" or "register" or "unavailable")) throw new InvalidDataException("Unsupported variable location.");
+                    var register = location.TryGetProperty("register", out var reg) ? reg.GetInt32() : 0;
+                    if (register is < 0 or > 31) throw new InvalidDataException("Invalid variable register.");
+                    entries.Add(new DebugVariable(variable.GetProperty("name").GetString()!, variable.GetProperty("type").GetString()!,
+                        group, storage, variable.GetProperty("visibleAddresses").EnumerateArray().Select(a => ParseAddress(a.GetString())).ToHashSet(),
+                        kind, location.TryGetProperty("offset", out var offset) ? offset.GetInt32() : 0, register,
+                        location.TryGetProperty("reason", out var reason) ? reason.GetString() : null));
+                }
+                result._variables.Add(symbol, entries);
             }
             foreach (var point in method.GetProperty("breakpoints").EnumerateArray())
             {
@@ -121,6 +143,13 @@ public sealed class SourceAddressMap
     {
         var methods = _methods.Where(method => method.Start <= address && address < method.End).ToArray();
         return methods.Length == 1 ? methods[0] : null;
+    }
+
+    public IReadOnlyList<DebugVariable> FindVariables(uint address)
+    {
+        var symbol = FindMethod(address)?.Symbol;
+        return symbol is not null && _variables.TryGetValue(symbol, out var variables)
+            ? variables.Where(v => v.VisibleAddresses.Contains(address)).ToArray() : Array.Empty<DebugVariable>();
     }
 
     public UnwindRule? FindUnwindRule(uint address)

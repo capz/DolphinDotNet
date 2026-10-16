@@ -139,7 +139,7 @@ internal static class ValueCBackend
         var values=Collect(method).GroupBy(v=>v.Id).Select(g=>g.First()).OrderBy(v=>v.Id).ToArray();
         if(includeHeader)b.AppendLine("#include <stdint.h>\n#include <math.h>\n#include <string.h>");
         b.Append($"{ReturnCType(method,model)} {functionName}(");
-        b.Append(Parameters(method,model));
+        b.Append(Parameters(method,model,sourceLocations is not null));
         b.AppendLine(") {");
         for(var ai=0;ai<method.ParameterCount+(method.HasThis?1:0);ai++)b.AppendLine($"  (void)a{ai};");
         // Struct arguments travel as addresses, but are private value copies in
@@ -155,7 +155,7 @@ internal static class ValueCBackend
         foreach(var region in method.ExceptionRegions.Where(r=>r.Kind==ValueIrExceptionRegionKind.Catch))
             b.AppendLine($"  volatile intptr_t dnd_caught_{region.HandlerOffset}=0;");
         foreach(var v in values)b.AppendLine($"  {(method.ExceptionRegions.Count>0?"volatile ":"")}{ValueStorageCType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
-        foreach(var local in method.Locals){b.AppendLine(local.StorageSize>0?$"  _Alignas(8) uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {(method.ExceptionRegions.Count>0?"volatile ":"")}{CType(local.Kind)} l{local.Index} = 0;");b.AppendLine($"  (void)l{local.Index};");}
+        foreach(var local in method.Locals){b.AppendLine(local.StorageSize>0?$"  _Alignas(8) uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {(method.ExceptionRegions.Count>0 || sourceLocations is not null?"volatile ":"")}{CType(local.Kind)} l{local.Index} = 0;");b.AppendLine($"  (void)l{local.Index};");}
         var valueConstructors=method.Blocks.SelectMany(b=>b.Instructions).OfType<ValueIrValueConstructor>().ToArray();
         foreach(var v in valueConstructors)b.AppendLine($"  _Alignas(8) uint8_t value_{v.Result.Id}[{v.Size}] = {{0}};");
         var structCalls=method.Blocks.SelectMany(b=>b.Instructions).OfType<ValueIrCall>().Where(c=>c.Result is not null&&ReturnSize(c.Target,model)>0).ToArray();
@@ -694,14 +694,14 @@ internal static class ValueCBackend
     internal static string TypeExpr(string type)=>type switch{"Dolphin.Network.ExternalException"=>"&DND_TYPE_EXTERNAL_EXCEPTION","Dolphin.Network.SocketException"=>"&DND_TYPE_SOCKET_EXCEPTION","System.FormatException"=>"&DND_TYPE_FORMAT_EXCEPTION","System.TimeoutException"=>"&DND_TYPE_TIMEOUT_EXCEPTION","System.OverflowException"=>"&DND_TYPE_OVERFLOW_EXCEPTION","System.PlatformNotSupportedException"=>"&DND_TYPE_PLATFORM_NOT_SUPPORTED_EXCEPTION","System.String"=>"&DND_TYPE_STRING","System.Object"=>"&DND_TYPE_OBJECT","System.Int32"=>"&DND_TYPE_BOXED_INT32","System.Int64"=>"&DND_TYPE_INT64","System.UInt64"=>"&DND_TYPE_UINT64","System.Single"=>"&DND_TYPE_SINGLE","System.Double"=>"&DND_TYPE_DOUBLE","System.Boolean"=>"&DND_TYPE_BOOLEAN","System.Byte"=>"&DND_TYPE_BYTE","System.SByte"=>"&DND_TYPE_SBYTE","System.Char"=>"&DND_TYPE_CHAR","System.Int16"=>"&DND_TYPE_INT16","System.UInt16"=>"&DND_TYPE_UINT16","System.UInt32"=>"&DND_TYPE_UINT32","System.OperationCanceledException"=>"&DND_TYPE_OPERATION_CANCELED_EXCEPTION","System.Text.EncoderFallbackException"=>"&DND_TYPE_ENCODER_FALLBACK_EXCEPTION","System.Text.DecoderFallbackException"=>"&DND_TYPE_DECODER_FALLBACK_EXCEPTION","System.Exception"=>"&DND_TYPE_EXCEPTION","System.IO.IOException"=>"&DND_TYPE_IO_EXCEPTION","System.IO.FileNotFoundException"=>"&DND_TYPE_FILE_NOT_FOUND_EXCEPTION","System.IO.DirectoryNotFoundException"=>"&DND_TYPE_DIRECTORY_NOT_FOUND_EXCEPTION","System.UnauthorizedAccessException"=>"&DND_TYPE_UNAUTHORIZED_EXCEPTION","System.IO.DriveNotFoundException"=>"&DND_TYPE_DRIVE_NOT_FOUND_EXCEPTION","System.IO.PathTooLongException"=>"&DND_TYPE_PATH_TOO_LONG_EXCEPTION","System.ObjectDisposedException"=>"&DND_TYPE_OBJECT_DISPOSED_EXCEPTION","System.SystemException"=>"&DND_TYPE_SYSTEM_EXCEPTION","System.InvalidOperationException"=>"&DND_TYPE_INVALID_OPERATION_EXCEPTION","System.ArgumentException"=>"&DND_TYPE_ARGUMENT_EXCEPTION","System.ArgumentNullException"=>"&DND_TYPE_ARGUMENT_NULL_EXCEPTION","System.ArgumentOutOfRangeException"=>"&DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION","System.IndexOutOfRangeException"=>"&DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION","System.NullReferenceException"=>"&DND_TYPE_NULL_REFERENCE_EXCEPTION","System.InvalidCastException"=>"&DND_TYPE_INVALID_CAST_EXCEPTION","System.NotSupportedException"=>"&DND_TYPE_NOT_SUPPORTED_EXCEPTION","System.OutOfMemoryException"=>"&DND_TYPE_OUT_OF_MEMORY_EXCEPTION",_ when type.StartsWith("System.",StringComparison.Ordinal)=>"NULL",_=>$"&dnd_type_{Id(type)}"};
     private static string LegacySymbol(MethodKey k)=>"dnd_value_"+Id(k.TypeName)+"_"+Id(k.Name);
     private static string StableId(string s){uint h=2166136261;foreach(var ch in s){h^=ch;h*=16777619;}return h.ToString("x8");}
-    private static string Parameters(ValueIrMethod m,CompilationModel model)
+    private static string Parameters(ValueIrMethod m,CompilationModel model,bool debug=false)
     {
         var n=m.ParameterCount+(m.HasThis?1:0);if(n==0)return ReturnSize(m.Key,model)>0?"intptr_t dnd_ret":"void";
         model.Methods.TryGetValue(m.Key,out var mm);var abi=mm?.Abi;
         return string.Join(", ",Enumerable.Range(0,n).Select(i=>{
-            if(m.HasThis&&i==0)return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}intptr_t a{i}";
+            if(m.HasThis&&i==0)return $"{(m.ExceptionRegions.Count>0 || debug?"volatile ":"")}intptr_t a{i}";
             var pi=i-(m.HasThis?1:0);var kind=abi is not null&&pi<abi.Parameters.Count?abi.Parameters[pi]:CilStackKind.NativeInt;
-            return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}{AbiCType(kind)} a{i}";
+            return $"{(m.ExceptionRegions.Count>0 || debug?"volatile ":"")}{AbiCType(kind)} a{i}";
         }))+(ReturnSize(m.Key,model)>0?", intptr_t dnd_ret":"");
     }
     private static int ReturnSize(MethodKey key,CompilationModel model)=>model.Methods.TryGetValue(key,out var mm)?mm.Abi?.ReturnStorage?.Size??0:0;

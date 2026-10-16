@@ -37,6 +37,8 @@ class Target:
         self.pc = 0x80004000
         self.breakpoints = set()
         self.commands = []
+        self.memory = {0x81700004: bytes.fromhex("00000003"), 0x81700008: bytes.fromhex("ffffffff"),
+                       0x81700010: bytes.fromhex("400c000000000000")}
         self.errors = []
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
@@ -90,6 +92,11 @@ class Target:
                             self.peer.sendall(b"+")
                     elif command == "p1":
                         self.reply("81700000")
+                    elif command == "p3":
+                        self.reply("0000002a")
+                    elif command.startswith("m"):
+                        address, size = (int(v, 16) for v in command[1:].split(","))
+                        self.reply(self.memory.get(address, bytes(size))[:size].hex())
                     else:
                         raise AssertionError(command)
         except Exception as error:
@@ -134,25 +141,30 @@ class SerialRelay:
         os.close(self.slave)
 
 
+def write_symbol_fixture(root):
+    elf = root / "Game.elf"
+    elf.write_bytes(b"fake ELF for identity tests")
+    source = root / "source.json"
+    source.write_text(json.dumps(dict(schemaVersion=2, methods=[dict(symbol="main", declaringType="Program", name="Main")])) )
+    address = root / "addresses.json"
+    address.write_text(json.dumps(dict(schemaVersion=1,
+        elfSha256=hashlib.sha256(elf.read_bytes()).hexdigest(),
+        sourceMapSha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        methods=[dict(symbol="main", nativeStart="0x80004000", nativeSize=256, breakpoints=[
+            dict(document="/build/日本/Game.cs", line=10, addresses=["0x80004004"]),
+            dict(document="/build/日本/Game.cs", line=11, addresses=["0x80004008"]),
+            dict(document="/build/日本/Game.cs", line=12, addresses=["0x8000400c"]),
+            dict(document="/build/日本/Other.cs", line=5, addresses=["0x80004004"])])],
+        unwind=[dict(start="0x80004000", end="0x80004100", supported=True,
+                     cfaRegister=1, cfaOffset=0, registers={"65": dict(kind="undefined")})])))
+    return elf, source, address
+
+
 class AdapterTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.elf = self.root / "Game.elf"
-        self.elf.write_bytes(b"fake ELF for identity tests")
-        self.source = self.root / "source.json"
-        self.source.write_text(json.dumps(dict(schemaVersion=2, methods=[dict(symbol="main", declaringType="Program", name="Main")])) )
-        self.address = self.root / "addresses.json"
-        self.address.write_text(json.dumps(dict(schemaVersion=1,
-            elfSha256=hashlib.sha256(self.elf.read_bytes()).hexdigest(),
-            sourceMapSha256=hashlib.sha256(self.source.read_bytes()).hexdigest(),
-            methods=[dict(symbol="main", nativeStart="0x80004000", nativeSize=256, breakpoints=[
-                dict(document="/build/日本/Game.cs", line=10, addresses=["0x80004004"]),
-                dict(document="/build/日本/Game.cs", line=11, addresses=["0x80004008"]),
-                dict(document="/build/日本/Game.cs", line=12, addresses=["0x8000400c"]),
-                dict(document="/build/日本/Other.cs", line=5, addresses=["0x80004004"])])],
-            unwind=[dict(start="0x80004000", end="0x80004100", supported=True,
-                         cfaRegister=1, cfaOffset=0, registers={"65": dict(kind="undefined")})])))
+        self.elf, self.source, self.address = write_symbol_fixture(self.root)
         self.client = probe.DapProcess(ADAPTER)
         self.target = None
         self.serial_relay = None
@@ -257,6 +269,44 @@ class AdapterTests(unittest.TestCase):
         self.client.event("terminated")
         self.assertEqual(self.client.process.wait(timeout=5), 0)
         self.assertFalse(self.target.breakpoints)
+
+    def test_primitive_scopes_pagination_big_endian_and_stale_handles(self):
+        data = json.loads(self.address.read_text())
+        def variable(name, type, group, size, location, pcs=("0x80004008", "0x8000400c")):
+            return dict(name=name, type=type, group=group, storageBytes=size,
+                        location=location, visibleAddresses=pcs)
+        data["methods"][0]["variables"] = [
+            variable("value", "System.Int32", "Arguments", 4, dict(kind="cfaOffset", offset=4)),
+            variable("signed", "System.Int32", "Locals", 4, dict(kind="cfaOffset", offset=8), ("0x8000400c",)),
+            variable("fraction", "System.Double", "Locals", 8, dict(kind="cfaOffset", offset=16)),
+            variable("optimized", "System.Int32", "Locals", 4, dict(kind="unavailable", reason="Unsupported expression")),
+            variable("register", "System.UInt32", "Locals", 4, dict(kind="register", register=3))]
+        self.address.write_text(json.dumps(data))
+        self.attach()
+        self.bp(lines=(11,))
+        self.client.request("continue", dict(threadId=1))
+        self.client.event("stopped")
+        frame = self.client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"][0]
+        scopes = self.client.request("scopes", dict(frameId=frame["id"]))["body"]["scopes"]
+        refs = {s["name"]: s["variablesReference"] for s in scopes}
+        value = self.client.request("variables", dict(variablesReference=refs["Arguments"]))["body"]["variables"][0]
+        self.assertEqual(("value", "3", 0), (value["name"], value["value"], value["variablesReference"]))
+        local = self.client.request("variables", dict(variablesReference=refs["Locals"]))["body"]["variables"]
+        self.assertEqual(["fraction", "optimized", "register"], [v["name"] for v in local])
+        self.assertEqual("3.5", local[0]["value"])
+        self.assertIn("unavailable", local[1]["value"])
+        self.assertEqual("42", local[2]["value"])
+        self.assertEqual(1, len(self.client.request("variables", dict(variablesReference=refs["Locals"], start=1, count=1))["body"]["variables"]))
+        self.bp(lines=())
+        self.client.request("stepIn", dict(threadId=1))
+        self.client.event("stopped")
+        self.client.request("variables", dict(variablesReference=refs["Arguments"]), success=False)
+        frame = self.client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"][0]
+        scopes = self.client.request("scopes", dict(frameId=frame["id"]))["body"]["scopes"]
+        ref = next(s["variablesReference"] for s in scopes if s["name"] == "Locals")
+        values = self.client.request("variables", dict(variablesReference=ref))["body"]["variables"]
+        self.assertEqual("-1", values[0]["value"])
+        self.client.request("variables", dict(variablesReference=ref, start=-1), success=False)
 
     def test_pause_and_disconnect_while_continuing(self):
         self.attach()

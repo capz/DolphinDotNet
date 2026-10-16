@@ -115,6 +115,14 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
         '<Target Name="TestCompilerDiagnostic"><ItemGroup><DiagnosticArgs Include="' +
         escape(str(root / 'tools/DolphinDotNet.Compiler/bin/Debug/net8.0/DolphinDotNet.Compiler.dll'), {'"': '&quot;'}) +
         ';--aot;missing.dll;output.c" /></ItemGroup><DndRunTool Tool="dotnet" Arguments="@(DiagnosticArgs)" /></Target></Project>')
+    # Debugger targets retain named locals; Release's normal optimization policy
+    # must remain intact even when an old configuration has debug flags set.
+    for configuration, expected_optimize in (("Debug", "false"), ("Release", "true")):
+        result = subprocess.run([dotnet, "msbuild", str(project / "Test.csproj"),
+                                 "-getProperty:Optimize", "-p:Configuration=" + configuration,
+                                 "-p:DndDebugSymbols=true"], text=True, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, timeout=30)
+        assert result.returncode == 0 and result.stdout.strip() == expected_optimize, result.stdout
     result = subprocess.run([dotnet, "build", str(project / "Test.csproj"), "-p:DndBuildBackend=Invalid"],
                             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
     assert result.returncode != 0 and "DndBuildBackend must be" in result.stdout, result.stdout
