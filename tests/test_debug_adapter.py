@@ -3,6 +3,9 @@
 import hashlib
 import importlib.util
 import json
+import os
+import select
+import subprocess
 from pathlib import Path
 import socket
 import sys
@@ -95,6 +98,42 @@ class Target:
             self.listener.close()
 
 
+class SerialRelay:
+    """PTY byte transport to the fake RSP target. No physical USB/EXI emulation."""
+    def __init__(self, port):
+        import tty
+        self.master, self.slave = os.openpty()
+        tty.setraw(self.slave)
+        self.path = os.ttyname(self.slave)
+        self.peer = socket.create_connection(("127.0.0.1", port))
+        self.stopping = threading.Event()
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+
+    def run(self):
+        try:
+            while not self.stopping.is_set():
+                ready, _, _ = select.select([self.master, self.peer], [], [], 0.1)
+                for source in ready:
+                    data = os.read(self.master, 4096) if source == self.master else self.peer.recv(4096)
+                    if not data:
+                        return
+                    if source == self.master:
+                        self.peer.sendall(data)
+                    else:
+                        os.write(self.master, data)
+        except OSError:
+            if not self.stopping.is_set():
+                raise
+
+    def close(self):
+        self.stopping.set()
+        self.thread.join(timeout=2)
+        self.peer.close()
+        os.close(self.master)
+        os.close(self.slave)
+
+
 class AdapterTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -116,10 +155,13 @@ class AdapterTests(unittest.TestCase):
                          cfaRegister=1, cfaOffset=0, registers={"65": dict(kind="undefined")})])))
         self.client = probe.DapProcess(ADAPTER)
         self.target = None
+        self.serial_relay = None
         self.client.request("initialize", dict(pathFormat="path", linesStartAt1=True), fragment=True)
 
     def tearDown(self):
         self.client.close()
+        if self.serial_relay:
+            self.serial_relay.close()
         if self.target:
             self.target.thread.join(timeout=2)
             self.assertFalse(self.target.errors, self.target.errors)
@@ -138,6 +180,47 @@ class AdapterTests(unittest.TestCase):
     def bp(self, path="Game.cs", lines=(10,)):
         return self.client.request("setBreakpoints", dict(source=dict(path="/local/日本/" + path),
             breakpoints=[dict(line=line) for line in lines]))["body"]["breakpoints"]
+
+    def test_invalid_transport_is_rejected_before_connecting(self):
+        for args in [dict(transport="unknown"), dict(transport="usbGecko", serialPort="", baudRate=115200),
+                     dict(transport="usbGecko", serialPort="COM5", baudRate=0),
+                     dict(transport="tcp", host="localhost", port=0), dict(timeoutSeconds=121)]:
+            with self.subTest(args=args):
+                self.client.request("attach", dict(elf=str(self.elf), sourceMap=str(self.source),
+                    addressMap=str(self.address), **args), success=False)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux pseudo-terminal serial transport check")
+    def test_usb_attach_breakpoint_step_pause_and_disconnect_over_serial(self):
+        self.target = Target()
+        self.serial_relay = SerialRelay(self.target.port)
+        self.client.request("attach", dict(transport="usbGecko", serialPort=self.serial_relay.path,
+            baudRate=115200, timeoutSeconds=3, elf=str(self.elf), sourceMap=str(self.source),
+            addressMap=str(self.address), sourceFileMap={"/build/日本": "/local/日本"}))
+        self.client.event("initialized")
+        self.bp(lines=(11,))
+        self.client.request("configurationDone")
+        self.client.event("stopped")
+        self.client.request("continue", dict(threadId=1))
+        self.assertEqual("breakpoint", self.client.event("stopped")["reason"])
+        frames = self.client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]
+        self.assertEqual(11, frames[0]["line"])
+        self.client.request("stepIn", dict(threadId=1))
+        self.assertEqual("SourceLocation", self.client.event("stopped")["description"])
+        frames = self.client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]
+        self.assertEqual(12, frames[0]["line"])
+        self.bp(lines=())
+        self.client.request("continue", dict(threadId=1))
+        self.client.request("pause", dict(threadId=1))
+        self.assertEqual("pause", self.client.event("stopped")["reason"])
+        self.client.request("disconnect")
+        self.client.event("terminated")
+        self.assertEqual(0, self.client.process.wait(timeout=5))
+        self.assertFalse(self.target.breakpoints)
+
+    def test_serial_enumeration_is_json_without_dap_frames(self):
+        result = subprocess.run(["dotnet", str(ADAPTER), "--list-serial-ports"],
+                                capture_output=True, text=True, timeout=15, check=True)
+        self.assertIsInstance(json.loads(result.stdout), list)
 
     def test_lifecycle_breakpoints_shared_ownership_and_stepping(self):
         self.attach()

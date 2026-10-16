@@ -83,8 +83,11 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             _frames.Clear();
             _symbols = SourceAddressMap.Load(Required(args, "elf"), Required(args, "sourceMap"), Required(args, "addressMap"));
             _paths = new SourcePathMapper(args);
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            _client = await RspClient.ConnectTcpAsync(Required(args, "host"), args.GetProperty("port").GetInt32(), cancellationToken: timeout.Token);
+            var transport = AttachTransport.Parse(args);
+            using var timeout = new CancellationTokenSource(transport.Timeout);
+            _client = transport.Kind == "usbGecko"
+                ? RspClient.ConnectUsbGecko(transport.SerialPort!, transport.BaudRate, transport.Timeout)
+                : await RspClient.ConnectTcpAsync(transport.Host!, transport.Port, transport.Timeout, timeout.Token);
             try
             {
                 _stop = await new SourceStepper(_client, _symbols).ReadProgramCounterAsync(await _client.QueryStopAsync());

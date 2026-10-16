@@ -1,130 +1,175 @@
-# Rider-first DAP attach increment (A5)
+# Rider attach debugging (A5 / A6 first implementation)
 
-The repository now contains a .NET 8 adapter in `tools/DolphinDotNet.DebugAdapter`.
-It speaks DAP over stdin/stdout and attaches over TCP to an **already-started,
-stopped Dolphin Emulator GDB target**. There is no custom IDE UI in this increment.
-Do not describe this as validated Rider or physical GameCube integration.
+`plugins/rider` implements the approved native Rider attach configuration and target
+editor. It uses public XDebugger APIs and Eclipse LSP4J DAP over stdio to the bundled
+.NET 8 adapter. It does not require LSP4IJ. The SDK is pinned to **Rider 2026.2.3.1
+(build 262)**, Java 25, Gradle 9.1.0 and IntelliJ Platform Gradle Plugin 2.19.0;
+LSP4J debug is pinned to 0.24.0. Compatibility is currently limited to 262.*.
 
-## Build and attach contract
+**Status:** source compiles against that Rider SDK; host profile and DAP tests pass.
+The complete Gradle plugin package must pass the `Rider attach plugin` CI job.
+Interactive Rider C# gutter coexistence, Debug window behavior and physical console
+attach remain separate acceptance gates. Do not describe SDK compilation, fake
+peers or emulator CI as interactive Rider or USB Gecko/BBA hardware validation.
+
+## Build, install and attach
+
+Requires JDK 25, a .NET 8 SDK to build the adapter, and Python 3 for tests:
+
+```sh
+cd plugins/rider
+./gradlew test buildPlugin
+# Optional: reuse an extracted matching Rider SDK instead of downloading it:
+./gradlew -PriderSdk=/absolute/path/to/Rider test buildPlugin
+```
+
+Install the ZIP from `plugins/rider/build/distributions` via Rider **Settings →
+Plugins → Install Plugin from Disk** and restart. The ZIP includes the adapter and
+its managed/native serial dependencies. The Rider process needs `dotnet` (.NET 8
+runtime) on PATH. Use a .NET SDK when rebuilding the adapter, not just its runtime.
+The plugin starts the adapter directly; its stdout is reserved for DAP, and stderr
+is shown in the Debug console. It never starts or kills Dolphin/the console.
+
+1. Start the matching debug DOL in Dolphin or on the console with its GDB stub
+   waiting/stopped. Build, upload and emulator launch remain external steps.
+2. Add a **DolphinDotNet Attach** run/debug configuration. Choose the debug build
+   folder containing exactly one `*.elf`, its `<name>.dnd-addresses.json`, and either
+   the published `<name>.dnd-debug.json` or native-bundle `dnd-il-debug.json`.
+   The three artifact rows display the resolved filenames; the adapter validates
+   their matching SHA-256 identities before connecting.
+3. Open **Manage targets…**, add a named connection and save it. Choose that saved
+   target in the configuration dropdown. Missing/deleted target IDs produce an
+   error; the plugin never silently switches to another console.
+4. Expand **Source path mappings** for CI/container builds. Add build-source prefix
+   → local-source prefix entries. `$PROJECT_DIR$` is supported in the debug build
+   folder and local mapping paths; mappings remain case-sensitive and bidirectional.
+5. Select the DolphinDotNet configuration **before** placing C# gutter breakpoints.
+   This enables its dedicated breakpoint type. Existing Rider .NET breakpoints
+   belong to the normal debugger and are not imported or rewritten. C# breakpoint
+   selection/coexistence must still be checked interactively on the pinned Rider.
+6. Use **Debug**. Attach performs initialize → attach → initialized → source
+   breakpoints → configurationDone. It initially leaves execution stopped. Use the
+   standard Rider Resume, Pause, Step Into, Step Over and Step Out controls and
+   stack frame source navigation. Stop disconnects the adapter without a target kill.
+
+## Saved target properties
+
+Profiles live in the IDE's machine-local `dolphindotnet-targets.xml` with roaming
+**disabled**. Run configurations store a stable target ID; debug build/source paths
+remain per run configuration. Sharing a run configuration does not share serial
+paths or target endpoints: define/select a target on the receiving machine.
+The target dialog edits copies and commits changes only on Save; Cancel leaves the
+stored profiles intact.
+
+| Setting | BBA / TCP (also Dolphin) | USB Gecko |
+|---|---|---|
+| Name | Required | Required |
+| Host / TCP port | Required; match emulator/stub | Not sent |
+| Serial device | Not used | Required editable picker, with Refresh; COM5, /dev/ttyUSB0, /dev/cu.usbserial-* are examples |
+| Expected console slot | Not used | A/B build expectation only; B by default |
+| Response timeout | Advanced; 1–120 seconds, default 10 | Same |
+| Driver baud compatibility | Not used | Advanced; positive integer, provisional 115200 default |
+
+USB opens the FTDI VCP using **8 data bits, no parity, 1 stop bit, no handshake**,
+matching the existing RSP backend. FT245 is a USB FIFO, so its driver baud setting
+is not an assertion of physical UART transfer speed. The compatibility default is
+not a tested hardware recommendation. Refresh runs the packaged adapter's
+`--list-serial-ports` command, lists OS serial ports without claiming they are USB
+Geckos, and preserves manually entered paths. Driver installation, OS permissions
+and exclusive port access remain host prerequisites.
+
+The expected EXI slot does not go into DAP attach arguments. The DOL was built with
+`DndGdbTransport=UsbGecko` and `DndGdbChannel=0` (slot A) or `1` (slot B); only a rebuild
+can change that. BBA subnet/gateway/initialization also belong to the target build,
+not the host attach profile. No target networking configuration is sent on attach.
+
+## Adapter contract
+
+The `.NET 8` adapter in `tools/DolphinDotNet.DebugAdapter` can also be used directly:
 
 ```sh
 dotnet build tools/DolphinDotNet.DebugAdapter -c Release
+dotnet tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll
+# Enumeration is a separate process mode that prints one JSON array, not DAP:
+dotnet tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll --list-serial-ports
 ```
 
-Configure a DAP host to execute `dotnet` with argument
-`tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll`
-using absolute paths appropriate to your checkout. Its stdin/stdout must be reserved
-for DAP. Example adapter-specific **attach arguments** (not a complete Rider config):
+Example TCP attach arguments (not an entire IDE configuration):
 
 ```json
 {
+  "transport": "tcp",
   "host": "127.0.0.1",
   "port": 2166,
-  "elf": "/artifacts/debug-stack/Game.elf",
-  "sourceMap": "/artifacts/debug-stack/dnd-il-debug.json",
-  "addressMap": "/artifacts/debug-stack/Game.dnd-addresses.json",
-  "sourceFileMap": {
-    "/__w/DolphinDotNet/DolphinDotNet": "/local/DolphinDotNet"
-  }
+  "timeoutSeconds": 10,
+  "elf": "/artifacts/debug/Game.elf",
+  "sourceMap": "/artifacts/debug/dnd-il-debug.json",
+  "addressMap": "/artifacts/debug/Game.dnd-addresses.json",
+  "sourceFileMap": {"/__w/DolphinDotNet/DolphinDotNet": "/local/DolphinDotNet"}
 }
 ```
 
-All three artifacts must belong to the same build; the adapter checks their hashes
-before connecting. Source mappings use the longest matching path-component prefix,
-are case-sensitive and bidirectional. Use explicit mappings for container/CI paths;
-ambiguous documents and unmapped lines remain unverified. DAP clients can request
-native paths or file URIs and zero- or one-based lines/columns.
+For USB replace transport/host/port with `"transport": "usbGecko"`,
+`"serialPort": "COM5"`, `"baudRate": 115200`. Baud is explicit at the DAP boundary.
+Omitting transport retains legacy TCP behavior. Unknown transports, missing serial
+paths, nonpositive baud, invalid TCP ports and invalid timeouts fail before connecting.
 
-Sequence: `initialize`, `attach`, wait for `initialized`, `setBreakpoints`,
-`configurationDone`, wait for `stopped` (entry), then `continue`. Attach never resumes
-execution implicitly. Breakpoints can be changed while stopped. Requests to inspect
-or change breakpoints while running fail explicitly; pause first.
+The adapter supports one all-stop PowerPC context, source breakpoint replacement,
+stack pagination, continue/pause, bounded source Step Into/Over/Out and disconnect.
+Rider keeps desired breakpoint changes while running and applies them at the next
+stop (or before resume); direct DAP clients must pause before changing breakpoints.
+Conditional breakpoints/logpoints remain explicitly unsupported. Native frames keep
+PCs without invented source positions; partial unwind/step-limit reasons go to the
+console. Scopes are empty and evaluation is disabled. Stack frame IDs expire on resume.
 
-Supported: source breakpoint replacement, one named all-stop execution context,
-stack trace pagination, continue/pause, bounded Step Into/Over/Out and disconnect.
-Frame IDs expire when execution resumes. Unmapped native frames retain their PCs;
-ambiguous PCs have no invented source location. Partial unwind reasons appear as
-console output. Scopes are empty; variable/evaluate requests are unsupported.
-Stepping temporarily removes native breakpoint installations and checks desired
-breakpoint addresses at each instruction, including deeper calls. Installations are
-restored at the resulting stop. Step limits, ambiguous source and unavailable CFA
-remain explicit stop descriptions, not a claim of successful source advancement.
+Disconnect interrupts a running target, waits for its stop reply, removes owned
+breakpoints and closes the connection. It sends no kill command and normally leaves
+the target stopped. Failed cleanup closes the adapter session and reports an error;
+reliable physical reconnect is not yet claimed. The Rider bridge waits for graceful
+adapter exit, then forcibly closes only the adapter if it is unresponsive.
 
-Continue waits are not ordinary-command timeouts. Pause sends Ctrl-C while the same
-RSP reader drains its stop response. Disconnect interrupts a running target, waits
-up to three seconds for its reply, removes owned breakpoints and closes the connection.
-It does not send a kill command or terminate the externally launched emulator. The
-normal policy leaves the target stopped; failed cleanup closes the session and is
-reported, rather than claiming reliable detach/reconnect support.
+## Acceptance evidence and remaining checks
 
-## Rider compatibility gate (A6, still pending)
+Automated host checks:
 
-First try an existing DAP host, pinned to an exact Rider and plugin version:
+- `tests/test_debug_adapter.py`: real adapter subprocess with fake RSP TCP target;
+  protocol framing, source identity/maps, breakpoint ownership, stack/stepping,
+  pause/resume/disconnect, invalid transports and serial enumeration.
+- Its Linux PTY test exercises actual `System.IO.Ports` open/read/write, source
+  breakpoint, stack, pause and cleanup against a byte relay to a fake RSP peer.
+  This validates host serial plumbing, **not** FTDI USB enumeration, EXI or hardware.
+- `plugins/rider/src/test`: TCP/USB argument separation, slot exclusion, input
+  validation, stable IDs/deep-copy state, deletion without fallback, native and
+  MSBuild artifact discovery, and the LSP4J subprocess initialize/configure/stack/
+  resume/pause/Step Into/Over/Out/disconnect sequence.
+- CI builds the pinned Rider plugin, runs its tests and uploads the installable ZIP.
+  Source-only plugin changes select that job; debugger changes also build its consumer.
 
-- LSP4IJ documents a generic DAP configuration and file mappings:
-  https://github.com/redhat-developer/lsp4ij/blob/main/docs/dap/UserGuide.md
-- Its current documented support matrix lists Pause as unsupported:
-  https://github.com/redhat-developer/lsp4ij/blob/main/docs/dap/DAPSupport.md
+Real-Dolphin DAP acceptance passed run
+[38934685398](https://github.com/capz/DolphinDotNet/actions/runs/38934685398) on
+`aa63a0499e25fe0c98ba31b6205d792218ee3b5f`: two managed breakpoints, source stepping,
+pause, Inner → Outer → Main stack, Step Out to Outer:14 and Step Over to Outer:15.
+The new increment requires its own CI result; that historical run proves emulator/DAP
+behavior only.
 
-This is a candidate feasibility route, not a verified Rider integration. Confirm
-installation compatibility, `.cs` gutter breakpoint routing alongside Rider's normal
-.NET debugger, adapter process startup, C# source navigation, managed stack frames,
-Step Into/Over/Out, and Pause. Record the exact versions and a protocol transcript.
-If the host cannot route C# breakpoints or Pause, stop that approach and scope a thin
-Rider debugger bridge. A generic DAP success does not satisfy this Rider gate.
-Any custom UI must have an approved mockup before implementation.
+Before claiming A6 validated, record the exact installed Rider/plugin versions,
+configuration save/reload and Cancel behavior, BBA/USB transport field switching,
+serial refresh/error handling, dropdown selection, C# gutter coexistence, source
+navigation, pause/resume, stack selection and all three step controls against the
+real Dolphin fixture. Verify Stop leaves the emulator alive and no owned breakpoint
+installed. Keep A4.4 physical BBA and USB Gecko validation deferred separately.
 
-## Acceptance and boundaries
-
-Host tests: `python3 -m unittest discover -s tests -p test_debug_adapter.py` after
-building the adapter. They launch the actual adapter process against a fake TCP
-RSP target and exercise fragmented UTF-8 frames, identity rejection, configuration
-ordering, shared breakpoint ownership, source ambiguity, source path translation,
-step breakpoint arbitration/restoration, stale frame IDs and pause/resume/disconnect.
-The existing `tests/DebuggerTests` also verifies a Continue wait outlives the ordinary
-command timeout and can still be cancelled.
-
-Real-Dolphin CI invokes `scripts/dnd_dap_probe.py` through `scripts/dolphin_smoke.py
---dap-adapter ...`. It must prove two C# breakpoint locations, source Step Into,
-pause, and the separate Inner -> Outer -> Main / Step Out / Step Over fixture,
-through the adapter process. CI success must be checked before claiming these new
-DAP paths validated. The smoke harness owns emulator launch and termination.
-
-Out of scope: DAP launch/build orchestration, custom Rider packaging, VS/VS Code
-extensions, physical BBA/USB Gecko (A4.4 remains deferred), locals/objects,
+Out of scope: DAP launch/build/upload orchestration, automatic target discovery or
+slot negotiation, verified hardware compatibility, reconnect, locals/objects,
 expressions, managed exception filters, async stacks, real thread enumeration,
-reverse execution, advanced optimized frames and automatic reconnect. Core source
-stepping retains A4.5's known same-line, recursion and performance limitations.
+reverse execution, Visual Studio integration and Marketplace publishing. A4.5's
+same-line/recursion/optimized-frame and stepping-performance limitations remain.
 
-## A6 feasibility spike: existing DAP host
+## Route decision
 
-A5 emulator gate passed CI run [38934685398](https://github.com/capz/DolphinDotNet/actions/runs/38934685398)
-on commit aa63a0499e25fe0c98ba31b6205d792218ee3b5f. The real-Dolphin logs show both
-ManagedGameCube source breakpoints, DAP source stepping, pause, Inner -> Outer ->
-Main, Step Out to Outer:14 and Step Over to Outer:15. Host protocol tests, all
-platform build workflows and the managed/compiler/native checks also passed.
-This is emulator/DAP validation only.
-
-Upstream LSP4IJ source was inspected at commit `cbe50d3d9ff7eac9d0055ad7695bf0b1fc5fb4f0`
-(version property 0.21.1-SNAPSHOT, not an installed/pinned Rider plugin release):
-
-- [`DAPDebugProcess.java`](https://github.com/redhat-developer/lsp4ij/blob/cbe50d3d9ff7eac9d0055ad7695bf0b1fc5fb4f0/src/main/java/com/redhat/devtools/lsp4ij/dap/DAPDebugProcess.java)
-  implements Step Into/Over/Out and resume, but has no pause override/handler.
-- [`DAPSupport.md`](https://github.com/redhat-developer/lsp4ij/blob/cbe50d3d9ff7eac9d0055ad7695bf0b1fc5fb4f0/docs/dap/DAPSupport.md)
-  explicitly marks the Pause request unsupported. Therefore this route does not
-  currently meet the complete interactive acceptance criteria as documented.
-- [`DAPBreakpointTypeBase.java`](https://github.com/redhat-developer/lsp4ij/blob/cbe50d3d9ff7eac9d0055ad7695bf0b1fc5fb4f0/src/main/java/com/redhat/devtools/lsp4ij/dap/breakpoints/DAPBreakpointTypeBase.java)
-  delegates breakpoint placement to debuggable-file mappings; its own DAP
-  breakpoint type is distinct from Rider's regular .NET breakpoint handling.
-  C# gutter routing/coexistence remains an interactive test, not a proven failure.
-- The upstream developer guide documents `debugAdapterServer` registration and
-  dedicated breakpoint handlers. A registration alone does not implement Pause.
-
-Decision: keep the shared .NET adapter and stdio contract. Do not advertise
-LSP4IJ-only setup as a complete Rider release. The next increment is a thin Rider
-bridge feasibility implementation (or an upstream host Pause fix), with a pinned
-Rider SDK/plugin combination. Prove C# breakpoint routing and Pause first, then
-source navigation and the existing emulator stack/stepping script. Reuse Rider's
-native Debug window and controls. Before implementing any custom configuration
-UI, present a Rider-style mockup for user approval. No interactive Rider session
-or physical console test was performed in this spike.
+The earlier LSP4IJ spike inspected upstream `cbe50d3d9ff7eac9d0055ad7695bf0b1fc5fb4f0`
+(0.21.1-SNAPSHOT). Its DAP support matrix marks Pause unsupported, and its
+`DAPDebugProcess` has no pause override. Therefore this implementation owns a thin
+XDebugger bridge instead of depending on or forking LSP4IJ. See the public
+[XDebugger APIs](https://github.com/JetBrains/intellij-community/tree/master/platform/xdebugger-api)
+and [LSP4J DAP client launcher](https://github.com/eclipse-lsp4j/lsp4j/blob/v0.24.0/org.eclipse.lsp4j.debug/src/main/java/org/eclipse/lsp4j/debug/launch/DSPLauncher.java).

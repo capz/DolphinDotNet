@@ -361,3 +361,33 @@ interactive C# gutter-routing test. See the pinned upstream source references an
 A6 decision in `docs/rider-debugging.md`. Next: thin Rider bridge feasibility,
 starting with breakpoint routing and pause; any custom UI needs an approved
 mockup first. Rider itself remains unvalidated and A4.4 stays deferred.
+
+## A6 first implementation: Rider attach and saved targets
+
+The user approved the native Rider configuration and Manage targets modal mockups.
+`plugins/rider` now provides a run configuration with a debug-build folder, resolved
+artifact rows, saved-target dropdown, target manager and source prefix mappings.
+Machine-local profiles support BBA/TCP (also Dolphin) and USB Gecko VCP; stable IDs
+keep run configurations independent of profile renames. USB slot A/B is expected
+build metadata only. Host attach cannot change the running DOL's EXI channel.
+
+The plugin uses public XDebugger APIs and LSP4J DAP over stdio to the packaged .NET
+adapter. The bridge implements source breakpoint replacement/verification, initial
+stopped attach, pause/resume, managed stack locations and Step Into/Over/Out using
+the existing adapter. It gates its C# gutter breakpoint type on selection of a
+DolphinDotNet configuration, preserving normal .NET breakpoint ownership. SDK target
+is Rider 2026.2.3.1 / build 262 with Java 25; support is bounded to 262.*.
+
+The adapter now accepts explicit USB serial/driver compatibility settings as well
+as TCP, and exposes a separate JSON serial-port enumeration mode. Host tests include
+actual System.IO.Ports traffic over a Linux PTY to a fake RSP target. Java tests
+exercise saved profiles, artifact discovery and the LSP4J lifecycle with a fake DAP
+process. Neither test substitutes for interactive Rider or real FTDI/EXI hardware.
+
+Validation at implementation time: SDK javac compilation, 6 Java tests, 11 adapter
+tests and 18 CI-selection tests passed. Complete Gradle packaging is pending CI;
+local Gradle dependency resolution is blocked by this environment's Java networking.
+The dedicated `Rider attach plugin` job builds/tests/packages the pinned SDK and
+uploads the plugin ZIP. See `docs/rider-debugging.md` for the exact install/attach
+procedure and manual acceptance checklist. A6 remains unvalidated interactively;
+A4.4 physical USB Gecko/BBA remains deferred. Do not infer either from emulator CI.

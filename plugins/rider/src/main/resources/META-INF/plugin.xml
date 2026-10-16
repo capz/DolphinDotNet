@@ -1,0 +1,13 @@
+<idea-plugin>
+    <id>com.dolphindotnet.rider</id>
+    <name>DolphinDotNet</name>
+    <vendor>DolphinDotNet</vendor>
+    <description>Attach to an already-running Dolphin or GameCube GDB target using the DolphinDotNet DAP adapter.</description>
+    <depends>com.intellij.modules.rider</depends>
+    <depends>com.intellij.modules.xdebugger</depends>
+    <extensions defaultExtensionNs="com.intellij">
+        <configurationType implementation="com.dolphindotnet.rider.AttachConfigurationType"/>
+        <programRunner implementation="com.dolphindotnet.rider.AttachRunner"/>
+        <xdebugger.breakpointType implementation="com.dolphindotnet.rider.SourceBreakpointType"/>
+    </extensions>
+</idea-plugin>

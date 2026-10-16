@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       debugger: ${{ steps.select.outputs.debugger }}
+      rider: ${{ steps.select.outputs.rider }}
       managed: ${{ steps.select.outputs.managed }}
       ide: ${{ steps.select.outputs.ide }}
       portable: ${{ steps.select.outputs.portable }}
@@ -56,6 +57,52 @@ jobs:
         run: dotnet build tools/DolphinDotNet.DebugAdapter -c Release
       - name: Test DAP process against fake RSP target
         run: python3 -m unittest discover -s tests -p test_debug_adapter.py
+  rider-plugin:
+    needs: changes
+    if: needs.changes.outputs.rider == 'true'
+    name: Rider attach plugin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.1.0'
+      - name: Compile Rider bridge, test target profiles and DAP lifecycle, package adapter
+        working-directory: plugins/rider
+        run: gradle --no-daemon test buildPlugin
+      - name: Verify plugin ZIP includes the adapter and serial runtime dependencies
+        run: |
+          python3 - <<'PYZIP'
+          from pathlib import Path
+          from zipfile import ZipFile
+          packages = list(Path('plugins/rider/build/distributions').glob('*.zip'))
+          assert len(packages) == 1, packages
+          with ZipFile(packages[0]) as archive:
+              names = archive.namelist()
+              for required in ['DolphinDotNet.DebugAdapter.dll', 'DolphinDotNet.DebugAdapter.deps.json',
+                               'DolphinDotNet.DebugAdapter.runtimeconfig.json', 'DolphinDotNet.Debugger.dll', 'System.IO.Ports.dll']:
+                  assert any(name.endswith('/adapter/' + required) for name in names), required
+              assert any('Ports.Native' in name for name in names), 'Missing serial native runtimes'
+          PYZIP
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DolphinDotNet-Rider-plugin
+          path: plugins/rider/build/distributions/*.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: Rider-plugin-test-reports
+          path: plugins/rider/build/reports/tests/
+
   managed:
     needs: changes
     if: needs.changes.outputs.managed == 'true'
@@ -807,7 +854,7 @@ jobs:
     name: CI result
     if: always()
     runs-on: ubuntu-24.04
-    needs: [changes, debugger-protocol, managed, ide-workflow, portable-runtime, gamecube, dolphin-smoke]
+    needs: [changes, debugger-protocol, rider-plugin, managed, ide-workflow, portable-runtime, gamecube, dolphin-smoke]
     steps:
       - name: Require every selected check to pass
         env:
@@ -819,7 +866,7 @@ jobs:
           if jobs['changes']['result'] != 'success':
               sys.exit('CI selection failed')
           selected = jobs['changes']['outputs']
-          groups = {'debugger-protocol': 'debugger', 'managed': 'managed',
+          groups = {'debugger-protocol': 'debugger', 'rider-plugin': 'rider', 'managed': 'managed',
                     'ide-workflow': 'ide', 'portable-runtime': 'portable',
                     'gamecube': 'gamecube', 'dolphin-smoke': 'dolphin'}
           failed = []
