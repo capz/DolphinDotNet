@@ -101,7 +101,10 @@ generated native function symbols, per-instruction IL offsets and A2b's
 matching Portable PDB source locations. It also includes assembly MVID and PDB
 identity for host-side build validation. This source map is **not yet mapped to
 PowerPC addresses**; A2c/A3 must generate and verify native line tables.
-The file remains in the generated native bundle and is not deployed on-device.
+The debug metadata is also published alongside the ELF as
+`<AssemblyName>.dnd-debug.json` by SDK builds, so a future debugger adapter
+does not need to inspect intermediate build directories. It is never deployed
+on-device. Normal builds remove any old sidecar.
 Debug builds fail if a reachable assembly's Portable PDB is missing or stale.
 The generated C additionally receives `#line` directives in debug builds only,
 including resets around hidden IL and synthetic native instructions. GCC uses
