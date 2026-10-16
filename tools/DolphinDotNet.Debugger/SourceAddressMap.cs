@@ -93,7 +93,7 @@ public sealed class SourceAddressMap
                         throw new InvalidDataException("Unsupported unwind rule.");
                     rules.Add(number, new RegisterRule(kind,
                         register.Value.TryGetProperty("offset", out var offset) ? offset.GetInt32() : 0,
-                        register.Value.TryGetProperty("register", out var source) ? source.GetInt32() : number));
+                        register.Value.TryGetProperty("register", out var sourceRegisterElement) ? sourceRegisterElement.GetInt32() : number));
                 }
             }
             result._unwind.Add(new UnwindRule(begin, end, supported, cfaRegister, cfaOffset, rules));
