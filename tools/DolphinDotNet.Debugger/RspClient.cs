@@ -88,6 +88,9 @@ public sealed class RspClient : IAsyncDisposable
 
     /// <summary>Perform one RSP request/response with bounded time and serialized access.</summary>
     public async Task<string> CommandAsync(string command, CancellationToken cancellationToken = default)
+        => await CommandCoreAsync(command, false, cancellationToken).ConfigureAwait(false);
+
+    private async Task<string> CommandCoreAsync(string command, bool waitForStop, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(command) || command.Any(c => c is '$' or '#' or '}' or '*' || c > 0x7f))
             throw new ArgumentException("Invalid literal RSP command.", nameof(command));
@@ -99,7 +102,9 @@ public sealed class RspClient : IAsyncDisposable
             ThrowIfDisposed();
             var frame = Encode(command);
             await WriteAsync(frame, deadline.Token).ConfigureAwait(false);
-            return await ReadReplyAsync(frame, deadline.Token).ConfigureAwait(false);
+            // A running target may legitimately take minutes to stop. The session
+            // owns its cancellation and must interrupt/drain before another request.
+            return await ReadReplyAsync(frame, waitForStop ? cancellationToken : deadline.Token).ConfigureAwait(false);
         }
         finally
         {
@@ -125,7 +130,8 @@ public sealed class RspClient : IAsyncDisposable
     }
 
     public Task<RspStop> QueryStopAsync(CancellationToken token = default) => StopCommandAsync("?", token);
-    public Task<RspStop> ContinueAsync(CancellationToken token = default) => StopCommandAsync("c", token);
+    public async Task<RspStop> ContinueAsync(CancellationToken token = default)
+        => RspStop.Parse(await CommandCoreAsync("c", true, token).ConfigureAwait(false));
     public Task<RspStop> StepInstructionAsync(CancellationToken token = default) => StopCommandAsync("s", token);
 
     private async Task<RspStop> StopCommandAsync(string command, CancellationToken token)

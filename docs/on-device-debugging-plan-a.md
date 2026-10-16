@@ -302,3 +302,27 @@ exercise saved LR/r31 recovery, leaf LR translation, caller-source attribution,
 partial stacks, CFA depth comparisons and invalid/missing unwind information.
 The parser also has prologue/body/epilogue and CIE-inheritance regressions.
 These new behaviors require their own passing CI run; A4.4 remains deferred.
+
+## A5 first increment: attach-only DAP process
+
+A4.5's original run 38916826744 recorded a probe failure before being superseded.
+Step Out had already reached Outer:14; two unconditional Step Over calls overshot
+Outer:15. Commit f2744a8 made that assertion source-position-aware and CI run
+38919479273 passed, including Inner -> Outer -> Main and Step Out/Over evidence.
+This does not validate physical BBA or USB Gecko; A4.4 remains deferred.
+
+`tools/DolphinDotNet.DebugAdapter` now exposes the verified source maps and host
+RSP backend through a single-session stdio DAP process. It attaches to an existing
+Dolphin TCP target, replaces source breakpoint sets, maps source paths, provides
+bounded call stacks and source stepping, and supports continue/pause/disconnect.
+Native breakpoint ownership is shared across source sets; stepping checks desired
+user breakpoint PCs before skipping deeper calls. Continue is no longer constrained
+by an ordinary RSP command timeout. Uncertain protocol failures terminate the
+session rather than reusing a possibly desynchronized reply stream.
+
+New black-box host and real-Dolphin DAP CI checks are required to validate this
+increment. Rider hosting remains a separate explicit gate; the documented LSP4IJ
+route is only a candidate and currently documents a Pause limitation. No custom UI,
+physical compatibility, variable inspection or Rider release is claimed.
+See `docs/rider-debugging.md` for attach arguments, responsibilities, acceptance
+commands and remaining integration gates.

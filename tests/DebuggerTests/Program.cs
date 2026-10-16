@@ -73,6 +73,7 @@ static async Task TestChecksumsAndTimeoutsAsync()
     var listener = new TcpListener(IPAddress.Loopback, 0);
     listener.Start();
     int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+    var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
     var server = Task.Run(async () =>
     {
         using var peer = await listener.AcceptTcpClientAsync();
@@ -86,17 +87,22 @@ static async Task TestChecksumsAndTimeoutsAsync()
         Check(await ReadFrameAsync(stream) == "c", "continue request");
         await stream.WriteAsync(new byte[] { (byte)'+' });
         // No stop reply: client must time out/cancel rather than hang forever.
-        await Task.Delay(450);
+        await finish.Task.WaitAsync(TimeSpan.FromSeconds(5));
     });
     await using var client = await RspClient.ConnectTcpAsync("127.0.0.1", port, TimeSpan.FromMilliseconds(180));
     Check((await client.QueryStopAsync()).Signal == 5, "checksum retry stop response");
-    using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(120));
+    using var cancellation = new CancellationTokenSource();
     try
     {
-        await client.ContinueAsync(cancellation.Token);
+        var running = client.ContinueAsync(cancellation.Token);
+        await Task.Delay(250);
+        Check(!running.IsCompleted, "Continue must outlive the 180 ms ordinary-command timeout.");
+        cancellation.Cancel();
+        await running;
         throw new Exception("Expected cancellation while target was executing.");
     }
     catch (OperationCanceledException) { }
+    finish.SetResult();
     await server.WaitAsync(TimeSpan.FromSeconds(3));
 }
 

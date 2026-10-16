@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 
 namespace DolphinDotNet.Debugger;
 
-public enum SourceStepReason { SourceLocation, Signal, Exited, InstructionLimit, AmbiguousSource, UnwindUnavailable }
+public enum SourceStepReason { SourceLocation, Signal, Exited, InstructionLimit, AmbiguousSource, UnwindUnavailable, UserBreakpoint }
 
 public sealed record SourceStepResult(RspStop Stop, SourceLocation? Location,
     SourceStepReason Reason, int Instructions);
@@ -11,7 +11,7 @@ public sealed record SourceStepResult(RspStop Stop, SourceLocation? Location,
 /// Conservative C# line Step Into for stopped PowerPC targets. The caller serializes
 /// session operations; no other command may change execution or breakpoints during a step.
 /// </summary>
-public sealed class SourceStepper(RspClient client, SourceAddressMap symbols)
+public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Func<uint, bool>? breakpointHit = null)
 {
     private enum StepMode { Into, Over, Out }
     public async Task<RspStop> ReadProgramCounterAsync(RspStop stop, CancellationToken token = default)
@@ -62,6 +62,8 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols)
             // SIGTRAP is the expected single-step completion. Never hide crashes or interrupts.
             if (current.Signal != 5) return new(current, null, SourceStepReason.Signal, count);
             var locations = symbols.FindExact(current.ProgramCounter!.Value);
+            if (breakpointHit?.Invoke(current.ProgramCounter.Value) == true)
+                return new(current, locations.Count == 1 ? locations[0] : null, SourceStepReason.UserBreakpoint, count);
             if (locations.Count > 1) return new(current, null, SourceStepReason.AmbiguousSource, count);
             if (locations.Count != 1) continue;
             if (mode == StepMode.Into)

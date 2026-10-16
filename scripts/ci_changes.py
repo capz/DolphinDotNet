@@ -15,9 +15,9 @@ def select(paths):
     for path in paths:
         if path.startswith("docs/") or path in {"README.md", "SECURITY.md", "LICENSE"}:
             continue
-        if path.startswith("tests/DebuggerTests/"):
+        if path.startswith("tests/DebuggerTests/") or path == "tests/test_debug_adapter.py":
             selected.add("debugger")
-        elif path.startswith(("tools/DolphinDotNet.Debugger/", "tools/DolphinDotNet.Debugger.Probe/")):
+        elif path.startswith(("tools/DolphinDotNet.Debugger/", "tools/DolphinDotNet.Debugger.Probe/", "tools/DolphinDotNet.DebugAdapter/")) or path == "scripts/dnd_dap_probe.py":
             selected.update({"debugger", "gamecube", "dolphin"})
         elif path in {"scripts/dolphin_smoke.py", "scripts/dolphin_gdb_probe.py", "tests/test_dolphin_smoke.py"}:
             selected.update({"gamecube", "dolphin"})

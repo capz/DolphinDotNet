@@ -20,6 +20,11 @@ class CiSelectionTests(unittest.TestCase):
     def test_debugger_requires_live_emulator_and_fresh_artifacts(self):
         self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger/RspClient.cs"]), {"debugger", "gamecube", "dolphin"})
 
+    def test_dap_dependency_selection(self):
+        self.assertEqual(ci.select(["tests/test_debug_adapter.py"]), {"debugger"})
+        for path in ["tools/DolphinDotNet.DebugAdapter/DebugSession.cs", "scripts/dnd_dap_probe.py"]:
+            self.assertEqual(ci.select([path]), {"debugger", "gamecube", "dolphin"})
+
     def test_probe_has_same_target_dependencies(self):
         self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger.Probe/Program.cs"]), {"debugger", "gamecube", "dolphin"})
 
