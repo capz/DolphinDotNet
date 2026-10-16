@@ -347,3 +347,17 @@ Both source probes step from the first short statement before the rendering call
 the stack probe accepts returning to the current caller statement before stepping
 to the second call and proving Step Over. New CI is required for the corrected
 PowerPC maps and full DAP source/pause/stack flow. A4.4 remains deferred.
+
+## A5 emulator gate passed; A6 host feasibility checked
+
+CI run [38934685398](https://github.com/capz/DolphinDotNet/actions/runs/38934685398)
+passed all selected checks on aa63a0499e25fe0c98ba31b6205d792218ee3b5f, including
+real-Dolphin DAP source breakpoints, source stepping, pause, managed stack and
+Step Over/Out. The DWARF correction is now emulator validated.
+
+The initial Rider-host source audit found that LSP4IJ's documented/current
+implementation lacks Pause. Its separate DAP breakpoint type also requires an
+interactive C# gutter-routing test. See the pinned upstream source references and
+A6 decision in `docs/rider-debugging.md`. Next: thin Rider bridge feasibility,
+starting with breakpoint routing and pause; any custom UI needs an approved
+mockup first. Rider itself remains unvalidated and A4.4 stays deferred.

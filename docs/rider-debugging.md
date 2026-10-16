@@ -95,3 +95,36 @@ extensions, physical BBA/USB Gecko (A4.4 remains deferred), locals/objects,
 expressions, managed exception filters, async stacks, real thread enumeration,
 reverse execution, advanced optimized frames and automatic reconnect. Core source
 stepping retains A4.5's known same-line, recursion and performance limitations.
+
+## A6 feasibility spike: existing DAP host
+
+A5 emulator gate passed CI run [38934685398](https://github.com/capz/DolphinDotNet/actions/runs/38934685398)
+on commit aa63a0499e25fe0c98ba31b6205d792218ee3b5f. The real-Dolphin logs show both
+ManagedGameCube source breakpoints, DAP source stepping, pause, Inner -> Outer ->
+Main, Step Out to Outer:14 and Step Over to Outer:15. Host protocol tests, all
+platform build workflows and the managed/compiler/native checks also passed.
+This is emulator/DAP validation only.
+
+Upstream LSP4IJ source was inspected at commit `cbe50d3d9ff7eac9d0055ad7695bf0b1fc5fb4f0`
+(version property 0.21.1-SNAPSHOT, not an installed/pinned Rider plugin release):
+
+- [`DAPDebugProcess.java`](https://github.com/redhat-developer/lsp4ij/blob/cbe50d3d9ff7eac9d0055ad7695bf0b1fc5fb4f0/src/main/java/com/redhat/devtools/lsp4ij/dap/DAPDebugProcess.java)
+  implements Step Into/Over/Out and resume, but has no pause override/handler.
+- [`DAPSupport.md`](https://github.com/redhat-developer/lsp4ij/blob/cbe50d3d9ff7eac9d0055ad7695bf0b1fc5fb4f0/docs/dap/DAPSupport.md)
+  explicitly marks the Pause request unsupported. Therefore this route does not
+  currently meet the complete interactive acceptance criteria as documented.
+- [`DAPBreakpointTypeBase.java`](https://github.com/redhat-developer/lsp4ij/blob/cbe50d3d9ff7eac9d0055ad7695bf0b1fc5fb4f0/src/main/java/com/redhat/devtools/lsp4ij/dap/breakpoints/DAPBreakpointTypeBase.java)
+  delegates breakpoint placement to debuggable-file mappings; its own DAP
+  breakpoint type is distinct from Rider's regular .NET breakpoint handling.
+  C# gutter routing/coexistence remains an interactive test, not a proven failure.
+- The upstream developer guide documents `debugAdapterServer` registration and
+  dedicated breakpoint handlers. A registration alone does not implement Pause.
+
+Decision: keep the shared .NET adapter and stdio contract. Do not advertise
+LSP4IJ-only setup as a complete Rider release. The next increment is a thin Rider
+bridge feasibility implementation (or an upstream host Pause fix), with a pinned
+Rider SDK/plugin combination. Prove C# breakpoint routing and Pause first, then
+source navigation and the existing emulator stack/stepping script. Reuse Rider's
+native Debug window and controls. Before implementing any custom configuration
+UI, present a Rider-style mockup for user approval. No interactive Rider session
+or physical console test was performed in this spike.
