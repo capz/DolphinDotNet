@@ -1,4 +1,7 @@
 #include "dnd_input.h"
+#ifdef DND_SAMPLE_CONTROLS
+#include "dnd_performance.h"
+#endif
 #include <math.h>
 #include <string.h>
 
@@ -54,6 +57,11 @@ void dnd_input_poll(void) {
         pad->axes[4]=trigger(raw->trigger_l, &options[i]);
         pad->axes[5]=trigger(raw->trigger_r, &options[i]);
     }
+#ifdef DND_SAMPLE_CONTROLS
+    /* Use the same edge snapshot as managed input; never poll a second time. */
+    if (pads[0].down & DND_PAD_BUTTON_Z)
+        dnd_performance_set_visible(!dnd_performance_visible());
+#endif
 }
 const DndGamePad *dnd_input_gamepad(unsigned port) { return port<4 ? &pads[port] : NULL; }
 int dnd_input_flags(int port) { return port>=0 && port<4 ? pads[port].flags : 0; }

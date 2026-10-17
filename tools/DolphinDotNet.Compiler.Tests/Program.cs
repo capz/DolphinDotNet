@@ -35,6 +35,13 @@ if (normalMake.Contains("-ldb ", StringComparison.Ordinal) ||
     File.Exists(Path.Combine(normalBundle, "source/debug_gamecube.c")))
     throw new Exception("Normal bundle unexpectedly enables the GDB debugger.");
 
+if (normalMake.Contains("-DDND_SAMPLE_CONTROLS", StringComparison.Ordinal))
+    throw new Exception("Application bundles must opt in to sample controls.");
+var sampleBundle = Path.Combine(tempDirectory, "sample-controls");
+Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{sampleBundle}\" --sample-controls");
+if (!File.ReadAllText(Path.Combine(sampleBundle, "Makefile")).Contains("-DDND_SAMPLE_CONTROLS", StringComparison.Ordinal))
+    throw new Exception("Sample controls did not reach the native build.");
+
 Run("dotnet", $"build \"{sample}\" -c Debug -p:DndBuildNative=false -p:DndDebugSymbols=true");
 var debugDll = Path.Combine(root, "samples/HelloGameCube/bin/Debug/net8.0/HelloGameCube.dll");
 

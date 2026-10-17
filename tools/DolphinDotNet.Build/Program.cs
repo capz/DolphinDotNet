@@ -24,7 +24,7 @@ internal static class Driver
                     "  doctor [--backend Auto|Native|Docker] [--dolphin PATH] [--build-only true]\n" +
                     "  build --assembly DLL --compiler DLL --native-directory DIR --dol DOL --elf ELF --run-config JSON\n" +
                     "        [--backend Auto|Native|Docker] [--dolphin PATH] [--user-directory DIR] [--jobs N]\n" +
-                     "        [--debug-symbols true|false] [--gdb-transport Off|Tcp|UsbGecko] [--gdb-channel 0|1] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
+                     "        [--sample-controls true|false] [--debug-symbols true|false] [--gdb-transport Off|Tcp|UsbGecko] [--gdb-channel 0|1] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
                     "  run --config JSON [--dolphin PATH] [--gdb-port PORT]");
                 return 0;
             }
@@ -89,7 +89,7 @@ internal static class Driver
             if (args[0] is not ("build" or "doctor")) throw new ArgumentException("Unknown command: " + args[0]);
             Allow(options, args[0] == "doctor" ? ["backend", "dolphin", "build-only"] :
                 ["assembly", "compiler", "native-directory", "dol", "elf", "run-config", "backend", "dolphin", "user-directory", "jobs",
-                  "debug-symbols", "gdb-transport", "gdb-channel", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
+                  "sample-controls", "debug-symbols", "gdb-transport", "gdb-channel", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
             string? native = null, dol = null, elf = null, runConfig = null, assembly = null, compiler = null;
             if (args[0] == "build")
             {
@@ -124,6 +124,8 @@ internal static class Driver
                 throw new ArgumentException("USB Gecko channel must be 0 (slot A) or 1 (slot B).");
             if (!bool.TryParse(Get("debug-symbols", "false"), out bool debugSymbols))
                 throw new ArgumentException("--debug-symbols must be true or false.");
+            if (!bool.TryParse(Get("sample-controls", "false"), out bool sampleControls))
+                throw new ArgumentException("--sample-controls must be true or false.");
             debugSymbols |= gdbTcp || gdbUsb;
             string backend = Get("backend", "Auto");
             if (backend.Equals("Auto", StringComparison.OrdinalIgnoreCase))
@@ -190,6 +192,7 @@ internal static class Driver
             File.WriteAllText(marker, "DolphinDotNet generated build directory\n");
             var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
             var compilerArgs = new List<string> { compiler!, "--bundle", assembly!, native! };
+            if (sampleControls) compilerArgs.Add("--sample-controls");
             if (debugSymbols) compilerArgs.Add("--debug-symbols");
             if (gdbUsb) compilerArgs.AddRange(["--gdb-usb", Get("gdb-channel", "1")]);
             if (gdbTcp)

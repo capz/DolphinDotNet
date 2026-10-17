@@ -54,7 +54,7 @@ internal static class GameCubeBundle
         ("unsupported-sound", new[] {"System.Media.", "Dolphin.Sound."}, Array.Empty<string>())
     };
 
-    internal static void Emit(string assembly, string directory, AotCompilation compilation, string platform, GdbTcpOptions? gdbTcp = null, bool debugSymbols = false, GdbUsbOptions? gdbUsb = null)
+    internal static void Emit(string assembly, string directory, AotCompilation compilation, string platform, GdbTcpOptions? gdbTcp = null, bool debugSymbols = false, GdbUsbOptions? gdbUsb = null, bool sampleControls = false)
     {
         if (gdbTcp is not null && gdbUsb is not null)
             throw new ArgumentException("TCP and USB Gecko debugger transports are mutually exclusive.");
@@ -63,6 +63,8 @@ internal static class GameCubeBundle
         debugSymbols |= gdbTcp is not null || gdbUsb is not null;
         if (debugSymbols && platform != "gamecube")
             throw new NotSupportedException("Native C# source mapping requires the GameCube target.");
+        if (sampleControls && platform != "gamecube")
+            throw new NotSupportedException("Sample controls currently require the GameCube target.");
         var root = FindRoot();
         var reachable = compilation.ValueMethods.Select(x => x.Key.TypeName)
             .Distinct(StringComparer.Ordinal).ToArray();
@@ -238,7 +240,7 @@ internal static class GameCubeBundle
             File.Copy(Path.Combine(root, "source", name + ".c"),
                 Path.Combine(directory, "source", name + ".c"), true);
 
-        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null, gdbUsb is not null, debugSymbols));
+        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null, gdbUsb is not null, debugSymbols, sampleControls));
         var report = new StringBuilder();
         report.AppendLine("DolphinDotNet AOT Native Dependencies");
         report.AppendLine("Target: " + platform);
@@ -281,7 +283,7 @@ internal static class GameCubeBundle
         throw new DirectoryNotFoundException("The DolphinDotNet repository's native sources are required to emit a self-contained build directory.");
     }
 
-    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool gdbUsb, bool debugSymbols)
+    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool gdbUsb, bool debugSymbols, bool sampleControls)
     {
         var isWiiU = platform == "wiiu";
         var overlayTelemetry = debugSymbols && platform == "gamecube";
@@ -313,7 +315,8 @@ internal static class GameCubeBundle
                     (usesNetworking ? "" : " -DDND_NO_AUTONETWORK") :
                 usesNetworking ? " -DDND_GAMECUBE_STORAGE" :
                 " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK") +
-            (overlayTelemetry ? " -DDND_DEBUG_TELEMETRY" : ""));
+            (overlayTelemetry ? " -DDND_DEBUG_TELEMETRY" : "") +
+            (sampleControls ? " -DDND_SAMPLE_CONTROLS" : ""));
         // Keep the reporting slot even when the app has not enabled/drawn the overlay yet.
         builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") +
             (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry -Wl,--undefined=dnd_debugger_heartbeat" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");

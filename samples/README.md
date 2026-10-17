@@ -5,7 +5,7 @@ the GameCube runs generated native code, using only the supported AOT API subset
 
 | Sample | Demonstrates | Setup / result |
 | --- | --- | --- |
-| [HelloGameCube](HelloGameCube/Program.cs) | `int Main`, `DebugOverlay.WriteLine`, integer arithmetic and standard `Int32.ToString` | Prints a greeting and 42, then exits |
+| [HelloGameCube](HelloGameCube/Program.cs) | `int Main`, `DebugOverlay.WriteLine`, integer arithmetic and standard `Int32.ToString` | Prints a greeting and 42, then shows the result screen |
 | [ManagedGameCube](ManagedGameCube/Program.cs) | Cached controller snapshots, debug text and `ImmediateRenderer`; the scene belongs to `DemoScene`, not the framework | Rotating triangle; press Start on controller port 0 to exit |
 | [AsyncNetworking](AsyncNetworking/Program.cs) | Standard `async Task<int> Main`, `HttpClient`, `Task.Run` and `ConfigureAwait(false)`; bounded Dolphin JSON parsing | Local DNS/HTTP fixture defaults; returns 0 when JSON `value` is 42, otherwise 1 |
 | [HardwareDiagnostics](HardwareDiagnostics/Program.cs) | Safe/extended GameCube device scanning, presence status, physical reset button, controlled reboot | Controller 1 A scans, Start+X restarts, Start+Y requests menu |
@@ -14,6 +14,21 @@ the GameCube runs generated native code, using only the supported AOT API subset
 | [Pong](Pong/README.md) | Complete two-player Pong: controller input, delta-time physics, 2D rectangles, generated PCM8 sounds | Self-contained GameCube DOL; two controllers, no storage/asset files |
 | [AudioDemo](AudioDemo/Program.cs) | AESND WAV effects and looping PCM music with async loading | Mount an SD device containing `audio/laser.wav` and `audio/theme.wav` (PCM WAV) |
 | [GoogleLogoAram](GoogleLogoAram/README.md) | Streamed HTTP to `AramStream` with standard `Stream.CopyToAsync`; partial-read-safe PNG signature verification | Run the PC relay and configure its LAN address; returns 0 on success, otherwise 1 |
+
+## Shared controls
+
+In every GameCube sample, press **Z on controller 1 (port 0)** to toggle the
+statistics panel, including its network and debugger status. Holding Z toggles
+only once; release and press again to toggle back. In Dolphin, use the keyboard
+or gamepad input mapped to the GameCube **Z button** in Controller Settings.
+ManagedGameCube starts with statistics visible; the other samples start hidden.
+
+When a sample's managed Main finishes, the native launcher keeps its result
+screen open: Z still toggles statistics and **Start** exits. Async demos reach
+this screen after their operation completes or fails. Games retain their existing
+controls during play. The shared `samples/Directory.Build.props` enables this
+behavior with `DndSampleControls`; set it to `false` to restore immediate exit.
+Applications outside `samples` keep their existing input and exit behavior.
 
 ## Build a GameCube DOL
 

@@ -35,5 +35,9 @@ int main(void) {
     intptr_t managed_result=dnd_aot_entry(&heap);
     dnd_audio_shutdown();
     dnd_console_write_line(managed_result==0?"MANAGED MAIN: OK":"MANAGED MAIN: FAILED");
+#ifdef DND_SAMPLE_CONTROLS
+    dnd_console_write_line("Z: STATISTICS   START: EXIT");
+    dnd_platform_wait_forever();
+#endif
     return managed_result==0?0:1;
 }

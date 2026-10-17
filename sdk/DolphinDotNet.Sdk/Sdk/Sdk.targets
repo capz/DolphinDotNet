@@ -97,6 +97,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
     <ItemGroup>
       <_DndArgs Include="$(_DndTools)DolphinDotNet.Build.dll;build;--assembly;$(TargetPath);--compiler;$(_DndCompiler);--native-directory;$(_DndNative);--dol;$(TargetDir)$(AssemblyName).dol;--elf;$(TargetDir)$(AssemblyName).elf;--run-config;$(TargetDir)dolphin-run.json;--backend;$(DndBuildBackend);--jobs;$(DndBuildJobs);--user-directory;$(DolphinUserDirectory)" />
       <_DndArgs Include="--dolphin;$(DolphinPath)" Condition="'$(DolphinPath)' != ''" />
+      <_DndArgs Include="--sample-controls;$(DndSampleControls)" Condition="'$(DndSampleControls)' != ''" />
       <_DndArgs Include="--debug-symbols;$(DndDebugSymbols);--gdb-transport;$(DndGdbTransport)" />
       <_DndArgs Include="--gdb-ip;$(DndGdbIp);--gdb-netmask;$(DndGdbNetmask);--gdb-gateway;$(DndGdbGateway);--gdb-port;$(DndGdbPort)"
                 Condition="'$(DndGdbTransport)' == 'Tcp' or '$(DndGdbTransport)' == 'tcp' or '$(DndGdbTransport)' == 'TCP'" />
