@@ -2,9 +2,11 @@
 import sys
 from pathlib import Path
 import unittest
+import os
+import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from dolphin_smoke import check
+from dolphin_smoke import check, run_emulator
 from dolphin_gdb_probe import parse_stop_pc, resolve_symbols, probe, probe_memory, MemoryExpectation, resolve_memory_expectations
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -26,6 +28,39 @@ class DolphinSmokeLogTests(unittest.TestCase):
 
     def test_normal_log_is_not_fatal(self):
         self.assertEqual([], check("I[BOOT]: Boot completed"))
+
+
+class EmulatorCompletionTests(unittest.TestCase):
+    def run_guest(self,code,seconds=2,completed=None,minimum=0):
+        with TemporaryDirectory() as folder:
+            output=Path(folder)/'stdout.log'
+            start=time.monotonic()
+            result=run_emulator([sys.executable,'-u','-c',code],dict(os.environ),output,
+                                seconds,lambda:completed(output) if completed else None,minimum)
+            return result,time.monotonic()-start,output.read_text()
+
+    def test_explicit_success_ends_early(self):
+        result,elapsed,log=self.run_guest('import time;print("proof");time.sleep(30)',
+            completed=lambda p:True if 'proof' in p.read_text() else None)
+        self.assertEqual(0,result);self.assertLess(elapsed,1.5);self.assertIn('proof',log)
+
+    def test_pending_evidence_reaches_deadline(self):
+        result,elapsed,_=self.run_guest('import time;time.sleep(30)',seconds=.2)
+        self.assertEqual(124,result);self.assertGreaterEqual(elapsed,.2)
+
+    def test_probe_failure_stops_without_waiting_for_deadline(self):
+        _,elapsed,_=self.run_guest('import time;time.sleep(30)',completed=lambda _:False)
+        self.assertLess(elapsed,1.5)
+
+    def test_soak_keeps_later_fault_visible(self):
+        code='import time;print("proof");time.sleep(.1);print("invalid instruction opcode");time.sleep(30)'
+        result,elapsed,log=self.run_guest(code,completed=lambda _:True,minimum=.3)
+        self.assertEqual(0,result);self.assertGreaterEqual(elapsed,.3)
+        self.assertTrue(check(log))
+
+    def test_process_failure_is_not_success(self):
+        result,_,_=self.run_guest('raise SystemExit(7)')
+        self.assertEqual(7,result)
 
 
 

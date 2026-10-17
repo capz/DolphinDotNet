@@ -6,13 +6,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SDK="${DEVKITPRO:?}/libogc2/gamecube"
 PPC="${DEVKITPPC:?}/bin"
 UPSTREAM_REV=094b250
-mkdir -p "$ROOT/build/exi-overlay" "$ROOT/build/exi-upstream"
-if [ ! -d "$ROOT/build/exi-upstream/.git" ]; then
-  git clone --quiet --filter=blob:none https://github.com/extremscorner/libogc2.git "$ROOT/build/exi-upstream"
+UP="${DND_EXI_SOURCE_DIR:-$ROOT/build/exi-upstream}"
+mkdir -p "$ROOT/build/exi-overlay" "$UP"
+if [ ! -d "$UP/.git" ]; then
+  git clone --quiet --filter=blob:none https://github.com/extremscorner/libogc2.git "$UP"
 fi
-git -C "$ROOT/build/exi-upstream" fetch --quiet --depth=100 origin master || git -C "$ROOT/build/exi-upstream" fetch --quiet origin
- git -C "$ROOT/build/exi-upstream" checkout --quiet --detach "$UPSTREAM_REV"
-UP="$ROOT/build/exi-upstream"
+if ! git -C "$UP" cat-file -e "$UPSTREAM_REV^{commit}" 2>/dev/null; then
+  git -C "$UP" fetch --quiet --depth=100 origin master || git -C "$UP" fetch --quiet origin
+fi
+ git -C "$UP" checkout --quiet --detach "$UPSTREAM_REV"
 # Verify our source is exactly the pinned upstream EXI implementation,
 # except for the documented register correction and attribution.
 python3 "$ROOT/scripts/verify_exi_source.py" "$UP/libogc/exi.c" "$ROOT/vendor/libogc2/exi.c"
@@ -25,7 +27,7 @@ python3 "$ROOT/scripts/verify_exi_source.py" "$UP/libogc/exi.c" "$ROOT/vendor/li
   -I"$UP" -I"$UP/libogc" -I"$UP/include" -I"$UP/include/ogc" \
   -I"$UP/include/ogc/machine" -I"$UP/include/sdcard" \
   -I"$SDK/include" -I"$SDK/include/ogc" \
-  -I"$ROOT/build/exi-upstream/lwip/include"
+  -I"$UP/lwip/include"
 cp "$SDK/lib/libogc.a" "$ROOT/build/exi-overlay/libogc.a"
 "$PPC/powerpc-eabi-ar" d "$ROOT/build/exi-overlay/libogc.a" exi.o
 "$PPC/powerpc-eabi-ar" r "$ROOT/build/exi-overlay/libogc.a" "$ROOT/build/exi-overlay/exi.o"

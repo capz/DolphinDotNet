@@ -9,7 +9,7 @@ var compiler = Path.Combine(root, "tools/DolphinDotNet.Compiler/DolphinDotNet.Co
 var tempDirectory = Path.Combine(Path.GetTempPath(), $"dnd-{Guid.NewGuid():N}");
 var temp = Path.Combine(tempDirectory, "hello.c");
 
-Run("dotnet", $"build \"{sample}\" -c Release");
+Run("dotnet", $"build \"{sample}\" -c Release -p:DndBuildNative=false");
 var dll = Path.Combine(root, "samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll");
 Run("dotnet", $"run --project \"{compiler}\" -- \"{dll}\" \"{temp}\"");
 
@@ -275,6 +275,7 @@ Console.WriteLine("DolphinDotNet compiler integration test passed.");
 
 static void Run(string file, string args)
 {
+    args = CompilerArguments(file, args);
     using var p = Process.Start(new ProcessStartInfo(file, args) { UseShellExecute = false })
         ?? throw new Exception($"Could not start {file}.");
     p.WaitForExit();
@@ -283,6 +284,7 @@ static void Run(string file, string args)
 
 static void RunFailure(string file, string args)
 {
+    args = CompilerArguments(file, args);
     using var process = Process.Start(new ProcessStartInfo(file, args)
     {
         UseShellExecute = false, RedirectStandardError = true
@@ -299,7 +301,7 @@ static void AssertPdbRejected(string dll, string directory)
         "../../../../../tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj"));
     var arguments = $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{directory}\" " +
         "--gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1";
-    using var process = Process.Start(new ProcessStartInfo("dotnet", arguments)
+    using var process = Process.Start(new ProcessStartInfo("dotnet", CompilerArguments("dotnet", arguments))
     {
         UseShellExecute = false, RedirectStandardError = true
     }) ?? throw new Exception("Failed to launch debug PDB validation.");
@@ -307,4 +309,18 @@ static void AssertPdbRejected(string dll, string directory)
     process.WaitForExit();
     if (process.ExitCode == 0 || !diagnostics.Contains("No matching Portable PDB", StringComparison.Ordinal))
         throw new Exception("Missing/stale PDB was accepted: " + diagnostics);
+}
+
+// CI already built this exact compiler. Preserve standalone test behavior when
+// no shared executable is supplied, and keep build/SDK tests on MSBuild.
+static string CompilerArguments(string file, string arguments)
+{
+    var dll = Environment.GetEnvironmentVariable("DND_COMPILER_DLL");
+    if (file != "dotnet" || string.IsNullOrEmpty(dll)) return arguments;
+    var project = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+        "../../../../../tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj"));
+    var prefix = $"run --project \"{project}\" -- ";
+    if (!arguments.StartsWith(prefix, StringComparison.Ordinal)) return arguments;
+    if (!File.Exists(dll)) throw new FileNotFoundException("Shared CI compiler is missing.", dll);
+    return $"\"{dll}\" " + arguments[prefix.Length..];
 }

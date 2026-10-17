@@ -1,6 +1,44 @@
 # CI performance proposals
 
-These are proposals, not changes to the required-check policy.
+The options below record the original proposals. The first implementation keeps
+all required checks and changes their execution strategy as described below.
+
+## Implemented first batch
+
+- Five managed groups run compiler, I/O, async/network, audio/games and
+  graphics/models in parallel. All 41 original managed contracts remain.
+- The native emulator-artifact job builds only the artifacts and reports needed
+  by Dolphin. Two concurrent groups retain the other PowerPC/transport and sample
+  checks. The final CI gate requires all three, while Dolphin depends only on its
+  artifact producer. All 27 native contracts remain.
+- Four isolated Dolphin groups run games, debugger, runtime and controllers.
+  The final gate rejects failed, skipped or missing selected cases. All 13
+  emulator scenarios remain, including all 285 controller cases and the negative
+  control. Artifact/log names include the group to prevent collisions.
+- Debugger/marker scenarios terminate after all probe and log evidence is ready.
+  Pong and Snake retain their existing 65/70-second gameplay soak. Deadlines,
+  abnormal exits, PPC diagnostics, object inspection and telemetry readback remain
+  checked; the complete emulator process group is cleaned up.
+- Each managed/native group builds a shared Release compiler and invokes its
+  DLL directly. Compiler integration and the compile-sample script support this
+  mode while standalone use retains project-based execution. Compiler integration
+  no longer performs a duplicate native HelloGameCube build; SDK/native coverage
+  remains in its dedicated jobs.
+- CI splits multi-source GCC commands into private objects, uses ccache for each
+  compile and then preserves the original link order/options. Headers, flags,
+  architecture and compiler identity remain ccache inputs. Cache contents are
+  never reused merely because an output file exists. Native Make builds also use
+  ccache and two compile workers.
+- Native bundles share the pinned EXI source checkout within a job. Existing
+  pinned commits need no repeated fetch, and source verification still runs for
+  every rebuilt archive. No SDK archive or verified-source check is bypassed.
+
+`tests/ci_coverage_manifest.json` and workflow regression tests protect the
+pre-sharding contracts and the aggregate result handling. Local real-Dolphin
+checks cover early guest entry and DAP object/string inspection with disconnect
+telemetry readback. The full CI run will provide cold-cache timings; the original
+22-minute baseline below is retained for comparison. OS matrices, stress/ABI
+coverage, whole-PR selection and merge requirements have not been reduced.
 
 ## Measured baseline
 
