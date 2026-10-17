@@ -17,7 +17,7 @@ internal sealed record CilCallStackEffect(int PopCount,CilStackKind? PushKind);
 
 internal static class CilStackAnalyzer
 {
-    public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks,Func<CilInstruction,CilCallStackEffect?>? resolveCall=null,bool returnsValue=false,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion>? exceptionRegions=null)
+    public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks,Func<CilInstruction,CilCallStackEffect?>? resolveCall=null,bool returnsValue=false,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion>? exceptionRegions=null,IReadOnlyList<CilStackKind>? arguments=null,IReadOnlyList<CilStackKind>? locals=null)
     {
         if(blocks.Count==0)return new CilStackAnalysis(new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>());
         var entry=new Dictionary<int,CilStackState>{{blocks[0].Id,CilStackState.Empty}};
@@ -35,7 +35,7 @@ internal static class CilStackAnalyzer
         {
             var id=queue.Dequeue();var block=blocks[id];
             var stack=entry[id].Values.ToList();
-            foreach(var i in block.Instructions){instructionEntry[i.Offset]=new CilStackState(stack.ToArray());Apply(i,stack,resolveCall,returnsValue);instructionExit[i.Offset]=new CilStackState(stack.ToArray());}
+            foreach(var i in block.Instructions){instructionEntry[i.Offset]=new CilStackState(stack.ToArray());Apply(i,stack,resolveCall,returnsValue,arguments,locals);instructionExit[i.Offset]=new CilStackState(stack.ToArray());}
             var state=new CilStackState(stack.ToArray());exit[id]=state;
             foreach(var successor in block.Successors)
             {
@@ -55,14 +55,15 @@ internal static class CilStackAnalyzer
         return changed?new CilStackState(values):a;
     }
 
-    private static void Apply(CilInstruction i,List<CilStackKind> s,Func<CilInstruction,CilCallStackEffect?>? resolveCall,bool returnsValue)
+    private static void Apply(CilInstruction i,List<CilStackKind> s,Func<CilInstruction,CilCallStackEffect?>? resolveCall,bool returnsValue,IReadOnlyList<CilStackKind>? arguments,IReadOnlyList<CilStackKind>? locals)
     {
         switch(i.OpCode)
         {
-            case >=0x02 and <=0x05: Push(s,CilStackKind.Unknown); break; // ldarg.*
-            case >=0x06 and <=0x09: Push(s,CilStackKind.Unknown); break; // ldloc.*
+            case >=0x02 and <=0x05: Push(s,Slot(arguments,i.OpCode-0x02)); break;
+            case >=0x06 and <=0x09: Push(s,Slot(locals,i.OpCode-0x06)); break;
             case >=0x0a and <=0x0d: Pop(s,i); break; // stloc.*
-            case 0x0e or 0x11 or 0xfe09 or 0xfe0c: Push(s,CilStackKind.Unknown); break;
+            case 0x0e or 0xfe09: Push(s,Slot(arguments,(int)((CilInteger)i.Operand!).Value)); break;
+            case 0x11 or 0xfe0c: Push(s,Slot(locals,(int)((CilInteger)i.Operand!).Value)); break;
             case 0x10 or 0x13 or 0xfe0b or 0xfe0e: Pop(s,i); break;
             case 0x0f or 0x12 or 0xfe0a or 0xfe0d: Push(s,CilStackKind.ManagedPointer); break;
             case >=0x15 and <=0x20: Push(s,CilStackKind.I4); break;
@@ -118,6 +119,7 @@ internal static class CilStackAnalyzer
                 break;
         }
     }
+    private static CilStackKind Slot(IReadOnlyList<CilStackKind>? kinds,int index)=>kinds is not null && index>=0 && index<kinds.Count?kinds[index]:CilStackKind.Unknown;
     private static CilStackKind Pop(List<CilStackKind>s,CilInstruction i){if(s.Count==0)Underflow(i);var v=s[^1];s.RemoveAt(s.Count-1);return v;}
     private static void Push(List<CilStackKind>s,CilStackKind v)=>s.Add(v);
     private static void Underflow(CilInstruction i)=>throw new InvalidDataException($"CIL evaluation stack underflow at IL_{i.Offset:x4}.");

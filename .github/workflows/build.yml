@@ -724,6 +724,11 @@ jobs:
           "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/timing-smoke.c build/timing.o build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/timing_tasks.elf
           elf2dol footprint/timing_tasks.elf footprint/timing_tasks.dol
           python3 scripts/dol_sections.py --pad footprint/timing_tasks.dol
+      - name: Build managed controller pipe acceptance DOL
+        run: |
+          dotnet build tests/ControllerDolphinSmoke/ControllerDolphinSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/ControllerDolphinSmoke/bin/Release/net8.0/ControllerDolphinSmoke.dll /tmp/controller-dolphin.c
+          bash tests/build_controller_dolphin.sh /tmp/controller-dolphin.c footprint
       - name: Report GameCube runtime footprint
         run: |
           mkdir -p footprint
@@ -789,7 +794,9 @@ jobs:
           name: DolphinDotNet-gamecube
           path: dist
       - name: Test emulator log validation
-        run: python3 -m unittest discover -s tests -p test_dolphin_smoke.py
+        run: |
+          python3 -m unittest discover -s tests -p test_dolphin_smoke.py
+          python3 -m unittest discover -s tests -p test_dolphin_controller.py
       - name: Verify Pong synthesizes audio and presents frames in Dolphin
         id: pong_boot
         continue-on-error: true
@@ -830,6 +837,11 @@ jobs:
         id: timing_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/footprint/timing_tasks.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2162 --elf dist/footprint/timing_tasks.elf --expect-word dnd_async_test_result=0x4153594e --memory-after-symbol dnd_async_test_done --logs dolphin-timing --require-boot
+      - name: Verify all four controllers through Dolphin pipe inputs
+        id: controller_inputs
+        continue-on-error: true
+        timeout-minutes: 6
+        run: python3 scripts/dolphin_controller_test.py dist/footprint/controller.dol --elf dist/footprint/controller.elf --logs dolphin-controller --verify-rejection
       - name: Require both guest entry-point checks
         if: always()
         run: |
@@ -845,6 +857,7 @@ jobs:
           test "${{ steps.timing_boot.outcome }}" = success
           test "${{ steps.pong_boot.outcome }}" = success
           test "${{ steps.snake_boot.outcome }}" = success
+          test "${{ steps.controller_inputs.outcome }}" = success
       - name: Upload emulator logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -863,6 +876,7 @@ jobs:
             dolphin-timing/
             dolphin-pong/
             dolphin-snake/
+            dolphin-controller/
           if-no-files-found: warn
 
   ci-result:

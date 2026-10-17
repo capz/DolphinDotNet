@@ -4,10 +4,11 @@
 #include <stdio.h>
 unsigned input_test_interrupt_depth;
 static unsigned init_count, alarm_count, motors[4];
+static u32 connected=3;
 static bool fail_create, fail_set;
 static struct { bool allocated, active; struct timespec due; alarmcallback callback; void *argument; } alarms[8];
 u32 PAD_Init(void) { init_count++; return 1; }
-u32 PAD_ScanPads(void) { return PAD_CHAN_BIT(0)|PAD_CHAN_BIT(1); }
+u32 PAD_ScanPads(void) { return connected; } /* Real SDK: low bits, not PAD_CHAN_BIT. */
 u32 PAD_GetType(s32 port,u32 *type) { *type=port==1?SI_GC_NOMOTOR:0; return 1; }
 u32 PAD_ButtonsHeld(s32 port) { return port==0?0x100:0; }
 int8_t PAD_StickX(s32 port) { (void)port; return 80; }
@@ -36,6 +37,12 @@ int main(void) {
     DndInputSample pads[4]={0}; dnd_input_backend_sample(pads);
     assert(pads[0].connected && pads[0].supports_rumble && pads[0].held==0x100 && pads[0].stick_x==80);
     assert(pads[1].connected && !pads[1].supports_rumble && !pads[2].connected);
+    connected=15;dnd_input_backend_sample(pads);
+    for(unsigned p=0;p<4;p++)assert(pads[p].connected);
+    connected=0;dnd_input_backend_sample(pads);
+    for(unsigned p=0;p<4;p++)assert(!pads[p].connected && !pads[p].supports_rumble);
+    connected=5;dnd_input_backend_sample(pads);
+    assert(pads[0].connected && !pads[1].connected && pads[2].connected && !pads[3].connected);
     fail_create=true; assert(!dnd_input_backend_rumble(0,100)); assert(alarm_count==0 && input_test_interrupt_depth==0);
     fail_create=false; fail_set=true; assert(!dnd_input_backend_rumble(0,100)); assert(motors[0]==PAD_MOTOR_STOP_HARD);
     fail_set=false; assert(dnd_input_backend_rumble(0,1500000));
