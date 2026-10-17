@@ -19,7 +19,7 @@ final class TargetDialog extends DialogWrapper {
     private final JBTextField name = new JBTextField();
     private final ComboBox<String> type = new ComboBox<>(new String[]{"BBA / TCP", "USB Gecko"});
     private final JBTextField host = new JBTextField();
-    private final JSpinner port = new JSpinner(new SpinnerNumberModel(2828, 1, 65535, 1));
+    private final JSpinner port = new JSpinner(new SpinnerNumberModel(new TargetProfile().port, 1, 65535, 1));
     private final ComboBox<String> serial = new ComboBox<>();
     private final ComboBox<String> slot = new ComboBox<>(new String[]{"Slot A", "Slot B"});
     private final JSpinner baud = new JSpinner(new SpinnerNumberModel(115200, 1, Integer.MAX_VALUE, 1));
@@ -48,7 +48,7 @@ final class TargetDialog extends DialogWrapper {
         var add = new JButton(AllIcons.General.Add); add.setToolTipText("Add target");
         var remove = new JButton(AllIcons.General.Remove); remove.setToolTipText("Remove target");
         add.addActionListener(e -> {
-            capture(); var t = new TargetProfile(); t.port = 2828; t.name = "New target";
+            capture(); var t = new TargetProfile();
             model.addElement(t); list.setSelectedValue(t, true); name.requestFocusInWindow(); name.selectAll();
         });
         remove.addActionListener(e -> {
@@ -61,7 +61,7 @@ final class TargetDialog extends DialogWrapper {
         left.setPreferredSize(JBUI.size(220, 440));
         Forms.row(editor, 0, "Name:", name); Forms.row(editor, 1, "Connection type:", type);
         Forms.row(tcp, 0, "Host:", host); Forms.row(tcp, 1, "TCP port:", port);
-        Forms.row(tcp, 2, "", new JBLabel("Use the address and GDB port configured in the debug build."));
+        Forms.row(tcp, 2, "", new JBLabel("<html>Dolphin wait-for-Rider profile: 127.0.0.1:2166.<br>For consoles, use the address and port configured in the build.</html>"));
         var refresh = new JButton("Refresh"); refresh.addActionListener(e -> refreshPorts(refresh));
         Forms.row(usb, 0, "Serial port:", Forms.beside(serial, refresh));
         Forms.row(usb, 1, "", new JBLabel("Choose the USB Gecko serial device on this computer."));

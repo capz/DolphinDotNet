@@ -83,6 +83,9 @@ interrupted native cleanup and NuGet restore errors.
    stack frame source navigation. Stop disconnects the adapter without a target kill.
 
 For that sample launch, choose a saved **BBA / TCP** target at **127.0.0.1:2166**.
+Older versions of the target dialog initialized new targets to **2828** even
+though the sample launcher uses **2166**. Existing saved targets keep their port;
+edit the selected target explicitly rather than assuming a plugin update changes it.
 Select the attach configuration before setting a breakpoint, for example Snake's
 `Controller.Update();` statement, then Debug and Resume. Dolphin waits at startup
 until the debugger connects. Run the launch profile first and leave it running
@@ -96,6 +99,20 @@ dotnet samples/Snake/bin/Debug/net8.0/DolphinDotNet.Build.dll run --config sampl
 
 `run --gdb-port` configures Dolphin's emulator stub, independently of the
 `DndGdbTransport` build settings used for console-side USB Gecko/BBA stubs.
+
+If attach reports a refused connection, confirm the selected saved target is
+`127.0.0.1:2166` and the **wait for Rider** launch remains running. Its command must
+include `--gdb-port 2166`. On Windows, inspect the listener without connecting a
+second debugger:
+
+```powershell
+Get-NetTCPConnection -State Listen -LocalPort 2166 -ErrorAction SilentlyContinue |
+    Select-Object LocalAddress, LocalPort, OwningProcess
+```
+
+No result means no listener is present on that port. Inspect the launch console's
+printed settings path and Dolphin process command line to confirm the intended
+user profile is active. The ordinary launch profile does not enable GDB.
 
 ## Saved target properties
 
