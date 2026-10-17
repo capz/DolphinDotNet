@@ -79,5 +79,27 @@ class WorkflowCoverageTests(unittest.TestCase):
         block=next(b for b in step_blocks(section) if b.startswith('      - name: Validate controller and memory-card connection transitions\n'))
         self.assertIn('DND_ASYNC_MANUAL: "0"',block)
 
+    def test_generated_c_inputs_are_available_within_each_managed_group(self):
+        # A named test can survive sharding while losing a hidden /tmp input.
+        # Track AOT outputs in command order for each isolated runner.
+        for group in MANIFEST['managed']:
+            generated=set()
+            for block in step_blocks(job('managed')):
+                condition=re.search(r"if: matrix.group == '([^']+)'",block)
+                if condition and condition.group(1)!=group:continue
+                for line in block.splitlines():
+                    command=line.strip()
+                    if command.startswith('dotnet ') and re.search(r' --(?:value-)?aot ',command):
+                        outputs=re.findall(r'/tmp/[\w/-]+\.c\b',command)
+                        generated.update(outputs)
+                    if command.startswith('cc '):
+                        for source in re.findall(r'/tmp/[\w/-]+\.c\b',command):
+                            self.assertIn(source,generated,f'{group}: {source} has no earlier AOT producer')
+
+    def test_only_managed_debugger_scenarios_build_host_dotnet_tools(self):
+        for block in step_blocks(job('dolphin-smoke')):
+            if block.startswith(('      - uses: actions/setup-dotnet@','      - name: Build .NET source debugger','      - name: Build attach-only DAP')):
+                self.assertIn("if: matrix.group == 'debugger'",block)
+
 
 if __name__=='__main__':unittest.main()

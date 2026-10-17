@@ -11,8 +11,7 @@
       "Build AOT smoke assembly",
       "Lower AOT smoke assembly to native C",
       "Compile generated AOT C",
-      "Compile and execute generic sharing integration smoke",
-      "Validate 32-bit managed dispatch and GC"
+      "Compile and execute generic sharing integration smoke"
     ],
     "io": [
       "Test and package save-image command-line tool",
@@ -28,6 +27,7 @@
       "Validate controller snapshots, bindings and executor ownership",
       "Validate input contexts and binding capture",
       "Validate clocks, frame timing, Task.Delay and captured timers",
+      "Validate 32-bit managed dispatch and GC",
       "Validate network fixture watchdog",
       "Validate automatic async HTTP and ARAM without application pumps",
       "Validate cooperative async and namespace interoperability",

@@ -217,18 +217,6 @@ jobs:
           timeout 30s /tmp/generic_sharing_value --gc-stress
           cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/generic_sharing_sanitized
           timeout 30s /tmp/generic_sharing_sanitized --gc-stress
-      - name: Validate 32-bit managed dispatch and GC
-        if: matrix.group == 'compiler'
-        run: |
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/timing-smoke.c tests/timing_host.c source/timing.c source/managed_runtime.c source/async_runtime.c -o /tmp/timing-smoke32
-          DND_ASYNC_MANUAL=0 /tmp/timing-smoke32
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-smoke.c tests/input_host.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-smoke32
-          DND_ASYNC_MANUAL=0 /tmp/input-smoke32
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-contexts.c tests/input_context_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-contexts32
-          /tmp/input-contexts32
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/generic_sharing_32
-          timeout 30s /tmp/generic_sharing_32
-          timeout 30s /tmp/generic_sharing_32 --gc-stress
       - name: Test and package save-image command-line tool
         if: matrix.group == 'io'
         run: |
@@ -348,6 +336,20 @@ jobs:
           dotnet "$DND_COMPILER_DLL" --aot tests/TimingSmoke/bin/Release/net8.0/TimingSmoke.dll /tmp/timing-smoke.c
           cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/timing-smoke.c tests/timing_host.c source/timing.c source/managed_runtime.c source/async_runtime.c -o /tmp/timing-smoke
           /tmp/timing-smoke
+      - name: Validate 32-bit managed dispatch and GC
+        if: matrix.group == 'async-network'
+        run: |
+          dotnet build tests/GenericSharingSmoke/GenericSharingSmoke.csproj -c Release
+          dotnet "$DND_COMPILER_DLL" --value-aot tests/GenericSharingSmoke/bin/Release/net8.0/GenericSharingSmoke.dll /tmp/generic_sharing_value.c
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/timing-smoke.c tests/timing_host.c source/timing.c source/managed_runtime.c source/async_runtime.c -o /tmp/timing-smoke32
+          DND_ASYNC_MANUAL=0 /tmp/timing-smoke32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-smoke.c tests/input_host.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-smoke32
+          DND_ASYNC_MANUAL=0 /tmp/input-smoke32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/input-contexts.c tests/input_context_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/input-contexts32
+          /tmp/input-contexts32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/generic_sharing_value.c tests/generic_sharing_value_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/generic_sharing_32
+          timeout 30s /tmp/generic_sharing_32
+          timeout 30s /tmp/generic_sharing_32 --gc-stress
       - name: Validate network fixture watchdog
         if: matrix.group == 'async-network'
         run: python3 -m unittest discover -s tests -p test_network_fixtures.py
@@ -956,11 +958,14 @@ jobs:
           test -x /usr/games/dolphin-emu-nogui
           xvfb-run -a /usr/games/dolphin-emu-nogui --version
       - uses: actions/setup-dotnet@v4
+        if: matrix.group == 'debugger'
         with:
           dotnet-version: '8.0.x'
       - name: Build .NET source debugger acceptance probe
+        if: matrix.group == 'debugger'
         run: dotnet build tools/DolphinDotNet.Debugger.Probe -c Release
       - name: Build attach-only DAP adapter
+        if: matrix.group == 'debugger'
         run: dotnet build tools/DolphinDotNet.DebugAdapter -c Release
       - name: Download GameCube DOL
         uses: actions/download-artifact@v4
