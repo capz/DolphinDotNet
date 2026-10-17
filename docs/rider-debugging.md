@@ -86,6 +86,15 @@ interrupted native cleanup and NuGet restore errors.
    standard Rider Resume, Pause, Step Into, Step Over and Step Out controls and
    stack frame source navigation. Stop disconnects the adapter without a target kill.
 
+Attach intentionally starts paused. Dolphin may first stop in native startup code
+before the PowerPC stack pointer has been initialized; `Partial stack: InvalidFrame`
+at that point is an unwind limitation, not a failed connection. The adapter keeps
+the observed native PC as a frame without inventing callers or managed source.
+Set a supported source breakpoint (for Snake, `Controller.Update();`) and press
+**Resume**. Source navigation and managed inspection become available once that
+breakpoint is reached. Step Over/Out at an unsupported native frame may report
+an unwind diagnostic; use Resume to reach managed code first.
+
 For that sample launch, choose a saved **BBA / TCP** target at **127.0.0.1:2166**.
 Older versions of the target dialog initialized new targets to **2828** even
 though the sample launcher uses **2166**. Existing saved targets keep their port;

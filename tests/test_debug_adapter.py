@@ -29,12 +29,13 @@ class ProbeTests(unittest.TestCase):
 
 
 class Target:
-    def __init__(self):
+    def __init__(self, startup=False):
         self.listener = socket.socket()
         self.listener.bind(("127.0.0.1", 0))
         self.listener.listen()
         self.port = self.listener.getsockname()[1]
-        self.pc = 0x80004000
+        self.pc = 0x80003100 if startup else 0x80004000
+        self.stack_pointer = 0 if startup else 0x81700000
         self.breakpoints = set()
         self.commands = []
         self.memory = {0x81700004: bytes.fromhex("00000003"), 0x81700008: bytes.fromhex("ffffffff"),
@@ -87,11 +88,12 @@ class Target:
                         candidates = sorted(b for b in self.breakpoints if b >= self.pc)
                         if candidates:
                             self.pc = candidates[0]
+                            self.stack_pointer = 0x81700000
                             self.reply(f"T0540:{self.pc:08x};")
                         else:
                             self.peer.sendall(b"+")
                     elif command == "p1":
-                        self.reply("81700000")
+                        self.reply(f"{self.stack_pointer:08x}")
                     elif command == "p3":
                         self.reply("0000002a")
                     elif command.startswith("m"):
@@ -192,6 +194,35 @@ class AdapterTests(unittest.TestCase):
     def bp(self, path="Game.cs", lines=(10,)):
         return self.client.request("setBreakpoints", dict(source=dict(path="/local/日本/" + path),
             breakpoints=[dict(line=line) for line in lines]))["body"]["breakpoints"]
+
+    def test_native_startup_without_stack_remains_resumable(self):
+        self.target = Target(startup=True)
+        self.client.request('attach', dict(host='127.0.0.1', port=self.target.port,
+            elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address),
+            sourceFileMap={'/build/日本': '/local/日本'}))
+        self.client.event('initialized')
+        self.assertTrue(self.bp(lines=(11,))[0]['verified'])
+        self.client.request('configurationDone')
+        entry = self.client.event('stopped')
+        self.assertEqual('entry', entry['reason'])
+        self.assertIn('Press Resume', entry['description'])
+        frames = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames']
+        self.assertEqual(1, len(frames))
+        frame = frames[0]
+        self.assertEqual('native 0x80003100', frame['name'])
+        self.assertEqual('0x80003100', frame['instructionPointerReference'])
+        self.assertEqual(0, frame['line'])
+        self.assertIsNone(frame['source'])
+        self.assertEqual([], self.client.request('scopes', dict(frameId=frame['id']))['body']['scopes'])
+        # A native startup stop does not auto-run or read a guessed stack.
+        self.assertNotIn('c', self.target.commands)
+        self.assertFalse(any(c.startswith('m') for c in self.target.commands))
+        self.client.request('continue', dict(threadId=1))
+        self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+        managed = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]
+        self.assertEqual('Program.Main', managed['name'])
+        self.assertEqual(11, managed['line'])
+        self.assertEqual('/local/日本/Game.cs', managed['source']['path'])
 
     def test_invalid_transport_is_rejected_before_connecting(self):
         for args in [dict(transport="unknown"), dict(transport="usbGecko", serialPort="", baudRate=115200),

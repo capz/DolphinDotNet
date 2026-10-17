@@ -33,7 +33,14 @@ public sealed class PowerPcUnwinder(RspClient client, SourceAddressMap symbols)
             // Caller PCs are return addresses. Attribute and unwind their call instruction.
             var lookup = index == 0 ? pc : pc >= 4 ? pc - 4 : 0;
             if (!registers.TryGetValue(1, out var sp) || !IsStack(sp) || !seen.Add((pc, sp)))
+            {
+                // Dolphin can stop before startup has initialized r1. Preserve
+                // the observed top PC so the IDE has a resumable native frame,
+                // without inventing a CFA, caller or source position.
+                if (index == 0)
+                    frames.Add(new(pc, sp, null, symbols.FindMethod(lookup), symbols.FindExact(lookup)));
                 return new(frames, UnwindStopReason.InvalidFrame);
+            }
             var row = symbols.FindUnwindRule(lookup);
             uint? cfa = null;
             if (row is not null)

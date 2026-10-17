@@ -121,7 +121,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 if (_configured) throw new InvalidOperationException("Already configured.");
                 _configured = true;
                 await connection.RespondAsync(request);
-                await StoppedAsync("entry");
+                await StoppedAsync("entry", "Attached; target is paused. Press Resume to run to a source breakpoint. Native startup code may not have a managed stack yet.");
                 break;
             case "setBreakpoints":
                 var path = Required(args.GetProperty("source"), "path");
