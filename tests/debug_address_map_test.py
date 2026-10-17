@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -107,6 +108,35 @@ class VariableLocations(unittest.TestCase):
 
 
 class AddressResolution(unittest.TestCase):
+    def test_cli_preserves_long_windows_pdb_paths_in_real_dwarf(self):
+        document = (r'D:\DolphinDotNet-feat-debugger-reliability-inspection-20261016'
+                    r'\samples\Snake\Program.cs')
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            c = directory / 'windows.c'
+            c.write_text('#line 10 ' + json.dumps(document) + '\n'
+                         f'__attribute__((aligned(4))) int {SYMBOL}(volatile int a) {{\n'
+                         ' volatile int b=a+1;\n return b;\n}\n'
+                         f'int main(void) {{return {SYMBOL}(2);}}\n')
+            binary = directory / 'windows'
+            subprocess.run(['cc', '-O0', '-gdwarf-4', '-fno-omit-frame-pointer',
+                            str(c), '-o', str(binary)], check=True)
+            source = json.loads(json.dumps(MAP))
+            source['methods'][0]['sourceLocations'] = [
+                dict(document=document, startLine=line, ilOffset=i)
+                for i, line in enumerate((10, 11, 12))]
+            source_path = directory / 'source.json'
+            source_path.write_text(json.dumps(source))
+            addresses = directory / 'addresses.json'
+            result = subprocess.run([sys.executable, str(root / 'scripts/dnd_debug_addresses.py'),
+                                     '--elf', str(binary), '--source-map', str(source_path),
+                                     '--output', str(addresses), '--require-source', document],
+                                    capture_output=True, text=True)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            points = json.loads(addresses.read_text())['methods'][0]['breakpoints']
+            self.assertTrue(points)
+            self.assertTrue(all(p['document'] == document and p['addresses'] for p in points))
+
     def test_equal_pc_views_keep_only_the_row_with_instruction_extent(self):
         # Reduced from CI run 38930010375: line 9 has an empty range at
         # 0x80005168, while the final line-10 view owns the instruction.

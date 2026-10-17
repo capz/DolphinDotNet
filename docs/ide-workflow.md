@@ -158,6 +158,12 @@ extensionless Unix shell script. A "not a valid application for this OS platform
 error naming `resources/bin/docker` indicates an older driver; update and rebuild.
 Docker Desktop must be running Linux containers.
 
+If an older build reports `No verifiable native breakpoint addresses` on Windows,
+update and rebuild. The address resolver now requests full DWARF filenames from
+`readelf --wide`; otherwise long Windows PDB paths can be truncated by the Unix
+toolchain and fail source matching. Native warnings about misleading indentation
+or unused `roots` do not cause this mapping failure.
+
 `dotnet clean samples/Pong` removes generated native build/output files but keeps
 the Dolphin user directory so controller and emulator settings survive. Set
 `DolphinUserDirectory` to use another directory. This does not modify your normal

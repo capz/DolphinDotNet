@@ -367,7 +367,10 @@ def main():
         if not path.is_file():
             parser.error('Missing input: ' + str(path))
     source_bytes = args.source_map.read_bytes()
-    lines = subprocess.run([args.readelf, '--debug-dump=decodedline', str(args.elf)],
+    # On a Unix native toolchain, backslashes in Windows PDB paths remain part
+    # of the DWARF filename. Without --wide, readelf truncates those filenames
+    # and they can no longer be matched to the managed source map.
+    lines = subprocess.run([args.readelf, '--wide', '--debug-dump=decodedline', str(args.elf)],
                            capture_output=True, text=True, check=True).stdout
     symbols = subprocess.run([args.readelf, '-Ws', str(args.elf)],
                              capture_output=True, text=True, check=True).stdout
