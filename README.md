@@ -18,6 +18,10 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
   - Out of the box support for obj, fbx, glb 3d models with meshes, animations, textures
   - Out of the box support for adx, with looping regions converted from mp3 with sidecart metadata using supplied tooling
 
+## Current focus ##
+   - Supporting on-device debugging
+   - > **Supporting live debugging via emulator**
+
 ## Quick start: build and run Pong
 
 Install the **.NET 8 SDK**, **Dolphin**, and a native build backend:
