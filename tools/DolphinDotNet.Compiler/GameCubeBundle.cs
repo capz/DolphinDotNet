@@ -119,8 +119,10 @@ internal static class GameCubeBundle
             // EXI_Sync in Dolphin's default hardware configuration.
             Directory.CreateDirectory(Path.Combine(directory, "vendor", "libogc2"));
             foreach (var file in new[] { "build_exi_overlay.sh", "verify_exi_source.py" })
-                File.Copy(Path.Combine(root, "scripts", file),
-                    Path.Combine(directory, "scripts", file), true);
+                // Existing Windows checkouts and packaged compilers can still
+                // contain CRLF even with the repository's LF checkout rule.
+                File.WriteAllText(Path.Combine(directory, "scripts", file),
+                    File.ReadAllText(Path.Combine(root, "scripts", file)).ReplaceLineEndings("\n"));
             File.Copy(Path.Combine(root, "vendor", "libogc2", "exi.c"),
                 Path.Combine(directory, "vendor", "libogc2", "exi.c"), true);
         }

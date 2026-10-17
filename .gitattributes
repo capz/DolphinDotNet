@@ -1,0 +1,2 @@
+# These scripts execute in Bash on Linux, including Windows Docker builds.
+*.sh text eol=lf

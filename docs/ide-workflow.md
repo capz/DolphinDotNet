@@ -164,6 +164,13 @@ update and rebuild. The address resolver now requests full DWARF filenames from
 toolchain and fail source matching. Native warnings about misleading indentation
 or unused `roots` do not cause this mapping failure.
 
+If Bash reports `set: pipefail` / `invalid option name` in
+`scripts/build_exi_overlay.sh`, the shell script has Windows CRLF line endings.
+Bundle generation now normalizes the copied script to LF, and `.gitattributes`
+keeps shell scripts at LF in new checkouts. Update the sources and rebuild the
+sample; no Docker image change is required. The CLI launch profile still builds
+through this same native pipeline before launching Dolphin.
+
 `dotnet clean samples/Pong` removes generated native build/output files but keeps
 the Dolphin user directory so controller and emulator settings survive. Set
 `DolphinUserDirectory` to use another directory. This does not modify your normal

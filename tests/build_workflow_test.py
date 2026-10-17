@@ -215,6 +215,26 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
                             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
     assert result.returncode != 0 and "DndBuildBackend must be" in result.stdout, result.stdout
     assert "DND001" in result.stdout, result.stdout
+    # A packaged compiler from a Windows checkout may contain CRLF scripts.
+    # Bundle generation must make them runnable by Bash inside Linux Docker,
+    # including for existing checkouts that predate the .gitattributes rule.
+    packaged_compiler = work / "compiler with CRLF"
+    shutil.copytree(root / "tools/DolphinDotNet.Compiler/bin/Debug/net8.0", packaged_compiler)
+    shell = packaged_compiler / "native/scripts/build_exi_overlay.sh"
+    shell_lf = shell.read_text().replace('\r\n', '\n')
+    shell.write_bytes(shell_lf.replace('\n', '\r\n').encode())
+    assert b'\r\n' in shell.read_bytes()
+    bundle = work / "CRLF bundle"
+    result = subprocess.run([dotnet, str(packaged_compiler / "DolphinDotNet.Compiler.dll"),
+                             "--bundle", str(project / "bin/Debug/net8.0/Test.dll"), str(bundle)],
+                            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+    assert result.returncode == 0, result.stdout
+    emitted_shell = (bundle / "scripts/build_exi_overlay.sh").read_bytes()
+    assert emitted_shell == shell_lf.encode() and b'\r' not in emitted_shell
+    if os.name != "nt":
+        header = b'\n'.join(emitted_shell.split(b'\n')[:2]).decode()
+        result = subprocess.run(['bash', '-c', header], capture_output=True, text=True, timeout=10)
+        assert result.returncode == 0, result.stderr
     result = subprocess.run([dotnet, "msbuild", str(project / "Test.csproj"), "-t:TestCompilerDiagnostic"],
                             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
     assert result.returncode != 0 and "DND002" in result.stdout and "missing.dll" in result.stdout, result.stdout
