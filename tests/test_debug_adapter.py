@@ -232,6 +232,22 @@ class AdapterTests(unittest.TestCase):
                 self.client.request("attach", dict(elf=str(self.elf), sourceMap=str(self.source),
                     addressMap=str(self.address), **args), success=False)
 
+    def test_resume_reports_missing_rejected_and_verified_breakpoints(self):
+        self.attach()
+        self.client.request('continue', dict(threadId=1))
+        self.assertIn('no verified source breakpoints', self.client.event('output')['output'])
+        self.client.request('pause', dict(threadId=1))
+        self.client.event('stopped')
+        self.assertFalse(self.bp(lines=(999,))[0]['verified'])
+        rejected = self.client.event('output')
+        self.assertEqual('stderr', rejected['category'])
+        self.assertIn('/build/日本/Game.cs:999', rejected['output'])
+        self.assertIn('No native address', rejected['output'])
+        self.assertTrue(self.bp(lines=(11,))[0]['verified'])
+        self.client.request('continue', dict(threadId=1))
+        self.assertIn('1 verified source breakpoint(s) at 1 native address(es)', self.client.event('output')['output'])
+        self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux pseudo-terminal serial transport check")
     def test_usb_attach_breakpoint_step_pause_and_disconnect_over_serial(self):
         self.target = Target()

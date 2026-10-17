@@ -132,6 +132,8 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                     throw new NotSupportedException("Conditional breakpoints and logpoints are not supported.");
                 var entries = await _breakpoints.ReplaceAsync(path, points.Select(p => checked(p.GetProperty("line").GetInt32() + 1 - _lineBase)).ToArray(), _symbols);
                 await connection.RespondAsync(request, new { breakpoints = entries.Select(e => new { id = e.Id, verified = e.Error is null, line = e.Line - 1 + _lineBase, message = e.Error }).ToArray() });
+                foreach (var entry in entries.Where(entry => entry.Error is not null))
+                    await connection.EventAsync("output", new { category = "stderr", output = $"Breakpoint rejected at {path}:{entry.Line}: {entry.Error}\n" });
                 break;
             case "setExceptionBreakpoints":
                 if (new[] { "filters", "filterOptions", "exceptionOptions" }.Any(name =>
@@ -202,6 +204,10 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             case "stepOut":
                 ThreadId(args);
                 if (!_configured) throw new InvalidOperationException("Finish configuration first.");
+                if (command == "continue")
+                    await connection.EventAsync("output", new { category = "console", output = _breakpoints.VerifiedCount == 0
+                        ? "Resuming with no verified source breakpoints. In Rider, select DolphinDotNet Attach before adding a new gutter breakpoint; existing .NET breakpoints are not sent to this adapter. Check rejected breakpoint messages and source path mappings.\n"
+                        : $"Resuming with {_breakpoints.VerifiedCount} verified source breakpoint(s) at {_breakpoints.NativeAddressCount} native address(es).\n" });
                 _frames.Clear();
                 _variableScopes.Clear();
                 _running = true;

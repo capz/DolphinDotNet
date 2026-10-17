@@ -10,6 +10,8 @@ public sealed class BreakpointRegistry(RspClient client)
     private readonly HashSet<uint> _installed = new();
     private int _nextId;
     private Dictionary<uint, int[]> _wanted = new();
+    public int VerifiedCount => _sources.Values.SelectMany(entries => entries).Count(entry => entry.Error is null);
+    public int NativeAddressCount => _wanted.Count;
     public bool Contains(uint pc) => _wanted.ContainsKey(pc);
     public int[] HitIds(uint pc) => _wanted.TryGetValue(pc, out var ids) ? ids.ToArray() : Array.Empty<int>();
 

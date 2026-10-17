@@ -95,6 +95,14 @@ Set a supported source breakpoint (for Snake, `Controller.Update();`) and press
 breakpoint is reached. Step Over/Out at an unsupported native frame may report
 an unwind diagnostic; use Resume to reach managed code first.
 
+If Resume runs without hitting a breakpoint, open **Run → View Breakpoints** and
+check that it is under **DolphinDotNet C# line breakpoints**. A regular .NET line
+breakpoint is not sent to this adapter. Select **DolphinDotNet Attach**, then add a
+fresh breakpoint on another executable line. Before each Resume the adapter prints
+the number of verified source breakpoints and native addresses. Rejected locations
+also appear in the console with their source path and reason; check the selected
+build folder and source path mappings if the source cannot be resolved.
+
 For that sample launch, choose a saved **BBA / TCP** target at **127.0.0.1:2166**.
 Older versions of the target dialog initialized new targets to **2828** even
 though the sample launcher uses **2166**. Existing saved targets keep their port;
