@@ -86,7 +86,10 @@ def call(*args, env=None, expected=0):
 
 
 with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
-    work = Path(temp)
+    # Windows runners may supply an 8.3 TEMP path (RUNNER~1). The driver's
+    # Path.GetFullPath expands it for the Dolphin user directory. Compare the
+    # same canonical path for both ordinary and debugger launch assertions.
+    work = Path(temp).resolve()
     probe_dir = work / "tools with spaces"
     shutil.copytree(probe_output, probe_dir)
     probe = probe_dir / ("DolphinLaunchProbe.exe" if os.name == "nt" else "DolphinLaunchProbe")
@@ -100,7 +103,9 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
     env.pop("DOLPHIN_PATH", None)
     config.write_text(json.dumps({"Dol": str(dol), "Dolphin": str(probe), "UserDirectory": str(user)}))
     call("run", "--config", config, env=env)
-    assert json.loads(capture.read_text())["Arguments"] == ["--user", str(user), "--exec", str(dol)]
+    actual = json.loads(capture.read_text())["Arguments"]
+    expected = ["--user", str(user), "--exec", str(dol)]
+    assert actual == expected, (actual, expected)
     ini = user / "Config/Dolphin.ini"
     assert "SIDevice1 = 6" in ini.read_text()
     ini.write_text("[Core]\nSIDevice1 = 0\n")
