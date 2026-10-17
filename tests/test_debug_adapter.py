@@ -29,13 +29,15 @@ class ProbeTests(unittest.TestCase):
 
 
 class Target:
-    def __init__(self, startup=False):
+    def __init__(self, startup=False, interrupt_empty_reply=False):
         self.listener = socket.socket()
         self.listener.bind(("127.0.0.1", 0))
         self.listener.listen()
         self.port = self.listener.getsockname()[1]
         self.pc = 0x80003100 if startup else 0x80004000
         self.stack_pointer = 0 if startup else 0x81700000
+        self.interrupt_empty_reply = interrupt_empty_reply
+        self.empty_register = False
         self.breakpoints = set()
         self.commands = []
         self.memory = {0x81700004: bytes.fromhex("00000003"), 0x81700008: bytes.fromhex("ffffffff"),
@@ -59,7 +61,13 @@ class Target:
                     if byte == b"+":
                         continue
                     if byte == b"\x03":
-                        self.reply(f"T0240:{self.pc:08x};")
+                        if self.interrupt_empty_reply:
+                            # Dolphin sends a stop without an ACK for raw Ctrl-C,
+                            # then an unsolicited empty reply from its dispatcher.
+                            payload = f"T0540:{self.pc:08x};".encode()
+                            self.peer.sendall(b"$" + payload + f"#{sum(payload) & 255:02x}".encode() + b"$#00")
+                        else:
+                            self.reply(f"T0240:{self.pc:08x};")
                         continue
                     assert byte == b"$", byte
                     payload = b""
@@ -93,7 +101,7 @@ class Target:
                         else:
                             self.peer.sendall(b"+")
                     elif command == "p1":
-                        self.reply(f"{self.stack_pointer:08x}")
+                        self.reply('' if self.empty_register else f"{self.stack_pointer:08x}")
                     elif command == "p3":
                         self.reply("0000002a")
                     elif command.startswith("m"):
@@ -181,8 +189,8 @@ class AdapterTests(unittest.TestCase):
             self.assertFalse(self.target.errors, self.target.errors)
         self.temp.cleanup()
 
-    def attach(self, configured=True):
-        self.target = Target()
+    def attach(self, configured=True, interrupt_empty_reply=False):
+        self.target = Target(interrupt_empty_reply=interrupt_empty_reply)
         self.client.request("attach", dict(host="127.0.0.1", port=self.target.port,
             elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address),
             sourceFileMap={"/build/日本": "/local/日本"}))
@@ -223,6 +231,27 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual('Program.Main', managed['name'])
         self.assertEqual(11, managed['line'])
         self.assertEqual('/local/日本/Game.cs', managed['source']['path'])
+
+    def test_dolphin_pause_extra_empty_reply_does_not_corrupt_register_reads(self):
+        self.attach(interrupt_empty_reply=True)
+        self.client.request('continue', dict(threadId=1))
+        self.client.request('pause', dict(threadId=1))
+        self.assertEqual('pause', self.client.event('stopped')['reason'])
+        frame = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]
+        self.assertEqual('Program.Main', frame['name'])
+        self.assertTrue(self.bp(lines=(11,))[0]['verified'])
+        self.client.request('continue', dict(threadId=1))
+        self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+        self.assertEqual(11, self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['line'])
+
+    def test_empty_register_reply_after_command_ack_is_still_an_error(self):
+        self.attach()
+        self.client.request('continue', dict(threadId=1))
+        self.client.request('pause', dict(threadId=1))
+        self.client.event('stopped')
+        self.target.empty_register = True
+        result = self.client.request('stackTrace', dict(threadId=1), success=False)
+        self.assertIn('Invalid register response', result['message'])
 
     def test_invalid_transport_is_rejected_before_connecting(self):
         for args in [dict(transport="unknown"), dict(transport="usbGecko", serialPort="", baudRate=115200),

@@ -95,6 +95,12 @@ Set a supported source breakpoint (for Snake, `Controller.Update();`) and press
 breakpoint is reached. Step Over/Out at an unsupported native frame may report
 an unwind diagnostic; use Resume to reach managed code first.
 
+Older bundled adapters can fail after Pause with `Invalid register response:`
+followed by an empty value. Dolphin can emit an extra empty GDB packet after the
+interrupt stop packet. The adapter now discards that leftover packet before the
+next command's acknowledgement. Install a rebuilt Rider plugin to receive this
+protocol fix; pulling the repository does not update an installed plugin.
+
 If Resume runs without hitting a breakpoint, open **Run → View Breakpoints** and
 check that it is under **DolphinDotNet C# line breakpoints**. A regular .NET line
 breakpoint is not sent to this adapter. Select **DolphinDotNet Attach**, then add a

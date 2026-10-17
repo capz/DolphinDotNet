@@ -20,6 +20,7 @@ public sealed class RspClient : IAsyncDisposable
     private readonly byte[] _byte = new byte[1];
     private readonly TimeSpan _timeout;
     private bool _disposed;
+    private volatile bool _interruptReplyPending;
 
     public RspClient(Stream stream, bool leaveOpen = true, TimeSpan? timeout = null)
     {
@@ -141,6 +142,7 @@ public sealed class RspClient : IAsyncDisposable
     public async Task InterruptAsync(CancellationToken token = default)
     {
         ThrowIfDisposed();
+        _interruptReplyPending = true;
         await WriteAsync(new byte[] { 3 }, token).ConfigureAwait(false);
     }
 
@@ -186,10 +188,11 @@ public sealed class RspClient : IAsyncDisposable
     {
         var rejected = 0;
         var invalid = 0;
+        var acknowledged = false;
         while (true)
         {
             var first = await ReadByteAsync(token).ConfigureAwait(false);
-            if (first == '+') continue;
+            if (first == '+') { acknowledged = true; continue; }
             if (first == '-')
             {
                 if (++rejected > 3) throw new IOException("GDB repeatedly rejected the command checksum.");
@@ -218,7 +221,20 @@ public sealed class RspClient : IAsyncDisposable
                 continue;
             }
             await WriteAsync(new byte[] { (byte)'+' }, token).ConfigureAwait(false);
-            return Encoding.ASCII.GetString(Unescape(packet));
+            var reply = Encoding.ASCII.GetString(Unescape(packet));
+            // Dolphin's ReadCommand handles Ctrl-C by calling SendSignal, which
+            // overwrites its command buffer. The dispatch loop then interprets
+            // that buffer as an unknown command and sends an extra empty reply.
+            // It precedes the ACK for our next command. Never discard an empty
+            // reply after that ACK: it can legitimately mean unsupported.
+            if (_interruptReplyPending && !acknowledged && reply.Length == 0)
+            {
+                _interruptReplyPending = false;
+                continue;
+            }
+            if (acknowledged && !reply.StartsWith('T') && !reply.StartsWith('S'))
+                _interruptReplyPending = false;
+            return reply;
         }
     }
 
