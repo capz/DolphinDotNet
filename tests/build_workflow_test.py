@@ -14,12 +14,43 @@ import sys
 import tempfile
 import time
 from xml.sax.saxutils import escape
+import xml.etree.ElementTree as ET
 
 root = Path(__file__).resolve().parents[1]
 driver = root / "tools/DolphinDotNet.Build/bin/Debug/net8.0/DolphinDotNet.Build.dll"
 probe_output = root / "tests/DolphinLaunchProbe/bin/Debug/net8.0"
 dotnet = shutil.which("dotnet")
 assert dotnet and driver.exists()
+
+# Every sample must keep the shared fixes and point its IDE launch profile at
+# its own project. Evaluate actual MSBuild settings rather than inspecting text.
+for project in sorted((root / 'samples').glob('*/*.csproj')):
+    sample = project.stem
+    tree = ET.parse(project).getroot()
+    imports = [(project.parent / node.attrib['Project']).resolve() for node in tree.findall('Import')]
+    sdk = root / 'sdk/DolphinDotNet.Sdk/Sdk'
+    assert imports == [sdk / 'Sdk.props', sdk / 'Sdk.targets'], project
+    assert (project.parent / f'{sample}.sln').is_file(), project
+    launch = json.loads((project.parent / 'Properties/launchSettings.json').read_text())['profiles']
+    assert launch['CLI']['commandName'] == 'Project', project
+    assert launch['Dolphin']['executablePath'] == 'dotnet', project
+    assert 'DolphinDotNet.Build.dll' in launch['Dolphin']['commandLineArgs'], project
+    assert launch['Dolphin']['workingDirectory'] == '$(TargetDir)', project
+    run = ET.parse(project.parent / f'.run/{sample}.run.xml')
+    options = {node.attrib['name']: node.attrib.get('value') for node in run.findall('.//configuration/option')}
+    assert options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
+    assert options['LAUNCH_PROFILE_NAME'] == 'Dolphin', project
+    assert run.find('.//method/option[@name="Build"]') is not None, project
+    for configuration in ('Debug', 'Release'):
+        result = subprocess.run([dotnet, 'msbuild', str(project), '-p:Configuration=' + configuration,
+                                 '-getProperty:DndDebugSymbols,Optimize,DebugType'],
+                                capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, result.stdout + result.stderr
+        properties = json.loads(result.stdout)['Properties']
+        assert properties['DndDebugSymbols'] == str(configuration == 'Debug').lower(), (project, properties)
+        assert properties['Optimize'] == str(configuration == 'Release').lower(), (project, properties)
+        if configuration == 'Debug':
+            assert properties['DebugType'] == 'portable', (project, properties)
 
 
 def call(*args, env=None, expected=0):

@@ -487,6 +487,8 @@ jobs:
         run: |
           dotnet build tools/DolphinDotNet.Build
           dotnet build tests/DolphinLaunchProbe
+      - name: Validate sample artifact checks
+        run: python tests/sample_build_validation_test.py
       - name: Validate launch lifecycle and MSBuild integration
         run: python tests/build_workflow_test.py
       - name: Build every sample solution without a native toolchain
@@ -502,7 +504,7 @@ jobs:
           for solution in samples/*/*.sln; do
             dotnet build "$solution" -p:DndBuildBackend=Docker
             sample=$(basename "$solution" .sln)
-            python scripts/dol_sections.py "samples/$sample/bin/Debug/net8.0/$sample.dol"
+            python scripts/validate_sample_build.py "samples/$sample"
           done
 
   portable-runtime:

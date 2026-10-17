@@ -42,7 +42,68 @@ own Dolphin settings in `obj/dolphin-user/`. Configure controllers, storage and
 networking as required by the table above; building does not provision external
 assets or network services.
 
-### Manual bundle generation
+## Debug builds and Rider attach
+
+All samples use the shared DolphinDotNet SDK and compiler. Debug builds preserve
+Portable PDB locals and publish the source/address maps Rider needs by default;
+Release builds retain their normal optimization policy. Sample projects follow
+those shared defaults instead of forcing optimization in Debug.
+
+From the repository root, substitute any sample name from the table:
+
+```powershell
+dotnet build samples/Snake/Snake.sln -c Debug
+python scripts/validate_sample_build.py samples/Snake
+```
+
+The validator checks the DOL, PowerPC ELF, launcher, LF-only bundled shell script,
+matching map hashes and verified breakpoint addresses in the sample's own
+`Program.cs`. A successful build must produce these files together:
+
+```text
+samples/<sample>/bin/Debug/net8.0/<sample>.dol
+samples/<sample>/bin/Debug/net8.0/<sample>.elf
+samples/<sample>/bin/Debug/net8.0/<sample>.dnd-debug.json
+samples/<sample>/bin/Debug/net8.0/<sample>.dnd-addresses.json
+```
+
+In Rider, open that sample's solution and select its own **<sample> in Dolphin**
+configuration to launch it. **CLI** uses the same build/run driver. Both build
+before launching Dolphin; neither is an attach configuration. For debugging,
+install the [Rider attach plugin](../docs/rider-debugging.md), start the matching
+DOL with Dolphin's GDB stub waiting/stopped, and add **DolphinDotNet Attach**.
+Choose `samples/<sample>/bin/Debug/net8.0` as its debug build folder, then save
+and select a TCP target matching Dolphin's host and GDB port. When opening the
+sample's solution directly, the folder is `$PROJECT_DIR$/bin/Debug/net8.0`.
+Select the attach configuration before placing C# gutter breakpoints.
+
+To build and validate every sample in PowerShell:
+
+```powershell
+Get-ChildItem samples/*/*.sln | ForEach-Object {
+    dotnet build $_.FullName -c Debug
+    if ($LASTEXITCODE -ne 0) { throw "Build failed: $($_.Name)" }
+}
+python scripts/validate_sample_build.py
+```
+
+The same validation runs in CI after every sample's container build. Windows,
+macOS and Linux host checks also verify every sample's SDK imports, launch target,
+and evaluated Debug/Release settings.
+
+The shared build fixes apply to every sample: Windows selects `docker.exe`, native
+cleanup handles read-only Git metadata and retains ownership on failure, emitted
+Bash scripts use LF, and full Windows PDB filenames survive native address mapping.
+See [build troubleshooting](../docs/ide-workflow.md) for restore errors and recovery
+from partial directories left by older drivers. Keep `obj/project.assets.json`
+when removing a partial `obj/Debug/net8.0/native` directory. `dotnet build` restores
+packages automatically. `DndDebugSymbols=false` is an explicit opt-out from maps.
+
+This verifies compilation and debugger artifacts. Each sample still needs the
+controllers, storage, assets or services listed above; interactive Rider and
+physical console acceptance remain separate checks.
+
+## Manual bundle generation
 
 For a standalone bundle, opt out of the integrated native build first:
 
