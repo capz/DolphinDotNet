@@ -4,6 +4,7 @@ The probe records launch arguments; actual DOL compilation/boot stays in the
 GameCube CI job. No installed Dolphin, Docker daemon or console SDK is required.
 """
 import json
+import configparser
 import os
 from pathlib import Path
 import shutil
@@ -41,6 +42,14 @@ for project in sorted((root / 'samples').glob('*/*.csproj')):
     assert options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
     assert options['LAUNCH_PROFILE_NAME'] == 'Dolphin', project
     assert run.find('.//method/option[@name="Build"]') is not None, project
+    debug_launch = launch['Dolphin Debug']
+    assert debug_launch['executablePath'] == 'dotnet', project
+    assert debug_launch['commandLineArgs'] == launch['Dolphin']['commandLineArgs'] + ' --gdb-port 2166', project
+    debug_run = ET.parse(project.parent / f'.run/{sample}.debug.run.xml')
+    debug_options = {node.attrib['name']: node.attrib.get('value') for node in debug_run.findall('.//configuration/option')}
+    assert debug_options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
+    assert debug_options['LAUNCH_PROFILE_NAME'] == 'Dolphin Debug', project
+    assert debug_run.find('.//method/option[@name="Build"]') is not None, project
     for configuration in ('Debug', 'Release'):
         result = subprocess.run([dotnet, 'msbuild', str(project), '-p:Configuration=' + configuration,
                                  '-getProperty:DndDebugSymbols,Optimize,DebugType'],
@@ -81,6 +90,44 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
     ini.write_text("[Core]\nSIDevice1 = 0\n")
     call("run", "--config", config, env={**env, "DND_PROBE_EXIT": "17"}, expected=17)
     assert "SIDevice1 = 0" in ini.read_text()  # Never overwrite personal settings.
+    # Opt-in GDB launch creates the actual settings file under the configured
+    # user path, and leaves ordinary launches and their controller settings alone.
+    ini.write_text('[Core]\nSIDevice1 = 0\nCPUCore = 1\nCPUThread = True\n'
+                   '[General]\nGDBPort = 0\n[Interface]\nThemeName = KeepMe\n')
+    original_ini = ini.read_bytes()
+    controller = user / 'Config/GCPadNew.ini'
+    controller.write_text('[GCPad1]\nDevice = test keyboard\n')
+    output = call('run', '--config', config, '--gdb-port', '2166', env=env)
+    debug_user = user / 'rider-debug'
+    debug_ini = debug_user / 'Config/Dolphin.ini'
+    assert str(debug_ini) in output and '127.0.0.1:2166' in output
+    assert json.loads(capture.read_text())['Arguments'] == ['--user', str(debug_user), '--exec', str(dol)]
+    settings = configparser.ConfigParser()
+    settings.read(debug_ini)
+    assert settings['General']['GDBPort'] == '2166'
+    assert settings['Core']['CPUCore'] == '0' and settings['Core']['CPUThread'] == 'False'
+    assert settings['Interface']['DebugModeEnabled'] == 'True'
+    assert settings['Interface']['ThemeName'] == 'KeepMe' and settings['Core']['SIDevice1'] == '0'
+    assert ini.read_bytes() == original_ini
+    assert (debug_user / 'Config/GCPadNew.ini').read_bytes() == controller.read_bytes()
+    # Debug controller changes survive subsequent debug runs and port changes.
+    (debug_user / 'Config/GCPadNew.ini').write_text('[GCPad1]\nDevice = debug keyboard\n')
+    call('run', '--config', config, '--gdb-port', '2170', env=env)
+    assert debug_ini.read_text().count('GDBPort =') == 1 and 'GDBPort = 2170' in debug_ini.read_text()
+    assert 'debug keyboard' in (debug_user / 'Config/GCPadNew.ini').read_text()
+    call('run', '--config', config, env=env)
+    assert json.loads(capture.read_text())['Arguments'][1] == str(user)
+    assert ini.read_bytes() == original_ini
+    for port in ('0', '-1', '65536', 'invalid'):
+        capture.unlink(missing_ok=True)
+        output = call('run', '--config', config, '--gdb-port', port, env=env, expected=1)
+        assert 'between 1 and 65535' in output and not capture.exists()
+    fresh_user = work / 'custom profile without an ini'
+    fresh_config = work / 'fresh.json'
+    fresh_config.write_text(json.dumps({'Dol': str(dol), 'Dolphin': str(probe), 'UserDirectory': str(fresh_user)}))
+    call('run', '--config', fresh_config, '--gdb-port', '2166', env=env)
+    assert 'SIDevice1 = 6' in (fresh_user / 'rider-debug/Config/Dolphin.ini').read_text()
+    assert not (fresh_user / 'Config/Dolphin.ini').exists()
     capture.unlink()
     output = call("run", "--config", config, "--dolphin", work / "missing", env=env, expected=1)
     assert "DND001" in output and not capture.exists()

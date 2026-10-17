@@ -6,6 +6,14 @@
       "commandLineArgs": "\"$(TargetDir)DolphinDotNet.Build.dll\" run --config \"$(TargetDir)dolphin-run.json\"",
       "workingDirectory": "$(TargetDir)"
     },
-    "CLI": { "commandName": "Project" }
+    "CLI": {
+      "commandName": "Project"
+    },
+    "Dolphin Debug": {
+      "commandName": "Executable",
+      "executablePath": "dotnet",
+      "commandLineArgs": "\"$(TargetDir)DolphinDotNet.Build.dll\" run --config \"$(TargetDir)dolphin-run.json\" --gdb-port 2166",
+      "workingDirectory": "$(TargetDir)"
+    }
   }
 }

@@ -25,7 +25,7 @@ internal static class Driver
                     "  build --assembly DLL --compiler DLL --native-directory DIR --dol DOL --elf ELF --run-config JSON\n" +
                     "        [--backend Auto|Native|Docker] [--dolphin PATH] [--user-directory DIR] [--jobs N]\n" +
                      "        [--debug-symbols true|false] [--gdb-transport Off|Tcp|UsbGecko] [--gdb-channel 0|1] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
-                    "  run --config JSON [--dolphin PATH]");
+                    "  run --config JSON [--dolphin PATH] [--gdb-port PORT]");
                 return 0;
             }
             var options = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -40,18 +40,51 @@ internal static class Driver
                 throw new ArgumentException("Missing --" + key + ".");
             if (args[0] == "run")
             {
-                Allow(options, "config", "dolphin");
+                Allow(options, "config", "dolphin", "gdb-port");
                 var config = JsonSerializer.Deserialize<RunConfig>(File.ReadAllText(Required("config")))
                     ?? throw new InvalidDataException("Invalid Dolphin run configuration. Build the project first.");
                 if (!File.Exists(config.Dol) || new FileInfo(config.Dol).Length < 256)
                     throw new FileNotFoundException("DOL missing or truncated. Build the project before running.", config.Dol);
+                int? debuggerPort = null;
+                if (options.TryGetValue("gdb-port", out var port))
+                {
+                    if (!int.TryParse(port, out var number) || number is < 1 or > 65535)
+                        throw new ArgumentException("Dolphin --gdb-port must be between 1 and 65535.");
+                    debuggerPort = number;
+                }
                 var dolphin = FindDolphin(Get("dolphin", config.Dolphin));
-                Directory.CreateDirectory(Path.Combine(config.UserDirectory, "Config"));
-                var ini = Path.Combine(config.UserDirectory, "Config", "Dolphin.ini");
+                var launchUser = Path.GetFullPath(config.UserDirectory);
+                if (debuggerPort is not null)
+                {
+                    // Keep ordinary launches independent from a GDB listener.
+                    // Seed a separate profile with existing controller settings.
+                    var originalConfig = Path.Combine(launchUser, "Config");
+                    launchUser = Path.Combine(launchUser, "rider-debug");
+                    var debugConfig = Path.Combine(launchUser, "Config");
+                    Directory.CreateDirectory(debugConfig);
+                    if (Directory.Exists(originalConfig))
+                        foreach (var file in Directory.EnumerateFiles(originalConfig, "*.ini"))
+                        {
+                            var destination = Path.Combine(debugConfig, Path.GetFileName(file));
+                            if (!File.Exists(destination)) File.Copy(file, destination);
+                        }
+                }
+                Directory.CreateDirectory(Path.Combine(launchUser, "Config"));
+                var ini = Path.Combine(launchUser, "Config", "Dolphin.ini");
                 if (!File.Exists(ini))
                     File.WriteAllText(ini, "[Core]\nSIDevice0 = 6\nSIDevice1 = 6\n");
-                Console.WriteLine("Launching " + config.Dol + "\nDolphin user directory: " + config.UserDirectory);
-                return await Run(dolphin, ["--user", config.UserDirectory, "--exec", config.Dol], Path.GetDirectoryName(config.Dol)!);
+                if (debuggerPort is not null)
+                {
+                    var settings = File.ReadAllLines(ini).ToList();
+                    SetIniValue(settings, "General", "GDBPort", debuggerPort.Value.ToString());
+                    SetIniValue(settings, "Core", "CPUCore", "0");
+                    SetIniValue(settings, "Core", "CPUThread", "False");
+                    SetIniValue(settings, "Interface", "DebugModeEnabled", "True");
+                    File.WriteAllText(ini, string.Join("\n", settings) + "\n");
+                    Console.WriteLine($"Dolphin will wait for Rider at 127.0.0.1:{debuggerPort}.");
+                }
+                Console.WriteLine("Launching " + config.Dol + "\nDolphin user directory: " + launchUser + "\nDolphin settings: " + ini);
+                return await Run(dolphin, ["--user", launchUser, "--exec", config.Dol], Path.GetDirectoryName(config.Dol)!);
             }
             if (args[0] is not ("build" or "doctor")) throw new ArgumentException("Unknown command: " + args[0]);
             Allow(options, args[0] == "doctor" ? ["backend", "dolphin", "build-only"] :
@@ -221,6 +254,29 @@ internal static class Driver
             Console.Error.WriteLine("error DND001: " + e.Message);
             return 1;
         }
+    }
+
+    static void SetIniValue(List<string> lines, string section, string key, string value)
+    {
+        var start = lines.FindIndex(line => line.Trim().Equals("[" + section + "]", StringComparison.OrdinalIgnoreCase));
+        if (start < 0)
+        {
+            lines.Add("[" + section + "]");
+            lines.Add(key + " = " + value);
+            return;
+        }
+        var end = start + 1;
+        while (end < lines.Count && !lines[end].TrimStart().StartsWith("[", StringComparison.Ordinal)) end++;
+        for (var index = start + 1; index < end; index++)
+        {
+            var separator = lines[index].IndexOf('=');
+            if (separator >= 0 && lines[index][..separator].Trim().Equals(key, StringComparison.OrdinalIgnoreCase))
+            {
+                lines[index] = key + " = " + value;
+                return;
+            }
+        }
+        lines.Insert(end, key + " = " + value);
     }
 
     static bool Within(string directory, string path) => Path.GetFullPath(path).StartsWith(

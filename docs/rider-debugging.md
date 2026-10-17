@@ -53,8 +53,15 @@ fail if there are no generated native symbols or no verifiable source addresses.
 See [IDE build troubleshooting](ide-workflow.md) for Windows Docker lookup,
 interrupted native cleanup and NuGet restore errors.
 
-1. Start the matching debug DOL in Dolphin or on the console with its GDB stub
-   waiting/stopped. Build, upload and emulator launch remain external steps.
+1. For a sample in Dolphin, select **<sample> in Dolphin (wait for Rider)** and
+   click **Run**. Its **Dolphin Debug** launch profile builds the game and creates
+   the emulator settings automatically: GDB port **2166**, interpreter CPU,
+   dual-core disabled and debugger mode enabled. It uses a separate `rider-debug`
+   profile beneath the configured Dolphin user directory and prints the exact
+   `Dolphin.ini` path. No manual INI creation is needed. Existing controller INIs
+   seed the debug profile once; later debug changes persist there. The ordinary
+   **<sample> in Dolphin** launch keeps its own settings. For a console, start
+   the matching debug DOL with its GDB stub waiting/stopped; upload remains external.
 2. Add a **DolphinDotNet Attach** run/debug configuration. Choose the debug build
    folder containing exactly one `*.elf`, its `<name>.dnd-addresses.json`, and either
    the published `<name>.dnd-debug.json` or native-bundle `dnd-il-debug.json`.
@@ -74,6 +81,21 @@ interrupted native cleanup and NuGet restore errors.
    breakpoints → configurationDone. It initially leaves execution stopped. Use the
    standard Rider Resume, Pause, Step Into, Step Over and Step Out controls and
    stack frame source navigation. Stop disconnects the adapter without a target kill.
+
+For that sample launch, choose a saved **BBA / TCP** target at **127.0.0.1:2166**.
+Select the attach configuration before setting a breakpoint, for example Snake's
+`Controller.Update();` statement, then Debug and Resume. Dolphin waits at startup
+until the debugger connects. Run the launch profile first and leave it running
+while starting the separate attach session.
+
+The equivalent host launch option is:
+
+```powershell
+dotnet samples/Snake/bin/Debug/net8.0/DolphinDotNet.Build.dll run --config samples/Snake/bin/Debug/net8.0/dolphin-run.json --gdb-port 2166
+```
+
+`run --gdb-port` configures Dolphin's emulator stub, independently of the
+`DndGdbTransport` build settings used for console-side USB Gecko/BBA stubs.
 
 ## Saved target properties
 

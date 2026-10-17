@@ -70,8 +70,12 @@ samples/<sample>/bin/Debug/net8.0/<sample>.dnd-addresses.json
 In Rider, open that sample's solution and select its own **<sample> in Dolphin**
 configuration to launch it. **CLI** uses the same build/run driver. Both build
 before launching Dolphin; neither is an attach configuration. For debugging,
-install the [Rider attach plugin](../docs/rider-debugging.md), start the matching
-DOL with Dolphin's GDB stub waiting/stopped, and add **DolphinDotNet Attach**.
+install the [Rider attach plugin](../docs/rider-debugging.md), run **<sample> in
+Dolphin (wait for Rider)**, and add **DolphinDotNet Attach**. That launch creates
+the emulator's GDB settings automatically in a separate profile, prints their
+location, and waits for Rider at **127.0.0.1:2166**. No manual `Dolphin.ini` edit
+is needed. If the configuration is not imported, create a **.NET Launch Settings
+Profile** configuration for that sample's **Dolphin Debug** profile with a Build task.
 Choose `samples/<sample>/bin/Debug/net8.0` as its debug build folder, then save
 and select a TCP target matching Dolphin's host and GDB port. When opening the
 sample's solution directly, the folder is `$PROJECT_DIR$/bin/Debug/net8.0`.

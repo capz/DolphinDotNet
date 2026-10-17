@@ -54,13 +54,16 @@ configuration after starting Dolphin with its GDB stub waiting/stopped. The atta
 configuration does not build, upload or launch the game. Select it before placing
 C# gutter breakpoints. Hot Reload is not supported.
 
-For Snake, open `samples/Snake/Snake.sln`, select **Debug**, and build. In
+For Snake, open `samples/Snake/Snake.sln`, select **Debug**, and run **Snake in
+Dolphin (wait for Rider)**. This creates Dolphin's debugger settings automatically
+in a separate profile and prints their exact path; you do not need to locate or
+create `Dolphin.ini`. Dolphin waits for Rider on `127.0.0.1:2166`. In
 **Run → Edit Configurations → + → DolphinDotNet Attach**, select
 `$PROJECT_DIR$/bin/Debug/net8.0` as the debug build folder (when Snake's solution
 is open). It must contain `Snake.elf`, `Snake.dnd-debug.json` and
 `Snake.dnd-addresses.json` from the same successful build. Under **Manage targets…**,
-save and select a **BBA / TCP** target with host `127.0.0.1` and the port configured
-in Dolphin's GDB stub. Start the matching `Snake.dol` in Dolphin, then click Debug
+save and select a **BBA / TCP** target with host `127.0.0.1` and port `2166`.
+Leave that Dolphin launch running, then click Debug
 in Rider. The DOL/ELF are GameCube artifacts, not Windows executables.
 
 ## Command line
