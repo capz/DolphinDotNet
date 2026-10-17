@@ -22,6 +22,7 @@ tests/network_link_test
 tests/debug_heartbeat_test
 tests/input_native_test
 tests/input_gamecube_test
+tests/hardware_gamecube_test
 
 **/.gradle/
 **/.intellijPlatform/

@@ -352,6 +352,14 @@ jobs:
           grep -q 'dnd_hardware_probe' /tmp/dnd-hardware-aot.c
           grep -q 'dnd_platform_reboot' /tmp/dnd-hardware-aot.c
           grep -q 'dnd_platform_reset_button' /tmp/dnd-hardware-aot.c
+      - name: Validate controller and memory-card connection transitions
+        run: |
+          dotnet build tests/ConnectionSmoke/ConnectionSmoke.csproj -c Release
+          dotnet run --project tools/DolphinDotNet.Compiler -- --aot tests/ConnectionSmoke/bin/Release/net8.0/ConnectionSmoke.dll /tmp/dnd-connections.c
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dnd-connections.c tests/connection_host.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/dnd-connections
+          /tmp/dnd-connections
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dnd-connections.c tests/connection_host.c source/input.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/dnd-connections32
+          /tmp/dnd-connections32
       - name: Verify disc identities and BNR1/BNR2 artwork metadata
         run: |
           dotnet run --project tests/DiscIdentityTests/DiscIdentityTests.csproj -c Release

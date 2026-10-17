@@ -55,19 +55,22 @@ int dnd_hardware_probe(int kind,int port,int extended) {
         return type==SI_ERROR_NO_RESPONSE ? ABSENT : UNKNOWN;
     }
     if (kind==9) return UNKNOWN; /* GBP uses high-speed parallel/ARAM bus. */
+    if (kind==2 && extended) {
+        /* A cached mount is not physical presence: CARD_ProbeEx starts with
+         * EXI_ProbeEx, including for an attached card. Do not reset or mount it. */
+        if (dnd_storage_is_mounted(port-4)) return BUSY; /* Slot owned by SD. */
+        s32 blocks=0,sector=0;
+        int rc=CARD_ProbeEx(port-4,&blocks,&sector);
+        if (rc>=0) return PRESENT;
+        if (rc==CARD_ERROR_NOCARD || rc==CARD_ERROR_WRONGDEVICE) return ABSENT;
+        if (rc==CARD_ERROR_BUSY) return BUSY;
+        return UNKNOWN;
+    }
     int m=media(kind,port);
     if (m>=0 && dnd_storage_is_mounted(m)) return PRESENT;
     if (kind==2 && dnd_storage_is_mounted(port-4)) return BUSY;
     if (kind==3 && dnd_storage_is_mounted(port)) return BUSY;
     if (!extended) return UNKNOWN;
-    if (kind==2) {
-        s32 blocks=0,sector=0;
-        int rc=CARD_ProbeEx(port-4,&blocks,&sector);
-        if (rc>=0) return PRESENT;
-        if (rc==CARD_ERROR_NOCARD) return ABSENT;
-        if (rc==CARD_ERROR_BUSY) return BUSY;
-        return UNKNOWN;
-    }
     if (kind==3 || kind==4) return sd_probe(m);
     if (kind==5 || kind==6) {
         u32 id=0;
