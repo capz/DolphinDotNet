@@ -1,0 +1,28 @@
+using System;
+using Dolphin.Audio;
+
+/// <summary>Unsigned PCM8 effects generated on the console; no external assets.</summary>
+internal sealed class FoxSounds : IDisposable
+{
+    private readonly Sound shot,hit,damage;
+    private SoundChannel? shotVoice,hitVoice,damageVoice;
+    internal FoxSounds()
+    {
+        shot=Sound.FromPcm8(FoxWaveforms.Pulse(1400,380,65),FoxWaveforms.Rate);
+        try { hit=Sound.FromPcm8(FoxWaveforms.Pulse(360,160,85),FoxWaveforms.Rate); }
+        catch { shot.Dispose();throw; }
+        try { damage=Sound.FromPcm8(FoxWaveforms.Pulse(190,60,260),FoxWaveforms.Rate); }
+        catch { hit.Dispose();shot.Dispose();throw; }
+    }
+    internal void Play(FoxEvent events)
+    {
+        if((events&FoxEvent.Shot)!=0) { shotVoice?.Dispose();shotVoice=shot.Play(); }
+        if((events&(FoxEvent.EnemyHit|FoxEvent.Ring))!=0) { hitVoice?.Dispose();hitVoice=hit.Play(); }
+        if((events&FoxEvent.Damage)!=0) { damageVoice?.Dispose();damageVoice=damage.Play(); }
+    }
+    public void Dispose()
+    {
+        shotVoice?.Dispose();hitVoice?.Dispose();damageVoice?.Dispose();
+        shot.Dispose();hit.Dispose();damage.Dispose();
+    }
+}
