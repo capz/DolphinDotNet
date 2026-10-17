@@ -23,6 +23,7 @@ static int nonblock(int fd){int f=fcntl(fd,F_GETFL,0);if(f<0||fcntl(fd,F_SETFL,f
 int dnd_np_start(uint32_t ip,uint32_t mask,uint32_t gateway,int dhcp){configured_ip=ip;configured_mask=mask;configured_gateway=gateway;configured_dhcp=dhcp;state=1;return 0;}
 int dnd_np_status(void){return state?1:-1;}
 int dnd_np_snapshot(uint32_t *ip,uint32_t *mask,uint32_t *gateway,int *dhcp){*ip=configured_ip;*mask=configured_mask;*gateway=configured_gateway;*dhcp=configured_dhcp;return dnd_np_status();}
+int dnd_np_link(void){return -1;}
 uint32_t dnd_np_time(void){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return (uint32_t)((uint64_t)t.tv_sec*1000+(uint64_t)t.tv_nsec/1000000);}
 int dnd_np_error(void){return error_code;}
 int dnd_np_open(int stream){int fd=socket(AF_INET,stream?SOCK_STREAM:SOCK_DGRAM,stream?IPPROTO_TCP:IPPROTO_UDP);return fd<0?result(fd):nonblock(fd);}

@@ -523,6 +523,24 @@ readback and rejection of a missing report. A native PowerPC
 build verifies snapshot compilation and the retained slot's exact ELF bytes.
 Physical BBA behavior and visual acceptance remain separate checks.
 
+Connectivity snapshots now use a separate 2,000 ms timer while the performance
+panel is visible. Showing the panel invalidates the cached link and requests a
+fresh sample; hidden frames perform no link polling. Memory statistics retain
+their independent 250 ms cadence. For the original Nintendo BBA (EXI ID
+0x04020200), a read of NWAYS 0x31 observes its 10/100 link bits under a non-waiting
+EXI lock. No network initialization, socket probe, DHCP request or adapter reset
+is performed. Unsupported hardware, contention and failed reads are unknown,
+not an inferred link-up; configured IP details survive cable loss. Tests cover
+the timer boundaries, toggle/clock behavior, register command, contention and
+failure cleanup, and both normal and reporting overlay layouts.
+
+The requested two-second heartbeat interval is reserved for the next debugger
+transport slice. Live debugger-loss detection is not implemented by these link
+checks: Dolphin's host GDB connection is independent of guest BBA state, and the
+current RSP session has no separate heartbeat channel while execution is active.
+DEBUG LAST keeps its existing, explicit last-report semantics. Running-target
+heartbeat support needs transport work and hardware/guest-network validation.
+
 The first overlay CI run (39045224094) exposed a Dolphin pause/cleanup race:
 its CPU pause loop can send a second SIGTRAP after the Ctrl-C stop, at a later PC
 and after an intervening inspection reply. The RSP client now drains at most one

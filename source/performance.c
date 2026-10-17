@@ -3,7 +3,7 @@
 #include <string.h>
 
 #define FRAME_WINDOW 32
-static DndPerformanceStats stats = {.network_state = -1};
+static DndPerformanceStats stats = {.network_state = -1, .network_link = -1};
 #ifdef DND_DEBUG_TELEMETRY
 volatile uint32_t dnd_debugger_telemetry[2] = {DND_DEBUGGER_TELEMETRY_MAGIC, 0};
 #endif
@@ -11,6 +11,8 @@ static int visible;
 static uint64_t intervals[FRAME_WINDOW], interval_sum, previous_present, memory_time;
 static unsigned interval_count, interval_head;
 static bool have_present;
+static uint64_t connectivity_time;
+static bool have_connectivity;
 
 static void reset_timing(void) {
   memset(intervals, 0, sizeof(intervals));
@@ -26,6 +28,8 @@ void dnd_performance_set_visible(int enabled) {
   visible = !!enabled;
   reset_timing();
   stats.memory_valid = false;
+  have_connectivity = false;
+  stats.network_link = -1;
 }
 int dnd_performance_visible(void) { return visible; }
 void dnd_performance_begin_frame(void) { stats.triangles = 0; }
@@ -59,6 +63,15 @@ void dnd_performance_presented(uint64_t now) {
 
 bool dnd_performance_memory_due(uint64_t now) {
   return visible && (!stats.memory_valid || now < memory_time || now - memory_time >= 250000);
+}
+bool dnd_performance_connectivity_due(uint64_t now) {
+  return visible && (!have_connectivity || now < connectivity_time ||
+                     now - connectivity_time >= DND_CONNECTIVITY_INTERVAL_US);
+}
+void dnd_performance_connectivity_sampled(uint64_t now, int link) {
+  connectivity_time = now;
+  have_connectivity = true;
+  stats.network_link = link == 0 || link == 1 ? link : -1;
 }
 void dnd_performance_memory(uint64_t now, uint32_t main_used, uint32_t main_total,
                             bool aram_available, uint32_t aram_used, uint32_t aram_total) {
@@ -107,7 +120,9 @@ int dnd_performance_format(char lines[DND_PERFORMANCE_ROWS][DND_PERFORMANCE_COLU
   if (stats.network_state != -1) {
     const char *state = stats.network_state == 0 ? "CONFIGURING" : stats.network_state == 1 ? "READY" :
                         stats.network_state == 2 ? "DEBUG TCP CONFIG" : "CONFIG FAILED";
-    snprintf(lines[row++], DND_PERFORMANCE_COLUMNS, "BBA: %s - %s", state, stats.network_dhcp ? "DHCP" : "STATIC");
+    const char *link = stats.network_state == 1 || stats.network_state == 2 ?
+        (stats.network_link == 1 ? " - LINK UP" : stats.network_link == 0 ? " - LINK DOWN" : " - LINK ?") : "";
+    snprintf(lines[row++], DND_PERFORMANCE_COLUMNS, "BBA: %s - %s%s", state, stats.network_dhcp ? "DHCP" : "STATIC", link);
     bool available = stats.network_state == 1 || stats.network_state == 2;
     address_line(lines[row++], "IP", stats.network_ip, available);
     address_line(lines[row++], "MASK", stats.network_mask, available);

@@ -36,6 +36,12 @@ draw it automatically during presentation.
   address, netmask and gateway. Addresses appear after configuration succeeds.
   `READY` describes configuration, not a continuous physical link/cable test.
   Merely drawing the panel never initializes networking or starts DHCP.
+  For the original Nintendo BBA, an additional `LINK UP`, `LINK DOWN` or `LINK ?`
+  reports its physical Ethernet link. This read-only check runs every **2,000 ms**
+  while the panel is visible, with an immediate sample when shown. Unsupported
+  adapters, a busy EXI bus and failed reads show `LINK ?`; the check never waits
+  for ownership of a busy bus. Configured addresses remain visible on cable loss.
+  Physical link status does not establish Internet or server reachability.
 * A build using the separate TCP GDB stub shows **BBA: DEBUG TCP CONFIG - STATIC**
   with that stub's configured addresses. This does not imply that the application
   socket stack is active or that a debugger is connected. Dolphin's host GDB port
@@ -51,7 +57,8 @@ draw it automatically during presentation.
 
 The panel uses five rows without BBA configuration and nine rows with BBA details.
 It keeps the existing visibility toggle and bottom-left placement. Network snapshots
-refresh with the memory statistics, without socket I/O. Debugger reports are read
+refresh on the separate two-second connectivity timer, without socket I/O. Memory
+statistics retain their four-times-per-second refresh. Debugger reports are read
 on each redraw. A halted target cannot redraw its overlay, so the screen retains
 its previous frame until execution resumes. The guest cannot independently detect a
 host-side adapter crash or lost connection; **DEBUG LAST is not a heartbeat or a
@@ -59,13 +66,20 @@ live connection guarantee**. An abrupt loss can leave the last report as connect
 
 Rebuild the target Debug build and install the updated Rider plugin to enable
 adapter reports. Maps without telemetry remain supported and cause no status writes.
+The existing debug report is a cheap memory read, not a heartbeat or transport poll.
+Live debugger-loss detection remains unimplemented: it needs a separate running-target
+channel for each supported transport. A future heartbeat should use the same requested
+2,000 ms interval and tolerate missed messages rather than time out after one interval.
 
 Memory readings refresh four times per second. Timing and formatting use fixed native
 buffers, with no managed allocations or storage/DMA operations. APIs run on the application's
 thread and require DolphinDotNet AOT, like the other platform diagnostics.
 
 Portable tests verify timing, counter reset/saturation, toggle behavior, network/debugger text formatting,
-color and panel placement at 480- and 576-line resolutions. CI also validates the managed
+color and panel placement at 480- and 576-line resolutions, plus the connectivity
+timer's two-second boundary, hidden/show behavior and clock reset. A mocked EXI
+test checks the BBA register/bits, adapter identity, contention and failure cleanup.
+CI also validates the managed
 toggle through AOT and builds the GameCube backend. The real-Dolphin inspection
 gate also reads the retained telemetry slot after the adapter releases its connection
 and requires the disconnected state in guest RAM. Console visual and timer accuracy

@@ -3,13 +3,14 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
 
-test: managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test worker_test stw_test input_native_test input_gamecube_test
+test: managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test network_link_test worker_test stw_test input_native_test input_gamecube_test
 	./managed_runtime_tests
 	./fst_test
 	./card_transaction_test
 	./aram_test
 	./overlay_test
 	./overlay_debug_test
+	./network_link_test
 	./worker_test
 	./stw_test
 	./input_native_test
@@ -45,5 +46,8 @@ overlay_test: overlay_test.c ../source/performance.c ../source/console_overlay.c
 overlay_debug_test: overlay_test.c ../source/performance.c ../source/console_overlay.c
 	$(CC) $(CFLAGS) -DDND_DEBUG_TELEMETRY $^ -lm -o $@
 
+network_link_test: network_link_test.c ../source/network_link_gamecube.c
+	$(CC) $(CFLAGS) -DGEKKO -DHW_DOL -Inetwork_link_sdk $^ -o $@
+
 clean:
-	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test worker_test stw_test input_native_test input_gamecube_test
+	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test network_link_test worker_test stw_test input_native_test input_gamecube_test

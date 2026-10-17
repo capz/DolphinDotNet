@@ -215,7 +215,7 @@ internal static class GameCubeBundle
             "fst_gamecube", "iso_file", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
             "model_graphics", "model_transform", "network", "network_gamecube",
-            "network_gamecube_backend", "performance", "platform_gamecube",
+            "network_gamecube_backend", "network_link_gamecube", "performance", "platform_gamecube",
             "storage", "storage_gamecube", "stw", "system", "text", "timing", "worker"
         };
 

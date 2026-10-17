@@ -37,6 +37,7 @@ void dnd_graphics_overlay_glyph_end(void) { assert(emitted_quads == expected_qua
 int main(void) {
   char lines[DND_PERFORMANCE_ROWS][DND_PERFORMANCE_COLUMNS];
   assert(!dnd_performance_visible());
+  assert(!dnd_performance_connectivity_due(0));
   dnd_console_init();
   dnd_console_set_visible(0);
   dnd_console_render();
@@ -47,6 +48,22 @@ int main(void) {
   dnd_performance_add_triangles(12);
   assert(dnd_performance_stats()->triangles == 22);
   assert(dnd_performance_format(lines) == 5);
+  assert(dnd_performance_connectivity_due(0));
+  dnd_performance_connectivity_sampled(0, 1);
+  assert(!dnd_performance_connectivity_due(1999999));
+  assert(dnd_performance_connectivity_due(2000000));
+  dnd_performance_connectivity_sampled(2000000, 0);
+  assert(!dnd_performance_connectivity_due(3999999));
+  assert(dnd_performance_connectivity_due(4000000));
+  assert(dnd_performance_connectivity_due(1)); /* Clock reset. */
+  dnd_performance_set_visible(0);
+  assert(!dnd_performance_connectivity_due(UINT64_MAX));
+  dnd_performance_set_visible(1);
+  assert(dnd_performance_stats()->network_link == -1);
+  assert(dnd_performance_connectivity_due(0)); /* Fresh sample on show. */
+  dnd_performance_connectivity_sampled(0, -1);
+  dnd_performance_set_visible(1);
+  assert(!dnd_performance_connectivity_due(1)); /* Reassigning true preserves cadence. */
 #ifdef DND_DEBUG_TELEMETRY
   assert(dnd_debugger_telemetry[0] == DND_DEBUGGER_TELEMETRY_MAGIC);
   assert(strcmp(lines[4], "DEBUG LAST: UNKNOWN") == 0);
@@ -81,11 +98,19 @@ int main(void) {
   assert(dnd_performance_format(lines) == 9);
   assert(strcmp(lines[4], "BBA: CONFIGURING - DHCP") == 0 && strcmp(lines[5], "IP: --") == 0);
   dnd_performance_network(1, true, UINT32_C(0xc0a8012a), UINT32_C(0xffffff00), UINT32_C(0xc0a80101));
+  dnd_performance_connectivity_sampled(now, 1);
   assert(dnd_performance_format(lines) == 9);
-  assert(strcmp(lines[4], "BBA: READY - DHCP") == 0);
+  assert(strcmp(lines[4], "BBA: READY - DHCP - LINK UP") == 0);
   assert(strcmp(lines[5], "IP: 192.168.1.42") == 0);
   assert(strcmp(lines[6], "MASK: 255.255.255.0") == 0);
   assert(strcmp(lines[7], "GW: 192.168.1.1") == 0);
+  dnd_performance_connectivity_sampled(now, 0);
+  dnd_performance_format(lines);
+  assert(strcmp(lines[4], "BBA: READY - DHCP - LINK DOWN") == 0);
+  assert(strcmp(lines[5], "IP: 192.168.1.42") == 0); /* Keep configuration on cable loss. */
+  dnd_performance_connectivity_sampled(now, -1);
+  dnd_performance_format(lines);
+  assert(strcmp(lines[4], "BBA: READY - DHCP - LINK ?") == 0);
   dnd_console_render();
   assert(rectangles == 1);
   screen_height = 576;
@@ -93,7 +118,7 @@ int main(void) {
   assert(rectangles == 2);
   dnd_performance_network(2, false, UINT32_C(0x0a000002), UINT32_C(0xff000000), 0);
   dnd_performance_format(lines);
-  assert(strcmp(lines[4], "BBA: DEBUG TCP CONFIG - STATIC") == 0 && strcmp(lines[5], "IP: 10.0.0.2") == 0);
+  assert(strcmp(lines[4], "BBA: DEBUG TCP CONFIG - STATIC - LINK ?") == 0 && strcmp(lines[5], "IP: 10.0.0.2") == 0);
   dnd_performance_network(-2, true, UINT32_MAX, UINT32_MAX, UINT32_MAX);
   dnd_performance_format(lines);
   assert(strcmp(lines[4], "BBA: CONFIG FAILED - DHCP") == 0 && strcmp(lines[5], "IP: --") == 0);
