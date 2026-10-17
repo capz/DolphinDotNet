@@ -2,6 +2,9 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#ifdef DND_SAMPLE_CONTROLS
+#include "dnd_performance.h"
+#endif
 static void close_to(float a,float b) { assert(fabsf(a-b)<0.0001f); }
 int main(void) {
     DndInputSample raw={.connected=true,.supports_rumble=true,.held=0x100,.stick_x=80,.cstick_y=65,.trigger_l=180};
@@ -31,5 +34,29 @@ int main(void) {
     raw.supports_rumble=true; test_input_set(3,raw); dnd_input_poll(); assert(dnd_input_rumble(3,1));
     dnd_input_shutdown(); assert(test_input_motors()==0 && dnd_input_flags(3)==0);
     assert(!dnd_input_rumble(-1,1) && !dnd_input_rumble(4,1));
+#ifdef DND_SAMPLE_CONTROLS
+    dnd_performance_set_visible(0);
+    raw=(DndInputSample){.connected=true,.held=0x10};
+    test_input_set(0,raw); dnd_input_poll();
+    assert(!dnd_performance_visible()); /* Connect-held is a baseline. */
+    raw.held=0; test_input_set(0,raw); dnd_input_poll();
+    raw.held=0x10; test_input_set(0,raw); dnd_input_poll();
+    assert(dnd_performance_visible() && dnd_input_buttons(0,1)==0x10);
+    for(int i=0;i<10;i++)dnd_input_poll();
+    assert(dnd_performance_visible()); /* Holding cannot flicker the overlay. */
+    raw.held=0; test_input_set(0,raw); dnd_input_poll();
+    assert(dnd_performance_visible()); /* Release does not toggle. */
+    raw.held=0x10; test_input_set(0,raw); dnd_input_poll();
+    assert(!dnd_performance_visible());
+    raw.connected=false; test_input_set(0,raw); dnd_input_poll();
+    raw.connected=true; test_input_set(0,raw); dnd_input_poll();
+    assert(!dnd_performance_visible()); /* Reconnect-held is also a baseline. */
+    for(int port=1;port<4;port++) {
+        raw.held=0; test_input_set(port,raw); dnd_input_poll();
+        raw.held=0x10; test_input_set(port,raw); dnd_input_poll();
+        assert(!dnd_performance_visible()); /* Only controller 1 owns the UI. */
+    }
+    dnd_input_shutdown();
+#endif
     puts("Controller transitions, calibration, snapshots, timed rumble and cleanup passed.");
 }

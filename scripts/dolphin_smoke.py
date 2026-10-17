@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Boot a freshly built DOL in Dolphin and reject executable/loader diagnostics.
 
-Exit 124 from GNU timeout is expected for a game that keeps running.
+Exit 124 denotes the hard deadline for a game that keeps running.
 Dolphin's own log is merged with stdout/stderr for troubleshooting.
 """
 import argparse
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import threading
+import time
 from dolphin_gdb_probe import ProbeResult, probe, probe_memory, probe_source, resolve_source, resolve_symbols, resolve_memory_expectations
 import sys
 
@@ -29,10 +31,57 @@ def check(log: str) -> list[str]:
             if any(pattern.search(line) for pattern in PATTERNS)]
 
 
+def collect_logs(stdout, user):
+    output=stdout.read_text(errors='replace') if stdout.exists() else ''
+    for path in sorted((user/'Logs').rglob('*')) if (user/'Logs').exists() else []:
+        if path.is_file() and path.suffix.lower() in ('.log','.txt'):
+            output+=f'\n--- {path.name} ---\n'+path.read_text(errors='replace')
+    return output
+
+
+def run_emulator(command, environment, stdout, seconds, completed=None, minimum_seconds=0):
+    """Stop only after explicit evidence, process failure or the hard deadline.
+
+    completed returns True when all assertions/required log markers are ready,
+    False after a probe failure, and None while evidence is still pending.
+    """
+    started=time.monotonic();intentional=False;status=None
+    with stdout.open('w') as log:
+        process=subprocess.Popen(command,stdout=log,stderr=subprocess.STDOUT,
+                                 env=environment,start_new_session=True)
+        try:
+            while True:
+                status=process.poll()
+                if status is not None: break
+                elapsed=time.monotonic()-started
+                evidence=completed() if completed else None
+                if evidence is False or (evidence is True and elapsed>=minimum_seconds):
+                    intentional=True;status=0;break
+                if elapsed>=seconds:
+                    intentional=True;status=124;break
+                time.sleep(.05)
+        finally:
+            observed=process.poll()
+            if observed is not None:
+                intentional=False
+            else:
+                os.killpg(process.pid,signal.SIGTERM)
+                try: process.wait(timeout=5)
+                except subprocess.TimeoutExpired: pass
+            # xvfb-run can exit before its Dolphin child handles SIGTERM.
+            try: os.killpg(process.pid,signal.SIGKILL)
+            except ProcessLookupError: pass
+            process.wait()
+    return status if intentional else process.returncode
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("dol", type=Path)
+    parser.add_argument("--disc", type=Path, help="Insert a default ISO while booting the DOL")
     parser.add_argument("--seconds", type=int, default=20)
+    parser.add_argument("--minimum-seconds", type=float, default=0,
+                        help="Retain a soak period after proof (for gameplay/audio checks)")
     parser.add_argument("--binary", default="/usr/games/dolphin-emu-nogui")
     parser.add_argument("--logs", type=Path, default=Path("dolphin-smoke"))
     parser.add_argument("--cpu-core", choices=[0, 1], type=int, default=0,
@@ -44,6 +93,8 @@ def main() -> int:
     parser.add_argument("--source-map", type=Path, help="Matching Portable PDB source map")
     parser.add_argument("--address-map", type=Path, help="PowerPC address map")
     parser.add_argument("--stack-steps", action="store_true", help="Verify DWARF managed stack and Step Over/Out")
+    parser.add_argument("--inspect-objects", action="store_true", help="Verify class fields, references and string previews through DAP")
+    parser.add_argument("--debugger-telemetry", action="store_true", help="Verify the adapter's disconnect report in guest RAM")
     parser.add_argument("--dap-adapter", type=Path, help="Built .NET DAP adapter DLL for source checks")
     parser.add_argument("--dotnet-probe", type=Path, help="Published .NET probe DLL for source checks")
     parser.add_argument("--expect-source", action="append", default=[], help="C# FILE:LINE in stop order")
@@ -53,6 +104,12 @@ def main() -> int:
     parser.add_argument("--expect-marker", help="Require a UART boot marker from the emulated program")
     parser.add_argument("--require-boot", action="store_true", help="Require Dolphin executable boot log")
     args = parser.parse_args()
+    if args.seconds<=0 or not 0<=args.minimum_seconds<=args.seconds:
+        parser.error('require 0 <= --minimum-seconds <= --seconds and a positive deadline')
+    if args.inspect_objects and not args.dap_adapter:
+        parser.error("--inspect-objects requires --dap-adapter")
+    if args.debugger_telemetry and not args.dap_adapter:
+        parser.error("--debugger-telemetry requires --dap-adapter")
     if not args.dol.is_file() or args.dol.stat().st_size < 256:
         parser.error("missing or truncated DOL")
     requires_gdb = bool(args.expect_symbol or args.expect_word or args.expect_text or args.expect_source)
@@ -76,6 +133,8 @@ def main() -> int:
     source_points = resolve_source(args.elf, args.source_map, args.address_map, args.expect_source) if args.expect_source else []
     memory_expected = resolve_memory_expectations(args.elf, args.expect_word, args.expect_text) if (args.expect_word or args.expect_text) else []
     completion = resolve_symbols(args.elf, [args.memory_after_symbol])[0] if args.memory_after_symbol else None
+    if args.disc and (not args.disc.is_file() or any(c in str(args.disc.resolve()) for c in "\r\n")):
+        parser.error("--disc requires an existing ISO path without newlines")
     args.logs.mkdir(parents=True, exist_ok=True)
     user = args.logs.resolve() / "user"
     user.mkdir(exist_ok=True)
@@ -83,7 +142,8 @@ def main() -> int:
     # logging in the isolated user directory rather than passing Qt GUI flags.
     config = user / "Config"
     config.mkdir(exist_ok=True)
-    (config / "Dolphin.ini").write_text(f"[Core]\nGFXBackend = Null\nCPUCore = {args.cpu_core}\nCPUThread = False\n[DSP]\nBackend = No Audio Output\n[Interface]\nDebugModeEnabled = True\n" +
+    (config / "Dolphin.ini").write_text(f"[Core]\nGFXBackend = Null\nCPUCore = {args.cpu_core}\nCPUThread = False\n" +
+        (f"DefaultISO = {args.disc.resolve()}\n" if args.disc else "") + "[DSP]\nBackend = No Audio Output\n[Interface]\nDebugModeEnabled = True\n" +
         (f"[General]\nGDBPort = {args.gdb_port}\n" if args.gdb_port else ""))
     (config / "Logger.ini").write_text(
         "[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 4\n"
@@ -101,19 +161,20 @@ def main() -> int:
     environment["XDG_CACHE_HOME"] = str(home / "cache")
     environment["DOLPHIN_EMU_USERPATH"] = str(user)
     environment["SDL_AUDIODRIVER"] = "dummy"
-    command = ["xvfb-run", "-a", "timeout", "--signal=TERM", "--kill-after=5s",
-               f"{args.seconds}s", args.binary, "--exec", str(args.dol.resolve())]
+    command = ["xvfb-run", "-a", args.binary, "--exec", str(args.dol.resolve())]
     print("Launching:", " ".join(command), flush=True)
     guest_state = []
+    probe_finished=threading.Event()
     if args.gdb_port:
-        def capture_guest_state():
+        def capture_guest_state_inner():
             if args.dap_adapter:
                 try:
                     result = subprocess.run([sys.executable, str(Path(__file__).with_name("dnd_dap_probe.py")),
                         "--adapter", str(args.dap_adapter), "--port", str(args.gdb_port),
                         "--elf", str(args.elf), "--source-map", str(args.source_map),
                         "--address-map", str(args.address_map),
-                        *(["--stack"] if args.stack_steps else []), *args.expect_source],
+                        *(["--stack"] if args.stack_steps else []), *(["--inspection"] if args.inspect_objects else []),
+                        *(["--telemetry"] if args.debugger_telemetry else []), *args.expect_source],
                         capture_output=True, text=True, timeout=max(2, args.seconds - 2))
                     guest_state.append(ProbeResult(result.returncode == 0, result.stdout + result.stderr))
                 except (OSError, subprocess.TimeoutExpired) as error:
@@ -134,25 +195,34 @@ def main() -> int:
                                probe_source(args.gdb_port, source_points, seconds=max(2, args.seconds - 2))
                                if source_points else
                                probe(args.gdb_port, expected, seconds=max(2, args.seconds - 2)))
+        def capture_guest_state():
+            try: capture_guest_state_inner()
+            except Exception as error: guest_state.append(ProbeResult(False,str(error)))
+            finally: probe_finished.set()
         diagnostic = threading.Thread(target=capture_guest_state, daemon=True)
         diagnostic.start()
-    completed = subprocess.run(command, stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT, text=True, errors="replace",
-                               timeout=args.seconds + 30, env=environment)
+    stdout=args.logs/'stdout.log'
+    def evidence_complete():
+        if not requires_gdb or not probe_finished.is_set(): return None
+        if not guest_state or not guest_state[0].success: return False
+        output=collect_logs(stdout,user)
+        if args.require_boot and not re.search(r'Booting from executable:.*\.dol',output,re.IGNORECASE):return None
+        if args.expect_marker and args.expect_marker not in output:return None
+        return True
+    started=time.monotonic()
+    returncode=run_emulator(command,environment,stdout,args.seconds,evidence_complete,args.minimum_seconds)
+    print(f'DND_DOLPHIN_ELAPSED_SECONDS={time.monotonic()-started:.3f}',flush=True)
     if args.gdb_port:
         diagnostic.join(timeout=1)
-    output = completed.stdout + ("\n" + "\n".join(result.message for result in guest_state) if guest_state else "")
-    for path in (user / "Logs").rglob("*") if (user / "Logs").exists() else []:
-        if path.is_file() and path.suffix.lower() in (".log", ".txt"):
-            output += f"\n--- {path.name} ---\n" + path.read_text(errors="replace")
+    output = collect_logs(stdout,user) + ("\n" + "\n".join(result.message for result in guest_state) if guest_state else "")
     (args.logs / "emulator.log").write_text(output)
     print(output[-12000:], flush=True)
     hits = check(output)
     if hits:
         print("DOL-specific emulator diagnostics:\n" + "\n".join(hits), file=sys.stderr)
         return 1
-    if completed.returncode not in (0, 124):
-        print(f"Dolphin exited abnormally: {completed.returncode}", file=sys.stderr)
+    if returncode not in (0, 124):
+        print(f"Dolphin exited abnormally: {returncode}", file=sys.stderr)
         return 1
     # A silent process running until timeout proves nothing: require evidence
     # from Dolphin's enabled BOOT logging that it attempted to boot the DOL.

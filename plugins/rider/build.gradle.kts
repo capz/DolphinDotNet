@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.19.0"
 }
 
-version = "0.1.0"
+version = "0.2.0"
 group = "com.dolphindotnet"
 repositories {
     mavenCentral()
@@ -15,6 +15,7 @@ dependencies {
         if (providers.gradleProperty("riderSdk").isPresent) local(providers.gradleProperty("riderSdk").get())
         else rider("2026.2.3.1")
         bundledModule("intellij.platform.debugger")
+        pluginVerifier()
     }
     implementation("org.eclipse.lsp4j:org.eclipse.lsp4j.debug:0.24.0")
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
@@ -26,8 +27,8 @@ intellijPlatform {
         name = "DolphinDotNet"
         ideaVersion { sinceBuild = "262"; untilBuild = "262.*" }
     }
+    pluginVerification { ides { current() } }
 }
-tasks.test { useJUnitPlatform() }
 val adapterOutput = layout.buildDirectory.dir("adapter")
 val publishAdapter by tasks.registering(Exec::class) {
     workingDir = rootDir.resolve("../..")
@@ -39,4 +40,11 @@ val publishAdapter by tasks.registering(Exec::class) {
 tasks.prepareSandbox {
     dependsOn(publishAdapter)
     from(adapterOutput) { into("${pluginName.get()}/adapter") }
+}
+
+tasks.test {
+    useJUnitPlatform()
+    dependsOn(publishAdapter)
+    systemProperty("dnd.adapter", adapterOutput.get().file("DolphinDotNet.DebugAdapter.dll").asFile.absolutePath)
+    systemProperty("dnd.repositoryRoot", rootDir.resolve("../..").canonicalPath)
 }

@@ -39,6 +39,38 @@ automatic and separate from input sampling.
 - Sticks use radial deadzones and a unit-circle magnitude limit; +X is right and
   +Y is up. Triggers range from 0 to 1. Digital L/R clicks remain separate.
 
+## Headless Dolphin acceptance
+
+`tests/ControllerDolphinSmoke` runs the public managed controller API against
+real emulated pads. `scripts/dolphin_controller_test.py` injects Dolphin pipe
+inputs on all four ports and synchronizes cases using guest breakpoints. It
+never writes input samples or expected results into guest RAM. The managed
+fixture checks all 12 buttons, press/hold/release, a simultaneous chord, both
+sticks in both directions, intermediate travel, diagonal normalization,
+deadzones, both triggers at five travel levels and port isolation. Repeated
+snapshot reads must preserve transitions. There are 285 cases.
+
+CI builds the AOT fixture with `tests/build_controller_dolphin.sh`, runs it with
+the headless Dolphin binary, and uploads the emulator log and passed-case list.
+To rerun against matching artifacts:
+
+```sh
+python3 scripts/dolphin_controller_test.py controller.dol --elf controller.elf \
+  --logs dolphin-controller --verify-rejection
+```
+
+This requires Linux, Dolphin's pipe input backend, `xvfb-run`, Python and
+`readelf`. It verifies the emulated input path; physical controller calibration,
+motor output and hot-unplug still require hardware. Native unit tests cover
+disconnect/reconnect transitions and rumble alarm cleanup separately.
+The negative control deliberately injects B instead of A and requires the
+specific managed assertion failure before running the complete positive suite.
+The suite passes on Dolphin 2503. It exposed and now guards the backend's
+connection mask: `PAD_ScanPads()` reports low bits 0–3, whereas
+`PAD_CHAN_BIT()` is the high-bit mask used by other PAD APIs. Intermediate stick
+checks also exposed a compiler stack-join bug that truncated float conditionals;
+typed arguments/locals now preserve floating-point values across those joins.
+
 ## Calibration
 
 Configure once per port; values take effect on the next update:

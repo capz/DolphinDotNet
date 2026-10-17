@@ -2,7 +2,7 @@
 #define DND_INPUT_H
 #include <stdbool.h>
 #include <stdint.h>
-enum { DND_PAD_BUTTON_START = 0x1000 };
+enum { DND_PAD_BUTTON_Z = 0x0010, DND_PAD_BUTTON_START = 0x1000 };
 enum { DND_INPUT_CONNECTED=1, DND_INPUT_CONNECTED_NOW=2,
        DND_INPUT_DISCONNECTED_NOW=4, DND_INPUT_RUMBLE=8 };
 typedef struct {

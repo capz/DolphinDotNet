@@ -24,8 +24,8 @@ internal static class Driver
                     "  doctor [--backend Auto|Native|Docker] [--dolphin PATH] [--build-only true]\n" +
                     "  build --assembly DLL --compiler DLL --native-directory DIR --dol DOL --elf ELF --run-config JSON\n" +
                     "        [--backend Auto|Native|Docker] [--dolphin PATH] [--user-directory DIR] [--jobs N]\n" +
-                     "        [--debug-symbols true|false] [--gdb-transport Off|Tcp|UsbGecko] [--gdb-channel 0|1] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
-                    "  run --config JSON [--dolphin PATH]");
+                     "        [--sample-controls true|false] [--debug-symbols true|false] [--gdb-transport Off|Tcp|UsbGecko] [--gdb-channel 0|1] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
+                    "  run --config JSON [--dolphin PATH] [--gdb-port PORT]");
                 return 0;
             }
             var options = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -40,23 +40,56 @@ internal static class Driver
                 throw new ArgumentException("Missing --" + key + ".");
             if (args[0] == "run")
             {
-                Allow(options, "config", "dolphin");
+                Allow(options, "config", "dolphin", "gdb-port");
                 var config = JsonSerializer.Deserialize<RunConfig>(File.ReadAllText(Required("config")))
                     ?? throw new InvalidDataException("Invalid Dolphin run configuration. Build the project first.");
                 if (!File.Exists(config.Dol) || new FileInfo(config.Dol).Length < 256)
                     throw new FileNotFoundException("DOL missing or truncated. Build the project before running.", config.Dol);
+                int? debuggerPort = null;
+                if (options.TryGetValue("gdb-port", out var port))
+                {
+                    if (!int.TryParse(port, out var number) || number is < 1 or > 65535)
+                        throw new ArgumentException("Dolphin --gdb-port must be between 1 and 65535.");
+                    debuggerPort = number;
+                }
                 var dolphin = FindDolphin(Get("dolphin", config.Dolphin));
-                Directory.CreateDirectory(Path.Combine(config.UserDirectory, "Config"));
-                var ini = Path.Combine(config.UserDirectory, "Config", "Dolphin.ini");
+                var launchUser = Path.GetFullPath(config.UserDirectory);
+                if (debuggerPort is not null)
+                {
+                    // Keep ordinary launches independent from a GDB listener.
+                    // Seed a separate profile with existing controller settings.
+                    var originalConfig = Path.Combine(launchUser, "Config");
+                    launchUser = Path.Combine(launchUser, "rider-debug");
+                    var debugConfig = Path.Combine(launchUser, "Config");
+                    Directory.CreateDirectory(debugConfig);
+                    if (Directory.Exists(originalConfig))
+                        foreach (var file in Directory.EnumerateFiles(originalConfig, "*.ini"))
+                        {
+                            var destination = Path.Combine(debugConfig, Path.GetFileName(file));
+                            if (!File.Exists(destination)) File.Copy(file, destination);
+                        }
+                }
+                Directory.CreateDirectory(Path.Combine(launchUser, "Config"));
+                var ini = Path.Combine(launchUser, "Config", "Dolphin.ini");
                 if (!File.Exists(ini))
                     File.WriteAllText(ini, "[Core]\nSIDevice0 = 6\nSIDevice1 = 6\n");
-                Console.WriteLine("Launching " + config.Dol + "\nDolphin user directory: " + config.UserDirectory);
-                return await Run(dolphin, ["--user", config.UserDirectory, "--exec", config.Dol], Path.GetDirectoryName(config.Dol)!);
+                if (debuggerPort is not null)
+                {
+                    var settings = File.ReadAllLines(ini).ToList();
+                    SetIniValue(settings, "General", "GDBPort", debuggerPort.Value.ToString());
+                    SetIniValue(settings, "Core", "CPUCore", "0");
+                    SetIniValue(settings, "Core", "CPUThread", "False");
+                    SetIniValue(settings, "Interface", "DebugModeEnabled", "True");
+                    File.WriteAllText(ini, string.Join("\n", settings) + "\n");
+                    Console.WriteLine($"Dolphin will wait for Rider at 127.0.0.1:{debuggerPort}.");
+                }
+                Console.WriteLine("Launching " + config.Dol + "\nDolphin user directory: " + launchUser + "\nDolphin settings: " + ini);
+                return await Run(dolphin, ["--user", launchUser, "--exec", config.Dol], Path.GetDirectoryName(config.Dol)!);
             }
             if (args[0] is not ("build" or "doctor")) throw new ArgumentException("Unknown command: " + args[0]);
             Allow(options, args[0] == "doctor" ? ["backend", "dolphin", "build-only"] :
                 ["assembly", "compiler", "native-directory", "dol", "elf", "run-config", "backend", "dolphin", "user-directory", "jobs",
-                  "debug-symbols", "gdb-transport", "gdb-channel", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
+                  "sample-controls", "debug-symbols", "gdb-transport", "gdb-channel", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
             string? native = null, dol = null, elf = null, runConfig = null, assembly = null, compiler = null;
             if (args[0] == "build")
             {
@@ -91,6 +124,8 @@ internal static class Driver
                 throw new ArgumentException("USB Gecko channel must be 0 (slot A) or 1 (slot B).");
             if (!bool.TryParse(Get("debug-symbols", "false"), out bool debugSymbols))
                 throw new ArgumentException("--debug-symbols must be true or false.");
+            if (!bool.TryParse(Get("sample-controls", "false"), out bool sampleControls))
+                throw new ArgumentException("--sample-controls must be true or false.");
             debugSymbols |= gdbTcp || gdbUsb;
             string backend = Get("backend", "Auto");
             if (backend.Equals("Auto", StringComparison.OrdinalIgnoreCase))
@@ -136,13 +171,28 @@ internal static class Driver
             var marker = Path.Combine(native!, ".dnd-build-directory");
             if (Directory.Exists(native))
             {
-                if (!File.Exists(marker)) throw new InvalidOperationException("Refusing to remove an unowned native work directory: " + native);
-                Directory.Delete(native, true);
+                if ((File.GetAttributes(native!) & FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidOperationException("The native work directory must not be a symbolic link: " + native);
+                if (!File.Exists(marker)) throw new InvalidOperationException("Refusing to remove an unowned native work directory: " + native +
+                    ". If this is a partial generated build from an older driver, remove only this native directory and rebuild; preserve the rest of obj for NuGet restore assets.");
+                // Keep the ownership marker throughout cleanup. A locked file or
+                // interrupted build must not turn our directory into an unowned one.
+                try
+                {
+                    foreach (var entry in Directory.EnumerateFileSystemEntries(native!))
+                        if (!string.Equals(entry, marker, StringComparison.Ordinal)) DeleteGeneratedEntry(entry);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    throw new IOException("Native cleanup failed in " + native +
+                        ". Close processes using these files or resolve permissions, then retry the build. The ownership marker was preserved. " + e.Message, e);
+                }
             }
             Directory.CreateDirectory(native!);
             File.WriteAllText(marker, "DolphinDotNet generated build directory\n");
             var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
             var compilerArgs = new List<string> { compiler!, "--bundle", assembly!, native! };
+            if (sampleControls) compilerArgs.Add("--sample-controls");
             if (debugSymbols) compilerArgs.Add("--debug-symbols");
             if (gdbUsb) compilerArgs.AddRange(["--gdb-usb", Get("gdb-channel", "1")]);
             if (gdbTcp)
@@ -209,6 +259,29 @@ internal static class Driver
         }
     }
 
+    static void SetIniValue(List<string> lines, string section, string key, string value)
+    {
+        var start = lines.FindIndex(line => line.Trim().Equals("[" + section + "]", StringComparison.OrdinalIgnoreCase));
+        if (start < 0)
+        {
+            lines.Add("[" + section + "]");
+            lines.Add(key + " = " + value);
+            return;
+        }
+        var end = start + 1;
+        while (end < lines.Count && !lines[end].TrimStart().StartsWith("[", StringComparison.Ordinal)) end++;
+        for (var index = start + 1; index < end; index++)
+        {
+            var separator = lines[index].IndexOf('=');
+            if (separator >= 0 && lines[index][..separator].Trim().Equals(key, StringComparison.OrdinalIgnoreCase))
+            {
+                lines[index] = key + " = " + value;
+                return;
+            }
+        }
+        lines.Insert(end, key + " = " + value);
+    }
+
     static bool Within(string directory, string path) => Path.GetFullPath(path).StartsWith(
         Path.TrimEndingDirectorySeparator(directory) + Path.DirectorySeparatorChar,
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ||
@@ -226,13 +299,28 @@ internal static class Driver
         if (Path.IsPathRooted(name) || name.Contains(Path.DirectorySeparatorChar) || name.Contains(Path.AltDirectorySeparatorChar))
             return File.Exists(name) ? Path.GetFullPath(name) : null;
         foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
-            foreach (var suffix in OperatingSystem.IsWindows() ? new[] { "", ".exe" } : new[] { "" })
+            foreach (var suffix in OperatingSystem.IsWindows() ? new[] { ".exe" } : new[] { "" })
             {
                 if (directory.Length == 0) continue;
-                string path = Path.Combine(directory.Trim('"'), name + suffix);
+                // Docker Desktop also ships an extensionless Unix shell script.
+                // Never pass that file (or a .cmd/.bat shim) to CreateProcess.
+                string path = Path.Combine(directory.Trim('"'),
+                    OperatingSystem.IsWindows() && Path.HasExtension(name) ? name : name + suffix);
                 if (File.Exists(path)) return path;
             }
         return null;
+    }
+
+    static void DeleteGeneratedEntry(string path)
+    {
+        var attributes = File.GetAttributes(path);
+        bool directory = (attributes & FileAttributes.Directory) != 0;
+        // Delete links themselves; never walk out of the owned build directory.
+        if (directory && (attributes & FileAttributes.ReparsePoint) == 0)
+            foreach (var entry in Directory.EnumerateFileSystemEntries(path)) DeleteGeneratedEntry(entry);
+        if ((attributes & FileAttributes.ReadOnly) != 0)
+            File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+        if (directory) Directory.Delete(path); else File.Delete(path);
     }
 
     static string RequireExecutable(string name) => Locate(name) ??

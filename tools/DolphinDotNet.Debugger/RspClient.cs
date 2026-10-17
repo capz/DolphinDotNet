@@ -20,6 +20,12 @@ public sealed class RspClient : IAsyncDisposable
     private readonly byte[] _byte = new byte[1];
     private readonly TimeSpan _timeout;
     private bool _disposed;
+    private volatile bool _interruptReplyPending;
+    private string? _interruptStopReply;
+    private bool _interruptEmptyReplyDrained;
+    private bool _interruptDuplicateStopDrained;
+    private volatile bool _continuing;
+    private bool _continueInterrupted;
 
     public RspClient(Stream stream, bool leaveOpen = true, TimeSpan? timeout = null)
     {
@@ -86,11 +92,31 @@ public sealed class RspClient : IAsyncDisposable
 
     public static string[] SerialPortNames() => SerialPort.GetPortNames();
 
+    /// <summary>Observe TCP EOF without consuming bytes owned by the RSP reader.</summary>
+    public bool IsTransportConnected
+    {
+        get
+        {
+            if (_disposed) return false;
+            try
+            {
+                return _owner switch
+                {
+                    TcpClient tcp => tcp.Client is Socket socket && !(socket.Poll(0, SelectMode.SelectRead) && socket.Available == 0),
+                    SerialPort serial => serial.IsOpen,
+                    _ => true
+                };
+            }
+            catch (Exception error) when (error is SocketException or ObjectDisposedException or IOException) { return false; }
+        }
+    }
+
     /// <summary>Perform one RSP request/response with bounded time and serialized access.</summary>
     public async Task<string> CommandAsync(string command, CancellationToken cancellationToken = default)
         => await CommandCoreAsync(command, false, cancellationToken).ConfigureAwait(false);
 
-    private async Task<string> CommandCoreAsync(string command, bool waitForStop, CancellationToken cancellationToken)
+    private async Task<string> CommandCoreAsync(string command, bool waitForStop, CancellationToken cancellationToken,
+        Func<bool>? interruptRequested = null)
     {
         if (string.IsNullOrEmpty(command) || command.Any(c => c is '$' or '#' or '}' or '*' || c > 0x7f))
             throw new ArgumentException("Invalid literal RSP command.", nameof(command));
@@ -101,13 +127,17 @@ public sealed class RspClient : IAsyncDisposable
         {
             ThrowIfDisposed();
             var frame = Encode(command);
-            await WriteAsync(frame, deadline.Token).ConfigureAwait(false);
+            await WriteAsync(frame, deadline.Token, startsContinue: waitForStop).ConfigureAwait(false);
+            // Pause may have arrived just before the continue frame was sent.
+            if (waitForStop && interruptRequested?.Invoke() == true)
+                await InterruptIfContinuingAsync(cancellationToken).ConfigureAwait(false);
             // A running target may legitimately take minutes to stop. The session
             // owns its cancellation and must interrupt/drain before another request.
             return await ReadReplyAsync(frame, waitForStop ? cancellationToken : deadline.Token).ConfigureAwait(false);
         }
         finally
         {
+            if (waitForStop) _continuing = false;
             _commands.Release();
         }
     }
@@ -130,8 +160,8 @@ public sealed class RspClient : IAsyncDisposable
     }
 
     public Task<RspStop> QueryStopAsync(CancellationToken token = default) => StopCommandAsync("?", token);
-    public async Task<RspStop> ContinueAsync(CancellationToken token = default)
-        => RspStop.Parse(await CommandCoreAsync("c", true, token).ConfigureAwait(false));
+    public async Task<RspStop> ContinueAsync(CancellationToken token = default, Func<bool>? interruptRequested = null)
+        => RspStop.Parse(await CommandCoreAsync("c", true, token, interruptRequested).ConfigureAwait(false));
     public Task<RspStop> StepInstructionAsync(CancellationToken token = default) => StopCommandAsync("s", token);
 
     private async Task<RspStop> StopCommandAsync(string command, CancellationToken token)
@@ -141,7 +171,34 @@ public sealed class RspClient : IAsyncDisposable
     public async Task InterruptAsync(CancellationToken token = default)
     {
         ThrowIfDisposed();
+        BeginInterrupt();
         await WriteAsync(new byte[] { 3 }, token).ConfigureAwait(false);
+    }
+
+    /// <summary>Interrupt an active continue once. Inspection/single-step commands
+    /// must finish their reply first; injecting a stop into them corrupts framing.</summary>
+    public async Task InterruptIfContinuingAsync(CancellationToken token = default)
+    {
+        await _writes.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            if (!_continuing || _continueInterrupted) return;
+            _continueInterrupted = true;
+            BeginInterrupt();
+            await _stream.WriteAsync(new byte[] { 3 }, token).ConfigureAwait(false);
+            await _stream.FlushAsync(token).ConfigureAwait(false);
+        }
+        finally { _writes.Release(); }
+    }
+
+    private void BeginInterrupt()
+    {
+        _continueInterrupted = true;
+        _interruptStopReply = null;
+        _interruptEmptyReplyDrained = false;
+        _interruptDuplicateStopDrained = false;
+        _interruptReplyPending = true;
     }
 
     public async Task SetSoftwareBreakpointAsync(uint address, CancellationToken token = default)
@@ -165,10 +222,21 @@ public sealed class RspClient : IAsyncDisposable
         if ((ulong)address + (uint)size > uint.MaxValue + 1UL)
             throw new ArgumentOutOfRangeException(nameof(address));
         var response = await CommandAsync($"m{address:x8},{size:x}", token).ConfigureAwait(false);
+        if (IsRemoteError(response)) throw new RspRemoteException("Target refused memory read at 0x" + address.ToString("x8") + ": " + response);
         if (response.Length != size * 2)
             throw new InvalidDataException("Incorrect GDB memory response length: " + response);
         try { return Convert.FromHexString(response); }
         catch (FormatException ex) { throw new InvalidDataException("Invalid GDB memory bytes.", ex); }
+    }
+
+    /// <summary>Bounded RSP writes for the adapter's optional overlay telemetry. DAP variable/memory mutation stays unsupported.</summary>
+    public async Task WriteMemoryAsync(uint address, ReadOnlyMemory<byte> bytes, CancellationToken token = default)
+    {
+        if (bytes.Length is < 1 or > 512 || (ulong)address + (uint)bytes.Length > uint.MaxValue + 1UL)
+            throw new ArgumentOutOfRangeException(nameof(bytes));
+        var reply = await CommandAsync($"M{address:x8},{bytes.Length:x}:{Convert.ToHexString(bytes.Span).ToLowerInvariant()}", token).ConfigureAwait(false);
+        if (reply.Length == 0 || IsRemoteError(reply)) throw new RspRemoteException("Target refused debugger telemetry write: " + reply);
+        if (reply != "OK") throw new InvalidDataException("Invalid GDB memory-write reply: " + reply);
     }
 
     /// <summary>Register bytes remain raw until the target's architecture/byte order is known.</summary>
@@ -176,6 +244,7 @@ public sealed class RspClient : IAsyncDisposable
     {
         if (index is < 0 or > 255) throw new ArgumentOutOfRangeException(nameof(index));
         var response = await CommandAsync($"p{index:x}", token).ConfigureAwait(false);
+        if (IsRemoteError(response)) throw new RspRemoteException("Target refused register read: " + response);
         if (response.Length == 0 || (response.Length & 1) != 0)
             throw new InvalidDataException("Invalid register response: " + response);
         try { return Convert.FromHexString(response); }
@@ -186,10 +255,19 @@ public sealed class RspClient : IAsyncDisposable
     {
         var rejected = 0;
         var invalid = 0;
+        var acknowledged = false;
         while (true)
         {
             var first = await ReadByteAsync(token).ConfigureAwait(false);
-            if (first == '+') continue;
+            if (first == '+')
+            {
+                acknowledged = true;
+                // A new execution command ends the previous pause's drain
+                // window. A queued interrupt for this continue opens its own.
+                if (lastCommand[1] == 's' || lastCommand[1] == 'c' && !_continueInterrupted)
+                    _interruptReplyPending = false;
+                continue;
+            }
             if (first == '-')
             {
                 if (++rejected > 3) throw new IOException("GDB repeatedly rejected the command checksum.");
@@ -218,9 +296,36 @@ public sealed class RspClient : IAsyncDisposable
                 continue;
             }
             await WriteAsync(new byte[] { (byte)'+' }, token).ConfigureAwait(false);
-            return Encoding.ASCII.GetString(Unescape(packet));
+            var reply = Encoding.ASCII.GetString(Unescape(packet));
+            // Dolphin's ReadCommand handles Ctrl-C by calling SendSignal, which
+            // overwrites its command buffer. The dispatch loop then interprets
+            // that buffer as an unknown command and sends an extra empty reply.
+            // It precedes the ACK for our next command. Never discard an empty
+            // reply after that ACK: it can legitimately mean unsupported.
+            if (_interruptReplyPending && !acknowledged && reply.Length == 0 && !_interruptEmptyReplyDrained)
+            {
+                _interruptEmptyReplyDrained = true;
+                continue;
+            }
+            // Dolphin's CPU pause loop can report another SIGTRAP after the
+            // initial Ctrl-C reply, sometimes at a later PC and after intervening
+            // inspection replies. Accept one such notification before a command
+            // ACK while still stopped. Other signals, repeated traps and traps
+            // after the current command's ACK remain protocol failures.
+            if (_interruptReplyPending && !acknowledged && _interruptStopReply is not null &&
+                !_interruptDuplicateStopDrained && IsTrapStop(_interruptStopReply) && IsTrapStop(reply))
+            {
+                _interruptDuplicateStopDrained = true;
+                continue;
+            }
+            if (_interruptReplyPending && _interruptStopReply is null && (reply.StartsWith('T') || reply.StartsWith('S')))
+                _interruptStopReply = reply;
+            return reply;
         }
     }
+
+    private static bool IsTrapStop(string reply)
+        => (reply.StartsWith('T') || reply.StartsWith('S')) && RspStop.Parse(reply) is { Exited: false, Signal: 5 };
 
     private static byte[] Unescape(List<byte> input)
     {
@@ -257,6 +362,9 @@ public sealed class RspClient : IAsyncDisposable
         _ => -1
     };
 
+    private static bool IsRemoteError(string reply)
+        => reply.Length == 3 && reply[0] == 'E' && Hex(reply[1]) >= 0 && Hex(reply[2]) >= 0;
+
     private static byte[] Encode(string command)
     {
         var payload = Encoding.ASCII.GetBytes(command);
@@ -278,7 +386,7 @@ public sealed class RspClient : IAsyncDisposable
         return _byte[0];
     }
 
-    private async Task WriteAsync(byte[] bytes, CancellationToken token)
+    private async Task WriteAsync(byte[] bytes, CancellationToken token, bool startsContinue = false)
     {
         await _writes.WaitAsync(token).ConfigureAwait(false);
         try
@@ -286,6 +394,11 @@ public sealed class RspClient : IAsyncDisposable
             ThrowIfDisposed();
             await _stream.WriteAsync(bytes, token).ConfigureAwait(false);
             await _stream.FlushAsync(token).ConfigureAwait(false);
+            if (startsContinue)
+            {
+                _continueInterrupted = false;
+                _continuing = true;
+            }
         }
         finally { _writes.Release(); }
     }
@@ -305,3 +418,6 @@ public sealed class RspClient : IAsyncDisposable
         _owner?.Dispose();
     }
 }
+
+/// <summary>A well-framed target refusal; unlike corrupt framing it does not desynchronize RSP.</summary>
+public sealed class RspRemoteException(string message) : Exception(message);

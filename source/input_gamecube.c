@@ -14,7 +14,9 @@ void dnd_input_backend_sample(DndInputSample samples[4]) {
     u32 connected=PAD_ScanPads();
     for (unsigned i=0; i<4; i++) {
         u32 type=0;
-        samples[i].connected=(connected & PAD_CHAN_BIT(i))!=0;
+        /* PAD_ScanPads returns low bits 0..3, unlike PAD_Read/PAD_Reset's
+         * high-bit PAD_CHAN_BIT mask. */
+        samples[i].connected=(connected & (1u<<i))!=0;
         samples[i].supports_rumble=samples[i].connected && PAD_GetType((int)i, &type) && !(type & SI_GC_NOMOTOR);
         samples[i].held=(uint16_t)PAD_ButtonsHeld((int)i);
         samples[i].stick_x=PAD_StickX((int)i); samples[i].stick_y=PAD_StickY((int)i);

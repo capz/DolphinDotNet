@@ -2,6 +2,8 @@
 #include "dnd_graphics.h"
 #include "dnd_console.h"
 #include "dnd_performance.h"
+#include "dnd_debug_heartbeat.h"
+#include "dnd_network_platform.h"
 #include "dnd_aram.h"
 #include <math.h>
 #include <string.h>
@@ -159,6 +161,14 @@ void dnd_graphics_end_triangles(void){if(!immediate_pass())return;if(!immediate_
 void dnd_graphics_begin_overlay(void) {
     if(dnd_performance_visible()) {
         uint64_t now=ticks_to_microsecs(gettime());
+        if(dnd_performance_connectivity_due(now)) {
+            uint32_t ip=0,mask=0,gateway=0;int dhcp=0;
+            int network=dnd_np_snapshot(&ip,&mask,&gateway,&dhcp);
+            if(network!=-1)dnd_performance_network(network,dhcp!=0,ip,mask,gateway);
+            bool configured=network==1 || dnd_performance_stats()->network_state==2;
+            dnd_performance_connectivity_sampled(now,configured?dnd_np_link():-1);
+            dnd_debug_heartbeat_tick(now,network,dnd_performance_stats()->network_link);
+        }
         if(dnd_performance_memory_due(now)) {
             struct mallinfo info=mallinfo();uint32_t total=SYS_GetPhysicalMem1Size(),aram_used=0,aram_total=0;
             uint64_t free_bytes=(uint64_t)SYS_GetArena1Size()+info.fordblks;

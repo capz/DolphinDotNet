@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Shared native sample controls: Z toggles statistics; Start leaves result screens. -->
+    <DndSampleControls Condition="'$(DndSampleControls)' == ''">true</DndSampleControls>
+  </PropertyGroup>
+</Project>

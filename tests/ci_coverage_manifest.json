@@ -1,0 +1,117 @@
+{
+  "managed": {
+    "compiler": [
+      "Validate HelloGameCube through current AOT path",
+      "Build managed GameCube sample",
+      "Lower managed GameCube dependency graph",
+      "Generate standalone GameCube AOT build bundle",
+      "Compile Google logo ARAM example through AOT",
+      "Compiler integration tests",
+      "Build control-flow smoke assembly",
+      "Build AOT smoke assembly",
+      "Lower AOT smoke assembly to native C",
+      "Compile generated AOT C",
+      "Compile and execute generic sharing integration smoke"
+    ],
+    "io": [
+      "Test and package save-image command-line tool",
+      "Validate standard List, comparers, streams, text and async state machines",
+      "Validate hardware probing contracts and AOT platform intrinsics",
+      "Validate controller and memory-card connection transitions",
+      "Verify disc identities and BNR1/BNR2 artwork metadata",
+      "Validate GameCube ISO image parser and mounted-image sample",
+      "Validate collections and storage I/O",
+      "Validate ARAM transfers and asset cache"
+    ],
+    "async-network": [
+      "Validate controller snapshots, bindings and executor ownership",
+      "Validate input contexts and binding capture",
+      "Validate clocks, frame timing, Task.Delay and captured timers",
+      "Validate 32-bit managed dispatch and GC",
+      "Validate network fixture watchdog",
+      "Validate automatic async HTTP and ARAM without application pumps",
+      "Validate cooperative async and namespace interoperability",
+      "Validate managed networking, DNS, HTTP and JSON",
+      "Validate documented async networking example"
+    ],
+    "audio-games": [
+      "Validate audio conversion and named loop sidecars",
+      "Validate native WAV parser, voice ownership and DSP controls",
+      "Validate GameCube audio containers, decoders and AESND callbacks",
+      "Validate GameCube audio awaits, background loading and cancellation",
+      "Compile managed AESND audio sample through current AOT pipeline",
+      "Test Pong gameplay and synthesized waveforms on host",
+      "Compile self-contained two-player Pong through managed AOT",
+      "Test Snake rules, state persistence and timed autosaves",
+      "Compile Snake save/load game through managed AOT"
+    ],
+    "graphics-model": [
+      "Validate raw and managed graphics layers",
+      "Convert, package and validate model assets",
+      "Validate model AOT, transforms, animation and ARAM residency",
+      "Validate background model awaits, rendering and in-flight cancellation"
+    ]
+  },
+  "gamecube": {
+    "emulator": [
+      "Build C# source-symbols-only Dolphin Emulator DOL",
+      "Build managed stack and source-stepping debugger fixture",
+      "Build object and string inspection debugger fixture",
+      "Build and validate self-contained Pong GameCube DOL",
+      "Build and validate Snake save/load GameCube DOL",
+      "Build bare-metal ELF/DOL to test emulator debugger",
+      "Build independent libogc emulator control DOL",
+      "Build automatic task execution DOL",
+      "Compile and link controller and timing ABI for PowerPC",
+      "Build managed controller pipe acceptance DOL",
+      "Report GameCube runtime footprint",
+      "Verify outputs",
+      "Build disc filesystem and DiscBrowser startup acceptance DOLs"
+    ],
+    "compat": [
+      "Build generated standalone GameCube project",
+      "Test native source-to-ELF address resolver",
+      "Link USB Gecko debugger GameCube bundle",
+      "Link opt-in GDB TCP GameCube bundle",
+      "Compile managed storage ABI for PowerPC",
+      "Compile standard library ABI for PowerPC",
+      "Compile managed ARAM ABI for PowerPC",
+      "Compile model and animation ABI for PowerPC",
+      "Compile and link graphics layers for PowerPC",
+      "Test DOL alignment handling",
+      "Compile and link managed networking for GameCube"
+    ],
+    "samples": [
+      "Link managed AESND sample to a real GameCube DOL",
+      "Link GameCube audio format loaders and async API",
+      "Build GameCube hardware discovery and reboot demo DOL",
+      "Build GameCube disc browser with libogc2 GC Loader sectors"
+    ]
+  },
+  "dolphin": {
+    "games": [
+      "Verify Pong synthesizes audio and presents frames in Dolphin",
+      "Verify Snake memory card initialization and frame rendering in Dolphin"
+    ],
+    "debugger": [
+      "Verify two consecutive C# source breakpoints in Dolphin",
+      "Verify managed stack and C# Step Over/Out in Dolphin",
+      "Verify DAP Csharp breakpoints and pause in Dolphin",
+      "Verify DAP managed stack, primitive inspection and Step Over/Out in Dolphin",
+      "Verify DAP object fields and string previews in Dolphin"
+    ],
+    "runtime": [
+      "Verify bare-metal main() guest PC",
+      "Verify independent libogc main() guest PC",
+      "Verify native and managed main() executed in Dolphin",
+      "Verify automatic async tasks complete and the service thread shuts down",
+      "Verify timing delays, callbacks and cleanup in Dolphin",
+      "Verify ISO mounts and file access with real GameCube newlib",
+      "Verify DiscBrowser starts without inserted media",
+      "Verify DiscBrowser reads inserted ISO metadata and files"
+    ],
+    "controllers": [
+      "Verify all four controllers through Dolphin pipe inputs"
+    ]
+  }
+}

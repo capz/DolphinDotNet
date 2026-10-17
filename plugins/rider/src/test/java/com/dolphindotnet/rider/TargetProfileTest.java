@@ -5,6 +5,18 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TargetProfileTest {
+    @Test void liveStatusIsOptionalAndCopiesItsSeparateEndpoint() {
+        var t = new TargetProfile(); t.heartbeatHost = " 192.168.1.2 "; t.heartbeatPort = 0;
+        assertEquals("192.168.1.2", t.attachArguments().get("heartbeatHost"));
+        assertEquals(0, t.attachArguments().get("heartbeatPort"));
+        assertEquals(t.heartbeatHost, t.copy().heartbeatHost);
+        assertEquals(0, t.copy().heartbeatPort);
+        for (var invalid : List.of("localhost", "192.168.1.256", "192.168.1.2.", "224.0.0.1", "0.0.0.0")) {
+            t.heartbeatHost = invalid; assertThrows(IllegalArgumentException.class, t::validate);
+        }
+        t.heartbeatHost = "192.168.1.2"; t.heartbeatPort = 65536;
+        assertThrows(IllegalArgumentException.class, t::validate);
+    }
     @Test void tcpArgumentsContainOnlyConnectionProperties() {
         var t = new TargetProfile(); t.name = "GameCube — BBA"; t.host = "192.168.1.80"; t.port = 2828;
         assertEquals(Map.of("transport", "tcp", "host", "192.168.1.80", "port", 2828, "timeoutSeconds", 10), t.attachArguments());

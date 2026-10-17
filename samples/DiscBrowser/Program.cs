@@ -1,12 +1,19 @@
+using System;
+using System.Collections.Generic;
 using Dolphin.Storage;
 using Dolphin.Diagnostics;
 
 internal static class Program
 {
-    private static void PrintFiles(string heading,string[] files)
+    private static void PrintFiles(string heading,IEnumerable<string> files)
     {
         DebugOverlay.WriteLine(heading);
-        for(int i=0;i<files.Length && i<8;i++)DebugOverlay.WriteLine(files[i]);
+        int count=0;
+        foreach(var file in files)
+        {
+            DebugOverlay.WriteLine(file);
+            if(++count==8)break;
+        }
     }
     private static void ShowMountedGame()
     {
@@ -19,28 +26,50 @@ internal static class Program
             // 96x32 RGBA pixels can also be supplied to Texture2D.Create.
             DebugOverlay.WriteLine("Banner RGBA size: "+identity.Banner.Rgba32.Length.ToString());
         }
-        PrintFiles("dvd:/ FST",Storage.GetFiles(StorageDevice.DvdDrive,""));
+        PrintFiles("dvd:/ FST",Storage.EnumerateFiles(StorageDevice.DvdDrive,""));
     }
     private static int Main()
     {
-        if(Storage.Mount(StorageDevice.GcLoader))
+        try { Browse();return 0; }
+        catch(Exception error)
         {
-            DebugOverlay.WriteLine("GC Loader volume: gcloader:/");
-            const string image="gcloader:/games/demo.iso";
-            if(Storage.FileExists(StorageDevice.GcLoader,"games/demo.iso") &&
-               Storage.MountDisc(image))
-            {
-                ShowMountedGame(); // Same dvd:/ API used for a real disc.
-                Storage.Unmount(StorageDevice.DvdDrive);
-            }
-            Storage.Unmount(StorageDevice.GcLoader);
+            DebugOverlay.WriteLine("DISC BROWSE FAILED");
+            DebugOverlay.WriteLine(error.Message);
+            return 1;
         }
-        // Real DVD and loaded ODE game both use the same dvd:/ view.
+    }
+    private static void Browse()
+    {
+        bool found=false;
+        // Prefer the current game. Probing GC Loader sectors resets the drive,
+        // so it must not run before browsing an already inserted disc.
+        // A DOL-only Dolphin launch has no disc; mounting must fail without waiting.
         if(Storage.MountDisc())
         {
-            ShowMountedGame();
-            Storage.Unmount(StorageDevice.DvdDrive);
+            try { ShowMountedGame(); }
+            finally { Storage.Unmount(StorageDevice.DvdDrive); }
+            return;
         }
-        return 0;
+
+        if(Storage.Mount(StorageDevice.GcLoader))
+        {
+            try
+            {
+                DebugOverlay.WriteLine("GC Loader volume: gcloader:/");
+                const string image="gcloader:/games/demo.iso";
+                if(Storage.FileExists(StorageDevice.GcLoader,"games/demo.iso") &&
+                   Storage.MountDisc(image))
+                {
+                    try { ShowMountedGame();found=true; }
+                    finally { Storage.Unmount(StorageDevice.DvdDrive); }
+                }
+            }
+            finally { Storage.Unmount(StorageDevice.GcLoader); }
+        }
+        if(!found)
+        {
+            DebugOverlay.WriteLine("NO GAMECUBE DISC OR DEMO ISO AVAILABLE");
+            DebugOverlay.WriteLine("INSERT A DISC OR CONFIGURE A DOLPHIN DEFAULT ISO");
+        }
     }
 }

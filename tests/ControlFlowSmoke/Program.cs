@@ -4,12 +4,17 @@ delegate int IntFn(int value);
 interface IValue { int GetValue(); }
 class VirtualBase { public int BaseField=4; public virtual int GetValue()=>3; }
 class VirtualDerived : VirtualBase, IValue { public int DerivedField=5; public override int GetValue()=>9; }
+struct Element { public int Value; }
 
 public static class Program
 {
     static int StaticValue=4;
     public static int Main()
     {
+        var elements=new Element[1];elements[0].Value=3;
+        if(elements[0].Value!=3)return -1001;
+        if(FloatArgument(-0.75f,true)!=-0.75f || FloatArgument(-0.75f,false)!=0.75f ||
+           FloatMagnitude(-1.5f)!=0.75f || FloatMagnitude(1.5f)!=0.75f)return -1000;
         var loop=LoopSum();
         var branches=BranchCases(7);
         var nested=Nested(3,8);
@@ -31,6 +36,8 @@ public static class Program
     }
 
     static int DelegateCase(){var fn=new IntFn(AddOne);return fn(10);}
+    static float FloatArgument(float value,bool choose)=>choose?value:-value;
+    static float FloatMagnitude(float value){var local=value*0.5f;return local<0?-local:local;}
     static int AddOne(int value)=>value+1;
 
     static int InterfaceIdentityCase(){object value=new VirtualDerived();return (value is IValue?4:0)+((IValue)value).GetValue();}

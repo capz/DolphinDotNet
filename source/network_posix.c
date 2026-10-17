@@ -15,11 +15,15 @@
 #include <stdio.h>
 #endif
 static int error_code,state;
+static uint32_t configured_ip,configured_mask,configured_gateway;
+static int configured_dhcp;
 static int result(int r){if(r>=0)return r;error_code=errno;return errno==EAGAIN||errno==EWOULDBLOCK||errno==EINPROGRESS||errno==EALREADY?DND_NET_WAIT:DND_NET_ERROR;}
 static struct sockaddr_in addr(uint32_t ip,int port){struct sockaddr_in a;memset(&a,0,sizeof(a));a.sin_family=AF_INET;a.sin_addr.s_addr=htonl(ip);a.sin_port=htons((uint16_t)port);return a;}
 static int nonblock(int fd){int f=fcntl(fd,F_GETFL,0);if(f<0||fcntl(fd,F_SETFL,f|O_NONBLOCK)<0){error_code=errno;close(fd);return DND_NET_ERROR;}return fd;}
-int dnd_np_start(uint32_t ip,uint32_t mask,uint32_t gateway,int dhcp){(void)ip;(void)mask;(void)gateway;(void)dhcp;state=1;return 0;}
+int dnd_np_start(uint32_t ip,uint32_t mask,uint32_t gateway,int dhcp){configured_ip=ip;configured_mask=mask;configured_gateway=gateway;configured_dhcp=dhcp;state=1;return 0;}
 int dnd_np_status(void){return state?1:-1;}
+int dnd_np_snapshot(uint32_t *ip,uint32_t *mask,uint32_t *gateway,int *dhcp){*ip=configured_ip;*mask=configured_mask;*gateway=configured_gateway;*dhcp=configured_dhcp;return dnd_np_status();}
+int dnd_np_link(void){return -1;}
 uint32_t dnd_np_time(void){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return (uint32_t)((uint64_t)t.tv_sec*1000+(uint64_t)t.tv_nsec/1000000);}
 int dnd_np_error(void){return error_code;}
 int dnd_np_open(int stream){int fd=socket(AF_INET,stream?SOCK_STREAM:SOCK_DGRAM,stream?IPPROTO_TCP:IPPROTO_UDP);return fd<0?result(fd):nonblock(fd);}
@@ -37,4 +41,7 @@ int dnd_np_write(int fd,const void *b,int count,int stream,uint32_t ip,int port)
 int dnd_np_endpoint(int fd,uint32_t *ip,int *port,int remote){struct sockaddr_in a;socklen_t n=sizeof(a);int r=remote?getpeername(fd,(struct sockaddr*)&a,&n):getsockname(fd,(struct sockaddr*)&a,&n);if(r<0)return result(r);*ip=ntohl(a.sin_addr.s_addr);*port=ntohs(a.sin_port);return 0;}
 int dnd_np_option(int fd,int opt,int value){return opt==0?result(setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&value,sizeof(value))):opt==1?result(setsockopt(fd,SOL_SOCKET,SO_BROADCAST,&value,sizeof(value))):DND_NET_ERROR;}
 void dnd_np_close(int fd){close(fd);}
+int dnd_np_monitor_open(void){int saved=error_code;int r=dnd_np_open(0);if(r>=0&&dnd_np_bind(r,0,0)<0){dnd_np_close(r);r=DND_NET_ERROR;}error_code=saved;return r;}
+int dnd_np_monitor_read(int fd,void *buffer,int count,uint32_t *ip,int *port){int saved=error_code;int r=dnd_np_read(fd,buffer,count,0,ip,port);error_code=saved;return r;}
+int dnd_np_monitor_write(int fd,const void *buffer,int count,uint32_t ip,int port){int saved=error_code;int r=dnd_np_write(fd,buffer,count,0,ip,port);error_code=saved;return r;}
 #endif

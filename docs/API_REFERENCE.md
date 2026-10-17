@@ -65,7 +65,46 @@ if (snapshot.IsPresent(HardwareKind.MemoryCard, HardwarePort.SlotA))
     LoadGame();
 ~~~
 
+### Dolphin.Hardware.MemoryCards — slot connection snapshots
+
+Call `MemoryCards.Update()` on the application executor, then
+`MemoryCards.GetState(MemoryCardSlot.A)` or `.B`. The immutable `MemoryCardState`
+exposes `IsConnected`, `WasConnected`, `WasDisconnected`, `IsKnown`, `Presence`
+and `ProbePresence`. Each update clears the previous transition flags. Initially
+presence is unknown; the first confirmed card reports `WasConnected`, while an
+initially empty slot does not report an unplug.
+
+`Presence` is the last confirmed physical presence. `ProbePresence` is the latest
+read, including Busy/Unknown/Unsupported. Such reads preserve confirmed state and
+emit no connection transition. A later confirmed removal still reports one unplug.
+No allocation is needed after initialization; cached reads do not probe hardware.
+Read/update the service on the application executor; copied states can be passed
+to background work. Callers choose polling cadence (for example every 250 ms),
+and transitions remain visible until the next `MemoryCards.Update()`.
+
+~~~csharp
+Controller.Update();
+if (Controller.GetState(0).WasDisconnected) PauseGame();
+
+MemoryCards.Update(); // Once per chosen card-poll tick, then read both slots.
+var cardA = MemoryCards.GetState(MemoryCardSlot.A);
+if (cardA.WasConnected) ShowCardInserted();
+if (cardA.WasDisconnected) ShowCardRemoved();
+~~~
+
+The example's handlers are application code. Probing never mounts, formats,
+resets or writes a card. Presence does not prove that the card is formatted,
+writable or mounted for the right save identity. Dispose old mount owners and
+explicitly mount the desired card for further saves; I/O errors remain possible
+between sampling and an operation. Slots owned by mounted SD devices report Busy.
+`Hardware.Refresh(Extended)` also probes actual memory-card presence even when
+storage still has a cached mount; Safe inventory retains its cached behavior.
+
 ## Controller input
+
+Controller snapshots already expose `IsConnected`, `WasConnected` and
+`WasDisconnected` independently for ports 0–3. Call `Controller.Update()` once
+per game tick before reading them.
 
 ### Dolphin.Input.Controller
 
@@ -676,7 +715,7 @@ Networking requires `await NetworkRuntime.StartAsync(...)`; the native service t
 
 ### Dolphin.Network.NetworkRuntime / NetworkOptions
 
-Start/stop GameCube networking with DHCP or static IPv4, DNS servers, retry timeout and operation status. `Pump` remains a compatibility hook but is not needed for ordinary awaits.
+Start/stop GameCube networking with DHCP or static IPv4, DNS servers, retry timeout and operation status. Defaults use DHCP and DNS server `8.8.8.8`. Set `NetworkOptions.DnsServers` to replace that resolver, or an empty array to disable hostname resolution. DHCP-advertised DNS servers are not imported. `Pump` remains a compatibility hook but is not needed for ordinary awaits.
 
 **API:** `StartAsync()`, `StartAsync(options,token)`, `IsReady`, `Options`, `PendingOperations`, `Stop()`, `Pump(maxOperations,maxMilliseconds)`, `NetworkOptions.UseDhcp/Address/Netmask/Gateway/DnsServers/DnsPort/OperationTimeoutMilliseconds`.
 

@@ -15,6 +15,11 @@ public sealed class SourceAddressMap
     private readonly Dictionary<uint, List<SourceLocation>> _locations = new();
     private readonly List<NativeMethod> _methods = new();
     private readonly List<UnwindRule> _unwind = new();
+    private readonly Dictionary<string, List<DebugVariable>> _variables = new(StringComparer.Ordinal);
+    private IReadOnlyDictionary<uint, DebugObjectLayout> _objectLayouts = new Dictionary<uint, DebugObjectLayout>();
+    public uint? DebuggerTelemetryAddress { get; private set; }
+    public uint? DebuggerHeartbeatAddress { get; private set; }
+    public bool DebuggerHeartbeatSupported { get; private set; }
 
     public static SourceAddressMap Load(string elf, string sourceMap, string addressMap)
     {
@@ -29,6 +34,27 @@ public sealed class SourceAddressMap
             !string.Equals(root.GetProperty("sourceMapSha256").GetString(), Convert.ToHexString(SHA256.HashData(source)), StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("ELF and C# debug metadata must belong to the same supported build.");
         var result = new SourceAddressMap();
+        result._objectLayouts = ObjectLayouts.Load(root);
+        if (root.TryGetProperty("debuggerTelemetry", out var telemetry))
+        {
+            var address = ParseAddress(telemetry.GetProperty("address").GetString());
+            if (telemetry.GetProperty("version").GetInt32() != 1 || telemetry.GetProperty("size").GetInt32() != 8 ||
+                address < 0x80000000 || address > 0x81800000 - 8)
+                throw new InvalidDataException("Unsupported debugger overlay telemetry.");
+            result.DebuggerTelemetryAddress = address;
+        }
+        if (root.TryGetProperty("debuggerHeartbeat", out var heartbeat))
+        {
+            var address = ParseAddress(heartbeat.GetProperty("address").GetString());
+            if (heartbeat.GetProperty("version").GetInt32() != 1 || heartbeat.GetProperty("size").GetInt32() != 24 ||
+                address < 0x80000000 || address > 0x81800000 - 24 || result.DebuggerTelemetryAddress is null)
+                throw new InvalidDataException("Unsupported debugger heartbeat metadata.");
+            result.DebuggerHeartbeatAddress = address;
+            result.DebuggerHeartbeatSupported = heartbeat.GetProperty("supported").GetBoolean();
+            var telemetryAddress = result.DebuggerTelemetryAddress.Value;
+            if ((ulong)address < (ulong)telemetryAddress + 8 && (ulong)telemetryAddress < (ulong)address + 24)
+                throw new InvalidDataException("Debugger heartbeat and status slots overlap.");
+        }
         var identities = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         if (managed.RootElement.TryGetProperty("methods", out var managedMethods))
             foreach (var method in managedMethods.EnumerateArray())
@@ -48,6 +74,30 @@ public sealed class SourceAddressMap
                 if (size == 0 || (ulong)begin + size > uint.MaxValue)
                     throw new InvalidDataException("Invalid native method extent.");
                 result._methods.Add(new NativeMethod(begin, begin + size, symbol, assembly, methodToken, methodName));
+            }
+            if (symbol is not null && method.TryGetProperty("variables", out var variables))
+            {
+                var entries = new List<DebugVariable>();
+                foreach (var variable in variables.EnumerateArray())
+                {
+                    var storage = variable.GetProperty("storageBytes").GetInt32();
+                    var group = variable.GetProperty("group").GetString()!;
+                    if (storage is not (4 or 8) || group is not ("Arguments" or "Locals"))
+                        throw new InvalidDataException("Unsupported debug variable metadata.");
+                    var location = variable.GetProperty("location");
+                    var kind = location.GetProperty("kind").GetString()!;
+                    var valueKind = variable.TryGetProperty("valueKind", out var vk) ? vk.GetString()! : "primitive";
+                    if (valueKind is not ("primitive" or "reference") || valueKind == "reference" && storage != 4)
+                        throw new InvalidDataException("Unsupported variable value kind.");
+                    if (kind is not ("cfaOffset" or "register" or "unavailable")) throw new InvalidDataException("Unsupported variable location.");
+                    var register = location.TryGetProperty("register", out var reg) ? reg.GetInt32() : 0;
+                    if (register is < 0 or > 31) throw new InvalidDataException("Invalid variable register.");
+                    entries.Add(new DebugVariable(variable.GetProperty("name").GetString()!, variable.GetProperty("type").GetString()!,
+                        group, storage, variable.GetProperty("visibleAddresses").EnumerateArray().Select(a => ParseAddress(a.GetString())).ToHashSet(),
+                        kind, location.TryGetProperty("offset", out var offset) ? offset.GetInt32() : 0, register,
+                        location.TryGetProperty("reason", out var reason) ? reason.GetString() : null, valueKind));
+                }
+                result._variables.Add(symbol, entries);
             }
             foreach (var point in method.GetProperty("breakpoints").EnumerateArray())
             {
@@ -123,11 +173,20 @@ public sealed class SourceAddressMap
         return methods.Length == 1 ? methods[0] : null;
     }
 
+    public IReadOnlyList<DebugVariable> FindVariables(uint address)
+    {
+        var symbol = FindMethod(address)?.Symbol;
+        return symbol is not null && _variables.TryGetValue(symbol, out var variables)
+            ? variables.Where(v => v.VisibleAddresses.Contains(address)).ToArray() : Array.Empty<DebugVariable>();
+    }
+
     public UnwindRule? FindUnwindRule(uint address)
     {
         var rows = _unwind.Where(row => row.Start <= address && address < row.End).ToArray();
         return rows.Length == 1 && rows[0].Supported ? rows[0] : null;
     }
+
+    public DebugObjectLayout? FindObjectLayout(uint typeAddress) => _objectLayouts.GetValueOrDefault(typeAddress);
 
     private static uint ParseAddress(string? text)
     {

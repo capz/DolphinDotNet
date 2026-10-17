@@ -21,7 +21,8 @@ class CiSelectionTests(unittest.TestCase):
         self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger/RspClient.cs"]), {"debugger", "rider", "gamecube", "dolphin"})
 
     def test_dap_dependency_selection(self):
-        self.assertEqual(ci.select(["tests/test_debug_adapter.py"]), {"debugger"})
+        self.assertEqual(ci.select(["tests/test_debug_adapter.py"]), {"debugger", "rider"})
+        self.assertEqual(ci.select(["tests/rider_dap_fixture.py"]), {"debugger", "rider"})
         for path in ["tools/DolphinDotNet.DebugAdapter/DebugSession.cs", "scripts/dnd_dap_probe.py"]:
             self.assertEqual(ci.select([path]), {"debugger", "rider", "gamecube", "dolphin"})
 

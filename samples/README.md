@@ -5,7 +5,7 @@ the GameCube runs generated native code, using only the supported AOT API subset
 
 | Sample | Demonstrates | Setup / result |
 | --- | --- | --- |
-| [HelloGameCube](HelloGameCube/Program.cs) | `int Main`, `DebugOverlay.WriteLine`, integer arithmetic and standard `Int32.ToString` | Prints a greeting and 42, then exits |
+| [HelloGameCube](HelloGameCube/Program.cs) | `int Main`, `DebugOverlay.WriteLine`, integer arithmetic and standard `Int32.ToString` | Prints a greeting and 42, then shows the result screen |
 | [ManagedGameCube](ManagedGameCube/Program.cs) | Cached controller snapshots, debug text and `ImmediateRenderer`; the scene belongs to `DemoScene`, not the framework | Rotating triangle; press Start on controller port 0 to exit |
 | [AsyncNetworking](AsyncNetworking/Program.cs) | Standard `async Task<int> Main`, `HttpClient`, `Task.Run` and `ConfigureAwait(false)`; bounded Dolphin JSON parsing | Local DNS/HTTP fixture defaults; returns 0 when JSON `value` is 42, otherwise 1 |
 | [HardwareDiagnostics](HardwareDiagnostics/Program.cs) | Safe/extended GameCube device scanning, presence status, physical reset button, controlled reboot | Controller 1 A scans, Start+X restarts, Start+Y requests menu |
@@ -15,6 +15,21 @@ the GameCube runs generated native code, using only the supported AOT API subset
 | [AudioDemo](AudioDemo/Program.cs) | AESND WAV effects and looping PCM music with async loading | Mount an SD device containing `audio/laser.wav` and `audio/theme.wav` (PCM WAV) |
 | [GoogleLogoAram](GoogleLogoAram/README.md) | Streamed HTTP to `AramStream` with standard `Stream.CopyToAsync`; partial-read-safe PNG signature verification | Run the PC relay and configure its LAN address; returns 0 on success, otherwise 1 |
 
+## Shared controls
+
+In every GameCube sample, press **Z on controller 1 (port 0)** to toggle the
+statistics panel, including its network and debugger status. Holding Z toggles
+only once; release and press again to toggle back. In Dolphin, use the keyboard
+or gamepad input mapped to the GameCube **Z button** in Controller Settings.
+ManagedGameCube starts with statistics visible; the other samples start hidden.
+
+When a sample's managed Main finishes, the native launcher keeps its result
+screen open: Z still toggles statistics and **Start** exits. Async demos reach
+this screen after their operation completes or fails. Games retain their existing
+controls during play. The shared `samples/Directory.Build.props` enables this
+behavior with `DndSampleControls`; set it to `false` to restore immediate exit.
+Applications outside `samples` keep their existing input and exit behavior.
+
 ## Build a GameCube DOL
 
 Every sample has a solution named after its directory, such as
@@ -23,9 +38,9 @@ Install .NET 8, Dolphin, and Docker with Linux containers, or a native
 Linux/macOS devkitPPC/libogc2 toolchain; see [IDE setup](../docs/ide-workflow.md).
 
 - **Visual Studio:** open the sample's `.sln`, select its executable as the
-  startup project, choose **Dolphin**, and press **Ctrl+F5**.
+  startup project, choose **Dolphin Play**, and press **Ctrl+F5**.
 - **Rider:** open the sample's `.sln`, disable **Use ReSharper Build**, select
-  **<sample> in Dolphin**, and click **Run**.
+  **<sample> in Dolphin (play without debugger)**, and click **Run**.
 
 Choose any sample directory name from the table for the CLI:
 
@@ -42,7 +57,74 @@ own Dolphin settings in `obj/dolphin-user/`. Configure controllers, storage and
 networking as required by the table above; building does not provision external
 assets or network services.
 
-### Manual bundle generation
+## Debug builds and Rider attach
+
+All samples use the shared DolphinDotNet SDK and compiler. Debug builds preserve
+Portable PDB locals and publish the source/address maps Rider needs by default;
+Release builds retain their normal optimization policy. Sample projects follow
+those shared defaults instead of forcing optimization in Debug.
+
+From the repository root, substitute any sample name from the table:
+
+```powershell
+dotnet build samples/Snake/Snake.sln -c Debug
+python scripts/validate_sample_build.py samples/Snake
+```
+
+The validator checks the DOL, PowerPC ELF, launcher, LF-only bundled shell script,
+matching map hashes and verified breakpoint addresses in the sample's own
+`Program.cs`. A successful build must produce these files together:
+
+```text
+samples/<sample>/bin/Debug/net8.0/<sample>.dol
+samples/<sample>/bin/Debug/net8.0/<sample>.elf
+samples/<sample>/bin/Debug/net8.0/<sample>.dnd-debug.json
+samples/<sample>/bin/Debug/net8.0/<sample>.dnd-addresses.json
+```
+
+In Rider, open that sample's solution. Its existing **<sample> in Dolphin**
+configuration now launches with GDB enabled and waits for Rider; **<sample> in
+Dolphin (wait for Rider)** is an equivalent alias. To play normally, select
+**<sample> in Dolphin (play without debugger)**. Debug **CLI** / project launches
+also wait on port 2166; Release CLI launches run normally. For debugging, install
+the [Rider attach plugin](../docs/rider-debugging.md),
+run **<sample> in Dolphin**, and add **DolphinDotNet Attach**. That launch creates
+the emulator's GDB settings automatically in a separate profile, prints their
+location, and waits for Rider at **127.0.0.1:2166**. No manual `Dolphin.ini` edit
+is needed. If the configuration is not imported, create a **.NET Launch Settings
+Profile** configuration for that sample's **Dolphin Debug** profile with a Build task.
+Choose `samples/<sample>/bin/Debug/net8.0` as its debug build folder, then save
+and select a TCP target matching Dolphin's host and GDB port. When opening the
+sample's solution directly, the folder is `$PROJECT_DIR$/bin/Debug/net8.0`.
+Select the attach configuration before placing C# gutter breakpoints.
+
+To build and validate every sample in PowerShell:
+
+```powershell
+Get-ChildItem samples/*/*.sln | ForEach-Object {
+    dotnet build $_.FullName -c Debug
+    if ($LASTEXITCODE -ne 0) { throw "Build failed: $($_.Name)" }
+}
+python scripts/validate_sample_build.py
+```
+
+The same validation runs in CI after every sample's container build. Windows,
+macOS and Linux host checks also verify every sample's SDK imports, launch target,
+and evaluated Debug/Release settings.
+
+The shared build fixes apply to every sample: Windows selects `docker.exe`, native
+cleanup handles read-only Git metadata and retains ownership on failure, emitted
+Bash scripts use LF, and full Windows PDB filenames survive native address mapping.
+See [build troubleshooting](../docs/ide-workflow.md) for restore errors and recovery
+from partial directories left by older drivers. Keep `obj/project.assets.json`
+when removing a partial `obj/Debug/net8.0/native` directory. `dotnet build` restores
+packages automatically. `DndDebugSymbols=false` is an explicit opt-out from maps.
+
+This verifies compilation and debugger artifacts. Each sample still needs the
+controllers, storage, assets or services listed above; interactive Rider and
+physical console acceptance remain separate checks.
+
+## Manual bundle generation
 
 For a standalone bundle, opt out of the integrated native build first:
 
