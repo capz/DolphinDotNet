@@ -1,5 +1,16 @@
 <Project>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <!-- Resolve defaults after project/local settings and Configuration are known. -->
+  <PropertyGroup>
+    <DndDebugSymbols Condition="'$(DndDebugSymbols)' == '' and '$(Configuration)' == 'Debug'">true</DndDebugSymbols>
+    <DndDebugSymbols Condition="'$(DndDebugSymbols)' == ''">false</DndDebugSymbols>
+  </PropertyGroup>
+  <!-- Preserve PDB locals before CIL lowering for a debug build.
+       Release builds keep their existing optimization policy. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug' and ('$(DndDebugSymbols)' == 'true' or '$(DndGdbTransport)' == 'Tcp' or '$(DndGdbTransport)' == 'UsbGecko')">
+    <Optimize>false</Optimize>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
   <!-- A direct process invocation keeps spaces, quotes and shell metacharacters
        in project/tool paths out of a command shell, on both MSBuild runtimes. -->
   <UsingTask TaskName="DndRunTool" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
@@ -71,6 +82,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
     <DolphinUserDirectory Condition="'$(DolphinUserDirectory)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(BaseIntermediateOutputPath)dolphin-user'))</DolphinUserDirectory>
     <RunCommand>$(_DndDotnet)</RunCommand>
     <RunArguments>&quot;$(TargetDir)DolphinDotNet.Build.dll&quot; run --config &quot;$(TargetDir)dolphin-run.json&quot;</RunArguments>
+    <RunArguments Condition="'$(Configuration)' == 'Debug' and '$(DndDebugSymbols)' == 'true'">$(RunArguments) --gdb-port 2166</RunArguments>
     <RunWorkingDirectory>$(TargetDir)</RunWorkingDirectory>
   </PropertyGroup>
   <Target Name="BuildDol" AfterTargets="Build"

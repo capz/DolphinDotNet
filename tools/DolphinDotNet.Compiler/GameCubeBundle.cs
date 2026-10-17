@@ -119,8 +119,10 @@ internal static class GameCubeBundle
             // EXI_Sync in Dolphin's default hardware configuration.
             Directory.CreateDirectory(Path.Combine(directory, "vendor", "libogc2"));
             foreach (var file in new[] { "build_exi_overlay.sh", "verify_exi_source.py" })
-                File.Copy(Path.Combine(root, "scripts", file),
-                    Path.Combine(directory, "scripts", file), true);
+                // Existing Windows checkouts and packaged compilers can still
+                // contain CRLF even with the repository's LF checkout rule.
+                File.WriteAllText(Path.Combine(directory, "scripts", file),
+                    File.ReadAllText(Path.Combine(root, "scripts", file)).ReplaceLineEndings("\n"));
             File.Copy(Path.Combine(root, "vendor", "libogc2", "exi.c"),
                 Path.Combine(directory, "vendor", "libogc2", "exi.c"), true);
         }
@@ -146,6 +148,7 @@ internal static class GameCubeBundle
                     signature = method.Key.Signature,
                     methodToken = System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(
                         compilation.Model.Methods[method.Key].Handle),
+                    variables = sourceMap!.Variables[method.Key].Select(v => new { nativeName = v.NativeName, name = v.Name, type = v.Type, group = v.Group, storageBytes = v.StorageBytes, scopeStart = v.ScopeStart, scopeEnd = v.ScopeEnd, valueKind = v.ValueKind }),
                     sourceLocations = sourceMap.Methods[method.Key]
                         .OrderBy(location => location.Key)
                         .Select(location => new
@@ -168,12 +171,18 @@ internal static class GameCubeBundle
                 JsonSerializer.Serialize(new
                 {
                     schemaVersion = 2,
-                    assemblies = sourceMap.Assemblies
+                    inspection = DebugInspectionMetadata.Build(compilation),
+                    debuggerTelemetry = new { version = 1, nativeSymbol = "dnd_debugger_telemetry", size = 8 },
+                    debuggerHeartbeat = new { version = 1, nativeSymbol = "dnd_debugger_heartbeat", size = 24, supported = gdbTcp is null },
+                    assemblies = sourceMap!.Assemblies
                         .Select(identity => new { name = identity.Name,
                             moduleVersionId = identity.ModuleVersionId, pdbId = identity.PdbId }),
                     methods
                 },
                     new JsonSerializerOptions { WriteIndented = true }));
+            File.AppendAllText(Path.Combine(directory, "source", "generated_program.c"),
+                "\n_Static_assert(sizeof(void*) == 4 && sizeof(DndObject) == 8, \"debug inspection requires PowerPC32 object ABI\");\n" +
+                "_Static_assert(offsetof(DndString, length) == 8 && offsetof(DndString, chars) == 12, \"debug string ABI mismatch\");\n");
         }
 
         if (gdbTcp is not null || gdbUsb is not null)
@@ -187,23 +196,27 @@ internal static class GameCubeBundle
             var init = gdbUsb is not null
                 ? $"DEBUG_Init(GDBSTUB_DEVICE_USB, {gdbUsb.Channel});"
                 : $"DEBUG_Init(GDBSTUB_DEVICE_TCP, {gdbTcp!.Port});";
+            static string IpWord(string address) => "0x" + Convert.ToHexString(System.Net.IPAddress.Parse(address).GetAddressBytes()).ToLowerInvariant() + "u";
+            var networkReport = gdbTcp is null ? "" :
+                $"    dnd_performance_network(2, false, {IpWord(tcpIp)}, {IpWord(tcpMask)}, {IpWord(tcpGateway)});\n";
             File.WriteAllText(Path.Combine(directory, "source", "debug_gamecube.c"),
-                "#include <debug.h>\n" +
+                "#include <debug.h>\n#include \"dnd_performance.h\"\n" +
                 $"const char *tcp_localip = \"{tcpIp}\";\n" +
                 $"const char *tcp_netmask = \"{tcpMask}\";\n" +
                 $"const char *tcp_gateway = \"{tcpGateway}\";\n" +
                 "void dnd_gdb_init(void) {\n" +
+                networkReport +
                 $"    {init}\n" +
                 "    _break(); /* Wait at a deterministic startup rendezvous. */\n" +
                 "}\n");
         }
 
         var sources = new[] {
-            "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "fst",
+            "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "debug_heartbeat", "fst",
             "fst_gamecube", "iso_file", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
             "model_graphics", "model_transform", "network", "network_gamecube",
-            "network_gamecube_backend", "performance", "platform_gamecube",
+            "network_gamecube_backend", "network_link_gamecube", "performance", "platform_gamecube",
             "storage", "storage_gamecube", "stw", "system", "text", "timing", "worker"
         };
 
@@ -271,6 +284,7 @@ internal static class GameCubeBundle
     private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool gdbUsb, bool debugSymbols)
     {
         var isWiiU = platform == "wiiu";
+        var overlayTelemetry = debugSymbols && platform == "gamecube";
         var rules = isWiiU ? "$(DEVKITPRO)/wut/share/wut_rules"
             : "$(DEVKITPRO)/libogc2/" + (platform == "wii" ? "wii_rules" : "gamecube_rules");
         var suffix = isWiiU ? "rpx" : "dol";
@@ -298,8 +312,11 @@ internal static class GameCubeBundle
                 gdbUsb ? " -DDND_GAMECUBE_STORAGE -DDND_GDB_ENABLED" +
                     (usesNetworking ? "" : " -DDND_NO_AUTONETWORK") :
                 usesNetworking ? " -DDND_GAMECUBE_STORAGE" :
-                " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK"));
-        builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
+                " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK") +
+            (overlayTelemetry ? " -DDND_DEBUG_TELEMETRY" : ""));
+        // Keep the reporting slot even when the app has not enabled/drawn the overlay yet.
+        builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") +
+            (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry -Wl,--undefined=dnd_debugger_heartbeat" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
         builder.AppendLine("ifneq ($(BUILD),$(notdir $(CURDIR)))");
         builder.AppendLine(".DEFAULT_GOAL := all");
         builder.AppendLine("export OUTPUT := $(CURDIR)/$(TARGET)");

@@ -4,21 +4,78 @@ The probe records launch arguments; actual DOL compilation/boot stays in the
 GameCube CI job. No installed Dolphin, Docker daemon or console SDK is required.
 """
 import json
+import configparser
 import os
 from pathlib import Path
 import shutil
+import shlex
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 from xml.sax.saxutils import escape
+import xml.etree.ElementTree as ET
 
 root = Path(__file__).resolve().parents[1]
 driver = root / "tools/DolphinDotNet.Build/bin/Debug/net8.0/DolphinDotNet.Build.dll"
 probe_output = root / "tests/DolphinLaunchProbe/bin/Debug/net8.0"
 dotnet = shutil.which("dotnet")
 assert dotnet and driver.exists()
+
+# Every sample must keep the shared fixes and point its IDE launch profile at
+# its own project. Evaluate actual MSBuild settings rather than inspecting text.
+primary_launches = []
+play_launches = []
+for project in sorted((root / 'samples').glob('*/*.csproj')):
+    sample = project.stem
+    tree = ET.parse(project).getroot()
+    imports = [(project.parent / node.attrib['Project']).resolve() for node in tree.findall('Import')]
+    sdk = root / 'sdk/DolphinDotNet.Sdk/Sdk'
+    assert imports == [sdk / 'Sdk.props', sdk / 'Sdk.targets'], project
+    assert (project.parent / f'{sample}.sln').is_file(), project
+    launch = json.loads((project.parent / 'Properties/launchSettings.json').read_text())['profiles']
+    assert launch['CLI']['commandName'] == 'Project', project
+    assert launch['Dolphin']['executablePath'] == 'dotnet', project
+    assert 'DolphinDotNet.Build.dll' in launch['Dolphin']['commandLineArgs'], project
+    assert launch['Dolphin']['workingDirectory'] == '$(TargetDir)', project
+    run = ET.parse(project.parent / f'.run/{sample}.run.xml')
+    options = {node.attrib['name']: node.attrib.get('value') for node in run.findall('.//configuration/option')}
+    assert options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
+    assert options['LAUNCH_PROFILE_NAME'] == 'Dolphin Debug', project
+    primary_launches.append((sample, launch[options['LAUNCH_PROFILE_NAME']]['commandLineArgs']))
+    assert run.find('.//method/option[@name="Build"]') is not None, project
+    play_run = ET.parse(project.parent / f'.run/{sample}.play.run.xml')
+    play_options = {node.attrib['name']: node.attrib.get('value') for node in play_run.findall('.//configuration/option')}
+    assert play_options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
+    assert play_options['LAUNCH_PROFILE_NAME'] == 'Dolphin Play', project
+    play_launches.append((sample, launch[play_options['LAUNCH_PROFILE_NAME']]['commandLineArgs']))
+    assert play_run.find('.//method/option[@name="Build"]') is not None, project
+    debug_launch = launch['Dolphin Debug']
+    assert debug_launch['executablePath'] == 'dotnet', project
+    assert debug_launch['commandLineArgs'] == launch['Dolphin']['commandLineArgs'], project
+    assert debug_launch['commandLineArgs'] == launch['Dolphin Play']['commandLineArgs'] + ' --gdb-port 2166', project
+    primary_launches.append((sample + ' Dolphin profile', launch['Dolphin']['commandLineArgs']))
+    debug_run = ET.parse(project.parent / f'.run/{sample}.debug.run.xml')
+    debug_options = {node.attrib['name']: node.attrib.get('value') for node in debug_run.findall('.//configuration/option')}
+    assert debug_options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
+    assert debug_options['LAUNCH_PROFILE_NAME'] == 'Dolphin Debug', project
+    assert debug_run.find('.//method/option[@name="Build"]') is not None, project
+    for configuration in ('Debug', 'Release'):
+        result = subprocess.run([dotnet, 'msbuild', str(project), '-p:Configuration=' + configuration,
+                                 '-getProperty:DndDebugSymbols,Optimize,DebugType,RunArguments,TargetDir'],
+                                capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, result.stdout + result.stderr
+        properties = json.loads(result.stdout)['Properties']
+        assert properties['DndDebugSymbols'] == str(configuration == 'Debug').lower(), (project, properties)
+        assert properties['Optimize'] == str(configuration == 'Release').lower(), (project, properties)
+        if configuration == 'Debug':
+            assert properties['DebugType'] == 'portable', (project, properties)
+            assert '--gdb-port 2166' in properties['RunArguments'], (project, properties)
+            primary_launches.append((sample + ' CLI', properties['RunArguments'].replace(properties['TargetDir'], '$(TargetDir)')))
+        else:
+            assert '--gdb-port' not in properties['RunArguments'], (project, properties)
 
 
 def call(*args, env=None, expected=0):
@@ -29,7 +86,10 @@ def call(*args, env=None, expected=0):
 
 
 with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
-    work = Path(temp)
+    # Windows runners may supply an 8.3 TEMP path (RUNNER~1). The driver's
+    # Path.GetFullPath expands it for the Dolphin user directory. Compare the
+    # same canonical path for both ordinary and debugger launch assertions.
+    work = Path(temp).resolve()
     probe_dir = work / "tools with spaces"
     shutil.copytree(probe_output, probe_dir)
     probe = probe_dir / ("DolphinLaunchProbe.exe" if os.name == "nt" else "DolphinLaunchProbe")
@@ -43,12 +103,77 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
     env.pop("DOLPHIN_PATH", None)
     config.write_text(json.dumps({"Dol": str(dol), "Dolphin": str(probe), "UserDirectory": str(user)}))
     call("run", "--config", config, env=env)
-    assert json.loads(capture.read_text())["Arguments"] == ["--user", str(user), "--exec", str(dol)]
+    actual = json.loads(capture.read_text())["Arguments"]
+    expected = ["--user", str(user), "--exec", str(dol)]
+    assert actual == expected, (actual, expected)
     ini = user / "Config/Dolphin.ini"
     assert "SIDevice1 = 6" in ini.read_text()
     ini.write_text("[Core]\nSIDevice1 = 0\n")
     call("run", "--config", config, env={**env, "DND_PROBE_EXIT": "17"}, expected=17)
     assert "SIDevice1 = 0" in ini.read_text()  # Never overwrite personal settings.
+    # Execute each primary Rider profile's resolved command, not just a hand-
+    # written --gdb-port invocation. This catches the original configuration
+    # still launching the ordinary profile after adding a new debug alias.
+    profile_output = work / 'resolved Rider output'
+    profile_output.mkdir()
+    for suffix in ('.dll', '.deps.json', '.runtimeconfig.json'):
+        shutil.copy2(driver.parent / ('DolphinDotNet.Build' + suffix), profile_output)
+    (profile_output / 'dolphin-run.json').write_text(config.read_text())
+    for sample, template in primary_launches:
+        resolved = template.replace('$(TargetDir)', str(profile_output) + os.sep)
+        result = subprocess.run([dotnet, *shlex.split(resolved)], env=env,
+                                capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, (sample, result.stdout, result.stderr)
+        assert '127.0.0.1:2166' in result.stdout, (sample, result.stdout)
+        assert json.loads(capture.read_text())['Arguments'][1] == str(user / 'rider-debug'), sample
+        assert 'GDBPort = 2166' in (user / 'rider-debug/Config/Dolphin.ini').read_text(), sample
+    for sample, template in play_launches:
+        resolved = template.replace('$(TargetDir)', str(profile_output) + os.sep)
+        result = subprocess.run([dotnet, *shlex.split(resolved)], env=env,
+                                capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, (sample, result.stdout, result.stderr)
+        assert 'wait for Rider' not in result.stdout, (sample, result.stdout)
+        assert json.loads(capture.read_text())['Arguments'][1] == str(user), sample
+    # Start the following isolation checks from a fresh debugger profile.
+    shutil.rmtree(user / 'rider-debug')
+    # Opt-in GDB launch creates the actual settings file under the configured
+    # user path, and leaves ordinary launches and their controller settings alone.
+    ini.write_text('[Core]\nSIDevice1 = 0\nCPUCore = 1\nCPUThread = True\n'
+                   '[General]\nGDBPort = 0\n[Interface]\nThemeName = KeepMe\n')
+    original_ini = ini.read_bytes()
+    controller = user / 'Config/GCPadNew.ini'
+    controller.write_text('[GCPad1]\nDevice = test keyboard\n')
+    output = call('run', '--config', config, '--gdb-port', '2166', env=env)
+    debug_user = user / 'rider-debug'
+    debug_ini = debug_user / 'Config/Dolphin.ini'
+    assert str(debug_ini) in output and '127.0.0.1:2166' in output
+    assert json.loads(capture.read_text())['Arguments'] == ['--user', str(debug_user), '--exec', str(dol)]
+    settings = configparser.ConfigParser()
+    settings.read(debug_ini)
+    assert settings['General']['GDBPort'] == '2166'
+    assert settings['Core']['CPUCore'] == '0' and settings['Core']['CPUThread'] == 'False'
+    assert settings['Interface']['DebugModeEnabled'] == 'True'
+    assert settings['Interface']['ThemeName'] == 'KeepMe' and settings['Core']['SIDevice1'] == '0'
+    assert ini.read_bytes() == original_ini
+    assert (debug_user / 'Config/GCPadNew.ini').read_bytes() == controller.read_bytes()
+    # Debug controller changes survive subsequent debug runs and port changes.
+    (debug_user / 'Config/GCPadNew.ini').write_text('[GCPad1]\nDevice = debug keyboard\n')
+    call('run', '--config', config, '--gdb-port', '2170', env=env)
+    assert debug_ini.read_text().count('GDBPort =') == 1 and 'GDBPort = 2170' in debug_ini.read_text()
+    assert 'debug keyboard' in (debug_user / 'Config/GCPadNew.ini').read_text()
+    call('run', '--config', config, env=env)
+    assert json.loads(capture.read_text())['Arguments'][1] == str(user)
+    assert ini.read_bytes() == original_ini
+    for port in ('0', '-1', '65536', 'invalid'):
+        capture.unlink(missing_ok=True)
+        output = call('run', '--config', config, '--gdb-port', port, env=env, expected=1)
+        assert 'between 1 and 65535' in output and not capture.exists()
+    fresh_user = work / 'custom profile without an ini'
+    fresh_config = work / 'fresh.json'
+    fresh_config.write_text(json.dumps({'Dol': str(dol), 'Dolphin': str(probe), 'UserDirectory': str(fresh_user)}))
+    call('run', '--config', fresh_config, '--gdb-port', '2166', env=env)
+    assert 'SIDevice1 = 6' in (fresh_user / 'rider-debug/Config/Dolphin.ini').read_text()
+    assert not (fresh_user / 'Config/Dolphin.ini').exists()
     capture.unlink()
     output = call("run", "--config", config, "--dolphin", work / "missing", env=env, expected=1)
     assert "DND001" in output and not capture.exists()
@@ -104,6 +229,82 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
                   "--elf", work / "fresh/Pong.elf", "--run-config", work / "fresh/run.json",
                   "--backend", "Invalid", expected=1)
     assert "DndBuildBackend must be" in output
+    # Real driver + fake compiler/container: read-only Git metadata must be
+    # removed, and failed cleanup must retain ownership for the next attempt.
+    tool_dir = work / "fake toolchain"
+    shutil.copytree(probe_output, tool_dir)
+    tool_app = tool_dir / ("DolphinLaunchProbe.exe" if os.name == "nt" else "DolphinLaunchProbe")
+    docker = tool_dir / ("docker.exe" if os.name == "nt" else "docker")
+    shutil.copy2(tool_app, docker)
+    if os.name == "nt":
+        (tool_dir / "docker").write_text("#!/bin/sh\nexit 99\n")
+        # Even an earlier PATH directory containing only a shell script is ignored.
+        shims = work / "shell shims"
+        shims.mkdir()
+        (shims / "docker").write_text("#!/bin/sh\nexit 99\n")
+    else:
+        shims = tool_dir
+    tool_env = {**env, "DND_PROBE_TOOLCHAIN": "true",
+                "PATH": os.pathsep.join((str(shims), str(tool_dir), os.environ.get("PATH", "")))}
+    native = work / "obj/native"
+    native.mkdir(parents=True)
+    marker = native / ".dnd-build-directory"
+    marker.write_text("DolphinDotNet generated build directory\n")
+    git_metadata = native / "dependency/.git/objects/info"
+    git_metadata.mkdir(parents=True)
+    chain = git_metadata / "commit-graph-chain"
+    chain.write_text("old Git metadata")
+    chain.chmod(stat.S_IREAD)
+    if os.name != "nt":
+        outside = work / "outside native"
+        outside.mkdir()
+        (outside / "keep.txt").write_text("external")
+        (native / "linked dependency").symlink_to(outside, target_is_directory=True)
+    build_args = ("build", "--assembly", assembly, "--compiler", tool_dir / "DolphinLaunchProbe.dll",
+                  "--native-directory", native, "--dol", dol, "--elf", elf,
+                  "--run-config", config, "--backend", "Docker", "--debug-symbols", "true")
+    call(*build_args, env=tool_env)
+    assert not git_metadata.exists() and marker.exists()
+    if os.name != "nt":
+        assert (outside / "keep.txt").read_text() == "external"
+    assert dol.exists() and elf.exists() and debug_map.exists()
+    assert (work / "Pong.dnd-addresses.json").exists()
+
+    locked = native / "locked"
+    locked.mkdir()
+    locked_file = locked / "commit-graph-chain"
+    locked_file.write_text("locked metadata")
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+        create = ctypes.windll.kernel32.CreateFileW
+        create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                           wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+        create.restype = wintypes.HANDLE
+        close = ctypes.windll.kernel32.CloseHandle
+        close.argtypes = (wintypes.HANDLE,)
+        handle = create(str(locked_file), 0x80000000, 1, None, 3, 0, None)
+        assert handle != wintypes.HANDLE(-1).value
+        try:
+            call(*build_args, env=tool_env, expected=1)
+            assert marker.exists() and locked_file.exists()
+        finally:
+            close(handle)
+    elif os.geteuid() != 0:
+        locked.chmod(0o500)
+        try:
+            call(*build_args, env=tool_env, expected=1)
+            assert marker.exists() and locked_file.exists()
+        finally:
+            locked.chmod(0o700)
+    call(*build_args, env=tool_env)
+    assert marker.exists() and not locked.exists(), "Cleanup must be retryable"
+    # Preserve the guard against deleting arbitrary, unowned directories.
+    marker.unlink()
+    sentinel = native / "keep.txt"
+    sentinel.write_text("not owned")
+    output = call(*build_args, env=tool_env, expected=1)
+    assert "unowned native work directory" in output and sentinel.exists()
     # Explicit SDK imports also work outside the repository and with spaces/&.
     project = work / "app"
     project.mkdir()
@@ -115,10 +316,49 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
         '<Target Name="TestCompilerDiagnostic"><ItemGroup><DiagnosticArgs Include="' +
         escape(str(root / 'tools/DolphinDotNet.Compiler/bin/Debug/net8.0/DolphinDotNet.Compiler.dll'), {'"': '&quot;'}) +
         ';--aot;missing.dll;output.c" /></ItemGroup><DndRunTool Tool="dotnet" Arguments="@(DiagnosticArgs)" /></Target></Project>')
+    # Debugger targets retain named locals; Release's normal optimization policy
+    # must remain intact even when an old configuration has debug flags set.
+    for configuration, expected_optimize in (("Debug", "false"), ("Release", "true")):
+        result = subprocess.run([dotnet, "msbuild", str(project / "Test.csproj"),
+                                 "-getProperty:Optimize", "-p:Configuration=" + configuration,
+                                 "-p:DndDebugSymbols=true"], text=True, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, timeout=30)
+        assert result.returncode == 0 and result.stdout.strip() == expected_optimize, result.stdout
+    # A normal IDE Debug build emits the Rider maps without extra CLI flags;
+    # explicit opt-out and Release defaults remain available.
+    for configuration, override, expected_symbols in (
+            ("Debug", None, "true"), ("Release", None, "false"), ("Debug", "false", "false")):
+        command = [dotnet, "msbuild", str(project / "Test.csproj"),
+                   "-getProperty:DndDebugSymbols", "-p:Configuration=" + configuration]
+        if override is not None:
+            command.append("-p:DndDebugSymbols=" + override)
+        result = subprocess.run(command, text=True, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, timeout=30)
+        assert result.returncode == 0 and result.stdout.strip() == expected_symbols, result.stdout
     result = subprocess.run([dotnet, "build", str(project / "Test.csproj"), "-p:DndBuildBackend=Invalid"],
                             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
     assert result.returncode != 0 and "DndBuildBackend must be" in result.stdout, result.stdout
     assert "DND001" in result.stdout, result.stdout
+    # A packaged compiler from a Windows checkout may contain CRLF scripts.
+    # Bundle generation must make them runnable by Bash inside Linux Docker,
+    # including for existing checkouts that predate the .gitattributes rule.
+    packaged_compiler = work / "compiler with CRLF"
+    shutil.copytree(root / "tools/DolphinDotNet.Compiler/bin/Debug/net8.0", packaged_compiler)
+    shell = packaged_compiler / "native/scripts/build_exi_overlay.sh"
+    shell_lf = shell.read_text().replace('\r\n', '\n')
+    shell.write_bytes(shell_lf.replace('\n', '\r\n').encode())
+    assert b'\r\n' in shell.read_bytes()
+    bundle = work / "CRLF bundle"
+    result = subprocess.run([dotnet, str(packaged_compiler / "DolphinDotNet.Compiler.dll"),
+                             "--bundle", str(project / "bin/Debug/net8.0/Test.dll"), str(bundle)],
+                            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+    assert result.returncode == 0, result.stdout
+    emitted_shell = (bundle / "scripts/build_exi_overlay.sh").read_bytes()
+    assert emitted_shell == shell_lf.encode() and b'\r' not in emitted_shell
+    if os.name != "nt":
+        header = b'\n'.join(emitted_shell.split(b'\n')[:2]).decode()
+        result = subprocess.run(['bash', '-c', header], capture_output=True, text=True, timeout=10)
+        assert result.returncode == 0, result.stderr
     result = subprocess.run([dotnet, "msbuild", str(project / "Test.csproj"), "-t:TestCompilerDiagnostic"],
                             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
     assert result.returncode != 0 and "DND002" in result.stdout and "missing.dll" in result.stdout, result.stdout

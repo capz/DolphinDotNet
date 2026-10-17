@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>com.dolphindotnet.rider</id>
+    <id>com.dolphindotnet.debugger</id>
     <name>DolphinDotNet</name>
     <vendor>DolphinDotNet</vendor>
     <description>Attach to an already-running Dolphin or GameCube GDB target using the DolphinDotNet DAP adapter.</description>

@@ -51,4 +51,51 @@ class DapClientTest {
         assertFalse(transcript.contains("expectedSlot"));
         assertTrue(transcript.contains("\"terminateDebuggee\": false"));
     }
+    @Test void startupFailureAndCancellationReapOnlyTheAdapter() throws Exception {
+        for (var mode : List.of("earlyExit", "closeStdout", "unresponsive", "rejectAttach", "missingInitialized", "cancel")) {
+            Path peer = temp.resolve(mode + ".py");
+            try (var input = getClass().getResourceAsStream("/fake_adapter.py")) { Files.copy(Objects.requireNonNull(input), peer); }
+            var process = new ProcessBuilder("python3", peer.toString(), temp.resolve(mode + ".jsonl").toString(),
+                mode.equals("cancel") ? "unresponsive" : mode).start();
+            var terminated = new java.util.concurrent.atomic.AtomicInteger();
+            var client = new DapClient(process, new DapClient.Listener() {
+                @Override public void stopped(StoppedEventArguments args) { fail("Startup failure must not publish a usable stop."); }
+                @Override public void continued() { fail("Startup failure must not resume anything."); }
+                @Override public void output(String text, boolean error) { }
+                @Override public void terminated() { terminated.incrementAndGet(); }
+            }, java.time.Duration.ofMillis(250), java.time.Duration.ofMillis(250));
+            try {
+                var pending = client.start(new TargetProfile().attachArguments());
+                if (mode.equals("cancel")) pending.cancel(false);
+                assertThrows(Exception.class, () -> pending.get(5, TimeUnit.SECONDS), mode);
+                client.close(); client.close();
+                assertTrue(process.waitFor(8, TimeUnit.SECONDS), "Orphaned adapter: " + mode);
+                assertTrue(terminated.get() <= 1, "Duplicate termination: " + mode);
+            } finally { client.close(); if (process.isAlive()) process.destroyForcibly(); }
+        }
+    }
+
+    @Test void crashAfterAttachTerminatesOnceAndReapsProcess() throws Exception {
+        Path peer = temp.resolve("crash.py");
+        try (var input = getClass().getResourceAsStream("/fake_adapter.py")) { Files.copy(Objects.requireNonNull(input), peer); }
+        var process = new ProcessBuilder("python3", peer.toString(), temp.resolve("crash.jsonl").toString(), "crashAfterConfigure").start();
+        var count = new java.util.concurrent.atomic.AtomicInteger();
+        var ended = new CountDownLatch(1);
+        var client = new DapClient(process, new DapClient.Listener() {
+            @Override public void stopped(StoppedEventArguments args) { }
+            @Override public void continued() { }
+            @Override public void output(String text, boolean error) { }
+            @Override public void terminated() { count.incrementAndGet(); ended.countDown(); }
+        });
+        try {
+            client.start(new TargetProfile().attachArguments()).get(5, TimeUnit.SECONDS);
+            client.server.configurationDone(new ConfigurationDoneArguments()).get(5, TimeUnit.SECONDS);
+            assertTrue(ended.await(5, TimeUnit.SECONDS));
+            assertTrue(process.waitFor(5, TimeUnit.SECONDS));
+            assertEquals(9, process.exitValue());
+            client.close(); client.close();
+            assertEquals(1, count.get());
+        } finally { client.close(); if (process.isAlive()) process.destroyForcibly(); }
+    }
+
 }

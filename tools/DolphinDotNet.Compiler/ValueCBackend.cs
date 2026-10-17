@@ -139,8 +139,19 @@ internal static class ValueCBackend
         var values=Collect(method).GroupBy(v=>v.Id).Select(g=>g.First()).OrderBy(v=>v.Id).ToArray();
         if(includeHeader)b.AppendLine("#include <stdint.h>\n#include <math.h>\n#include <string.h>");
         b.Append($"{ReturnCType(method,model)} {functionName}(");
-        b.Append(Parameters(method,model));
+        b.Append(Parameters(method,model,sourceLocations is not null));
         b.AppendLine(") {");
+        // GCC may describe even volatile formal parameters using entry_value,
+        // which requires historical register state. Debug targets use explicit
+        // volatile local copies so their current DWARF locations are readable.
+        if(sourceLocations is not null) {
+            model.Methods.TryGetValue(method.Key,out var debugMethod);var abi=debugMethod?.Abi;
+            for(var ai=0;ai<method.ParameterCount+(method.HasThis?1:0);ai++) {
+                var pi=ai-(method.HasThis?1:0);
+                var kind=pi>=0&&abi is not null&&pi<abi.Parameters.Count?abi.Parameters[pi]:CilStackKind.NativeInt;
+                b.AppendLine($"  volatile {AbiCType(kind)} a{ai} = dnd_in_a{ai};");
+            }
+        }
         for(var ai=0;ai<method.ParameterCount+(method.HasThis?1:0);ai++)b.AppendLine($"  (void)a{ai};");
         // Struct arguments travel as addresses, but are private value copies in
         // the callee. ldarga must address the copy, never the ABI pointer slot.
@@ -155,7 +166,7 @@ internal static class ValueCBackend
         foreach(var region in method.ExceptionRegions.Where(r=>r.Kind==ValueIrExceptionRegionKind.Catch))
             b.AppendLine($"  volatile intptr_t dnd_caught_{region.HandlerOffset}=0;");
         foreach(var v in values)b.AppendLine($"  {(method.ExceptionRegions.Count>0?"volatile ":"")}{ValueStorageCType(v.Kind)} v{v.Id} = 0; (void)v{v.Id};");
-        foreach(var local in method.Locals){b.AppendLine(local.StorageSize>0?$"  _Alignas(8) uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {(method.ExceptionRegions.Count>0?"volatile ":"")}{CType(local.Kind)} l{local.Index} = 0;");b.AppendLine($"  (void)l{local.Index};");}
+        foreach(var local in method.Locals){b.AppendLine(local.StorageSize>0?$"  _Alignas(8) uint8_t l{local.Index}[{local.StorageSize}] = {{0}};":$"  {(method.ExceptionRegions.Count>0 || sourceLocations is not null?"volatile ":"")}{CType(local.Kind)} l{local.Index} = 0;");b.AppendLine($"  (void)l{local.Index};");}
         var valueConstructors=method.Blocks.SelectMany(b=>b.Instructions).OfType<ValueIrValueConstructor>().ToArray();
         foreach(var v in valueConstructors)b.AppendLine($"  _Alignas(8) uint8_t value_{v.Result.Id}[{v.Size}] = {{0}};");
         var structCalls=method.Blocks.SelectMany(b=>b.Instructions).OfType<ValueIrCall>().Where(c=>c.Result is not null&&ReturnSize(c.Target,model)>0).ToArray();
@@ -630,8 +641,8 @@ internal static class ValueCBackend
     }
     internal static string Symbol(MethodKey k)=>"dnd_value_"+Id(k.AssemblyName)+"_"+Id(k.TypeName)+"_"+Id(k.Name)+"_"+StableId(k.Signature);
     private static int ValueTypeSize(string type,CompilationModel model)=>type switch{"System.Boolean" or "System.Byte" or "System.SByte"=>1,"System.Char" or "System.Int16" or "System.UInt16"=>2,"System.Int64" or "System.UInt64" or "System.Double"=>8,"System.Single" or "System.Int32" or "System.UInt32" or "System.IntPtr" or "System.UIntPtr"=>4,_ when model.Types.ContainsKey(type)=>Math.Max(1,TotalInstanceSize(type,model)),_=>4};
-    private static int BasePayloadSize(string type,CompilationModel model){if(!model.Types.TryGetValue(type,out var t)||t.BaseType is not { } p||!model.Types.ContainsKey(p))return 0;return TotalInstanceSize(p,model);}
-    private static int TotalInstanceSize(string type,CompilationModel model){if(!model.Types.TryGetValue(type,out var t))return 0;var parent=t.BaseType is { } p&&model.Types.ContainsKey(p)?TotalInstanceSize(p,model):0;return parent+t.InstanceSize;}
+    internal static int BasePayloadSize(string type,CompilationModel model){if(!model.Types.TryGetValue(type,out var t)||t.BaseType is not { } p||!model.Types.ContainsKey(p))return 0;return TotalInstanceSize(p,model);}
+    internal static int TotalInstanceSize(string type,CompilationModel model){if(!model.Types.TryGetValue(type,out var t))return 0;var parent=t.BaseType is { } p&&model.Types.ContainsKey(p)?TotalInstanceSize(p,model):0;return parent+t.InstanceSize;}
     private static MethodModel? TypeInitializer(string type,CompilationModel model)=>model.Methods.Values.FirstOrDefault(m=>m.Key.TypeName==type&&m.Key.Name==".cctor");
     private static bool HasTypeInitializer(string type,CompilationModel model)=>TypeInitializer(type,model) is not null;
     private static string EnsureSymbol(string type)=>"dnd_ensure_"+Id(type);
@@ -694,14 +705,15 @@ internal static class ValueCBackend
     internal static string TypeExpr(string type)=>type switch{"Dolphin.Network.ExternalException"=>"&DND_TYPE_EXTERNAL_EXCEPTION","Dolphin.Network.SocketException"=>"&DND_TYPE_SOCKET_EXCEPTION","System.FormatException"=>"&DND_TYPE_FORMAT_EXCEPTION","System.TimeoutException"=>"&DND_TYPE_TIMEOUT_EXCEPTION","System.OverflowException"=>"&DND_TYPE_OVERFLOW_EXCEPTION","System.PlatformNotSupportedException"=>"&DND_TYPE_PLATFORM_NOT_SUPPORTED_EXCEPTION","System.String"=>"&DND_TYPE_STRING","System.Object"=>"&DND_TYPE_OBJECT","System.Int32"=>"&DND_TYPE_BOXED_INT32","System.Int64"=>"&DND_TYPE_INT64","System.UInt64"=>"&DND_TYPE_UINT64","System.Single"=>"&DND_TYPE_SINGLE","System.Double"=>"&DND_TYPE_DOUBLE","System.Boolean"=>"&DND_TYPE_BOOLEAN","System.Byte"=>"&DND_TYPE_BYTE","System.SByte"=>"&DND_TYPE_SBYTE","System.Char"=>"&DND_TYPE_CHAR","System.Int16"=>"&DND_TYPE_INT16","System.UInt16"=>"&DND_TYPE_UINT16","System.UInt32"=>"&DND_TYPE_UINT32","System.OperationCanceledException"=>"&DND_TYPE_OPERATION_CANCELED_EXCEPTION","System.Text.EncoderFallbackException"=>"&DND_TYPE_ENCODER_FALLBACK_EXCEPTION","System.Text.DecoderFallbackException"=>"&DND_TYPE_DECODER_FALLBACK_EXCEPTION","System.Exception"=>"&DND_TYPE_EXCEPTION","System.IO.IOException"=>"&DND_TYPE_IO_EXCEPTION","System.IO.FileNotFoundException"=>"&DND_TYPE_FILE_NOT_FOUND_EXCEPTION","System.IO.DirectoryNotFoundException"=>"&DND_TYPE_DIRECTORY_NOT_FOUND_EXCEPTION","System.UnauthorizedAccessException"=>"&DND_TYPE_UNAUTHORIZED_EXCEPTION","System.IO.DriveNotFoundException"=>"&DND_TYPE_DRIVE_NOT_FOUND_EXCEPTION","System.IO.PathTooLongException"=>"&DND_TYPE_PATH_TOO_LONG_EXCEPTION","System.ObjectDisposedException"=>"&DND_TYPE_OBJECT_DISPOSED_EXCEPTION","System.SystemException"=>"&DND_TYPE_SYSTEM_EXCEPTION","System.InvalidOperationException"=>"&DND_TYPE_INVALID_OPERATION_EXCEPTION","System.ArgumentException"=>"&DND_TYPE_ARGUMENT_EXCEPTION","System.ArgumentNullException"=>"&DND_TYPE_ARGUMENT_NULL_EXCEPTION","System.ArgumentOutOfRangeException"=>"&DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION","System.IndexOutOfRangeException"=>"&DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION","System.NullReferenceException"=>"&DND_TYPE_NULL_REFERENCE_EXCEPTION","System.InvalidCastException"=>"&DND_TYPE_INVALID_CAST_EXCEPTION","System.NotSupportedException"=>"&DND_TYPE_NOT_SUPPORTED_EXCEPTION","System.OutOfMemoryException"=>"&DND_TYPE_OUT_OF_MEMORY_EXCEPTION",_ when type.StartsWith("System.",StringComparison.Ordinal)=>"NULL",_=>$"&dnd_type_{Id(type)}"};
     private static string LegacySymbol(MethodKey k)=>"dnd_value_"+Id(k.TypeName)+"_"+Id(k.Name);
     private static string StableId(string s){uint h=2166136261;foreach(var ch in s){h^=ch;h*=16777619;}return h.ToString("x8");}
-    private static string Parameters(ValueIrMethod m,CompilationModel model)
+    private static string Parameters(ValueIrMethod m,CompilationModel model,bool debug=false)
     {
         var n=m.ParameterCount+(m.HasThis?1:0);if(n==0)return ReturnSize(m.Key,model)>0?"intptr_t dnd_ret":"void";
         model.Methods.TryGetValue(m.Key,out var mm);var abi=mm?.Abi;
         return string.Join(", ",Enumerable.Range(0,n).Select(i=>{
-            if(m.HasThis&&i==0)return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}intptr_t a{i}";
+            var name=debug?$"dnd_in_a{i}":$"a{i}";
+            if(m.HasThis&&i==0)return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}intptr_t {name}";
             var pi=i-(m.HasThis?1:0);var kind=abi is not null&&pi<abi.Parameters.Count?abi.Parameters[pi]:CilStackKind.NativeInt;
-            return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}{AbiCType(kind)} a{i}";
+            return $"{(m.ExceptionRegions.Count>0?"volatile ":"")}{AbiCType(kind)} {name}";
         }))+(ReturnSize(m.Key,model)>0?", intptr_t dnd_ret":"");
     }
     private static int ReturnSize(MethodKey key,CompilationModel model)=>model.Methods.TryGetValue(key,out var mm)?mm.Abi?.ReturnStorage?.Size??0:0;

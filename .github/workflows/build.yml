@@ -75,9 +75,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.1.0'
-      - name: Compile Rider bridge, test target profiles and DAP lifecycle, package adapter
+      - name: Compile, test real adapter integration, package and verify Rider compatibility
         working-directory: plugins/rider
-        run: gradle --no-daemon test buildPlugin
+        run: gradle --no-daemon test buildPlugin verifyPlugin
       - name: Verify plugin ZIP includes the adapter and serial runtime dependencies
         run: |
           python3 - <<'PYZIP'
@@ -101,7 +101,9 @@ jobs:
         if: failure()
         with:
           name: Rider-plugin-test-reports
-          path: plugins/rider/build/reports/tests/
+          path: |
+            plugins/rider/build/reports/tests/
+            plugins/rider/build/reports/pluginVerifier/
 
   managed:
     needs: changes
@@ -485,6 +487,8 @@ jobs:
         run: |
           dotnet build tools/DolphinDotNet.Build
           dotnet build tests/DolphinLaunchProbe
+      - name: Validate sample artifact checks
+        run: python tests/sample_build_validation_test.py
       - name: Validate launch lifecycle and MSBuild integration
         run: python tests/build_workflow_test.py
       - name: Build every sample solution without a native toolchain
@@ -500,7 +504,7 @@ jobs:
           for solution in samples/*/*.sln; do
             dotnet build "$solution" -p:DndBuildBackend=Docker
             sample=$(basename "$solution" .sln)
-            python scripts/dol_sections.py "samples/$sample/bin/Debug/net8.0/$sample.dol"
+            python scripts/validate_sample_build.py "samples/$sample"
           done
 
   portable-runtime:
@@ -560,7 +564,8 @@ jobs:
         run: python3 -m unittest discover -s tests -p debug_address_map_test.py -v
       - name: Build C# source-symbols-only Dolphin Emulator DOL
         run: |
-          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-emulator-debug --debug-symbols
+          dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Debug -p:DndBuildNative=false -p:DndDebugSymbols=true
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Debug/net8.0/ManagedGameCube.dll /tmp/dnd-emulator-debug --debug-symbols
           make -C /tmp/dnd-emulator-debug
           test -s /tmp/dnd-emulator-debug/Game.dnd-addresses.json
           ! grep -q '\-ldb' /tmp/dnd-emulator-debug/Makefile
@@ -569,14 +574,21 @@ jobs:
           cp /tmp/dnd-emulator-debug/Game.dol /tmp/dnd-emulator-debug/Game.elf /tmp/dnd-emulator-debug/dnd-il-debug.json /tmp/dnd-emulator-debug/Game.dnd-addresses.json footprint/debug-symbols/
       - name: Build managed stack and source-stepping debugger fixture
         run: |
-          dotnet build tests/DebuggerStackSmoke/DebuggerStackSmoke.csproj -c Release
-          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle tests/DebuggerStackSmoke/bin/Release/net8.0/DebuggerStackSmoke.dll /tmp/dnd-debug-stack --platform gamecube --debug-symbols
+          dotnet build tests/DebuggerStackSmoke/DebuggerStackSmoke.csproj -c Debug
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle tests/DebuggerStackSmoke/bin/Debug/net8.0/DebuggerStackSmoke.dll /tmp/dnd-debug-stack --platform gamecube --debug-symbols
           make -C /tmp/dnd-debug-stack
           mkdir -p footprint/debug-stack
           cp /tmp/dnd-debug-stack/Game.dol /tmp/dnd-debug-stack/Game.elf /tmp/dnd-debug-stack/Game.dnd-addresses.json /tmp/dnd-debug-stack/dnd-il-debug.json footprint/debug-stack/
+      - name: Build object and string inspection debugger fixture
+        run: |
+          dotnet build tests/DebuggerInspectionSmoke/DebuggerInspectionSmoke.csproj -c Debug
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle tests/DebuggerInspectionSmoke/bin/Debug/net8.0/DebuggerInspectionSmoke.dll /tmp/dnd-debug-inspection --platform gamecube --debug-symbols
+          make -C /tmp/dnd-debug-inspection
+          mkdir -p footprint/debug-inspection
+          cp /tmp/dnd-debug-inspection/Game.dol /tmp/dnd-debug-inspection/Game.elf /tmp/dnd-debug-inspection/Game.dnd-addresses.json /tmp/dnd-debug-inspection/dnd-il-debug.json footprint/debug-inspection/
       - name: Link USB Gecko debugger GameCube bundle
         run: |
-          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-usb-gecko --gdb-usb 1
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Debug/net8.0/ManagedGameCube.dll /tmp/dnd-usb-gecko --gdb-usb 1
           make -C /tmp/dnd-usb-gecko
           test -s /tmp/dnd-usb-gecko/Game.dol
           test -s /tmp/dnd-usb-gecko/Game.dnd-addresses.json
@@ -586,7 +598,7 @@ jobs:
       - name: Link opt-in GDB TCP GameCube bundle
         run: |
           test -f "$DEVKITPRO/libogc2/gamecube/lib/libdb.a"
-          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Release/net8.0/ManagedGameCube.dll /tmp/dnd-gdb-ppc --gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1
+          dotnet run --project tools/DolphinDotNet.Compiler -- --bundle samples/ManagedGameCube/bin/Debug/net8.0/ManagedGameCube.dll /tmp/dnd-gdb-ppc --gdb-tcp 192.0.2.10 --gdb-netmask 255.255.255.0 --gdb-gateway 192.0.2.1
           make -C /tmp/dnd-gdb-ppc
           test -s /tmp/dnd-gdb-ppc/Game.dol
           "$DEVKITPPC/bin/powerpc-eabi-readelf" -SW /tmp/dnd-gdb-ppc/Game.elf | grep -q '\.debug_info'
@@ -802,8 +814,10 @@ jobs:
         run: python3 scripts/dolphin_smoke.py dist/footprint/debug-stack/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2166 --elf dist/footprint/debug-stack/Game.elf --source-map dist/footprint/debug-stack/dnd-il-debug.json --address-map dist/footprint/debug-stack/Game.dnd-addresses.json --expect-source DebuggerStackSmoke/Program.cs:20 --expect-source DebuggerStackSmoke/Program.cs:15 --logs dolphin-csharp-stack --require-boot --dotnet-probe tools/DolphinDotNet.Debugger.Probe/bin/Release/net8.0/DolphinDotNet.Debugger.Probe.dll --stack-steps
       - name: Verify DAP Csharp breakpoints and pause in Dolphin
         run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2167 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:8 --expect-source ManagedGameCube/Program.cs:9 --logs dolphin-dap-source --require-boot --dap-adapter tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll
-      - name: Verify DAP managed stack and Step Over/Out in Dolphin
+      - name: Verify DAP managed stack, primitive inspection and Step Over/Out in Dolphin
         run: python3 scripts/dolphin_smoke.py dist/footprint/debug-stack/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2168 --elf dist/footprint/debug-stack/Game.elf --source-map dist/footprint/debug-stack/dnd-il-debug.json --address-map dist/footprint/debug-stack/Game.dnd-addresses.json --expect-source DebuggerStackSmoke/Program.cs:20 --expect-source DebuggerStackSmoke/Program.cs:15 --logs dolphin-dap-stack --require-boot --dap-adapter tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll --stack-steps
+      - name: Verify DAP object fields and string previews in Dolphin
+        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-inspection/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2169 --elf dist/footprint/debug-inspection/Game.elf --source-map dist/footprint/debug-inspection/dnd-il-debug.json --address-map dist/footprint/debug-inspection/Game.dnd-addresses.json --expect-source DebuggerInspectionSmoke/Program.cs:23 --logs dolphin-dap-inspection --require-boot --dap-adapter tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll --inspect-objects --debugger-telemetry
       - name: Verify native and managed main() executed in Dolphin
         id: app_boot
         continue-on-error: true
@@ -844,6 +858,7 @@ jobs:
             dolphin-csharp-stack/
             dolphin-dap-source/
             dolphin-dap-stack/
+            dolphin-dap-inspection/
             dolphin-async/
             dolphin-timing/
             dolphin-pong/

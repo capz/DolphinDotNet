@@ -3,12 +3,15 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
 
-test: managed_runtime_tests fst_test card_transaction_test aram_test overlay_test worker_test stw_test input_native_test input_gamecube_test
+test: managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_gamecube_test
 	./managed_runtime_tests
 	./fst_test
 	./card_transaction_test
 	./aram_test
 	./overlay_test
+	./overlay_debug_test
+	./debug_heartbeat_test
+	./network_link_test
 	./worker_test
 	./stw_test
 	./input_native_test
@@ -41,5 +44,14 @@ worker_test: worker_test.c ../source/worker.c
 overlay_test: overlay_test.c ../source/performance.c ../source/console_overlay.c
 	$(CC) $(CFLAGS) $^ -lm -o $@
 
+overlay_debug_test: overlay_test.c ../source/performance.c ../source/console_overlay.c ../source/debug_heartbeat.c
+	$(CC) $(CFLAGS) -DDND_DEBUG_TELEMETRY $^ -lm -o $@
+
+network_link_test: network_link_test.c ../source/network_link_gamecube.c
+	$(CC) $(CFLAGS) -DGEKKO -DHW_DOL -Inetwork_link_sdk $^ -o $@
+
+debug_heartbeat_test: debug_heartbeat_test.c ../source/debug_heartbeat.c ../source/performance.c
+	$(CC) $(CFLAGS) -DDND_DEBUG_TELEMETRY $^ -o $@
+
 clean:
-	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test worker_test stw_test input_native_test input_gamecube_test
+	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_gamecube_test

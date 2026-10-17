@@ -5,6 +5,10 @@ A4.5 source stepping is in progress. A4.4 physical USB Gecko/BBA validation is
 **deferred: the user currently has no access to hardware**. Continue emulator,
 DAP and Rider milestones without requiring hardware validation first. Physical
 attachment remains unverified; host TCP/serial transports are implemented.
+The first interactive Rider/Dolphin Snake workflow is now user-validated: attach,
+Resume to a DolphinDotNet source breakpoint, basic Step Over and primitive values.
+Further A6 checks and A7 object inspection remain incremental work; see the current
+stepping/diagnostics increment at the end of this document.
 
 ## Repository and dependency audit (2026-10-16)
 
@@ -389,5 +393,178 @@ tests and 18 CI-selection tests passed. Complete Gradle packaging is pending CI;
 local Gradle dependency resolution is blocked by this environment's Java networking.
 The dedicated `Rider attach plugin` job builds/tests/packages the pinned SDK and
 uploads the plugin ZIP. See `docs/rider-debugging.md` for the exact install/attach
-procedure and manual acceptance checklist. A6 remains unvalidated interactively;
+procedure and manual acceptance checklist. At that stage A6 was unvalidated interactively;
 A4.4 physical USB Gecko/BBA remains deferred. Do not infer either from emulator CI.
+
+
+## A6 reliability and first A7 primitive slice
+
+PR #77 merged after [CI 38944870062](https://github.com/capz/DolphinDotNet/actions/runs/38944870062)
+passed, including Gradle packaging, host TCP/PTY and real-Dolphin DAP acceptance.
+The follow-up keeps the approved saved-target UI and uses Rider's existing Variables
+pane; no new custom UI is introduced. Debugger target builds are managed **Debug**
+with Portable PDBs. Release optimization remains unchanged and Release-mode
+debugging is not supported by this acceptance scope.
+
+- A6 lifecycle: bounded startup/disconnect, cancellation and failed-attach cleanup,
+  adapter exit/stdout EOF notification, and queued execution guards. Cleanup owns
+  the adapter process only; the target is never killed.
+- A6 packaging: Plugin Verifier against the pinned Rider SDK, and the Java DAP
+  client against the real packaged .NET adapter over TCP and Linux PTY fixtures.
+- A4.5 robustness: CFA transitions distinguish recursive/same-line calls; user
+  breakpoints retain priority and desired-breakpoint hit lookup is indexed.
+- A7 primitives: Portable PDB names/scopes → generated native slots → conservative
+  DWARF register/CFA locations → big-endian values → DAP scopes/variables → native
+  Rider Variables pane. References expire on resume; unsupported values are explicit.
+  Real-Dolphin acceptance additionally checks Inner's argument and Outer's local.
+
+Relevant implementation: `PortablePdbSourceMap.cs`, `ValueCBackend.cs` and
+`GameCubeBundle.cs` in the compiler; `scripts/dnd_debug_addresses.py`; debugger
+`PrimitiveVariables.cs`, `SourceAddressMap.cs` and `SourceStepper.cs`; adapter
+`DebugSession.cs` and `BreakpointRegistry.cs`; Rider `DapClient.java` and
+`RiderDebugProcess.java`. Host/protocol tests, Python DWARF/adapter tests, Java
+integration/fault tests and emulator probes cover these responsibilities.
+
+Remaining acceptance outside this environment is interactive Rider on the pinned SDK:
+C# gutter coexistence, configuration persistence, target management, navigation,
+step controls and Variables presentation. Physical A4.4 USB Gecko/BBA remains
+deferred separately. Neither is proven by fake peers, Plugin Verifier or emulator
+success. Objects, evaluation, mutation, exception/async diagnostics, Release target
+builds, automatic reconnect and Visual Studio remain outside this slice.
+
+## Interactive Snake validation and faster Step Over
+
+On 2026-10-17 the user confirmed a Windows Rider session with Dolphin waiting for
+attach, Resume reaching a dedicated DolphinDotNet source breakpoint, working basic
+Step Over and primitive values in Rider's Variables window. Regular .NET line
+breakpoints were not forwarded; selecting the DolphinDotNet attach configuration
+and using its breakpoint type resolved that issue. The exact installed versions
+and commit were not supplied, so this records the working flow rather than a full
+versioned A6 release gate. Pause also exposed Dolphin's extra empty interrupt reply;
+the protocol fix and regression are in the follow-up branch.
+
+The next increment addresses the reported slow stepping and console repetition:
+
+- Supported unconditional linked calls use a temporary return breakpoint for
+  Step Over. Desired user breakpoints stay active during the continue, including
+  recursive calls. CFA/source arbitration still decides when the step completes.
+- Conditional/tail/unknown calls retain instruction stepping; unsupported unwind
+  states stay explicit. Step Into/Out are unchanged. Pause interrupts a long callee.
+- Pause is serialized with a running continue, avoiding unsolicited stop replies
+  during memory/register commands. Early Pause requests are checked when continue
+  starts and during instruction stepping; disconnect uses the same stop path.
+- Stack snapshots/frame IDs are reused while stopped and expire on execution.
+  Partial-stack warnings are emitted once per reason per attach. Routine successful
+  source-step/breakpoint descriptions are no longer printed by the Rider bridge.
+
+Host regression coverage exercises the real adapter with deterministic RSP peers
+for call/return, recursion, same-line calls, breakpoint priority, interruption,
+cleanup, exit/signals and stack snapshot lifetime. The existing real-Dolphin stack
+gate steps over Inner in Outer and remains required for this increment. Command
+count reduction is tested; real latency and updated Rider UI behavior still need
+acceptance. This stepping increment passed complete CI in
+[run 39027086139](https://github.com/capz/DolphinDotNet/actions/runs/39027086139).
+The following inspection increment builds on that validated baseline.
+
+## A7 bounded class and string inspection
+
+Reference arguments, locals and class `this` now have host-side metadata alongside
+the primitive slice. The compiler exports supported class field layouts using the
+same base/payload offsets as code generation. The native resolver binds these to
+linked type objects; only an exact runtime type pointer match permits expansion.
+PowerPC32 object/string ABI assertions protect the emitted layout. Old maps keep
+their primitive behavior; target Debug maps must be rebuilt for reference slots.
+
+Rider's existing Variables window lazily expands class fields and nested references.
+It displays nulls and bounded UTF-16 string previews without invoking getters or
+`ToString`. Depth 4, 128 values per page, 128 UTF-16 units per string preview and
+4096 object handles per stop bound the work. Cycles terminate at the depth limit.
+References expire on execution. Invalid pointers/layouts and unsupported array or
+struct fields are explicit; a valid target memory refusal affects that value,
+while corrupt RSP replies still fail. Generic/native base layouts, arrays,
+value-type expansion, statics, properties, evaluation and mutation are outside
+this slice.
+
+Local coverage includes compiler metadata and inheritance assertions, resolver
+symbol validation, real-adapter object/string/pagination/lifetime tests and an
+actual PowerPC fixture build. The Java TCP/PTY assertions and real-Dolphin
+inspection gate passed complete CI in run 39033281419. Neither CI nor fake peers
+prove the new Rider object UI. The Dolphin fixture checks object arguments/locals,
+inherited scalar fields, a nested/cyclic reference and string previews. Interactive
+object expansion remains a separate user check after installing the rebuilt plugin
+and rebuilding the target's Debug artifacts.
+
+## BBA and debugger statistics overlay
+
+The existing performance panel now adds BBA configuration state/mode and IPv4,
+netmask and gateway after configuration is attempted. Its read-only platform
+snapshot never initializes BBA/DHCP or polls sockets. The separate TCP GDB stub
+publishes its own static configuration, explicitly distinguished from application
+socket readiness and Dolphin's host GDB listener.
+
+Debug symbol builds retain a versioned eight-byte overlay telemetry slot. The
+native map binds its exact symbol; the adapter verifies the signature before
+writing the four-byte connected/disconnected state on attach/clean disconnect,
+then reads the state word back. An acknowledged write that does not persist is
+reported as unavailable without failing attach.
+Old maps do not cause writes, and unsupported reporting does not prevent attach.
+Variable/expression mutation remains unsupported. The row is labelled DEBUG LAST:
+it is a last reported state, not a heartbeat. Abrupt host failure cannot be detected
+from the guest, and a stopped target does not redraw until it runs another frame.
+
+Portable overlay tests cover five/nine-row layouts, status/IPv4 formatting and
+both reporting/non-reporting builds. Host tests cover signature refusal, absent
+metadata, unsupported/ineffective writes and running disconnect cleanup. The
+real-Dolphin DAP inspection gate retains the upstream test socket after the adapter
+closes it, then independently requires the disconnected state and intact signature
+in guest RAM. The relay forwards bytes unchanged during the adapter's session and
+never issues concurrent RSP commands. Host tests exercise both successful relay
+readback and rejection of a missing report. A native PowerPC
+build verifies snapshot compilation and the retained slot's exact ELF bytes.
+Physical BBA behavior and visual acceptance remain separate checks.
+
+Connectivity snapshots now use a separate 2,000 ms timer while the performance
+panel is visible. Showing the panel invalidates the cached link and requests a
+fresh sample; hidden frames perform no link polling. Memory statistics retain
+their independent 250 ms cadence. For the original Nintendo BBA (EXI ID
+0x04020200), a read of NWAYS 0x31 observes its 10/100 link bits under a non-waiting
+EXI lock. No network initialization, socket probe, DHCP request or adapter reset
+is performed. Unsupported hardware, contention and failed reads are unknown,
+not an inferred link-up; configured IP details survive cable loss. Tests cover
+the timer boundaries, toggle/clock behavior, register command, contention and
+failure cleanup, and both normal and reporting overlay layouts.
+
+An optional running-target heartbeat now uses the application BBA stack, separately
+from RSP. Rider accepts a guest-reachable computer IPv4 and UDP port; the adapter
+binds a responder and writes its endpoint and fresh 64-bit session token into a
+separate, versioned 24-byte ELF-bound configuration slot while stopped at attach.
+The existing eight-byte report is unchanged. Every two seconds while stats are
+visible, the target drains at most four datagrams and sends a 20-byte ping. Only
+a reply from the configured endpoint with the current token and outstanding
+sequence renews its six-second lease. Hidden stats close the socket and cause no
+heartbeat traffic. The adapter never writes GDB memory or interrupts execution to
+send heartbeats. Closed debug transports and adapter exit stop responses.
+
+DEBUG LIVE distinguishes checking, waiting for BBA, connected, unreachable and
+cleanly disconnected. Loss is a failure of the game-to-adapter path, not proof of
+which endpoint failed. Pause/resume gaps and clock resets start fresh verification;
+socket reopen after an I/O error cannot keep restarting a lost session's lease.
+The host loopback gate uses the actual native C state machine and .NET adapter,
+kills the adapter without cleanup, verifies loss, then reattaches and verifies
+new-session recovery. This does not validate a physical cable or guest route.
+
+Dolphin host-GDB and USB Gecko can use this channel when application BBA networking
+is configured and the host UDP endpoint is reachable. The native BBA GDB stub owns
+a separate uIP stack; its metadata explicitly declines application UDP heartbeat
+support, preserving DEBUG LAST and physical cable status. Adding a heartbeat to
+that native stub remains a separate transport/hardware slice.
+
+The first overlay CI run (39045224094) exposed a Dolphin pause/cleanup race:
+its CPU pause loop can send a second SIGTRAP after the Ctrl-C stop, at a later PC
+and after an intervening inspection reply. The RSP client now drains at most one
+such pending pause notification, plus the previously supported empty interrupt
+reply, before a command's ACK. The window ends when execution resumes. Other
+signals, repeated traps and traps after that ACK still fail rather than concealing
+protocol corruption. Regression tests cover both reply orders, delayed delivery
+and these refusal boundaries; the real-Dolphin telemetry gate exercises pause
+followed by cleanup.

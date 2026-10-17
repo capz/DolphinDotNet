@@ -23,9 +23,9 @@ Install .NET 8, Dolphin, and Docker with Linux containers, or a native
 Linux/macOS devkitPPC/libogc2 toolchain; see [IDE setup](../docs/ide-workflow.md).
 
 - **Visual Studio:** open the sample's `.sln`, select its executable as the
-  startup project, choose **Dolphin**, and press **Ctrl+F5**.
+  startup project, choose **Dolphin Play**, and press **Ctrl+F5**.
 - **Rider:** open the sample's `.sln`, disable **Use ReSharper Build**, select
-  **<sample> in Dolphin**, and click **Run**.
+  **<sample> in Dolphin (play without debugger)**, and click **Run**.
 
 Choose any sample directory name from the table for the CLI:
 
@@ -42,7 +42,74 @@ own Dolphin settings in `obj/dolphin-user/`. Configure controllers, storage and
 networking as required by the table above; building does not provision external
 assets or network services.
 
-### Manual bundle generation
+## Debug builds and Rider attach
+
+All samples use the shared DolphinDotNet SDK and compiler. Debug builds preserve
+Portable PDB locals and publish the source/address maps Rider needs by default;
+Release builds retain their normal optimization policy. Sample projects follow
+those shared defaults instead of forcing optimization in Debug.
+
+From the repository root, substitute any sample name from the table:
+
+```powershell
+dotnet build samples/Snake/Snake.sln -c Debug
+python scripts/validate_sample_build.py samples/Snake
+```
+
+The validator checks the DOL, PowerPC ELF, launcher, LF-only bundled shell script,
+matching map hashes and verified breakpoint addresses in the sample's own
+`Program.cs`. A successful build must produce these files together:
+
+```text
+samples/<sample>/bin/Debug/net8.0/<sample>.dol
+samples/<sample>/bin/Debug/net8.0/<sample>.elf
+samples/<sample>/bin/Debug/net8.0/<sample>.dnd-debug.json
+samples/<sample>/bin/Debug/net8.0/<sample>.dnd-addresses.json
+```
+
+In Rider, open that sample's solution. Its existing **<sample> in Dolphin**
+configuration now launches with GDB enabled and waits for Rider; **<sample> in
+Dolphin (wait for Rider)** is an equivalent alias. To play normally, select
+**<sample> in Dolphin (play without debugger)**. Debug **CLI** / project launches
+also wait on port 2166; Release CLI launches run normally. For debugging, install
+the [Rider attach plugin](../docs/rider-debugging.md),
+run **<sample> in Dolphin**, and add **DolphinDotNet Attach**. That launch creates
+the emulator's GDB settings automatically in a separate profile, prints their
+location, and waits for Rider at **127.0.0.1:2166**. No manual `Dolphin.ini` edit
+is needed. If the configuration is not imported, create a **.NET Launch Settings
+Profile** configuration for that sample's **Dolphin Debug** profile with a Build task.
+Choose `samples/<sample>/bin/Debug/net8.0` as its debug build folder, then save
+and select a TCP target matching Dolphin's host and GDB port. When opening the
+sample's solution directly, the folder is `$PROJECT_DIR$/bin/Debug/net8.0`.
+Select the attach configuration before placing C# gutter breakpoints.
+
+To build and validate every sample in PowerShell:
+
+```powershell
+Get-ChildItem samples/*/*.sln | ForEach-Object {
+    dotnet build $_.FullName -c Debug
+    if ($LASTEXITCODE -ne 0) { throw "Build failed: $($_.Name)" }
+}
+python scripts/validate_sample_build.py
+```
+
+The same validation runs in CI after every sample's container build. Windows,
+macOS and Linux host checks also verify every sample's SDK imports, launch target,
+and evaluated Debug/Release settings.
+
+The shared build fixes apply to every sample: Windows selects `docker.exe`, native
+cleanup handles read-only Git metadata and retains ownership on failure, emitted
+Bash scripts use LF, and full Windows PDB filenames survive native address mapping.
+See [build troubleshooting](../docs/ide-workflow.md) for restore errors and recovery
+from partial directories left by older drivers. Keep `obj/project.assets.json`
+when removing a partial `obj/Debug/net8.0/native` directory. `dotnet build` restores
+packages automatically. `DndDebugSymbols=false` is an explicit opt-out from maps.
+
+This verifies compilation and debugger artifacts. Each sample still needs the
+controllers, storage, assets or services listed above; interactive Rider and
+physical console acceptance remain separate checks.
+
+## Manual bundle generation
 
 For a standalone bundle, opt out of the integrated native build first:
 

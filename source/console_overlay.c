@@ -138,17 +138,17 @@ void dnd_console_render(void) {
     char panel[DND_PERFORMANCE_ROWS][DND_PERFORMANCE_COLUMNS];
     const char *text[DND_PERFORMANCE_ROWS];
     size_t columns = 0;
-    dnd_performance_format(panel);
-    for (int row = 0; row < DND_PERFORMANCE_ROWS; row++) {
+    int rows = dnd_performance_format(panel);
+    for (int row = 0; row < rows; row++) {
       text[row] = panel[row];
       size_t length = strlen(panel[row]);
       if (length > columns) columns = length;
     }
     const float margin = 8, padding = 6;
-    float height = DND_PERFORMANCE_ROWS * ch + padding * 2;
+    float height = rows * ch + padding * 2;
     float top = (float)dnd_graphics_height() - margin - height;
     dnd_graphics_overlay_rect(margin, top, columns * cw + padding * 2,
                               height, 0, 0, 0, 1);
-    render_text(text, DND_PERFORMANCE_ROWS, margin + padding, top + padding, 208);
+    render_text(text, rows, margin + padding, top + padding, 208);
   }
 }

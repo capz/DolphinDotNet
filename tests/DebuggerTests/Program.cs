@@ -8,10 +8,13 @@ Check(RspStop.Parse("S05").ProgramCounter is null, "S stop without PC");
 Check(RspStop.Parse("W00").Exited, "exit event");
 Expect<InvalidDataException>(() => RspStop.Parse("T0540:xyz;"), "invalid stop program counter");
 await TestUnwindingAndDepthAsync();
+await TestRecursiveAndSameLineAsync();
 await TestSourceSteppingAsync();
 await TestSourceBreakpointsAsync();
 await TestTcpProtocolAsync();
 await TestChecksumsAndTimeoutsAsync();
+await TestQueuedPauseAsync();
+await TestDuplicatePauseRepliesAsync();
 Console.WriteLine("DolphinDotNet GDB/RSP protocol tests passed.");
 
 static void Check(bool condition, string message)
@@ -23,6 +26,99 @@ static void Expect<T>(Action run, string message) where T : Exception
     try { run(); }
     catch (T) { return; }
     throw new Exception("Expected " + typeof(T).Name + ": " + message);
+}
+
+static async Task TestDuplicatePauseRepliesAsync()
+{
+    const string stop = "T0540:80001000;01:81700000;";
+    foreach (var (extras, afterAck, succeeds) in new[]
+    {
+        (new[] { stop }, false, true),
+        (new[] { stop, "" }, false, true),
+        (new[] { "", stop }, false, true),
+        (new[] { "T0540:80001004;01:81700000;" }, false, true),
+        (new[] { "T0b40:80001004;01:81700000;" }, false, false),
+        (new[] { stop }, true, false),
+        (new[] { stop, stop }, false, false)
+    })
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            var server = Task.Run(async () =>
+            {
+                using var peer = await listener.AcceptTcpClientAsync();
+                using var stream = peer.GetStream();
+                Check(await ReadFrameAsync(stream) == "c", "duplicate pause continue");
+                await stream.WriteAsync(new byte[] { (byte)'+' });
+                Check(await ReadByteAsync(stream) == 3, "duplicate pause interrupt");
+                await SendReplyAsync(stream, stop);
+                Check(await ReadByteAsync(stream) == '+', "initial pause ACK");
+                Check(await ReadFrameAsync(stream) == "m80002000,4", "post-pause memory request");
+                if (afterAck) await stream.WriteAsync(new byte[] { (byte)'+' });
+                foreach (var extra in extras) await SendReplyAsync(stream, extra);
+                if (succeeds)
+                {
+                    await stream.WriteAsync(new byte[] { (byte)'+' });
+                    await SendReplyAsync(stream, "00000001");
+                }
+                for (int i = 0; i < extras.Length + (succeeds ? 1 : 0); i++)
+                    Check(await ReadByteAsync(stream) == '+', "extra pause/memory ACK");
+            });
+            await using var client = await RspClient.ConnectTcpAsync("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
+            Check((await client.ContinueAsync(interruptRequested: () => true)).ProgramCounter == 0x80001000, "initial pause stop retained");
+            if (succeeds)
+                Check(Convert.ToHexString(await client.ReadMemoryAsync(0x80002000, 4)) == "00000001", "bounded pause replies drained");
+            else
+            {
+                try
+                {
+                    await client.ReadMemoryAsync(0x80002000, 4);
+                    throw new Exception("Unexpected/multiple/post-ACK stop must fail inspection");
+                }
+                catch (InvalidDataException) { }
+            }
+            await server.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally { listener.Stop(); }
+    }
+}
+
+static async Task TestQueuedPauseAsync()
+{
+    var listener = new TcpListener(IPAddress.Loopback, 0);
+    var interrupted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var releaseStop = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    listener.Start();
+    try
+    {
+        var server = Task.Run(async () =>
+        {
+            using var peer = await listener.AcceptTcpClientAsync();
+            using var stream = peer.GetStream();
+            Check(await ReadFrameAsync(stream) == "c", "idle pause must not inject an interrupt");
+            await stream.WriteAsync(new byte[] { (byte)'+' });
+            Check(await ReadByteAsync(stream) == 3, "queued pause interrupts after continue is sent");
+            interrupted.SetResult();
+            await releaseStop.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await SendReplyAsync(stream, "T0540:80001000;");
+            Check(await ReadByteAsync(stream) == '+', "pause stop ACK");
+            Check(await ReadFrameAsync(stream) == "p1", "repeated pause must not send another interrupt");
+            await SendReplyAsync(stream, "81700000");
+            Check(await ReadByteAsync(stream) == '+', "register ACK after pause");
+        });
+        await using var client = await RspClient.ConnectTcpAsync("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
+        await client.InterruptIfContinuingAsync();
+        var running = client.ContinueAsync(interruptRequested: () => true);
+        await interrupted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await client.InterruptIfContinuingAsync();
+        releaseStop.SetResult();
+        Check((await running).ProgramCounter == 0x80001000, "queued pause stop");
+        Check(Convert.ToHexString(await client.ReadRegisterAsync(1)) == "81700000", "inspection remains synchronized after repeated pause");
+        await server.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+    finally { listener.Stop(); }
 }
 static async Task TestTcpProtocolAsync()
 {
@@ -294,7 +390,7 @@ static async Task TestUnwindingAndDepthAsync()
             schemaVersion = 1, elfSha256 = Hash(elf), sourceMapSha256 = Hash(source),
             methods = new[] {
                 new { symbol = "A", assembly = "Demo", methodToken = 1, nativeStart = "0x80001000", nativeSize = 64, breakpoints = new[] {
-                    new { document = "/Program.cs", line = 10, addresses = new[] { "0x80001000" } },
+                    new { document = "/Program.cs", line = 10, addresses = new[] { "0x80001000", "0x80001008" } },
                     new { document = "/Program.cs", line = 11, addresses = new[] { "0x80001004" } }
                 } },
                 new { symbol = "B", assembly = "Demo", methodToken = 2, nativeStart = "0x80002000", nativeSize = 64, breakpoints = new[] {
@@ -324,6 +420,7 @@ static async Task TestUnwindingAndDepthAsync()
                 ("p1", "81700000"), ("p43", "80002008"), // leaf: DWARF LR 65 maps to RSP 67
                 ("p1", "81700000"), // over origin CFA
                 ("s", "T0540:80002000;"), ("p1", "81700000"), // deeper leaf skipped
+                ("s", "T0540:80001008;"), ("p1", "81700000"), // ordinary call return on original line
                 ("s", "T0540:80001004;"), ("p1", "81700000"), // same frame next line
                 ("p1", "81700000"), // out origin CFA
                 ("s", "T0540:80002004;"), ("p1f", "81700020"), // caller CFA greater
@@ -344,12 +441,53 @@ static async Task TestUnwindingAndDepthAsync()
         Check(partial.Frames.Count == 2 && partial.Reason == UnwindStopReason.UnavailableRegister, "leaf LR read and partial stack rather than guessed caller register");
         var stepper = new SourceStepper(client, symbols);
         var origin = RspStop.Parse("T0540:80001000;");
-        var over = await stepper.StepOverAsync(origin, 3);
-        Check(over.Reason == SourceStepReason.SourceLocation && over.Instructions == 2 && over.Location?.Line == 11, "step over skips deeper CFA");
+        var over = await stepper.StepOverAsync(origin, 4);
+        Check(over.Reason == SourceStepReason.SourceLocation && over.Instructions == 3 && over.Location?.Line == 11, "ordinary step over skips deeper CFA and same-line call return");
         var exit = await stepper.StepOutAsync(origin, 2);
         Check(exit.Reason == SourceStepReason.SourceLocation && exit.Instructions == 1 && exit.Location?.Line == 20, "step out reaches greater caller CFA");
         Check((await stepper.StepOutAsync(RspStop.Parse("T0540:80004000;"), 1)).Reason == SourceStepReason.UnwindUnavailable, "missing CFA never guessed");
         Check((await stepper.StepOverAsync(origin, 1)).Reason == SourceStepReason.UnwindUnavailable, "invalid stack origin never executes");
+        await server.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+    finally { listener.Stop(); Directory.Delete(directory, true); }
+}
+
+static async Task TestRecursiveAndSameLineAsync()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "dnd-recursive-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    var listener = new TcpListener(IPAddress.Loopback, 0);
+    try
+    {
+        var elf = Path.Combine(directory, "Game.elf"); var source = Path.Combine(directory, "source.json"); var native = Path.Combine(directory, "addresses.json");
+        File.WriteAllText(elf, "recursive fixture"); File.WriteAllText(source, "{\"schemaVersion\":2}");
+        string Hash(string path) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)));
+        File.WriteAllText(native, System.Text.Json.JsonSerializer.Serialize(new {
+            schemaVersion = 1, elfSha256 = Hash(elf), sourceMapSha256 = Hash(source),
+            methods = new[] { new { symbol = "A", assembly = "Demo", methodToken = 1, nativeStart = "0x80001000", nativeSize = 64,
+                breakpoints = new[] { new { document = "/Program.cs", line = 10, addresses = new[] { "0x80001000", "0x80001004" } } } } },
+            unwind = new[] { new { start = "0x80001000", end = "0x80001040", supported = true, cfaRegister = 1, cfaOffset = 0,
+                registers = new Dictionary<string, object> { ["65"] = new { kind = "same" } } } }
+        }));
+        listener.Start();
+        var server = Task.Run(async () => {
+            using var peer = await listener.AcceptTcpClientAsync(); using var stream = peer.GetStream();
+            foreach (var (command, reply) in new[] {
+                ("p1", "81700100"), ("s", "T0540:80001000;"), ("p1", "817000e0"),
+                ("p1", "81700100"), ("s", "T0540:80001000;"), ("p1", "817000e0"),
+                ("s", "T0540:80001004;"), ("p1", "81700100"),
+                ("p1", "81700100"), ("s", "T0540:80001000;")
+            }) { Check(await ReadFrameAsync(stream) == command, "recursive depth command " + command); await SendReplyAsync(stream, reply); Check(await ReadByteAsync(stream) == '+', "recursive ACK"); }
+        });
+        var symbols = SourceAddressMap.Load(elf, source, native);
+        await using var client = await RspClient.ConnectTcpAsync("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
+        var start = RspStop.Parse("T0540:80001000;"); var stepper = new SourceStepper(client, symbols);
+        var into = await stepper.StepIntoAsync(start, 2);
+        Check(into.Reason == SourceStepReason.SourceLocation && into.Instructions == 1, "recursive entry at identical PC/line is a new activation");
+        var over = await stepper.StepOverAsync(start, 3);
+        Check(over.Reason == SourceStepReason.SourceLocation && over.Instructions == 2 && over.Stop.ProgramCounter == 0x80001004, "same-line call return stops after proven CFA transition");
+        var hit = await new SourceStepper(client, symbols, pc => pc == 0x80001000).StepOverAsync(start, 2);
+        Check(hit.Reason == SourceStepReason.UserBreakpoint && hit.Instructions == 1, "recursive breakpoint wins over depth/source arbitration");
         await server.WaitAsync(TimeSpan.FromSeconds(5));
     }
     finally { listener.Stop(); Directory.Delete(directory, true); }
