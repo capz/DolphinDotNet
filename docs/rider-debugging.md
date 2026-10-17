@@ -10,9 +10,14 @@ LSP4J debug is pinned to 0.24.0. Compatibility is currently limited to 262.*.
 real-Dolphin checks in [run 38944870062](https://github.com/capz/DolphinDotNet/actions/runs/38944870062).
 This follow-up adds lifecycle fault handling, Plugin Verifier and primitive inspection;
 its CI results must be checked separately.
-Interactive Rider C# gutter coexistence, Debug window behavior and physical console
-attach remain separate acceptance gates. Do not describe SDK compilation, fake
-peers or emulator CI as interactive Rider or USB Gecko/BBA hardware validation.
+The user has now validated the first interactive Windows Snake workflow in Rider:
+attach to a waiting Dolphin, Resume to a dedicated DolphinDotNet source breakpoint,
+basic Step Over and primitive values in the Variables window. Step Over was slow
+and partial-stack messages repeated; the next increment below addresses those.
+Exact installed Rider/plugin versions were not recorded. Full gutter coexistence,
+configuration persistence and physical console attach remain separate acceptance
+checks. Do not describe fake peers or emulator CI as interactive Rider or hardware
+validation.
 
 ## Build, install and attach
 
@@ -80,7 +85,8 @@ interrupted native cleanup and NuGet restore errors.
 5. Select the DolphinDotNet configuration **before** placing C# gutter breakpoints.
    This enables its dedicated breakpoint type. Existing Rider .NET breakpoints
    belong to the normal debugger and are not imported or rewritten. C# breakpoint
-   selection/coexistence must still be checked interactively on the pinned Rider.
+   selection worked in the user's Snake session; broader coexistence still needs
+   acceptance on the pinned Rider.
 6. Use **Debug**. Attach performs initialize → attach → initialized → source
    breakpoints → configurationDone. It initially leaves execution stopped. Use the
    standard Rider Resume, Pause, Step Into, Step Over and Step Out controls and
@@ -94,6 +100,23 @@ Set a supported source breakpoint (for Snake, `Controller.Update();`) and press
 **Resume**. Source navigation and managed inspection become available once that
 breakpoint is reached. Step Over/Out at an unsupported native frame may report
 an unwind diagnostic; use Resume to reach managed code first.
+
+Step Over now recognizes unconditional PowerPC `bl`/`bla` and `bctrl` calls within
+verified managed method extents. It single-steps into the call, then runs with a
+temporary return breakpoint and the user's breakpoints installed. A breakpoint in
+the callee or at the return address still wins. CFA checks distinguish recursive
+activations and preserve same-line stepping. Conditional branches, tail calls and
+unrecognized instructions keep the instruction-stepping fallback. A callee that
+does not return can keep the step running; **Pause** interrupts it normally. The
+step budget counts explicit single-step requests, not instructions executed during
+run-to-return. Step Into and Step Out retain their existing instruction stepping.
+
+The adapter reuses a stack snapshot and stable frame IDs until execution resumes,
+avoiding repeated register/memory reads for the same stop. Partial-stack warnings
+appear once per reason per attach. Rider no longer prints the routine
+`SourceLocation` and `UserBreakpoint` descriptions after every successful step;
+diagnostic stops and failures remain visible. Pause during an inspection command
+waits for that reply instead of injecting an unrelated stop packet into it.
 
 Older bundled adapters can fail after Pause with `Invalid register response:`
 followed by an empty value. Dolphin can emit an extra empty GDB packet after the
@@ -239,6 +262,13 @@ Automated host checks:
   protocol framing, source identity/maps, breakpoint ownership, stack/stepping,
   pause/resume/disconnect, primitive values, pagination, expired handles, invalid
   transports and serial enumeration.
+- Fast-Step-Over tests cover direct/indirect calls, recursion, same-line returns,
+  user breakpoints inside a callee and at its return, conditional-call fallback,
+  Pause/disconnect cleanup, target exit/signals, a Pause during code reads, stack
+  snapshot invalidation and deduplicated unwind diagnostics. A supported call uses
+  one single-step plus one continue instead of stepping its entire body. These are
+  protocol/command-count checks; real emulator speed and the rebuilt Rider plugin
+  require their own acceptance result.
 - Its Linux PTY test exercises actual `System.IO.Ports` open/read/write, source
   breakpoint, stack, pause and cleanup against a byte relay to a fake RSP peer.
   This validates host serial plumbing, **not** FTDI USB enumeration, EXI or hardware.
@@ -261,7 +291,7 @@ pause, Inner → Outer → Main stack, Step Out to Outer:14 and Step Over to Out
 The new increment requires its own CI result; that historical run proves emulator/DAP
 behavior only.
 
-Before claiming A6 validated, record the exact installed Rider/plugin versions,
+To complete A6 acceptance beyond the reported Snake workflow, record the exact installed Rider/plugin versions,
 configuration save/reload and Cancel behavior, BBA/USB transport field switching,
 serial refresh/error handling, dropdown selection, C# gutter coexistence, source
 navigation, pause/resume, stack selection and all three step controls against the

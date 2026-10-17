@@ -13,6 +13,7 @@ await TestSourceSteppingAsync();
 await TestSourceBreakpointsAsync();
 await TestTcpProtocolAsync();
 await TestChecksumsAndTimeoutsAsync();
+await TestQueuedPauseAsync();
 Console.WriteLine("DolphinDotNet GDB/RSP protocol tests passed.");
 
 static void Check(bool condition, string message)
@@ -24,6 +25,42 @@ static void Expect<T>(Action run, string message) where T : Exception
     try { run(); }
     catch (T) { return; }
     throw new Exception("Expected " + typeof(T).Name + ": " + message);
+}
+
+static async Task TestQueuedPauseAsync()
+{
+    var listener = new TcpListener(IPAddress.Loopback, 0);
+    var interrupted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var releaseStop = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    listener.Start();
+    try
+    {
+        var server = Task.Run(async () =>
+        {
+            using var peer = await listener.AcceptTcpClientAsync();
+            using var stream = peer.GetStream();
+            Check(await ReadFrameAsync(stream) == "c", "idle pause must not inject an interrupt");
+            await stream.WriteAsync(new byte[] { (byte)'+' });
+            Check(await ReadByteAsync(stream) == 3, "queued pause interrupts after continue is sent");
+            interrupted.SetResult();
+            await releaseStop.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await SendReplyAsync(stream, "T0540:80001000;");
+            Check(await ReadByteAsync(stream) == '+', "pause stop ACK");
+            Check(await ReadFrameAsync(stream) == "p1", "repeated pause must not send another interrupt");
+            await SendReplyAsync(stream, "81700000");
+            Check(await ReadByteAsync(stream) == '+', "register ACK after pause");
+        });
+        await using var client = await RspClient.ConnectTcpAsync("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
+        await client.InterruptIfContinuingAsync();
+        var running = client.ContinueAsync(interruptRequested: () => true);
+        await interrupted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await client.InterruptIfContinuingAsync();
+        releaseStop.SetResult();
+        Check((await running).ProgramCounter == 0x80001000, "queued pause stop");
+        Check(Convert.ToHexString(await client.ReadRegisterAsync(1)) == "81700000", "inspection remains synchronized after repeated pause");
+        await server.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+    finally { listener.Stop(); }
 }
 static async Task TestTcpProtocolAsync()
 {

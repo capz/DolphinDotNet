@@ -5,6 +5,10 @@ A4.5 source stepping is in progress. A4.4 physical USB Gecko/BBA validation is
 **deferred: the user currently has no access to hardware**. Continue emulator,
 DAP and Rider milestones without requiring hardware validation first. Physical
 attachment remains unverified; host TCP/serial transports are implemented.
+The first interactive Rider/Dolphin Snake workflow is now user-validated: attach,
+Resume to a DolphinDotNet source breakpoint, basic Step Over and primitive values.
+Further A6 checks and A7 object inspection remain incremental work; see the current
+stepping/diagnostics increment at the end of this document.
 
 ## Repository and dependency audit (2026-10-16)
 
@@ -389,7 +393,7 @@ tests and 18 CI-selection tests passed. Complete Gradle packaging is pending CI;
 local Gradle dependency resolution is blocked by this environment's Java networking.
 The dedicated `Rider attach plugin` job builds/tests/packages the pinned SDK and
 uploads the plugin ZIP. See `docs/rider-debugging.md` for the exact install/attach
-procedure and manual acceptance checklist. A6 remains unvalidated interactively;
+procedure and manual acceptance checklist. At that stage A6 was unvalidated interactively;
 A4.4 physical USB Gecko/BBA remains deferred. Do not infer either from emulator CI.
 
 
@@ -421,9 +425,42 @@ Relevant implementation: `PortablePdbSourceMap.cs`, `ValueCBackend.cs` and
 `RiderDebugProcess.java`. Host/protocol tests, Python DWARF/adapter tests, Java
 integration/fault tests and emulator probes cover these responsibilities.
 
-Next acceptance outside this environment is interactive Rider on the pinned SDK:
+Remaining acceptance outside this environment is interactive Rider on the pinned SDK:
 C# gutter coexistence, configuration persistence, target management, navigation,
 step controls and Variables presentation. Physical A4.4 USB Gecko/BBA remains
 deferred separately. Neither is proven by fake peers, Plugin Verifier or emulator
 success. Objects, evaluation, mutation, exception/async diagnostics, Release target
 builds, automatic reconnect and Visual Studio remain outside this slice.
+
+## Interactive Snake validation and faster Step Over
+
+On 2026-10-17 the user confirmed a Windows Rider session with Dolphin waiting for
+attach, Resume reaching a dedicated DolphinDotNet source breakpoint, working basic
+Step Over and primitive values in Rider's Variables window. Regular .NET line
+breakpoints were not forwarded; selecting the DolphinDotNet attach configuration
+and using its breakpoint type resolved that issue. The exact installed versions
+and commit were not supplied, so this records the working flow rather than a full
+versioned A6 release gate. Pause also exposed Dolphin's extra empty interrupt reply;
+the protocol fix and regression are in the follow-up branch.
+
+The next increment addresses the reported slow stepping and console repetition:
+
+- Supported unconditional linked calls use a temporary return breakpoint for
+  Step Over. Desired user breakpoints stay active during the continue, including
+  recursive calls. CFA/source arbitration still decides when the step completes.
+- Conditional/tail/unknown calls retain instruction stepping; unsupported unwind
+  states stay explicit. Step Into/Out are unchanged. Pause interrupts a long callee.
+- Pause is serialized with a running continue, avoiding unsolicited stop replies
+  during memory/register commands. Early Pause requests are checked when continue
+  starts and during instruction stepping; disconnect uses the same stop path.
+- Stack snapshots/frame IDs are reused while stopped and expire on execution.
+  Partial-stack warnings are emitted once per reason per attach. Routine successful
+  source-step/breakpoint descriptions are no longer printed by the Rider bridge.
+
+Host regression coverage exercises the real adapter with deterministic RSP peers
+for call/return, recursion, same-line calls, breakpoint priority, interruption,
+cleanup, exit/signals and stack snapshot lifetime. The existing real-Dolphin stack
+gate steps over Inner in Outer and remains required for this increment. Command
+count reduction is tested; real latency and updated Rider UI behavior still need
+acceptance. A7 remains primitive-only; verified object layouts and bounded child
+expansion are the next inspection slice, with expressions and mutation excluded.

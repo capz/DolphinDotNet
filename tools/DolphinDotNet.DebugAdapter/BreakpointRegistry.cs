@@ -3,7 +3,7 @@ using DolphinDotNet.Debugger;
 namespace DolphinDotNet.DebugAdapter;
 
 /// <summary>Desired source sets and actual native writes are tracked independently.</summary>
-public sealed class BreakpointRegistry(RspClient client)
+public sealed class BreakpointRegistry(RspClient client, Func<bool>? pauseRequested = null)
 {
     public sealed record Entry(int Id, int Line, uint[] Addresses, string? Error);
     private readonly Dictionary<string, Entry[]> _sources = new(StringComparer.Ordinal);
@@ -55,5 +55,21 @@ public sealed class BreakpointRegistry(RspClient client)
             await client.SetSoftwareBreakpointAsync(address);
             _installed.Add(address);
         }
+    }
+
+    /// <summary>Run with user breakpoints and one temporary return breakpoint.
+    /// A successful stop removes all native writes before instruction stepping resumes.
+    /// A failed RSP operation is left to session teardown; no further commands are safe.</summary>
+    public async Task<RspStop> ContinueToAsync(uint address, CancellationToken token)
+    {
+        await RestoreAsync();
+        if (!_installed.Contains(address))
+        {
+            await client.SetSoftwareBreakpointAsync(address, token);
+            _installed.Add(address);
+        }
+        var stop = await client.ContinueAsync(token, pauseRequested);
+        if (!stop.Exited) await SuspendAsync();
+        return stop;
     }
 }

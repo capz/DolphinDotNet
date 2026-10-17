@@ -38,6 +38,15 @@ class Target:
         self.stack_pointer = 0 if startup else 0x81700000
         self.interrupt_empty_reply = interrupt_empty_reply
         self.empty_register = False
+        self.step_destinations = {}
+        self.step_stack_pointers = {}
+        self.continue_stop = None
+        self.continue_stack_pointer = None
+        self.continuing = threading.Event()
+        self.delay_memory = False
+        self.memory_requested = threading.Event()
+        self.memory_release = threading.Event()
+        self.interrupts = 0
         self.breakpoints = set()
         self.commands = []
         self.memory = {0x81700004: bytes.fromhex("00000003"), 0x81700008: bytes.fromhex("ffffffff"),
@@ -61,6 +70,7 @@ class Target:
                     if byte == b"+":
                         continue
                     if byte == b"\x03":
+                        self.interrupts += 1
                         if self.interrupt_empty_reply:
                             # Dolphin sends a stop without an ACK for raw Ctrl-C,
                             # then an unsolicited empty reply from its dispatcher.
@@ -90,9 +100,20 @@ class Target:
                         self.breakpoints.discard(int(command.split(",")[1], 16))
                         self.reply("OK")
                     elif command == "s":
-                        self.pc += 4
+                        self.stack_pointer = self.step_stack_pointers.get(self.pc, self.stack_pointer)
+                        self.pc = self.step_destinations.get(self.pc, self.pc + 4)
                         self.reply(f"T0540:{self.pc:08x};")
                     elif command == "c":
+                        self.continuing.set()
+                        if self.continue_stop is not None:
+                            reply = self.continue_stop
+                            self.continue_stop = None
+                            if reply.startswith('T'):
+                                self.pc = int(reply.split(':')[1].split(';')[0], 16)
+                            if self.continue_stack_pointer is not None:
+                                self.stack_pointer = self.continue_stack_pointer
+                            self.reply(reply)
+                            continue
                         candidates = sorted(b for b in self.breakpoints if b >= self.pc)
                         if candidates:
                             self.pc = candidates[0]
@@ -105,6 +126,10 @@ class Target:
                     elif command == "p3":
                         self.reply("0000002a")
                     elif command.startswith("m"):
+                        if self.delay_memory:
+                            self.memory_requested.set()
+                            assert self.memory_release.wait(3), 'Timed out waiting for memory response release'
+                            self.delay_memory = False
                         address, size = (int(v, 16) for v in command[1:].split(","))
                         self.reply(self.memory.get(address, bytes(size))[:size].hex())
                     else:
@@ -181,6 +206,8 @@ class AdapterTests(unittest.TestCase):
         self.client.request("initialize", dict(pathFormat="path", linesStartAt1=True), fragment=True)
 
     def tearDown(self):
+        if self.target:
+            self.target.memory_release.set()
         self.client.close()
         if self.serial_relay:
             self.serial_relay.close()
@@ -252,6 +279,183 @@ class AdapterTests(unittest.TestCase):
         self.target.empty_register = True
         result = self.client.request('stackTrace', dict(threadId=1), success=False)
         self.assertIn('Invalid register response', result['message'])
+
+    def attach_call_target(self, opcode=0x48001001, same_line=False):
+        data = json.loads(self.address.read_text())
+        data['methods'][0]['breakpoints'] = [
+            dict(document='/build/日本/Game.cs', line=10, addresses=['0x80004000']),
+            dict(document='/build/日本/Game.cs', line=11, addresses=['0x80004004']),
+            dict(document='/build/日本/Game.cs', line=12, addresses=['0x80004008'])]
+        if same_line:
+            data['methods'][0]['breakpoints'][0]['addresses'].append('0x80004004')
+            data['methods'][0]['breakpoints'][1]['addresses'] = ['0x80004008']
+            data['methods'][0]['breakpoints'].pop()
+        data['methods'].append(dict(symbol='callee', nativeStart='0x80005000', nativeSize=256,
+            breakpoints=[dict(document='/build/日本/Game.cs', line=20, addresses=['0x80005000']),
+                         dict(document='/build/日本/Game.cs', line=21, addresses=['0x80005004'])]))
+        data['unwind'][0]['cfaOffset'] = 32
+        data['unwind'].append(dict(start='0x80005000', end='0x80005100', supported=True,
+            cfaRegister=1, cfaOffset=0, registers={'65': dict(kind='undefined')}))
+        self.address.write_text(json.dumps(data))
+        self.attach()
+        self.target.memory[0x80004000] = opcode.to_bytes(4, 'big') + bytes.fromhex('60000000') * 31
+        self.target.step_destinations[0x80004000] = 0x80005000
+
+    def test_step_over_call_runs_to_return_and_removes_temporary_breakpoint(self):
+        self.attach_call_target()
+        self.bp(lines=(10,))
+        self.target.continue_stop = 'T0540:80004004;'
+        self.client.request('next', dict(threadId=1))
+        stop = self.client.event('stopped')
+        self.assertEqual(('step', 'SourceLocation'), (stop['reason'], stop['description']))
+        self.assertEqual(1, self.target.commands.count('s'))
+        self.assertEqual(1, self.target.commands.count('c'))
+        self.assertIn('Z0,80004004,4', self.target.commands)
+        self.assertIn('z0,80004004,4', self.target.commands)
+        self.assertEqual({0x80004000}, self.target.breakpoints)
+        self.assertEqual(11, self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['line'])
+
+    def test_step_over_call_keeps_user_breakpoints_inside_callee(self):
+        self.attach_call_target()
+        entries = self.bp(lines=(10, 21))
+        self.target.continue_stop = 'T0540:80005004;'
+        self.client.request('next', dict(threadId=1))
+        stop = self.client.event('stopped')
+        self.assertEqual('breakpoint', stop['reason'])
+        self.assertEqual([entries[1]['id']], stop['hitBreakpointIds'])
+        self.assertEqual({0x80004000, 0x80005004}, self.target.breakpoints)
+        self.assertEqual(21, self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['line'])
+
+    def test_step_over_indirect_call_preserves_user_breakpoint_at_return(self):
+        self.attach_call_target(opcode=0x4e800421)  # bctrl
+        entry = self.bp(lines=(11,))[0]
+        self.target.continue_stop = 'T0540:80004004;'
+        self.client.request('next', dict(threadId=1))
+        stop = self.client.event('stopped')
+        self.assertEqual('breakpoint', stop['reason'])
+        self.assertEqual([entry['id']], stop['hitBreakpointIds'])
+        self.assertEqual({0x80004004}, self.target.breakpoints)
+        self.assertEqual(1, self.target.commands.count('c'))
+
+    def test_step_over_conditional_linked_branch_keeps_single_step_fallback(self):
+        self.attach_call_target(opcode=0x41821001)  # conditional bcl
+        self.target.step_destinations[0x80005000] = 0x80004004
+        self.client.request('next', dict(threadId=1))
+        self.assertEqual('SourceLocation', self.client.event('stopped')['description'])
+        self.assertEqual(2, self.target.commands.count('s'))
+        self.assertNotIn('c', self.target.commands)
+
+    def test_step_over_fast_return_on_same_line_keeps_advancing(self):
+        self.attach_call_target(same_line=True)
+        self.target.continue_stop = 'T0540:80004004;'
+        self.client.request('next', dict(threadId=1))
+        self.assertEqual('SourceLocation', self.client.event('stopped')['description'])
+        self.assertEqual(2, self.target.commands.count('s'))
+        self.assertEqual(11, self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['line'])
+
+    def test_step_over_recursive_call_proves_activation_before_same_line_return(self):
+        self.attach_call_target(opcode=0x48000001, same_line=True)
+        self.target.step_destinations[0x80004000] = 0x80004000
+        self.target.step_stack_pointers[0x80004000] = 0x816fffe0
+        self.target.continue_stack_pointer = 0x81700000
+        self.target.continue_stop = 'T0540:80004004;'
+        self.client.request('next', dict(threadId=1))
+        self.assertEqual('SourceLocation', self.client.event('stopped')['description'])
+        self.assertEqual(1, self.target.commands.count('s'))
+        self.assertEqual(1, self.target.commands.count('c'))
+        self.assertEqual(10, self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['line'])
+
+    def test_step_over_callee_entry_breakpoint_prevents_fast_continue(self):
+        self.attach_call_target()
+        entry = self.bp(lines=(20,))[0]
+        self.client.request('next', dict(threadId=1))
+        stop = self.client.event('stopped')
+        self.assertEqual('breakpoint', stop['reason'])
+        self.assertEqual([entry['id']], stop['hitBreakpointIds'])
+        self.assertNotIn('c', self.target.commands)
+        self.assertNotIn('Z0,80004004,4', self.target.commands)
+
+    def test_pause_during_fast_step_removes_return_breakpoint(self):
+        self.attach_call_target()
+        self.client.request('next', dict(threadId=1))
+        self.assertTrue(self.target.continuing.wait(3))
+        self.client.request('pause', dict(threadId=1))
+        self.assertEqual('pause', self.client.event('stopped')['reason'])
+        self.assertFalse(self.target.breakpoints)
+        self.assertIn('z0,80004004,4', self.target.commands)
+        self.assertTrue(self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'])
+
+    def test_pause_while_reading_step_instruction_does_not_inject_rsp_stop(self):
+        self.attach_call_target()
+        self.target.delay_memory = True
+        self.client.request('next', dict(threadId=1))
+        self.assertTrue(self.target.memory_requested.wait(3))
+        self.client.request('pause', dict(threadId=1))
+        self.target.memory_release.set()
+        self.assertEqual('pause', self.client.event('stopped')['reason'])
+        self.assertEqual(0, self.target.interrupts)
+        self.assertNotIn('s', self.target.commands)
+        self.assertNotIn('c', self.target.commands)
+        self.assertTrue(self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'])
+
+    def test_disconnect_during_fast_step_removes_return_breakpoint(self):
+        self.attach_call_target()
+        self.client.request('next', dict(threadId=1))
+        self.assertTrue(self.target.continuing.wait(3))
+        self.client.request('disconnect')
+        self.client.event('terminated')
+        self.assertFalse(self.target.breakpoints)
+        self.assertNotIn('k', self.target.commands)
+
+    def test_signal_during_fast_step_stays_visible(self):
+        self.attach_call_target()
+        self.target.continue_stop = 'T0b40:80005004;'
+        self.client.request('next', dict(threadId=1))
+        stop = self.client.event('stopped')
+        self.assertEqual(('exception', 'Signal'), (stop['reason'], stop['description']))
+        self.assertFalse(self.target.breakpoints)
+
+    def test_unexpected_trap_during_fast_step_stays_visible(self):
+        self.attach_call_target()
+        self.target.continue_stop = 'T0540:80005004;'
+        self.client.request('next', dict(threadId=1))
+        stop = self.client.event('stopped')
+        self.assertEqual(('exception', 'Signal'), (stop['reason'], stop['description']))
+        self.assertFalse(self.target.breakpoints)
+
+    def test_exit_during_fast_step_does_not_write_to_exited_target(self):
+        self.attach_call_target()
+        self.target.continue_stop = 'W00'
+        self.client.request('next', dict(threadId=1))
+        self.client.event('terminated')
+        self.assertEqual('c', self.target.commands[-1])
+
+    def test_stack_snapshot_reuses_frames_and_refreshes_after_execution(self):
+        self.attach()
+        first = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames']
+        reads = self.target.commands.count('p1')
+        again = self.client.request('stackTrace', dict(threadId=1, startFrame=0, levels=1))['body']['stackFrames']
+        self.assertEqual(first, again)
+        self.assertEqual(reads, self.target.commands.count('p1'))
+        self.client.request('stepIn', dict(threadId=1))
+        self.client.event('stopped')
+        refreshed = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames']
+        self.assertNotEqual(first[0]['id'], refreshed[0]['id'])
+        self.assertGreater(self.target.commands.count('p1'), reads)
+
+    def test_partial_stack_diagnostic_is_not_repeated_after_steps(self):
+        data = json.loads(self.address.read_text())
+        data['unwind'] = []
+        self.address.write_text(json.dumps(data))
+        self.attach()
+        self.client.request('stackTrace', dict(threadId=1))
+        self.assertIn('Partial stack: MissingRules', self.client.event('output')['output'])
+        self.bp(lines=(11,))
+        self.client.request('continue', dict(threadId=1))
+        self.client.event('stopped')
+        self.client.request('stackTrace', dict(threadId=1))
+        self.client.request('threads')  # Drain any output emitted after the stack response.
+        self.assertFalse(any('Partial stack' in e.get('body', {}).get('output', '') for e in self.client.events))
 
     def test_invalid_transport_is_rejected_before_connecting(self):
         for args in [dict(transport="unknown"), dict(transport="usbGecko", serialPort="", baudRate=115200),

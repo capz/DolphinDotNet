@@ -13,11 +13,15 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     private RspStop? _stop;
     private Task? _execution;
     private volatile bool _running;
-    private bool _initialized, _configured, _closed, _pauseRequested;
+    private volatile bool _pauseRequested;
+    private bool _initialized, _configured, _closed;
     private int _lineBase = 1, _columnBase = 1, _nextFrame;
     private bool _uriPaths;
     private sealed record FrameState(NativeStackFrame Frame, bool TopFrame, uint Lookup);
     private readonly Dictionary<int, FrameState> _frames = new();
+    private StackTraceResult? _stackTrace;
+    private int[] _stackFrameIds = Array.Empty<int>();
+    private readonly HashSet<UnwindStopReason> _reportedUnwindReasons = new();
     private readonly Dictionary<int, (FrameState Frame, DebugVariable[] Variables)> _variableScopes = new();
     private int _nextVariable;
     private readonly CancellationTokenSource _lifetime = new();
@@ -84,6 +88,8 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             if (_client is not null) throw new InvalidOperationException("Already attached.");
             _configured = false;
             _frames.Clear();
+            _stackTrace = null;
+            _reportedUnwindReasons.Clear();
             _variableScopes.Clear();
             _symbols = SourceAddressMap.Load(Required(args, "elf"), Required(args, "sourceMap"), Required(args, "addressMap"));
             _paths = new SourcePathMapper(args);
@@ -96,7 +102,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             {
                 _stop = await new SourceStepper(_client, _symbols).ReadProgramCounterAsync(await _client.QueryStopAsync());
                 if (_stop.Exited) throw new InvalidOperationException("Target has exited.");
-                _breakpoints = new BreakpointRegistry(_client);
+                _breakpoints = new BreakpointRegistry(_client, () => _pauseRequested);
             }
             catch { await _client.DisposeAsync(); _client = null; throw; }
             await connection.RespondAsync(request);
@@ -110,7 +116,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             ThreadId(args);
             if (!_running) throw new InvalidOperationException("Target is already stopped.");
             _pauseRequested = true;
-            await _client.InterruptAsync();
+            await _client.InterruptIfContinuingAsync();
             await connection.RespondAsync(request);
             return;
         }
@@ -146,15 +152,23 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 break;
             case "stackTrace":
                 ThreadId(args);
-                var trace = await new PowerPcUnwinder(_client, _symbols).ReadStackAsync(_stop!.ProgramCounter!.Value);
                 var start = args.TryGetProperty("startFrame", out var sf) ? sf.GetInt32() : 0;
                 var levels = args.TryGetProperty("levels", out var lv) ? lv.GetInt32() : 0;
                 if (start < 0 || levels < 0) throw new ArgumentException("Invalid stack pagination.");
+                if (_stackTrace is null)
+                {
+                    _stackTrace = await new PowerPcUnwinder(_client, _symbols).ReadStackAsync(_stop!.ProgramCounter!.Value);
+                    _stackFrameIds = _stackTrace.Frames.Select((frame, index) =>
+                    {
+                        var id = ++_nextFrame;
+                        _frames.Add(id, new(frame, index == 0, index == 0 ? frame.ProgramCounter : frame.ProgramCounter >= 4 ? frame.ProgramCounter - 4 : 0));
+                        return id;
+                    }).ToArray();
+                }
+                var trace = _stackTrace;
                 var frames = trace.Frames.Skip(start).Take(levels == 0 ? int.MaxValue : levels).Select((frame, index) =>
                 {
-                    var id = ++_nextFrame;
-                    var top = start + index == 0;
-                    _frames.Add(id, new(frame, top, top ? frame.ProgramCounter : frame.ProgramCounter >= 4 ? frame.ProgramCounter - 4 : 0));
+                    var id = _stackFrameIds[start + index];
                     var source = frame.SourceLocations.Count == 1 ? frame.SourceLocations[0] : null;
                     var local = source is null ? null : _paths!.ToLocal(source.Document);
                     return new
@@ -166,8 +180,8 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                     };
                 }).ToArray();
                 await connection.RespondAsync(request, new { stackFrames = frames, totalFrames = trace.Frames.Count });
-                if (trace.Reason != UnwindStopReason.EndOfStack)
-                    await connection.EventAsync("output", new { category = "console", output = $"Partial stack: {trace.Reason}\n" });
+                if (trace.Reason != UnwindStopReason.EndOfStack && _reportedUnwindReasons.Add(trace.Reason))
+                    await connection.EventAsync("output", new { category = "console", output = $"Partial stack: {trace.Reason}. Available frames are shown; this limitation is reported once per attach.\n" });
                 break;
             case "scopes":
                 if (!_frames.TryGetValue(args.GetProperty("frameId").GetInt32(), out var frameState)) throw new ArgumentException("Unknown or stale frameId.");
@@ -209,6 +223,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                         ? "Resuming with no verified source breakpoints. In Rider, select DolphinDotNet Attach before adding a new gutter breakpoint; existing .NET breakpoints are not sent to this adapter. Check rejected breakpoint messages and source path mappings.\n"
                         : $"Resuming with {_breakpoints.VerifiedCount} verified source breakpoint(s) at {_breakpoints.NativeAddressCount} native address(es).\n" });
                 _frames.Clear();
+                _stackTrace = null;
                 _variableScopes.Clear();
                 _running = true;
                 _pauseRequested = false;
@@ -227,18 +242,20 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
         string? description = null;
         try
         {
-            var stepper = new SourceStepper(_client!, _symbols!, _breakpoints!.Contains);
-            await _breakpoints.SuspendAsync();
+            var breakpoints = _breakpoints!;
+            var stepper = new SourceStepper(_client!, _symbols!, breakpoints.Contains, breakpoints.ContinueToAsync,
+                () => _pauseRequested);
+            await breakpoints.SuspendAsync();
             if (command == "continue")
             {
                 // Step off an installed breakpoint before resuming so it cannot retrigger.
-                var steppedOff = _stop!.ProgramCounter is uint pc && _breakpoints.Contains(pc);
+                var steppedOff = _stop!.ProgramCounter is uint pc && breakpoints.Contains(pc);
                 if (steppedOff)
                     _stop = await stepper.ReadProgramCounterAsync(await _client!.StepInstructionAsync(_lifetime.Token), _lifetime.Token);
-                await _breakpoints.RestoreAsync();
+                await breakpoints.RestoreAsync();
                 if (!_stop!.Exited && (!steppedOff || _stop.Signal == 5))
-                    _stop = await stepper.ReadProgramCounterAsync(await _client!.ContinueAsync(_lifetime.Token), _lifetime.Token);
-                reason = _pauseRequested ? "pause" : _stop.ProgramCounter is uint stoppedPc && _breakpoints.Contains(stoppedPc) ? "breakpoint" : "exception";
+                    _stop = await stepper.ReadProgramCounterAsync(await _client!.ContinueAsync(_lifetime.Token, () => _pauseRequested), _lifetime.Token);
+                reason = _pauseRequested ? "pause" : _stop.Signal == 5 && _stop.ProgramCounter is uint stoppedPc && breakpoints.Contains(stoppedPc) ? "breakpoint" : "exception";
             }
             else
             {
@@ -251,7 +268,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 _stop = result.Stop;
                 reason = result.Reason == SourceStepReason.UserBreakpoint ? "breakpoint" : _pauseRequested ? "pause" : result.Reason == SourceStepReason.Signal ? "exception" : "step";
                 description = result.Reason.ToString();
-                if (!_stop.Exited) await _breakpoints.RestoreAsync();
+                if (!_stop.Exited) await breakpoints.RestoreAsync();
             }
             _running = false;
             if (_stop!.Exited)
@@ -286,7 +303,8 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
         {
             if (_running && _client is not null)
             {
-                await _client.InterruptAsync();
+                _pauseRequested = true;
+                await _client.InterruptIfContinuingAsync();
                 if (_execution is not null) await _execution.WaitAsync(TimeSpan.FromSeconds(3));
             }
             if (_client is not null && _stop is { Exited: false }) await _breakpoints!.SuspendAsync();

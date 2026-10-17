@@ -21,6 +21,8 @@ public sealed class RspClient : IAsyncDisposable
     private readonly TimeSpan _timeout;
     private bool _disposed;
     private volatile bool _interruptReplyPending;
+    private volatile bool _continuing;
+    private bool _continueInterrupted;
 
     public RspClient(Stream stream, bool leaveOpen = true, TimeSpan? timeout = null)
     {
@@ -91,7 +93,8 @@ public sealed class RspClient : IAsyncDisposable
     public async Task<string> CommandAsync(string command, CancellationToken cancellationToken = default)
         => await CommandCoreAsync(command, false, cancellationToken).ConfigureAwait(false);
 
-    private async Task<string> CommandCoreAsync(string command, bool waitForStop, CancellationToken cancellationToken)
+    private async Task<string> CommandCoreAsync(string command, bool waitForStop, CancellationToken cancellationToken,
+        Func<bool>? interruptRequested = null)
     {
         if (string.IsNullOrEmpty(command) || command.Any(c => c is '$' or '#' or '}' or '*' || c > 0x7f))
             throw new ArgumentException("Invalid literal RSP command.", nameof(command));
@@ -102,13 +105,17 @@ public sealed class RspClient : IAsyncDisposable
         {
             ThrowIfDisposed();
             var frame = Encode(command);
-            await WriteAsync(frame, deadline.Token).ConfigureAwait(false);
+            await WriteAsync(frame, deadline.Token, startsContinue: waitForStop).ConfigureAwait(false);
+            // Pause may have arrived just before the continue frame was sent.
+            if (waitForStop && interruptRequested?.Invoke() == true)
+                await InterruptIfContinuingAsync(cancellationToken).ConfigureAwait(false);
             // A running target may legitimately take minutes to stop. The session
             // owns its cancellation and must interrupt/drain before another request.
             return await ReadReplyAsync(frame, waitForStop ? cancellationToken : deadline.Token).ConfigureAwait(false);
         }
         finally
         {
+            if (waitForStop) _continuing = false;
             _commands.Release();
         }
     }
@@ -131,8 +138,8 @@ public sealed class RspClient : IAsyncDisposable
     }
 
     public Task<RspStop> QueryStopAsync(CancellationToken token = default) => StopCommandAsync("?", token);
-    public async Task<RspStop> ContinueAsync(CancellationToken token = default)
-        => RspStop.Parse(await CommandCoreAsync("c", true, token).ConfigureAwait(false));
+    public async Task<RspStop> ContinueAsync(CancellationToken token = default, Func<bool>? interruptRequested = null)
+        => RspStop.Parse(await CommandCoreAsync("c", true, token, interruptRequested).ConfigureAwait(false));
     public Task<RspStop> StepInstructionAsync(CancellationToken token = default) => StopCommandAsync("s", token);
 
     private async Task<RspStop> StopCommandAsync(string command, CancellationToken token)
@@ -144,6 +151,23 @@ public sealed class RspClient : IAsyncDisposable
         ThrowIfDisposed();
         _interruptReplyPending = true;
         await WriteAsync(new byte[] { 3 }, token).ConfigureAwait(false);
+    }
+
+    /// <summary>Interrupt an active continue once. Inspection/single-step commands
+    /// must finish their reply first; injecting a stop into them corrupts framing.</summary>
+    public async Task InterruptIfContinuingAsync(CancellationToken token = default)
+    {
+        await _writes.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            if (!_continuing || _continueInterrupted) return;
+            _continueInterrupted = true;
+            _interruptReplyPending = true;
+            await _stream.WriteAsync(new byte[] { 3 }, token).ConfigureAwait(false);
+            await _stream.FlushAsync(token).ConfigureAwait(false);
+        }
+        finally { _writes.Release(); }
     }
 
     public async Task SetSoftwareBreakpointAsync(uint address, CancellationToken token = default)
@@ -294,7 +318,7 @@ public sealed class RspClient : IAsyncDisposable
         return _byte[0];
     }
 
-    private async Task WriteAsync(byte[] bytes, CancellationToken token)
+    private async Task WriteAsync(byte[] bytes, CancellationToken token, bool startsContinue = false)
     {
         await _writes.WaitAsync(token).ConfigureAwait(false);
         try
@@ -302,6 +326,11 @@ public sealed class RspClient : IAsyncDisposable
             ThrowIfDisposed();
             await _stream.WriteAsync(bytes, token).ConfigureAwait(false);
             await _stream.FlushAsync(token).ConfigureAwait(false);
+            if (startsContinue)
+            {
+                _continueInterrupted = false;
+                _continuing = true;
+            }
         }
         finally { _writes.Release(); }
     }

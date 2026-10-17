@@ -114,7 +114,9 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
                 if (breakpoint != null) getSession().breakpointReached(breakpoint, null, context);
                 else getSession().positionReached(context);
             });
-            if (args.getDescription() != null) output(args.getDescription() + "\n", false);
+            var description = args.getDescription();
+            if (description != null && !description.equals("SourceLocation") && !description.equals("UserBreakpoint"))
+                output(description + "\n", false);
         });
     }
     @Override public void continued() { running = true; ++generation; }
