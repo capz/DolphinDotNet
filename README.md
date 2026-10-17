@@ -14,13 +14,14 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
   - Allows for on-device debugging using visual studio and rider, using gdb over BBA or USB Gecko
 - **Support many assets from retail games**
   - Out of the box support for meshes, textures, animations, sound files
-- **Support common asset formats for easy homebrewing*
+- **Support common asset formats for easy homebrewing**
   - Out of the box support for obj, fbx, glb 3d models with meshes, animations, textures
   - Out of the box support for adx, with looping regions converted from mp3 with sidecart metadata using supplied tooling
 
 ## Current focus ##
-   - Supporting on-device debugging
-   - > **Supporting live debugging via emulator**
+   - **Supporting live debugging via emulator**
+   - Supporting on-device debugging via BBA (LAN)
+   - Supporting on-device debugging via USB Gecko (serial port)
 
 ## Quick start: build and run Pong
 
