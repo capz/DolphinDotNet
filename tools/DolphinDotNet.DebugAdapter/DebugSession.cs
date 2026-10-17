@@ -23,6 +23,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     private int[] _stackFrameIds = Array.Empty<int>();
     private readonly HashSet<UnwindStopReason> _reportedUnwindReasons = new();
     private readonly Dictionary<int, (FrameState Frame, DebugVariable[] Variables)> _variableScopes = new();
+    private readonly Dictionary<int, ObjectView> _objectViews = new();
     private int _nextVariable;
     private readonly CancellationTokenSource _lifetime = new();
 
@@ -91,6 +92,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             _stackTrace = null;
             _reportedUnwindReasons.Clear();
             _variableScopes.Clear();
+            _objectViews.Clear();
             _symbols = SourceAddressMap.Load(Required(args, "elf"), Required(args, "sourceMap"), Required(args, "addressMap"));
             _paths = new SourcePathMapper(args);
             var transport = AttachTransport.Parse(args);
@@ -196,18 +198,33 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 await connection.RespondAsync(request, new { scopes });
                 break;
             case "variables":
-                if (!_variableScopes.TryGetValue(args.GetProperty("variablesReference").GetInt32(), out var scope))
+                var reference = args.GetProperty("variablesReference").GetInt32();
+                var isScope = _variableScopes.TryGetValue(reference, out var scope);
+                var isObject = _objectViews.TryGetValue(reference, out var view);
+                if (!isScope && !isObject)
                     throw new ArgumentException("Unknown or stale variablesReference.");
                 var first = args.TryGetProperty("start", out var begin) ? begin.GetInt32() : 0;
                 var count = args.TryGetProperty("count", out var amount) ? amount.GetInt32() : 0;
                 if (first < 0 || count < 0) throw new ArgumentException("Invalid variable pagination.");
-                var selected = args.TryGetProperty("filter", out var filter) && filter.GetString() == "indexed"
-                    ? Array.Empty<DebugVariable>() : scope.Variables.Skip(first).Take(count == 0 ? int.MaxValue : count).ToArray();
+                var pageSize = count == 0 ? ObjectInspector.MaximumPageSize : Math.Min(count, ObjectInspector.MaximumPageSize);
+                if (args.TryGetProperty("filter", out var filter) && filter.GetString() == "indexed") pageSize = 0;
                 var values = new List<object>();
-                foreach (var variable in selected)
+                var inspector = new ObjectInspector(_client, _symbols);
+                var total = isScope ? scope.Variables.Length : view!.Layout.Fields.Count;
+                foreach (var index in Enumerable.Range(0, total).Skip(first).Take(pageSize))
                 {
-                    var value = await new PrimitiveVariableReader(_client).ReadAsync(variable, scope.Frame.Frame, scope.Frame.TopFrame, _lifetime.Token);
-                    values.Add(new { name = value.Name, type = value.Type, value = value.Value, variablesReference = 0,
+                    var value = isScope
+                        ? await inspector.ReadAsync(scope.Variables[index], scope.Frame.Frame, scope.Frame.TopFrame, _lifetime.Token)
+                        : await inspector.ReadFieldAsync(view!, view!.Layout.Fields[index], _lifetime.Token);
+                    var children = 0;
+                    if (value.Children is not null && _objectViews.Count < 4096)
+                    {
+                        children = ++_nextVariable;
+                        _objectViews.Add(children, value.Children);
+                    }
+                    var display = value.Children is not null && children == 0 ? value.Value + " <inspection handle limit>" : value.Value;
+                    values.Add(new { name = value.Name, type = value.Type, value = display, variablesReference = children,
+                        namedVariables = children == 0 ? 0 : value.Children!.Layout.Fields.Count,
                         presentationHint = new { attributes = new[] { "readOnly" }, kind = "data" } });
                 }
                 await connection.RespondAsync(request, new { variables = values });
@@ -225,6 +242,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 _frames.Clear();
                 _stackTrace = null;
                 _variableScopes.Clear();
+                _objectViews.Clear();
                 _running = true;
                 _pauseRequested = false;
                 await connection.RespondAsync(request, command == "continue" ? new { allThreadsContinued = true } : null);
@@ -232,7 +250,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 _execution = ExecuteAsync(command);
                 break;
             default:
-                throw new NotSupportedException($"Unsupported DAP request: {command}. Only read-only primitive inspection is supported; launch and evaluation are not implemented.");
+                throw new NotSupportedException($"Unsupported DAP request: {command}. Only read-only stopped inspection is supported; launch and evaluation are not implemented.");
         }
     }
 

@@ -148,7 +148,7 @@ internal static class GameCubeBundle
                     signature = method.Key.Signature,
                     methodToken = System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(
                         compilation.Model.Methods[method.Key].Handle),
-                    variables = sourceMap!.Variables[method.Key].Select(v => new { nativeName = v.NativeName, name = v.Name, type = v.Type, group = v.Group, storageBytes = v.StorageBytes, scopeStart = v.ScopeStart, scopeEnd = v.ScopeEnd }),
+                    variables = sourceMap!.Variables[method.Key].Select(v => new { nativeName = v.NativeName, name = v.Name, type = v.Type, group = v.Group, storageBytes = v.StorageBytes, scopeStart = v.ScopeStart, scopeEnd = v.ScopeEnd, valueKind = v.ValueKind }),
                     sourceLocations = sourceMap.Methods[method.Key]
                         .OrderBy(location => location.Key)
                         .Select(location => new
@@ -171,12 +171,16 @@ internal static class GameCubeBundle
                 JsonSerializer.Serialize(new
                 {
                     schemaVersion = 2,
-                    assemblies = sourceMap.Assemblies
+                    inspection = DebugInspectionMetadata.Build(compilation),
+                    assemblies = sourceMap!.Assemblies
                         .Select(identity => new { name = identity.Name,
                             moduleVersionId = identity.ModuleVersionId, pdbId = identity.PdbId }),
                     methods
                 },
                     new JsonSerializerOptions { WriteIndented = true }));
+            File.AppendAllText(Path.Combine(directory, "source", "generated_program.c"),
+                "\n_Static_assert(sizeof(void*) == 4 && sizeof(DndObject) == 8, \"debug inspection requires PowerPC32 object ABI\");\n" +
+                "_Static_assert(offsetof(DndString, length) == 8 && offsetof(DndString, chars) == 12, \"debug string ABI mismatch\");\n");
         }
 
         if (gdbTcp is not null || gdbUsb is not null)

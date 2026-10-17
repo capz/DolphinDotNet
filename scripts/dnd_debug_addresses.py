@@ -355,6 +355,37 @@ def attach_variables(mapped, source_map, info_dump, location_dump=''):
                 variables.append(value)
         method['variables'] = variables
 
+def attach_inspection(mapped, source_map, symbol_dump):
+    inspection = source_map.get('inspection')
+    if inspection is None:
+        return
+    if (inspection.get('version'), inspection.get('pointerSize'), inspection.get('objectHeaderSize'),
+            inspection.get('stringLengthOffset'), inspection.get('stringDataOffset')) != (1, 4, 8, 8, 12):
+        raise ValueError('Unsupported managed inspection ABI')
+    symbols = {}
+    required = {layout['nativeSymbol'] for layout in inspection['types']}
+    for line in symbol_dump.splitlines():
+        parts = line.split()
+        if len(parts) < 8 or parts[3] != 'OBJECT' or parts[6] in ('UND', 'ABS') or parts[7] not in required:
+            continue
+        try:
+            address, size = int(parts[1], 16), int(parts[2])
+        except ValueError:
+            continue
+        if not 0x80000000 <= address < 0x81800000 or address % 4 or size < 12:
+            continue
+        identity = (address, size)
+        if parts[7] in symbols and symbols[parts[7]] != identity:
+            raise ValueError('Ambiguous managed type symbol: ' + parts[7])
+        symbols[parts[7]] = identity
+    types = []
+    for layout in inspection['types']:
+        symbol = symbols.get(layout['nativeSymbol'])
+        if symbol is not None:
+            types.append(dict(layout, address=f'0x{symbol[0]:08x}'))
+    mapped['inspection'] = dict(inspection, types=types)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--elf', required=True, type=Path)
@@ -383,6 +414,7 @@ def main():
     locs = subprocess.run([args.readelf, '--wide', '--debug-dump=loc', str(args.elf)],
                           capture_output=True, text=True, check=True).stdout
     attach_variables(mapped, json.loads(source_bytes), info, locs)
+    attach_inspection(mapped, json.loads(source_bytes), symbols)
     mapped['elfSha256'] = hashlib.sha256(args.elf.read_bytes()).hexdigest()
     mapped['sourceMapSha256'] = hashlib.sha256(source_bytes).hexdigest()
     count = sum(len(method['breakpoints']) for method in mapped['methods'])

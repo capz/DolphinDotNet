@@ -49,8 +49,18 @@ class AdapterIntegrationTest {
             var frame = client.server.stackTrace(trace).get(5, TimeUnit.SECONDS).getStackFrames()[0];
             assertEquals("Program.Main", frame.getName()); assertEquals(11, frame.getLine());
             assertEquals(path, frame.getSource().getPath());
+            var scopeArgs = new ScopesArguments(); scopeArgs.setFrameId(frame.getId());
+            var scope = client.server.scopes(scopeArgs).get(5, TimeUnit.SECONDS).getScopes()[0];
+            var variables = new VariablesArguments(); variables.setVariablesReference(scope.getVariablesReference());
+            var roots = client.server.variables(variables).get(5, TimeUnit.SECONDS).getVariables();
+            assertEquals("box", roots[0].getName()); assertTrue(roots[0].getVariablesReference() > 0);
+            assertEquals("\"Snake\"", roots[1].getValue()); assertEquals("null", roots[2].getValue());
+            variables.setVariablesReference(roots[0].getVariablesReference()); variables.setStart(0); variables.setCount(2);
+            var fields = client.server.variables(variables).get(5, TimeUnit.SECONDS).getVariables();
+            assertEquals(2, fields.length); assertEquals("Count", fields[0].getName()); assertEquals("7", fields[0].getValue());
             var step = new StepInArguments(); step.setThreadId(1); client.server.stepIn(step).get(5, TimeUnit.SECONDS);
             assertEquals("SourceLocation", stopped(stops).getDescription());
+            assertThrows(ExecutionException.class, () -> client.server.variables(variables).get(5, TimeUnit.SECONDS));
             request.setBreakpoints(new SourceBreakpoint[0]); client.server.setBreakpoints(request).get(5, TimeUnit.SECONDS);
             continued.clear(); client.server.continue_(resume).get(5, TimeUnit.SECONDS);
             assertNotNull(continued.poll(5, TimeUnit.SECONDS));

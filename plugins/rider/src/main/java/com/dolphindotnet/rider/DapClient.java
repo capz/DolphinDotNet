@@ -63,6 +63,7 @@ final class DapClient implements AutoCloseable {
         });
         var init = new InitializeRequestArguments(); init.setAdapterID("dolphindotnet"); init.setClientID("dolphindotnet-rider");
         init.setLinesStartAt1(true); init.setColumnsStartAt1(true); init.setPathFormat("path");
+        init.setSupportsVariablePaging(true);
         startup = server.initialize(init).orTimeout(Math.min(15000, requestMillis), TimeUnit.MILLISECONDS)
             .thenCompose(capabilities -> server.attach(arguments).orTimeout(requestMillis, TimeUnit.MILLISECONDS))
             .thenCompose(ignored -> initialized.orTimeout(requestMillis, TimeUnit.MILLISECONDS));

@@ -201,25 +201,48 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
                     children.addTopGroup(new XValueGroup(scope.getName()) {
                         @Override public boolean isAutoExpand() { return true; }
                         @Override public void computeChildren(@NotNull XCompositeNode target) {
-                            submit(() -> {
-                                if (target.isObsolete()) return;
-                                if (running || generation != frameGeneration) { target.setErrorMessage("Frame is no longer stopped."); return; }
-                                var args = new VariablesArguments(); args.setVariablesReference(scope.getVariablesReference());
-                                var values = new XValueChildrenList();
-                                for (var variable : await(dap.server.variables(args)).getVariables()) {
-                                    values.add(variable.getName(), new XValue() {
-                                        @Override public void computePresentation(@NotNull XValueNode value, @NotNull XValuePlace place) {
-                                            value.setPresentation(null, variable.getType(), variable.getValue(), false);
-                                        }
-                                    });
-                                }
-                                if (!target.isObsolete() && generation == frameGeneration) target.addChildren(values, true);
-                            });
+                            loadChildren(scope.getVariablesReference(), scope.getNamedVariables(), target, frameGeneration);
                         }
                     });
                 }
                 if (!node.isObsolete() && generation == frameGeneration) node.addChildren(children, true);
             });
         }
+    }
+
+    private void loadChildren(int reference, Integer total, XCompositeNode node, long stopGeneration) {
+        if (total == null || total <= 128) { loadPage(reference, 0, node, stopGeneration); return; }
+        submit(() -> {
+            if (node.isObsolete()) return;
+            if (running || generation != stopGeneration) { node.setErrorMessage("Frame is no longer stopped."); return; }
+            var pages = new XValueChildrenList();
+            for (int offset = 0; offset < Math.min(total, 4096); offset += 128) {
+                final int start = offset;
+                pages.addTopGroup(new XValueGroup("Variables " + (start + 1) + "–" + Math.min(start + 128, total)) {
+                    @Override public void computeChildren(@NotNull XCompositeNode target) { loadPage(reference, start, target, stopGeneration); }
+                });
+            }
+            if (!node.isObsolete() && generation == stopGeneration) node.addChildren(pages, true);
+        });
+    }
+
+    private void loadPage(int reference, int start, XCompositeNode node, long stopGeneration) {
+        submit(() -> {
+            if (node.isObsolete()) return;
+            if (running || generation != stopGeneration) { node.setErrorMessage("Frame is no longer stopped."); return; }
+            var args = new VariablesArguments(); args.setVariablesReference(reference); args.setStart(start); args.setCount(128);
+            var values = new XValueChildrenList();
+            for (var variable : await(dap.server.variables(args)).getVariables()) {
+                values.add(variable.getName(), new XValue() {
+                    @Override public void computePresentation(@NotNull XValueNode value, @NotNull XValuePlace place) {
+                        value.setPresentation(null, variable.getType(), variable.getValue(), variable.getVariablesReference() != 0);
+                    }
+                    @Override public void computeChildren(@NotNull XCompositeNode target) {
+                        loadChildren(variable.getVariablesReference(), variable.getNamedVariables(), target, stopGeneration);
+                    }
+                });
+            }
+            if (!node.isObsolete() && generation == stopGeneration) node.addChildren(values, true);
+        });
     }
 }

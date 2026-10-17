@@ -47,6 +47,7 @@ class Target:
         self.memory_requested = threading.Event()
         self.memory_release = threading.Event()
         self.interrupts = 0
+        self.refused_memory = set()
         self.breakpoints = set()
         self.commands = []
         self.memory = {0x81700004: bytes.fromhex("00000003"), 0x81700008: bytes.fromhex("ffffffff"),
@@ -131,6 +132,9 @@ class Target:
                             assert self.memory_release.wait(3), 'Timed out waiting for memory response release'
                             self.delay_memory = False
                         address, size = (int(v, 16) for v in command[1:].split(","))
+                        if address in self.refused_memory:
+                            self.reply('E01')
+                            continue
                         self.reply(self.memory.get(address, bytes(size))[:size].hex())
                     else:
                         raise AssertionError(command)
@@ -195,6 +199,28 @@ def write_symbol_fixture(root):
     return elf, source, address
 
 
+def write_inspection_fixture(addresses):
+    data = json.loads(addresses.read_text())
+    fields = [dict(name=name, type=type, offset=offset, storageBytes=width, valueKind=kind)
+        for name, type, offset, width, kind in [
+            ('Count', 'System.Int32', 8, 4, 'primitive'), ('Flag', 'System.Byte', 12, 1, 'primitive'),
+            ('Delta', 'System.Int16', 14, 2, 'primitive'), ('Fraction', 'System.Double', 16, 8, 'primitive'),
+            ('Name', 'System.String', 24, 4, 'reference'), ('Next', 'Box', 28, 4, 'reference')]]
+    data['inspection'] = dict(version=1, pointerSize=4, objectHeaderSize=8, stringLengthOffset=8, stringDataOffset=12,
+        types=[dict(name='Box', kind='object', address='0x80008000', size=32, fields=fields),
+               dict(name='System.String', kind='string', address='0x80008040', size=12, fields=[])])
+    data['methods'][0]['variables'] = [dict(name=name, type=type, group='Locals', storageBytes=4,
+        valueKind='reference', location=dict(kind='cfaOffset', offset=offset), visibleAddresses=['0x80004008', '0x8000400c'])
+        for name, type, offset in [('box', 'Box', 4), ('text', 'System.String', 8), ('nothing', 'Box', 12)]]
+    addresses.write_text(json.dumps(data))
+    return {0x81700004: bytes.fromhex('80010000'), 0x81700008: bytes.fromhex('80011000'), 0x8170000c: bytes(4),
+            0x80010000: bytes.fromhex('80008000'), 0x80010008: bytes.fromhex('00000007'),
+            0x8001000c: bytes.fromhex('ff'), 0x8001000e: bytes.fromhex('fffe'),
+            0x80010010: bytes.fromhex('3ff8000000000000'), 0x80010018: bytes.fromhex('80011000'),
+            0x8001001c: bytes.fromhex('80010000'), 0x80011000: bytes.fromhex('80008040'),
+            0x80011008: bytes.fromhex('00000005'), 0x8001100c: 'Snake'.encode('utf-16-be')}
+
+
 class AdapterTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -229,6 +255,128 @@ class AdapterTests(unittest.TestCase):
     def bp(self, path="Game.cs", lines=(10,)):
         return self.client.request("setBreakpoints", dict(source=dict(path="/local/日本/" + path),
             breakpoints=[dict(line=line) for line in lines]))["body"]["breakpoints"]
+
+    def attach_inspection(self, configure=None):
+        memory = write_inspection_fixture(self.address)
+        if configure:
+            data = json.loads(self.address.read_text())
+            configure(data)
+            self.address.write_text(json.dumps(data))
+        self.attach()
+        self.target.memory.update(memory)
+        self.bp(lines=(11,))
+        self.client.request('continue', dict(threadId=1))
+        self.client.event('stopped')
+        frame = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]
+        return self.client.request('scopes', dict(frameId=frame['id']))['body']['scopes'][0]['variablesReference']
+
+    def variables(self, reference, **args):
+        return self.client.request('variables', dict(variablesReference=reference, **args))['body']['variables']
+
+    def test_objects_expand_lazily_with_scalar_fields_strings_null_and_stale_handles(self):
+        scope = self.attach_inspection()
+        roots = {v['name']: v for v in self.variables(scope)}
+        self.assertEqual('"Snake"', roots['text']['value'])
+        self.assertEqual('null', roots['nothing']['value'])
+        box = roots['box']['variablesReference']
+        self.assertGreater(box, 0)
+        self.assertNotIn('m80010008,4', self.target.commands)
+        fields = {v['name']: v for v in self.variables(box)}
+        self.assertEqual(['7', '255', '-2', '1.5', '"Snake"'], [fields[n]['value'] for n in ('Count', 'Flag', 'Delta', 'Fraction', 'Name')])
+        self.assertGreater(fields['Next']['variablesReference'], 0)
+        self.assertTrue(all(v['presentationHint']['attributes'] == ['readOnly'] for v in fields.values()))
+        self.assertEqual(['Delta'], [v['name'] for v in self.variables(box, start=2, count=1)])
+        self.assertEqual([], self.variables(box, filter='indexed'))
+        self.client.request('stepIn', dict(threadId=1))
+        self.client.event('stopped')
+        self.client.request('variables', dict(variablesReference=box), success=False)
+
+    def test_cyclic_object_expansion_has_a_depth_limit(self):
+        scope = self.attach_inspection()
+        box = self.variables(scope)[0]
+        for _ in range(4):
+            self.assertGreater(box['variablesReference'], 0)
+            box = next(v for v in self.variables(box['variablesReference']) if v['name'] == 'Next')
+        self.assertEqual(0, box['variablesReference'])
+        self.assertIn('maximum depth', box['value'])
+
+    def test_string_preview_is_bounded_and_preserves_utf16_units(self):
+        scope = self.attach_inspection()
+        text = '日\n"\\\ud800' + 'a' * 140
+        self.target.memory[0x80011008] = len(text).to_bytes(4, 'big')
+        self.target.memory[0x8001100c] = text.encode('utf-16-be', errors='surrogatepass')
+        preview = self.variables(scope)[1]['value']
+        self.assertIn('日\\n\\"\\\\\\uD800', preview)
+        self.assertIn('length=145', preview)
+        self.assertIn('m8001100c,100', self.target.commands)
+        self.assertNotIn('m8001100c,122', self.target.commands)
+
+    def test_invalid_reference_and_unknown_runtime_type_do_not_guess_layouts(self):
+        scope = self.attach_inspection()
+        self.target.memory[0x81700004] = bytes.fromhex('12345678')
+        self.target.memory[0x80011000] = bytes.fromhex('80008100')
+        values = self.variables(scope)
+        self.assertIn('Invalid object reference', values[0]['value'])
+        self.assertIn('no verified layout', values[1]['value'])
+        self.assertTrue(all(v['variablesReference'] == 0 for v in values))
+        self.assertFalse(any(c.startswith('m12345678') for c in self.target.commands))
+
+    def test_corrupt_string_length_is_unavailable_without_body_read(self):
+        scope = self.attach_inspection()
+        self.target.memory[0x80011008] = bytes.fromhex('ffffffff')
+        self.assertIn('Invalid string length', self.variables(scope)[1]['value'])
+        self.assertFalse(any(c.startswith('m8001100c,') for c in self.target.commands))
+
+    def test_target_refused_field_is_unavailable_and_other_fields_still_work(self):
+        scope = self.attach_inspection()
+        box = self.variables(scope)[0]['variablesReference']
+        self.target.refused_memory.add(0x80010008)
+        fields = {v['name']: v for v in self.variables(box)}
+        self.assertIn('Target refused memory read', fields['Count']['value'])
+        self.assertEqual('255', fields['Flag']['value'])
+        self.assertTrue(self.client.request('threads')['success'])
+
+    def test_malformed_object_metadata_is_rejected_before_connecting(self):
+        write_inspection_fixture(self.address)
+        data = json.loads(self.address.read_text())
+        data['inspection']['types'][0]['fields'][0]['offset'] = 32
+        self.address.write_text(json.dumps(data))
+        response = self.client.request('attach', dict(host='127.0.0.1', port=1, elf=str(self.elf),
+            sourceMap=str(self.source), addressMap=str(self.address)), success=False)
+        self.assertIn('Invalid inspection field layout', response['message'])
+
+    def test_large_object_fields_are_paged_and_reads_are_bounded(self):
+        def configure(data):
+            layout = data['inspection']['types'][0]
+            layout['size'] = 137
+            layout['fields'] = [dict(name=f'f{i}', type='System.Byte', offset=8+i, storageBytes=1, valueKind='primitive') for i in range(129)]
+        scope = self.attach_inspection(configure)
+        box = self.variables(scope)[0]
+        self.assertEqual(129, box['namedVariables'])
+        self.assertEqual(128, len(self.variables(box['variablesReference'], count=10000)))
+        self.assertNotIn('m80010088,1', self.target.commands)
+        last = self.variables(box['variablesReference'], start=128, count=1)
+        self.assertEqual(['f128'], [v['name'] for v in last])
+
+    def test_unsupported_struct_field_does_not_read_guessed_storage(self):
+        def configure(data):
+            field = data['inspection']['types'][0]['fields'][0]
+            field.update(type='SomeStruct', valueKind='unavailable')
+        scope = self.attach_inspection(configure)
+        box = self.variables(scope)[0]['variablesReference']
+        self.assertIn('Unsupported field type', self.variables(box)[0]['value'])
+        self.assertNotIn('m80010008,4', self.target.commands)
+
+    def test_array_reference_is_explicitly_unsupported(self):
+        scope = self.attach_inspection(lambda data: data['methods'][0]['variables'][0].update(type='System.Int32[]'))
+        self.assertIn('Array inspection is not implemented', self.variables(scope)[0]['value'])
+        self.assertNotIn('m80010000,4', self.target.commands)
+
+    def test_reference_in_old_map_without_inspection_metadata_is_unavailable(self):
+        scope = self.attach_inspection(lambda data: data.pop('inspection'))
+        root = self.variables(scope)[0]
+        self.assertIn('no verified layout', root['value'])
+        self.assertEqual(0, root['variablesReference'])
 
     def test_native_startup_without_stack_remains_resumable(self):
         self.target = Target(startup=True)

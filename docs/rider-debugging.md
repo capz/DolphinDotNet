@@ -1,4 +1,4 @@
-# Rider attach debugging (A6 / primitive A7 inspection)
+# Rider attach debugging (A6 / bounded A7 inspection)
 
 `plugins/rider` implements the approved native Rider attach configuration and target
 editor. It uses public XDebugger APIs and Eclipse LSP4J DAP over stdio to the bundled
@@ -8,8 +8,10 @@ LSP4J debug is pinned to 0.24.0. Compatibility is currently limited to 262.*.
 
 **Baseline:** PR #77 passed the complete Gradle package, host protocol/PTY and
 real-Dolphin checks in [run 38944870062](https://github.com/capz/DolphinDotNet/actions/runs/38944870062).
-This follow-up adds lifecycle fault handling, Plugin Verifier and primitive inspection;
-its CI results must be checked separately.
+The stepping/lifecycle/primitive increment passed the complete CI in
+[run 39027086139](https://github.com/capz/DolphinDotNet/actions/runs/39027086139),
+including Windows/macOS/Linux workflows, Rider packaging/Plugin Verifier and real
+Dolphin checks. The object/string increment below requires its own CI result.
 The user has now validated the first interactive Windows Snake workflow in Rider:
 attach to a waiting Dolphin, Resume to a dedicated DolphinDotNet source breakpoint,
 basic Step Over and primitive values in the Variables window. Step Over was slow
@@ -242,7 +244,7 @@ the target stopped. Failed cleanup closes the adapter session and reports an err
 reliable physical reconnect is not yet claimed. The Rider bridge waits for graceful
 adapter exit, then forcibly closes only the adapter if it is unresponsive.
 
-## Primitive inspection contract
+## Stopped inspection contract
 
 The compiler joins Portable PDB parameter/local names and lexical IL scopes to
 generated native slots. The address resolver accepts verified CFA-relative
@@ -251,8 +253,40 @@ Values are decoded as big-endian Boolean, Char, signed/unsigned integers, native
 integers, Single or Double. Caller frames permit proven CFA-relative memory only;
 register-backed values are restricted to the top frame. Missing, ambiguous or
 unsupported locations display an explicit unavailable reason. No expression is
-evaluated to recover a value. Objects, strings, arrays, fields and properties are
-not expanded. Scope visibility is restricted to proven mapped statement addresses.
+evaluated to recover a value. Scope visibility is restricted to proven mapped
+statement addresses.
+
+The next slice exposes reference arguments, locals and class `this`. Supported
+non-generic classes expand into scalar fields, string previews and nested class
+references in Rider's existing Variables window. Inherited fields use the same
+payload offsets as generated field accesses; hidden names are qualified by their
+declaring type. Null displays as `null`. The runtime type pointer must match a
+type symbol bound from this exact ELF. Missing/discarded symbols, native/generic
+base layouts, invalid pointers and unknown runtime types are unavailable rather
+than interpreted using a guessed layout. Scalar fields use their actual 1/2/4/8
+byte width; reference fields reserve the compiler's payload space but read the
+PowerPC's four-byte pointer.
+
+String previews read at most **128 UTF-16 code units**, escape controls/surrogates,
+and show the total length when truncated. Reference expansion stops at depth 4,
+including cyclic graphs. The adapter returns at most 128 variables per request;
+Rider exposes larger objects through page groups. Layouts are limited to 4096
+fields, and at most 4096 expandable handles are retained per stop. Handles expire
+on any execution. Member reads are lazy and validate the MEM1 bounds before
+reading; a well-framed target memory refusal becomes an unavailable value while
+other fields and the session stay usable. Corrupt transport responses still fail.
+
+Arrays, value-type expansion, static fields, properties, expressions and mutation
+remain unsupported. A struct field is explicitly unavailable; generic/unsupported
+runtime layouts are not expanded. No getter, `ToString`, allocation or other target
+code is invoked for inspection.
+
+**Rebuild the target Debug build and install the rebuilt plugin ZIP** for object
+inspection. Older maps still work for their existing primitive slice, but do not
+contain the reference slots/type layouts required for object expansion. The
+optional inspection sub-schema is version 1 inside the existing source/address
+maps; their outer schemas and file names are unchanged. Generated Debug C asserts
+the PowerPC32 object/string ABI before metadata can be used.
 
 ## Acceptance evidence and remaining checks
 
@@ -262,6 +296,12 @@ Automated host checks:
   protocol framing, source identity/maps, breakpoint ownership, stack/stepping,
   pause/resume/disconnect, primitive values, pagination, expired handles, invalid
   transports and serial enumeration.
+- Object tests cover lazy members, scalar widths, nested/null/cyclic references,
+  UTF-16/truncated strings, invalid references/lengths, missing and malformed
+  layouts, target memory refusals, paging, unsupported arrays/struct fields and
+  expired object handles. Compiler tests assert inherited offsets and reference
+  slots; the resolver binds linked type symbols only. Java TCP/PTY integration
+  exercises roots, child pages and stale handles through the packaged adapter.
 - Fast-Step-Over tests cover direct/indirect calls, recursion, same-line returns,
   user breakpoints inside a callee and at its return, conditional-call fallback,
   Pause/disconnect cleanup, target exit/signals, a Pause during code reads, stack
@@ -299,7 +339,7 @@ real Dolphin fixture. Verify Stop leaves the emulator alive and no owned breakpo
 installed. Keep A4.4 physical BBA and USB Gecko validation deferred separately.
 
 Out of scope: DAP launch/build/upload orchestration, automatic target discovery or
-slot negotiation, verified hardware compatibility, reconnect, object inspection,
+slot negotiation, verified hardware compatibility, reconnect, arrays/value types,
 expressions, managed exception filters, async stacks, real thread enumeration,
 reverse execution, Release target debugging, Visual Studio integration and Marketplace
 publishing. Recursive Step Into and same-line Step Over use CFA transitions;

@@ -462,5 +462,34 @@ for call/return, recursion, same-line calls, breakpoint priority, interruption,
 cleanup, exit/signals and stack snapshot lifetime. The existing real-Dolphin stack
 gate steps over Inner in Outer and remains required for this increment. Command
 count reduction is tested; real latency and updated Rider UI behavior still need
-acceptance. A7 remains primitive-only; verified object layouts and bounded child
-expansion are the next inspection slice, with expressions and mutation excluded.
+acceptance. This stepping increment passed complete CI in
+[run 39027086139](https://github.com/capz/DolphinDotNet/actions/runs/39027086139).
+The following inspection increment builds on that validated baseline.
+
+## A7 bounded class and string inspection
+
+Reference arguments, locals and class `this` now have host-side metadata alongside
+the primitive slice. The compiler exports supported class field layouts using the
+same base/payload offsets as code generation. The native resolver binds these to
+linked type objects; only an exact runtime type pointer match permits expansion.
+PowerPC32 object/string ABI assertions protect the emitted layout. Old maps keep
+their primitive behavior; target Debug maps must be rebuilt for reference slots.
+
+Rider's existing Variables window lazily expands class fields and nested references.
+It displays nulls and bounded UTF-16 string previews without invoking getters or
+`ToString`. Depth 4, 128 values per page, 128 UTF-16 units per string preview and
+4096 object handles per stop bound the work. Cycles terminate at the depth limit.
+References expire on execution. Invalid pointers/layouts and unsupported array or
+struct fields are explicit; a valid target memory refusal affects that value,
+while corrupt RSP replies still fail. Generic/native base layouts, arrays,
+value-type expansion, statics, properties, evaluation and mutation are outside
+this slice.
+
+Local coverage includes compiler metadata and inheritance assertions, resolver
+symbol validation, real-adapter object/string/pagination/lifetime tests and an
+actual PowerPC fixture build. The new Java TCP/PTY assertions and real-Dolphin
+inspection gate require current CI; neither the earlier CI nor fake peers prove
+the new Rider object UI. The Dolphin fixture checks object arguments/locals,
+inherited scalar fields, a nested/cyclic reference and string previews. Interactive
+object expansion remains a separate user check after installing the rebuilt plugin
+and rebuilding the target's Debug artifacts.

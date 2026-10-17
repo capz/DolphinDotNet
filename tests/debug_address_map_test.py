@@ -31,6 +31,22 @@ Program.cs - 0x80001040
 
 
 class VariableLocations(unittest.TestCase):
+    def test_inspection_only_binds_linked_object_symbols(self):
+        source = dict(inspection=dict(version=1, pointerSize=4, objectHeaderSize=8, stringLengthOffset=8, stringDataOffset=12,
+            types=[dict(name='Box', nativeSymbol='dnd_type_Box', kind='object', size=32, fields=[]),
+                   dict(name='Discarded', nativeSymbol='dnd_type_Discarded', kind='object', size=8, fields=[])]))
+        mapped = {}
+        symbols = ('1: 80002000 48 OBJECT GLOBAL DEFAULT 2 dnd_type_Box\n2: 00000000 48 OBJECT GLOBAL DEFAULT UND dnd_type_Discarded\n'
+                   '3: 80003000 48 OBJECT LOCAL DEFAULT 2 ResetInfo\n4: 80004000 48 OBJECT LOCAL DEFAULT 2 ResetInfo\n')
+        module.attach_inspection(mapped, source, symbols)
+        self.assertEqual(['Box'], [t['name'] for t in mapped['inspection']['types']])
+        self.assertEqual('0x80002000', mapped['inspection']['types'][0]['address'])
+        with self.assertRaisesRegex(ValueError, 'Ambiguous managed type'):
+            module.attach_inspection({}, source, symbols + '3: 80003000 48 OBJECT GLOBAL DEFAULT 2 dnd_type_Box\n')
+        source['inspection']['pointerSize'] = 8
+        with self.assertRaisesRegex(ValueError, 'Unsupported managed inspection ABI'):
+            module.attach_inspection({}, source, symbols)
+
     def test_native_dwarf_locations_and_unsupported_expressions(self):
         text = f"""
  <1><10>: Abbrev Number: 3 (DW_TAG_subprogram)

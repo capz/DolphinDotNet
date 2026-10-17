@@ -132,6 +132,28 @@ using (var debugMap = System.Text.Json.JsonDocument.Parse(File.ReadAllText(debug
     }
     if (!entryFound) throw new Exception("Managed entry method absent from debug IL map.");
 }
+var inspectionProject = Path.Combine(root, "tests/DebuggerInspectionSmoke/DebuggerInspectionSmoke.csproj");
+Run("dotnet", $"build \"{inspectionProject}\" -c Debug");
+var inspectionDll = Path.Combine(root, "tests/DebuggerInspectionSmoke/bin/Debug/net8.0/DebuggerInspectionSmoke.dll");
+var inspectionBundle = Path.Combine(tempDirectory, "inspection-bundle");
+Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{inspectionDll}\" \"{inspectionBundle}\" --debug-symbols");
+using (var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(inspectionBundle, "dnd-il-debug.json"))))
+{
+    var map = document.RootElement;
+    var box = map.GetProperty("inspection").GetProperty("types").EnumerateArray().Single(t => t.GetProperty("name").GetString() == "Box");
+    var fields = box.GetProperty("fields").EnumerateArray().ToDictionary(f => f.GetProperty("name").GetString()!);
+    if (box.GetProperty("nativeSymbol").GetString() != "dnd_type_Box" || box.GetProperty("size").GetInt32() != 48 ||
+        fields["Count"].GetProperty("offset").GetInt32() != 8 || fields["Flag"].GetProperty("storageBytes").GetInt32() != 1 ||
+        fields["Name"].GetProperty("offset").GetInt32() != 16 || fields["Name"].GetProperty("storageBytes").GetInt32() != 4 ||
+        fields["Delta"].GetProperty("offset").GetInt32() != 40)
+        throw new Exception("Object inspection layout disagrees with generated inherited payload/PowerPC pointer widths.");
+    var methods = map.GetProperty("methods").EnumerateArray().ToArray();
+    var inspect = methods.Single(m => m.GetProperty("name").GetString() == "Inspect").GetProperty("variables").EnumerateArray().ToArray();
+    if (!new[] { "box", "text", "local", "caption" }.All(name => inspect.Any(v => v.GetProperty("name").GetString() == name &&
+            v.GetProperty("valueKind").GetString() == "reference" && v.GetProperty("storageBytes").GetInt32() == 4)) ||
+        !methods.Single(m => m.GetProperty("name").GetString() == "Read").GetProperty("variables").EnumerateArray().Any(v => v.GetProperty("name").GetString() == "this"))
+        throw new Exception("Reference arguments, locals or this are missing from debug metadata.");
+}
 // Missing and mismatched PDBs must fail rather than returning misleading
 // source coordinates to the IDE; normal builds continue to ignore PDBs.
 var staleDirectory = Path.Combine(tempDirectory, "stale-pdb");

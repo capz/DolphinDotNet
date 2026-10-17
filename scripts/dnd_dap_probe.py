@@ -109,6 +109,23 @@ def primitive_values(client, frame):
             values[value["name"]] = value["value"]
     return values
 
+
+def object_values(client, frame):
+    roots = {}
+    for scope in client.request('scopes', dict(frameId=frame['id']))['body']['scopes']:
+        roots.update({v['name']: v for v in client.request('variables', dict(variablesReference=scope['variablesReference']))['body']['variables']})
+    assert roots['text']['value'] == '"hello"' and roots['caption']['value'] == '"hello"', roots
+    for name in ('box', 'local'):
+        reference = roots[name]['variablesReference']
+        assert reference > 0, roots[name]
+        fields = {v['name']: v for v in client.request('variables', dict(variablesReference=reference))['body']['variables']}
+        assert {n: fields[n]['value'] for n in ('Count', 'Flag', 'Delta', 'Fraction', 'Name')} == {
+            'Count': '7', 'Flag': '1', 'Delta': '-2', 'Fraction': '1.5', 'Name': '"Snake"'}, fields
+        nested = client.request('variables', dict(variablesReference=fields['Next']['variablesReference']))['body']['variables']
+        assert next(v for v in nested if v['name'] == 'Count')['value'] == '7', nested
+    print('DND_DAP_OBJECT_FIELDS inherited/nested/scalar fields verified', flush=True)
+    print('DND_DAP_STRING_PREVIEW "Snake" / "hello"', flush=True)
+
 def run_probe(args):
     client = DapProcess(args.adapter)
     try:
@@ -147,7 +164,7 @@ def run_probe(args):
             assert frames and frames[0]["line"] == int(line), frames
             print(f"DND_DAP_SOURCE_BREAKPOINT {path}:{line}", flush=True)
             client.request("setBreakpoints", dict(source=dict(path=path), breakpoints=[]))
-            if not args.stack and index == 0:
+            if not args.stack and not args.inspection and index == 0:
                 # Step from the first short statement, before the next statement
                 # enters console/rendering code with an intentionally bounded step budget.
                 client.request("stepIn", dict(threadId=1))
@@ -155,6 +172,8 @@ def run_probe(args):
                 stepped = client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"]
                 assert stepped and stepped[0]["source"] and stepped[0]["line"] > 0, stepped
                 print("DND_DAP_SOURCE_STEP", flush=True)
+        if args.inspection:
+            object_values(client, frames[0])
         if args.stack:
             names = [frame["name"] for frame in frames]
             assert names[:3] == ["Program.Inner", "Program.Outer", "Program.Main"], names
@@ -200,5 +219,6 @@ if __name__ == "__main__":
     parser.add_argument("--source-map", type=Path, required=True)
     parser.add_argument("--address-map", type=Path, required=True)
     parser.add_argument("--stack", action="store_true")
+    parser.add_argument("--inspection", action="store_true")
     parser.add_argument("sources", nargs="+")
     run_probe(parser.parse_args())

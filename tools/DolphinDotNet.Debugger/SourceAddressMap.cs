@@ -16,6 +16,7 @@ public sealed class SourceAddressMap
     private readonly List<NativeMethod> _methods = new();
     private readonly List<UnwindRule> _unwind = new();
     private readonly Dictionary<string, List<DebugVariable>> _variables = new(StringComparer.Ordinal);
+    private IReadOnlyDictionary<uint, DebugObjectLayout> _objectLayouts = new Dictionary<uint, DebugObjectLayout>();
 
     public static SourceAddressMap Load(string elf, string sourceMap, string addressMap)
     {
@@ -30,6 +31,7 @@ public sealed class SourceAddressMap
             !string.Equals(root.GetProperty("sourceMapSha256").GetString(), Convert.ToHexString(SHA256.HashData(source)), StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("ELF and C# debug metadata must belong to the same supported build.");
         var result = new SourceAddressMap();
+        result._objectLayouts = ObjectLayouts.Load(root);
         var identities = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         if (managed.RootElement.TryGetProperty("methods", out var managedMethods))
             foreach (var method in managedMethods.EnumerateArray())
@@ -61,13 +63,16 @@ public sealed class SourceAddressMap
                         throw new InvalidDataException("Unsupported debug variable metadata.");
                     var location = variable.GetProperty("location");
                     var kind = location.GetProperty("kind").GetString()!;
+                    var valueKind = variable.TryGetProperty("valueKind", out var vk) ? vk.GetString()! : "primitive";
+                    if (valueKind is not ("primitive" or "reference") || valueKind == "reference" && storage != 4)
+                        throw new InvalidDataException("Unsupported variable value kind.");
                     if (kind is not ("cfaOffset" or "register" or "unavailable")) throw new InvalidDataException("Unsupported variable location.");
                     var register = location.TryGetProperty("register", out var reg) ? reg.GetInt32() : 0;
                     if (register is < 0 or > 31) throw new InvalidDataException("Invalid variable register.");
                     entries.Add(new DebugVariable(variable.GetProperty("name").GetString()!, variable.GetProperty("type").GetString()!,
                         group, storage, variable.GetProperty("visibleAddresses").EnumerateArray().Select(a => ParseAddress(a.GetString())).ToHashSet(),
                         kind, location.TryGetProperty("offset", out var offset) ? offset.GetInt32() : 0, register,
-                        location.TryGetProperty("reason", out var reason) ? reason.GetString() : null));
+                        location.TryGetProperty("reason", out var reason) ? reason.GetString() : null, valueKind));
                 }
                 result._variables.Add(symbol, entries);
             }
@@ -157,6 +162,8 @@ public sealed class SourceAddressMap
         var rows = _unwind.Where(row => row.Start <= address && address < row.End).ToArray();
         return rows.Length == 1 && rows[0].Supported ? rows[0] : null;
     }
+
+    public DebugObjectLayout? FindObjectLayout(uint typeAddress) => _objectLayouts.GetValueOrDefault(typeAddress);
 
     private static uint ParseAddress(string? text)
     {

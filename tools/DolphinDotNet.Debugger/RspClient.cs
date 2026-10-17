@@ -191,6 +191,7 @@ public sealed class RspClient : IAsyncDisposable
         if ((ulong)address + (uint)size > uint.MaxValue + 1UL)
             throw new ArgumentOutOfRangeException(nameof(address));
         var response = await CommandAsync($"m{address:x8},{size:x}", token).ConfigureAwait(false);
+        if (IsRemoteError(response)) throw new RspRemoteException("Target refused memory read at 0x" + address.ToString("x8") + ": " + response);
         if (response.Length != size * 2)
             throw new InvalidDataException("Incorrect GDB memory response length: " + response);
         try { return Convert.FromHexString(response); }
@@ -202,6 +203,7 @@ public sealed class RspClient : IAsyncDisposable
     {
         if (index is < 0 or > 255) throw new ArgumentOutOfRangeException(nameof(index));
         var response = await CommandAsync($"p{index:x}", token).ConfigureAwait(false);
+        if (IsRemoteError(response)) throw new RspRemoteException("Target refused register read: " + response);
         if (response.Length == 0 || (response.Length & 1) != 0)
             throw new InvalidDataException("Invalid register response: " + response);
         try { return Convert.FromHexString(response); }
@@ -297,6 +299,9 @@ public sealed class RspClient : IAsyncDisposable
         _ => -1
     };
 
+    private static bool IsRemoteError(string reply)
+        => reply.Length == 3 && reply[0] == 'E' && Hex(reply[1]) >= 0 && Hex(reply[2]) >= 0;
+
     private static byte[] Encode(string command)
     {
         var payload = Encoding.ASCII.GetBytes(command);
@@ -350,3 +355,6 @@ public sealed class RspClient : IAsyncDisposable
         _owner?.Dispose();
     }
 }
+
+/// <summary>A well-framed target refusal; unlike corrupt framing it does not desynchronize RSP.</summary>
+public sealed class RspRemoteException(string message) : Exception(message);

@@ -3,12 +3,13 @@
 import json
 from pathlib import Path
 import sys
-from test_debug_adapter import Target, SerialRelay, write_symbol_fixture
+from test_debug_adapter import Target, SerialRelay, write_symbol_fixture, write_inspection_fixture
 
 root = Path(sys.argv[1])
 root.mkdir(parents=True, exist_ok=True)
 elf, source, addresses = write_symbol_fixture(root)
 target = Target()
+target.memory.update(write_inspection_fixture(addresses))
 relay = SerialRelay(target.port) if sys.argv[2] == 'usbGecko' else None
 args = dict(elf=str(elf), sourceMap=str(source), addressMap=str(addresses),
             sourceFileMap={'/build/日本': str(root / '日本')}, timeoutSeconds=3)
