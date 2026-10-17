@@ -13,6 +13,7 @@ public static class Program
     {
         var elements=new Element[1];elements[0].Value=3;
         if(elements[0].Value!=3)return -1001;
+        if(!FloatArrays(true) || !FloatArrays(false))return -1002;
         if(FloatArgument(-0.75f,true)!=-0.75f || FloatArgument(-0.75f,false)!=0.75f ||
            FloatMagnitude(-1.5f)!=0.75f || FloatMagnitude(1.5f)!=0.75f)return -1000;
         var loop=LoopSum();
@@ -36,6 +37,18 @@ public static class Program
     }
 
     static int DelegateCase(){var fn=new IntFn(AddOne);return fn(10);}
+    static bool FloatArrays(bool choose)
+    {
+        var single=new float[1];single[0]=1.25f;
+        single[0]+=choose?0.5f:1.5f;
+        float joined=single[0]+(choose?0.5f:1.5f);
+        var wide=new double[1];wide[0]=10.25;
+        wide[0]+=choose?0.125:0.375;
+        double wideJoined=wide[0]+(choose?0.125:0.375);
+        return single[0]==(choose?1.75f:2.75f) && joined==(choose?2.25f:4.25f) &&
+               wide[0]==(choose?10.375:10.625) && wideJoined==(choose?10.5:11.0);
+    }
+
     static float FloatArgument(float value,bool choose)=>choose?value:-value;
     static float FloatMagnitude(float value){var local=value*0.5f;return local<0?-local:local;}
     static int AddOne(int value)=>value+1;
