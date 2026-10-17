@@ -3,7 +3,7 @@
 Open **`samples/Pong/Pong.sln`** in Visual Studio 2022 (17.8+) or Rider with
 .NET 8 support. Pong is the startup project and needs no external assets.
 Every other sample has the same layout: open `samples/<sample>/<sample>.sln`
-and select **<sample> in Dolphin** in Rider or the **Dolphin** profile in Visual
+and select **<sample> in Dolphin (play without debugger)** in Rider or the **Dolphin Play** profile in Visual
 Studio. See the [sample catalog](../samples/README.md) for runtime requirements.
 
 Install the **.NET 8 SDK**, **Dolphin**, and one build backend:
@@ -33,20 +33,30 @@ container. Host-specific proxy hostnames must also resolve inside Docker.
 ## Visual Studio
 
 1. Open `samples/Pong/Pong.sln`, and select **Pong** as the startup project if needed.
-2. Choose the **Dolphin** launch profile in the toolbar.
+2. Choose the **Dolphin Play** launch profile in the toolbar.
 3. Build normally, then use **Ctrl+F5 / Start Without Debugging**. That action also
    builds before launching. A build failure prevents launch.
 
 ## Rider
 
-Open the same solution and select the checked-in **Pong in Dolphin** run
+Open the same solution and select the checked-in **Pong in Dolphin (play without debugger)** run
 configuration. Click **Run**. Its before-launch Build task produces the DOL and
 then launches the Dolphin executable profile. If Rider has not imported the
 shared configuration, create a **.NET Launch Settings Profile** configuration
-for `Pong.csproj`, framework `net8.0`, profile **Dolphin**, with a Build task.
+for `Pong.csproj`, framework `net8.0`, profile **Dolphin Play**, with a Build task.
 Disable **Use ReSharper Build** in **Settings → Build, Execution, Deployment →
 Toolset and Build** for this solution so Rider invokes MSBuild on every run
 instead of skipping an unchanged project.
+
+The existing **<sample> in Dolphin** configuration now uses **Dolphin Debug** and
+waits for Rider on `127.0.0.1:2166`. This corrects older configurations that kept
+launching without GDB after a separate debugger profile was added. After pulling
+an update, reload the solution so Rider picks up the shared configuration change.
+Debug **CLI** / project launches also enable the same GDB port through the shared
+SDK's `RunArguments`; Release CLI launches continue without a debugger.
+The original **Dolphin** launch-settings profile is also a debugger launch, so
+existing configurations that refer to it pick up GDB after a reload. Choose
+**Dolphin Play** explicitly when creating a launch-settings profile for normal play.
 
 These configurations launch an emulator process. For C# source debugging, install
 the separate [DolphinDotNet Attach plugin](rider-debugging.md) and use an attach
@@ -72,13 +82,15 @@ From the repository root:
 
 ```sh
 dotnet build samples/Pong/Pong.sln
-dotnet run --project samples/Pong
+dotnet run --project samples/Pong -c Release
 ```
 
 `dotnet run` builds first, including the full native build. To launch the last
-successful output without building, use `dotnet run --project samples/Pong --no-build`.
-The `CLI` launch profile uses the same launcher as the IDE's `Dolphin` profile.
+successful Release output without building, use `dotnet run --project samples/Pong -c Release --no-build`.
+The `CLI` launch profile uses the same build/run driver as the IDE profiles.
 You can use `-c Release` for either command.
+Debug CLI launches with symbols enabled wait for Rider at `127.0.0.1:2166`.
+For ordinary play, use `-c Release` or the IDE's **play without debugger** profile.
 
 From the repository root, the equivalent Snake build is:
 
@@ -202,7 +214,8 @@ Pong uses explicit SDK imports so no extension or custom SDK resolver is needed:
 ```
 
 Adjust the relative paths for the new project. Copy Pong's `Properties/launchSettings.json`
-and select the Dolphin profile; it uses `$(TargetDir)` and does not hard-code Pong's
+and select Dolphin Debug for attach preparation or Dolphin Play for normal play;
+the profiles use `$(TargetDir)` and do not hard-code Pong's
 output name. A Rider shared configuration must point at the new `.csproj`.
 
 For compiler/host tests that only need the managed assembly, explicitly set

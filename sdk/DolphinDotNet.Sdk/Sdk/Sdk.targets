@@ -82,6 +82,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
     <DolphinUserDirectory Condition="'$(DolphinUserDirectory)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(BaseIntermediateOutputPath)dolphin-user'))</DolphinUserDirectory>
     <RunCommand>$(_DndDotnet)</RunCommand>
     <RunArguments>&quot;$(TargetDir)DolphinDotNet.Build.dll&quot; run --config &quot;$(TargetDir)dolphin-run.json&quot;</RunArguments>
+    <RunArguments Condition="'$(Configuration)' == 'Debug' and '$(DndDebugSymbols)' == 'true'">$(RunArguments) --gdb-port 2166</RunArguments>
     <RunWorkingDirectory>$(TargetDir)</RunWorkingDirectory>
   </PropertyGroup>
   <Target Name="BuildDol" AfterTargets="Build"

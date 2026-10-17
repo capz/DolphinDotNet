@@ -23,9 +23,9 @@ Install .NET 8, Dolphin, and Docker with Linux containers, or a native
 Linux/macOS devkitPPC/libogc2 toolchain; see [IDE setup](../docs/ide-workflow.md).
 
 - **Visual Studio:** open the sample's `.sln`, select its executable as the
-  startup project, choose **Dolphin**, and press **Ctrl+F5**.
+  startup project, choose **Dolphin Play**, and press **Ctrl+F5**.
 - **Rider:** open the sample's `.sln`, disable **Use ReSharper Build**, select
-  **<sample> in Dolphin**, and click **Run**.
+  **<sample> in Dolphin (play without debugger)**, and click **Run**.
 
 Choose any sample directory name from the table for the CLI:
 
@@ -67,11 +67,13 @@ samples/<sample>/bin/Debug/net8.0/<sample>.dnd-debug.json
 samples/<sample>/bin/Debug/net8.0/<sample>.dnd-addresses.json
 ```
 
-In Rider, open that sample's solution and select its own **<sample> in Dolphin**
-configuration to launch it. **CLI** uses the same build/run driver. Both build
-before launching Dolphin; neither is an attach configuration. For debugging,
-install the [Rider attach plugin](../docs/rider-debugging.md), run **<sample> in
-Dolphin (wait for Rider)**, and add **DolphinDotNet Attach**. That launch creates
+In Rider, open that sample's solution. Its existing **<sample> in Dolphin**
+configuration now launches with GDB enabled and waits for Rider; **<sample> in
+Dolphin (wait for Rider)** is an equivalent alias. To play normally, select
+**<sample> in Dolphin (play without debugger)**. Debug **CLI** / project launches
+also wait on port 2166; Release CLI launches run normally. For debugging, install
+the [Rider attach plugin](../docs/rider-debugging.md),
+run **<sample> in Dolphin**, and add **DolphinDotNet Attach**. That launch creates
 the emulator's GDB settings automatically in a separate profile, prints their
 location, and waits for Rider at **127.0.0.1:2166**. No manual `Dolphin.ini` edit
 is needed. If the configuration is not imported, create a **.NET Launch Settings

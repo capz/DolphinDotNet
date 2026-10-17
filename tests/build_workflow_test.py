@@ -8,6 +8,7 @@ import configparser
 import os
 from pathlib import Path
 import shutil
+import shlex
 import signal
 import stat
 import subprocess
@@ -25,6 +26,8 @@ assert dotnet and driver.exists()
 
 # Every sample must keep the shared fixes and point its IDE launch profile at
 # its own project. Evaluate actual MSBuild settings rather than inspecting text.
+primary_launches = []
+play_launches = []
 for project in sorted((root / 'samples').glob('*/*.csproj')):
     sample = project.stem
     tree = ET.parse(project).getroot()
@@ -40,11 +43,20 @@ for project in sorted((root / 'samples').glob('*/*.csproj')):
     run = ET.parse(project.parent / f'.run/{sample}.run.xml')
     options = {node.attrib['name']: node.attrib.get('value') for node in run.findall('.//configuration/option')}
     assert options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
-    assert options['LAUNCH_PROFILE_NAME'] == 'Dolphin', project
+    assert options['LAUNCH_PROFILE_NAME'] == 'Dolphin Debug', project
+    primary_launches.append((sample, launch[options['LAUNCH_PROFILE_NAME']]['commandLineArgs']))
     assert run.find('.//method/option[@name="Build"]') is not None, project
+    play_run = ET.parse(project.parent / f'.run/{sample}.play.run.xml')
+    play_options = {node.attrib['name']: node.attrib.get('value') for node in play_run.findall('.//configuration/option')}
+    assert play_options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
+    assert play_options['LAUNCH_PROFILE_NAME'] == 'Dolphin Play', project
+    play_launches.append((sample, launch[play_options['LAUNCH_PROFILE_NAME']]['commandLineArgs']))
+    assert play_run.find('.//method/option[@name="Build"]') is not None, project
     debug_launch = launch['Dolphin Debug']
     assert debug_launch['executablePath'] == 'dotnet', project
-    assert debug_launch['commandLineArgs'] == launch['Dolphin']['commandLineArgs'] + ' --gdb-port 2166', project
+    assert debug_launch['commandLineArgs'] == launch['Dolphin']['commandLineArgs'], project
+    assert debug_launch['commandLineArgs'] == launch['Dolphin Play']['commandLineArgs'] + ' --gdb-port 2166', project
+    primary_launches.append((sample + ' Dolphin profile', launch['Dolphin']['commandLineArgs']))
     debug_run = ET.parse(project.parent / f'.run/{sample}.debug.run.xml')
     debug_options = {node.attrib['name']: node.attrib.get('value') for node in debug_run.findall('.//configuration/option')}
     assert debug_options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
@@ -52,7 +64,7 @@ for project in sorted((root / 'samples').glob('*/*.csproj')):
     assert debug_run.find('.//method/option[@name="Build"]') is not None, project
     for configuration in ('Debug', 'Release'):
         result = subprocess.run([dotnet, 'msbuild', str(project), '-p:Configuration=' + configuration,
-                                 '-getProperty:DndDebugSymbols,Optimize,DebugType'],
+                                 '-getProperty:DndDebugSymbols,Optimize,DebugType,RunArguments,TargetDir'],
                                 capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stdout + result.stderr
         properties = json.loads(result.stdout)['Properties']
@@ -60,6 +72,10 @@ for project in sorted((root / 'samples').glob('*/*.csproj')):
         assert properties['Optimize'] == str(configuration == 'Release').lower(), (project, properties)
         if configuration == 'Debug':
             assert properties['DebugType'] == 'portable', (project, properties)
+            assert '--gdb-port 2166' in properties['RunArguments'], (project, properties)
+            primary_launches.append((sample + ' CLI', properties['RunArguments'].replace(properties['TargetDir'], '$(TargetDir)')))
+        else:
+            assert '--gdb-port' not in properties['RunArguments'], (project, properties)
 
 
 def call(*args, env=None, expected=0):
@@ -90,6 +106,31 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
     ini.write_text("[Core]\nSIDevice1 = 0\n")
     call("run", "--config", config, env={**env, "DND_PROBE_EXIT": "17"}, expected=17)
     assert "SIDevice1 = 0" in ini.read_text()  # Never overwrite personal settings.
+    # Execute each primary Rider profile's resolved command, not just a hand-
+    # written --gdb-port invocation. This catches the original configuration
+    # still launching the ordinary profile after adding a new debug alias.
+    profile_output = work / 'resolved Rider output'
+    profile_output.mkdir()
+    for suffix in ('.dll', '.deps.json', '.runtimeconfig.json'):
+        shutil.copy2(driver.parent / ('DolphinDotNet.Build' + suffix), profile_output)
+    (profile_output / 'dolphin-run.json').write_text(config.read_text())
+    for sample, template in primary_launches:
+        resolved = template.replace('$(TargetDir)', str(profile_output) + os.sep)
+        result = subprocess.run([dotnet, *shlex.split(resolved)], env=env,
+                                capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, (sample, result.stdout, result.stderr)
+        assert '127.0.0.1:2166' in result.stdout, (sample, result.stdout)
+        assert json.loads(capture.read_text())['Arguments'][1] == str(user / 'rider-debug'), sample
+        assert 'GDBPort = 2166' in (user / 'rider-debug/Config/Dolphin.ini').read_text(), sample
+    for sample, template in play_launches:
+        resolved = template.replace('$(TargetDir)', str(profile_output) + os.sep)
+        result = subprocess.run([dotnet, *shlex.split(resolved)], env=env,
+                                capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, (sample, result.stdout, result.stderr)
+        assert 'wait for Rider' not in result.stdout, (sample, result.stdout)
+        assert json.loads(capture.read_text())['Arguments'][1] == str(user), sample
+    # Start the following isolation checks from a fresh debugger profile.
+    shutil.rmtree(user / 'rider-debug')
     # Opt-in GDB launch creates the actual settings file under the configured
     # user path, and leaves ordinary launches and their controller settings alone.
     ini.write_text('[Core]\nSIDevice1 = 0\nCPUCore = 1\nCPUThread = True\n'

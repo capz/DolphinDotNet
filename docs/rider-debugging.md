@@ -53,14 +53,18 @@ fail if there are no generated native symbols or no verifiable source addresses.
 See [IDE build troubleshooting](ide-workflow.md) for Windows Docker lookup,
 interrupted native cleanup and NuGet restore errors.
 
-1. For a sample in Dolphin, select **<sample> in Dolphin (wait for Rider)** and
-   click **Run**. Its **Dolphin Debug** launch profile builds the game and creates
+1. For a sample in Dolphin, select **<sample> in Dolphin** and click **Run**.
+   This existing primary configuration now uses **Dolphin Debug**, so it enables
+   GDB automatically; **<sample> in Dolphin (wait for Rider)** is an equivalent
+   explicit alias. Debug **CLI** / project launches use the same port through the
+   shared SDK. The launch profile builds the game and creates
    the emulator settings automatically: GDB port **2166**, interpreter CPU,
    dual-core disabled and debugger mode enabled. It uses a separate `rider-debug`
    profile beneath the configured Dolphin user directory and prints the exact
    `Dolphin.ini` path. No manual INI creation is needed. Existing controller INIs
    seed the debug profile once; later debug changes persist there. The ordinary
-   **<sample> in Dolphin** launch keeps its own settings. For a console, start
+   **<sample> in Dolphin (play without debugger)** launch keeps its own settings.
+   For a console, start
    the matching debug DOL with its GDB stub waiting/stopped; upload remains external.
 2. Add a **DolphinDotNet Attach** run/debug configuration. Choose the debug build
    folder containing exactly one `*.elf`, its `<name>.dnd-addresses.json`, and either

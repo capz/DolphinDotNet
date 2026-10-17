@@ -31,22 +31,23 @@ Install the **.NET 8 SDK**, **Dolphin**, and a native build backend:
 Open [`samples/Pong/Pong.sln`](samples/Pong/Pong.sln):
 
 - **Visual Studio 2022 (17.8+):** select Pong as the startup project, choose the
-  **Dolphin** launch profile, and press **Ctrl+F5**.
+  **Dolphin Play** launch profile, and press **Ctrl+F5**.
 - **Rider with .NET 8 support:** disable **Use ReSharper Build** under
   **Settings → Build, Execution, Deployment → Toolset and Build**, select
-  **Pong in Dolphin**, and click **Run**.
+  **Pong in Dolphin (play without debugger)**, and click **Run**.
+  **Pong in Dolphin** enables GDB and waits for Rider attach.
 
 Or, from the repository root:
 
 ```sh
-dotnet run --project samples/Pong
+dotnet run --project samples/Pong -c Release
 ```
 
 Build/Run compiles the managed project, generates native C, builds
-`samples/Pong/bin/Debug/net8.0/Pong.dol` and `Pong.elf`, and launches Dolphin.
+`samples/Pong/bin/<configuration>/net8.0/Pong.dol` and `Pong.elf`, and launches Dolphin.
 Every build performs the full native build; there is no native incremental
 cache. To build without launching, use `dotnet build samples/Pong/Pong.sln`.
-To launch the last successful build, use `dotnet run --project samples/Pong --no-build`.
+To launch the last successful Release build, use `dotnet run --project samples/Pong -c Release --no-build`.
 
 Dolphin is discovered automatically in standard locations or on `PATH`.
 For a portable installation, set `DOLPHIN_PATH` to its executable and restart
@@ -61,6 +62,8 @@ The [IDE setup guide](docs/ide-workflow.md) covers backend selection, local
 settings, troubleshooting and adding the workflow to another project.
 For C# source debugging of Debug targets, use the experimental
 [Rider attach plugin](docs/rider-debugging.md). Hot Reload is not implemented.
+Debug CLI/project launches wait for Rider on port 2166 by default. Use Release
+or Rider's **play without debugger** configuration to run without attaching.
 
 ## Features
 
