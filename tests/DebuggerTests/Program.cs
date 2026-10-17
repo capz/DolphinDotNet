@@ -14,6 +14,7 @@ await TestSourceBreakpointsAsync();
 await TestTcpProtocolAsync();
 await TestChecksumsAndTimeoutsAsync();
 await TestQueuedPauseAsync();
+await TestDuplicatePauseRepliesAsync();
 Console.WriteLine("DolphinDotNet GDB/RSP protocol tests passed.");
 
 static void Check(bool condition, string message)
@@ -25,6 +26,63 @@ static void Expect<T>(Action run, string message) where T : Exception
     try { run(); }
     catch (T) { return; }
     throw new Exception("Expected " + typeof(T).Name + ": " + message);
+}
+
+static async Task TestDuplicatePauseRepliesAsync()
+{
+    const string stop = "T0540:80001000;01:81700000;";
+    foreach (var (extras, afterAck, succeeds) in new[]
+    {
+        (new[] { stop }, false, true),
+        (new[] { stop, "" }, false, true),
+        (new[] { "", stop }, false, true),
+        (new[] { "T0540:80001004;01:81700000;" }, false, true),
+        (new[] { "T0b40:80001004;01:81700000;" }, false, false),
+        (new[] { stop }, true, false),
+        (new[] { stop, stop }, false, false)
+    })
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            var server = Task.Run(async () =>
+            {
+                using var peer = await listener.AcceptTcpClientAsync();
+                using var stream = peer.GetStream();
+                Check(await ReadFrameAsync(stream) == "c", "duplicate pause continue");
+                await stream.WriteAsync(new byte[] { (byte)'+' });
+                Check(await ReadByteAsync(stream) == 3, "duplicate pause interrupt");
+                await SendReplyAsync(stream, stop);
+                Check(await ReadByteAsync(stream) == '+', "initial pause ACK");
+                Check(await ReadFrameAsync(stream) == "m80002000,4", "post-pause memory request");
+                if (afterAck) await stream.WriteAsync(new byte[] { (byte)'+' });
+                foreach (var extra in extras) await SendReplyAsync(stream, extra);
+                if (succeeds)
+                {
+                    await stream.WriteAsync(new byte[] { (byte)'+' });
+                    await SendReplyAsync(stream, "00000001");
+                }
+                for (int i = 0; i < extras.Length + (succeeds ? 1 : 0); i++)
+                    Check(await ReadByteAsync(stream) == '+', "extra pause/memory ACK");
+            });
+            await using var client = await RspClient.ConnectTcpAsync("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port);
+            Check((await client.ContinueAsync(interruptRequested: () => true)).ProgramCounter == 0x80001000, "initial pause stop retained");
+            if (succeeds)
+                Check(Convert.ToHexString(await client.ReadMemoryAsync(0x80002000, 4)) == "00000001", "bounded pause replies drained");
+            else
+            {
+                try
+                {
+                    await client.ReadMemoryAsync(0x80002000, 4);
+                    throw new Exception("Unexpected/multiple/post-ACK stop must fail inspection");
+                }
+                catch (InvalidDataException) { }
+            }
+            await server.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally { listener.Stop(); }
+    }
 }
 
 static async Task TestQueuedPauseAsync()

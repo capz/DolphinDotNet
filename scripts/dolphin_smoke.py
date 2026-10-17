@@ -45,6 +45,7 @@ def main() -> int:
     parser.add_argument("--address-map", type=Path, help="PowerPC address map")
     parser.add_argument("--stack-steps", action="store_true", help="Verify DWARF managed stack and Step Over/Out")
     parser.add_argument("--inspect-objects", action="store_true", help="Verify class fields, references and string previews through DAP")
+    parser.add_argument("--debugger-telemetry", action="store_true", help="Verify the adapter's disconnect report in guest RAM")
     parser.add_argument("--dap-adapter", type=Path, help="Built .NET DAP adapter DLL for source checks")
     parser.add_argument("--dotnet-probe", type=Path, help="Published .NET probe DLL for source checks")
     parser.add_argument("--expect-source", action="append", default=[], help="C# FILE:LINE in stop order")
@@ -56,6 +57,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.inspect_objects and not args.dap_adapter:
         parser.error("--inspect-objects requires --dap-adapter")
+    if args.debugger_telemetry and not args.dap_adapter:
+        parser.error("--debugger-telemetry requires --dap-adapter")
     if not args.dol.is_file() or args.dol.stat().st_size < 256:
         parser.error("missing or truncated DOL")
     requires_gdb = bool(args.expect_symbol or args.expect_word or args.expect_text or args.expect_source)
@@ -116,7 +119,8 @@ def main() -> int:
                         "--adapter", str(args.dap_adapter), "--port", str(args.gdb_port),
                         "--elf", str(args.elf), "--source-map", str(args.source_map),
                         "--address-map", str(args.address_map),
-                        *(["--stack"] if args.stack_steps else []), *(["--inspection"] if args.inspect_objects else []), *args.expect_source],
+                        *(["--stack"] if args.stack_steps else []), *(["--inspection"] if args.inspect_objects else []),
+                        *(["--telemetry"] if args.debugger_telemetry else []), *args.expect_source],
                         capture_output=True, text=True, timeout=max(2, args.seconds - 2))
                     guest_state.append(ProbeResult(result.returncode == 0, result.stdout + result.stderr))
                 except (OSError, subprocess.TimeoutExpired) as error:

@@ -504,7 +504,9 @@ socket readiness and Dolphin's host GDB listener.
 
 Debug symbol builds retain a versioned eight-byte overlay telemetry slot. The
 native map binds its exact symbol; the adapter verifies the signature before
-writing the four-byte connected/disconnected state on attach/clean disconnect.
+writing the four-byte connected/disconnected state on attach/clean disconnect,
+then reads the state word back. An acknowledged write that does not persist is
+reported as unavailable without failing attach.
 Old maps do not cause writes, and unsupported reporting does not prevent attach.
 Variable/expression mutation remains unsupported. The row is labelled DEBUG LAST:
 it is a last reported state, not a heartbeat. Abrupt host failure cannot be detected
@@ -512,6 +514,21 @@ from the guest, and a stopped target does not redraw until it runs another frame
 
 Portable overlay tests cover five/nine-row layouts, status/IPv4 formatting and
 both reporting/non-reporting builds. Host tests cover signature refusal, absent
-metadata, unsupported writes and running disconnect cleanup. A native PowerPC
+metadata, unsupported/ineffective writes and running disconnect cleanup. The
+real-Dolphin DAP inspection gate retains the upstream test socket after the adapter
+closes it, then independently requires the disconnected state and intact signature
+in guest RAM. The relay forwards bytes unchanged during the adapter's session and
+never issues concurrent RSP commands. Host tests exercise both successful relay
+readback and rejection of a missing report. A native PowerPC
 build verifies snapshot compilation and the retained slot's exact ELF bytes.
 Physical BBA behavior and visual acceptance remain separate checks.
+
+The first overlay CI run (39045224094) exposed a Dolphin pause/cleanup race:
+its CPU pause loop can send a second SIGTRAP after the Ctrl-C stop, at a later PC
+and after an intervening inspection reply. The RSP client now drains at most one
+such pending pause notification, plus the previously supported empty interrupt
+reply, before a command's ACK. The window ends when execution resumes. Other
+signals, repeated traps and traps after that ACK still fail rather than concealing
+protocol corruption. Regression tests cover both reply orders, delayed delivery
+and these refusal boundaries; the real-Dolphin telemetry gate exercises pause
+followed by cleanup.

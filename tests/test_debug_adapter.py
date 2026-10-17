@@ -37,6 +37,8 @@ class Target:
         self.pc = 0x80003100 if startup else 0x80004000
         self.stack_pointer = 0 if startup else 0x81700000
         self.interrupt_empty_reply = interrupt_empty_reply
+        self.duplicate_interrupt_stop = False
+        self.delayed_interrupt_stop = None
         self.empty_register = False
         self.step_destinations = {}
         self.step_stack_pointers = {}
@@ -49,6 +51,7 @@ class Target:
         self.interrupts = 0
         self.refused_memory = set()
         self.refused_writes = False
+        self.ignored_writes = False
         self.breakpoints = set()
         self.commands = []
         self.memory = {0x81700004: bytes.fromhex("00000003"), 0x81700008: bytes.fromhex("ffffffff"),
@@ -73,11 +76,13 @@ class Target:
                         continue
                     if byte == b"\x03":
                         self.interrupts += 1
-                        if self.interrupt_empty_reply:
+                        if self.interrupt_empty_reply or self.duplicate_interrupt_stop:
                             # Dolphin sends a stop without an ACK for raw Ctrl-C,
                             # then an unsolicited empty reply from its dispatcher.
                             payload = f"T0540:{self.pc:08x};".encode()
-                            self.peer.sendall(b"$" + payload + f"#{sum(payload) & 255:02x}".encode() + b"$#00")
+                            packet = b"$" + payload + f"#{sum(payload) & 255:02x}".encode()
+                            self.peer.sendall(packet + (packet if self.duplicate_interrupt_stop else b'') +
+                                              (b"$#00" if self.interrupt_empty_reply else b''))
                         else:
                             self.reply(f"T0240:{self.pc:08x};")
                         continue
@@ -131,6 +136,9 @@ class Target:
                         if self.refused_writes:
                             self.reply('')  # Valid RSP unsupported-command response.
                             continue
+                        if self.ignored_writes:
+                            self.reply('OK')
+                            continue
                         location, encoded = command[1:].split(':')
                         address, size = (int(v, 16) for v in location.split(','))
                         value = bytes.fromhex(encoded)
@@ -151,6 +159,10 @@ class Target:
                             self.reply('E01')
                             continue
                         self.reply(self.memory.get(address, bytes(size))[:size].hex())
+                        if self.delayed_interrupt_stop and self.interrupts:
+                            payload = self.delayed_interrupt_stop.encode()
+                            self.peer.sendall(b'$' + payload + f'#{sum(payload) & 255:02x}'.encode())
+                            self.delayed_interrupt_stop = None
                     else:
                         raise AssertionError(command)
         except Exception as error:
@@ -244,6 +256,7 @@ class AdapterTests(unittest.TestCase):
         self.client = probe.DapProcess(ADAPTER)
         self.target = None
         self.serial_relay = None
+        self.telemetry_relay = None
         self.client.request("initialize", dict(pathFormat="path", linesStartAt1=True), fragment=True)
 
     def tearDown(self):
@@ -252,6 +265,8 @@ class AdapterTests(unittest.TestCase):
         self.client.close()
         if self.serial_relay:
             self.serial_relay.close()
+        if self.telemetry_relay:
+            self.telemetry_relay.close()
         if self.target:
             self.target.thread.join(timeout=2)
             self.assertFalse(self.target.errors, self.target.errors)
@@ -296,6 +311,50 @@ class AdapterTests(unittest.TestCase):
         self.bp(lines=(11,))
         self.client.request('continue', dict(threadId=1))
         self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+
+    def test_overlay_telemetry_acknowledged_but_ignored_write_is_unavailable(self):
+        target = self.telemetry_target()
+        target.ignored_writes = True
+        self.attach(target=target)
+        self.assertIn('write did not persist', self.client.event('output')['output'])
+        self.client.request('disconnect')
+        self.client.event('terminated')
+        self.assertEqual(['M80009004,4:00000001'], [c for c in target.commands if c.startswith('M')])
+
+    def test_emulator_acceptance_relay_reads_persisted_disconnect_after_adapter_releases_socket(self):
+        target = self.telemetry_target()
+        target.interrupt_empty_reply = True
+        target.delayed_interrupt_stop = 'T0540:80004004;'
+        self.telemetry_relay = probe.TelemetryRelay(target.port, 0x80009000)
+        target.port = self.telemetry_relay.port
+        self.attach(target=target)
+        self.client.request('continue', dict(threadId=1))
+        self.client.request('disconnect')
+        self.client.event('terminated')
+        self.telemetry_relay.verify()
+        self.assertEqual('m80009000,8', target.commands[-1])
+
+    def test_pause_duplicate_stop_and_empty_reply_do_not_corrupt_inspection(self):
+        target = Target(interrupt_empty_reply=True)
+        target.duplicate_interrupt_stop = True
+        self.attach(target=target)
+        self.client.request('continue', dict(threadId=1))
+        self.client.request('pause', dict(threadId=1))
+        self.assertEqual('pause', self.client.event('stopped')['reason'])
+        frames = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames']
+        self.assertTrue(frames)
+        self.client.request('disconnect')
+        self.client.event('terminated')
+
+    def test_emulator_acceptance_relay_rejects_missing_disconnect_report(self):
+        target = self.telemetry_target(refused=True)
+        self.telemetry_relay = probe.TelemetryRelay(target.port, 0x80009000)
+        target.port = self.telemetry_relay.port
+        self.attach(target=target)
+        self.client.request('disconnect')
+        self.client.event('terminated')
+        with self.assertRaisesRegex(AssertionError, 'not persisted'):
+            self.telemetry_relay.verify()
 
     def test_overlay_signature_mismatch_never_writes_target_memory(self):
         self.attach(target=self.telemetry_target(signature='1234567800000000'))

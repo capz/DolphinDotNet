@@ -13,8 +13,11 @@ The stepping/lifecycle/primitive increment passed the complete CI in
 including Windows/macOS/Linux workflows, Rider packaging/Plugin Verifier and real
 Dolphin checks. The object/string increment also passed complete CI in
 [run 39033281419](https://github.com/capz/DolphinDotNet/actions/runs/39033281419),
-including its new real-Dolphin inspection gate. The overlay telemetry increment
-requires its own CI result.
+including its new real-Dolphin inspection gate. The first overlay CI run
+(39045224094) exposed a delayed Dolphin pause notification during disconnect.
+The follow-up passes 50 adapter tests, the RSP suite and a local real-Dolphin
+object/string, pause and telemetry-memory gate. Current CI status is tracked in
+[PR #78](https://github.com/capz/DolphinDotNet/pull/78).
 The user has now validated the first interactive Windows Snake workflow in Rider:
 attach to a waiting Dolphin, Resume to a dedicated DolphinDotNet source breakpoint,
 basic Step Over and primitive values in the Variables window. Step Over was slow

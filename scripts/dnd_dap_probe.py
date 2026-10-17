@@ -4,9 +4,122 @@ import argparse
 import json
 from pathlib import Path
 import queue
+import select
+import socket
 import subprocess
+import sys
 import threading
 import time
+
+
+class TelemetryRelay:
+    """Keep the test's upstream socket open to inspect RAM after DAP cleanup.
+
+    Forward bytes unchanged while the adapter owns the session. Only after its
+    socket closes do we issue our own read; no second client races the adapter.
+    """
+    def __init__(self, target_port, address):
+        self.address = address
+        self.closed = threading.Event()
+        self.finished = threading.Event()
+        self.error = None
+        self.trace = []
+        deadline = time.monotonic() + 15
+        while True:
+            try:
+                self.target = socket.create_connection(('127.0.0.1', target_port), timeout=.4)
+                self.target.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(.15)
+        self.listener = socket.socket()
+        self.listener.bind(('127.0.0.1', 0))
+        self.listener.listen(1)
+        self.listener.settimeout(.2)
+        self.port = self.listener.getsockname()[1]
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _run(self):
+        try:
+            deadline = time.monotonic() + 15
+            while not self.closed.is_set():
+                try:
+                    client, _ = self.listener.accept()
+                    client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    break
+                except socket.timeout:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError('Adapter did not connect to telemetry relay')
+            else:
+                return
+            with client:
+                while not self.closed.is_set():
+                    ready, _, _ = select.select([self.target, client], [], [], .2)
+                    disconnected = False
+                    for source in ready:
+                        data = source.recv(8192)
+                        if not data:
+                            if source is self.target:
+                                raise EOFError('Target closed before telemetry inspection')
+                            disconnected = True
+                            break
+                        destination = client if source is self.target else self.target
+                        self.trace.append(f"{'target' if source is self.target else 'adapter'}: {data!r}")
+                        self.trace = self.trace[-32:]
+                        destination.sendall(data)
+                    if disconnected:
+                        self._verify_disconnected()
+                        return
+        except Exception as error:
+            if not self.closed.is_set():
+                self.error = error
+        finally:
+            self.target.close()
+            self.listener.close()
+            self.finished.set()
+
+    def _verify_disconnected(self):
+        command = f'm{self.address:x},8'.encode('ascii')
+        self.target.sendall(b'$' + command + f'#{sum(command) & 255:02x}'.encode('ascii'))
+        deadline = time.monotonic() + 5
+
+        def byte():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('Telemetry memory readback timed out')
+            self.target.settimeout(remaining)
+            value = self.target.recv(1)
+            if not value:
+                raise EOFError('Target closed during telemetry readback')
+            return value
+
+        while (value := byte()) != b'$':
+            if value not in (b'+', b'-'):
+                raise ValueError(f'Invalid telemetry RSP framing: {value!r}')
+        payload = bytearray()
+        while (value := byte()) != b'#':
+            if len(payload) >= 16:
+                raise ValueError('Oversized telemetry memory response')
+            payload.extend(value)
+        checksum = byte() + byte()
+        if int(checksum, 16) != (sum(payload) & 255):
+            raise ValueError('Invalid telemetry memory checksum')
+        self.target.sendall(b'+')
+        if payload.lower() != b'444e443100000002':
+            raise AssertionError(f'Disconnected telemetry not persisted: {payload!r}')
+
+    def verify(self):
+        if not self.finished.wait(7):
+            raise TimeoutError('Adapter did not release telemetry connection')
+        if self.error:
+            raise self.error
+
+    def close(self):
+        self.closed.set()
+        self.thread.join(timeout=6)
 
 
 class DapProcess:
@@ -127,11 +240,19 @@ def object_values(client, frame):
     print('DND_DAP_STRING_PREVIEW "Snake" / "hello"', flush=True)
 
 def run_probe(args):
-    client = DapProcess(args.adapter)
+    relay = None
+    if args.telemetry:
+        metadata = json.loads(args.address_map.read_text())['debuggerTelemetry']
+        assert metadata['version'] == 1 and metadata['size'] == 8, metadata
+        address = int(metadata['address'], 16)
+        assert address % 4 == 0 and 0x80000000 <= address <= 0x817ffff8, metadata
+        relay = TelemetryRelay(args.port, address)
+    client = None
     try:
+        client = DapProcess(args.adapter)
         client.request("initialize", dict(adapterID="dolphindotnet", linesStartAt1=True,
                                           columnsStartAt1=True, pathFormat="path"))
-        attach = dict(host="127.0.0.1", port=args.port, elf=str(args.elf),
+        attach = dict(host="127.0.0.1", port=relay.port if relay else args.port, elf=str(args.elf),
                       sourceMap=str(args.source_map), addressMap=str(args.address_map))
         # Dolphin's GDB listener appears after boot. Retry attach without reusing an RSP connection.
         deadline = time.monotonic() + 15
@@ -207,8 +328,18 @@ def run_probe(args):
         client.request("disconnect", dict(terminateDebuggee=False))
         client.event("terminated")
         assert client.process.wait(timeout=5) == 0
+        if relay:
+            relay.verify()
+            print('DND_DAP_DEBUGGER_TELEMETRY disconnected state verified in target RAM', flush=True)
+    except Exception:
+        if relay:
+            print('Recent telemetry relay traffic:\n' + '\n'.join(relay.trace), file=sys.stderr)
+        raise
     finally:
-        client.close()
+        if client:
+            client.close()
+        if relay:
+            relay.close()
 
 
 if __name__ == "__main__":
@@ -220,5 +351,6 @@ if __name__ == "__main__":
     parser.add_argument("--address-map", type=Path, required=True)
     parser.add_argument("--stack", action="store_true")
     parser.add_argument("--inspection", action="store_true")
+    parser.add_argument("--telemetry", action="store_true")
     parser.add_argument("sources", nargs="+")
     run_probe(parser.parse_args())

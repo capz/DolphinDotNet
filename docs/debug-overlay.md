@@ -45,8 +45,9 @@ draw it automatically during presentation.
   `UNKNOWN`, `CONNECTED` or `DISCONNECTED`. Debug symbol builds include an optional,
   versioned eight-byte telemetry slot bound through the ELF address map. The adapter
   checks its signature and writes only its four-byte state word on attach/clean
-  disconnect. An older/non-reporting build shows `UNAVAILABLE`; other GDB clients
-  do not report through this slot. Variable inspection remains read-only.
+  disconnect, and reads it back to verify that the write persisted. An older or
+  non-reporting build shows `UNAVAILABLE`; other GDB clients do not report through
+  this slot. Variable inspection remains read-only.
 
 The panel uses five rows without BBA configuration and nine rows with BBA details.
 It keeps the existing visibility toggle and bottom-left placement. Network snapshots
@@ -65,5 +66,7 @@ thread and require DolphinDotNet AOT, like the other platform diagnostics.
 
 Portable tests verify timing, counter reset/saturation, toggle behavior, network/debugger text formatting,
 color and panel placement at 480- and 576-line resolutions. CI also validates the managed
-toggle through AOT and builds the GameCube backend. Console visual and timer accuracy
+toggle through AOT and builds the GameCube backend. The real-Dolphin inspection
+gate also reads the retained telemetry slot after the adapter releases its connection
+and requires the disconnected state in guest RAM. Console visual and timer accuracy
 acceptance still requires an emulator or real hardware.

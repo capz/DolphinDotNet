@@ -350,7 +350,11 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             if (BinaryPrimitives.ReadUInt32BigEndian(slot) != 0x444e4431 ||
                 BinaryPrimitives.ReadUInt32BigEndian(slot.AsSpan(4)) > 2)
                 throw new RspRemoteException("Overlay telemetry slot has an unsupported signature or state.");
-            await _client.WriteMemoryAsync(address + 4, new byte[] { 0, 0, 0, connected ? (byte)1 : (byte)2 });
+            var state = new byte[] { 0, 0, 0, connected ? (byte)1 : (byte)2 };
+            await _client.WriteMemoryAsync(address + 4, state);
+            var reported = await _client.ReadMemoryAsync(address + 4, 4);
+            if (!reported.AsSpan().SequenceEqual(state))
+                throw new RspRemoteException("Overlay telemetry write did not persist.");
             _telemetryReported = connected;
         }
         catch (RspRemoteException error)

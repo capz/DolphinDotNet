@@ -21,6 +21,9 @@ public sealed class RspClient : IAsyncDisposable
     private readonly TimeSpan _timeout;
     private bool _disposed;
     private volatile bool _interruptReplyPending;
+    private string? _interruptStopReply;
+    private bool _interruptEmptyReplyDrained;
+    private bool _interruptDuplicateStopDrained;
     private volatile bool _continuing;
     private bool _continueInterrupted;
 
@@ -149,7 +152,7 @@ public sealed class RspClient : IAsyncDisposable
     public async Task InterruptAsync(CancellationToken token = default)
     {
         ThrowIfDisposed();
-        _interruptReplyPending = true;
+        BeginInterrupt();
         await WriteAsync(new byte[] { 3 }, token).ConfigureAwait(false);
     }
 
@@ -163,11 +166,20 @@ public sealed class RspClient : IAsyncDisposable
             ThrowIfDisposed();
             if (!_continuing || _continueInterrupted) return;
             _continueInterrupted = true;
-            _interruptReplyPending = true;
+            BeginInterrupt();
             await _stream.WriteAsync(new byte[] { 3 }, token).ConfigureAwait(false);
             await _stream.FlushAsync(token).ConfigureAwait(false);
         }
         finally { _writes.Release(); }
+    }
+
+    private void BeginInterrupt()
+    {
+        _continueInterrupted = true;
+        _interruptStopReply = null;
+        _interruptEmptyReplyDrained = false;
+        _interruptDuplicateStopDrained = false;
+        _interruptReplyPending = true;
     }
 
     public async Task SetSoftwareBreakpointAsync(uint address, CancellationToken token = default)
@@ -228,7 +240,15 @@ public sealed class RspClient : IAsyncDisposable
         while (true)
         {
             var first = await ReadByteAsync(token).ConfigureAwait(false);
-            if (first == '+') { acknowledged = true; continue; }
+            if (first == '+')
+            {
+                acknowledged = true;
+                // A new execution command ends the previous pause's drain
+                // window. A queued interrupt for this continue opens its own.
+                if (lastCommand[1] == 's' || lastCommand[1] == 'c' && !_continueInterrupted)
+                    _interruptReplyPending = false;
+                continue;
+            }
             if (first == '-')
             {
                 if (++rejected > 3) throw new IOException("GDB repeatedly rejected the command checksum.");
@@ -263,16 +283,30 @@ public sealed class RspClient : IAsyncDisposable
             // that buffer as an unknown command and sends an extra empty reply.
             // It precedes the ACK for our next command. Never discard an empty
             // reply after that ACK: it can legitimately mean unsupported.
-            if (_interruptReplyPending && !acknowledged && reply.Length == 0)
+            if (_interruptReplyPending && !acknowledged && reply.Length == 0 && !_interruptEmptyReplyDrained)
             {
-                _interruptReplyPending = false;
+                _interruptEmptyReplyDrained = true;
                 continue;
             }
-            if (acknowledged && !reply.StartsWith('T') && !reply.StartsWith('S'))
-                _interruptReplyPending = false;
+            // Dolphin's CPU pause loop can report another SIGTRAP after the
+            // initial Ctrl-C reply, sometimes at a later PC and after intervening
+            // inspection replies. Accept one such notification before a command
+            // ACK while still stopped. Other signals, repeated traps and traps
+            // after the current command's ACK remain protocol failures.
+            if (_interruptReplyPending && !acknowledged && _interruptStopReply is not null &&
+                !_interruptDuplicateStopDrained && IsTrapStop(_interruptStopReply) && IsTrapStop(reply))
+            {
+                _interruptDuplicateStopDrained = true;
+                continue;
+            }
+            if (_interruptReplyPending && _interruptStopReply is null && (reply.StartsWith('T') || reply.StartsWith('S')))
+                _interruptStopReply = reply;
             return reply;
         }
     }
+
+    private static bool IsTrapStop(string reply)
+        => (reply.StartsWith('T') || reply.StartsWith('S')) && RspStop.Parse(reply) is { Exited: false, Signal: 5 };
 
     private static byte[] Unescape(List<byte> input)
     {
