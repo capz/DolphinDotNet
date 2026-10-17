@@ -137,7 +137,9 @@ slot receives a fresh per-session token and endpoint while stopped at attach.
 Then `DEBUG LIVE` sends a 20-byte UDP ping every 2,000 ms only while stats are
 visible. It reports `UNREACHABLE` after six seconds without valid replies, and
 recovers when replies return. The responder does not issue RSP commands during
-execution; UDP cannot disturb breakpoints, registers or stepping. A closed TCP
+execution; UDP cannot disturb breakpoints, registers or stepping. The responder
+acknowledges only an actively running debug session; manually resuming an emulator
+while Rider still considers it paused does not establish live status. A closed TCP
 debug transport stops replies without consuming any RSP bytes. Adapter exit/crash
 also stops replies. Hiding stats closes the guest socket and generates no heartbeat
 traffic. See [overlay setup and limits](debug-overlay.md).

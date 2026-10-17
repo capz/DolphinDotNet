@@ -337,6 +337,7 @@ class AdapterTests(unittest.TestCase):
 
     def test_live_heartbeat_stops_after_adapter_crash_without_a_clean_status_write(self):
         endpoint, ping = self.live_attach()
+        self.client.request('continue', dict(threadId=1))
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
             udp.settimeout(.2)
             udp.sendto(ping, endpoint)
@@ -346,11 +347,17 @@ class AdapterTests(unittest.TestCase):
             udp.sendto(ping, endpoint)
             with self.assertRaises(OSError): udp.recvfrom(64)
 
-    def test_live_heartbeat_observes_stopped_tcp_peer_loss_without_consuming_rsp(self):
+    def test_live_heartbeat_declines_paused_sessions_and_buffered_stop_on_peer_loss(self):
         endpoint, ping = self.live_attach()
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
             udp.settimeout(.2)
+            udp.sendto(ping, endpoint)
+            with self.assertRaises(socket.timeout): udp.recvfrom(64)
+            self.client.request('continue', dict(threadId=1))
             udp.sendto(ping, endpoint); self.assertEqual(20, len(udp.recvfrom(64)[0]))
+            self.client.request('pause', dict(threadId=1)); self.client.event('stopped')
+            payload = b'T0540:80004004;'
+            self.target.peer.sendall(b'$'+payload+f'#{sum(payload)&255:02x}'.encode())
             self.target.peer.shutdown(socket.SHUT_RDWR)
             self.target.thread.join(timeout=2)
             udp.sendto(ping, endpoint)
@@ -413,6 +420,7 @@ class AdapterTests(unittest.TestCase):
             str(root/'tests/debug_heartbeat_host.c'), str(root/'source/debug_heartbeat.c'), str(root/'source/performance.c'),
             str(root/'source/network_posix.c'), '-Wl,--wrap=dnd_np_monitor_open', '-o', str(binary)], check=True, capture_output=True)
         self.live_attach()
+        self.client.request('continue', dict(threadId=1))
         guest = subprocess.Popen([str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         def command(text):
             guest.stdin.write(text+'\n');guest.stdin.flush()
@@ -433,7 +441,7 @@ class AdapterTests(unittest.TestCase):
             self.client.close()
             self.client = probe.DapProcess(ADAPTER)
             self.client.request('initialize', dict(pathFormat='path', linesStartAt1=True))
-            self.live_attach();configure()
+            self.live_attach();self.client.request('continue', dict(threadId=1));configure()
             self.assertEqual('1', command('t 12000000 1 1'))
             self.assertEqual('1', command('w'))
             self.assertEqual('2', command('t 14000000 1 1'))

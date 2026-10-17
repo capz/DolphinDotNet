@@ -40,7 +40,7 @@ int dnd_np_write(int fd,const void *b,int count,int stream,uint32_t ip,int port)
 int dnd_np_endpoint(int fd,uint32_t *ip,int *port,int remote){struct sockaddr_in a;socklen_t n=sizeof(a);int r=remote?net_getpeername(fd,(struct sockaddr*)&a,&n):net_getsockname(fd,(struct sockaddr*)&a,&n);if(r<0)return result(r);*ip=ntohl(a.sin_addr.s_addr);*port=ntohs(a.sin_port);return 0;}
 int dnd_np_option(int fd,int opt,int value){return opt==0?result(net_setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&value,sizeof(value))):opt==1?result(net_setsockopt(fd,SOL_SOCKET,SO_BROADCAST,&value,sizeof(value))):DND_NET_ERROR;}
 void dnd_np_close(int fd){net_close(fd);}
-int dnd_np_monitor_open(void){int saved=error_code;int r=dnd_np_open(0);error_code=saved;return r;}
+int dnd_np_monitor_open(void){int saved=error_code;int r=dnd_np_open(0);if(r>=0&&dnd_np_bind(r,0,0)<0){dnd_np_close(r);r=DND_NET_ERROR;}error_code=saved;return r;}
 int dnd_np_monitor_read(int fd,void *buffer,int count,uint32_t *ip,int *port){int saved=error_code;int r=dnd_np_read(fd,buffer,count,0,ip,port);error_code=saved;return r;}
 int dnd_np_monitor_write(int fd,const void *buffer,int count,uint32_t ip,int port){int saved=error_code;int r=dnd_np_write(fd,buffer,count,0,ip,port);error_code=saved;return r;}
 #endif

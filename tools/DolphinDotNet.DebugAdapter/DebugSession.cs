@@ -372,7 +372,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             {
                 try
                 {
-                    _heartbeat = new DebugHeartbeat(options.Value.Host, options.Value.Port, () => _client?.IsTransportConnected == true);
+                    _heartbeat = new DebugHeartbeat(options.Value.Host, options.Value.Port, () => _running && _client?.IsTransportConnected == true);
                     config = _heartbeat.Configuration;
                 }
                 catch (System.Net.Sockets.SocketException error)

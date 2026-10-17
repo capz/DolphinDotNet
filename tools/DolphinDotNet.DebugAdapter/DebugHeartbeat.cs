@@ -39,7 +39,7 @@ internal sealed class DebugHeartbeat : IAsyncDisposable
     public DebugHeartbeat(IPAddress host, int port, Func<bool> connected)
     {
         while (_token.All(value => value == 0)) RandomNumberGenerator.Fill(_token);
-        _socket = new UdpClient(new IPEndPoint(IPAddress.Any, port));
+        _socket = Bind(host, port);
         // Bounded socket queues; packets do not grow any application collection.
         _socket.Client.ReceiveBufferSize = 4096;
         Configuration = new byte[20];
@@ -48,6 +48,24 @@ internal sealed class DebugHeartbeat : IAsyncDisposable
         _token.CopyTo(Configuration, 8);
         BinaryPrimitives.WriteUInt32BigEndian(Configuration.AsSpan(16), 1);
         _worker = RunAsync(connected);
+    }
+
+    private static UdpClient Bind(IPAddress host, int port)
+    {
+        // Pin replies to the configured interface on a multi-homed computer.
+        // A guest-visible NAT alias may not be assigned to a local interface.
+        var socket = new UdpClient(AddressFamily.InterNetwork);
+        try
+        {
+            socket.Client.Bind(new IPEndPoint(host, port));
+            return socket;
+        }
+        catch (SocketException error) when (error.SocketErrorCode == SocketError.AddressNotAvailable)
+        {
+            socket.Dispose();
+            return new UdpClient(new IPEndPoint(IPAddress.Any, port));
+        }
+        catch { socket.Dispose(); throw; }
     }
 
     private async Task RunAsync(Func<bool> connected)

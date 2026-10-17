@@ -18,6 +18,7 @@ static void snapshot_test(void){
  assert(dnd_np_bind(-1,0x7f000001,0)<0);int saved=dnd_np_error();assert(saved!=0);
  int fd=dnd_np_monitor_open();assert(fd>=0 && dnd_np_error()==saved);
  unsigned char packet[20]={0};int port=0;
+ assert(dnd_np_endpoint(fd,&ip,&port,0)==0&&port>0); /* Bound before the first receive. */
  assert(dnd_np_monitor_read(fd,packet,sizeof(packet),&ip,&port)==DND_NET_WAIT);
  assert(dnd_np_error()==saved);
  assert(dnd_np_monitor_write(fd,packet,sizeof(packet),0x7f000001,9)==sizeof(packet));

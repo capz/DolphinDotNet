@@ -57,7 +57,7 @@ draw it automatically during presentation.
 * **DEBUG LIVE** replaces that row when live status is configured in Rider.
   While the overlay is visible, the game sends one 20-byte UDP ping every
   **2,000 ms** through its already configured BBA network. The adapter replies
-  only while its debug transport remains connected. Valid replies show
+  only while its debug session is running and its transport remains connected. Valid replies show
   `CONNECTED`; six seconds without a valid reply show `UNREACHABLE`. Cable
   loss shows `UNREACHABLE` on the next link check. A clean adapter report shows
   `DISCONNECTED`. `CHECKING` and `WAITING FOR BBA` distinguish startup from loss.
@@ -83,6 +83,10 @@ listener through the computer's firewall and configure a working guest BBA netwo
 first. The host GDB address `127.0.0.1` is not automatically the address the guest
 can reach. Dolphin's BBA setup and the guest's network are separate from its host
 GDB listener.
+For games that do not otherwise start networking, initialize it during game startup
+with `await Dolphin.Network.NetworkRuntime.StartAsync()` (or its static-address
+overload); see [network startup](network-runtime.md). The overlay and host-endpoint
+setting do not initialize networking or start DHCP themselves.
 
 This channel supports Dolphin host-GDB and USB Gecko sessions with application
 BBA networking. The native BBA/TCP GDB stub owns a separate uIP stack and explicitly
