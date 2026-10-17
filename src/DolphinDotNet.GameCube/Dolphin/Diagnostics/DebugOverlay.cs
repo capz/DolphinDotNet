@@ -3,7 +3,7 @@ namespace Dolphin.Diagnostics;
 /// <summary>Text diagnostics drawn over the current GameCube graphics frame.</summary>
 public static class DebugOverlay
 {
-    /// <summary>Enables the bottom-left FPS, frame-time, triangle and RAM panel. Disabled by default.</summary>
+    /// <summary>Enables the bottom-left performance, memory, BBA and last-reported debugger panel. Disabled by default.</summary>
     public static bool PerformanceVisible
     {
         get => NativeDiagnostics.PerformanceVisible() != 0;

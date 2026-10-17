@@ -386,6 +386,27 @@ def attach_inspection(mapped, source_map, symbol_dump):
     mapped['inspection'] = dict(inspection, types=types)
 
 
+def attach_debugger_telemetry(mapped, source_map, symbol_dump):
+    spec = source_map.get('debuggerTelemetry')
+    if spec is None:
+        return
+    if spec.get('version') != 1 or spec.get('size') != 8 or spec.get('nativeSymbol') != 'dnd_debugger_telemetry':
+        raise ValueError('Unsupported debugger telemetry ABI')
+    matches = set()
+    for line in symbol_dump.splitlines():
+        parts = line.split()
+        if len(parts) < 8 or parts[3] != 'OBJECT' or parts[6] in ('UND', 'ABS') or parts[7] != spec['nativeSymbol']:
+            continue
+        address, size = int(parts[1], 16), int(parts[2])
+        if size != 8 or address % 4 or not 0x80000000 <= address <= 0x81800000 - 8:
+            raise ValueError('Invalid debugger telemetry symbol')
+        matches.add(address)
+    if len(matches) > 1:
+        raise ValueError('Ambiguous debugger telemetry symbol')
+    if matches:
+        mapped['debuggerTelemetry'] = dict(version=1, size=8, address=f'0x{next(iter(matches)):08x}')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--elf', required=True, type=Path)
@@ -415,6 +436,7 @@ def main():
                           capture_output=True, text=True, check=True).stdout
     attach_variables(mapped, json.loads(source_bytes), info, locs)
     attach_inspection(mapped, json.loads(source_bytes), symbols)
+    attach_debugger_telemetry(mapped, json.loads(source_bytes), symbols)
     mapped['elfSha256'] = hashlib.sha256(args.elf.read_bytes()).hexdigest()
     mapped['sourceMapSha256'] = hashlib.sha256(source_bytes).hexdigest()
     count = sum(len(method['breakpoints']) for method in mapped['methods'])

@@ -198,6 +198,16 @@ public sealed class RspClient : IAsyncDisposable
         catch (FormatException ex) { throw new InvalidDataException("Invalid GDB memory bytes.", ex); }
     }
 
+    /// <summary>Bounded RSP writes for the adapter's optional overlay telemetry. DAP variable/memory mutation stays unsupported.</summary>
+    public async Task WriteMemoryAsync(uint address, ReadOnlyMemory<byte> bytes, CancellationToken token = default)
+    {
+        if (bytes.Length is < 1 or > 512 || (ulong)address + (uint)bytes.Length > uint.MaxValue + 1UL)
+            throw new ArgumentOutOfRangeException(nameof(bytes));
+        var reply = await CommandAsync($"M{address:x8},{bytes.Length:x}:{Convert.ToHexString(bytes.Span).ToLowerInvariant()}", token).ConfigureAwait(false);
+        if (reply.Length == 0 || IsRemoteError(reply)) throw new RspRemoteException("Target refused debugger telemetry write: " + reply);
+        if (reply != "OK") throw new InvalidDataException("Invalid GDB memory-write reply: " + reply);
+    }
+
     /// <summary>Register bytes remain raw until the target's architecture/byte order is known.</summary>
     public async Task<byte[]> ReadRegisterAsync(int index, CancellationToken token = default)
     {

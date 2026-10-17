@@ -94,8 +94,16 @@ if (File.ReadAllText(Path.Combine(normalBundle, "source/generated_program.c"))
 if (File.Exists(Path.Combine(normalBundle, "dnd-il-debug.json")))
     throw new Exception("Default bundle unexpectedly contains debugger metadata.");
 var debugMapPath = Path.Combine(gdbBundle, "dnd-il-debug.json");
+if (!debugMake.Contains("-DDND_DEBUG_TELEMETRY", StringComparison.Ordinal) ||
+    !debugMake.Contains("--undefined=dnd_debugger_telemetry", StringComparison.Ordinal) ||
+    File.ReadAllText(Path.Combine(normalBundle, "Makefile")).Contains("-DDND_DEBUG_TELEMETRY", StringComparison.Ordinal) ||
+    !debugC.Contains("dnd_performance_network(2, false, 0xc000020au, 0xffffff00u, 0xc0000201u)", StringComparison.Ordinal))
+    throw new Exception("Debug overlay telemetry must be opt-in with symbols and report the separate TCP stub configuration.");
 using (var debugMap = System.Text.Json.JsonDocument.Parse(File.ReadAllText(debugMapPath)))
 {
+    var telemetry = debugMap.RootElement.GetProperty("debuggerTelemetry");
+    if (telemetry.GetProperty("nativeSymbol").GetString() != "dnd_debugger_telemetry" || telemetry.GetProperty("size").GetInt32() != 8)
+        throw new Exception("Missing host-only debugger overlay telemetry metadata.");
     if (debugMap.RootElement.GetProperty("schemaVersion").GetInt32() != 2)
         throw new Exception("Unexpected debug IL map schema.");
     if (!debugMap.RootElement.GetProperty("assemblies").EnumerateArray()

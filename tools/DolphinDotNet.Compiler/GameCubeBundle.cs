@@ -172,6 +172,7 @@ internal static class GameCubeBundle
                 {
                     schemaVersion = 2,
                     inspection = DebugInspectionMetadata.Build(compilation),
+                    debuggerTelemetry = new { version = 1, nativeSymbol = "dnd_debugger_telemetry", size = 8 },
                     assemblies = sourceMap!.Assemblies
                         .Select(identity => new { name = identity.Name,
                             moduleVersionId = identity.ModuleVersionId, pdbId = identity.PdbId }),
@@ -194,12 +195,16 @@ internal static class GameCubeBundle
             var init = gdbUsb is not null
                 ? $"DEBUG_Init(GDBSTUB_DEVICE_USB, {gdbUsb.Channel});"
                 : $"DEBUG_Init(GDBSTUB_DEVICE_TCP, {gdbTcp!.Port});";
+            static string IpWord(string address) => "0x" + Convert.ToHexString(System.Net.IPAddress.Parse(address).GetAddressBytes()).ToLowerInvariant() + "u";
+            var networkReport = gdbTcp is null ? "" :
+                $"    dnd_performance_network(2, false, {IpWord(tcpIp)}, {IpWord(tcpMask)}, {IpWord(tcpGateway)});\n";
             File.WriteAllText(Path.Combine(directory, "source", "debug_gamecube.c"),
-                "#include <debug.h>\n" +
+                "#include <debug.h>\n#include \"dnd_performance.h\"\n" +
                 $"const char *tcp_localip = \"{tcpIp}\";\n" +
                 $"const char *tcp_netmask = \"{tcpMask}\";\n" +
                 $"const char *tcp_gateway = \"{tcpGateway}\";\n" +
                 "void dnd_gdb_init(void) {\n" +
+                networkReport +
                 $"    {init}\n" +
                 "    _break(); /* Wait at a deterministic startup rendezvous. */\n" +
                 "}\n");
@@ -278,6 +283,7 @@ internal static class GameCubeBundle
     private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool gdbUsb, bool debugSymbols)
     {
         var isWiiU = platform == "wiiu";
+        var overlayTelemetry = debugSymbols && platform == "gamecube";
         var rules = isWiiU ? "$(DEVKITPRO)/wut/share/wut_rules"
             : "$(DEVKITPRO)/libogc2/" + (platform == "wii" ? "wii_rules" : "gamecube_rules");
         var suffix = isWiiU ? "rpx" : "dol";
@@ -305,8 +311,11 @@ internal static class GameCubeBundle
                 gdbUsb ? " -DDND_GAMECUBE_STORAGE -DDND_GDB_ENABLED" +
                     (usesNetworking ? "" : " -DDND_NO_AUTONETWORK") :
                 usesNetworking ? " -DDND_GAMECUBE_STORAGE" :
-                " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK"));
-        builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
+                " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK") +
+            (overlayTelemetry ? " -DDND_DEBUG_TELEMETRY" : ""));
+        // Keep the reporting slot even when the app has not enabled/drawn the overlay yet.
+        builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") +
+            (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
         builder.AppendLine("ifneq ($(BUILD),$(notdir $(CURDIR)))");
         builder.AppendLine(".DEFAULT_GOAL := all");
         builder.AppendLine("export OUTPUT := $(CURDIR)/$(TARGET)");

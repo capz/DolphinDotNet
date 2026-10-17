@@ -48,6 +48,7 @@ class Target:
         self.memory_release = threading.Event()
         self.interrupts = 0
         self.refused_memory = set()
+        self.refused_writes = False
         self.breakpoints = set()
         self.commands = []
         self.memory = {0x81700004: bytes.fromhex("00000003"), 0x81700008: bytes.fromhex("ffffffff"),
@@ -126,6 +127,20 @@ class Target:
                         self.reply('' if self.empty_register else f"{self.stack_pointer:08x}")
                     elif command == "p3":
                         self.reply("0000002a")
+                    elif command.startswith('M'):
+                        if self.refused_writes:
+                            self.reply('')  # Valid RSP unsupported-command response.
+                            continue
+                        location, encoded = command[1:].split(':')
+                        address, size = (int(v, 16) for v in location.split(','))
+                        value = bytes.fromhex(encoded)
+                        assert len(value) == size
+                        for base, block in list(self.memory.items()):
+                            if base <= address and address + size <= base + len(block):
+                                start = address - base
+                                self.memory[base] = block[:start] + value + block[start+size:]
+                        self.memory[address] = value
+                        self.reply('OK')
                     elif command.startswith("m"):
                         if self.delay_memory:
                             self.memory_requested.set()
@@ -242,8 +257,8 @@ class AdapterTests(unittest.TestCase):
             self.assertFalse(self.target.errors, self.target.errors)
         self.temp.cleanup()
 
-    def attach(self, configured=True, interrupt_empty_reply=False):
-        self.target = Target(interrupt_empty_reply=interrupt_empty_reply)
+    def attach(self, configured=True, interrupt_empty_reply=False, target=None):
+        self.target = target or Target(interrupt_empty_reply=interrupt_empty_reply)
         self.client.request("attach", dict(host="127.0.0.1", port=self.target.port,
             elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address),
             sourceFileMap={"/build/日本": "/local/日本"}))
@@ -255,6 +270,43 @@ class AdapterTests(unittest.TestCase):
     def bp(self, path="Game.cs", lines=(10,)):
         return self.client.request("setBreakpoints", dict(source=dict(path="/local/日本/" + path),
             breakpoints=[dict(line=line) for line in lines]))["body"]["breakpoints"]
+
+    def telemetry_target(self, signature='444e443100000000', refused=False):
+        data = json.loads(self.address.read_text())
+        data['debuggerTelemetry'] = dict(version=1, size=8, address='0x80009000')
+        self.address.write_text(json.dumps(data))
+        target = Target()
+        target.memory[0x80009000] = bytes.fromhex(signature)
+        target.refused_writes = refused
+        return target
+
+    def test_overlay_telemetry_reports_attach_and_clean_disconnect_only(self):
+        self.attach(target=self.telemetry_target())
+        self.assertEqual(bytes.fromhex('444e443100000001'), self.target.memory[0x80009000])
+        self.client.request('continue', dict(threadId=1))
+        self.client.request('disconnect')
+        self.client.event('terminated')
+        self.assertEqual(bytes.fromhex('444e443100000002'), self.target.memory[0x80009000])
+        self.assertEqual(['M80009004,4:00000001', 'M80009004,4:00000002'], [c for c in self.target.commands if c.startswith('M')])
+        self.assertNotIn('k', self.target.commands)
+
+    def test_overlay_telemetry_unsupported_write_does_not_break_debugging(self):
+        self.attach(target=self.telemetry_target(refused=True))
+        self.assertIn('Debugger overlay status unavailable', self.client.event('output')['output'])
+        self.bp(lines=(11,))
+        self.client.request('continue', dict(threadId=1))
+        self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+
+    def test_overlay_signature_mismatch_never_writes_target_memory(self):
+        self.attach(target=self.telemetry_target(signature='1234567800000000'))
+        self.assertIn('unsupported signature', self.client.event('output')['output'])
+        self.assertFalse(any(c.startswith('M') for c in self.target.commands))
+
+    def test_old_maps_do_not_write_overlay_telemetry(self):
+        self.attach()
+        self.client.request('disconnect')
+        self.client.event('terminated')
+        self.assertFalse(any(c.startswith('M') for c in self.target.commands))
 
     def attach_inspection(self, configure=None):
         memory = write_inspection_fixture(self.address)

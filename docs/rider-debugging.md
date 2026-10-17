@@ -11,7 +11,10 @@ real-Dolphin checks in [run 38944870062](https://github.com/capz/DolphinDotNet/a
 The stepping/lifecycle/primitive increment passed the complete CI in
 [run 39027086139](https://github.com/capz/DolphinDotNet/actions/runs/39027086139),
 including Windows/macOS/Linux workflows, Rider packaging/Plugin Verifier and real
-Dolphin checks. The object/string increment below requires its own CI result.
+Dolphin checks. The object/string increment also passed complete CI in
+[run 39033281419](https://github.com/capz/DolphinDotNet/actions/runs/39033281419),
+including its new real-Dolphin inspection gate. The overlay telemetry increment
+requires its own CI result.
 The user has now validated the first interactive Windows Snake workflow in Rider:
 attach to a waiting Dolphin, Resume to a dedicated DolphinDotNet source breakpoint,
 basic Step Over and primitive values in the Variables window. Step Over was slow
@@ -112,6 +115,15 @@ unrecognized instructions keep the instruction-stepping fallback. A callee that
 does not return can keep the step running; **Pause** interrupts it normally. The
 step budget counts explicit single-step requests, not instructions executed during
 run-to-return. Step Into and Step Out retain their existing instruction stepping.
+
+Debug target builds also expose an optional overlay status slot. After validating
+its ELF-bound address, version and signature, the adapter reports connected on
+attach and disconnected during clean cleanup. It writes only that reserved state
+word; DAP memory/variable mutation remains unsupported. **DEBUG LAST** in the
+[statistics overlay](debug-overlay.md) is the last reported state, not a heartbeat:
+the guest cannot detect a host-side crash, and a paused game cannot redraw until
+it resumes. Unsupported reporting on a stub produces a console note without
+preventing debugging; old maps have no reporting side effects.
 
 The adapter reuses a stack snapshot and stable frame IDs until execution resumes,
 avoiding repeated register/memory reads for the same stop. Partial-stack warnings

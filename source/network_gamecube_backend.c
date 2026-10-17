@@ -17,6 +17,14 @@ static struct sockaddr_in addr(uint32_t ip,int port){struct sockaddr_in a;memset
 static void *configure(void *unused){(void)unused;int r=if_configex(&config_ip,&config_mask,&config_gateway,config_dhcp!=0);__sync_synchronize();state=r<0?-2:1;return NULL;}
 int dnd_np_start(uint32_t ip,uint32_t mask,uint32_t gateway,int dhcp){if(state==0)return DND_NET_WAIT;if(state==1)return 0;if(state==-2)return DND_NET_ERROR;config_ip.s_addr=htonl(ip);config_mask.s_addr=htonl(mask);config_gateway.s_addr=htonl(gateway);config_dhcp=dhcp;state=0;if(LWP_CreateThread(&worker,configure,NULL,worker_stack,sizeof(worker_stack),70)!=0){state=-2;return DND_NET_ERROR;}return 0;}
 int dnd_np_status(void){__sync_synchronize();return state;}
+int dnd_np_snapshot(uint32_t *ip,uint32_t *mask,uint32_t *gateway,int *dhcp){
+ int snapshot=state;__sync_synchronize();
+ *dhcp=config_dhcp;
+ *ip=snapshot==1?ntohl(config_ip.s_addr):0;
+ *mask=snapshot==1?ntohl(config_mask.s_addr):0;
+ *gateway=snapshot==1?ntohl(config_gateway.s_addr):0;
+ return snapshot;
+}
 uint32_t dnd_np_time(void){return (uint32_t)ticks_to_millisecs(gettime());}
 int dnd_np_error(void){return error_code;}
 static int nonblock(int fd){unsigned long value=1;int r=net_ioctl(fd,FIONBIO,&value);if(r<0){result(r);net_close(fd);return DND_NET_ERROR;}return fd;}

@@ -31,12 +31,39 @@ draw it automatically during presentation.
   region plus rounded live allocations, including pending disposal. It reads the existing
   ARAM service without initializing or resetting it. Before initialization it shows
   `NOT INITIALIZED`; usage of outside owners within the reserved region is not discoverable.
+* **BBA** appears after application network configuration is attempted. It shows
+  `CONFIGURING`, `READY` or `CONFIG FAILED`, DHCP/static mode, and the configured IPv4
+  address, netmask and gateway. Addresses appear after configuration succeeds.
+  `READY` describes configuration, not a continuous physical link/cable test.
+  Merely drawing the panel never initializes networking or starts DHCP.
+* A build using the separate TCP GDB stub shows **BBA: DEBUG TCP CONFIG - STATIC**
+  with that stub's configured addresses. This does not imply that the application
+  socket stack is active or that a debugger is connected. Dolphin's host GDB port
+  (`127.0.0.1:2166`) is independent of the guest BBA network and is not shown as the
+  guest's IP address.
+* **DEBUG LAST** shows the last state reported by the DolphinDotNet adapter:
+  `UNKNOWN`, `CONNECTED` or `DISCONNECTED`. Debug symbol builds include an optional,
+  versioned eight-byte telemetry slot bound through the ELF address map. The adapter
+  checks its signature and writes only its four-byte state word on attach/clean
+  disconnect. An older/non-reporting build shows `UNAVAILABLE`; other GDB clients
+  do not report through this slot. Variable inspection remains read-only.
+
+The panel uses five rows without BBA configuration and nine rows with BBA details.
+It keeps the existing visibility toggle and bottom-left placement. Network snapshots
+refresh with the memory statistics, without socket I/O. Debugger reports are read
+on each redraw. A halted target cannot redraw its overlay, so the screen retains
+its previous frame until execution resumes. The guest cannot independently detect a
+host-side adapter crash or lost connection; **DEBUG LAST is not a heartbeat or a
+live connection guarantee**. An abrupt loss can leave the last report as connected.
+
+Rebuild the target Debug build and install the updated Rider plugin to enable
+adapter reports. Maps without telemetry remain supported and cause no status writes.
 
 Memory readings refresh four times per second. Timing and formatting use fixed native
 buffers, with no managed allocations or storage/DMA operations. APIs run on the application's
 thread and require DolphinDotNet AOT, like the other platform diagnostics.
 
-Portable tests verify timing, counter reset/saturation, toggle behavior, text formatting,
+Portable tests verify timing, counter reset/saturation, toggle behavior, network/debugger text formatting,
 color and panel placement at 480- and 576-line resolutions. CI also validates the managed
 toggle through AOT and builds the GameCube backend. Console visual and timer accuracy
 acceptance still requires an emulator or real hardware.

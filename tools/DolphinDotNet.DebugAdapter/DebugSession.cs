@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Buffers.Binary;
 using DolphinDotNet.Debugger;
 
 namespace DolphinDotNet.DebugAdapter;
@@ -25,6 +26,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     private readonly Dictionary<int, (FrameState Frame, DebugVariable[] Variables)> _variableScopes = new();
     private readonly Dictionary<int, ObjectView> _objectViews = new();
     private int _nextVariable;
+    private bool _telemetryReported;
     private readonly CancellationTokenSource _lifetime = new();
 
     public async Task RunAsync()
@@ -105,6 +107,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 _stop = await new SourceStepper(_client, _symbols).ReadProgramCounterAsync(await _client.QueryStopAsync());
                 if (_stop.Exited) throw new InvalidOperationException("Target has exited.");
                 _breakpoints = new BreakpointRegistry(_client, () => _pauseRequested);
+                await ReportDebuggerTelemetryAsync(true);
             }
             catch { await _client.DisposeAsync(); _client = null; throw; }
             await connection.RespondAsync(request);
@@ -326,6 +329,8 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 if (_execution is not null) await _execution.WaitAsync(TimeSpan.FromSeconds(3));
             }
             if (_client is not null && _stop is { Exited: false }) await _breakpoints!.SuspendAsync();
+            if (_client is not null && _stop is { Exited: false } && _telemetryReported)
+                await ReportDebuggerTelemetryAsync(false);
         }
         finally
         {
@@ -333,6 +338,24 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             if (_client is not null) await _client.DisposeAsync();
             if (_execution is not null) { try { await _execution; } catch { } }
             _client = null;
+        }
+    }
+
+    private async Task ReportDebuggerTelemetryAsync(bool connected)
+    {
+        if (_symbols?.DebuggerTelemetryAddress is not uint address || _client is null) return;
+        try
+        {
+            var slot = await _client.ReadMemoryAsync(address, 8);
+            if (BinaryPrimitives.ReadUInt32BigEndian(slot) != 0x444e4431 ||
+                BinaryPrimitives.ReadUInt32BigEndian(slot.AsSpan(4)) > 2)
+                throw new RspRemoteException("Overlay telemetry slot has an unsupported signature or state.");
+            await _client.WriteMemoryAsync(address + 4, new byte[] { 0, 0, 0, connected ? (byte)1 : (byte)2 });
+            _telemetryReported = connected;
+        }
+        catch (RspRemoteException error)
+        {
+            await connection.EventAsync("output", new { category = "console", output = $"Debugger overlay status unavailable: {error.Message}\n" });
         }
     }
 

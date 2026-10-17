@@ -46,7 +46,19 @@ int main(void) {
   dnd_performance_add_triangles(10);
   dnd_performance_add_triangles(12);
   assert(dnd_performance_stats()->triangles == 22);
+  assert(dnd_performance_format(lines) == 5);
+#ifdef DND_DEBUG_TELEMETRY
+  assert(dnd_debugger_telemetry[0] == DND_DEBUGGER_TELEMETRY_MAGIC);
+  assert(strcmp(lines[4], "DEBUG LAST: UNKNOWN") == 0);
+  dnd_debugger_telemetry[1] = 1;
   dnd_performance_format(lines);
+  assert(strcmp(lines[4], "DEBUG LAST: CONNECTED") == 0);
+  dnd_debugger_telemetry[1] = 2;
+  dnd_performance_format(lines);
+  assert(strcmp(lines[4], "DEBUG LAST: DISCONNECTED") == 0);
+#else
+  assert(strcmp(lines[4], "DEBUG LAST: UNAVAILABLE") == 0);
+#endif
   assert(strstr(lines[0], "--") && strcmp(lines[1], "TRIS: 22") == 0);
   assert(strcmp(lines[3], "ARAM: NOT INITIALIZED") == 0);
   uint64_t now = 0;
@@ -65,11 +77,28 @@ int main(void) {
   assert(strcmp(lines[0], "FPS: 50.0  FRAME: 20.00 MS") == 0);
   assert(strcmp(lines[2], "MAIN: 6.00 / 24.00 MIB") == 0);
   assert(strcmp(lines[3], "ARAM: 2.00 / 16.00 MIB") == 0);
+  dnd_performance_network(0, true, 0, 0, 0);
+  assert(dnd_performance_format(lines) == 9);
+  assert(strcmp(lines[4], "BBA: CONFIGURING - DHCP") == 0 && strcmp(lines[5], "IP: --") == 0);
+  dnd_performance_network(1, true, UINT32_C(0xc0a8012a), UINT32_C(0xffffff00), UINT32_C(0xc0a80101));
+  assert(dnd_performance_format(lines) == 9);
+  assert(strcmp(lines[4], "BBA: READY - DHCP") == 0);
+  assert(strcmp(lines[5], "IP: 192.168.1.42") == 0);
+  assert(strcmp(lines[6], "MASK: 255.255.255.0") == 0);
+  assert(strcmp(lines[7], "GW: 192.168.1.1") == 0);
   dnd_console_render();
   assert(rectangles == 1);
   screen_height = 576;
   dnd_console_render();
   assert(rectangles == 2);
+  dnd_performance_network(2, false, UINT32_C(0x0a000002), UINT32_C(0xff000000), 0);
+  dnd_performance_format(lines);
+  assert(strcmp(lines[4], "BBA: DEBUG TCP CONFIG - STATIC") == 0 && strcmp(lines[5], "IP: 10.0.0.2") == 0);
+  dnd_performance_network(-2, true, UINT32_MAX, UINT32_MAX, UINT32_MAX);
+  dnd_performance_format(lines);
+  assert(strcmp(lines[4], "BBA: CONFIG FAILED - DHCP") == 0 && strcmp(lines[5], "IP: --") == 0);
+  dnd_performance_network(-1, false, 0, 0, 0);
+  assert(dnd_performance_format(lines) == 5 && lines[5][0] == 0 && lines[8][0] == 0);
   for (int i = 0; i < 40; i++) { now += 40000; dnd_performance_presented(now); }
   assert(dnd_performance_stats()->fps_tenths == 250);
   assert(dnd_performance_stats()->frame_centimilliseconds == 4000);
@@ -93,6 +122,6 @@ int main(void) {
   dnd_console_write_line("LOG STILL VISIBLE");
   dnd_console_render();
   assert(rectangles == 3);
-  puts("Performance timing, counters, toggle, color and bottom-left layout passed.");
+  puts("Performance timing, counters, BBA/debugger status, toggle, color and layout passed.");
   return 0;
 }

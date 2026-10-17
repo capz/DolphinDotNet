@@ -15,11 +15,14 @@
 #include <stdio.h>
 #endif
 static int error_code,state;
+static uint32_t configured_ip,configured_mask,configured_gateway;
+static int configured_dhcp;
 static int result(int r){if(r>=0)return r;error_code=errno;return errno==EAGAIN||errno==EWOULDBLOCK||errno==EINPROGRESS||errno==EALREADY?DND_NET_WAIT:DND_NET_ERROR;}
 static struct sockaddr_in addr(uint32_t ip,int port){struct sockaddr_in a;memset(&a,0,sizeof(a));a.sin_family=AF_INET;a.sin_addr.s_addr=htonl(ip);a.sin_port=htons((uint16_t)port);return a;}
 static int nonblock(int fd){int f=fcntl(fd,F_GETFL,0);if(f<0||fcntl(fd,F_SETFL,f|O_NONBLOCK)<0){error_code=errno;close(fd);return DND_NET_ERROR;}return fd;}
-int dnd_np_start(uint32_t ip,uint32_t mask,uint32_t gateway,int dhcp){(void)ip;(void)mask;(void)gateway;(void)dhcp;state=1;return 0;}
+int dnd_np_start(uint32_t ip,uint32_t mask,uint32_t gateway,int dhcp){configured_ip=ip;configured_mask=mask;configured_gateway=gateway;configured_dhcp=dhcp;state=1;return 0;}
 int dnd_np_status(void){return state?1:-1;}
+int dnd_np_snapshot(uint32_t *ip,uint32_t *mask,uint32_t *gateway,int *dhcp){*ip=configured_ip;*mask=configured_mask;*gateway=configured_gateway;*dhcp=configured_dhcp;return dnd_np_status();}
 uint32_t dnd_np_time(void){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return (uint32_t)((uint64_t)t.tv_sec*1000+(uint64_t)t.tv_nsec/1000000);}
 int dnd_np_error(void){return error_code;}
 int dnd_np_open(int stream){int fd=socket(AF_INET,stream?SOCK_STREAM:SOCK_DGRAM,stream?IPPROTO_TCP:IPPROTO_UDP);return fd<0?result(fd):nonblock(fd);}

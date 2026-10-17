@@ -17,6 +17,7 @@ public sealed class SourceAddressMap
     private readonly List<UnwindRule> _unwind = new();
     private readonly Dictionary<string, List<DebugVariable>> _variables = new(StringComparer.Ordinal);
     private IReadOnlyDictionary<uint, DebugObjectLayout> _objectLayouts = new Dictionary<uint, DebugObjectLayout>();
+    public uint? DebuggerTelemetryAddress { get; private set; }
 
     public static SourceAddressMap Load(string elf, string sourceMap, string addressMap)
     {
@@ -32,6 +33,14 @@ public sealed class SourceAddressMap
             throw new InvalidDataException("ELF and C# debug metadata must belong to the same supported build.");
         var result = new SourceAddressMap();
         result._objectLayouts = ObjectLayouts.Load(root);
+        if (root.TryGetProperty("debuggerTelemetry", out var telemetry))
+        {
+            var address = ParseAddress(telemetry.GetProperty("address").GetString());
+            if (telemetry.GetProperty("version").GetInt32() != 1 || telemetry.GetProperty("size").GetInt32() != 8 ||
+                address < 0x80000000 || address > 0x81800000 - 8)
+                throw new InvalidDataException("Unsupported debugger overlay telemetry.");
+            result.DebuggerTelemetryAddress = address;
+        }
         var identities = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         if (managed.RootElement.TryGetProperty("methods", out var managedMethods))
             foreach (var method in managedMethods.EnumerateArray())

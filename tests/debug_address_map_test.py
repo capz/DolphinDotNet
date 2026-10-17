@@ -31,6 +31,19 @@ Program.cs - 0x80001040
 
 
 class VariableLocations(unittest.TestCase):
+    def test_debugger_telemetry_is_optional_and_requires_one_exact_symbol(self):
+        source = dict(debuggerTelemetry=dict(version=1, size=8, nativeSymbol='dnd_debugger_telemetry'))
+        mapped = {}
+        module.attach_debugger_telemetry(mapped, source, '')
+        self.assertNotIn('debuggerTelemetry', mapped)
+        symbols = '1: 80002000 8 OBJECT GLOBAL DEFAULT 2 dnd_debugger_telemetry\n'
+        module.attach_debugger_telemetry(mapped, source, symbols)
+        self.assertEqual(dict(version=1, size=8, address='0x80002000'), mapped['debuggerTelemetry'])
+        with self.assertRaisesRegex(ValueError, 'Ambiguous debugger telemetry'):
+            module.attach_debugger_telemetry({}, source, symbols + '2: 80002008 8 OBJECT GLOBAL DEFAULT 2 dnd_debugger_telemetry\n')
+        with self.assertRaisesRegex(ValueError, 'Invalid debugger telemetry'):
+            module.attach_debugger_telemetry({}, source, symbols.replace(' 8 OBJECT', ' 16 OBJECT'))
+
     def test_inspection_only_binds_linked_object_symbols(self):
         source = dict(inspection=dict(version=1, pointerSize=4, objectHeaderSize=8, stringLengthOffset=8, stringDataOffset=12,
             types=[dict(name='Box', nativeSymbol='dnd_type_Box', kind='object', size=32, fields=[]),

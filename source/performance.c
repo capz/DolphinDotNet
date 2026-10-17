@@ -3,7 +3,10 @@
 #include <string.h>
 
 #define FRAME_WINDOW 32
-static DndPerformanceStats stats;
+static DndPerformanceStats stats = {.network_state = -1};
+#ifdef DND_DEBUG_TELEMETRY
+volatile uint32_t dnd_debugger_telemetry[2] = {DND_DEBUGGER_TELEMETRY_MAGIC, 0};
+#endif
 static int visible;
 static uint64_t intervals[FRAME_WINDOW], interval_sum, previous_present, memory_time;
 static unsigned interval_count, interval_head;
@@ -75,7 +78,21 @@ static void memory_line(char *line, const char *label, uint32_t used, uint32_t t
   snprintf(line, DND_PERFORMANCE_COLUMNS, "%s: %u.%02u / %u.%02u MIB",
            label, (unsigned)(u / 100), (unsigned)(u % 100), (unsigned)(t / 100), (unsigned)(t % 100));
 }
-void dnd_performance_format(char lines[DND_PERFORMANCE_ROWS][DND_PERFORMANCE_COLUMNS]) {
+void dnd_performance_network(int state, bool dhcp, uint32_t ip, uint32_t mask, uint32_t gateway) {
+  stats.network_state = state;
+  stats.network_dhcp = dhcp;
+  stats.network_ip = ip;
+  stats.network_mask = mask;
+  stats.network_gateway = gateway;
+}
+static void address_line(char *line, const char *label, uint32_t address, bool available) {
+  if (!available) snprintf(line, DND_PERFORMANCE_COLUMNS, "%s: --", label);
+  else snprintf(line, DND_PERFORMANCE_COLUMNS, "%s: %u.%u.%u.%u", label,
+                (unsigned)(address >> 24), (unsigned)((address >> 16) & 255),
+                (unsigned)((address >> 8) & 255), (unsigned)(address & 255));
+}
+int dnd_performance_format(char lines[DND_PERFORMANCE_ROWS][DND_PERFORMANCE_COLUMNS]) {
+  memset(lines, 0, DND_PERFORMANCE_ROWS * DND_PERFORMANCE_COLUMNS);
   if (stats.timing_valid)
     snprintf(lines[0], DND_PERFORMANCE_COLUMNS, "FPS: %u.%u  FRAME: %u.%02u MS",
              (unsigned)(stats.fps_tenths / 10), (unsigned)(stats.fps_tenths % 10),
@@ -86,4 +103,21 @@ void dnd_performance_format(char lines[DND_PERFORMANCE_ROWS][DND_PERFORMANCE_COL
   else snprintf(lines[2], DND_PERFORMANCE_COLUMNS, "MAIN: --");
   if (stats.aram_available) memory_line(lines[3], "ARAM", stats.aram_used, stats.aram_total);
   else snprintf(lines[3], DND_PERFORMANCE_COLUMNS, "ARAM: NOT INITIALIZED");
+  int row = 4;
+  if (stats.network_state != -1) {
+    const char *state = stats.network_state == 0 ? "CONFIGURING" : stats.network_state == 1 ? "READY" :
+                        stats.network_state == 2 ? "DEBUG TCP CONFIG" : "CONFIG FAILED";
+    snprintf(lines[row++], DND_PERFORMANCE_COLUMNS, "BBA: %s - %s", state, stats.network_dhcp ? "DHCP" : "STATIC");
+    bool available = stats.network_state == 1 || stats.network_state == 2;
+    address_line(lines[row++], "IP", stats.network_ip, available);
+    address_line(lines[row++], "MASK", stats.network_mask, available);
+    address_line(lines[row++], "GW", stats.network_gateway, available);
+  }
+  const char *debugger = "UNAVAILABLE";
+#ifdef DND_DEBUG_TELEMETRY
+  uint32_t report = dnd_debugger_telemetry[1];
+  debugger = report == 1 ? "CONNECTED" : report == 2 ? "DISCONNECTED" : "UNKNOWN";
+#endif
+  snprintf(lines[row++], DND_PERFORMANCE_COLUMNS, "DEBUG LAST: %s", debugger);
+  return row;
 }

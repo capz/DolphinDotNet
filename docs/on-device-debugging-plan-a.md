@@ -487,9 +487,31 @@ this slice.
 
 Local coverage includes compiler metadata and inheritance assertions, resolver
 symbol validation, real-adapter object/string/pagination/lifetime tests and an
-actual PowerPC fixture build. The new Java TCP/PTY assertions and real-Dolphin
-inspection gate require current CI; neither the earlier CI nor fake peers prove
-the new Rider object UI. The Dolphin fixture checks object arguments/locals,
+actual PowerPC fixture build. The Java TCP/PTY assertions and real-Dolphin
+inspection gate passed complete CI in run 39033281419. Neither CI nor fake peers
+prove the new Rider object UI. The Dolphin fixture checks object arguments/locals,
 inherited scalar fields, a nested/cyclic reference and string previews. Interactive
 object expansion remains a separate user check after installing the rebuilt plugin
 and rebuilding the target's Debug artifacts.
+
+## BBA and debugger statistics overlay
+
+The existing performance panel now adds BBA configuration state/mode and IPv4,
+netmask and gateway after configuration is attempted. Its read-only platform
+snapshot never initializes BBA/DHCP or polls sockets. The separate TCP GDB stub
+publishes its own static configuration, explicitly distinguished from application
+socket readiness and Dolphin's host GDB listener.
+
+Debug symbol builds retain a versioned eight-byte overlay telemetry slot. The
+native map binds its exact symbol; the adapter verifies the signature before
+writing the four-byte connected/disconnected state on attach/clean disconnect.
+Old maps do not cause writes, and unsupported reporting does not prevent attach.
+Variable/expression mutation remains unsupported. The row is labelled DEBUG LAST:
+it is a last reported state, not a heartbeat. Abrupt host failure cannot be detected
+from the guest, and a stopped target does not redraw until it runs another frame.
+
+Portable overlay tests cover five/nine-row layouts, status/IPv4 formatting and
+both reporting/non-reporting builds. Host tests cover signature refusal, absent
+metadata, unsupported writes and running disconnect cleanup. A native PowerPC
+build verifies snapshot compilation and the retained slot's exact ELF bytes.
+Physical BBA behavior and visual acceptance remain separate checks.
