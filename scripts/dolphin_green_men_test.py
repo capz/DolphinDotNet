@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the actual Green Men DOL using Dolphin pipe inputs and read-only GDB observations."""
+"""Exercise actual arcade sample DOLs using Dolphin pipe inputs and read-only GDB observations."""
 import argparse
 import json
 import os
@@ -20,10 +20,10 @@ def run(args):
     config=root/'user'/'Config';config.mkdir(parents=True,exist_ok=True)
     pipes=root/'user'/'Pipes';pipes.mkdir(exist_ok=True)
     model=json.loads(args.source_map.read_text())['inspection']
-    game_type=next(t for t in model['types'] if t['name']=='GreenMenGame')
+    game_type=next(t for t in model['types'] if t['name']==args.game+'Game')
     if model['pointerSize']!=4 or not 8<=game_type['size']<=4096:raise ValueError('Unsupported game layout')
     fields={f['name']:f for f in game_type['fields']}
-    functions=dict(resolve_symbols(args.elf,['dnd_value_GreenMen_GreenMenGame_Update_*','dnd_device_end']))
+    functions=dict(resolve_symbols(args.elf,[f'dnd_value_{args.game}_{args.game}Game_Update_*','dnd_device_end']))
     update=next(v for k,v in functions.items() if k!='dnd_device_end');frame=functions['dnd_device_end']
     with socket.socket() as available:
         available.bind(('127.0.0.1',0));port=available.getsockname()[1]
@@ -64,7 +64,8 @@ def run(args):
                         if not 0x80000000<=game<0x81800000:raise ValueError('Invalid managed game pointer')
                         data=memory(conn,game,game_type['size'])
                         state={}
-                        for name in ['State','PlayerX','Lives','Score','Wave','FormationX','FormationY','ShotY','ShotActive']:
+                        names=['State','PlayerX','Lives','Score','Wave','FormationX','FormationY','ShotY','ShotActive'] if args.game=='GreenMen' else ['State','PlayerX','PlayerY','Shield','Score','Distance','Energy','Speed','RollRemaining','RollDirection','fireTime']
+                        for name in names:
                             field=fields.get(name) or fields[f'<{name}>k__BackingField']
                             offset=field['offset'];size=field['storageBytes']
                             state[name]=struct.unpack_from('>f',data,offset)[0] if field['type']=='System.Single' else int.from_bytes(data[offset:offset+size],'big')
@@ -77,23 +78,42 @@ def run(args):
                 proof.append(label)
             initial=observe()
             require(initial['State']==0,'title renders with connected controller')
-            playing=observe(['A'])
-            require(playing['State']==1 and playing['Lives']==3 and playing['Wave']==1,'A starts a three-life game')
-            require(playing['ShotActive'] or playing['Score']>0,'held A fires a real projectile')
-            observe()
-            moved=observe(['D_LEFT'])
-            require(moved['PlayerX']<playing['PlayerX'],'D-pad moves the ship left')
-            observe()
-            paused=observe(['START']);observe()
-            frozen=observe(['D_RIGHT','A'])
-            require(paused['State']==2 and frozen['State']==2,'Start pauses')
-            require(all(paused[k]==frozen[k] for k in ('PlayerX','FormationX','FormationY','ShotY')),'pause freezes ship, invaders and projectiles')
-            observe();resumed=observe(['START'])
-            require(resumed['State']==1,'Start resumes')
-            observe();title=observe(['B'])
-            require(title['State']==0,'B returns to title')
-            observe();restarted=observe(['A'])
-            require(restarted['State']==1 and restarted['Score']==0 and restarted['Lives']==3,'new game resets score and lives')
+            if args.game=='Fox':
+                playing=observe(['A'])
+                require(playing['State']==1 and playing['Shield']==5,'A launches with full shield')
+                require(playing['fireTime']>0,'held A fires lasers')
+                observe();moved=observe(['D_RIGHT','D_UP'])
+                require(moved['PlayerX']>playing['PlayerX'] and moved['PlayerY']>playing['PlayerY'],'D-pad flies right and up')
+                boosted=observe(['X'])
+                require(boosted['Speed']==30 and boosted['Energy']<1,'X boosts and drains energy')
+                braked=observe(['Y']);require(braked['Speed']==10,'Y brakes')
+                observe();rolled=observe(['R'],frames=4)
+                require(rolled['RollRemaining']>0 and rolled['RollDirection']==1,'R performs a barrel roll')
+                observe();paused=observe(['START']);observe();frozen=observe(['D_LEFT','A','X'])
+                require(paused['State']==2 and frozen['State']==2,'Start pauses flight')
+                require(all(paused[k]==frozen[k] for k in ('PlayerX','PlayerY','Distance','Energy','RollRemaining')),'pause freezes flight, energy and roll timers')
+                observe();resumed=observe(['START']);require(resumed['State']==1,'Start resumes')
+                observe();title=observe(['B']);require(title['State']==0,'B returns to title')
+                observe();restarted=observe(['A'])
+                require(restarted['State']==1 and restarted['Score']==0 and restarted['Shield']==5,'new mission resets score and shield')
+            else:
+                playing=observe(['A'])
+                require(playing['State']==1 and playing['Lives']==3 and playing['Wave']==1,'A starts a three-life game')
+                require(playing['ShotActive'] or playing['Score']>0,'held A fires a real projectile')
+                observe()
+                moved=observe(['D_LEFT'])
+                require(moved['PlayerX']<playing['PlayerX'],'D-pad moves the ship left')
+                observe()
+                paused=observe(['START']);observe()
+                frozen=observe(['D_RIGHT','A'])
+                require(paused['State']==2 and frozen['State']==2,'Start pauses')
+                require(all(paused[k]==frozen[k] for k in ('PlayerX','FormationX','FormationY','ShotY')),'pause freezes ship, invaders and projectiles')
+                observe();resumed=observe(['START'])
+                require(resumed['State']==1,'Start resumes')
+                observe();title=observe(['B'])
+                require(title['State']==0,'B returns to title')
+                observe();restarted=observe(['A'])
+                require(restarted['State']==1 and restarted['Score']==0 and restarted['Lives']==3,'new game resets score and lives')
         return proof
     finally:
         if conn:conn.close()
@@ -110,6 +130,7 @@ def run(args):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--game',choices=['GreenMen','Fox'],default='GreenMen')
     parser.add_argument('dol',type=Path);parser.add_argument('--elf',type=Path,required=True)
     parser.add_argument('--source-map',type=Path,required=True)
     parser.add_argument('--logs',type=Path,default=Path('dolphin-green-men'))
@@ -118,7 +139,7 @@ def main():
     args=parser.parse_args()
     proof=run(args)
     (args.logs/'results.json').write_text(json.dumps(dict(passed=True,checks=proof),indent=2)+'\n')
-    print('Green Men real Dolphin inputs passed: '+', '.join(proof))
+    print(args.game+' real Dolphin inputs passed: '+', '.join(proof))
     return 0
 
 

@@ -23,7 +23,7 @@ def step_blocks(section):
 
 class WorkflowCoverageTests(unittest.TestCase):
     def test_every_original_contract_is_owned_once(self):
-        self.assertEqual({'managed':42,'gamecube':29,'dolphin':17},
+        self.assertEqual({'managed':43,'gamecube':30,'dolphin':18},
                          {kind:sum(map(len,groups.values())) for kind,groups in MANIFEST.items()})
         for kind,groups in MANIFEST.items():
             seen=[]

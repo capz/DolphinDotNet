@@ -44,7 +44,8 @@
       "Compile self-contained two-player Pong through managed AOT",
       "Test Snake rules, state persistence and timed autosaves",
       "Compile Snake save/load game through managed AOT",
-      "Validate Green Men rules and AOT gameplay"
+      "Validate Green Men rules and AOT gameplay",
+      "Validate Fox rules and AOT flight"
     ],
     "graphics-model": [
       "Validate raw and managed graphics layers",
@@ -68,7 +69,8 @@
       "Report GameCube runtime footprint",
       "Verify outputs",
       "Build disc filesystem and DiscBrowser startup acceptance DOLs",
-      "Build Green Men GameCube sample with source maps"
+      "Build Green Men GameCube sample with source maps",
+      "Build Fox polygon rail shooter with source maps"
     ],
     "compat": [
       "Build generated standalone GameCube project",
@@ -94,7 +96,8 @@
     "games": [
       "Verify Pong synthesizes audio and presents frames in Dolphin",
       "Verify Snake memory card initialization and frame rendering in Dolphin",
-      "Verify Green Men gameplay using real controller inputs"
+      "Verify Green Men gameplay using real controller inputs",
+      "Verify Fox flight using real controller inputs"
     ],
     "debugger": [
       "Verify two consecutive C# source breakpoints in Dolphin",
