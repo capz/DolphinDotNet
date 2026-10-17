@@ -168,6 +168,31 @@ Program.cs - 0x80001004
         with self.assertRaisesRegex(ValueError, 'No generated native function'):
             module.resolve(MAP, LINES, '')
 
+    def test_linker_discarded_methods_have_no_invented_addresses(self):
+        dead = SYMBOL + '_discarded'
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            c = directory / 'gc.c'
+            c.write_text(f'int {SYMBOL}(void) {{return 1;}}\n'
+                         f'int {dead}(void) {{return 2;}}\n'
+                         f'int main(void) {{return {SYMBOL}();}}\n')
+            binary = directory / 'gc'
+            subprocess.run(['cc', '-O0', '-ffunction-sections', '-Wl,--gc-sections',
+                            str(c), '-o', str(binary)], check=True)
+            symbols = subprocess.check_output(['readelf', '-Ws', str(binary)], text=True)
+            self.assertIn(SYMBOL, module.parse_symbols(symbols))
+            self.assertNotIn(dead, module.parse_symbols(symbols))
+            source = json.loads(json.dumps(MAP))
+            source['methods'].append({**source['methods'][0], 'symbol': dead, 'methodToken': 100663298})
+            mapped = module.resolve(source, '', symbols)
+            live, discarded = mapped['methods']
+            self.assertIn('nativeStart', live)
+            self.assertEqual(dead, discarded['symbol'])
+            self.assertEqual([], discarded['breakpoints'])
+            self.assertNotIn('nativeStart', discarded)
+            self.assertNotIn('nativeSize', discarded)
+            self.assertIn('absent', discarded['unavailableReason'])
+
     def test_ambiguous_source_names_rejected(self):
         ambiguous = json.loads(json.dumps(MAP))
         ambiguous['methods'][0]['sourceLocations'].append(

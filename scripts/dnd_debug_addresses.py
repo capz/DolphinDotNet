@@ -96,7 +96,13 @@ def resolve(source_map, line_dump, symbol_dump):
     for method in source_map['methods']:
         name = method['symbol']
         if name not in symbols:
-            raise ValueError('Native ELF missing generated method: ' + name)
+            # The compiler graph conservatively includes methods whose sections
+            # the native linker can discard (for example, unused vtable entries).
+            # Keep their identity, but never invent an extent or breakpoint PC.
+            result.append({'symbol': name, 'assembly': method['assembly'],
+                           'methodToken': method['methodToken'], 'breakpoints': [],
+                           'unavailableReason': 'Method is absent from the linked ELF'})
+            continue
         begin, size = symbols[name]
         locations = {}
         for source in method.get('sourceLocations', []):
@@ -386,6 +392,9 @@ def main():
             parser.error('No native breakpoint address in source ' + args.require_source)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(mapped, indent=2, sort_keys=True) + '\n')
+    absent = sum('unavailableReason' in method for method in mapped['methods'])
+    if absent:
+        print(f'{absent} managed methods are unavailable in the linked ELF; no addresses were assigned')
     print(f'Validated {count} source breakpoint lines in {args.elf}')
 
 

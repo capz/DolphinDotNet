@@ -47,6 +47,9 @@ repository root run `dotnet build samples/Snake/Snake.csproj -c Debug`, then cho
 publishes `Snake.elf`, `Snake.dnd-debug.json` and `Snake.dnd-addresses.json` together.
 If maps are missing, check that the native build succeeded and no local setting
 disabled `DndDebugSymbols`; `-p:DndDebugSymbols=true` overrides that setting.
+Methods discarded by the native linker remain explicitly unavailable in the
+address map, with no invented native extent or breakpoint addresses. Builds still
+fail if there are no generated native symbols or no verifiable source addresses.
 See [IDE build troubleshooting](ide-workflow.md) for Windows Docker lookup,
 interrupted native cleanup and NuGet restore errors.
 
