@@ -187,13 +187,13 @@ internal static class ValueIrImporter
                     {
                         var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve cpobj type at IL_{cil.Offset:x4}.");var source=Pop(stack,cil);var destination=Pop(stack,cil);instructions.Add(new ValueIrCopyObject(destination,source,type,type=="System.Nullable`1"?AlignNullable(nullableValueSize(cil)):0));break;
                     }
-                    case >=0x46 and <=0x4a or 0x4c or 0x50:
+                    case >=0x46 and <=0x4a or 0x4c or 0x4e or 0x4f or 0x50:
                     {
-                        var address=Pop(stack,cil);var reference=cil.OpCode==0x50;var size=cil.OpCode is 0x46 or 0x47?1:cil.OpCode is 0x48 or 0x49?2:cil.OpCode==0x4c?8:4;var result=New(reference?CilStackKind.ObjectReference:cil.OpCode==0x4c?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadIndirect(result,address,size,reference));stack.Add(result);break;
+                        var address=Pop(stack,cil);var reference=cil.OpCode==0x50;var size=cil.OpCode is 0x46 or 0x47?1:cil.OpCode is 0x48 or 0x49?2:cil.OpCode is 0x4c or 0x4f?8:4;var result=New(reference?CilStackKind.ObjectReference:cil.OpCode is 0x4e or 0x4f?CilStackKind.Float:cil.OpCode==0x4c?CilStackKind.I8:CilStackKind.I4);instructions.Add(new ValueIrLoadIndirect(result,address,size,reference));stack.Add(result);break;
                     }
                     case >=0x51 and <=0x57:
                     {
-                        var value=Pop(stack,cil);var address=Pop(stack,cil);var size=cil.OpCode==0x52?1:cil.OpCode==0x53?2:cil.OpCode==0x55?8:4;instructions.Add(new ValueIrStoreIndirect(address,value,size,value.Kind==IrValueKind.ObjectReference));break;
+                        var value=Pop(stack,cil);var address=Pop(stack,cil);var size=cil.OpCode==0x52?1:cil.OpCode==0x53?2:cil.OpCode is 0x55 or 0x57?8:4;instructions.Add(new ValueIrStoreIndirect(address,value,size,value.Kind==IrValueKind.ObjectReference));break;
                     }
                     case >=0x67 and <=0x6e or 0xd1 or 0xd2 or 0xd3 or 0xe0:
                     {

@@ -276,7 +276,7 @@ internal static class ValueCBackend
                     }
                     case ValueIrStoreArgument x:b.AppendLine($"  a{x.Index} = v{x.Value.Id};");break;
                     case ValueIrLoadIndirect x:{var ct=x.Reference?"intptr_t":x.Result.Kind is IrValueKind.R4 or IrValueKind.R8?(x.Size==4?"float":"double"):x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  v{x.Result.Id} = *({ct}*)v{x.Address.Id};");break;}
-                    case ValueIrStoreIndirect x:{var ct=x.Reference?"intptr_t":x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  *({ct}*)v{x.Address.Id} = ({ct})v{x.Value.Id};");break;}
+                    case ValueIrStoreIndirect x:{var ct=x.Reference?"intptr_t":x.Value.Kind is IrValueKind.R4 or IrValueKind.R8?(x.Size==4?"float":"double"):x.Size==1?"int8_t":x.Size==2?"int16_t":x.Size==8?"int64_t":"int32_t";b.AppendLine($"  *({ct}*)v{x.Address.Id} = ({ct})v{x.Value.Id};");break;}
                     case ValueIrInitObject x:b.AppendLine($"  memset((void*)v{x.Address.Id}, 0, {ValueTypeSize(x.TypeName,model)}u);");break;
                     case ValueIrCopyObject x:b.AppendLine($"  memcpy((void*)v{x.Destination.Id}, (void*)v{x.Source.Id}, {(x.Size>0?x.Size:ValueTypeSize(x.TypeName,model))}u);");break;
                     case ValueIrFloatConstant x:b.AppendLine(x.Single?$"  {{uint32_t bits=0x{unchecked((uint)x.Bits):x}u;float value;memcpy(&value,&bits,4);v{x.Result.Id}=value;}}":$"  {{uint64_t bits=UINT64_C(0x{unchecked((ulong)x.Bits):x});double value;memcpy(&value,&bits,8);v{x.Result.Id}=value;}}");break;

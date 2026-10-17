@@ -99,10 +99,11 @@ internal static class CilStackAnalyzer
             case 0xfe07: Pop(s,i);Push(s,CilStackKind.NativeInt);break;
             case >=0x46 and <=0x49 or 0x4a: Pop(s,i);Push(s,CilStackKind.I4);break;
             case 0x4c: Pop(s,i);Push(s,CilStackKind.I8);break;
+            case 0x4e or 0x4f: Pop(s,i);Push(s,CilStackKind.Float);break;
             case 0x50: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;
             case >=0x51 and <=0x57: Pop(s,i);Pop(s,i);break;
             case >=0x90 and <=0x9a or 0xa3:
-                Pop(s,i);Pop(s,i);Push(s,i.OpCode==0x9a?CilStackKind.ObjectReference:i.OpCode is 0x96 or 0x97 or 0x99?CilStackKind.I8:CilStackKind.I4);break;
+                Pop(s,i);Pop(s,i);Push(s,i.OpCode==0x9a?CilStackKind.ObjectReference:i.OpCode is 0x98 or 0x99?CilStackKind.Float:i.OpCode is 0x96 or 0x97?CilStackKind.I8:CilStackKind.I4);break;
             case >=0x9b and <=0xa2 or 0xa4: Pop(s,i);Pop(s,i);Pop(s,i);break;
             case 0xa5: Pop(s,i);Push(s,CilStackKind.Unknown);break;
             case 0xfe01 or 0xfe02 or 0xfe03 or 0xfe04 or 0xfe05: Pop(s,i);Pop(s,i);Push(s,CilStackKind.I4);break;
