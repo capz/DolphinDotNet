@@ -676,7 +676,7 @@ Networking requires `await NetworkRuntime.StartAsync(...)`; the native service t
 
 ### Dolphin.Network.NetworkRuntime / NetworkOptions
 
-Start/stop GameCube networking with DHCP or static IPv4, DNS servers, retry timeout and operation status. `Pump` remains a compatibility hook but is not needed for ordinary awaits.
+Start/stop GameCube networking with DHCP or static IPv4, DNS servers, retry timeout and operation status. Defaults use DHCP and DNS server `8.8.8.8`. Set `NetworkOptions.DnsServers` to replace that resolver, or an empty array to disable hostname resolution. DHCP-advertised DNS servers are not imported. `Pump` remains a compatibility hook but is not needed for ordinary awaits.
 
 **API:** `StartAsync()`, `StartAsync(options,token)`, `IsReady`, `Options`, `PendingOperations`, `Stop()`, `Pump(maxOperations,maxMilliseconds)`, `NetworkOptions.UseDhcp/Address/Netmask/Gateway/DnsServers/DnsPort/OperationTimeoutMilliseconds`.
 

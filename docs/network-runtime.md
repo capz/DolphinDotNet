@@ -6,7 +6,7 @@ IPv4 UDP/TCP client and server sockets, DNS, bounded HTTP/1.1 and a reflection-f
 
 See [async runtime and namespace rules](async-runtime.md) and the complete [AsyncNetworking sample](../samples/AsyncNetworking/Program.cs). Use standard `System.Net`/`System.Net.Sockets`/`System.Net.Http` APIs for the compatible subset. Alias platform helpers such as `NetworkRuntime` and `NetworkOptions` rather than importing both competing task/socket namespaces. `NetworkOptions.DnsServers` specifically requires `Dolphin.Network.IPAddress[]`.
 
-Start through `Dolphin.Network.NetworkRuntime.StartAsync(NetworkOptions, CancellationToken)`. Defaults use DHCP; static IPv4 configuration is also available. Configure DNS server addresses explicitly: this backend does not assume that the gateway provides DNS or that DHCP exposes its resolver addresses. Initialization runs on a native LWP worker on GameCube. Its records and stack contain no managed pointers.
+Start through `Dolphin.Network.NetworkRuntime.StartAsync(NetworkOptions, CancellationToken)`. Defaults use DHCP and Google's public DNS server `8.8.8.8`; static IPv4 configuration is also available. Set `NetworkOptions.DnsServers` to replace the default with your own resolvers, or an empty array to disable hostname resolution. The default applies to both DHCP and static configuration. This backend does not import DHCP-advertised resolvers or assume that the gateway provides DNS. Initialization runs on a native LWP worker on GameCube. Its records and stack contain no managed pointers.
 
 The runtime service thread advances registered operations automatically, with bounded batches and a soft elapsed-time budget. I/O steps transfer at most 4 KiB, except atomic UDP datagrams. Application input, updates and graphics stay on the application executor; default awaits return there. No network or task pump calls are required.
 
@@ -58,7 +58,7 @@ TCP is a byte stream; raw Socket.SendAsync may accept fewer bytes than requested
 
 ## DNS
 
-The stub resolver requires ASCII/punycode hostnames and resolves IPv4 A records through configured recursive servers. It validates source address/port, query ID, response flags and the echoed question, follows bounded CNAME chains, limits name compression traversal, validates record boundaries and caches results by the minimum relevant TTL. Cache results are copied for callers. DNS replies that indicate truncation switch to a length-framed TCP query.
+The stub resolver requires ASCII/punycode hostnames and resolves IPv4 A records through configured recursive servers (default `8.8.8.8`). Configure a local resolver for private hostnames or networks without access to public DNS. It validates source address/port, query ID, response flags and the echoed question, follows bounded CNAME chains, limits name compression traversal, validates record boundaries and caches results by the minimum relevant TTL. Cache results are copied for callers. DNS replies that indicate truncation switch to a length-framed TCP query.
 
 This is ordinary DNS, not DNSSEC or encrypted DNS. Query IDs combine a local counter with monotonic ticks; a cryptographic randomness provider is not yet integrated. Do not treat DNS as an authenticated identity source. Concurrent lookup sharing and negative caching are not implemented.
 

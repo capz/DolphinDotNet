@@ -18,6 +18,12 @@ internal static class Program
     {
         int phase=0;
         try {
+        var defaults=new NetworkOptions();var defaultDns=defaults.DnsServers;
+        if(defaultDns.Length!=1)return 19;
+        var defaultBytes=defaultDns[0].GetAddressBytes();
+        if(defaultBytes[0]!=8||defaultBytes[1]!=8||defaultBytes[2]!=8||defaultBytes[3]!=8)return 20;
+        defaults.DnsServers=new Dolphin.Network.IPAddress[0];
+        if(defaults.DnsServers.Length!=0||new NetworkOptions().DnsServers.Length!=1)return 21;
         Complete(NetworkRuntime.StartAsync(new NetworkOptions{DnsServers=new[]{Dolphin.Network.IPAddress.Loopback},DnsPort=15353},default));
         if(IPAddress.Parse("127.0.0.1").GetAddressBytes()[0]!=127)return 1;
         using var server=new UdpClient(0);using var client=new UdpClient(0);

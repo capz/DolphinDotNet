@@ -10,7 +10,7 @@ public sealed class NetworkOptions
     public IPAddress Address {get;set;}=IPAddress.Any;
     public IPAddress Netmask {get;set;}=IPAddress.Any;
     public IPAddress Gateway {get;set;}=IPAddress.Any;
-    public IPAddress[] DnsServers {get;set;}=new IPAddress[0];
+    public IPAddress[] DnsServers {get;set;}=new[]{IPAddress.Parse("8.8.8.8")};
     public int DnsPort {get;set;}=53;
     public int OperationTimeoutMilliseconds {get;set;}=10000;
 }
