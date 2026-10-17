@@ -1,6 +1,11 @@
 <Project>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
-  <!-- Preserve PDB locals before CIL lowering for an explicitly requested debug build.
+  <!-- Resolve defaults after project/local settings and Configuration are known. -->
+  <PropertyGroup>
+    <DndDebugSymbols Condition="'$(DndDebugSymbols)' == '' and '$(Configuration)' == 'Debug'">true</DndDebugSymbols>
+    <DndDebugSymbols Condition="'$(DndDebugSymbols)' == ''">false</DndDebugSymbols>
+  </PropertyGroup>
+  <!-- Preserve PDB locals before CIL lowering for a debug build.
        Release builds keep their existing optimization policy. -->
   <PropertyGroup Condition="'$(Configuration)' == 'Debug' and ('$(DndDebugSymbols)' == 'true' or '$(DndGdbTransport)' == 'Tcp' or '$(DndGdbTransport)' == 'UsbGecko')">
     <Optimize>false</Optimize>

@@ -48,9 +48,20 @@ Disable **Use ReSharper Build** in **Settings → Build, Execution, Deployment �
 Toolset and Build** for this solution so Rider invokes MSBuild on every run
 instead of skipping an unchanged project.
 
-These configurations launch an emulator process. C# breakpoints, managed
-stepping, Hot Reload and a C# debugger attached to emulated PowerPC code are not
-implemented. The ELF retains native symbols for Dolphin's separate debugger.
+These configurations launch an emulator process. For C# source debugging, install
+the separate [DolphinDotNet Attach plugin](rider-debugging.md) and use an attach
+configuration after starting Dolphin with its GDB stub waiting/stopped. The attach
+configuration does not build, upload or launch the game. Select it before placing
+C# gutter breakpoints. Hot Reload is not supported.
+
+For Snake, open `samples/Snake/Snake.sln`, select **Debug**, and build. In
+**Run → Edit Configurations → + → DolphinDotNet Attach**, select
+`$PROJECT_DIR$/bin/Debug/net8.0` as the debug build folder (when Snake's solution
+is open). It must contain `Snake.elf`, `Snake.dnd-debug.json` and
+`Snake.dnd-addresses.json` from the same successful build. Under **Manage targets…**,
+save and select a **BBA / TCP** target with host `127.0.0.1` and the port configured
+in Dolphin's GDB stub. Start the matching `Snake.dol` in Dolphin, then click Debug
+in Rider. The DOL/ELF are GameCube artifacts, not Windows executables.
 
 ## Command line
 
@@ -65,6 +76,18 @@ dotnet run --project samples/Pong
 successful output without building, use `dotnet run --project samples/Pong --no-build`.
 The `CLI` launch profile uses the same launcher as the IDE's `Dolphin` profile.
 You can use `-c Release` for either command.
+
+From the repository root, the equivalent Snake build is:
+
+```powershell
+dotnet build samples/Snake/Snake.csproj -c Debug
+```
+
+`dotnet build` restores NuGet packages automatically. If the IDE reports
+`NETSDK1004` after deleting generated files, run
+`dotnet restore samples/Snake/Snake.csproj`, then build again. Do not use
+`--no-restore` until restore has succeeded. Running `dotnet build Snake.csproj`
+from the repository root fails because that project lives under `samples/Snake`.
 
 Check prerequisites separately after the driver has been built:
 
@@ -106,6 +129,8 @@ For a Debug build:
 
 - `samples/Pong/bin/Debug/net8.0/Pong.dol`: runnable game.
 - `samples/Pong/bin/Debug/net8.0/Pong.elf`: native symbols.
+- `samples/Pong/bin/Debug/net8.0/Pong.dnd-debug.json`: managed source/inspection map.
+- `samples/Pong/bin/Debug/net8.0/Pong.dnd-addresses.json`: ELF address/variable map.
 - `samples/Pong/obj/Debug/net8.0/native/`: generated C, Makefile and native objects.
 - `samples/Pong/obj/dolphin-user/`: persistent, isolated Dolphin user directory.
 
@@ -114,6 +139,24 @@ including the EXI overlay. There is no native incremental build cache. Visual
 Studio's fast up-to-date shortcut is disabled. Restore, IntelliSense/design-time
 builds and project references to the ordinary runtime libraries do not run the
 native pipeline. A failed native build removes previous published native outputs.
+
+Debug builds enable `DndDebugSymbols` by default and preserve Portable PDB locals.
+Release builds keep their existing optimization and symbol defaults. Set
+`-p:DndDebugSymbols=false` to opt out explicitly. Rebuild before attaching; copying
+maps from another build fails the adapter's artifact identity checks.
+
+The build driver clears read-only generated Git files and keeps its ownership
+marker during cleanup, allowing a failed cleanup to be retried. It still refuses
+to delete an unowned native directory. If an older driver left an unowned partial
+directory, close any processes using it and remove only
+`samples/<sample>/obj/Debug/net8.0/native`, then rebuild. Keep the rest of `obj`
+to preserve restored NuGet assets. A genuinely locked file or permissions failure
+still needs to be resolved before retrying.
+
+On Windows, the driver resolves `docker.exe` rather than Docker Desktop's
+extensionless Unix shell script. A "not a valid application for this OS platform"
+error naming `resources/bin/docker` indicates an older driver; update and rebuild.
+Docker Desktop must be running Linux containers.
 
 `dotnet clean samples/Pong` removes generated native build/output files but keeps
 the Dolphin user directory so controller and emulator settings survive. Set

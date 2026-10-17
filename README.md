@@ -59,8 +59,8 @@ profiles, using the same workflow.
 
 The [IDE setup guide](docs/ide-workflow.md) covers backend selection, local
 settings, troubleshooting and adding the workflow to another project.
-Running in Dolphin supports native execution; C# source debugging and Hot Reload
-are not implemented.
+For C# source debugging of Debug targets, use the experimental
+[Rider attach plugin](docs/rider-debugging.md). Hot Reload is not implemented.
 
 ## Features
 

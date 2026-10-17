@@ -136,8 +136,22 @@ internal static class Driver
             var marker = Path.Combine(native!, ".dnd-build-directory");
             if (Directory.Exists(native))
             {
-                if (!File.Exists(marker)) throw new InvalidOperationException("Refusing to remove an unowned native work directory: " + native);
-                Directory.Delete(native, true);
+                if ((File.GetAttributes(native!) & FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidOperationException("The native work directory must not be a symbolic link: " + native);
+                if (!File.Exists(marker)) throw new InvalidOperationException("Refusing to remove an unowned native work directory: " + native +
+                    ". If this is a partial generated build from an older driver, remove only this native directory and rebuild; preserve the rest of obj for NuGet restore assets.");
+                // Keep the ownership marker throughout cleanup. A locked file or
+                // interrupted build must not turn our directory into an unowned one.
+                try
+                {
+                    foreach (var entry in Directory.EnumerateFileSystemEntries(native!))
+                        if (!string.Equals(entry, marker, StringComparison.Ordinal)) DeleteGeneratedEntry(entry);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    throw new IOException("Native cleanup failed in " + native +
+                        ". Close processes using these files or resolve permissions, then retry the build. The ownership marker was preserved. " + e.Message, e);
+                }
             }
             Directory.CreateDirectory(native!);
             File.WriteAllText(marker, "DolphinDotNet generated build directory\n");
@@ -226,13 +240,28 @@ internal static class Driver
         if (Path.IsPathRooted(name) || name.Contains(Path.DirectorySeparatorChar) || name.Contains(Path.AltDirectorySeparatorChar))
             return File.Exists(name) ? Path.GetFullPath(name) : null;
         foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
-            foreach (var suffix in OperatingSystem.IsWindows() ? new[] { "", ".exe" } : new[] { "" })
+            foreach (var suffix in OperatingSystem.IsWindows() ? new[] { ".exe" } : new[] { "" })
             {
                 if (directory.Length == 0) continue;
-                string path = Path.Combine(directory.Trim('"'), name + suffix);
+                // Docker Desktop also ships an extensionless Unix shell script.
+                // Never pass that file (or a .cmd/.bat shim) to CreateProcess.
+                string path = Path.Combine(directory.Trim('"'),
+                    OperatingSystem.IsWindows() && Path.HasExtension(name) ? name : name + suffix);
                 if (File.Exists(path)) return path;
             }
         return null;
+    }
+
+    static void DeleteGeneratedEntry(string path)
+    {
+        var attributes = File.GetAttributes(path);
+        bool directory = (attributes & FileAttributes.Directory) != 0;
+        // Delete links themselves; never walk out of the owned build directory.
+        if (directory && (attributes & FileAttributes.ReparsePoint) == 0)
+            foreach (var entry in Directory.EnumerateFileSystemEntries(path)) DeleteGeneratedEntry(entry);
+        if ((attributes & FileAttributes.ReadOnly) != 0)
+            File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+        if (directory) Directory.Delete(path); else File.Delete(path);
     }
 
     static string RequireExecutable(string name) => Locate(name) ??

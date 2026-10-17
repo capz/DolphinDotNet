@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -104,6 +105,82 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
                   "--elf", work / "fresh/Pong.elf", "--run-config", work / "fresh/run.json",
                   "--backend", "Invalid", expected=1)
     assert "DndBuildBackend must be" in output
+    # Real driver + fake compiler/container: read-only Git metadata must be
+    # removed, and failed cleanup must retain ownership for the next attempt.
+    tool_dir = work / "fake toolchain"
+    shutil.copytree(probe_output, tool_dir)
+    tool_app = tool_dir / ("DolphinLaunchProbe.exe" if os.name == "nt" else "DolphinLaunchProbe")
+    docker = tool_dir / ("docker.exe" if os.name == "nt" else "docker")
+    shutil.copy2(tool_app, docker)
+    if os.name == "nt":
+        (tool_dir / "docker").write_text("#!/bin/sh\nexit 99\n")
+        # Even an earlier PATH directory containing only a shell script is ignored.
+        shims = work / "shell shims"
+        shims.mkdir()
+        (shims / "docker").write_text("#!/bin/sh\nexit 99\n")
+    else:
+        shims = tool_dir
+    tool_env = {**env, "DND_PROBE_TOOLCHAIN": "true",
+                "PATH": os.pathsep.join((str(shims), str(tool_dir), os.environ.get("PATH", "")))}
+    native = work / "obj/native"
+    native.mkdir(parents=True)
+    marker = native / ".dnd-build-directory"
+    marker.write_text("DolphinDotNet generated build directory\n")
+    git_metadata = native / "dependency/.git/objects/info"
+    git_metadata.mkdir(parents=True)
+    chain = git_metadata / "commit-graph-chain"
+    chain.write_text("old Git metadata")
+    chain.chmod(stat.S_IREAD)
+    if os.name != "nt":
+        outside = work / "outside native"
+        outside.mkdir()
+        (outside / "keep.txt").write_text("external")
+        (native / "linked dependency").symlink_to(outside, target_is_directory=True)
+    build_args = ("build", "--assembly", assembly, "--compiler", tool_dir / "DolphinLaunchProbe.dll",
+                  "--native-directory", native, "--dol", dol, "--elf", elf,
+                  "--run-config", config, "--backend", "Docker", "--debug-symbols", "true")
+    call(*build_args, env=tool_env)
+    assert not git_metadata.exists() and marker.exists()
+    if os.name != "nt":
+        assert (outside / "keep.txt").read_text() == "external"
+    assert dol.exists() and elf.exists() and debug_map.exists()
+    assert (work / "Pong.dnd-addresses.json").exists()
+
+    locked = native / "locked"
+    locked.mkdir()
+    locked_file = locked / "commit-graph-chain"
+    locked_file.write_text("locked metadata")
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+        create = ctypes.windll.kernel32.CreateFileW
+        create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                           wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+        create.restype = wintypes.HANDLE
+        close = ctypes.windll.kernel32.CloseHandle
+        close.argtypes = (wintypes.HANDLE,)
+        handle = create(str(locked_file), 0x80000000, 1, None, 3, 0, None)
+        assert handle != wintypes.HANDLE(-1).value
+        try:
+            call(*build_args, env=tool_env, expected=1)
+            assert marker.exists() and locked_file.exists()
+        finally:
+            close(handle)
+    elif os.geteuid() != 0:
+        locked.chmod(0o500)
+        try:
+            call(*build_args, env=tool_env, expected=1)
+            assert marker.exists() and locked_file.exists()
+        finally:
+            locked.chmod(0o700)
+    call(*build_args, env=tool_env)
+    assert marker.exists() and not locked.exists(), "Cleanup must be retryable"
+    # Preserve the guard against deleting arbitrary, unowned directories.
+    marker.unlink()
+    sentinel = native / "keep.txt"
+    sentinel.write_text("not owned")
+    output = call(*build_args, env=tool_env, expected=1)
+    assert "unowned native work directory" in output and sentinel.exists()
     # Explicit SDK imports also work outside the repository and with spaces/&.
     project = work / "app"
     project.mkdir()
@@ -123,6 +200,17 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
                                  "-p:DndDebugSymbols=true"], text=True, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, timeout=30)
         assert result.returncode == 0 and result.stdout.strip() == expected_optimize, result.stdout
+    # A normal IDE Debug build emits the Rider maps without extra CLI flags;
+    # explicit opt-out and Release defaults remain available.
+    for configuration, override, expected_symbols in (
+            ("Debug", None, "true"), ("Release", None, "false"), ("Debug", "false", "false")):
+        command = [dotnet, "msbuild", str(project / "Test.csproj"),
+                   "-getProperty:DndDebugSymbols", "-p:Configuration=" + configuration]
+        if override is not None:
+            command.append("-p:DndDebugSymbols=" + override)
+        result = subprocess.run(command, text=True, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, timeout=30)
+        assert result.returncode == 0 and result.stdout.strip() == expected_symbols, result.stdout
     result = subprocess.run([dotnet, "build", str(project / "Test.csproj"), "-p:DndBuildBackend=Invalid"],
                             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
     assert result.returncode != 0 and "DndBuildBackend must be" in result.stdout, result.stdout

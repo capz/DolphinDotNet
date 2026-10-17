@@ -41,6 +41,15 @@ Portable PDBs and native debug symbols. Release-mode debugging is out of scope;
 Release optimization is unchanged. The adapter/plugin may themselves be packaged
 in Release: that does not change the target configuration.
 
+SDK Debug builds now enable `DndDebugSymbols` by default. For example, from the
+repository root run `dotnet build samples/Snake/Snake.csproj -c Debug`, then choose
+`samples/Snake/bin/Debug/net8.0` in the attach configuration. A successful build
+publishes `Snake.elf`, `Snake.dnd-debug.json` and `Snake.dnd-addresses.json` together.
+If maps are missing, check that the native build succeeded and no local setting
+disabled `DndDebugSymbols`; `-p:DndDebugSymbols=true` overrides that setting.
+See [IDE build troubleshooting](ide-workflow.md) for Windows Docker lookup,
+interrupted native cleanup and NuGet restore errors.
+
 1. Start the matching debug DOL in Dolphin or on the console with its GDB stub
    waiting/stopped. Build, upload and emulator launch remain external steps.
 2. Add a **DolphinDotNet Attach** run/debug configuration. Choose the debug build
