@@ -730,6 +730,17 @@ jobs:
           dotnet build tests/ControllerDolphinSmoke/ControllerDolphinSmoke.csproj -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/ControllerDolphinSmoke/bin/Release/net8.0/ControllerDolphinSmoke.dll /tmp/controller-dolphin.c
           bash tests/build_controller_dolphin.sh /tmp/controller-dolphin.c footprint
+      - name: Build disc filesystem and DiscBrowser startup acceptance DOLs
+        run: |
+          mkdir -p footprint
+          python3 tests/make_disc_fixture.py footprint/test-disc.iso
+          python3 tests/make_disc_fixture.py footprint/test-disc-many.iso --many-files
+          python3 scripts/ci_cc.py --compiler "$DEVKITPPC/bin/powerpc-eabi-gcc" -std=gnu11 -O2 -Wall -Wextra -Werror -DDND_GAMECUBE_STORAGE -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/disc_access_gamecube.c source/disc_gamecube.c source/fst_gamecube.c source/fst.c source/iso_file.c -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -liso9660 -logc -lm -o footprint/disc_access.elf
+          elf2dol footprint/disc_access.elf footprint/disc_access.dol
+          python3 scripts/dol_sections.py --pad footprint/disc_access.dol
+          dotnet build samples/DiscBrowser/DiscBrowser.csproj -c Release -p:DndBuildNative=false
+          dotnet "$DND_COMPILER_DLL" --bundle samples/DiscBrowser/bin/Release/net8.0/DiscBrowser.dll footprint/disc-browser --sample-controls
+          make -j2 CC="ccache $DEVKITPPC/bin/powerpc-eabi-gcc" -C footprint/disc-browser
       - name: Report GameCube runtime footprint
         run: |
           mkdir -p footprint
@@ -1034,6 +1045,24 @@ jobs:
         id: timing_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/footprint/timing_tasks.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2162 --elf dist/footprint/timing_tasks.elf --expect-word dnd_async_test_result=0x4153594e --memory-after-symbol dnd_async_test_done --logs dolphin-timing --require-boot
+      - name: Verify ISO mounts and file access with real GameCube newlib
+        if: matrix.group == 'runtime'
+        id: disc_access
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/disc_access.dol --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2170 --elf dist/footprint/disc_access.elf --expect-word dnd_disc_test_result=0x49534f31 --memory-after-symbol dnd_disc_test_done --logs dolphin-disc-access --require-boot
+      - name: Verify DiscBrowser starts without inserted media
+        if: matrix.group == 'runtime'
+        id: disc_browser
+        continue-on-error: true
+        run: |
+          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2171 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=MANAGED MAIN: OK" --expect-text "lines=NO GAMECUBE DISC OR DEMO ISO AVAILABLE" --memory-after-symbol dnd_platform_wait_forever --logs dolphin-disc-browser --require-boot
+      - name: Verify DiscBrowser reads inserted ISO metadata and files
+        if: matrix.group == 'runtime'
+        id: disc_browser_iso
+        continue-on-error: true
+        run: |
+          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --disc dist/footprint/test-disc.iso --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2172 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=MANAGED MAIN: OK" --expect-text "lines=Title: Fixture banner" --expect-text "lines=Banner RGBA size: 12288" --expect-text "lines=dvd:/top" --memory-after-symbol dnd_platform_wait_forever --logs dolphin-disc-browser-iso --require-boot
+          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --disc dist/footprint/test-disc-many.iso --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2172 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=MANAGED MAIN: OK" --expect-text "lines=dvd:/file5.bin" --memory-after-symbol dnd_platform_wait_forever --logs dolphin-disc-browser-many --require-boot
       - name: Verify all four controllers through Dolphin pipe inputs
         if: matrix.group == 'controllers'
         id: controller_inputs
@@ -1048,7 +1077,7 @@ jobs:
         run: |
           python3 - <<'PYRESULTS'
           import json, os, sys
-          expected = {'games': ['pong_boot', 'snake_boot'], 'debugger': ['cs_breakpoints', 'cs_stack_steps', 'emulator_case_14', 'emulator_case_15', 'emulator_case_16'], 'runtime': ['minimal_boot', 'control_boot', 'app_boot', 'async_boot', 'timing_boot'], 'controllers': ['controller_inputs']}
+          expected = {'games': ['pong_boot', 'snake_boot'], 'debugger': ['cs_breakpoints', 'cs_stack_steps', 'emulator_case_14', 'emulator_case_15', 'emulator_case_16'], 'runtime': ['minimal_boot', 'control_boot', 'app_boot', 'async_boot', 'timing_boot', 'disc_access', 'disc_browser', 'disc_browser_iso'], 'controllers': ['controller_inputs']}
           results = json.loads(os.environ['STEP_RESULTS'])
           failed = [name for name in expected[os.environ['GROUP']] if results.get(name, {}).get('outcome') != 'success']
           if failed:
@@ -1073,6 +1102,10 @@ jobs:
             dolphin-pong/
             dolphin-snake/
             dolphin-controller/
+            dolphin-disc-access/
+            dolphin-disc-browser/
+            dolphin-disc-browser-iso/
+            dolphin-disc-browser-many/
           if-no-files-found: warn
 
 

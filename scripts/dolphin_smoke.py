@@ -78,6 +78,7 @@ def run_emulator(command, environment, stdout, seconds, completed=None, minimum_
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("dol", type=Path)
+    parser.add_argument("--disc", type=Path, help="Insert a default ISO while booting the DOL")
     parser.add_argument("--seconds", type=int, default=20)
     parser.add_argument("--minimum-seconds", type=float, default=0,
                         help="Retain a soak period after proof (for gameplay/audio checks)")
@@ -132,6 +133,8 @@ def main() -> int:
     source_points = resolve_source(args.elf, args.source_map, args.address_map, args.expect_source) if args.expect_source else []
     memory_expected = resolve_memory_expectations(args.elf, args.expect_word, args.expect_text) if (args.expect_word or args.expect_text) else []
     completion = resolve_symbols(args.elf, [args.memory_after_symbol])[0] if args.memory_after_symbol else None
+    if args.disc and (not args.disc.is_file() or any(c in str(args.disc.resolve()) for c in "\r\n")):
+        parser.error("--disc requires an existing ISO path without newlines")
     args.logs.mkdir(parents=True, exist_ok=True)
     user = args.logs.resolve() / "user"
     user.mkdir(exist_ok=True)
@@ -139,7 +142,8 @@ def main() -> int:
     # logging in the isolated user directory rather than passing Qt GUI flags.
     config = user / "Config"
     config.mkdir(exist_ok=True)
-    (config / "Dolphin.ini").write_text(f"[Core]\nGFXBackend = Null\nCPUCore = {args.cpu_core}\nCPUThread = False\n[DSP]\nBackend = No Audio Output\n[Interface]\nDebugModeEnabled = True\n" +
+    (config / "Dolphin.ini").write_text(f"[Core]\nGFXBackend = Null\nCPUCore = {args.cpu_core}\nCPUThread = False\n" +
+        (f"DefaultISO = {args.disc.resolve()}\n" if args.disc else "") + "[DSP]\nBackend = No Audio Output\n[Interface]\nDebugModeEnabled = True\n" +
         (f"[General]\nGDBPort = {args.gdb_port}\n" if args.gdb_port else ""))
     (config / "Logger.ini").write_text(
         "[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 4\n"

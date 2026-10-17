@@ -20,7 +20,6 @@ static const char *names[] = {"carda", "cardb", "sd", "dvd", "mca", "mcb", "gclo
 static void *workareas[2];
 static char games[2][5], companies[2][3];
 static bool card_initialized;
-static int disc_format;
 int dnd_gc_card_recover(int device);
 static int card_errno(int rc) {
   if (rc >= 0)
@@ -46,22 +45,8 @@ static int card_errno(int rc) {
     return -EIO;
   }
 }
-bool dnd_gc_mount_disc_image(const char *path) {
-  if (!path || !dnd_gc_fst_mount_image(path))
-    return false;
-  disc_format = 2;
-  return true;
-}
-bool dnd_gc_mount_disc(int format) {
-  DVD_Init();
-  if (DVD_Mount() < 0)
-    return false;
-  bool result =
-      format == 1 ? ISO9660_Mount("dvd", &__io_gcdvd) : dnd_gc_fst_mount();
-  if (result)
-    disc_format = format;
-  return result;
-}
+bool dnd_gc_mount_disc(int format);
+void dnd_gc_unmount_disc(void);
 bool dnd_gc_mount(int device) {
   if (device == 3) {
     return dnd_gc_mount_disc(1);
@@ -94,10 +79,7 @@ bool dnd_gc_mount(int device) {
 }
 void dnd_gc_unmount(int device) {
   if (device == 3) {
-    if (disc_format == 1)
-      ISO9660_Unmount("dvd");
-    else
-      dnd_gc_fst_unmount();
+    dnd_gc_unmount_disc();
     return;
   }
   if ((device >= 0 && device < 3) || device == 6) {

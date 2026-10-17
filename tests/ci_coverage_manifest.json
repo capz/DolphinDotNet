@@ -65,7 +65,8 @@
       "Compile and link controller and timing ABI for PowerPC",
       "Build managed controller pipe acceptance DOL",
       "Report GameCube runtime footprint",
-      "Verify outputs"
+      "Verify outputs",
+      "Build disc filesystem and DiscBrowser startup acceptance DOLs"
     ],
     "compat": [
       "Build generated standalone GameCube project",
@@ -104,7 +105,10 @@
       "Verify independent libogc main() guest PC",
       "Verify native and managed main() executed in Dolphin",
       "Verify automatic async tasks complete and the service thread shuts down",
-      "Verify timing delays, callbacks and cleanup in Dolphin"
+      "Verify timing delays, callbacks and cleanup in Dolphin",
+      "Verify ISO mounts and file access with real GameCube newlib",
+      "Verify DiscBrowser starts without inserted media",
+      "Verify DiscBrowser reads inserted ISO metadata and files"
     ],
     "controllers": [
       "Verify all four controllers through Dolphin pipe inputs"

@@ -36,4 +36,19 @@ dotnet run --project samples/DiscBrowser -c Release
 
 See [IDE setup](../../docs/ide-workflow.md) for prerequisites and local settings.
 
-GC Loader and physical drive behavior require hardware testing.
+A DOL-only Dolphin launch may have no disc inserted. The sample then shows
+`NO GAMECUBE DISC OR DEMO ISO AVAILABLE` instead of waiting for a disc-cover
+close event. To browse a real game image, set Dolphin's **Default ISO** before
+launching the DOL (a plain GameCube ISO/GCM). The current disc is tried before GC Loader, whose probe resets the drive.
+GC Loader browsing additionally
+requires its firmware-backed SD interface; a PC file path is not a mounted
+GameCube filesystem path.
+
+The sample lists at most eight root files using a lazy enumerator, closes the
+enumerator, and unmounts volumes even if metadata or directory reads fail.
+Errors remain visible on the result screen. Z toggles statistics; Start exits.
+
+CI exercises ISO mounting, file access, read-only errors, and cleanup through the
+actual GameCube devoptab/newlib interfaces in headless Dolphin, using a synthetic
+read-only backing device. It also starts DiscBrowser without media. GC Loader
+and physical drive behavior still require hardware testing.

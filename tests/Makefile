@@ -3,7 +3,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
 
-test: managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test
+test: managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test
 	./managed_runtime_tests
 	./fst_test
 	./card_transaction_test
@@ -18,6 +18,10 @@ test: managed_runtime_tests fst_test card_transaction_test aram_test overlay_tes
 	./input_overlay_test
 	./input_gamecube_test
 	./hardware_gamecube_test
+	./disc_mount_test
+
+disc_mount_test: disc_mount_test.c ../source/disc_gamecube.c ../source/fst_gamecube.c ../source/fst.c ../source/iso_file.c
+	$(CC) $(CFLAGS) -D_DEFAULT_SOURCE -DDND_GAMECUBE_STORAGE -Idisc_sdk $^ -o $@
 
 hardware_gamecube_test: hardware_gamecube_test.c ../source/hardware.c
 	$(CC) $(CFLAGS) -DDND_GAMECUBE_STORAGE -Ihardware_sdk $^ -o $@
@@ -62,4 +66,4 @@ debug_heartbeat_test: debug_heartbeat_test.c ../source/debug_heartbeat.c ../sour
 	$(CC) $(CFLAGS) -DDND_DEBUG_TELEMETRY $^ -o $@
 
 clean:
-	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test
+	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test
