@@ -2,6 +2,7 @@
 #include "dnd_graphics.h"
 #include "dnd_console.h"
 #include "dnd_performance.h"
+#include "dnd_debug_heartbeat.h"
 #include "dnd_network_platform.h"
 #include "dnd_aram.h"
 #include <math.h>
@@ -166,6 +167,7 @@ void dnd_graphics_begin_overlay(void) {
             if(network!=-1)dnd_performance_network(network,dhcp!=0,ip,mask,gateway);
             bool configured=network==1 || dnd_performance_stats()->network_state==2;
             dnd_performance_connectivity_sampled(now,configured?dnd_np_link():-1);
+            dnd_debug_heartbeat_tick(now,network,dnd_performance_stats()->network_link);
         }
         if(dnd_performance_memory_due(now)) {
             struct mallinfo info=mallinfo();uint32_t total=SYS_GetPhysicalMem1Size(),aram_used=0,aram_total=0;

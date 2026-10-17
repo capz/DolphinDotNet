@@ -124,9 +124,30 @@ its ELF-bound address, version and signature, the adapter reports connected on
 attach and disconnected during clean cleanup. It writes only that reserved state
 word; DAP memory/variable mutation remains unsupported. **DEBUG LAST** in the
 [statistics overlay](debug-overlay.md) is the last reported state, not a heartbeat:
-the guest cannot detect a host-side crash, and a paused game cannot redraw until
+the fallback report cannot detect a host-side crash, and a paused game cannot redraw until
 it resumes. Unsupported reporting on a stub produces a console note without
 preventing debugging; old maps have no reporting side effects.
+
+For a running game with application BBA networking, target **Advanced connection
+options** now include **Live status computer IPv4** and a separate **Live status
+UDP port** (2167 by default, or zero for automatic allocation). Supply a computer
+address reachable from the guest; leaving it blank disables the channel. Rebuild
+the Debug target and install the updated plugin. The target's ELF-bound heartbeat
+slot receives a fresh per-session token and endpoint while stopped at attach.
+Then `DEBUG LIVE` sends a 20-byte UDP ping every 2,000 ms only while stats are
+visible. It reports `UNREACHABLE` after six seconds without valid replies, and
+recovers when replies return. The responder does not issue RSP commands during
+execution; UDP cannot disturb breakpoints, registers or stepping. A closed TCP
+debug transport stops replies without consuming any RSP bytes. Adapter exit/crash
+also stops replies. Hiding stats closes the guest socket and generates no heartbeat
+traffic. See [overlay setup and limits](debug-overlay.md).
+
+The guest BBA route and firewall must permit that UDP endpoint. Dolphin's host
+GDB listener is independent of its guest BBA, so the saved host-GDB address does
+not establish the heartbeat route. USB Gecko can use this same BBA side channel.
+The native BBA GDB stub has a separate uIP stack and does not support application
+UDP heartbeats; unsupported target metadata produces an explicit console note
+and preserves the last-report overlay.
 
 The adapter reuses a stack snapshot and stable frame IDs until execution resumes,
 avoiding repeated register/memory reads for the same stop. Partial-stack warnings

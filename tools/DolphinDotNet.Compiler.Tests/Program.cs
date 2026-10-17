@@ -104,6 +104,13 @@ using (var debugMap = System.Text.Json.JsonDocument.Parse(File.ReadAllText(debug
     var telemetry = debugMap.RootElement.GetProperty("debuggerTelemetry");
     if (telemetry.GetProperty("nativeSymbol").GetString() != "dnd_debugger_telemetry" || telemetry.GetProperty("size").GetInt32() != 8)
         throw new Exception("Missing host-only debugger overlay telemetry metadata.");
+    var heartbeat = debugMap.RootElement.GetProperty("debuggerHeartbeat");
+    if (heartbeat.GetProperty("nativeSymbol").GetString() != "dnd_debugger_heartbeat" ||
+        heartbeat.GetProperty("size").GetInt32() != 24 || heartbeat.GetProperty("supported").GetBoolean())
+        throw new Exception("The native BBA GDB stack must explicitly decline application UDP heartbeat support.");
+    if (!debugMake.Contains("--undefined=dnd_debugger_heartbeat", StringComparison.Ordinal) ||
+        !File.Exists(Path.Combine(gdbBundle, "source/debug_heartbeat.c")))
+        throw new Exception("Heartbeat metadata requires its retained native implementation.");
     if (debugMap.RootElement.GetProperty("schemaVersion").GetInt32() != 2)
         throw new Exception("Unexpected debug IL map schema.");
     if (!debugMap.RootElement.GetProperty("assemblies").EnumerateArray()

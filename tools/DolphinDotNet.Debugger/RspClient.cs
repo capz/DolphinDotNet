@@ -92,6 +92,25 @@ public sealed class RspClient : IAsyncDisposable
 
     public static string[] SerialPortNames() => SerialPort.GetPortNames();
 
+    /// <summary>Observe TCP EOF without consuming bytes owned by the RSP reader.</summary>
+    public bool IsTransportConnected
+    {
+        get
+        {
+            if (_disposed) return false;
+            try
+            {
+                return _owner switch
+                {
+                    TcpClient tcp => tcp.Client is Socket socket && !(socket.Poll(0, SelectMode.SelectRead) && socket.Available == 0),
+                    SerialPort serial => serial.IsOpen,
+                    _ => true
+                };
+            }
+            catch (Exception error) when (error is SocketException or ObjectDisposedException or IOException) { return false; }
+        }
+    }
+
     /// <summary>Perform one RSP request/response with bounded time and serialized access.</summary>
     public async Task<string> CommandAsync(string command, CancellationToken cancellationToken = default)
         => await CommandCoreAsync(command, false, cancellationToken).ConfigureAwait(false);

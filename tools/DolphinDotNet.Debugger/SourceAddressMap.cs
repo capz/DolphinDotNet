@@ -18,6 +18,8 @@ public sealed class SourceAddressMap
     private readonly Dictionary<string, List<DebugVariable>> _variables = new(StringComparer.Ordinal);
     private IReadOnlyDictionary<uint, DebugObjectLayout> _objectLayouts = new Dictionary<uint, DebugObjectLayout>();
     public uint? DebuggerTelemetryAddress { get; private set; }
+    public uint? DebuggerHeartbeatAddress { get; private set; }
+    public bool DebuggerHeartbeatSupported { get; private set; }
 
     public static SourceAddressMap Load(string elf, string sourceMap, string addressMap)
     {
@@ -40,6 +42,18 @@ public sealed class SourceAddressMap
                 address < 0x80000000 || address > 0x81800000 - 8)
                 throw new InvalidDataException("Unsupported debugger overlay telemetry.");
             result.DebuggerTelemetryAddress = address;
+        }
+        if (root.TryGetProperty("debuggerHeartbeat", out var heartbeat))
+        {
+            var address = ParseAddress(heartbeat.GetProperty("address").GetString());
+            if (heartbeat.GetProperty("version").GetInt32() != 1 || heartbeat.GetProperty("size").GetInt32() != 24 ||
+                address < 0x80000000 || address > 0x81800000 - 24 || result.DebuggerTelemetryAddress is null)
+                throw new InvalidDataException("Unsupported debugger heartbeat metadata.");
+            result.DebuggerHeartbeatAddress = address;
+            result.DebuggerHeartbeatSupported = heartbeat.GetProperty("supported").GetBoolean();
+            var telemetryAddress = result.DebuggerTelemetryAddress.Value;
+            if ((ulong)address < (ulong)telemetryAddress + 8 && (ulong)telemetryAddress < (ulong)address + 24)
+                throw new InvalidDataException("Debugger heartbeat and status slots overlap.");
         }
         var identities = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         if (managed.RootElement.TryGetProperty("methods", out var managedMethods))

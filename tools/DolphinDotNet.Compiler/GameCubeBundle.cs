@@ -173,6 +173,7 @@ internal static class GameCubeBundle
                     schemaVersion = 2,
                     inspection = DebugInspectionMetadata.Build(compilation),
                     debuggerTelemetry = new { version = 1, nativeSymbol = "dnd_debugger_telemetry", size = 8 },
+                    debuggerHeartbeat = new { version = 1, nativeSymbol = "dnd_debugger_heartbeat", size = 24, supported = gdbTcp is null },
                     assemblies = sourceMap!.Assemblies
                         .Select(identity => new { name = identity.Name,
                             moduleVersionId = identity.ModuleVersionId, pdbId = identity.PdbId }),
@@ -211,7 +212,7 @@ internal static class GameCubeBundle
         }
 
         var sources = new[] {
-            "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "fst",
+            "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "debug_heartbeat", "fst",
             "fst_gamecube", "iso_file", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
             "model_graphics", "model_transform", "network", "network_gamecube",
@@ -315,7 +316,7 @@ internal static class GameCubeBundle
             (overlayTelemetry ? " -DDND_DEBUG_TELEMETRY" : ""));
         // Keep the reporting slot even when the app has not enabled/drawn the overlay yet.
         builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") +
-            (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
+            (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry -Wl,--undefined=dnd_debugger_heartbeat" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
         builder.AppendLine("ifneq ($(BUILD),$(notdir $(CURDIR)))");
         builder.AppendLine(".DEFAULT_GOAL := all");
         builder.AppendLine("export OUTPUT := $(CURDIR)/$(TARGET)");

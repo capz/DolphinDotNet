@@ -27,6 +27,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     private readonly Dictionary<int, ObjectView> _objectViews = new();
     private int _nextVariable;
     private bool _telemetryReported;
+    private DebugHeartbeat? _heartbeat;
     private readonly CancellationTokenSource _lifetime = new();
 
     public async Task RunAsync()
@@ -46,6 +47,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                     await connection.RespondAsync(request, error: error.Message);
                     if (error is IOException or OperationCanceledException && _client is not null)
                     {
+                        await StopHeartbeatAsync();
                         await _client.DisposeAsync();
                         _client = null;
                         await connection.EventAsync("terminated");
@@ -89,6 +91,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
         if (command == "attach")
         {
             if (_client is not null) throw new InvalidOperationException("Already attached.");
+            _telemetryReported = false;
             _configured = false;
             _frames.Clear();
             _stackTrace = null;
@@ -98,6 +101,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             _symbols = SourceAddressMap.Load(Required(args, "elf"), Required(args, "sourceMap"), Required(args, "addressMap"));
             _paths = new SourcePathMapper(args);
             var transport = AttachTransport.Parse(args);
+            var heartbeat = DebugHeartbeat.Parse(args);
             using var timeout = new CancellationTokenSource(transport.Timeout);
             _client = transport.Kind == "usbGecko"
                 ? RspClient.ConnectUsbGecko(transport.SerialPort!, transport.BaudRate, transport.Timeout)
@@ -108,8 +112,13 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 if (_stop.Exited) throw new InvalidOperationException("Target has exited.");
                 _breakpoints = new BreakpointRegistry(_client, () => _pauseRequested);
                 await ReportDebuggerTelemetryAsync(true);
+                await ConfigureHeartbeatAsync(heartbeat);
             }
-            catch { await _client.DisposeAsync(); _client = null; throw; }
+            catch
+            {
+                await StopHeartbeatAsync();
+                await _client.DisposeAsync(); _client = null; throw;
+            }
             await connection.RespondAsync(request);
             await connection.EventAsync("initialized");
             return;
@@ -303,6 +312,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
         {
             // A timed-out/corrupt RSP operation may leave an unread reply. Never
             // advertise a usable stopped session or issue new commands on it.
+            await StopHeartbeatAsync();
             await _client!.DisposeAsync();
             _client = null;
             _running = false;
@@ -322,6 +332,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     {
         try
         {
+            await StopHeartbeatAsync();
             if (_running && _client is not null)
             {
                 _pauseRequested = true;
@@ -339,6 +350,53 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             if (_execution is not null) { try { await _execution; } catch { } }
             _client = null;
         }
+    }
+
+    private async Task ConfigureHeartbeatAsync((System.Net.IPAddress Host, int Port)? options)
+    {
+        if (_symbols?.DebuggerHeartbeatAddress is not uint address || _client is null || !_telemetryReported)
+        {
+            if (options is not null) await connection.EventAsync("output", new { category = "console", output = _symbols?.DebuggerHeartbeatAddress is null
+                ? "Live debugger status unavailable: rebuild the target with heartbeat metadata.\n"
+                : "Live debugger status unavailable: session status reporting did not succeed.\n" });
+            return;
+        }
+        try
+        {
+            var slot = await _client.ReadMemoryAsync(address, 24);
+            if (BinaryPrimitives.ReadUInt32BigEndian(slot) != DebugHeartbeat.Magic)
+                throw new RspRemoteException("Unsupported heartbeat signature.");
+            // Clear a previous session's configuration even if this attach opts out.
+            var config = new byte[20];
+            if (options is not null && _symbols.DebuggerHeartbeatSupported)
+            {
+                try
+                {
+                    _heartbeat = new DebugHeartbeat(options.Value.Host, options.Value.Port, () => _client?.IsTransportConnected == true);
+                    config = _heartbeat.Configuration;
+                }
+                catch (System.Net.Sockets.SocketException error)
+                {
+                    await connection.EventAsync("output", new { category = "console", output = $"Live debugger status unavailable: {error.Message}\n" });
+                }
+            }
+            else if (options is not null)
+                await connection.EventAsync("output", new { category = "console", output = "Live debugger status unavailable: the native BBA GDB stack has no application UDP channel.\n" });
+            await _client.WriteMemoryAsync(address + 4, config);
+            var readback = await _client.ReadMemoryAsync(address + 4, config.Length);
+            if (!readback.AsSpan().SequenceEqual(config)) throw new RspRemoteException("Heartbeat configuration did not persist.");
+        }
+        catch (RspRemoteException error)
+        {
+            await StopHeartbeatAsync();
+            await connection.EventAsync("output", new { category = "console", output = $"Live debugger status unavailable: {error.Message}\n" });
+        }
+    }
+
+    private async Task StopHeartbeatAsync()
+    {
+        var heartbeat = Interlocked.Exchange(ref _heartbeat, null);
+        if (heartbeat is not null) await heartbeat.DisposeAsync();
     }
 
     private async Task ReportDebuggerTelemetryAsync(bool connected)

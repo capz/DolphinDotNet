@@ -8,6 +8,8 @@ import select
 import subprocess
 from pathlib import Path
 import socket
+import struct
+import shutil
 import sys
 import tempfile
 import threading
@@ -272,11 +274,11 @@ class AdapterTests(unittest.TestCase):
             self.assertFalse(self.target.errors, self.target.errors)
         self.temp.cleanup()
 
-    def attach(self, configured=True, interrupt_empty_reply=False, target=None):
+    def attach(self, configured=True, interrupt_empty_reply=False, target=None, heartbeat=None):
         self.target = target or Target(interrupt_empty_reply=interrupt_empty_reply)
         self.client.request("attach", dict(host="127.0.0.1", port=self.target.port,
             elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address),
-            sourceFileMap={"/build/日本": "/local/日本"}))
+            sourceFileMap={"/build/日本": "/local/日本"}, **(heartbeat or {})))
         self.client.event("initialized")
         if configured:
             self.client.request("configurationDone")
@@ -294,6 +296,153 @@ class AdapterTests(unittest.TestCase):
         target.memory[0x80009000] = bytes.fromhex(signature)
         target.refused_writes = refused
         return target
+
+    def heartbeat_target(self, supported=True):
+        target = self.telemetry_target()
+        data = json.loads(self.address.read_text())
+        data['debuggerHeartbeat'] = dict(version=1, size=24, supported=supported, address='0x80009100')
+        self.address.write_text(json.dumps(data))
+        target.memory[0x80009100] = bytes.fromhex('444e4842') + bytes(20)
+        return target
+
+    def live_attach(self):
+        self.attach(target=self.heartbeat_target(), heartbeat=dict(heartbeatHost='127.0.0.1', heartbeatPort=0))
+        slot = self.target.memory[0x80009100]
+        magic, host, port, high, low, enabled = struct.unpack('>6I', slot)
+        self.assertEqual((0x444e4842, 0x7f000001, 1), (magic, host, enabled))
+        self.assertNotEqual(0, high | low)
+        return ('127.0.0.1', port), struct.pack('>5I', magic, 1, high, low, 1)
+
+    def test_live_heartbeat_runs_without_interrupting_or_writing_gdb_while_running(self):
+        endpoint, ping = self.live_attach()
+        self.client.request('continue', dict(threadId=1))
+        self.assertTrue(self.target.continuing.wait(2))
+        commands = list(self.target.commands)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+            udp.settimeout(.15)
+            invalid = [ping[:19], ping+b'x', ping[:8]+bytes(8)+ping[16:], ping[:4]+bytes(4)+ping[8:], ping[:16]+bytes(4)]
+            for packet in invalid:
+                udp.sendto(packet, endpoint)
+                with self.assertRaises(socket.timeout): udp.recvfrom(64)
+            udp.sendto(ping, endpoint)
+            reply, peer = udp.recvfrom(64)
+            self.assertEqual(ping[:4]+struct.pack('>I', 2)+ping[8:], reply)
+            self.assertEqual(endpoint, peer)
+            self.assertEqual(commands, self.target.commands)
+            self.assertEqual(0, self.target.interrupts)
+            self.client.request('disconnect')
+            self.client.event('terminated')
+            udp.sendto(ping, endpoint)
+            with self.assertRaises(OSError): udp.recvfrom(64)
+
+    def test_live_heartbeat_stops_after_adapter_crash_without_a_clean_status_write(self):
+        endpoint, ping = self.live_attach()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+            udp.settimeout(.2)
+            udp.sendto(ping, endpoint)
+            self.assertEqual(20, len(udp.recvfrom(64)[0]))
+            self.client.process.kill(); self.client.process.wait(timeout=3)
+            self.assertEqual(1, struct.unpack('>I', self.target.memory[0x80009000][4:])[0])
+            udp.sendto(ping, endpoint)
+            with self.assertRaises(OSError): udp.recvfrom(64)
+
+    def test_live_heartbeat_observes_stopped_tcp_peer_loss_without_consuming_rsp(self):
+        endpoint, ping = self.live_attach()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+            udp.settimeout(.2)
+            udp.sendto(ping, endpoint); self.assertEqual(20, len(udp.recvfrom(64)[0]))
+            self.target.peer.shutdown(socket.SHUT_RDWR)
+            self.target.thread.join(timeout=2)
+            udp.sendto(ping, endpoint)
+            with self.assertRaises(socket.timeout): udp.recvfrom(64)
+
+    def test_attach_without_live_options_clears_stale_heartbeat_configuration(self):
+        target = self.heartbeat_target()
+        target.memory[0x80009100] = bytes.fromhex('444e4842') + bytes.fromhex('01010101')*5
+        self.attach(target=target)
+        self.assertEqual(bytes(20), target.memory[0x80009100][4:])
+
+    def test_native_bba_gdb_stack_explicitly_declines_live_udp(self):
+        self.attach(target=self.heartbeat_target(supported=False), heartbeat=dict(heartbeatHost='127.0.0.1', heartbeatPort=0))
+        self.assertIn('native BBA GDB stack', self.client.event('output')['output'])
+        self.assertEqual(bytes(20), self.target.memory[0x80009100][4:])
+
+    def test_older_status_maps_keep_debugging_when_live_status_is_requested(self):
+        self.attach(target=self.telemetry_target(), heartbeat=dict(heartbeatHost='127.0.0.1', heartbeatPort=0))
+        self.assertIn('rebuild the target', self.client.event('output')['output'])
+        self.assertEqual(['M80009004,4:00000001'], [c for c in self.target.commands if c.startswith('M')])
+
+    def test_live_udp_bind_failure_clears_stale_configuration_and_keeps_attach(self):
+        target = self.heartbeat_target()
+        target.memory[0x80009100] = bytes.fromhex('444e4842') + bytes.fromhex('01010101')*5
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as occupied:
+            occupied.bind(('0.0.0.0', 0))
+            self.attach(target=target, heartbeat=dict(heartbeatHost='127.0.0.1', heartbeatPort=occupied.getsockname()[1]))
+        self.assertIn('Live debugger status unavailable', self.client.event('output')['output'])
+        self.assertEqual(bytes(20), target.memory[0x80009100][4:])
+        self.bp(lines=(11,));self.client.request('continue', dict(threadId=1))
+        self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+
+    def test_live_endpoint_validation_precedes_transport_connection(self):
+        base = dict(host='127.0.0.1', port=1, elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address))
+        for options in [dict(heartbeatHost='localhost'), dict(heartbeatHost='224.0.0.1'),
+                        dict(heartbeatHost='192.168.1.999'), dict(heartbeatHost='0.0.0.0'),
+                        dict(heartbeatHost='127.0.0.1', heartbeatPort=65536), dict(heartbeatPort=2167)]:
+            with self.subTest(options=options):
+                response = self.client.request('attach', dict(base, **options), success=False)
+                self.assertIn('heartbeat', response['message'])
+
+    def test_heartbeat_metadata_refuses_overlap_and_incompatible_slots(self):
+        base = json.loads(self.address.read_text())
+        base['debuggerTelemetry'] = dict(version=1, size=8, address='0x80009000')
+        for options in [dict(version=1, size=24, supported=True, address='0x80009004'),
+                        dict(version=2, size=24, supported=True, address='0x80009100'),
+                        dict(version=1, size=8, supported=True, address='0x80009100'),
+                        dict(version=1, size=24, supported=True, address='0x817ffff0')]:
+            with self.subTest(options=options):
+                self.address.write_text(json.dumps(dict(base, debuggerHeartbeat=options)))
+                response = self.client.request('attach', dict(host='127.0.0.1', port=1,
+                    elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address)), success=False)
+                self.assertIn('heartbeat', response['message'])
+
+    @unittest.skipUnless(sys.platform.startswith('linux') and shutil.which('cc'), 'Requires POSIX C host fixture')
+    def test_real_native_guest_udp_detects_adapter_crash_and_new_session_recovery(self):
+        root = ADAPTER.parents[5]
+        binary = self.root / 'heartbeat-guest'
+        subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-DDND_DEBUG_TELEMETRY', '-I'+str(root/'include'),
+            str(root/'tests/debug_heartbeat_host.c'), str(root/'source/debug_heartbeat.c'), str(root/'source/performance.c'),
+            str(root/'source/network_posix.c'), '-Wl,--wrap=dnd_np_monitor_open', '-o', str(binary)], check=True, capture_output=True)
+        self.live_attach()
+        guest = subprocess.Popen([str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        def command(text):
+            guest.stdin.write(text+'\n');guest.stdin.flush()
+            self.assertTrue(select.select([guest.stdout], [], [], 4)[0], 'Native heartbeat fixture response deadline')
+            return guest.stdout.readline().strip()
+        def configure():
+            _, host, port, high, low, _ = struct.unpack('>6I', self.target.memory[0x80009100])
+            self.assertEqual('configured', command(f'c {host} {port} {high} {low}'))
+        try:
+            configure()
+            self.assertEqual('1', command('t 0 1 1'))
+            self.assertEqual('1', command('w'))
+            self.assertEqual('2', command('t 2000000 1 1'))
+            self.client.process.kill();self.client.process.wait(timeout=3)
+            self.target.thread.join(timeout=2)
+            for clock in (4000000,6000000,8000000,10000000): state=command(f't {clock} 1 1')
+            self.assertEqual('3', state) # No graceful disconnect report was written.
+            self.client.close()
+            self.client = probe.DapProcess(ADAPTER)
+            self.client.request('initialize', dict(pathFormat='path', linesStartAt1=True))
+            self.live_attach();configure()
+            self.assertEqual('1', command('t 12000000 1 1'))
+            self.assertEqual('1', command('w'))
+            self.assertEqual('2', command('t 14000000 1 1'))
+            self.assertEqual('3', command('t 16000000 1 0')) # Physical cable loss.
+        finally:
+            guest.stdin.close()
+            try: self.assertEqual(0, guest.wait(timeout=3))
+            except subprocess.TimeoutExpired: guest.kill();guest.wait();raise
+            guest.stdout.close()
 
     def test_overlay_telemetry_reports_attach_and_clean_disconnect_only(self):
         self.attach(target=self.telemetry_target())

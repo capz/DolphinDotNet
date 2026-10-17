@@ -24,6 +24,8 @@ final class TargetDialog extends DialogWrapper {
     private final ComboBox<String> slot = new ComboBox<>(new String[]{"Slot A", "Slot B"});
     private final JSpinner baud = new JSpinner(new SpinnerNumberModel(115200, 1, Integer.MAX_VALUE, 1));
     private final JSpinner timeout = new JSpinner(new SpinnerNumberModel(10, 1, 120, 1));
+    private final JBTextField heartbeatHost = new JBTextField();
+    private final JSpinner heartbeatPort = new JSpinner(new SpinnerNumberModel(2167, 0, 65535, 1));
     private final JPanel tcp = Forms.form(), usb = Forms.form(), editor = Forms.form(), usbAdvanced = Forms.form();
     private final JBLabel footer = new JBLabel();
     private TargetProfile editing;
@@ -75,14 +77,17 @@ final class TargetDialog extends DialogWrapper {
         Forms.row(usbAdvanced, 0, "Driver baud compatibility:", baudPanel);
         Forms.row(usbAdvanced, 1, "", new JBLabel("<html>USB FIFO speed is not a UART baud rate.<br>The compatibility value has not been hardware validated.</html>"));
         Forms.row(details, 1, "", usbAdvanced);
+        Forms.row(details, 2, "Live status computer IPv4:", heartbeatHost);
+        Forms.row(details, 3, "Live status UDP port:", heartbeatPort);
+        Forms.row(details, 4, "", new JBLabel("<html>Optional: leave IPv4 blank to disable.<br>The game must reach this computer over its BBA network.<br>Requires application networking; native BBA GDB builds are unsupported.<br>Updates every 2 seconds while stats are shown; port 0 is automatic.</html>"));
         var hideable = new HideableDecorator(advanced, "Advanced connection options", false);
         hideable.setContentComponent(details);
         // Baud controls are relevant only to USB; timeout is shared.
         type.addActionListener(e -> { baud.setEnabled(type.getSelectedIndex() == 1); });
         Forms.row(editor, 3, "", advanced); Forms.row(editor, 4, "", footer);
         var right = new JPanel(new BorderLayout()); right.setBorder(JBUI.Borders.empty(8, 20)); right.add(editor, BorderLayout.NORTH);
-        var root = new JPanel(new BorderLayout()); root.add(left, BorderLayout.WEST); root.add(right);
-        root.setPreferredSize(JBUI.size(850, 490)); return root;
+        var root = new JPanel(new BorderLayout()); root.add(left, BorderLayout.WEST); root.add(new JBScrollPane(right));
+        root.setPreferredSize(JBUI.size(850, 560)); return root;
     }
     private void select() {
         capture(); editing = list.getSelectedValue(); loading = true;
@@ -90,6 +95,7 @@ final class TargetDialog extends DialogWrapper {
             name.setText(editing.name); type.setSelectedIndex(editing.transport.equals("usbGecko") ? 1 : 0);
             host.setText(editing.host); port.setValue(editing.port); serial.getEditor().setItem(editing.serialPort);
             slot.setSelectedIndex(editing.expectedSlot.equals("A") ? 0 : 1); baud.setValue(editing.baudRate); timeout.setValue(editing.timeoutSeconds);
+            heartbeatHost.setText(editing.heartbeatHost); heartbeatPort.setValue(editing.heartbeatPort);
         }
         loading = false; showTransport();
     }
@@ -100,6 +106,7 @@ final class TargetDialog extends DialogWrapper {
         editing.serialPort = Objects.toString(serial.getEditor().getItem(), "").trim();
         editing.expectedSlot = slot.getSelectedIndex() == 0 ? "A" : "B";
         editing.baudRate = (int)baud.getValue(); editing.timeoutSeconds = (int)timeout.getValue(); list.repaint();
+        editing.heartbeatHost = heartbeatHost.getText().trim(); editing.heartbeatPort = (int)heartbeatPort.getValue();
     }
     private void showTransport() {
         boolean isUsb = type.getSelectedIndex() == 1;
@@ -131,7 +138,7 @@ final class TargetDialog extends DialogWrapper {
     }
     @Override protected void doOKAction() {
         try {
-            port.commitEdit(); baud.commitEdit(); timeout.commitEdit(); capture();
+            port.commitEdit(); baud.commitEdit(); timeout.commitEdit(); heartbeatPort.commitEdit(); capture();
             var targets = Collections.list(model.elements());
             for (var t : targets) { try { t.validate(); } catch (IllegalArgumentException e) { list.setSelectedValue(t, true); throw e; } }
             TargetStore.getInstance().replace(targets); selectedId = editing == null ? null : editing.id; super.doOKAction();

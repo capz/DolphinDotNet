@@ -31,6 +31,27 @@ Program.cs - 0x80001040
 
 
 class VariableLocations(unittest.TestCase):
+    def test_heartbeat_metadata_binds_exact_bounded_symbol_and_capability(self):
+        source = dict(debuggerHeartbeat=dict(version=1, size=24, nativeSymbol='dnd_debugger_heartbeat', supported=True))
+        symbol = '1: 80002000 24 OBJECT GLOBAL DEFAULT 2 dnd_debugger_heartbeat\n'
+        mapped = {}
+        module.attach_debugger_heartbeat(mapped, source, symbol)
+        self.assertEqual(dict(version=1, size=24, supported=True, address='0x80002000'), mapped['debuggerHeartbeat'])
+        source['debuggerHeartbeat']['supported'] = False
+        module.attach_debugger_heartbeat(mapped, source, symbol)
+        self.assertFalse(mapped['debuggerHeartbeat']['supported'])
+        missing = {}
+        module.attach_debugger_heartbeat(missing, source, '')
+        self.assertEqual({}, missing)
+        for bad in [symbol.replace('24 OBJECT', '8 OBJECT'), symbol.replace('80002000', '817ffff0'), symbol.replace('80002000', '80002002')]:
+            with self.subTest(bad=bad), self.assertRaisesRegex(ValueError, 'Invalid debugger heartbeat'):
+                module.attach_debugger_heartbeat({}, source, bad)
+        with self.assertRaisesRegex(ValueError, 'Ambiguous debugger heartbeat'):
+            module.attach_debugger_heartbeat({}, source, symbol+symbol.replace('80002000', '80003000'))
+        source['debuggerHeartbeat']['supported'] = 1
+        with self.assertRaisesRegex(ValueError, 'Unsupported debugger heartbeat'):
+            module.attach_debugger_heartbeat({}, source, symbol)
+
     def test_debugger_telemetry_is_optional_and_requires_one_exact_symbol(self):
         source = dict(debuggerTelemetry=dict(version=1, size=8, nativeSymbol='dnd_debugger_telemetry'))
         mapped = {}

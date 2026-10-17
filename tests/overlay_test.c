@@ -10,6 +10,13 @@ static unsigned rectangles, expected_quads, emitted_quads;
 static float panel_left, panel_top, panel_width, panel_height;
 static int screen_height = 480;
 static bool performance_panel = true;
+#ifdef DND_DEBUG_TELEMETRY
+/* Reporting layout tests do not configure a live UDP channel. */
+int dnd_np_monitor_open(void) { assert(0); return -2; }
+int dnd_np_monitor_read(int fd,void *b,int n,uint32_t *ip,int *port) {(void)fd;(void)b;(void)n;(void)ip;(void)port;assert(0);return -1;}
+int dnd_np_monitor_write(int fd,const void *b,int n,uint32_t ip,int port) {(void)fd;(void)b;(void)n;(void)ip;(void)port;assert(0);return -2;}
+void dnd_np_close(int fd) {(void)fd;assert(0);}
+#endif
 int dnd_graphics_width(void) { return 640; }
 int dnd_graphics_height(void) { return screen_height; }
 void dnd_graphics_overlay_rect(float x, float y, float w, float h,

@@ -387,6 +387,7 @@ def attach_inspection(mapped, source_map, symbol_dump):
 
 
 def attach_debugger_telemetry(mapped, source_map, symbol_dump):
+    attach_debugger_heartbeat(mapped, source_map, symbol_dump)
     spec = source_map.get('debuggerTelemetry')
     if spec is None:
         return
@@ -405,6 +406,28 @@ def attach_debugger_telemetry(mapped, source_map, symbol_dump):
         raise ValueError('Ambiguous debugger telemetry symbol')
     if matches:
         mapped['debuggerTelemetry'] = dict(version=1, size=8, address=f'0x{next(iter(matches)):08x}')
+
+
+def attach_debugger_heartbeat(mapped, source_map, symbol_dump):
+    spec = source_map.get('debuggerHeartbeat')
+    if spec is None:
+        return
+    if (spec.get('version') != 1 or spec.get('size') != 24 or
+            spec.get('nativeSymbol') != 'dnd_debugger_heartbeat' or type(spec.get('supported')) is not bool):
+        raise ValueError('Unsupported debugger heartbeat ABI')
+    matches = set()
+    for line in symbol_dump.splitlines():
+        parts = line.split()
+        if len(parts) < 8 or parts[3] != 'OBJECT' or parts[6] in ('UND', 'ABS') or parts[7] != spec['nativeSymbol']:
+            continue
+        address, size = int(parts[1], 16), int(parts[2])
+        if size != 24 or address % 4 or not 0x80000000 <= address <= 0x81800000 - 24:
+            raise ValueError('Invalid debugger heartbeat symbol')
+        matches.add(address)
+    if len(matches) > 1:
+        raise ValueError('Ambiguous debugger heartbeat symbol')
+    if matches:
+        mapped['debuggerHeartbeat'] = dict(version=1, size=24, supported=spec['supported'], address=f'0x{next(iter(matches)):08x}')
 
 
 def main():

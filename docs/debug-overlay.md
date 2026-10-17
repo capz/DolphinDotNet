@@ -54,22 +54,49 @@ draw it automatically during presentation.
   disconnect, and reads it back to verify that the write persisted. An older or
   non-reporting build shows `UNAVAILABLE`; other GDB clients do not report through
   this slot. Variable inspection remains read-only.
+* **DEBUG LIVE** replaces that row when live status is configured in Rider.
+  While the overlay is visible, the game sends one 20-byte UDP ping every
+  **2,000 ms** through its already configured BBA network. The adapter replies
+  only while its debug transport remains connected. Valid replies show
+  `CONNECTED`; six seconds without a valid reply show `UNREACHABLE`. Cable
+  loss shows `UNREACHABLE` on the next link check. A clean adapter report shows
+  `DISCONNECTED`. `CHECKING` and `WAITING FOR BBA` distinguish startup from loss.
+  Unreachable describes the game-to-adapter path; it cannot distinguish a host
+  crash from a blocked or broken network route.
 
 The panel uses five rows without BBA configuration and nine rows with BBA details.
 It keeps the existing visibility toggle and bottom-left placement. Network snapshots
 refresh on the separate two-second connectivity timer, without socket I/O. Memory
 statistics retain their four-times-per-second refresh. Debugger reports are read
 on each redraw. A halted target cannot redraw its overlay, so the screen retains
-its previous frame until execution resumes. The guest cannot independently detect a
-host-side adapter crash or lost connection; **DEBUG LAST is not a heartbeat or a
-live connection guarantee**. An abrupt loss can leave the last report as connected.
+its previous frame until execution resumes. A long pause gives the live monitor a
+fresh verification period on resume. **DEBUG LAST is not a live connection
+guarantee**; an abrupt loss can leave that fallback report as connected.
 
 Rebuild the target Debug build and install the updated Rider plugin to enable
 adapter reports. Maps without telemetry remain supported and cause no status writes.
-The existing debug report is a cheap memory read, not a heartbeat or transport poll.
-Live debugger-loss detection remains unimplemented: it needs a separate running-target
-channel for each supported transport. A future heartbeat should use the same requested
-2,000 ms interval and tolerate missed messages rather than time out after one interval.
+For live status, open Rider's **DolphinDotNet Attach → Manage targets → Advanced
+connection options**. Set **Live status computer IPv4** to an address the game can
+reach on this computer, and **Live status UDP port** (default 2167; zero selects an
+automatic port). Leave the address blank to disable live status. Allow this UDP
+listener through the computer's firewall and configure a working guest BBA network
+first. The host GDB address `127.0.0.1` is not automatically the address the guest
+can reach. Dolphin's BBA setup and the guest's network are separate from its host
+GDB listener.
+
+This channel supports Dolphin host-GDB and USB Gecko sessions with application
+BBA networking. The native BBA/TCP GDB stub owns a separate uIP stack and explicitly
+declines this UDP channel; it keeps `DEBUG LAST` plus physical `LINK` status.
+An unsupported or unconfigured live channel never silently claims live connectivity.
+
+Hiding the overlay closes the diagnostic socket and stops pings, reads and link
+polls. Showing it starts fresh verification. The responder is passive while hidden;
+it never polls GDB or interrupts execution. Each visible check drains at most four
+small replies and sends one ping. Replies must match the configured peer, session
+token and outstanding sequence. Clock resets, stale replies and session changes
+cannot extend an old lease. Diagnostic UDP calls preserve application network error
+state. The optional 24-byte heartbeat configuration is ELF-bound separately from
+the existing eight-byte report, so old maps/plugins retain the fallback behavior.
 
 Memory readings refresh four times per second. Timing and formatting use fixed native
 buffers, with no managed allocations or storage/DMA operations. APIs run on the application's
@@ -79,6 +106,10 @@ Portable tests verify timing, counter reset/saturation, toggle behavior, network
 color and panel placement at 480- and 576-line resolutions, plus the connectivity
 timer's two-second boundary, hidden/show behavior and clock reset. A mocked EXI
 test checks the BBA register/bits, adapter identity, contention and failure cleanup.
+Heartbeat tests cover loss/recovery, cadence, hiding, paused targets, invalid/stale
+messages, bounded receive work and cleanup. A real native C guest and the real .NET
+adapter exchange UDP on loopback, detect an abruptly killed adapter, and recover
+with a new session token. These host tests do not establish physical BBA routing.
 CI also validates the managed
 toggle through AOT and builds the GameCube backend. The real-Dolphin inspection
 gate also reads the retained telemetry slot after the adapter releases its connection

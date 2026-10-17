@@ -64,6 +64,8 @@ class AdapterIntegrationTest {
             request.setBreakpoints(new SourceBreakpoint[0]); client.server.setBreakpoints(request).get(5, TimeUnit.SECONDS);
             continued.clear(); client.server.continue_(resume).get(5, TimeUnit.SECONDS);
             assertNotNull(continued.poll(5, TimeUnit.SECONDS));
+            writer.println("heartbeat");
+            assertTrue(JsonParser.parseString(readLine(reader)).getAsJsonObject().get("live").getAsBoolean());
             var pause = new PauseArguments(); pause.setThreadId(1); client.server.pause(pause).get(5, TimeUnit.SECONDS);
             assertEquals("pause", stopped(stops).getReason());
             // Disconnect while executing must interrupt and remove owned breaks.
@@ -72,6 +74,8 @@ class AdapterIntegrationTest {
             continued.clear(); client.server.continue_(resume).get(5, TimeUnit.SECONDS);
             assertNotNull(continued.poll(5, TimeUnit.SECONDS));
             client.close(); assertTrue(process.waitFor(10, TimeUnit.SECONDS)); assertEquals(0, process.exitValue());
+            writer.println("heartbeat");
+            assertFalse(JsonParser.parseString(readLine(reader)).getAsJsonObject().get("live").getAsBoolean());
             writer.println("status"); var status = JsonParser.parseString(readLine(reader)).getAsJsonObject();
             assertEquals(0, status.getAsJsonArray("breakpoints").size());
             assertEquals(0, status.getAsJsonArray("errors").size());

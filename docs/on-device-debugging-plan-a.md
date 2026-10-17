@@ -534,12 +534,30 @@ not an inferred link-up; configured IP details survive cable loss. Tests cover
 the timer boundaries, toggle/clock behavior, register command, contention and
 failure cleanup, and both normal and reporting overlay layouts.
 
-The requested two-second heartbeat interval is reserved for the next debugger
-transport slice. Live debugger-loss detection is not implemented by these link
-checks: Dolphin's host GDB connection is independent of guest BBA state, and the
-current RSP session has no separate heartbeat channel while execution is active.
-DEBUG LAST keeps its existing, explicit last-report semantics. Running-target
-heartbeat support needs transport work and hardware/guest-network validation.
+An optional running-target heartbeat now uses the application BBA stack, separately
+from RSP. Rider accepts a guest-reachable computer IPv4 and UDP port; the adapter
+binds a responder and writes its endpoint and fresh 64-bit session token into a
+separate, versioned 24-byte ELF-bound configuration slot while stopped at attach.
+The existing eight-byte report is unchanged. Every two seconds while stats are
+visible, the target drains at most four datagrams and sends a 20-byte ping. Only
+a reply from the configured endpoint with the current token and outstanding
+sequence renews its six-second lease. Hidden stats close the socket and cause no
+heartbeat traffic. The adapter never writes GDB memory or interrupts execution to
+send heartbeats. Closed debug transports and adapter exit stop responses.
+
+DEBUG LIVE distinguishes checking, waiting for BBA, connected, unreachable and
+cleanly disconnected. Loss is a failure of the game-to-adapter path, not proof of
+which endpoint failed. Pause/resume gaps and clock resets start fresh verification;
+socket reopen after an I/O error cannot keep restarting a lost session's lease.
+The host loopback gate uses the actual native C state machine and .NET adapter,
+kills the adapter without cleanup, verifies loss, then reattaches and verifies
+new-session recovery. This does not validate a physical cable or guest route.
+
+Dolphin host-GDB and USB Gecko can use this channel when application BBA networking
+is configured and the host UDP endpoint is reachable. The native BBA GDB stub owns
+a separate uIP stack; its metadata explicitly declines application UDP heartbeat
+support, preserving DEBUG LAST and physical cable status. Adding a heartbeat to
+that native stub remains a separate transport/hardware slice.
 
 The first overlay CI run (39045224094) exposed a Dolphin pause/cleanup race:
 its CPU pause loop can send a second SIGTRAP after the Ctrl-C stop, at a later PC

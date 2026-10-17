@@ -1,4 +1,5 @@
 #include "dnd_performance.h"
+#include "dnd_debug_heartbeat.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -30,6 +31,9 @@ void dnd_performance_set_visible(int enabled) {
   stats.memory_valid = false;
   have_connectivity = false;
   stats.network_link = -1;
+#ifdef DND_DEBUG_TELEMETRY
+  dnd_debug_heartbeat_hide();
+#endif
 }
 int dnd_performance_visible(void) { return visible; }
 void dnd_performance_begin_frame(void) { stats.triangles = 0; }
@@ -133,6 +137,15 @@ int dnd_performance_format(char lines[DND_PERFORMANCE_ROWS][DND_PERFORMANCE_COLU
   uint32_t report = dnd_debugger_telemetry[1];
   debugger = report == 1 ? "CONNECTED" : report == 2 ? "DISCONNECTED" : "UNKNOWN";
 #endif
-  snprintf(lines[row++], DND_PERFORMANCE_COLUMNS, "DEBUG LAST: %s", debugger);
+  const char *label="DEBUG LAST";
+#ifdef DND_DEBUG_TELEMETRY
+  int live=dnd_debug_heartbeat_state();
+  if(live!=DND_LIVE_DISABLED) {
+    label="DEBUG LIVE";
+    debugger=live==DND_LIVE_CONNECTED?"CONNECTED":live==DND_LIVE_LOST?"UNREACHABLE":
+        live==DND_LIVE_DISCONNECTED?"DISCONNECTED":live==DND_LIVE_WAIT_NETWORK?"WAITING FOR BBA":"CHECKING";
+  }
+#endif
+  snprintf(lines[row++], DND_PERFORMANCE_COLUMNS, "%s: %s", label, debugger);
   return row;
 }
