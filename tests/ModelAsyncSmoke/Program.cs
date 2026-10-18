@@ -17,13 +17,17 @@ internal static class Program
     }
     // The native host pauses ufbx at entry, with the execution gate released.
     // It publishes this file only once the real parser runs on another thread.
-    private static void WhileParsing(Renderer renderer,ModelInstance instance,CancellationTokenSource? cancellation=null)
+    private static async Task WhileParsing(Renderer renderer,ModelInstance instance,CancellationTokenSource? cancellation=null)
     {
         long started=Clock.Timestamp;
         while(!Dolphin.IO.File.Exists("sd:/native-import-active"))
         {
             Draw(renderer,instance);
             if(Clock.Timestamp-started>10000000)throw new InvalidOperationException("Background parser never started.");
+            // Yield on the application executor while native I/O acquires the
+            // gate. Timers run on the service executor, which this test pauses
+            // inside the parser, so waiting for a timer would deadlock here.
+            await Task.Yield();
         }
         Dolphin.IO.File.Delete("sd:/native-import-active");
         var retained=string.Concat("application-","root");
@@ -45,7 +49,7 @@ internal static class Program
         {
             var renderer=new Renderer();
             var loading=Model.LoadFbxAsync("sd:/skinned.fbx");
-            WhileParsing(renderer,instance);
+            await WhileParsing(renderer,instance);
             using(var imported=await loading)
             {
                 if(!Scheduler.IsApplicationThread||imported.Animations.Count!=1)return 2;
@@ -54,7 +58,7 @@ internal static class Program
             using(var cancellation=new CancellationTokenSource())
             {
                 var canceled=Model.LoadFbxAsync("sd:/embedded-binary.fbx",cancellation.Token);
-                WhileParsing(renderer,instance,cancellation);
+                await WhileParsing(renderer,instance,cancellation);
                 try{using(var unexpected=await canceled){}return 3;}catch(OperationCanceledException){}
                 if(!canceled.IsCanceled||!Scheduler.IsApplicationThread)return 4;
             }

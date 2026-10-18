@@ -1112,7 +1112,9 @@ jobs:
         if: matrix.group == 'games'
         id: snake_boot
         continue-on-error: true
-        run: python3 scripts/dolphin_smoke.py dist/footprint/snake.dol --binary /usr/games/dolphin-emu-nogui --seconds 70 --minimum-seconds 70 --cpu-core 1 --gdb-port 2164 --elf dist/footprint/snake.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol dnd_card_mount --expect-symbol dnd_device_end --logs dolphin-snake --require-boot
+        # No card is configured here: verify physical polling, then rendering.
+        # Mounting is conditional on presence rather than attempted at startup.
+        run: python3 scripts/dolphin_smoke.py dist/footprint/snake.dol --binary /usr/games/dolphin-emu-nogui --seconds 70 --minimum-seconds 70 --cpu-core 1 --gdb-port 2164 --elf dist/footprint/snake.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol dnd_hardware_probe --expect-symbol dnd_device_end --logs dolphin-snake --require-boot
       - name: Verify two consecutive C# source breakpoints in Dolphin
         if: matrix.group == 'debugger'
         id: cs_breakpoints
