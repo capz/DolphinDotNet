@@ -1,5 +1,6 @@
 using Dolphin.Diagnostics;
 using Dolphin.Input;
+using Dolphin.Timing;
 
 internal static class Program
 {
@@ -7,7 +8,8 @@ internal static class Program
     {
         DebugOverlay.PerformanceVisible = true;
         DebugOverlay.WriteLine("csharp with dolphin dotnet");
-        var rotation = 0;
+        float rotation=0;
+        var clock=new FrameClock { MaximumDeltaSeconds=.1f };
         // Graphics and controller calls stay on the application executor.
         // A game using async work alongside this loop needs no task/IO pumps.
         while (true)
@@ -15,8 +17,8 @@ internal static class Program
             Controller.Update();
             var pad = Controller.GetState();
             if (pad.Start.WasPressed) return 0;
-            rotation = (rotation + 1) % 360;
-            DemoScene.PresentDemoFrame(rotation);
+            rotation = (rotation + 60*clock.Tick()) % 360;
+            DemoScene.PresentDemoFrame((int)rotation);
         }
     }
 }

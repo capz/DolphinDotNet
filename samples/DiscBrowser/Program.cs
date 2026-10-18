@@ -1,75 +1,101 @@
 using System;
 using System.Collections.Generic;
-using Dolphin.Storage;
+using System.IO;
 using Dolphin.Diagnostics;
+using Dolphin.Graphics;
+using Dolphin.Input;
+using Dolphin.Storage;
 
 internal static class Program
 {
-    private static void PrintFiles(string heading,IEnumerable<string> files)
+    private static readonly List<string> paths=new List<string>();
+    private static int directories,selection,top;
+    private static string current="",status="";
+    private static bool disc,loader;
+    private static Texture2D? banner;
+    private static string title="DISC BROWSER";
+    private static void Listing()
     {
-        DebugOverlay.WriteLine(heading);
-        int count=0;
-        foreach(var file in files)
-        {
-            DebugOverlay.WriteLine(file);
-            if(++count==8)break;
-        }
+        paths.Clear();selection=top=0;
+        var folders=new List<string>();var files=new List<string>();
+        foreach(var path in Storage.EnumerateDirectories(StorageDevice.DvdDrive,current))
+        {if(folders.Count>=256)break;folders.Add(path);}
+        foreach(var path in Storage.EnumerateFiles(StorageDevice.DvdDrive,current))
+        {if(files.Count>=256)break;files.Add(path);}
+        folders.Sort(StringComparer.OrdinalIgnoreCase);files.Sort(StringComparer.OrdinalIgnoreCase);
+        directories=folders.Count;paths.AddRange(folders);paths.AddRange(files);
+        status=$"{paths.Count:D3} ENTRIES  {current}";
+        for(int i=0;i<paths.Count&&i<3;i++)DebugOverlay.WriteLine(paths[i]);
     }
-    private static void ShowMountedGame()
+    private static void Release()
     {
-        var identity=Storage.GetMountedDiscIdentity(DiscBannerLanguage.English);
-        DebugOverlay.WriteLine("Game ID: "+identity.GameId);
-        DebugOverlay.WriteLine("Title: "+identity.Title);
-        DebugOverlay.WriteLine("Description: "+identity.ShortDescription);
-        if(identity.Banner!=null)
+        banner?.Dispose();banner=null;
+        if(disc){Storage.Unmount(StorageDevice.DvdDrive);disc=false;}
+        if(loader){Storage.Unmount(StorageDevice.GcLoader);loader=false;}
+    }
+    private static void Refresh()
+    {
+        Release();paths.Clear();title="DISC BROWSER";current="";
+        try
         {
-            // 96x32 RGBA pixels can also be supplied to Texture2D.Create.
-            DebugOverlay.WriteLine("Banner RGBA size: "+identity.Banner.Rgba32.Length.ToString());
+            // Probe physical/ODE media before touching GC Loader sectors.
+            disc=Storage.MountDisc();
+            if(!disc)
+            {
+                loader=Storage.Mount(StorageDevice.GcLoader);
+                if(loader&&Storage.FileExists(StorageDevice.GcLoader,"games/demo.iso"))disc=Storage.MountDisc("gcloader:/games/demo.iso");
+            }
+            if(!disc){status="NO GAMECUBE DISC OR DEMO ISO AVAILABLE";DebugOverlay.WriteLine(status);return;}
+            var identity=Storage.GetMountedDiscIdentity();title=identity.Title;
+            DebugOverlay.WriteLine("Title: "+title);
+            if(identity.Banner!=null)
+            {
+                var pixels=identity.Banner.Rgba32;banner=Texture2D.Create(96,32,pixels);
+                DebugOverlay.WriteLine($"Banner RGBA size: {pixels.Length}");
+            }
+            Listing();
         }
-        PrintFiles("dvd:/ FST",Storage.EnumerateFiles(StorageDevice.DvdDrive,""));
+        catch(Exception error){status=error.Message;Release();}
     }
     private static int Main()
     {
-        try { Browse();return 0; }
-        catch(Exception error)
+        using var draw=new Draw2D(GraphicsDevice.Default,new Draw2DOptions {Width=640,Height=480});
+        using var text=new SampleText();Refresh();
+        try
         {
-            DebugOverlay.WriteLine("DISC BROWSE FAILED");
-            DebugOverlay.WriteLine(error.Message);
-            return 1;
-        }
-    }
-    private static void Browse()
-    {
-        bool found=false;
-        // Prefer the current game. Probing GC Loader sectors resets the drive,
-        // so it must not run before browsing an already inserted disc.
-        // A DOL-only Dolphin launch has no disc; mounting must fail without waiting.
-        if(Storage.MountDisc())
-        {
-            try { ShowMountedGame(); }
-            finally { Storage.Unmount(StorageDevice.DvdDrive); }
-            return;
-        }
-
-        if(Storage.Mount(StorageDevice.GcLoader))
-        {
-            try
+            while(true)
             {
-                DebugOverlay.WriteLine("GC Loader volume: gcloader:/");
-                const string image="gcloader:/games/demo.iso";
-                if(Storage.FileExists(StorageDevice.GcLoader,"games/demo.iso") &&
-                   Storage.MountDisc(image))
+                Controller.Update();var pad=Controller.GetState();
+                if(pad.Start.WasPressed)return 0;
+                if(pad.X.WasPressed)Refresh();
+                if(disc)
                 {
-                    try { ShowMountedGame();found=true; }
-                    finally { Storage.Unmount(StorageDevice.DvdDrive); }
+                    try
+                    {
+                        if(pad.DPadDown.WasPressed&&selection+1<paths.Count)selection++;
+                        if(pad.DPadUp.WasPressed&&selection>0)selection--;
+                        if(pad.A.WasPressed&&selection<directories)
+                        {current=paths[selection];if(current.StartsWith("dvd:/"))current=current.Substring(5);Listing();}
+                        if(pad.B.WasPressed&&current.Length>0){current=Path.GetDirectoryName(current)??"";Listing();}
+                    }
+                    catch(Exception error){status=error.Message;}
                 }
+                if(selection<top)top=selection;if(selection>=top+8)top=selection-7;
+                var device=GraphicsDevice.Default;device.BeginFrame(new Color32(15,26,40));draw.Begin();
+                text.Draw(draw,"DISC BROWSER",24,140,4,Color32.White);
+                string label=title.Length>40?title.Substring(0,40):title;
+                text.Draw(draw,label,24,180,2,new Color32(112,225,240));
+                if(banner!=null)draw.DrawTexture(banner,new RectF(424,140,192,64),Color32.White);
+                text.Draw(draw,status.Length>70?status.Substring(0,70):status,24,220,2,Color32.White);
+                for(int row=0;row<8&&top+row<paths.Count;row++)
+                {
+                    int index=top+row;string name=Path.GetFileName(paths[index]);if(name.Length>52)name=name.Substring(0,52);
+                    text.Draw(draw,(index==selection?"> ":"  ")+(index<directories?"DIR ":"FILE ")+name,24,250+row*21,2,index==selection?new Color32(255,210,104):Color32.White);
+                }
+                text.Draw(draw,"UP DOWN SELECT  A OPEN  B PARENT  X REFRESH  START EXIT",24,450,2,Color32.White);
+                draw.End();device.EndFrame();
             }
-            finally { Storage.Unmount(StorageDevice.GcLoader); }
         }
-        if(!found)
-        {
-            DebugOverlay.WriteLine("NO GAMECUBE DISC OR DEMO ISO AVAILABLE");
-            DebugOverlay.WriteLine("INSERT A DISC OR CONFIGURE A DOLPHIN DEFAULT ISO");
-        }
+        finally{Release();}
     }
 }

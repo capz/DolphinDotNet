@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Dolphin.Network;
+using Dolphin.Timing;
 
 internal sealed class KartNetwork : IDisposable
 {
@@ -17,6 +18,7 @@ internal sealed class KartNetwork : IDisposable
     private readonly byte[] send=new byte[KartPeer.PacketSize],receive=new byte[KartPeer.PacketSize+1];
     private readonly int[] endpoint=new int[2];
     private float sendIn,retryIn;
+    private long lastTime=Clock.Timestamp;
     private readonly int localPort,peerPort;
     private bool disposed;
     internal KartNetwork(int id,int localPort=Port,int peerPort=Port)
@@ -34,6 +36,7 @@ internal sealed class KartNetwork : IDisposable
     }
     internal void Update(float seconds,KartGame game)
     {
+        long now=Clock.Timestamp;seconds=(float)((now-lastTime)/(double)Clock.Frequency);lastTime=now;
         Peer.Update(seconds);if(!Peer.Connected)remote=null;
         if(disposed)return;
         retryIn-=seconds;
@@ -87,7 +90,7 @@ internal sealed class KartNetwork : IDisposable
     internal int Position(KartGame game)
     {
         if(!Peer.Paired)return 1;
-        if(game.Finished && Peer.Lap==3)return game.Time<=Peer.RemoteTime?1:2;
+        if(game.Finished && Peer.Lap==3)return game.Elapsed<=Peer.RemoteTime?1:2;
         float remoteAngle=MathF.Atan2(Peer.Z,Peer.X);
         if(remoteAngle<0)remoteAngle+=2*MathF.PI;
         return game.Lap*2*MathF.PI+game.Angle>=Peer.Lap*2*MathF.PI+remoteAngle?1:2;

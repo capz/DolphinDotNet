@@ -29,6 +29,7 @@ internal sealed class FoxGame
     internal int Shield { get; private set; }
     internal int Score { get; private set; }
     internal int HighScore { get; private set; }
+    internal void LoadBest(int score){if(score>HighScore)HighScore=score;}
     internal bool BossActive { get; private set; }
     internal int BossHealth { get; private set; }
     internal float BossX,BossY,BossZ;
@@ -59,8 +60,8 @@ internal sealed class FoxGame
         for(int i=0;i<BoltCount;i++)Bolts[i]=false;
         for(int i=0;i<RingCount;i++)Rings[i]=false;
     }
-    private static float Clamp(float v,float min,float max)=>v<min?min:v>max?max:v;
-    private static float Abs(float v)=>v<0?-v:v;
+    private static float Clamp(float x,float low,float high)=>Math.Clamp(x,low,high);
+    private static float Abs(float v)=>MathF.Abs(v);
     private static bool Close(float x,float y,float a,float b,float radius)
     { float dx=x-a,dy=y-b;return dx*dx+dy*dy<radius*radius; }
     private void AddScore(int points) { Score+=points;if(Score>HighScore)HighScore=Score; }

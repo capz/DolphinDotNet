@@ -1,11 +1,12 @@
 using System;
 using Dolphin.Graphics;
 
-/// <summary>Only untextured rectangles: no textures, fonts or external assets.</summary>
+/// <summary>Generated rectangles and shared bitmap text; no external assets.</summary>
 internal sealed class PongRenderer : IDisposable
 {
     private readonly GraphicsDevice device;
     private readonly Draw2D draw;
+    private readonly SampleText text=new SampleText();
     private readonly Color32 light=new Color32(228,238,246);
     private readonly Color32 dim=new Color32(62,81,100);
     private readonly Color32 left=new Color32(106,223,210);
@@ -22,7 +23,7 @@ internal sealed class PongRenderer : IDisposable
     private void Rect(float x,float y,float w,float h,Color32 color)=>
         draw.FillRectangle(new RectF(x,y,w,h),color);
 
-    internal void Present(PongGame game,bool leftConnected,bool rightConnected,bool paused)
+    internal void Present(PongGame game,bool leftConnected,bool rightConnected,bool paused,int leftBest=0,int rightBest=0)
     {
         device.BeginFrame(new Color32(12,18,31));
         draw.Begin();
@@ -66,37 +67,13 @@ internal sealed class PongRenderer : IDisposable
             Rect(314,251,12,4,light);
         }
 
+        text.Draw(draw,$"BEST STREAK {leftBest:D2}         {rightBest:D2}",190,435,2,dim);
         draw.End();
         device.EndFrame();
     }
 
-    private static int Segments(int n)
-    {
-        switch(n)
-        {
-            case 0:return 0x3f;
-            case 1:return 0x06;
-            case 2:return 0x5b;
-            case 3:return 0x4f;
-            case 4:return 0x66;
-            case 5:return 0x6d;
-            case 6:return 0x7d;
-            case 7:return 0x07;
-            case 8:return 0x7f;
-            default:return 0x6f;
-        }
-    }
-    private void Digit(int number,float x,float y,Color32 tint)
-    {
-        const float w=40f, h=70f, t=6f;
-        int parts=Segments(number);
-        if((parts&1)!=0)Rect(x+t,y,w-t*2,t,tint);
-        if((parts&2)!=0)Rect(x+w-t,y+t,t,h/2-t,tint);
-        if((parts&4)!=0)Rect(x+w-t,y+h/2,t,h/2-t,tint);
-        if((parts&8)!=0)Rect(x+t,y+h-t,w-t*2,t,tint);
-        if((parts&16)!=0)Rect(x,y+h/2,t,h/2-t,tint);
-        if((parts&32)!=0)Rect(x,y+t,t,h/2-t,tint);
-        if((parts&64)!=0)Rect(x+t,y+h/2-t/2,w-t*2,t,tint);
-    }
-    public void Dispose()=>draw.Dispose();
+
+    private void Digit(int value,float x,float y,Color32 color)
+    {text.Number(draw,value,1,x,y,12,color);}
+    public void Dispose(){text.Dispose();draw.Dispose();}
 }

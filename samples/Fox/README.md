@@ -56,3 +56,17 @@ PowerPC DOL in headless Dolphin. The controller acceptance check launches the
 actual game and verifies launch/fire, horizontal and vertical flight, boost,
 brake, roll, pause/resume, returning to title and restarting through real pipe
 inputs. GDB observes state without patching guest input or game data.
+
+## API updates
+
+The player uses an original embedded glTF-derived model and looping Hover
+animation through `ModelInstance.Animator`. Procedural geometry remains a fallback
+and is retained for tinted enemy variants. Regenerate with
+`python3 scripts/generate_sample_model.py`; CI checks the generated source.
+
+On the title screen hold Start and press Y to capture a new fire binding (A, X or
+Y; B cancels). Release the opening buttons before choosing. Context changes suppress
+held actions, preventing the title's start press from firing. Start+X exits from
+the title even when X is rebound. Hits/damage produce rumble. Best scores merge
+and save automatically when a native memory card is present in either slot
+(`DFOX`), with two-second hotplug checks.

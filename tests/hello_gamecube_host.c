@@ -7,7 +7,7 @@ extern intptr_t dnd_aot_entry(DndManagedHeap *heap);
 static unsigned lines;
 void dnd_console_write_line(const char *text) {
     static const char *expected[] = {
-        "Hello from real C#!", "Running through DolphinDotNet.", "42"
+        "Hello from real C#!", "Running through DolphinDotNet.", "ANSWER: 42   PI: 3.142"
     };
     assert(lines < 3 && strcmp(text, expected[lines++]) == 0);
 }

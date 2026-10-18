@@ -1,7 +1,7 @@
 using System;
 using Dolphin.Graphics;
 
-/// <summary>Original pixel art and a tiny built-in font, drawn as batched rectangles.</summary>
+/// <summary>Original pixel art and shared bitmap text drawn through Draw2D.</summary>
 internal sealed class GreenMenRenderer : IDisposable
 {
     private readonly GraphicsDevice device;
@@ -15,37 +15,18 @@ internal sealed class GreenMenRenderer : IDisposable
         66,36,126,219,255,66, 66,165,126,219,126,36,
         60,126,219,255,90,129, 60,126,219,255,165,66
     };
-    private static readonly int[] glyphs={
-        // A-Z then 0-9, packed row-major as 3 x 5 pixels.
-        11245, 27566, 14627, 27502, 31143, 31140, 14699, 23533, 29847, 4714, 23469, 18727, 24557, 24573, 11114, 27556, 11131, 27565, 14478, 29842, 23407, 23402, 23549, 23213, 23186, 29351,
-        31599, 11415, 25575, 25294, 23497, 31118, 14831, 29330, 31727, 31694
-    };
+    private readonly SampleText text=new SampleText();
     internal GreenMenRenderer(GraphicsDevice device)
     {
         this.device=device;
         draw=new Draw2D(device,new Draw2DOptions { Width=640,Height=480,VertexCapacity=12288 });
     }
     private void Rect(float x,float y,float w,float h,Color32 color)=>draw.FillRectangle(new RectF(x,y,w,h),color);
-    private void Glyph(int glyph,float x,float y,float size,Color32 color)
-    {
-        for(int row=0;row<5;row++)for(int col=0;col<3;col++)
-            if((glyph&(1<<(14-row*3-col)))!=0)Rect(x+col*size,y+row*size,size,size,color);
-    }
-    private void Text(string text,float x,float y,float size,Color32 color)
-    {
-        for(int i=0;i<text.Length;i++)
-        {
-            char c=text[i];
-            if(c>='A' && c<='Z')Glyph(glyphs[c-'A'],x,y,size,color);
-            else if(c>='0' && c<='9')Glyph(glyphs[26+c-'0'],x,y,size,color);
-            x+=size*4;
-        }
-    }
+
+    private void Text(string value,float x,float y,float size,Color32 color)
+    { text.Draw(draw,value,x,y,size,color); }
     private void Number(int value,int digits,float x,float y,float size,Color32 color)
-    {
-        for(int i=digits-1;i>=0;i--)
-        { Glyph(glyphs[26+value%10],x+i*size*4,y,size,color);value/=10; }
-    }
+    { text.Number(draw,value,digits,x,y,size,color); }
     private void Alien(float x,float y,int species,int beat,float scale,Color32 tint)
     {
         int start=(species*2+(beat&1))*6;
@@ -108,5 +89,5 @@ internal sealed class GreenMenRenderer : IDisposable
         if(!connected && game.State==GreenMenState.Title)Text("CONNECT CONTROLLER 1",160,110,4,amber);
         draw.End();device.EndFrame();
     }
-    public void Dispose()=>draw.Dispose();
+    public void Dispose(){text.Dispose();draw.Dispose();}
 }

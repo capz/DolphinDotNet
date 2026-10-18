@@ -6,34 +6,15 @@ internal sealed class FoxHud : IDisposable
     private readonly Draw2D draw;
     private readonly Color32 cyan=new Color32(112,224,240),white=new Color32(231,239,252),
         dim=new Color32(65,103,133),gold=new Color32(255,210,104);
-    private static readonly int[] glyphs={
-        // A-Z then 0-9, packed row-major as 3 x 5 pixels.
-        11245, 27566, 14627, 27502, 31143, 31140, 14699, 23533, 29847, 4714, 23469, 18727, 24557, 24573, 11114, 27556, 11131, 27565, 14478, 29842, 23407, 23402, 23549, 23213, 23186, 29351,
-        31599, 11415, 25575, 25294, 23497, 31118, 14831, 29330, 31727, 31694
-    };
+    private readonly SampleText text=new SampleText();
     internal FoxHud(GraphicsDevice device)
     { draw=new Draw2D(device,new Draw2DOptions { Width=640,Height=480,VertexCapacity=6144 }); }
     private void Rect(float x,float y,float w,float h,Color32 color)=>draw.FillRectangle(new RectF(x,y,w,h),color);
-    private void Glyph(int glyph,float x,float y,float size,Color32 color)
-    {
-        for(int row=0;row<5;row++)for(int col=0;col<3;col++)
-            if((glyph&(1<<(14-row*3-col)))!=0)Rect(x+col*size,y+row*size,size,size,color);
-    }
-    private void Text(string text,float x,float y,float size,Color32 color)
-    {
-        for(int i=0;i<text.Length;i++)
-        {
-            char c=text[i];
-            if(c>='A' && c<='Z')Glyph(glyphs[c-'A'],x,y,size,color);
-            else if(c>='0' && c<='9')Glyph(glyphs[26+c-'0'],x,y,size,color);
-            x+=size*4;
-        }
-    }
+
+    private void Text(string value,float x,float y,float size,Color32 color)
+    { text.Draw(draw,value,x,y,size,color); }
     private void Number(int value,int digits,float x,float y,float size,Color32 color)
-    {
-        for(int i=digits-1;i>=0;i--)
-        { Glyph(glyphs[26+value%10],x+i*size*4,y,size,color);value/=10; }
-    }
+    { text.Number(draw,value,digits,x,y,size,color); }
     internal void Present(FoxGame game,bool connected)
     {
         draw.Begin();
@@ -77,5 +58,5 @@ internal sealed class FoxHud : IDisposable
         if(!connected && game.State==FoxState.Title)Text("CONNECT CONTROLLER 1",160,110,4,gold);
         draw.End();
     }
-    public void Dispose()=>draw.Dispose();
+    public void Dispose(){text.Dispose();draw.Dispose();}
 }

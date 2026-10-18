@@ -4,6 +4,7 @@
     <Nullable>enable</Nullable><Optimize>true</Optimize>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/DolphinDotNet.Core/DolphinDotNet.Core.csproj" />
     <Compile Include="../../samples/GreenMen/GreenMenGame.cs" Link="GreenMenGame.cs" />
     <Compile Include="../../samples/GreenMen/GreenMenWaveforms.cs" Link="GreenMenWaveforms.cs" />
   </ItemGroup>

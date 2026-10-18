@@ -107,3 +107,13 @@ GC/sanitizers and on PowerPC in Dolphin. Capture verifies the native kart, track
 and cyan item-box rendering without networking.
 Two physical BBA devices and cross-machine Dolphin LAN setup remain manual
 acceptance; host loopback tests do not validate bridge/TAP configuration.
+
+## API updates
+
+Production pickups use a timestamp-seeded `Random`; explicit seeds reproduce
+item choices in tests. Network retries and peer expiry use `Clock.Timestamp`,
+independent of capped simulation steps. Race display and transmitted finish times
+use a `Stopwatch`. Procedural engine audio follows speed/boost; pickups, item use
+and hits have cues and rumble. Best race milliseconds are saved as a checksummed
+`DKRT` record, merging the better time when a card is inserted in either slot.
+No card or network is required for single-player play.

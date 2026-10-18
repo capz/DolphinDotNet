@@ -19,6 +19,7 @@ internal sealed class GreenMenGame
     internal float PlayerX { get; private set; }
     internal int Score { get; private set; }
     internal int HighScore { get; private set; }
+    internal void LoadBest(int score){if(score>HighScore)HighScore=score;}
     internal int Lives { get; private set; }
     internal int Wave { get; private set; }
     internal int Beat { get; private set; }
@@ -68,7 +69,7 @@ internal sealed class GreenMenGame
         ClearShots();FormationX=140;FormationY=100+(Wave>6?6:Wave-1)*8;
         direction=1;marchTime=0;bombTime=0.8f;shotTime=0;Beat=0;
     }
-    private static float Clamp(float value,float min,float max)=>value<min?min:value>max?max:value;
+    private static float Clamp(float x,float low,float high)=>Math.Clamp(x,low,high);
     private static bool Overlap(float x,float y,float w,float h,float a,float b,float aw,float ah)=>
         x<a+aw && x+w>a && y<b+ah && y+h>b;
     private bool HitShield(float x,float y,float width,float height)

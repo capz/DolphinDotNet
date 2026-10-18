@@ -17,12 +17,12 @@ internal sealed class FoxSounds : IDisposable
     internal void Play(FoxEvent events)
     {
         if((events&FoxEvent.Shot)!=0) { shotVoice?.Dispose();shotVoice=shot.Play(); }
-        if((events&(FoxEvent.EnemyHit|FoxEvent.Ring))!=0) { hitVoice?.Dispose();hitVoice=hit.Play(); }
-        if((events&FoxEvent.Damage)!=0) { damageVoice?.Dispose();damageVoice=damage.Play(); }
+        if((events&(FoxEvent.EnemyHit|FoxEvent.Ring))!=0) { hitVoice?.Dispose();hitVoice=hit.Play();SampleFeedback.Pulse(.05f); }
+        if((events&FoxEvent.Damage)!=0) { damageVoice?.Dispose();damageVoice=damage.Play();SampleFeedback.Pulse(.18f); }
     }
     public void Dispose()
     {
         shotVoice?.Dispose();hitVoice?.Dispose();damageVoice?.Dispose();
-        shot.Dispose();hit.Dispose();damage.Dispose();
+        SampleFeedback.Stop();shot.Dispose();hit.Dispose();damage.Dispose();
     }
 }

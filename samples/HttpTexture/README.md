@@ -16,13 +16,14 @@ addresses or another DNS server. See [networking](../../docs/network-runtime.md)
 dotnet build samples/HttpTexture/HttpTexture.sln -c Debug
 ```
 
-Use **B** to exit and **Z** to toggle statistics. The usual wait-for-Rider launch
-profile is included. A failed request or PNG decode prints the error on the result
-screen; Start leaves that screen. The native `.dol` build requires devkitPro and
+Use **A** to retry, **B** to cancel and exit, and **Z** to toggle statistics. The usual wait-for-Rider launch
+profile is included. A failed request or PNG decode leaves an error in the live UI; A starts another attempt.
+The UI continues rendering while streaming, shows received bytes, and waits for
+cancellation to settle before freeing staging storage. The native `.dol` build requires devkitPro and
 libogc2, as with the other samples. The CLI profile is a build profile; platform
 APIs require the GameCube runtime.
 
-The response buffer is bounded to 64 KiB (the logo is currently about 4 KiB).
+The response buffer is bounded to 256 KiB (the logo is currently about 4 KiB).
 `FromPng` accepts up to 1 MiB of encoded PNG, dimensions 1–1024 on each axis,
 and at most 8 MiB of temporary decoder allocations. It creates tiled GX_RGBA8
 storage and must run between graphics frames. PNG decode is synchronous; decode
@@ -31,4 +32,4 @@ storage. No decoded managed pixel copy is retained.
 
 HTTP is supported directly. If the remote site later redirects to HTTPS, the
 runtime reports an unsupported-TLS error; it never disables TLS verification.
-Change `ImageUrl` to a reachable HTTP endpoint or a local relay in that case.
+Change the URL passed to `SampleDownload.Run` in `Program.cs` to a reachable HTTP endpoint or a local relay in that case.

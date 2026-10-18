@@ -66,3 +66,9 @@ Host-side logic and serialization tests:
 ```sh
 dotnet run --project tests/SnakeRulesSmoke/SnakeRulesSmoke.csproj -c Release
 ```
+
+## API updates
+
+Input now uses the shared router, suppressing held actions across screen
+transitions. Finishing a run pulses rumble. The HUD uses the common bitmap font;
+the existing serialized save format and deterministic RNG are retained.

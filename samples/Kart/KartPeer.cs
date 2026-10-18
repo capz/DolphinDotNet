@@ -28,7 +28,7 @@ internal sealed class KartPeer
         Put(b,0,0x4b415232);Put(b,4,Room);Put(b,8,Id);Put(b,12,unchecked(++sequence));
         Put(b,16,(int)(game.X*1000));Put(b,20,(int)(game.Z*1000));
         Put(b,24,(int)(game.Heading*10000));Put(b,28,(int)(game.Height*1000));
-        Put(b,32,(int)(game.Speed*1000));Put(b,36,game.Lap);Put(b,40,(int)(game.Time*1000));Put(b,44,Connected?remoteId:0);
+        Put(b,32,(int)(game.Speed*1000));Put(b,36,game.Lap);Put(b,40,(int)(game.Elapsed*1000));Put(b,44,Connected?remoteId:0);
         Put(b,48,(int)game.Items.Held);Put(b,52,(int)(game.Boost*1000));Put(b,56,(int)(game.Stun*1000));
         for(int i=0;i<KartItems.Capacity;i++)
         {

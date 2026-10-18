@@ -5,13 +5,15 @@ internal sealed class KartGame
 {
     internal const float Radius=52f,HalfWidth=7f,Step=1f/60;
     internal float X=Radius,Z,Heading,Speed,Height,VerticalSpeed,DriftCharge,Boost,Time,Countdown,Stun,Invulnerable;
-    internal readonly KartItems Items=new KartItems();
+    internal readonly KartItems Items;
+    internal float RaceTime=-1;
+    internal float Elapsed=>RaceTime>=0?RaceTime:Time;
     internal int Lap,NextGate=1;
     internal bool Finished,Gliding,Drifting;
     private float accumulator;
     private bool previousDrift;
-    internal KartGame(){Heading=0;}
-    internal static float Clamp(float x,float low,float high)=>x<low?low:x>high?high:x;
+    internal KartGame(int seed=0){Heading=0;Items=new KartItems(seed);}
+    internal static float Clamp(float x,float low,float high)=>Math.Clamp(x,low,high);
     internal static float Wrap(float angle)
     { while(angle>MathF.PI)angle-=2*MathF.PI;while(angle< -MathF.PI)angle+=2*MathF.PI;return angle; }
     internal static float Distance(float x,float z)=>MathF.Sqrt(x*x+z*z);

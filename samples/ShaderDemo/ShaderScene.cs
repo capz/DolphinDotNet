@@ -19,6 +19,8 @@ internal sealed class ShaderScene : IDisposable
     private readonly Draw2D draw;
     private readonly Transform left=new Transform(),middle=new Transform(),right=new Transform();
     private readonly int brightSlot,thresholdSlot,graphThresholdSlot;
+    internal float LowOffset,HighOffset,ColorOffset;
+    internal bool UseGraph=true;
     internal ShaderScene()
     {
         camera.LookAt(new Vector3(0,0,1),new Vector3(0,0,0),new Vector3(0,1,0));
@@ -41,8 +43,10 @@ internal sealed class ShaderScene : IDisposable
         =>new VertexPositionColor(new Vector3(x/240,(240-y)/240,0),new Color32(intensity,intensity,intensity));
     internal void Present(float wave,bool paused)
     {
-        ramp.SetColor(brightSlot,new Color32((byte)(60+80*wave),(byte)(180+50*wave),240));
-        var thresholds=new Color32((byte)(65+40*wave),(byte)(165+40*wave),0);
+        ramp.SetColor(brightSlot,new Color32((byte)Math.Clamp(60+80*wave+ColorOffset,0,255),(byte)(180+50*wave),240));
+        byte low=(byte)Math.Clamp(65+40*wave+LowOffset,1,200);
+        byte high=(byte)Math.Clamp(165+40*wave+HighOffset,low+1,254);
+        var thresholds=new Color32(low,high,0);
         toon.SetColor(thresholdSlot,thresholds);compiled.SetColor(graphThresholdSlot,thresholds);
         for(int i=0;i<32;i++)diskVertices[i*3]=Vertex(-20+40*wave,240,255);
         disk.SetVertices(diskVertices);
@@ -51,13 +55,13 @@ internal sealed class ShaderScene : IDisposable
         renderer.DrawMesh(disk,rampMaterial,middle);renderer.DrawMesh(strip,rampMaterial,middle);
         renderer.DrawMesh(disk,toonMaterial,right);
         renderer.End3D();
-        draw.Begin();draw.SetEffect(compiled);
+        draw.Begin();draw.SetEffect(UseGraph?compiled:toon);
         for(int x=0;x<156;x++){
             byte intensity=(byte)(x*255/155);
             draw.FillRectangle(new RectF(450+x,340,1,14),new Color32(intensity,intensity,intensity));
         }
         draw.SetEffect(null);draw.End();
-        hud.Present(paused);device.EndFrame();
+        hud.Present(paused,low,high,UseGraph);device.EndFrame();
     }
     public void Dispose(){hud.Dispose();draw.Dispose();strip.Dispose();disk.Dispose();compiled.Dispose();toon.Dispose();ramp.Dispose();}
 }
