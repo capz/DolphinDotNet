@@ -9,6 +9,24 @@ internal static class Program
     private static double Unsigned(ulong value)=>(double)value;
     private static void RefFloat(ref float value){value=3.25f;}
     private static double Remainder(double a,double b)=>a%b;
+    private sealed class Motion
+    {
+        internal float Speed=.25f;
+        internal double Travel=.125;
+        internal long Ticks=1L<<40;
+        internal static double Total=.125;
+        internal static float Samples=.25f;
+        internal static long WideTicks=1L<<40;
+        internal void Advance(bool accelerate,bool brake)
+        {
+            Speed+=((accelerate?16:0)-(brake?30:0)-3-Speed*.12f)/60;
+            Travel+=accelerate?.125:.25;
+            Ticks+=accelerate?1:2;
+            Total+=accelerate?.125:.25;
+            Samples+=accelerate?.125f:.25f;
+            WideTicks+=accelerate?1:2;
+        }
+    }
     private static int phase;
     private static int Main()
     {
@@ -104,5 +122,13 @@ internal static class Program
         try{first.Next(2,1);Check(false);}catch(ArgumentOutOfRangeException){}
         try{first.NextBytes(null!);Check(false);}catch(ArgumentNullException){}
         var defaultA=new Random();var defaultB=new Random();Check(defaultA.Next()!=defaultB.Next());
+        phase=9;
+        var motion=new Motion();
+        for(int step=0;step<60;step++)motion.Advance(true,false);
+        Check(motion.Speed>12&&motion.Speed<13);
+        phase=10;Near(motion.Travel,7.625);
+        phase=11;Near(Motion.Total,7.625);
+        phase=12;Check(motion.Ticks==(1L<<40)+60&&Motion.WideTicks==(1L<<40)+60);
+        phase=13;Near(Motion.Samples,7.75);
     }
 }

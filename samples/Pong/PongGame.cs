@@ -57,8 +57,8 @@ internal sealed class PongGame
         return true;
     }
 
-    private static float Absolute(float v)=>v<0?-v:v;
-    private static float Clamp(float v,float min,float max)=>v<min?min:v>max?max:v;
+    private static float Absolute(float v)=>MathF.Abs(v);
+    private static float Clamp(float x,float low,float high)=>Math.Clamp(x,low,high);
 
     /// <summary>Input is -1 for up and +1 for down. Handles substeps to avoid tunnelling.</summary>
     internal PongEvent Update(float seconds,float leftInput,float rightInput)

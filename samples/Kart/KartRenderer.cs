@@ -53,7 +53,7 @@ internal sealed class KartRenderer : IDisposable
             }
         }
     }
-    internal void Present(KartGame game,KartNetwork network,bool connected)
+    internal void Present(KartGame game,KartNetwork network,bool connected,int best=0)
     {
         float fx=MathF.Sin(game.Heading),fz=MathF.Cos(game.Heading);
         camera.LookAt(new Vector3(game.X-fx*11,game.Height+6,game.Z-fz*11),
@@ -97,7 +97,7 @@ internal sealed class KartRenderer : IDisposable
         Kart(game.X,game.Height,game.Z,game.Heading+game.Stun*12,game.Stun>0?new Color32(250,94,87):new Color32(244,170,68),game.Gliding);
         if(network.Peer.Connected)Kart(network.Peer.X,network.Peer.Height,network.Peer.Z,
             network.Peer.Heading+network.Peer.Stun*12,new Color32(69,211,230),network.Peer.Height>1);
-        renderer.End3D();hud.Present(game,network,connected);device.EndFrame();
+        renderer.End3D();hud.Present(game,network,connected,best);device.EndFrame();
     }
     public void Dispose(){hud.Dispose();track.Dispose();box.Dispose();}
 }

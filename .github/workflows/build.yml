@@ -149,7 +149,7 @@ jobs:
         run: |
           dotnet build samples/HelloGameCube/HelloGameCube.csproj -c Release -p:DndBuildNative=false
           dotnet "$DND_COMPILER_DLL" --aot samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll /tmp/hello-gamecube.c
-          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/hello-gamecube.c tests/hello_gamecube_host.c source/managed_runtime.c source/async_runtime.c -o /tmp/hello-gamecube-test
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/hello-gamecube.c tests/hello_gamecube_host.c source/numeric.c source/text.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/hello-gamecube-test
           /tmp/hello-gamecube-test
           sh scripts/compile-sample.sh /tmp/hello-gamecube-bundle
           test -s /tmp/hello-gamecube-bundle/source/generated_program.c
@@ -418,9 +418,10 @@ jobs:
         run: |
           dotnet build samples/AsyncNetworking/AsyncNetworking.csproj -c Release -p:DndBuildNative=false
           dotnet "$DND_COMPILER_DLL" --aot samples/AsyncNetworking/bin/Release/net8.0/AsyncNetworking.dll /tmp/async-networking.c
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-networking.c tests/network_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/network.c source/network_posix.c -o /tmp/async-networking
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/async-networking.c tests/network_host.c source/managed_runtime.c source/async_runtime.c source/text.c source/numeric.c source/timing.c source/network.c source/network_posix.c -lm -o /tmp/async-networking
           python3 tests/network_fixtures.py /tmp/async-networking
           python3 tests/network_fixtures.py /tmp/async-networking --gc-stress
+          dotnet run --project tests/SampleDownloadTests -c Release
       - name: Validate audio conversion and named loop sidecars
         if: matrix.group == 'audio-games'
         run: |
@@ -481,19 +482,24 @@ jobs:
         run: |
           dotnet run --project tests/GreenMenRulesSmoke -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/GreenMenRulesSmoke/bin/Release/net8.0/GreenMenRulesSmoke.dll /tmp/dnd-green-men-rules.c
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dnd-green-men-rules.c tests/green_men_rules_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/dnd-green-men-rules
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dnd-green-men-rules.c tests/green_men_rules_host.c source/numeric.c source/text.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/dnd-green-men-rules
           /tmp/dnd-green-men-rules
       - name: Validate Fox rules and AOT flight
         if: matrix.group == 'audio-games'
         run: |
+          python3 scripts/generate_sample_model.py --check
           dotnet run --project tests/FoxRulesSmoke -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/FoxRulesSmoke/bin/Release/net8.0/FoxRulesSmoke.dll /tmp/dnd-fox-rules.c
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dnd-fox-rules.c tests/fox_rules_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/dnd-fox-rules
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dnd-fox-rules.c tests/fox_rules_host.c source/numeric.c source/text.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/dnd-fox-rules
           /tmp/dnd-fox-rules
       - name: Validate Kart driving and peer-to-peer networking
         if: matrix.group == 'audio-games'
         run: |
           dotnet run --project tests/KartRulesSmoke -c Release
+          dotnet build tests/KartInputSmoke -c Release
+          dotnet "$DND_COMPILER_DLL" --aot tests/KartInputSmoke/bin/Release/net8.0/KartInputSmoke.dll /tmp/kart-input.c
+          cc -pthread -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/kart-input.c tests/kart_input_host.c source/input.c source/numeric.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/kart-input
+          /tmp/kart-input
           dotnet build tests/KartItemSmoke -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/KartItemSmoke/bin/Release/net8.0/KartItemSmoke.dll /tmp/kart-items.c
           cc -pthread -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/kart-items.c tests/kart_items_host.c source/numeric.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/kart-items
@@ -504,7 +510,9 @@ jobs:
           python3 tests/kart_network_peer.py /tmp/kart-network --gc-stress
       - name: Test Snake rules, state persistence and timed autosaves
         if: matrix.group == 'audio-games'
-        run: dotnet run --project tests/SnakeRulesSmoke/SnakeRulesSmoke.csproj -c Release
+        run: |
+          dotnet run --project tests/SnakeRulesSmoke/SnakeRulesSmoke.csproj -c Release
+          dotnet run --project tests/SampleRecordsTests -c Release
       - name: Compile Snake save/load game through managed AOT
         if: matrix.group == 'audio-games'
         run: |
@@ -742,7 +750,7 @@ jobs:
           test -s footprint/green-men/Game.dnd-addresses.json
           dotnet build tests/GreenMenRulesSmoke -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/GreenMenRulesSmoke/bin/Release/net8.0/GreenMenRulesSmoke.dll /tmp/green-men-rules.c
-          python3 scripts/ci_cc.py --compiler "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/green-men-rules.c build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/green-men-rules.elf
+          python3 scripts/ci_cc.py --compiler "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/green-men-rules.c source/numeric.c build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/green-men-rules.elf
           elf2dol footprint/green-men-rules.elf footprint/green-men-rules.dol
           python3 scripts/dol_sections.py --pad footprint/green-men-rules.dol
       - name: Build Fox polygon rail shooter with source maps
@@ -754,7 +762,7 @@ jobs:
           test -s footprint/fox/Game.dnd-addresses.json
           dotnet build tests/FoxRulesSmoke -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/FoxRulesSmoke/bin/Release/net8.0/FoxRulesSmoke.dll /tmp/fox-rules.c
-          python3 scripts/ci_cc.py --compiler "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/fox-rules.c build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/fox-rules.elf
+          python3 scripts/ci_cc.py --compiler "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/fox-rules.c source/numeric.c build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/fox-rules.elf
           elf2dol footprint/fox-rules.elf footprint/fox-rules.dol
           python3 scripts/dol_sections.py --pad footprint/fox-rules.dol
       - name: Build TEV shader demo with source maps
@@ -1149,7 +1157,7 @@ jobs:
       - name: Verify two consecutive C# source breakpoints in Dolphin
         if: matrix.group == 'debugger'
         id: cs_breakpoints
-        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2165 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:8 --expect-source ManagedGameCube/Program.cs:9 --logs dolphin-csharp-breakpoints --require-boot --dotnet-probe tools/DolphinDotNet.Debugger.Probe/bin/Release/net8.0/DolphinDotNet.Debugger.Probe.dll
+        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2165 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:9 --expect-source ManagedGameCube/Program.cs:10 --logs dolphin-csharp-breakpoints --require-boot --dotnet-probe tools/DolphinDotNet.Debugger.Probe/bin/Release/net8.0/DolphinDotNet.Debugger.Probe.dll
       - name: Verify managed stack and C# Step Over/Out in Dolphin
         if: matrix.group == 'debugger'
         id: cs_stack_steps
@@ -1158,7 +1166,7 @@ jobs:
         if: matrix.group == 'debugger'
         id: emulator_case_14
         continue-on-error: true
-        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2167 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:8 --expect-source ManagedGameCube/Program.cs:9 --logs dolphin-dap-source --require-boot --dap-adapter tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll
+        run: python3 scripts/dolphin_smoke.py dist/footprint/debug-symbols/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2167 --elf dist/footprint/debug-symbols/Game.elf --source-map dist/footprint/debug-symbols/dnd-il-debug.json --address-map dist/footprint/debug-symbols/Game.dnd-addresses.json --expect-source ManagedGameCube/Program.cs:9 --expect-source ManagedGameCube/Program.cs:10 --logs dolphin-dap-source --require-boot --dap-adapter tools/DolphinDotNet.DebugAdapter/bin/Release/net8.0/DolphinDotNet.DebugAdapter.dll
       - name: Verify DAP managed stack, primitive inspection and Step Over/Out in Dolphin
         if: matrix.group == 'debugger'
         id: emulator_case_15
@@ -1214,14 +1222,14 @@ jobs:
         id: disc_browser
         continue-on-error: true
         run: |
-          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2171 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=MANAGED MAIN: OK" --expect-text "lines=NO GAMECUBE DISC OR DEMO ISO AVAILABLE" --memory-after-symbol dnd_platform_wait_forever --logs dolphin-disc-browser --require-boot
+          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2171 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=NO GAMECUBE DISC OR DEMO ISO AVAILABLE" --memory-after-symbol dnd_device_end --logs dolphin-disc-browser --require-boot
       - name: Verify DiscBrowser reads inserted ISO metadata and files
         if: matrix.group == 'runtime'
         id: disc_browser_iso
         continue-on-error: true
         run: |
-          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --disc dist/footprint/test-disc.iso --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2172 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=MANAGED MAIN: OK" --expect-text "lines=Title: Fixture banner" --expect-text "lines=Banner RGBA size: 12288" --expect-text "lines=dvd:/top" --memory-after-symbol dnd_platform_wait_forever --logs dolphin-disc-browser-iso --require-boot
-          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --disc dist/footprint/test-disc-many.iso --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2172 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=MANAGED MAIN: OK" --expect-text "lines=dvd:/file5.bin" --memory-after-symbol dnd_platform_wait_forever --logs dolphin-disc-browser-many --require-boot
+          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --disc dist/footprint/test-disc.iso --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2172 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=Title: Fixture banner" --expect-text "lines=Banner RGBA size: 12288" --expect-text "lines=dvd:/top" --memory-after-symbol dnd_device_end --logs dolphin-disc-browser-iso --require-boot
+          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --disc dist/footprint/test-disc-many.iso --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2172 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=dvd:/file0.bin" --memory-after-symbol dnd_device_end --logs dolphin-disc-browser-many --require-boot
       - name: Verify all four controllers through Dolphin pipe inputs
         if: matrix.group == 'controllers'
         id: controller_inputs

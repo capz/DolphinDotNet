@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/DolphinDotNet.Core/DolphinDotNet.Core.csproj" />
     <Compile Include="../../samples/Pong/PongGame.cs" Link="PongGame.cs" />
     <Compile Include="../../samples/Pong/PongWaveforms.cs" Link="PongWaveforms.cs" />
   </ItemGroup>

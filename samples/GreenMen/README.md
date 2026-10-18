@@ -47,3 +47,12 @@ dotnet run --project tests/GreenMenRulesSmoke -c Release
 CI also runs these rules through AOT under memory sanitizers and forced GC,
 builds the actual PowerPC DOL, and drives the game using Dolphin pipe inputs to
 check start/fire, movement, pause/resume, returning to title and restarting.
+
+## API updates
+
+On the title screen hold Start and press Y to remap fire to A, X or Y;
+B cancels capture. Release the opening buttons before choosing. The input router
+suppresses held actions across title, play and pause transitions. Start+X remains
+an exit chord if X is rebound. Hits/damage pulse rumble. High scores are kept
+while no card is present and merged/saved when either slot receives a card
+(`DGRN` identity, two-second hotplug polling).

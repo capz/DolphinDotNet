@@ -6,7 +6,7 @@ internal static class Program
     {
         DebugOverlay.WriteLine("Hello from real C#!");
         DebugOverlay.WriteLine("Running through DolphinDotNet.");
-        DebugOverlay.WriteLine((40 + 2).ToString());
+        DebugOverlay.WriteLine($"ANSWER: {40+2:D2}   PI: {System.Math.PI:F3}");
         return 0;
     }
 }

@@ -17,12 +17,12 @@ internal sealed class GreenMenSounds : IDisposable
     internal void Play(GreenMenEvent events)
     {
         if((events&GreenMenEvent.Shot)!=0) { shotVoice?.Dispose();shotVoice=shot.Play(); }
-        if((events&GreenMenEvent.AlienHit)!=0) { hitVoice?.Dispose();hitVoice=hit.Play(); }
-        if((events&GreenMenEvent.PlayerHit)!=0) { damageVoice?.Dispose();damageVoice=damage.Play(); }
+        if((events&GreenMenEvent.AlienHit)!=0) { hitVoice?.Dispose();hitVoice=hit.Play();SampleFeedback.Pulse(.05f); }
+        if((events&GreenMenEvent.PlayerHit)!=0) { damageVoice?.Dispose();damageVoice=damage.Play();SampleFeedback.Pulse(.18f); }
     }
     public void Dispose()
     {
         shotVoice?.Dispose();hitVoice?.Dispose();damageVoice?.Dispose();
-        shot.Dispose();hit.Dispose();damage.Dispose();
+        SampleFeedback.Stop();shot.Dispose();hit.Dispose();damage.Dispose();
     }
 }

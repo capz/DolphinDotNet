@@ -23,7 +23,7 @@ if (File.ReadAllText(temp) != generated)
     throw new Exception("Default compilation and --aot produced different native programs.");
 
 var helloHost = Path.Combine(tempDirectory, "hello-host");
-Run("cc", $"-pthread -std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" \"{temp}\" \"{Path.Combine(root, "tests/hello_gamecube_host.c")}\" \"{Path.Combine(root, "source/managed_runtime.c")}\" \"{Path.Combine(root, "source/async_runtime.c")}\" -o \"{helloHost}\"");
+Run("cc", $"-pthread -std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" \"{temp}\" \"{Path.Combine(root, "tests/hello_gamecube_host.c")}\" \"{Path.Combine(root, "source/managed_runtime.c")}\" \"{Path.Combine(root, "source/async_runtime.c")}\" \"{Path.Combine(root, "source/numeric.c")}\" \"{Path.Combine(root, "source/text.c")}\" -lm -o \"{helloHost}\"");
 Run(helloHost, "");
 // Normal Release output must not link libdb or install a trap.
 // Debugger acceptance uses a separate managed Debug build.

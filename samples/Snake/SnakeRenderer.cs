@@ -3,11 +3,12 @@ using Dolphin.Graphics;
 
 internal enum SnakeScreen { Title, Playing, Paused, GameOver }
 
-/// <summary>All graphics are Draw2D filled rectangles, including a tiny 5x7 font.</summary>
+/// <summary>Draw2D rectangles with shared bitmap text.</summary>
 internal sealed class SnakeRenderer : IDisposable
 {
     private readonly GraphicsDevice device;
     private readonly Draw2D batch;
+    private readonly SampleText text=new SampleText();
     private readonly Color32 background=new Color32(12,20,29);
     private readonly Color32 field=new Color32(21,35,44);
     private readonly Color32 dark=new Color32(50,78,82);
@@ -29,68 +30,10 @@ internal sealed class SnakeRenderer : IDisposable
     private void Rect(float x,float y,float w,float h,Color32 color)=>
         batch.FillRectangle(new RectF(x,y,w,h),color);
 
-    private static ulong Glyph(char ch)
-    {
-        switch(ch)
-        {
-            case '0': return 0x3A33AE62EUL;
-            case '1': return 0x3884210C4UL;
-            case '2': return 0x7C444422EUL;
-            case '3': return 0x3E106420FUL;
-            case '4': return 0x211F4A988UL;
-            case '5': return 0x3E107843FUL;
-            case '6': return 0x3A317843EUL;
-            case '7': return 0x8422221FUL;
-            case '8': return 0x3A317462EUL;
-            case '9': return 0x3E10F462EUL;
-            case 'A': return 0x4631FC62EUL;
-            case 'B': return 0x3E317C62FUL;
-            case 'C': return 0x78210843EUL;
-            case 'D': return 0x3E318C62FUL;
-            case 'E': return 0x7C217843FUL;
-            case 'F': return 0x4217843FUL;
-            case 'G': return 0x7A31E843EUL;
-            case 'H': return 0x4631FC631UL;
-            case 'I': return 0x38842108EUL;
-            case 'J': return 0x19294211CUL;
-            case 'K': return 0x452519531UL;
-            case 'L': return 0x7C2108421UL;
-            case 'M': return 0x4631AD771UL;
-            case 'N': return 0x4631CD671UL;
-            case 'O': return 0x3A318C62EUL;
-            case 'P': return 0x4217C62FUL;
-            case 'Q': return 0x59358C62EUL;
-            case 'R': return 0x45257C62FUL;
-            case 'S': return 0x3E107043EUL;
-            case 'T': return 0x10842109FUL;
-            case 'U': return 0x3A318C631UL;
-            case 'V': return 0x11518C631UL;
-            case 'W': return 0x2AB5AC631UL;
-            case 'X': return 0x462A22A31UL;
-            case 'Y': return 0x108422A31UL;
-            case 'Z': return 0x7C222221FUL;
-            case '-': return 0xF8000UL;
-            case ':': return 0x8401080UL;
-            case '>': return 0x44441041UL;
-            case '!': return 0x100421084UL;
-            case '/': return 0x42222210UL;
-            case '.': return 0x18C000000UL;
-            default:return 0;
-        }
-    }
+
 
     private void Text(string value,int x,int y,int size,Color32 color)
-    {
-        for(int i=0;i<value.Length;i++)
-        {
-            ulong bits=Glyph(value[i]);
-            for(int row=0;row<7;row++)
-                for(int col=0;col<5;col++)
-                    if((bits & (1UL << (row*5+col)))!=0)
-                        Rect(x+col*size,y+row*size,size,size,color);
-            x+=6*size;
-        }
-    }
+    { text.Draw(batch,value,x,y,size*1.5f,color); }
 
     internal void Present(SnakeGame game,SnakeScreen screen,
                           int selection,bool canContinue,string saveMessage,bool connected)
@@ -171,5 +114,5 @@ internal sealed class SnakeRenderer : IDisposable
         Rect(x,y,Cell-2*inset,Cell-2*inset,color);
     }
 
-    public void Dispose()=>batch.Dispose();
+    public void Dispose(){text.Dispose();batch.Dispose();}
 }

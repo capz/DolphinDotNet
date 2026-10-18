@@ -58,3 +58,11 @@ For isolated host-side rules checks:
 ```sh
 dotnet run --project tests/PongRulesSmoke/PongRulesSmoke.csproj -c Release
 ```
+
+## API updates
+
+Both players use routed input with transition suppression. Paddle hits and
+match wins pulse the appropriate controller's rumble. Consecutive match-win
+records are persisted per player under `DPNG` as LeftStreak and RightStreak.
+Card insertion/removal is checked every two seconds and pending improvements
+save after insertion. The HUD uses the shared bitmap font.

@@ -43,3 +43,11 @@ python3 scripts/dolphin_shader_test.py samples/ShaderDemo/bin/Debug/net8.0/Shade
 This requires Dolphin, Xvfb and FFmpeg. `frame.png` and `results.json` are retained
 for inspection. Captures validate emulated output; final performance and precision
 on physical GameCube hardware remain a separate check.
+
+## API updates
+
+The main stick adjusts the low/high toon thresholds; the C-stick adjusts the
+bright color. A switches graph/preset rendering and Y resets parameters. Start
+pauses animation, B exits, and Z toggles statistics. Uniform slots are cached;
+changes update parameters between frames without recompiling the graph. The
+original default appearance remains the automated visual reference.

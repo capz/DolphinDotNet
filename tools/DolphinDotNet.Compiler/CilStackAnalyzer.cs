@@ -17,7 +17,7 @@ internal sealed record CilCallStackEffect(int PopCount,CilStackKind? PushKind);
 
 internal static class CilStackAnalyzer
 {
-    public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks,Func<CilInstruction,CilCallStackEffect?>? resolveCall=null,bool returnsValue=false,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion>? exceptionRegions=null,IReadOnlyList<CilStackKind>? arguments=null,IReadOnlyList<CilStackKind>? locals=null)
+    public static CilStackAnalysis Analyze(IReadOnlyList<CilBasicBlock> blocks,Func<CilInstruction,CilCallStackEffect?>? resolveCall=null,bool returnsValue=false,IReadOnlyList<System.Reflection.Metadata.ExceptionRegion>? exceptionRegions=null,IReadOnlyList<CilStackKind>? arguments=null,IReadOnlyList<CilStackKind>? locals=null,Func<CilInstruction,CilStackKind>? resolveField=null)
     {
         if(blocks.Count==0)return new CilStackAnalysis(new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>(),new Dictionary<int,CilStackState>());
         var entry=new Dictionary<int,CilStackState>{{blocks[0].Id,CilStackState.Empty}};
@@ -35,7 +35,7 @@ internal static class CilStackAnalyzer
         {
             var id=queue.Dequeue();var block=blocks[id];
             var stack=entry[id].Values.ToList();
-            foreach(var i in block.Instructions){instructionEntry[i.Offset]=new CilStackState(stack.ToArray());Apply(i,stack,resolveCall,returnsValue,arguments,locals);instructionExit[i.Offset]=new CilStackState(stack.ToArray());}
+            foreach(var i in block.Instructions){instructionEntry[i.Offset]=new CilStackState(stack.ToArray());Apply(i,stack,resolveCall,returnsValue,arguments,locals,resolveField);instructionExit[i.Offset]=new CilStackState(stack.ToArray());}
             var state=new CilStackState(stack.ToArray());exit[id]=state;
             foreach(var successor in block.Successors)
             {
@@ -55,7 +55,7 @@ internal static class CilStackAnalyzer
         return changed?new CilStackState(values):a;
     }
 
-    private static void Apply(CilInstruction i,List<CilStackKind> s,Func<CilInstruction,CilCallStackEffect?>? resolveCall,bool returnsValue,IReadOnlyList<CilStackKind>? arguments,IReadOnlyList<CilStackKind>? locals)
+    private static void Apply(CilInstruction i,List<CilStackKind> s,Func<CilInstruction,CilCallStackEffect?>? resolveCall,bool returnsValue,IReadOnlyList<CilStackKind>? arguments,IReadOnlyList<CilStackKind>? locals,Func<CilInstruction,CilStackKind>? resolveField)
     {
         switch(i.OpCode)
         {
@@ -85,10 +85,10 @@ internal static class CilStackAnalyzer
             case 0xd3 or 0xe0: Pop(s,i);Push(s,CilStackKind.NativeInt);break;
             case 0x14 or 0x72: Push(s,CilStackKind.ObjectReference); break;
             case 0x74 or 0x75: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;
-            case 0x7b: Pop(s,i);Push(s,CilStackKind.Unknown);break;
+            case 0x7b: Pop(s,i);Push(s,resolveField?.Invoke(i)??CilStackKind.Unknown);break;
             case 0x7c: Pop(s,i);Push(s,CilStackKind.ManagedPointer);break;
             case 0x7d: Pop(s,i);Pop(s,i);break;
-            case 0x7e: Push(s,CilStackKind.Unknown);break;
+            case 0x7e: Push(s,resolveField?.Invoke(i)??CilStackKind.Unknown);break;
             case 0x80: Pop(s,i);break;
             case 0x8c: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;
             case 0x8d: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;

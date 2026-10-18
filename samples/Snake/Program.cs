@@ -29,6 +29,7 @@ internal static class Program
         using var store=new SnakeSaveStore();
         using var renderer=new SnakeRenderer(GraphicsDevice.Default);
         var game=new SnakeGame();
+        var input=new SampleInput();
         var clock=new FrameClock { MaximumDeltaSeconds=0.2f };
         var autosave=new SaveInterval();
         SnakeScreen screen=SnakeScreen.Title;
@@ -38,7 +39,7 @@ internal static class Program
         while(true)
         {
             Controller.Update();
-            var pad=Controller.GetState(0);
+            var pad=input.Read((int)screen);
             float dt=clock.Tick(); // Used only during active, connected play.
             if(store.Update(dt,screen==SnakeScreen.Playing || screen==SnakeScreen.Paused?game:null))
                 autosave.Saved();
@@ -87,6 +88,7 @@ internal static class Program
                     SnakeMove result=game.Advance(dt);
                     if(result==SnakeMove.Died || result==SnakeMove.Won)
                     {
+                        SampleFeedback.Pulse(.2f);
                         store.Clear(); // A finished run is not resumable.
                         selection=1;
                         screen=SnakeScreen.GameOver;

@@ -102,8 +102,22 @@ checkpoint order, rescue, malformed/reordered packets, pairing, timeout/rejoin
 item pickups/use/hits and two real .NET UDP endpoints. `tests/KartNetworkSmoke` runs the production
 network adapter through AOT/native POSIX sockets against
 `tests/kart_network_peer.py`, including item snapshots/hit acknowledgements, loss and reconnection while driving.
+`tests/KartInputSmoke` executes the real controller cache/router and driving code
+through AOT after peer pairing, checking countdown, held acceleration, braking
+and steering with forced GC. Numeric acceptance also covers floating-point fields
+carried across branches, including PowerPC.
 `tests/KartItemSmoke` also executes the item contracts through AOT with forced
 GC/sanitizers and on PowerPC in Dolphin. Capture verifies the native kart, track
 and cyan item-box rendering without networking.
 Two physical BBA devices and cross-machine Dolphin LAN setup remain manual
 acceptance; host loopback tests do not validate bridge/TAP configuration.
+
+## API updates
+
+Production pickups use a timestamp-seeded `Random`; explicit seeds reproduce
+item choices in tests. Network retries and peer expiry use `Clock.Timestamp`,
+independent of capped simulation steps. Race display and transmitted finish times
+use a `Stopwatch`. Procedural engine audio follows speed/boost; pickups, item use
+and hits have cues and rumble. Best race milliseconds are saved as a checksummed
+`DKRT` record, merging the better time when a card is inserted in either slot.
+No card or network is required for single-player play.

@@ -44,11 +44,24 @@ GC Loader browsing additionally
 requires its firmware-backed SD interface; a PC file path is not a mounted
 GameCube filesystem path.
 
-The sample lists at most eight root files using a lazy enumerator, closes the
-enumerator, and unmounts volumes even if metadata or directory reads fail.
+The sample shows a scrolling list with eight visible rows, sorts directories
+before files, and unmounts volumes even if metadata or directory reads fail.
 Errors remain visible on the result screen. Z toggles statistics; Start exits.
 
 CI exercises ISO mounting, file access, read-only errors, and cleanup through the
 actual GameCube devoptab/newlib interfaces in headless Dolphin, using a synthetic
 read-only backing device. It also starts DiscBrowser without media. GC Loader
 and physical drive behavior still require hardware testing.
+
+## Interactive disc browser
+
+Probes an inserted GameCube disc/ODE first, then an optional GC Loader
+`games/demo.iso`. Shows disc title and banner, sorted directories before files,
+and a scrolling eight-row list. Enumeration is bounded to 256 directories plus
+256 files per directory; this is a browser demo, not an unbounded indexer.
+
+Up/down selects; A opens a directory; B opens its parent; X refreshes/remounts;
+Start exits; Z toggles statistics. Missing media leaves a usable status screen.
+Refreshing disposes the previous banner and releases mounts before replacing them.
+The browser lists files; it does not execute them. CI checks no-media startup and
+inserted ISO/banner/file access in Dolphin.

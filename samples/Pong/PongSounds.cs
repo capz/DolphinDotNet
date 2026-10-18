@@ -28,7 +28,7 @@ internal sealed class PongSounds : IDisposable
         else if((events&PongEvent.Paddle)!=0)
         {
             paddleVoice?.Dispose();
-            paddleVoice=paddle.Play();
+            paddleVoice=paddle.Play();SampleFeedback.Pulse(.035f,0);SampleFeedback.Pulse(.035f,1);
         }
         else if((events&PongEvent.Wall)!=0)
         {
@@ -39,6 +39,6 @@ internal sealed class PongSounds : IDisposable
     public void Dispose()
     {
         paddleVoice?.Dispose();wallVoice?.Dispose();scoreVoice?.Dispose();
-        paddle.Dispose();wall.Dispose();score.Dispose();
+        SampleFeedback.Stop();paddle.Dispose();wall.Dispose();score.Dispose();
     }
 }

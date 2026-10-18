@@ -18,6 +18,8 @@ internal sealed class KartItems
     internal readonly KartObject[] Objects=CreateObjects();
     internal readonly float[] Boxes=new float[BoxCount];
     private int pickups;
+    private readonly Random? random;
+    internal KartItems(int seed=0){if(seed!=0)random=new Random(seed);}
     private float useCooldown;
 
     internal static KartObject[] CreateObjects()
@@ -44,7 +46,7 @@ internal sealed class KartItems
             float dx=game.X-BoxX(i),dz=game.Z-BoxZ(i);
             if(dx*dx+dz*dz<6.25f)
             {
-                Held=(KartItem)(1+pickups%3);pickups++;Boxes[i]=6;
+                Held=(KartItem)(1+(random==null?pickups%3:random.Next(3)));pickups++;Boxes[i]=6;
             }
         }
         for(int i=0;i<Capacity;i++)

@@ -11,6 +11,9 @@ internal sealed class FoxRenderer : IDisposable
     private readonly Material material=new Material { Cull=CullMode.None };
     private readonly FoxHud hud;
     private int frame;
+    private Model? model;
+    private ModelInstance? instance;
+    private readonly Dolphin.Timing.FrameClock modelClock=new Dolphin.Timing.FrameClock {MaximumDeltaSeconds=.05f};
     internal FoxRenderer(GraphicsDevice device)
     {
         this.device=device;renderer=new Renderer(device);camera=new Camera(55,4f/3,1,160);
@@ -19,16 +22,29 @@ internal sealed class FoxRenderer : IDisposable
         try { box=FoxGeometry.Box(); }catch { ship.Dispose();throw; }
         try { ring=FoxGeometry.Ring(); }catch { box.Dispose();ship.Dispose();throw; }
         try { hud=new FoxHud(device); }catch { ring.Dispose();box.Dispose();ship.Dispose();throw; }
+        try
+        {
+            model=Model.FromPackage(ShipModel.Package);instance=model.CreateInstance();
+            instance.Animator.Play("Hover",true);
+        }
+        catch(Exception)
+        {
+            instance?.Dispose();instance=null;model?.Dispose();model=null;
+            Dolphin.Diagnostics.DebugOverlay.WriteLine("MODEL UNAVAILABLE - PROCEDURAL SHIP FALLBACK");
+        }
     }
     private void Draw(Mesh mesh,float x,float y,float z,float sx,float sy,float sz,Color32 tint,float pitch=0,float yaw=0,float roll=0)
     {
         transform.LocalPosition=new Vector3(x,y,z);transform.LocalScale=new Vector3(sx,sy,sz);
         transform.LocalRotation=Quaternion.Identity;
         if(pitch!=0 || yaw!=0 || roll!=0)transform.Rotate(pitch,yaw,roll);
-        material.Color=tint;renderer.DrawMesh(mesh,material,transform);
+        material.Color=tint;
+        if(instance!=null&&mesh==ship&&tint.Packed==Color32.White.Packed)renderer.DrawModel(instance,transform);
+        else renderer.DrawMesh(mesh,material,transform);
     }
     internal void Present(FoxGame game,bool connected)
     {
+        float dt=modelClock.Tick();if(instance!=null&&game.State!=FoxState.Paused)instance.Update(dt);
         frame++;device.BeginFrame(new Color32(7,16,36));renderer.Begin3D(camera);
         Draw(box,0,-5.7f,-64,26,.3f,150,new Color32(28,53,65));
         for(int i=0;i<12;i++)
@@ -67,5 +83,5 @@ internal sealed class FoxRenderer : IDisposable
         }
         renderer.End3D();hud.Present(game,connected);device.EndFrame();
     }
-    public void Dispose() { hud.Dispose();ring.Dispose();box.Dispose();ship.Dispose(); }
+    public void Dispose() { instance?.Dispose();model?.Dispose();hud.Dispose();ring.Dispose();box.Dispose();ship.Dispose(); }
 }

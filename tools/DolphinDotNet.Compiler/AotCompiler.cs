@@ -44,7 +44,7 @@ internal static class AotCompiler
                 var cfg=CilControlFlowGraph.Build(cil,body.ExceptionRegions);
                 var localStorage=ReadLocalStorage(assembly,method,model);
                 var argumentKinds=(method.IsStatic?Array.Empty<CilStackKind>():new[]{CilStackKind.ObjectReference}).Concat(method.Abi?.Parameters??Array.Empty<CilStackKind>()).ToArray();
-                CilStackAnalysis stackAnalysis;try{stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i,method),method.ReturnsValue,body.ExceptionRegions,argumentKinds,localStorage.Select(s=>s.Size>0?CilStackKind.ManagedPointer:s.Kind).ToArray());}catch(Exception ex){if(Environment.GetEnvironmentVariable("DND_DEBUG_IL")=="1")foreach(var i in cil)Console.Error.WriteLine($"{i.Offset:x4} {i.OpCode:x4} {i.Operand} {ResolveCallEffect(assembly.Metadata,model,i,method)}");throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex);}
+                CilStackAnalysis stackAnalysis;try{stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i,method),method.ReturnsValue,body.ExceptionRegions,argumentKinds,localStorage.Select(s=>s.Size>0?CilStackKind.ManagedPointer:s.Kind).ToArray(),i=>FieldStackKind(ResolveField(assembly.Metadata,model,i,method),i.OpCode==0x7b));}catch(Exception ex){if(Environment.GetEnvironmentVariable("DND_DEBUG_IL")=="1")foreach(var i in cil)Console.Error.WriteLine($"{i.Offset:x4} {i.OpCode:x4} {i.Operand} {ResolveCallEffect(assembly.Metadata,model,i,method)}");throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex);}
                 var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,localStorage,i=>ResolveCall(assembly.Metadata,model,i,method),i=>ResolveCallEffect(assembly.Metadata,model,i,method),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i,method),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i,method),i=>ResolveTypeForContext(assembly.Metadata,model,method,i),i=>ResolveGenericTypeParameter(assembly.Metadata,model,method,i),t=>model.Types.TryGetValue(t,out var vm)&&vm.IsValueType?(vm.InstanceSize,model.Fields.Values.Where(f=>f.DeclaringType==t&&!f.IsStatic&&f.IsReference).Select(f=>f.Offset).ToArray()):(0,null),(constraint,name)=>ResolveConstrained(assembly.Metadata,model,method,constraint,name),i=>ResolveArrayEnumerator(assembly.Metadata,model,method,i),i=>ReadFieldData(assembly,model,i),body.ExceptionRegions)
                     with { ExceptionRegions = ReadExceptionRegions(assembly.Metadata,body.ExceptionRegions) };
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
@@ -387,6 +387,17 @@ internal static class AotCompiler
         Type("System.Collections.Generic.IList`1","System.Collections.Generic.ICollection`1");Method("System.Collections.Generic.IList`1","get_Item",true);Method("System.Collections.Generic.IList`1","set_Item",false);Method("System.Collections.Generic.IList`1","IndexOf",true);Method("System.Collections.Generic.IList`1","Insert",false);Method("System.Collections.Generic.IList`1","RemoveAt",false);
         Type("System.Collections.Generic.IReadOnlyCollection`1","System.Collections.Generic.IEnumerable`1");Method("System.Collections.Generic.IReadOnlyCollection`1","get_Count",true);
         Type("System.Collections.Generic.IReadOnlyList`1","System.Collections.Generic.IReadOnlyCollection`1");Method("System.Collections.Generic.IReadOnlyList`1","get_Item",true);
+    }
+
+    // Preserve field types on the evaluation stack across branches. Unknown
+    // float fields otherwise become pointer-sized phi values and truncate motion.
+    private static CilStackKind FieldStackKind(FieldModel? field,bool instance)
+    {
+        if(field is null)return CilStackKind.Unknown;
+        if(instance&&field.StorageSize>0)return CilStackKind.ManagedPointer;
+        if(field.IsReference)return CilStackKind.ObjectReference;
+        if(field.Representation?.TypeName is "System.Single" or "System.Double")return CilStackKind.Float;
+        return field.Size==8?CilStackKind.I8:CilStackKind.I4;
     }
 
     private static void LoadDolphinDependencies(CompilationModel model,AssemblyModel root)

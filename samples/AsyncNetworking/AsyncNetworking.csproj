@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/DolphinDotNet.Core/DolphinDotNet.Core.csproj" />
+    <ProjectReference Include="../../src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
   </ItemGroup>
   <Import Project="../../sdk/DolphinDotNet.Sdk/Sdk/Sdk.targets" />
 </Project>

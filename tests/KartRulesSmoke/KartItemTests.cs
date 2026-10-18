@@ -9,6 +9,18 @@ internal static class KartItemTests
     { game.X=KartItems.BoxX(index);game.Z=KartItems.BoxZ(index);game.Update(KartGame.Step,0,false,false,false,false); }
     internal static void Run()
     {
+        // Production pickups use seeded Random; replaying a seed remains reproducible.
+        var seededA=new KartGame(1741);var seededB=new KartGame(1741);int kinds=0;
+        for(int i=0;i<48;i++)
+        {
+            seededA.Items.Held=seededB.Items.Held=KartItem.None;
+            seededA.Items.Boxes[0]=seededB.Items.Boxes[0]=0;
+            Box(seededA,0);Box(seededB,0);
+            Check(seededA.Items.Held==seededB.Items.Held,"Equal seeds reproduce pickup choices.");
+            int kind=(int)seededA.Items.Held;
+            Check(kind>=1&&kind<=3,"Random pickups contain a supported item.");kinds|=1<<kind;
+        }
+        Check(kinds==14,"Seeded pickups exercise every item category.");
         var game=new KartGame();Box(game,0);
         Check(game.Items.Held==KartItem.Turbo && game.Items.Boxes[0]>5,"Item box grants turbo and starts cooldown.");
         Check(game.Items.Use(game) && game.Boost==2 && game.Speed>=30,"L consumes turbo and accelerates immediately.");
