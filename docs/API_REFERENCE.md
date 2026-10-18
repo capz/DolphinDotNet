@@ -1310,3 +1310,12 @@ make -C out/Snake
 ~~~
 
 The output is `out/Snake/Game.dol`; devkitPPC, libogc2 and .NET 8 are required. Standalone bundles include the verified GameCube EXI correction.
+
+### GxEffect
+
+Managed TEV RGB programs: `ColorRamp(dark,bright)`,
+`ToonBands(low,high,dark,middle,bright)`, `FromPackage(bytes)`,
+`LoadAsync(path[,token])`, `StageCount`, `UniformCount`, `RequiresTexture`,
+`GetUniformName(slot)`, `GetUniformSlot(name)`, `SetColor(slot/name,color)`,
+`Dispose()`. Bind using `Material.Effect` or `Draw2D.SetEffect(effect/null)`.
+Uniform updates run between frames. See [effects and graph compilation](effects.md).

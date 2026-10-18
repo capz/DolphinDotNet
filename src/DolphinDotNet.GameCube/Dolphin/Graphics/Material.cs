@@ -4,6 +4,8 @@ namespace Dolphin.Graphics;
 /// <summary>Fixed-function material. Diffuse lighting uses a camera-space headlight.</summary>
 public sealed class Material
 {
+    public GxEffect? Effect {get;set;}
+    internal int EffectToken => Effect==null?0:Effect.Token;
     public Texture2D? Texture {get;set;}
     public Color32 Color {get;set;}=Color32.White;
     public BlendMode Blend {get;set;}
@@ -17,6 +19,7 @@ public sealed class Material
     internal void Check()
     {
         if(Texture!=null)Texture.Check();
+        if(Effect!=null){Effect.Check();if(Effect.RequiresTexture&&Texture==null)throw new ArgumentException("Effect requires a texture.");}
         if((int)Blend<0||(int)Blend>3||(int)Lighting<0||(int)Lighting>1||(int)Cull<0||(int)Cull>1||!(AlphaCutoff>=0&&AlphaCutoff<=1))throw new ArgumentException("Invalid material.");
     }
 }

@@ -1,12 +1,17 @@
 # Shader support on GameCube
 
+Managed presets and the first constrained material compiler are now implemented;
+see [managed effects](effects.md) for current APIs, graph schema and limits. The
+plans below retain the broader direction; multi-texture graphs, multipass effects
+and another backend are still future work.
+
 ## What works today
 
 GameCube's Flipper GPU has fixed vertex processing and a configurable **TEV
 pixel combiner**. Dolphin emulates that hardware. Its ability to use host GPU
 shaders internally does not let a GameCube executable submit GLSL, HLSL or SPIR-V.
 DolphinDotNet currently exposes TEV through `Dolphin.Graphics.Raw.GX`; managed
-`Material`/`Draw2D` select the runtime's built-in pipelines.
+`Material`/`Draw2D` support validated `GxEffect` programs as well as their default pipelines.
 
 [ShaderDemo](../samples/ShaderDemo/README.md) demonstrates actual per-fragment
 TEV operations: a grayscale reference, an animated color ramp, and two comparison
@@ -29,54 +34,35 @@ not an instruction count for arbitrary modern shader programs.
 | Multipass and indirect-texture effects | Distortion, reflection-like effects, small bloom/blur | Copies, extra draws, limited precision and EFB resources | After effect ownership |
 | Modern GPU shaders on another backend | General GLSL/HLSL-style materials | Requires a different graphics backend; GameCube needs fallback materials | Separate roadmap |
 
-### 1. Managed effect presets — recommended first slice
+### 1. Managed effect presets — implemented
 
-Add an immutable `GxEffect` description and a small parameter block, with
-`Material.Effect` and `Draw2D.SetEffect` as proposed entry points. Start with
-`ColorRamp` and `ToonBands`, using this demo's TEV equations and pixel tests.
-These names are proposals, not existing APIs.
+`GxEffect.ColorRamp` and `GxEffect.ToonBands` bind through `Material.Effect` and
+`Draw2D.SetEffect`. Programs are immutable, named color parameters update between
+frames, batch changes flush queued work, and native validation/lifetime rules
+protect resource use. ShaderDemo and rendered-pixel checks exercise the presets,
+a compiled graph, and restoration of the normal HUD pipeline. See
+[the API and lifecycle contract](effects.md).
 
-1. Describe each preset's stages, allowed inputs, uniforms and precision. Keep
-   the default effect identical to current rendering.
-2. Apply effects inside the native draw backend **after** it establishes the
-   standard GX state. Calling raw GX immediately before `DrawMesh` currently
-   fails to preserve custom TEV state because the backend restores its pipeline.
-3. Validate texture handles, stage/register budgets and parameters before any
-   GPU submission. Retain resource lifetimes using the existing token system;
-   reject disposed inputs and mutation during a primitive stream.
-4. Make Draw2D flush when effect or uniform bindings change. Cache unchanged
-   state, with no per-frame allocation or compilation. Reestablish state at
-   raw/managed pass boundaries and restore the diagnostic overlay.
-5. Run software-Dolphin pixel checks for each preset and for transitions between
-   two effects, default rendering and raw drawing. Check console/Dolphin hardware
-   backends separately for precision and performance.
+Next preset work can add texture-driven ramps, dissolve and extra material
+examples. Physical GameCube profiling remains a separate acceptance check.
 
-Deliverable: two useful effects available to ordinary C# sample code without raw
-GX calls. This is the smallest path to a reusable shader-like API.
+### 2. Restricted material graph / shader DSL compiled to TEV — implemented
 
-### 2. Restricted material graph / shader DSL compiled to TEV
+`DolphinDotNet.Effects` compiles a bounded RGB DAG at build time into DNEF v1.
+The SDK `DndEffect` item can embed the result directly into generated C# source.
+The first version supports raster/texture input, four named color parameters,
+channel replication, zero/one, add, multiply, mix and strict R8 greater-than.
+It shares expressions, folds exact identities, allocates four result registers
+and reports node-specific errors for stage/register exhaustion. The current toon
+graph uses nine stages and three live result registers.
 
-Build on the same effect representation. Accept a small typed graph with texture
-and raster inputs, constants, add, multiply, mix and comparisons. Compile at build
-time to a validated TEV program; expose parameter updates at runtime.
-
-1. Specify supported semantics first: fixed-point ranges, saturation, comparison
-   behavior and permitted texture coordinate sources. Include a CPU reference
-   evaluator with explicit quantization.
-2. Create an intermediate representation, constant folding and common-expression
-   elimination. Schedule stages, allocate TEV registers and texture bindings.
-3. Report an actionable build error when a graph cannot fit. Include stage count,
-   limiting resource and the originating node. Do not silently change the effect.
-4. Package the program and uniform layout as an asset; integrate asset validation
-   with the existing SDK build. Load it with bounded memory and version checks.
-5. Compare CPU reference results with Dolphin captures, including clamp boundaries
-   and comparisons. Add optimizer tests using equivalent graphs and deliberately
-   impossible graphs.
-
-Deliverable: portable-looking material expressions with an honest GameCube subset.
-General loops, arbitrary fragment memory access, derivatives and arbitrary floating
-point programs remain unsupported. A GLSL front end should wait until the subset
-and compiler are proven; accepting GLSL syntax does not remove hardware limits.
+[The graph schema](effects.md) documents precision, package loading and resource
+limits. Current compiler and native limits are deliberately narrower than the
+full GPU: one texture with existing UV0 coordinates, four color parameters,
+RGB expressions and no loops, derivatives or general source language. More
+texture inputs, coordinate expressions, richer folding and improved scheduling
+can follow without changing resource ownership. A GLSL front end should wait
+until the supported subset is mature; syntax cannot remove hardware limits.
 
 ### 3. CPU effects / software-generated content
 
@@ -135,8 +121,8 @@ host extension would also require a patched Dolphin and would not run on a conso
 
 ## Recommended sequence
 
-Ship the raw TEV demo and its pixel acceptance check first. Implement two managed
-presets next, then use them to establish the effect representation, uniform
-ownership and state-transition tests. Add indirect effects or the material graph
-compiler after that foundation, according to developer demand. Keep the separate
-backend proposal independent so it does not delay effects that can ship on GameCube.
+Managed presets and the first material compiler are implemented. Extend their
+pixel and hardware acceptance coverage before expanding the operation set. Add
+texture/coordinate inputs and indirect effects according to developer demand.
+Keep the separate programmable-backend proposal independent so it does not delay
+effects that can run on GameCube.

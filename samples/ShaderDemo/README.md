@@ -4,9 +4,9 @@ A self-contained demonstration of GameCube's GPU pixel combiners. It starts
 immediately with three panels, each drawing the same grayscale disk and ramp:
 
 - **Reference:** one stage passes interpolated vertex intensity through.
-- **Color ramp:** one stage mixes two colors using intensity; the bright color animates.
-- **Toon bands:** two R8 comparison stages produce three discrete color bands;
-  their thresholds animate.
+- **Color ramp:** a managed preset in two stages mixes two colors using intensity; the bright color animates.
+- **Toon bands:** a managed toon preset on the disk and a build-time compiled graph
+  on the strip produce three discrete color bands. Their thresholds animate.
 
 The CPU submits geometry and changes a few registers. TEV computes the ramp and
 comparisons per fragment. This illustrates shading, not physical sphere lighting.
@@ -21,13 +21,14 @@ dotnet build samples/ShaderDemo/ShaderDemo.sln -c Debug
 ```
 
 The native build needs the same devkitPro/libogc2 setup as other samples. To check
-C# compilation without it, add `-p:DndBuildNative=false`. Raw GX programs own their
-state within `GraphicsDevice.BeginRaw`/`EndRaw`; the HUD uses managed Draw2D after
-that pass, exercising restoration of the normal pipeline.
+C# compilation without it, add `-p:DndBuildNative=false`. The disks use `Material.Effect`; the right strip uses `Draw2D.SetEffect` with
+`CompiledEffect.Package`, generated from `toon.dndfx.json` by the SDK before C#
+compilation. The HUD uses the default pipeline after that batch, exercising state
+restoration. Parameter values update between frames; no graph compiles per frame.
 
 GameCube has no programmable vertex/fragment shader units. Its TEV hardware has
-16 stages and a small fixed-point operation/register set. Raw GX already exposes
-that functionality; `Material` does not currently accept custom effects. See
+16 stages and a small fixed-point operation/register set. Managed effects expose a constrained subset of that functionality. See
+[the effect API and graph schema](../../docs/effects.md). See
 [shader support plans](../../docs/shader-support.md) for preset APIs, a restricted
 material compiler, CPU effects, multipass effects and another-backend options.
 

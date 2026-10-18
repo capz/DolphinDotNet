@@ -37,6 +37,14 @@ def validate(rgb):
             levels.add(band)
     if levels!={0,1,2}:
         raise AssertionError(f'TEV did not produce all three bands: {levels}')
+    # The disk uses the managed toon preset; the strip uses the compiled graph.
+    for y,band in ((240,2),(275,1),(320,0)):
+        actual=pixel(528,y)
+        if max(abs(actual[c]-colors[band][c]) for c in range(3))>12:
+            raise AssertionError(f'Managed toon preset differs at {y}: {actual}')
+    hud=pixel(33,411)
+    if max(abs(hud[c]-(231,239,252)[c]) for c in range(3))>12:
+        raise AssertionError(f'Default HUD pipeline was not restored: {hud}')
     ramp=pixel(320)
     if not ramp[0]+35<ramp[1]<ramp[2] or ramp[2]<115:
         raise AssertionError(f'TEV color ramp differs: {ramp}')

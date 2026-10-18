@@ -39,7 +39,10 @@ internal static class NativeGraphics
     internal static int TexturePng(byte[] png,int linear) => throw Unsupported();
     internal static int TexturePackage(byte[] package,int linear) => throw Unsupported();
     internal static int TextureDimension(int token,int axis) => throw Unsupported();
-    internal static int MeshDraw(int mesh,int texture,float[] world,uint color,int flags,float cutoff) => throw Unsupported();
+    internal static int EffectCreate(byte[] package) => throw Unsupported();
+    internal static int EffectColor(int token,int slot,uint color) => throw Unsupported();
+    internal static int CanvasEffect(int token,int effect) => throw Unsupported();
+    internal static int MeshDraw(int mesh,int texture,float[] world,uint color,int flags,float cutoff,int effect) => throw Unsupported();
     internal static int MeshPrimitives(VertexPositionColor[] vertices,int offset,int count,int format,int primitive,float[] world,uint color,int flags) => throw Unsupported();
     internal static int CanvasCreate(int capacity) => throw Unsupported();
     internal static int CanvasBegin(int token,int width,int height) => throw Unsupported();

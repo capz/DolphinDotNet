@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <DndEffect Include="toon.dndfx.json" GeneratedSource="CompiledEffect.g.cs" ClassName="CompiledEffect" />
     <ProjectReference Include="../../src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
   </ItemGroup>
   <Import Project="../../sdk/DolphinDotNet.Sdk/Sdk/Sdk.targets" />

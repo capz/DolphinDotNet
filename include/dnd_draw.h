@@ -1,13 +1,14 @@
 #ifndef DND_DRAW_H
 #define DND_DRAW_H
 #include "dnd_managed.h"
+#include "dnd_effect.h"
 #include <stdint.h>
 #include <math.h>
 #include <stdbool.h>
 
 typedef struct { float x,y,z,nx,ny,nz,u,v; uint32_t color; } DndDrawVertex;
 typedef struct { const void *data; uint32_t bytes; int width,height,format; bool linear; } DndDrawTexture;
-typedef struct { uint32_t color; int flags; float cutoff; } DndDrawMaterial;
+typedef struct { uint32_t color; int flags; float cutoff; const DndDrawEffect *effect; } DndDrawMaterial;
 /* One graphics owner and one active pass: 1=3D, 2=2D, 3=raw, 4=compatibility immediate. */
 int dnd_device_begin(float r,float g,float b,float a);
 int dnd_device_end(void);
@@ -45,6 +46,10 @@ int dnd_texture_package(DndArray *package,int linear);
 int dnd_texture_dimension(int token,int axis);
 int dnd_mesh_create(DndArray *vertices,DndArray *indices,int format,int dynamic);
 int dnd_mesh_update(int token,DndArray *vertices,int offset,int count,int format);
+int dnd_effect_create(DndArray *package);
+int dnd_effect_color(int token,int slot,uint32_t color);
+int dnd_canvas_effect(int token,int effect);
+int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
 int dnd_mesh_draw(int mesh,int texture,DndArray *world,uint32_t color,int flags,float cutoff);
 int dnd_mesh_primitives(DndArray *vertices,int offset,int count,int format,int primitive,DndArray *world,uint32_t color,int flags);
 int dnd_canvas_create(int capacity);

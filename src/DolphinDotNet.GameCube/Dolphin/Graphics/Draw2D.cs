@@ -15,6 +15,7 @@ public sealed class Draw2D : IDisposable
     private readonly GraphicsDevice device;
     private readonly float[] scratch=new float[24];
     private bool active,disposed;
+    private GxEffect? effect;
     public Draw2D(GraphicsDevice device,Draw2DOptions? options=null)
     {
         if(device==null)throw new ArgumentNullException("device");this.device=device;
@@ -29,7 +30,13 @@ public sealed class Draw2D : IDisposable
     public void Begin()
     {
         Check();if(active)throw new InvalidOperationException("Batch already active.");
-        GraphicsDevice.Check(NativeGraphics.CanvasBegin(token,width==0?device.Width:width,height==0?device.Height:height),"Begin a device frame and end other drawing passes first.");active=true;
+        GraphicsDevice.Check(NativeGraphics.CanvasBegin(token,width==0?device.Width:width,height==0?device.Height:height),"Begin a device frame and end other drawing passes first.");active=true;effect=null;
+    }
+    /// <summary>Flush queued vertices before changing effects. Null restores the default pipeline.</summary>
+    public void SetEffect(GxEffect? value)
+    {
+        Require();if(value!=null)value.Check();
+        GraphicsDevice.Check(NativeGraphics.CanvasEffect(token,value==null?0:value.Token),"Cannot bind this effect.");effect=value;
     }
     public void End(){Require();GraphicsDevice.Check(NativeGraphics.CanvasEnd(token),"Batch could not finish.");active=false;}
     public void Flush(){Require();GraphicsDevice.Check(NativeGraphics.CanvasFlush(token),"Batch could not flush.");}
@@ -40,7 +47,7 @@ public sealed class Draw2D : IDisposable
     private void Check(){if(disposed)throw new ObjectDisposedException("Draw2D");}
     private void Require(){Check();if(!active)throw new InvalidOperationException("Begin the batch first.");}
     private void Vertex(int index,float x,float y,float u,float v){int at=index*4;scratch[at]=x;scratch[at+1]=y;scratch[at+2]=u;scratch[at+3]=v;}
-    private void Submit(int texture,int count,Color32 color){GraphicsDevice.Check(NativeGraphics.CanvasVertices(token,texture,scratch,count,color.Packed),"Invalid drawing coordinates, texture or exhausted batch capacity.");}
+    private void Submit(int texture,int count,Color32 color){if(effect!=null)effect.Check();GraphicsDevice.Check(NativeGraphics.CanvasVertices(token,texture,scratch,count,color.Packed),"Invalid drawing coordinates, texture or exhausted batch capacity.");}
     private static void Rectangle(RectF rectangle){if(!(rectangle.Width>=0&&rectangle.Height>=0))throw new ArgumentException("Invalid rectangle.");}
     private void Quad(int texture,RectF source,RectF destination,Color32 color,float rotation,Vector2 origin)
     {

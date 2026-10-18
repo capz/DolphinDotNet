@@ -33,13 +33,13 @@ internal sealed class ShaderHud : IDisposable
     {
         draw.Begin();
         Text("TEV SHADER LAB",28,52,5,white);
-        Text("GAMECUBE PIXEL COMBINERS",28,88,2,dim);
+        Text("MANAGED PRESETS AND COMPILED GRAPH",28,88,2,dim);
         Text("REFERENCE",42,132,3,white);
         Text("COLOR RAMP",246,132,3,cyan);
         Text("TOON BANDS",450,132,3,gold);
         Text("1 STAGE",74,370,2,dim);
-        Text("1 STAGE",282,370,2,dim);
-        Text("2 STAGES",486,370,2,dim);
+        Text("2 STAGES",282,370,2,dim);
+        Text("PRESET GRAPH",478,370,2,dim);
         Text("SAME GEOMETRY AND GRAYSCALE INPUT",28,410,3,white);
         Text(paused?"PAUSED":"ANIMATED REGISTERS",28,438,2,cyan);
         Text("START PAUSE   B EXIT   Z STATS",28,460,2,dim);

@@ -22,7 +22,7 @@ public sealed class Renderer
     {
         if(mesh==null)throw new ArgumentNullException("mesh");if(material==null)throw new ArgumentNullException("material");if(transform==null)throw new ArgumentNullException("transform");
         mesh.Check();material.Check();
-        GraphicsDevice.Check(NativeGraphics.MeshDraw(mesh.Token,material.TextureToken,transform.WorldMatrix,material.Color.Packed,material.Flags,material.AlphaCutoff),"Invalid mesh, material, transform or 3D pass.");
+        GraphicsDevice.Check(NativeGraphics.MeshDraw(mesh.Token,material.TextureToken,transform.WorldMatrix,material.Color.Packed,material.Flags,material.AlphaCutoff,material.EffectToken),"Invalid mesh, material, transform or 3D pass.");
     }
     public void DrawPrimitives(VertexPositionColor[] vertices,int offset,int vertexCount,PrimitiveType primitive,Transform transform)
     {

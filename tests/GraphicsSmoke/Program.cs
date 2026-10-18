@@ -24,15 +24,32 @@ internal static class Program
         buffer.Write(new byte[]{1,2,3,4});buffer.Flush();
         using var texturedMesh=Mesh.Create(new[]{new VertexPositionColorTexture(new Vector3(0,1,0),Color32.White,new Vector2(0,0)),new VertexPositionColorTexture(new Vector3(-1,-1,0),Color32.White,new Vector2(0,1)),new VertexPositionColorTexture(new Vector3(1,-1,0),Color32.White,new Vector2(1,1))});
         using var normalMesh=Mesh.Create(new[]{new VertexPositionNormalColorTexture(new Vector3(0,1,0),new Vector3(0,0,1),Color32.White,new Vector2(0,0)),new VertexPositionNormalColorTexture(new Vector3(-1,-1,0),new Vector3(0,0,1),Color32.White,new Vector2(0,1)),new VertexPositionNormalColorTexture(new Vector3(1,-1,0),new Vector3(0,0,1),Color32.White,new Vector2(1,1))});
+        var textureProgram=new byte[184];textureProgram[0]=68;textureProgram[1]=78;textureProgram[2]=69;textureProgram[3]=70;
+        textureProgram[4]=1;textureProgram[8]=1;textureProgram[12]=1;
+        textureProgram[176]=15;textureProgram[177]=15;textureProgram[178]=15;textureProgram[179]=8;
+        using var textureEffect=GxEffect.FromPackage(textureProgram);
+        textureProgram[179]=0; // Native program must retain its own validated copy.
+        using var effect=GxEffect.ColorRamp(Color32.Black,Color32.White);
+        if(effect.StageCount!=2||effect.GetUniformName(effect.GetUniformSlot("Bright"))!="Bright")return 9;
+        effect.SetColor("Bright",new Color32(20,100,200));
         var renderer=new Renderer();var camera=new Camera();var transform=new Transform();var material=new Material();
         device.BeginFrame(Color32.Black);
-        renderer.Begin3D(camera);renderer.DrawMesh(mesh,material,transform);material.Texture=texture;renderer.DrawMesh(texturedMesh,material,transform);material.Lighting=LightingMode.Diffuse;renderer.DrawMesh(normalMesh,material,transform);renderer.End3D();
+        renderer.Begin3D(camera);material.Effect=textureEffect;
+        try{renderer.DrawMesh(mesh,material,transform);return 12;}catch(ArgumentException){}
+        material.Texture=loaded;renderer.DrawMesh(mesh,material,transform);material.Texture=null;material.Effect=effect;renderer.DrawMesh(mesh,material,transform);material.Effect=null;material.Texture=texture;renderer.DrawMesh(texturedMesh,material,transform);material.Lighting=LightingMode.Diffuse;renderer.DrawMesh(normalMesh,material,transform);renderer.End3D();
         device.BeginRaw();GX.GX_SetCopyClear(new GXColor(0x11,0x22,0x33,0x44),0xffffff);GX.GX_SetTevColorS10(0,new GXColorS10(-1,2,-3,4));GU.guMtxIdentity(buffer.Address);GX.GX_Begin((byte)GXConstants.GX_TRIANGLES,(byte)GXConstants.GX_VTXFMT0,3);
         GX.GX_Position3f32(0,1,0);GX.GX_Position3f32(-1,-1,0);GX.GX_Position3f32(1,-1,0);GX.GX_End();device.EndRaw();
         batch.Begin();batch.FillRectangle(new RectF(0,0,10,10),Color32.White);batch.FillRectangle(new RectF(10,0,10,10),Color32.White);
         batch.DrawTexture(texture,new RectF(0,0,4,4),Color32.White);texture.Dispose();batch.End();
         if(batch.DrawCalls!=2)return 1;
         device.EndFrame();
+        using var queued=GxEffect.ToonBands(65,165,Color32.Black,new Color32(50,100,150),Color32.White);
+        device.BeginFrame(Color32.Black);batch.Begin();batch.SetEffect(queued);
+        batch.DrawTexture(loaded,new RectF(0,0,4,4),Color32.White);
+        try{queued.SetColor("Dark",Color32.White);return 10;}catch(InvalidOperationException){}
+        queued.Dispose(); // Queued vertices retain native state until frame end.
+        batch.SetEffect(null);batch.FillRectangle(new RectF(0,0,2,2),Color32.White);batch.End();device.EndFrame();
+        try{queued.SetColor(0,Color32.White);return 11;}catch(ObjectDisposedException){}
         using var atlas=Texture2D.Create(4,4,new byte[64]);
         using var font=new BitmapFont(atlas,1,1,32,16);
         var measured=font.MeasureText(" !\n!",2);if(measured.X!=4||measured.Y!=4)return 3;

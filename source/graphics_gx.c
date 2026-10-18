@@ -113,6 +113,21 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
         GX_InitTexObjLOD(&tex,texture->linear?GX_LINEAR:GX_NEAR,texture->linear?GX_LINEAR:GX_NEAR,0,0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
         GX_LoadTexObj(&tex,GX_TEXMAP0);GX_SetTexCoordGen(GX_TEXCOORD0,GX_TG_MTX2x4,GX_TG_TEX0,GX_IDENTITY);
     }
+    if(material->effect) {
+        const DndDrawEffect *fx=material->effect;
+        for(int k=0;k<fx->uniforms;k++)GX_SetTevKColor((u8)k,color(fx->colors[k]));
+        GX_SetNumTevStages((u8)fx->count);
+        for(int i=0;i<fx->count;i++) {
+            const DndTevStage *s=&fx->stages[i];u8 stage=(u8)i;
+            GX_SetTevDirect(stage);GX_SetTevSwapMode(stage,GX_TEV_SWAP0,GX_TEV_SWAP0);
+            GX_SetTevOrder(stage,texture?GX_TEXCOORD0:GX_TEXCOORDNULL,texture?GX_TEXMAP0:GX_TEXMAP_NULL,GX_COLOR0A0);
+            GX_SetTevKColorSel(stage,s->konst);
+            GX_SetTevColorIn(stage,s->a,s->b,s->c,s->d);
+            GX_SetTevColorOp(stage,s->op,GX_TB_ZERO,GX_CS_SCALE_1,GX_TRUE,s->dest);
+            GX_SetTevAlphaIn(stage,GX_CA_ZERO,texture?GX_CA_TEXA:GX_CA_ZERO,texture?GX_CA_RASA:GX_CA_ZERO,texture?GX_CA_ZERO:GX_CA_RASA);
+            GX_SetTevAlphaOp(stage,GX_TEV_ADD,GX_TB_ZERO,GX_CS_SCALE_1,GX_TRUE,GX_TEVPREV);
+        }
+    }
     GX_ClearVtxDesc();GX_SetVtxDesc(GX_VA_POS,GX_DIRECT);GX_SetVtxDesc(GX_VA_CLR0,GX_DIRECT);
     GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_POS,GX_POS_XYZ,GX_F32,0);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_CLR0,GX_CLR_RGBA,GX_RGBA8,0);
     if(lit){GX_SetVtxDesc(GX_VA_NRM,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);}
@@ -153,7 +168,7 @@ void dnd_graphics_rotate(float angle,float x,float y,float z) {
     float a=angle*0.01745329252f,c=cosf(a),s=sinf(a),q=1-c;
     float m[16]={c+x*x*q,y*x*q+z*s,z*x*q-y*s,0,x*y*q-z*s,c+y*y*q,z*y*q+x*s,0,x*z*q+y*s,y*z*q-x*s,c+z*z*q,0,0,0,0,1};multiply(immediate_world,immediate_world,m);
 }
-static void immediate_flush(void){if(!immediate_count)return;DndDrawMaterial mat={0xffffffffu,4,0};dnd_draw_backend_vertices(immediate_vertices,immediate_count,GX_TRIANGLES,NULL,&mat,immediate_world);dnd_performance_add_triangles((uint32_t)immediate_count/3);immediate_count=0;}
+static void immediate_flush(void){if(!immediate_count)return;DndDrawMaterial mat={0xffffffffu,4,0,NULL};dnd_draw_backend_vertices(immediate_vertices,immediate_count,GX_TRIANGLES,NULL,&mat,immediate_world);dnd_performance_add_triangles((uint32_t)immediate_count/3);immediate_count=0;}
 void dnd_graphics_begin_triangles(void){if(!immediate_pass())return;if(immediate_batch){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Triangle batch already active.");return;}immediate_batch=true;immediate_count=0;}
 void dnd_graphics_color(float r,float g,float b){if(!immediate_pass())return;if(!isfinite(r)||!isfinite(g)||!isfinite(b)||r<0||r>1||g<0||g>1||b<0||b>1){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Color must be finite and normalized.");return;}immediate_color=rgba(r,g,b,1);}
 void dnd_graphics_vertex(float x,float y,float z){if(!immediate_pass())return;if(!isfinite(x)||!isfinite(y)||!isfinite(z)){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Vertex must be finite.");return;}if(!immediate_batch){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"No triangle batch.");return;}if(immediate_count==1536)immediate_flush();immediate_vertices[immediate_count++]=(DndDrawVertex){x,y,z,0,0,1,0,0,immediate_color};}
@@ -180,12 +195,12 @@ void dnd_graphics_begin_overlay(void) {
 }
 void dnd_graphics_overlay_rect(float x,float y,float w,float h,float r,float g,float b,float a) {
     DndDrawVertex v[6]={{x,y,0,0,0,1,0,0,0},{x+w,y,0,0,0,1,0,0,0},{x+w,y+h,0,0,0,1,0,0,0},{x,y,0,0,0,1,0,0,0},{x+w,y+h,0,0,0,1,0,0,0},{x,y+h,0,0,0,1,0,0,0}};
-    DndDrawMaterial mat={rgba(r,g,b,a),1|8|16,0};for(int i=0;i<6;i++)v[i].color=0xffffffffu;
+    DndDrawMaterial mat={rgba(r,g,b,a),1|8|16,0,NULL};for(int i=0;i<6;i++)v[i].color=0xffffffffu;
     float world[16];identity(world);dnd_draw_backend_vertices(v,6,GX_TRIANGLES,NULL,&mat,world);
 }
 static void glyph_flush(void) {
     if(!glyph_vertices)return;
-    DndDrawMaterial mat={0xffffffffu,1|8|16,0};float world[16];identity(world);
+    DndDrawMaterial mat={0xffffffffu,1|8|16,0,NULL};float world[16];identity(world);
     dnd_draw_backend_vertices(immediate_vertices,glyph_vertices,GX_TRIANGLES,NULL,&mat,world);glyph_vertices=0;
 }
 void dnd_graphics_overlay_glyph_begin(unsigned quads,unsigned char shade){glyph_quads=quads;glyph_vertices=0;immediate_color=(uint32_t)shade<<24|(uint32_t)shade<<16|(uint32_t)shade<<8|255;}
