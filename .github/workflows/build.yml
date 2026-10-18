@@ -489,6 +489,11 @@ jobs:
       - name: Validate raw and managed graphics layers
         if: matrix.group == 'graphics-model'
         run: |
+          python3 tests/make_png_fixtures.py
+          git diff --exit-code -- tests/png_texture_fixtures.h
+          dotnet build samples/HttpTexture/HttpTexture.sln -c Debug -p:DndBuildNative=false
+          dotnet "$DND_COMPILER_DLL" --aot samples/HttpTexture/bin/Debug/net8.0/HttpTexture.dll /tmp/http-texture.c
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/http-texture.c -o /tmp/http-texture.o
           python3 tools/gx-bindings/generate.py
           git diff --exit-code -- src/DolphinDotNet.GameCube/Dolphin/Graphics/Raw include/dnd_gx_raw.h source/gx_raw.c tools/DolphinDotNet.Compiler/RawGXBindings.Generated.cs
           dotnet build tests/GraphicsSmoke/GraphicsSmoke.csproj -c Release
@@ -936,6 +941,10 @@ jobs:
           dotnet "$DND_COMPILER_DLL" --bundle tests/GraphicsSmoke/bin/Release/net8.0/GraphicsSmoke.dll /tmp/dnd-graphics --platform gamecube
           make -j2 CC="ccache $DEVKITPPC/bin/powerpc-eabi-gcc" -C /tmp/dnd-graphics V=1
           test -s /tmp/dnd-graphics/Game.dol
+          dotnet build samples/HttpTexture/HttpTexture.sln -c Debug -p:DndBuildNative=false
+          dotnet "$DND_COMPILER_DLL" --bundle samples/HttpTexture/bin/Debug/net8.0/HttpTexture.dll /tmp/dnd-http-texture --debug-symbols --sample-controls
+          make -j2 CC="ccache $DEVKITPPC/bin/powerpc-eabi-gcc" -C /tmp/dnd-http-texture V=1
+          test -s /tmp/dnd-http-texture/Game.dol
       - name: Test DOL alignment handling
         if: matrix.group == 'compat'
         run: python3 -m unittest discover -s tests -p test_dol_sections.py

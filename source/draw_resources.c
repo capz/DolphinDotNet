@@ -7,6 +7,7 @@
 #ifdef DND_GAMECUBE_STORAGE
 #include <gccore.h>
 #endif
+#include "dnd_texture_png.h"
 #define SLOTS 512
 #define BUDGET (16*1024*1024)
 enum { BUFFER=1,TEXTURE,MESH,CANVAS };
@@ -104,18 +105,34 @@ int dnd_texture_package(DndArray *a,int linear) {
     r->width=w;r->height=h;r->format=format;r->linear=linear!=0;memcpy(r->data,p+32,(size_t)bytes);
     dnd_draw_backend_flush(r->data,bytes,2);return token;
 }
-int dnd_texture_create(int w,int h,DndArray *rgba,int linear) {
+static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
     int bytes=texture_size(w,h,6);
-    if(dnd_device_active() || bytes<0 || !rgba || rgba->element_size!=1 || rgba->elements_are_references || rgba->length!=(uint32_t)(w*h*4))return 0;
+    if(dnd_device_active() || bytes<0 || !src)return 0;
     int token=create(TEXTURE,bytes,32);Resource *r=find(token,TEXTURE);if(!r)return 0;
     r->width=w;r->height=h;r->format=6;r->linear=linear!=0;
-    const unsigned char *src=rgba->data;int blocks=(w+3)/4;
+    int blocks=(w+3)/4;
     for(int y=0;y<h;y++)for(int x=0;x<w;x++) {
         int block=((y/4)*blocks+x/4)*64,at=((y&3)*4+(x&3))*2,source=(y*w+x)*4;
         r->data[block+at]=src[source+3];r->data[block+at+1]=src[source];
         r->data[block+32+at]=src[source+1];r->data[block+33+at]=src[source+2];
     }
     dnd_draw_backend_flush(r->data,bytes,2);return token;
+}
+int dnd_texture_create(int w,int h,DndArray *rgba,int linear) {
+    if(texture_size(w,h,6)<0 || !rgba || rgba->element_size!=1 || rgba->elements_are_references || rgba->length!=(uint32_t)(w*h*4))return 0;
+    return texture_rgba(w,h,rgba->data,linear);
+}
+int dnd_texture_png(DndArray *png,int linear) {
+    if(dnd_device_active() || dnd_raw_depth() || !png || png->element_size!=1 || png->elements_are_references || png->length>1024*1024)return 0;
+    const unsigned char *data=png->data;
+    if(!png_envelope(data,png->length))return 0;
+    int w=0,h=0,channels=0;
+    if(!stbi_info_from_memory(data,(int)png->length,&w,&h,&channels) || texture_size(w,h,6)<0)return 0;
+    unsigned char *rgba=stbi_load_from_memory(data,(int)png->length,&w,&h,&channels,4);
+    if(!rgba)return 0;
+    int token=texture_rgba(w,h,rgba,linear);
+    stbi_image_free(rgba);
+    return token;
 }
 int dnd_texture_dimension(int token,int axis) { Resource *r=find(token,TEXTURE);return !r?-1:axis==0?r->width:axis==1?r->height:r->format; }
 static bool matrix(DndArray *a,float *out) {

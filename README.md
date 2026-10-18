@@ -121,7 +121,7 @@ internal static class Program
 }
 ```
 
-See the [samples](samples/README.md) for [Fox](samples/Fox/README.md), [Green Men](samples/GreenMen/README.md), two-player Pong, memory-card Snake, rendering, automatic async networking and
+See the [samples](samples/README.md) for [HTTP PNG textures](samples/HttpTexture/README.md), [Fox](samples/Fox/README.md), [Green Men](samples/GreenMen/README.md), two-player Pong, memory-card Snake, rendering, automatic async networking and
 HTTP-to-ARAM streaming. Native platform APIs execute in the compiled console
 program. Every sample integrates the shared SDK so `dotnet run` builds the DOL
 and launches it in Dolphin.

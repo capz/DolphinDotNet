@@ -7,6 +7,7 @@ the GameCube runs generated native code, using only the supported AOT API subset
 | --- | --- | --- |
 | [HelloGameCube](HelloGameCube/Program.cs) | `int Main`, `DebugOverlay.WriteLine`, integer arithmetic and standard `Int32.ToString` | Prints a greeting and 42, then shows the result screen |
 | [ManagedGameCube](ManagedGameCube/Program.cs) | Cached controller snapshots, debug text and `ImmediateRenderer`; the scene belongs to `DemoScene`, not the framework | Rotating triangle; press Start on controller port 0 to exit |
+| [HttpTexture](HttpTexture/README.md) | Download a PNG with `HttpClient`, decode in memory into tiled RGBA8 and display it | Internet-capable BBA; DHCP/DNS defaults, B exits |
 | [AsyncNetworking](AsyncNetworking/Program.cs) | Standard `async Task<int> Main`, `HttpClient`, `Task.Run` and `ConfigureAwait(false)`; bounded Dolphin JSON parsing | Local DNS/HTTP fixture defaults; returns 0 when JSON `value` is 42, otherwise 1 |
 | [HardwareDiagnostics](HardwareDiagnostics/Program.cs) | Safe/extended GameCube device scanning, presence status, physical reset button, controlled reboot | Controller 1 A scans, Start+X restarts, Start+Y requests menu |
 | [DiscBrowser](DiscBrowser/README.md) | GC Loader SD mount, read-only GameCube ISO FST, original-game FST on DVD interface | GC Loader-compatible firmware or original DVD/ODE optional; skips unavailable devices |

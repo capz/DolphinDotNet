@@ -88,7 +88,15 @@ Draw transparent objects in the appropriate order. Transforms/cameras retain the
 existing column-major managed matrix convention.
 
 `Texture2D.Create` takes straight RGBA bytes and packs tiled GX_RGBA8 once during
-setup. `FromPackage`/`LoadAsync` load DNTX native texture packages. Loading
+setup. `Texture2D.FromPng(bytes, linear: true)` decodes an in-memory PNG and
+packs the same format, preserving alpha. It accepts grayscale, RGB, palette and
+RGBA PNGs (including 16-bit and Adam7), checks chunk CRCs and completion, and
+rejects malformed data. Encoded bytes are bounded to 1 MiB and decoder scratch
+to 8 MiB, in addition to the existing 16 MiB native graphics budget. Decode
+synchronously between frames, then reuse the texture; dispose it when done.
+See [HTTP image sample](../samples/HttpTexture/README.md).
+
+`FromPackage`/`LoadAsync` load DNTX native texture packages. Loading
 currently stages the full package in managed memory before copying to native
 storage; size the application heap for the largest package and other live
 managed objects. Dimensions are
