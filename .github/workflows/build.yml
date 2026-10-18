@@ -494,6 +494,10 @@ jobs:
         if: matrix.group == 'audio-games'
         run: |
           dotnet run --project tests/KartRulesSmoke -c Release
+          dotnet build tests/KartItemSmoke -c Release
+          dotnet "$DND_COMPILER_DLL" --aot tests/KartItemSmoke/bin/Release/net8.0/KartItemSmoke.dll /tmp/kart-items.c
+          cc -pthread -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/kart-items.c tests/kart_items_host.c source/numeric.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/kart-items
+          /tmp/kart-items
           dotnet build tests/KartNetworkSmoke -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/KartNetworkSmoke/bin/Release/net8.0/KartNetworkSmoke.dll /tmp/kart-network.c
           cc -pthread -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/kart-network.c tests/network_host.c source/network.c source/network_posix.c source/timing.c source/numeric.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/kart-network
@@ -767,6 +771,11 @@ jobs:
           make -j2 CC="ccache $DEVKITPPC/bin/powerpc-eabi-gcc" -C footprint/kart
           python3 scripts/verify_dol_elf.py footprint/kart/Game.elf footprint/kart/Game.dol
           test -s footprint/kart/Game.dnd-addresses.json
+          dotnet build tests/KartItemSmoke -c Release
+          dotnet "$DND_COMPILER_DLL" --aot tests/KartItemSmoke/bin/Release/net8.0/KartItemSmoke.dll /tmp/kart-items.c
+          python3 scripts/ci_cc.py --compiler "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/kart-items.c source/numeric.c build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/kart-items.elf
+          elf2dol footprint/kart-items.elf footprint/kart-items.dol
+          python3 scripts/dol_sections.py --pad footprint/kart-items.dol
       - name: Build and validate Snake save/load GameCube DOL
         run: |
           dotnet build samples/Snake/Snake.csproj -c Release -p:DndBuildNative=false
@@ -1127,7 +1136,9 @@ jobs:
         if: matrix.group == 'games'
         id: kart
         continue-on-error: true
-        run: python3 scripts/dolphin_kart_test.py dist/footprint/kart/Game.dol --logs dolphin-kart --seconds 90
+        run: |
+          python3 scripts/dolphin_smoke.py dist/footprint/kart-items.dol --seconds 25 --cpu-core 1 --gdb-port 2189 --elf dist/footprint/kart-items.elf --expect-word dnd_async_test_result=0x4153594e --memory-after-symbol dnd_async_test_done --logs dolphin-kart-items --require-boot
+          python3 scripts/dolphin_kart_test.py dist/footprint/kart/Game.dol --logs dolphin-kart --seconds 90
       - name: Verify Snake memory card initialization and frame rendering in Dolphin
         if: matrix.group == 'games'
         id: snake_boot
@@ -1253,6 +1264,7 @@ jobs:
             dolphin-green-men/
             dolphin-shader/
             dolphin-kart/
+            dolphin-kart-items/
             dolphin-fox/
             dolphin-fox-rules/
             dolphin-green-men-rules/

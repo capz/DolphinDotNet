@@ -19,6 +19,7 @@ internal static class Program
             float steer=pad.DPadLeft.IsHeld?-1:pad.DPadRight.IsHeld?1:pad.Stick.X;
             game.Update(dt,steer,pad.IsConnected && pad.A.IsHeld,pad.B.IsHeld,
                 pad.IsConnected && pad.R.IsHeld,pad.IsConnected && pad.X.IsHeld);
+            if(pad.L.WasPressed)game.Items.Use(game);
             network.Update(dt,game);
             if(network.Peer.Paired && !paired)game=new KartGame { Countdown=3,X=KartGame.Radius+(network.Peer.InsideLane?-2:2) };
             paired=network.Peer.Paired;

@@ -4,7 +4,8 @@ using System;
 internal sealed class KartGame
 {
     internal const float Radius=52f,HalfWidth=7f,Step=1f/60;
-    internal float X=Radius,Z,Heading,Speed,Height,VerticalSpeed,DriftCharge,Boost,Time,Countdown;
+    internal float X=Radius,Z,Heading,Speed,Height,VerticalSpeed,DriftCharge,Boost,Time,Countdown,Stun,Invulnerable;
+    internal readonly KartItems Items=new KartItems();
     internal int Lap,NextGate=1;
     internal bool Finished,Gliding,Drifting;
     private float accumulator;
@@ -22,9 +23,12 @@ internal sealed class KartGame
     }
     private void Tick(float steering,bool throttle,bool brake,bool drift,bool glide)
     {
+        Stun=Clamp(Stun-Step,0,2);Invulnerable=Clamp(Invulnerable-Step,0,2);
+        Items.Update(this,Step);
         if(Finished)return;
         if(Countdown>0){Countdown=Clamp(Countdown-Step,0,3);return;}
         Time+=Step;steering=Clamp(steering,-1,1);
+        if(Stun>0){throttle=false;steering=0;drift=false;glide=false;}
         float distance=Distance(X,Z),off=MathF.Abs(distance-Radius);
         Drifting=drift && Speed>9 && off<HalfWidth && Height<.1f;
         if(Drifting && MathF.Abs(steering)>.25f)DriftCharge=Clamp(DriftCharge+Step,0,1.4f);
@@ -56,6 +60,12 @@ internal sealed class KartGame
         if(pad && off<3 && Height==0 && Speed>5)
         { Boost=1.4f;if(angle>4)VerticalSpeed=9; }
         if(Distance(X,Z)>Radius+HalfWidth+13 || Distance(X,Z)<Radius-HalfWidth-13)Rescue();
+    }
+    internal bool Hit()
+    {
+        if(Countdown>0 || Finished || Invulnerable>0)return false;
+        Stun=1.1f;Invulnerable=1.8f;Speed*=.25f;Boost=DriftCharge=0;
+        Drifting=false;return true;
     }
     internal void Rescue()
     {

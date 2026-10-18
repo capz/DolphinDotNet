@@ -13,7 +13,9 @@ def validate(rgb):
     if not sky[2]>sky[0]+60:raise AssertionError(f'Missing island sky: {sky}')
     if not kart[0]>kart[2]+40:raise AssertionError(f'Missing orange player kart: {kart}')
     if not 40<road[0]<130 or max(road)-min(road)>55:raise AssertionError(f'Missing track: {road}')
-    return {'sky':sky,'kart':kart,'road':road}
+    item=pixel(360,222)
+    if not item[1]>item[0]+60 or not item[2]>item[0]+60:raise AssertionError(f'Missing cyan item box: {item}')
+    return {'sky':sky,'kart':kart,'road':road,'itemBox':item}
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)

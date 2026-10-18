@@ -36,6 +36,23 @@ internal sealed class KartRenderer : IDisposable
         }
         if(glider)Draw(box,x,y+2.6f,z,5.2f,.12f,1.6f,new Color32(255,237,120),yaw);
     }
+    private void ItemObjects(KartObject[] objects)
+    {
+        for(int i=0;i<KartItems.Capacity;i++)
+        {
+            var item=objects[i];if(item.Life<=0)continue;
+            if(item.Kind==KartItem.Hazard)
+            {
+                Draw(box,item.X,.15f,item.Z,1.6f,.3f,1.6f,new Color32(205,87,194),45);
+                Draw(box,item.X,.4f,item.Z,.6f,.35f,.6f,new Color32(255,192,237));
+            }
+            else
+            {
+                Draw(box,item.X,item.Height+.65f,item.Z,.7f,.7f,1.2f,new Color32(143,255,87),item.Heading*180/MathF.PI);
+                Draw(box,item.X,item.Height+.7f,item.Z,.3f,.3f,1.5f,Color32.White,item.Heading*180/MathF.PI);
+            }
+        }
+    }
     internal void Present(KartGame game,KartNetwork network,bool connected)
     {
         float fx=MathF.Sin(game.Heading),fz=MathF.Cos(game.Heading);
@@ -62,6 +79,14 @@ internal sealed class KartRenderer : IDisposable
             float a=i==0?.76f:4.71f;
             Draw(box,MathF.Cos(a)*52,.06f,MathF.Sin(a)*52,5,.1f,5,new Color32(255,191,62),-a*180/MathF.PI);
         }
+        for(int i=0;i<KartItems.BoxCount;i++)if(game.Items.Boxes[i]<=0)
+        {
+            float x=KartItems.BoxX(i),z=KartItems.BoxZ(i);
+            Draw(box,x,1.2f,z,1.7f,1.7f,1.7f,new Color32(81,217,239),game.Time*70);
+            Draw(box,x,2.2f,z,.7f,.3f,.7f,new Color32(255,233,107));
+        }
+        ItemObjects(game.Items.Objects);
+        if(network.Peer.Connected)ItemObjects(network.Peer.Objects);
         // Start/finish gantry and checkerboard.
         for(int i=0;i<10;i++)Draw(box,45.7f+i*1.4f,.05f,0,1.4f,.08f,1,
             i%2==0?Color32.White:new Color32(23,36,54));
@@ -69,9 +94,9 @@ internal sealed class KartRenderer : IDisposable
         Draw(box,60.5f,3,0,.5f,6,.5f,new Color32(255,235,202));
         Draw(box,52,6,0,18,.7f,1,new Color32(235,105,87));
         Draw(box,0,7,0,20,15,20,new Color32(100,149,121),25);
-        Kart(game.X,game.Height,game.Z,game.Heading,new Color32(244,170,68),game.Gliding);
+        Kart(game.X,game.Height,game.Z,game.Heading+game.Stun*12,game.Stun>0?new Color32(250,94,87):new Color32(244,170,68),game.Gliding);
         if(network.Peer.Connected)Kart(network.Peer.X,network.Peer.Height,network.Peer.Z,
-            network.Peer.Heading,new Color32(69,211,230),network.Peer.Height>1);
+            network.Peer.Heading+network.Peer.Stun*12,new Color32(69,211,230),network.Peer.Height>1);
         renderer.End3D();hud.Present(game,network,connected);device.EndFrame();
     }
     public void Dispose(){hud.Dispose();track.Dispose();box.Dispose();}

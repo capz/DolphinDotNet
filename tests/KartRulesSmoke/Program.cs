@@ -65,6 +65,7 @@ internal static class Program
         Check(countdown.Time==0 && countdown.Speed==0 && countdown.Countdown<3,"Race countdown holds the start grid.");
         Check(MathF.Abs(KartGame.Wrap(3.2f)+3.083185f)<.001f,"Heading interpolation takes the short arc.");
 
+        KartItemTests.Run();
         // Exercise the exact wire protocol through two real UDP endpoints.
         using var first=new UdpClient(new IPEndPoint(IPAddress.Loopback,0));
         using var second=new UdpClient(new IPEndPoint(IPAddress.Loopback,0));

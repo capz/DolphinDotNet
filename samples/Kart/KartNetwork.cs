@@ -64,6 +64,11 @@ internal sealed class KartNetwork : IDisposable
                 if(endpoint[1]!=peerPort || (remote!=null && !remote.Address.Equals(address)))continue;
                 if(Peer.Accept(receive,count))remote=new IPEndPoint(address,endpoint[1]);
             }
+            if(Peer.Paired)
+            {
+                game.Items.Acknowledge(Peer);
+                game.Items.HitRemote(game,Peer);
+            }
             sendIn-=seconds;
             if(sendIn<=0)
             {

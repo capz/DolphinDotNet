@@ -47,7 +47,7 @@ internal sealed class KartHud : IDisposable
         if(network.Peer.Connected)
         {
             Text("PEER LAP",24,112,2,cyan);Number(network.Peer.Lap>=3?3:network.Peer.Lap+1,1,110,112,2,white);
-            Text("GHOST CONTACT",24,130,2,dim);
+            Text(network.Peer.Stun>0?"PEER SPIN":network.Peer.Boost>0?"PEER BOOST":network.Peer.Held==KartItem.None?"PEER EMPTY":"PEER HAS ITEM",24,130,2,dim);
         }
         if(network.Peer.Paired)
         { Text("PLACE",520,168,2,cyan);Number(network.Position(game),1,558,187,4,white); }
@@ -56,6 +56,9 @@ internal sealed class KartHud : IDisposable
         { float a=i*.19634954f;Rect(571+(float)System.Math.Cos(a)*39,110+(float)System.Math.Sin(a)*39,3,3,dim); }
         Rect(571+game.X*.75f,110+game.Z*.75f,5,5,gold);
         if(network.Peer.Connected)Rect(571+network.Peer.X*.75f,110+network.Peer.Z*.75f,5,5,cyan);
+        string item=game.Items.Held==KartItem.Turbo?"TURBO":game.Items.Held==KartItem.Hazard?"SLICK":game.Items.Held==KartItem.Bolt?"PULSE":"EMPTY";
+        Text("ITEM "+item+"   L USE",365,432,2,gold);
+        if(game.Stun>0)Text("SPIN OUT",260,162,4,gold);
         Text("A DRIVE  B BRAKE  R DRIFT  X GLIDE  Y RESTART",24,450,2,white);
         Text("Z STATS   START B RESCUE   START X EXIT",24,467,2,dim);
         if(!connected)Text("CONNECT CONTROLLER",112,210,5,gold);

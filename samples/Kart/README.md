@@ -10,6 +10,7 @@ bitmap lettering are generated in C#. There are no downloaded game assets.
 - Stick / D-pad: steer. **A** accelerates, **B** brakes.
 - Hold **R** while turning at speed, charge the yellow meter, then release R
   for a mini turbo. Gold strips also boost; the far strip launches a jump.
+- Drive through a cyan item box; press **L** to use the held item.
 - Hold **X** in the air to glide and descend more slowly.
 - **Y** restarts your run. **Start+B** rescues the kart to the road;
   driving too far off the island also triggers rescue.
@@ -35,7 +36,7 @@ pair, each starts a fresh three-lap run with a three-second countdown. Your
 kart is orange; the peer is cyan. The HUD shows peer status, peer lap, approximate position and a
 mini-map. Starts are approximate LAN starts, not a synchronized competition
 clock. Y restarts only your local run. This is a friendly two-player race/time
-trial demonstration, without authoritative results, items, bots or collisions.
+trial demonstration, without authoritative results, bots or kart-to-kart collisions.
 
 The local kart remains responsive: fixed 60 Hz simulation, snapshots at 20 Hz,
 interpolated peer rendering with at most 150 ms extrapolation. Remote karts
@@ -49,10 +50,40 @@ finish; it still runs in the background.
 On LANs that suppress broadcast, set `KartNetwork.DirectPeer` to the other
 machine's IPv4 address **on each device** and rebuild. `Port` defaults to 28777;
 `KartPeer.Room` defaults to 701 and must match. Automatic discovery supports
-one other player; additional copies should use another room/port. The 48-byte
+one other player; additional copies should use another room/port. The 252-byte
 versioned, big-endian packet validates bounds, session identity, sequence and
 room before touching a remote visual. It is unauthenticated and intended for
 a trusted LAN. A restarting peer can pair after the old three-second lease.
+
+## Items
+
+Six cyan boxes are spread around the circuit. Each kart has its own pickups,
+so both players can collect from the same box. A collected box reappears after
+six seconds; you carry one item at a time. Pickups cycle through three types:
+
+- **Turbo:** immediately raises speed to at least 30 m/s and grants two seconds
+  of boost. Grass still slows the kart.
+- **Slick:** drops a pink road hazard behind the kart. It lasts 14 seconds.
+- **Pulse:** fires a green projectile straight ahead at 32 m/s. It expires after
+  four seconds or when it leaves the island; it does not home or bounce.
+
+Slicks and pulses cause a short spin-out and quarter the victim's speed.
+Brief invulnerability prevents stacked hits; gliding clears ground hazards.
+Your own objects can hit you after a one-second grace period, so items remain
+interactive offline. At most six objects per owner can be active; a full pool
+keeps the held item until there is space. Items cannot fire during the countdown,
+a spin-out or after finishing. Y/new paired races clear local objects/inventory.
+
+Each peer publishes its active items repeatedly in its versioned UDP snapshot.
+The victim checks collisions against that view, applies its own slowdown, and
+repeats a per-slot acknowledgement until newer items replace it. The owner then
+removes the consumed object. Unique item IDs survive local restarts, so delayed
+acknowledgements cannot consume a reused slot or apply the same hit twice. New
+peer identities clear old acknowledgement state. This tolerates ordinary packet
+loss. Snapshots older than 250 ms cannot cause new hits, avoiding damage from
+stale objects during a link outage. It does not implement lag compensation or an authoritative anti-cheat
+service. Both devices must use this item-enabled protocol (KAR2); the earlier
+48-byte demo will not pair with it.
 
 ## Build and validate
 
@@ -68,9 +99,11 @@ included. See [IDE setup](../../docs/ide-workflow.md) for the toolchain.
 
 `tests/KartRulesSmoke` verifies offline driving, braking, drift boost, gliding,
 checkpoint order, rescue, malformed/reordered packets, pairing, timeout/rejoin
-and two real .NET UDP endpoints. `tests/KartNetworkSmoke` runs the production
+item pickups/use/hits and two real .NET UDP endpoints. `tests/KartNetworkSmoke` runs the production
 network adapter through AOT/native POSIX sockets against
-`tests/kart_network_peer.py`, including loss and reconnection while driving.
-Dolphin capture verifies the native kart/track rendering without networking.
+`tests/kart_network_peer.py`, including item snapshots/hit acknowledgements, loss and reconnection while driving.
+`tests/KartItemSmoke` also executes the item contracts through AOT with forced
+GC/sanitizers and on PowerPC in Dolphin. Capture verifies the native kart, track
+and cyan item-box rendering without networking.
 Two physical BBA devices and cross-machine Dolphin LAN setup remain manual
 acceptance; host loopback tests do not validate bridge/TAP configuration.

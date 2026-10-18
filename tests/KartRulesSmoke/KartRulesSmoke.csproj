@@ -3,5 +3,6 @@
   <ItemGroup>
     <Compile Include="../../samples/Kart/KartGame.cs" Link="KartGame.cs" />
     <Compile Include="../../samples/Kart/KartPeer.cs" Link="KartPeer.cs" />
+    <Compile Include="../../samples/Kart/KartItems.cs" Link="KartItems.cs" />
   </ItemGroup>
 </Project>
