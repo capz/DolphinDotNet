@@ -276,7 +276,7 @@ paths, nonpositive baud, invalid TCP ports and invalid timeouts fail before conn
 The adapter supports one all-stop PowerPC context, source breakpoint replacement,
 stack pagination, continue/pause, bounded source Step Into/Over/Out and disconnect.
 Rider keeps desired breakpoint changes while running and applies them at the next
-stop (or before resume); direct DAP clients must pause before changing breakpoints.
+stop (or before resume); direct DAP clients now queue changes in the shared adapter until the next stop.
 Conditional breakpoints/logpoints remain explicitly unsupported. Native frames keep
 PCs without invented source positions; partial unwind/step-limit reasons go to the
 console. `scopes`/`variables` expose read-only primitive Arguments and Locals in

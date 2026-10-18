@@ -5,6 +5,12 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["DolPrepare"]=("dnd_dol_prepare","a",false),
+        ["DolBegin"]=("dnd_dol_begin","s",false),
+        ["DolStep"]=("dnd_dol_step","i",false),
+        ["DolInfo"]=("dnd_dol_info","ii",false),
+        ["DolDispose"]=("dnd_dol_dispose","i",false),
+        ["DolRequest"]=("dnd_dol_request","i",false),
         ["TextArrayLength"]=("dnd_text_array_length","o",false),
         ["TextArrayItem"]=("dnd_text_array_item","oi",true),
         ["FromCharArray"]=("dnd_text_from_array","a",true),
@@ -153,6 +159,7 @@ internal static class NativeStorageBindings
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
         if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");
+        if(call.Operation=="DolRequest")b.AppendLine("  dnd_async_require_application_thread();");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";
         if(call.Result is {} result)b.AppendLine($"  v{result.Id} = {(result.Kind==IrValueKind.ObjectReference?"(intptr_t)":"")}{expression};");else b.AppendLine($"  {expression};");
     }

@@ -298,6 +298,16 @@ jobs:
           grep -q 'dnd_storage_mount_disc_image' /tmp/dnd-disc-browser.c
           grep -q 'dnd_storage_mount_disc' /tmp/dnd-disc-browser.c
           grep -q 'dnd_storage_disc_header' /tmp/dnd-disc-browser.c
+      - name: Validate DOL preparation and deferred launch APIs
+        if: matrix.group == 'io'
+        run: |
+          dotnet build tests/DolLauncherSmoke -c Release
+          dotnet "$DND_COMPILER_DLL" --aot tests/DolLauncherSmoke/bin/Release/net8.0/DolLauncherSmoke.dll /tmp/dol-launcher.c
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dol-launcher.c tests/dol_host.c source/dol.c source/storage.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/dol-launcher
+          /tmp/dol-launcher
+          /tmp/dol-launcher --gc-stress
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dol-launcher.c tests/dol_host.c source/dol.c source/storage.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/dol-launcher32
+          /tmp/dol-launcher32 --gc-stress
       - name: Validate collections and storage I/O
         if: matrix.group == 'io'
         timeout-minutes: 3
@@ -709,6 +719,8 @@ jobs:
         run: bash scripts/build_exi_overlay.sh
       - name: Build ELF and DOL
         run: make V=1
+      - name: Build independent DOL replacement acceptance fixtures
+        run: bash tests/build_dol_replacement.sh footprint/dol-launcher
       - name: Build C# source-symbols-only Dolphin Emulator DOL
         run: |
           dotnet build samples/ManagedGameCube/ManagedGameCube.csproj -c Debug -p:DndBuildNative=false -p:DndDebugSymbols=true
@@ -1212,6 +1224,10 @@ jobs:
         id: timing_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/footprint/timing_tasks.dol --binary /usr/games/dolphin-emu-nogui --seconds 40 --cpu-core 1 --gdb-port 2162 --elf dist/footprint/timing_tasks.elf --expect-word dnd_async_test_result=0x4153594e --memory-after-symbol dnd_async_test_done --logs dolphin-timing --require-boot
+      - name: Verify DOL handoff restarts an independent libogc runtime
+        if: matrix.group == 'runtime'
+        run: |
+          python3 scripts/dolphin_smoke.py dist/footprint/dol-launcher/chain.dol --seconds 20 --cpu-core 1 --gdb-port 2175 --elf dist/footprint/dol-launcher/replacement.elf --expect-word dnd_dol_replacement_result=0x444f4c32 --memory-after-symbol dnd_dol_replacement_done --logs dolphin-dol-launcher --require-boot
       - name: Verify ISO mounts and file access with real GameCube newlib
         if: matrix.group == 'runtime'
         id: disc_access

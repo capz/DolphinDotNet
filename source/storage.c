@@ -365,6 +365,16 @@ void dnd_storage_unmount(int d) {
   mounted[d] = false;
   if (d == 3) iso_source_device = -1;
 }
+void dnd_storage_shutdown(void) {
+  for (int i = 0; i < HANDLE_CAP; i++) {
+    if (files[i].token) dnd_fs_close(files[i].token);
+    if (directories[i].token) dnd_fs_dir_close(directories[i].token);
+  }
+  /* The ISO-backed dvd volume owns a file on another mounted device. */
+  dnd_storage_unmount(3);
+  card_users[0] = card_users[1] = 0;
+  for (int d = 0; d < 7; d++) dnd_storage_unmount(d);
+}
 DndString *dnd_fs_full_path(DndManagedHeap *heap, DndString *path) {
   char raw[PATH_CAP], out[PATH_CAP];
   if (!utf8(path, raw) || normalize(raw, out) < 0)

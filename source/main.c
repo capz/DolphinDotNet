@@ -5,6 +5,8 @@
 #include "dnd_graphics.h"
 #include "dnd_console.h"
 #include "dnd_network.h"
+#include "dnd_storage.h"
+#include "dnd_dol.h"
 #include <gccore.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -34,6 +36,12 @@ int main(void) {
 
     intptr_t managed_result=dnd_aot_entry(&heap);
     dnd_audio_shutdown();
+    if (dnd_dol_pending() && managed_result==0 && !dnd_exception_pending()) {
+        dnd_input_shutdown();
+        dnd_net_stop();
+        dnd_storage_shutdown();
+    }
+    dnd_dol_finish(managed_result==0 && !dnd_exception_pending());
     dnd_console_write_line(managed_result==0?"MANAGED MAIN: OK":"MANAGED MAIN: FAILED");
 #ifdef DND_SAMPLE_CONTROLS
     dnd_console_write_line("Z: STATISTICS   START: EXIT");
