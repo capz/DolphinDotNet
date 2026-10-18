@@ -2,7 +2,7 @@
 #include "dnd_graphics.h"
 #include "dnd_gx_raw.h"
 #include <assert.h>
-int graphics_draws, graphics_vertices, graphics_raw_commands;
+int graphics_draws, graphics_vertices, graphics_raw_commands, graphics_effect_draws;
 static int frames;
 const unsigned char *graphics_expected_rgba;
 int graphics_expected_width,graphics_expected_height;
@@ -11,7 +11,7 @@ int dnd_graphics_width(void){return 640;}
 int dnd_graphics_height(void){return 480;}
 void dnd_graphics_begin_frame(float r,float g,float b,float a){(void)r;(void)g;(void)b;(void)a;assert(!frames);frames++;}
 void dnd_graphics_present(void){assert(frames);frames--;}
-void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const DndDrawTexture *t,const DndDrawMaterial *m,const float *world){assert(v&&n&&m&&world);assert(primitive==0x90);if(t){assert(t->data&&t->width==4&&t->height==4);const unsigned char *p=t->data;assert(p[0]==0&&p[1]==0);}graphics_draws++;graphics_vertices+=n;}
+void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const DndDrawTexture *t,const DndDrawMaterial *m,const float *world){assert(v&&n&&m&&world);assert(primitive==0x90);if(m->effect){assert(m->effect->count>=1&&m->effect->count<=16);if(m->effect->texture)assert(m->effect->stages[m->effect->count-1].d==8);graphics_effect_draws++;}if(t){assert(t->data&&t->width==4&&t->height==4);const unsigned char *p=t->data;assert(p[0]==0&&p[1]==0);}graphics_draws++;graphics_vertices+=n;}
 void dnd_draw_backend_camera(const float *v,const float *p){assert(v&&p);}
 void dnd_draw_set_camera(const float *v,const float *p){dnd_draw_backend_camera(v,p);}
 void dnd_draw_backend_2d(int w,int h){assert(w>0&&h>0);}

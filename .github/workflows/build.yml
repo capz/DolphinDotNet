@@ -498,6 +498,9 @@ jobs:
       - name: Validate raw and managed graphics layers
         if: matrix.group == 'graphics-model'
         run: |
+          dotnet run --project tests/EffectCompilerTests -c Release
+          dotnet run --project tools/DolphinDotNet.Effects -c Release -- samples/ShaderDemo/toon.dndfx.json /tmp/toon.dndfx samples/ShaderDemo/CompiledEffect.g.cs
+          git diff --exit-code -- samples/ShaderDemo/CompiledEffect.g.cs
           python3 tests/make_png_fixtures.py
           git diff --exit-code -- tests/png_texture_fixtures.h
           dotnet build samples/HttpTexture/HttpTexture.sln -c Debug -p:DndBuildNative=false
@@ -507,10 +510,10 @@ jobs:
           git diff --exit-code -- src/DolphinDotNet.GameCube/Dolphin/Graphics/Raw include/dnd_gx_raw.h source/gx_raw.c tools/DolphinDotNet.Compiler/RawGXBindings.Generated.cs
           dotnet build tests/GraphicsSmoke/GraphicsSmoke.csproj -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/GraphicsSmoke/bin/Release/net8.0/GraphicsSmoke.dll /tmp/graphics-smoke.c
-          cc -pthread -DDND_GRAPHICS_TEST -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke
+          cc -pthread -DDND_GRAPHICS_TEST -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/text.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke
           /tmp/graphics-smoke
           DND_ASYNC_MANUAL=0 /tmp/graphics-smoke
-          cc -pthread -m32 -DDND_GRAPHICS_TEST -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke32
+          cc -pthread -m32 -DDND_GRAPHICS_TEST -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/text.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke32
           /tmp/graphics-smoke32
       - name: Convert, package and validate model assets
         if: matrix.group == 'graphics-model'
@@ -733,6 +736,13 @@ jobs:
           python3 scripts/ci_cc.py --compiler "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/fox-rules.c build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/fox-rules.elf
           elf2dol footprint/fox-rules.elf footprint/fox-rules.dol
           python3 scripts/dol_sections.py --pad footprint/fox-rules.dol
+      - name: Build TEV shader demo with source maps
+        run: |
+          dotnet build samples/ShaderDemo/ShaderDemo.sln -c Debug -p:DndBuildNative=false
+          dotnet "$DND_COMPILER_DLL" --bundle samples/ShaderDemo/bin/Debug/net8.0/ShaderDemo.dll footprint/shader --debug-symbols --sample-controls
+          make -j2 CC="ccache $DEVKITPPC/bin/powerpc-eabi-gcc" -C footprint/shader
+          python3 scripts/verify_dol_elf.py footprint/shader/Game.elf footprint/shader/Game.dol
+          test -s footprint/shader/Game.dnd-addresses.json
       - name: Build and validate Snake save/load GameCube DOL
         run: |
           dotnet build samples/Snake/Snake.csproj -c Release -p:DndBuildNative=false
@@ -1031,6 +1041,9 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth python3 binutils libxcb-cursor0 curl ca-certificates
           test -x /usr/games/dolphin-emu-nogui
           xvfb-run -a /usr/games/dolphin-emu-nogui --version
+      - name: Install shader capture decoder
+        if: matrix.group == 'games'
+        run: apt-get install -y --no-install-recommends ffmpeg
       - uses: actions/setup-dotnet@v4
         if: matrix.group == 'debugger'
         with:
@@ -1071,6 +1084,14 @@ jobs:
         run: |
           python3 scripts/dolphin_smoke.py dist/footprint/fox-rules.dol --binary /usr/games/dolphin-emu-nogui --seconds 25 --cpu-core 1 --gdb-port 2174 --elf dist/footprint/fox-rules.elf --expect-word dnd_async_test_result=0x4153594e --memory-after-symbol dnd_async_test_done --logs dolphin-fox-rules --require-boot
           python3 scripts/dolphin_green_men_test.py dist/footprint/fox/Game.dol --game Fox --elf dist/footprint/fox/Game.elf --source-map dist/footprint/fox/dnd-il-debug.json --logs dolphin-fox
+      - name: Verify rendered TEV shader effects in Dolphin
+        if: matrix.group == 'games'
+        id: shader
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          python3 -m unittest discover -s tests -p test_dolphin_shader.py
+          python3 scripts/dolphin_shader_test.py dist/footprint/shader/Game.dol --logs dolphin-shader --seconds 90
       - name: Verify Snake memory card initialization and frame rendering in Dolphin
         if: matrix.group == 'games'
         id: snake_boot
@@ -1161,7 +1182,7 @@ jobs:
         run: |
           python3 - <<'PYRESULTS'
           import json, os, sys
-          expected = {'games': ['pong_boot', 'snake_boot', 'green_men', 'fox'], 'debugger': ['cs_breakpoints', 'cs_stack_steps', 'emulator_case_14', 'emulator_case_15', 'emulator_case_16'], 'runtime': ['minimal_boot', 'control_boot', 'app_boot', 'async_boot', 'numeric', 'timing_boot', 'disc_access', 'disc_browser', 'disc_browser_iso'], 'controllers': ['controller_inputs']}
+          expected = {'games': ['pong_boot', 'snake_boot', 'green_men', 'fox', 'shader'], 'debugger': ['cs_breakpoints', 'cs_stack_steps', 'emulator_case_14', 'emulator_case_15', 'emulator_case_16'], 'runtime': ['minimal_boot', 'control_boot', 'app_boot', 'async_boot', 'numeric', 'timing_boot', 'disc_access', 'disc_browser', 'disc_browser_iso'], 'controllers': ['controller_inputs']}
           results = json.loads(os.environ['STEP_RESULTS'])
           failed = [name for name in expected[os.environ['GROUP']] if results.get(name, {}).get('outcome') != 'success']
           if failed:
@@ -1186,6 +1207,7 @@ jobs:
             dolphin-timing/
             dolphin-pong/
             dolphin-green-men/
+            dolphin-shader/
             dolphin-fox/
             dolphin-fox-rules/
             dolphin-green-men-rules/

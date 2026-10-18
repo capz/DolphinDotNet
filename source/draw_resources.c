@@ -1,4 +1,5 @@
 #include "dnd_draw.h"
+#include "dnd_async.h"
 #include "dnd_performance.h"
 #include <stdlib.h>
 #include <string.h>
@@ -10,12 +11,13 @@
 #include "dnd_texture_png.h"
 #define SLOTS 512
 #define BUDGET (16*1024*1024)
-enum { BUFFER=1,TEXTURE,MESH,CANVAS };
+enum { BUFFER=1,TEXTURE,MESH,CANVAS,EFFECT };
 typedef struct {
     void *allocation;
     unsigned char *data;
     int kind,bytes,generation;
     bool pending;
+    int effect;
     int width,height,format,linear,vertices,indices,dynamic,capacity,count,texture,blend,draws,flushes;
 } Resource;
 static Resource slots[SLOTS];
@@ -179,10 +181,12 @@ static bool texture(int token,DndDrawTexture *out) {
     Resource *r=find(token,TEXTURE);if(!r)return false;
     *out=(DndDrawTexture){r->data,(uint32_t)r->bytes,r->width,r->height,r->format,r->linear!=0};return true;
 }
-int dnd_mesh_draw(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff) {
+int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect) {
     Resource *r=find(token,MESH);DndDrawTexture tx;float transform[16];
     if(dnd_device_pass()!=1||!r||!texture(tex,&tx)||!matrix(world,transform)||flags<0||flags>63||!isfinite(cutoff)||cutoff<0||cutoff>1)return -1;
-    DndDrawMaterial material={color,flags,cutoff};
+    Resource *fx=effect?find(effect,EFFECT):NULL;
+    if(effect&&(!fx||(((DndDrawEffect*)fx->data)->texture&&!tex)))return -1;
+    DndDrawMaterial material={color,flags,cutoff,fx?(DndDrawEffect*)fx->data:NULL};
     DndDrawVertex *v=(DndDrawVertex*)r->data;uint16_t *idx=(uint16_t*)(r->data+r->vertices*sizeof(DndDrawVertex));
     int count=r->indices?r->indices:r->vertices;
     for(int start=0;start<count;) {
@@ -192,8 +196,11 @@ int dnd_mesh_draw(int token,int tex,DndArray *world,uint32_t color,int flags,flo
     }
     dnd_performance_add_triangles((uint32_t)count/3);return 0;
 }
+int dnd_mesh_draw(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff) {
+    return dnd_mesh_draw_effect(token,tex,world,color,flags,cutoff,0);
+}
 int dnd_mesh_primitives(DndArray *a,int offset,int count,int format,int primitive,DndArray *world,uint32_t color,int flags) {
-    DndDrawMaterial material={color,flags,0};float transform[16];
+    DndDrawMaterial material={color,flags,0,NULL};float transform[16];
     if(dnd_device_pass()!=1||count<0||count>768||!matrix(world,transform)||!vertices(a,offset,count,format,staging))return -1;
     if((primitive==0x90&&count%3)||(primitive==0xa8&&count%2)||(primitive!=0x90&&primitive!=0xa8&&primitive!=0xb8))return -1;
     if(count)dnd_draw_backend_vertices(staging,count,primitive,NULL,&material,transform);
@@ -206,7 +213,7 @@ int dnd_canvas_create(int capacity) {
 }
 int dnd_canvas_begin(int token,int w,int h) {
     Resource *r=find(token,CANVAS);if(!r||w<1||h<1||w>16384||h>16384||dnd_device_pass_begin(2)<0)return -1;
-    active_canvas=token;r->count=0;r->texture=0;r->blend=1;r->draws=0;r->flushes=0;r->width=w;r->height=h;
+    active_canvas=token;r->count=0;r->texture=0;r->effect=0;r->blend=1;r->draws=0;r->flushes=0;r->width=w;r->height=h;
     dnd_draw_backend_2d(w,h);return 0;
 }
 int dnd_canvas_flush(int token) {
@@ -218,7 +225,12 @@ int dnd_canvas_flush(int token) {
         if(r->texture>0&&ti>=0&&ti<SLOTS&&slots[ti].generation==(r->texture>>10)&&slots[ti].kind==TEXTURE)retired=&slots[ti];
         if(retired)tx=(DndDrawTexture){retired->data,(uint32_t)retired->bytes,retired->width,retired->height,retired->format,retired->linear!=0};
         else if(!texture(r->texture,&tx))return -1;
-        DndDrawMaterial mat={0xffffffffu,r->blend|8|16,0};
+        Resource *fx=NULL;
+        if(r->effect){int index=(r->effect&1023)-1;
+            if(index<0||index>=SLOTS||slots[index].kind!=EFFECT||slots[index].generation!=(r->effect>>10))return -1;
+            fx=&slots[index];
+        }
+        DndDrawMaterial mat={0xffffffffu,r->blend|8|16,0,fx?(DndDrawEffect*)fx->data:NULL};
         dnd_draw_backend_vertices((DndDrawVertex*)r->data,r->count,0x90,r->texture?&tx:NULL,&mat,identity);
         dnd_performance_add_triangles((uint32_t)r->count/3);r->count=0;r->draws++;r->flushes++;
     }
@@ -227,6 +239,8 @@ int dnd_canvas_flush(int token) {
 int dnd_canvas_vertices(int token,int tex,DndArray *a,int count,uint32_t color) {
     Resource *r=find(token,CANVAS);DndDrawTexture tx;
     if(!r||token!=active_canvas||dnd_device_pass()!=2||!a||a->element_size!=4||a->elements_are_references||count<0||count>r->capacity||count%3||a->length<(uint32_t)count*4||!texture(tex,&tx))return -1;
+    Resource *fx=r->effect?find(r->effect,EFFECT):NULL;
+    if(r->effect&&(!fx||(((DndDrawEffect*)fx->data)->texture&&!tex)))return -1;
     const float *p=(const float*)a->data;for(int i=0;i<count*4;i++)if(!isfinite(p[i]))return -1;
     if(r->count && (r->texture!=tex || r->count+count>r->capacity))if(dnd_canvas_flush(token)<0)return -1;
     r->texture=tex;DndDrawVertex *v=(DndDrawVertex*)r->data+r->count;
@@ -278,3 +292,53 @@ int dnd_native_object_size(int kind) {
 
 int dnd_buffer_write(int token,int offset,DndArray *array,int index,int count){return dnd_buffer_copy(token,offset,array,index,count,1);}
 int dnd_buffer_read(int token,int offset,DndArray *array,int index,int count){return dnd_buffer_copy(token,offset,array,index,count,0);}
+
+/* Programs are immutable. Uniform writes are forbidden while a frame is active. */
+int dnd_effect_create(DndArray *a) {
+    dnd_async_require_application_thread();if(dnd_exception_pending())return 0;
+    if(dnd_device_active()||dnd_raw_depth()||!a||a->element_size!=1||a->elements_are_references||a->length<184||a->length>304)return 0;
+    const unsigned char *p=a->data;
+    unsigned count=le32(p+8),texture_flag=le32(p+12),uniforms=le32(p+16);
+    if(memcmp(p,"DNEF",4)||le32(p+4)!=1||count<1||count>16||texture_flag>1||uniforms>4||a->length!=176+count*8||le32(p+20)||le32(p+24)||le32(p+28))return 0;
+    for(unsigned i=0;i<4;i++) {
+        const unsigned char *name=p+32+i*36;int end=0;
+        for(int j=0;j<32;j++){if(!name[j])end=1;else if(end||name[j]<33||name[j]>126)return 0;}
+        if(!end||(i<uniforms?!name[0]:name[0]!=0))return 0;
+        for(unsigned j=0;j<i&&i<uniforms;j++)if(!strcmp((const char*)name,(const char*)p+32+j*36))return 0;
+    }
+    unsigned initialized=0;
+    for(unsigned i=0;i<count;i++) {
+        const DndTevStage *s=(const DndTevStage*)(p+176+i*8);
+        if((s->op!=0&&s->op!=8)||s->dest>3||s->reserved||(s->konst!=0&&(s->konst<12||s->konst>31)))return 0;
+        const unsigned char inputs[]={s->a,s->b,s->c,s->d};
+        for(int j=0;j<4;j++) {
+            unsigned v=inputs[j];
+            if(v==0||v==2||v==4||v==6){if(!(initialized&(1u<<(v/2))))return 0;}
+            else if(v==14){unsigned k=s->konst;if(k<12||k>31||((k-12)%4)>=uniforms)return 0;}
+            else if(v==8){if(!texture_flag)return 0;}
+            else if(v!=10&&v!=12&&v!=15)return 0;
+        }
+        initialized|=1u<<s->dest;
+    }
+    if(p[176+(count-1)*8+5]!=0)return 0;
+    int token=create(EFFECT,sizeof(DndDrawEffect),32);Resource *r=find(token,EFFECT);if(!r)return 0;
+    DndDrawEffect *effect=(DndDrawEffect*)r->data;
+    effect->count=(int)count;effect->texture=(int)texture_flag;effect->uniforms=(int)uniforms;
+    for(unsigned i=0;i<uniforms;i++){const unsigned char *c=p+64+i*36;effect->colors[i]=(unsigned)c[0]<<24|(unsigned)c[1]<<16|(unsigned)c[2]<<8|c[3];}
+    memcpy(effect->stages,p+176,count*8);return token;
+}
+int dnd_effect_color(int token,int slot,uint32_t color) {
+    dnd_async_require_application_thread();if(dnd_exception_pending())return -1;
+    Resource *r=find(token,EFFECT);
+    if(!r||dnd_device_active()||dnd_raw_depth())return -1;
+    DndDrawEffect *effect=(DndDrawEffect*)r->data;
+    if(slot<0||slot>=effect->uniforms)return -1;
+    effect->colors[slot]=color;return 0;
+}
+int dnd_canvas_effect(int token,int effect) {
+    Resource *r=find(token,CANVAS),*fx=effect?find(effect,EFFECT):NULL;
+    if(!r||token!=active_canvas||(effect&&!fx)||dnd_device_pass()!=2)return -1;
+    if(r->effect==effect)return 0;
+    if(dnd_canvas_flush(token)<0)return -1;
+    r->effect=effect;return 0;
+}

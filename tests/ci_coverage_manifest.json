@@ -72,6 +72,7 @@
       "Build disc filesystem and DiscBrowser startup acceptance DOLs",
       "Build Green Men GameCube sample with source maps",
       "Build Fox polygon rail shooter with source maps",
+      "Build TEV shader demo with source maps",
       "Build numeric contracts PowerPC acceptance DOL"
     ],
     "compat": [
@@ -99,7 +100,8 @@
       "Verify Pong synthesizes audio and presents frames in Dolphin",
       "Verify Snake memory card initialization and frame rendering in Dolphin",
       "Verify Green Men gameplay using real controller inputs",
-      "Verify Fox flight using real controller inputs"
+      "Verify Fox flight using real controller inputs",
+      "Verify rendered TEV shader effects in Dolphin"
     ],
     "debugger": [
       "Verify two consecutive C# source breakpoints in Dolphin",
