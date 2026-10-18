@@ -69,6 +69,14 @@ def run(args):
                             field=fields.get(name) or fields[f'<{name}>k__BackingField']
                             offset=field['offset'];size=field['storageBytes']
                             state[name]=struct.unpack_from('>f',data,offset)[0] if field['type']=='System.Single' else int.from_bytes(data[offset:offset+size],'big')
+                        if args.game=='Fox':
+                            array=int.from_bytes(data[fields['Shots']['offset']:fields['Shots']['offset']+4],'big')
+                            # DndArray: object header, length/stride, type pointer, flags/padding.
+                            header_size=model['objectHeaderSize']+8+model['pointerSize']+4
+                            header=memory(conn,array,header_size)
+                            count,stride=struct.unpack_from('>II',header,model['objectHeaderSize'])
+                            if count!=16 or stride!=1:raise ValueError('Unsupported Fox shot array layout')
+                            state['ShotsActive']=any(memory(conn,array+header_size,count))
                         stop=parse_stop_pc(request(conn,'c'))
                     if stop!=frame:raise ValueError(f'Unexpected game stop {stop:08x}')
                 if state is None:raise AssertionError('No connected controller/game update observed')
@@ -81,7 +89,9 @@ def run(args):
             if args.game=='Fox':
                 playing=observe(['A'])
                 require(playing['State']==1 and playing['Shield']==5,'A launches with full shield')
-                require(playing['fireTime']>0,'held A fires lasers')
+                require(not playing['ShotsActive'],'title launch press stays suppressed while held')
+                observe();playing=observe(['A'])
+                require(playing['ShotsActive'],'fresh A press fires lasers')
                 observe();moved=observe(['D_RIGHT','D_UP'])
                 require(moved['PlayerX']>playing['PlayerX'] and moved['PlayerY']>playing['PlayerY'],'D-pad flies right and up')
                 boosted=observe(['X'])
@@ -99,7 +109,9 @@ def run(args):
             else:
                 playing=observe(['A'])
                 require(playing['State']==1 and playing['Lives']==3 and playing['Wave']==1,'A starts a three-life game')
-                require(playing['ShotActive'] or playing['Score']>0,'held A fires a real projectile')
+                require(not playing['ShotActive'] and playing['Score']==0,'title start press stays suppressed while held')
+                observe();playing=observe(['A'])
+                require(playing['ShotActive'] or playing['Score']>0,'fresh A press fires a real projectile')
                 observe()
                 moved=observe(['D_LEFT'])
                 require(moved['PlayerX']<playing['PlayerX'],'D-pad moves the ship left')
