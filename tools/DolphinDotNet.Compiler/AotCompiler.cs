@@ -145,7 +145,7 @@ internal static class AotCompiler
         var def=assembly.Metadata.GetMethodDefinition(method.Handle);var body=assembly.PE.GetMethodBody(def.RelativeVirtualAddress);
         if(body.LocalSignature.IsNil)return Array.Empty<LocalStorage>();
         var types=assembly.Metadata.GetStandaloneSignature(body.LocalSignature).DecodeLocalSignature(new SignatureAbi(model),new SignatureAbi.Context(method.TypeArguments??Array.Empty<GenericRepresentation>(),method.MethodArguments??Array.Empty<GenericRepresentation>()));
-        return types.Select(t=>new LocalStorage(t.Size,t.Kind??CilStackKind.NativeInt,t.References)).ToArray();
+        return types.Select(t=>new LocalStorage(t.Size,t.Kind??CilStackKind.NativeInt,t.References,t.ScalarSize)).ToArray();
     }
 
     private static byte[] ReadFieldData(AssemblyModel assembly,CompilationModel model,CilInstruction instruction)

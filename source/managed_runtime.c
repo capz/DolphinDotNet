@@ -24,9 +24,11 @@ DND_SCALAR_TYPE(DND_TYPE_DOUBLE,"System.Double",8);
 static const uint32_t exception_refs[] = {(uint32_t)offsetof(DndException, message)};
 const DndType DND_TYPE_EXCEPTION = {"System.Exception", &DND_TYPE_OBJECT, sizeof(DndException), 0, NULL, 1, exception_refs, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_SYSTEM_EXCEPTION = {"System.SystemException", &DND_TYPE_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_ARITHMETIC_EXCEPTION = {"System.ArithmeticException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_DIVIDE_BY_ZERO_EXCEPTION = {"System.DivideByZeroException", &DND_TYPE_ARITHMETIC_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_FORMAT_EXCEPTION = {"System.FormatException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_TIMEOUT_EXCEPTION = {"System.TimeoutException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
-const DndType DND_TYPE_OVERFLOW_EXCEPTION = {"System.OverflowException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_OVERFLOW_EXCEPTION = {"System.OverflowException", &DND_TYPE_ARITHMETIC_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_PLATFORM_NOT_SUPPORTED_EXCEPTION = {"System.PlatformNotSupportedException", &DND_TYPE_NOT_SUPPORTED_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_INVALID_OPERATION_EXCEPTION = {"System.InvalidOperationException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_ARGUMENT_EXCEPTION = {"System.ArgumentException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
@@ -48,7 +50,7 @@ const DndType DND_TYPE_DRIVE_NOT_FOUND_EXCEPTION = {"System.IO.DriveNotFoundExce
 const DndType DND_TYPE_PATH_TOO_LONG_EXCEPTION = {"System.IO.PathTooLongException", &DND_TYPE_IO_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_OBJECT_DISPOSED_EXCEPTION = {"System.ObjectDisposedException", &DND_TYPE_INVALID_OPERATION_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 // Keep caught native exception types stable across errors raised by cleanup.
-static DndException builtin_exceptions[DND_EXCEPTION_NOT_SUPPORTED + 1];
+static DndException builtin_exceptions[DND_EXCEPTION_DIVIDE_BY_ZERO + 1];
 
 typedef struct DndHeapBlock {
     uint32_t size;
@@ -950,9 +952,13 @@ void dnd_exception_throw(DndExceptionKind kind, const char *message) {
         kind==DND_EXCEPTION_OPERATION_CANCELED?&DND_TYPE_OPERATION_CANCELED_EXCEPTION:
         kind==DND_EXCEPTION_ENCODER_FALLBACK?&DND_TYPE_ENCODER_FALLBACK_EXCEPTION:
         kind==DND_EXCEPTION_DECODER_FALLBACK?&DND_TYPE_DECODER_FALLBACK_EXCEPTION:
+        kind==DND_EXCEPTION_FORMAT?&DND_TYPE_FORMAT_EXCEPTION:
+        kind==DND_EXCEPTION_OVERFLOW?&DND_TYPE_OVERFLOW_EXCEPTION:
+        kind==DND_EXCEPTION_ARITHMETIC?&DND_TYPE_ARITHMETIC_EXCEPTION:
+        kind==DND_EXCEPTION_DIVIDE_BY_ZERO?&DND_TYPE_DIVIDE_BY_ZERO_EXCEPTION:
         kind==DND_EXCEPTION_NOT_SUPPORTED?&DND_TYPE_NOT_SUPPORTED_EXCEPTION:
         &DND_TYPE_EXCEPTION;
-    DndException *builtin = &builtin_exceptions[(unsigned)kind <= DND_EXCEPTION_NOT_SUPPORTED ? (unsigned)kind : 0];
+    DndException *builtin = &builtin_exceptions[(unsigned)kind <= DND_EXCEPTION_DIVIDE_BY_ZERO ? (unsigned)kind : 0];
     builtin->object.type = type;
     builtin->message = NULL;
     exception_object = (DndObject *)builtin;
