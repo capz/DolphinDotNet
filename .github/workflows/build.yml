@@ -1075,7 +1075,7 @@ jobs:
         timeout-minutes: 2
         run: |
           python3 -m unittest discover -s tests -p test_dolphin_shader.py
-          python3 scripts/dolphin_shader_test.py dist/footprint/shader/Game.dol --logs dolphin-shader
+          python3 scripts/dolphin_shader_test.py dist/footprint/shader/Game.dol --logs dolphin-shader --seconds 90
       - name: Verify Snake memory card initialization and frame rendering in Dolphin
         if: matrix.group == 'games'
         id: snake_boot

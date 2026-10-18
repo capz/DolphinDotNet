@@ -13,6 +13,20 @@ import subprocess
 import time
 from dolphin_smoke import check
 
+CAPTURE_TIMEOUT_SECONDS=90
+
+
+def wait_for_capture(process,frames,seconds):
+    deadline=time.monotonic()+seconds
+    while time.monotonic()<deadline:
+        if process.poll() is not None:raise RuntimeError('Dolphin exited before rendering')
+        captures=sorted(frames.glob('*.avi'))
+        for capture in captures:
+            if capture.stat().st_size>256*1024:return capture
+        time.sleep(.05)
+    sizes={p.name:p.stat().st_size for p in frames.glob('*.avi')}
+    raise TimeoutError(f'No rendered shader frames within {seconds}s; capture files: {sizes}')
+
 
 def validate(rgb):
     if len(rgb)!=640*480*3:
@@ -60,21 +74,24 @@ def run(args):
     (config/'GFX.ini').write_text('[Settings]\nDumpFormat = avi\nDumpCodec = ffv1\nDumpEncoder = ffv1\nDumpPixelFormat = bgr0\n')
     (config/'Logger.ini').write_text('[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 3\n[Logs]\nBOOT = True\nCORE = True\nPOWERPC = True\n')
     environment=dict(os.environ)
-    environment.update(HOME=str(root),DOLPHIN_EMU_USERPATH=str(root/'user'),SDL_AUDIODRIVER='dummy')
+    # Mesa also presents the software backend's output. Its host-sized worker
+    # pool can oversubscribe a small CI CPU quota during startup.
+    environment.update(HOME=str(root),DOLPHIN_EMU_USERPATH=str(root/'user'),
+                       SDL_AUDIODRIVER='dummy',LP_NUM_THREADS='2')
     for key,name in [('XDG_CONFIG_HOME','config'),('XDG_CACHE_HOME','cache'),('XDG_DATA_HOME','data')]:
         path=root/name;path.mkdir(exist_ok=True);environment[key]=str(path)
     started=time.monotonic();process=None;capture=None
     try:
         with (root/'emulator.log').open('w') as log:
-            process=subprocess.Popen(['xvfb-run','-a',args.binary,'--exec',str(args.dol.resolve())],
+            process=subprocess.Popen(['xvfb-run','-a',args.binary,'--user',str(root/'user'),
+                                      '--exec',str(args.dol.resolve())],
                 env=environment,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
-            while time.monotonic()-started<args.seconds:
-                if process.poll() is not None:raise RuntimeError('Dolphin exited before rendering')
-                captures=list((root/'user'/'Dump'/'Frames').glob('*.avi'))
-                if captures and captures[0].stat().st_size>256*1024:
-                    capture=captures[0];break
-                time.sleep(.05)
-            if capture is None:raise TimeoutError('No rendered shader frames before deadline')
+            try:
+                capture=wait_for_capture(process,root/'user'/'Dump'/'Frames',args.seconds)
+            except (RuntimeError,TimeoutError) as error:
+                log.flush()
+                diagnostics=(root/'emulator.log').read_text(errors='replace')
+                raise RuntimeError(f'{error}\nDolphin log ({root}/emulator.log):\n{diagnostics[-8000:]}') from error
     finally:
         if process is not None and process.poll() is None:
             os.killpg(process.pid,signal.SIGTERM)
@@ -103,5 +120,5 @@ if __name__=='__main__':
     parser.add_argument('dol',type=Path)
     parser.add_argument('--binary',default='/usr/games/dolphin-emu-nogui')
     parser.add_argument('--logs',type=Path,default=Path('dolphin-shader'))
-    parser.add_argument('--seconds',type=float,default=30)
+    parser.add_argument('--seconds',type=float,default=CAPTURE_TIMEOUT_SECONDS)
     run(parser.parse_args())

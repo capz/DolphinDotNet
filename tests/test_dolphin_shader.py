@@ -2,8 +2,9 @@
 import sys
 from pathlib import Path
 import unittest
+from unittest.mock import Mock,patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from dolphin_shader_test import validate
+from dolphin_shader_test import CAPTURE_TIMEOUT_SECONDS,validate,wait_for_capture
 
 
 def frame():
@@ -21,6 +22,26 @@ def frame():
 
 
 class ShaderCaptureTests(unittest.TestCase):
+    def test_slow_ci_startup_can_finish_after_thirty_seconds(self):
+        process=Mock();process.poll.return_value=None
+        frames=Mock();capture=Mock();capture.stat.return_value.st_size=512*1024
+        frames.glob.return_value=[capture]
+        with patch('dolphin_shader_test.time.monotonic',side_effect=[0,31]):
+            self.assertIs(capture,wait_for_capture(process,frames,CAPTURE_TIMEOUT_SECONDS))
+
+    def test_capture_deadline_remains_bounded_and_reports_partial_files(self):
+        process=Mock();frames=Mock();capture=Mock();capture.name='partial.avi'
+        capture.stat.return_value.st_size=1024;frames.glob.return_value=[capture]
+        with patch('dolphin_shader_test.time.monotonic',side_effect=[0,91]):
+            with self.assertRaisesRegex(TimeoutError,'partial.avi.*1024'):
+                wait_for_capture(process,frames,CAPTURE_TIMEOUT_SECONDS)
+
+    def test_emulator_exit_fails_without_waiting_for_deadline(self):
+        process=Mock();process.poll.return_value=1
+        with patch('dolphin_shader_test.time.monotonic',side_effect=[0,1]):
+            with self.assertRaisesRegex(RuntimeError,'exited before rendering'):
+                wait_for_capture(process,Mock(),CAPTURE_TIMEOUT_SECONDS)
+
     def test_three_real_effect_signatures(self):
         self.assertEqual([0,1,2],validate(frame())['toonBands'])
 
