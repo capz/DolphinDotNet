@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
+    <Compile Include="../../samples/Common/SampleInput.cs" Link="SampleInput.cs" />
+    <Compile Include="../../samples/Kart/KartGame.cs" Link="KartGame.cs" />
+    <Compile Include="../../samples/Kart/KartItems.cs" Link="KartItems.cs" />
+    <Compile Include="../../samples/Kart/KartPeer.cs" Link="KartPeer.cs" />
+  </ItemGroup>
+</Project>

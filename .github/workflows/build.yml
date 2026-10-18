@@ -496,6 +496,10 @@ jobs:
         if: matrix.group == 'audio-games'
         run: |
           dotnet run --project tests/KartRulesSmoke -c Release
+          dotnet build tests/KartInputSmoke -c Release
+          dotnet "$DND_COMPILER_DLL" --aot tests/KartInputSmoke/bin/Release/net8.0/KartInputSmoke.dll /tmp/kart-input.c
+          cc -pthread -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/kart-input.c tests/kart_input_host.c source/input.c source/numeric.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/kart-input
+          /tmp/kart-input
           dotnet build tests/KartItemSmoke -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/KartItemSmoke/bin/Release/net8.0/KartItemSmoke.dll /tmp/kart-items.c
           cc -pthread -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/kart-items.c tests/kart_items_host.c source/numeric.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/kart-items

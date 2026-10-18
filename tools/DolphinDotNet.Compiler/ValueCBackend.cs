@@ -57,7 +57,15 @@ internal static class ValueCBackend
             b.AppendLine($"const DndType dnd_type_{Id(tn)} = {{\"{tn}\", {parent}, sizeof(DndObject)+{totalSize}u, {interfaces.Length}u, {(interfaces.Length>0?$"dnd_interfaces_{Id(tn)}":"NULL")}, {refs.Length}u, {(refs.Length>0?$"dnd_refs_{Id(tn)}":"NULL")}, 0, {slots.Count}u, {(slots.Count>0?$"dnd_vtable_{Id(tn)}":"NULL")}, {interfaceMaps.Count}u, {(interfaceMaps.Count>0?$"dnd_imap_{Id(tn)}":"NULL")}}};");
         }
         var staticFields=model.Fields.Values.Where(f=>f.IsStatic&&graph.Types.Contains(f.DeclaringType)).OrderBy(f=>f.DeclaringType).ThenBy(f=>f.Name).ToArray();
-        foreach(var field in staticFields)b.AppendLine($"static intptr_t {StaticSymbol(field)} __attribute__((unused));");
+        foreach(var field in staticFields)
+        {
+            var storageType=field.Representation?.TypeName switch
+            {
+                "System.Single"=>"float", "System.Double"=>"double",
+                "System.Int64" or "System.UInt64"=>"int64_t", _=>"intptr_t"
+            };
+            b.AppendLine($"static {storageType} {StaticSymbol(field)} __attribute__((unused));");
+        }
         var initializedTypes=graph.Types.Where(t=>TypeInitializer(t,model) is not null).OrderBy(t=>t).ToArray();
         foreach(var type in initializedTypes){b.AppendLine($"static uint8_t dnd_cctor_state_{Id(type)};");b.AppendLine($"static void {EnsureSymbol(type)}(void);");}
         foreach(var m in methods)b.AppendLine($"{ReturnCType(m,model)} {Symbol(m.Key)}({Parameters(m,model)});");

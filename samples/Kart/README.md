@@ -102,6 +102,10 @@ checkpoint order, rescue, malformed/reordered packets, pairing, timeout/rejoin
 item pickups/use/hits and two real .NET UDP endpoints. `tests/KartNetworkSmoke` runs the production
 network adapter through AOT/native POSIX sockets against
 `tests/kart_network_peer.py`, including item snapshots/hit acknowledgements, loss and reconnection while driving.
+`tests/KartInputSmoke` executes the real controller cache/router and driving code
+through AOT after peer pairing, checking countdown, held acceleration, braking
+and steering with forced GC. Numeric acceptance also covers floating-point fields
+carried across branches, including PowerPC.
 `tests/KartItemSmoke` also executes the item contracts through AOT with forced
 GC/sanitizers and on PowerPC in Dolphin. Capture verifies the native kart, track
 and cyan item-box rendering without networking.
