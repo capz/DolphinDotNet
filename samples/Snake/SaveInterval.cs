@@ -1,4 +1,5 @@
-/// <summary>120 seconds of active play between saves; retry a failed save after 15 seconds.</summary>
+/// <summary>120 seconds of active play between saves, with a 15-second failure
+/// fallback. SnakeSaveStore also retries queued writes on its card polls.</summary>
 internal sealed class SaveInterval
 {
     internal const float NormalSeconds=120f;

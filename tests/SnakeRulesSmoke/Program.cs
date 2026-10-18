@@ -95,7 +95,8 @@ internal static class Program
         timer.Saved();
         Check(!timer.Advance(119f) && timer.Advance(1f),
               "Successful saves reset the two-minute interval.");
-        Console.WriteLine("Snake gameplay, save format, corruption and autosave tests passed");
+        CardHotplugTests.Run();
+        Console.WriteLine("Snake gameplay, serialization, autosave and hotplug tests passed");
         return 0;
     }
 }

@@ -26,9 +26,20 @@ memory card in one of the slots.
 
 The sample saves immediately on New Game, every **120 seconds of connected,
 active gameplay** (pauses and menus do not count), and when returning to the
-title screen with B. Failed periodic saves retry after 15 active seconds.
-A game over clears its resumable save. If no memory card is available, play
-still works, but saves and Continue are disabled; the status line explains why.
+title screen with B.
+A game over clears its resumable save. Both slots are polled every **two seconds**
+with `MemoryCards.Update`/`GetState`. Removing the mounted card releases it and
+clears Continue availability; a card in the other slot can take over. Inserting
+a card during play or pause saves the current run at the next poll. At the
+title screen, an inserted card makes its existing save available for Continue
+without automatically loading or overwriting it.
+
+If no card is available, play still works. Requested saves remain queued and
+begin once a writable card is present, including after B returns to the title.
+Pending writes and failed mounts retry on the two-second poll; game over or
+New Game cancels the previous pending run. A busy/unknown probe preserves the
+last confirmed connection state. The status line reports failures; physical
+presence does not guarantee a formatted, writable card.
 
 `SnakeSaveStore` uses `MemoryCard.Mount`, `GetEntries`, `ReadAllBytes`,
 `WriteSave`, `Delete`, and `Dispose`. `WriteSave` provides the card's

@@ -40,6 +40,8 @@ internal static class Program
             Controller.Update();
             var pad=Controller.GetState(0);
             float dt=clock.Tick(); // Used only during active, connected play.
+            if(store.Update(dt,screen==SnakeScreen.Playing || screen==SnakeScreen.Paused?game:null))
+                autosave.Saved();
             if(screen==SnakeScreen.Title)
             {
                 if(pad.X.WasPressed)return 0;
