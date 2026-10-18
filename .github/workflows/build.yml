@@ -490,6 +490,14 @@ jobs:
           dotnet "$DND_COMPILER_DLL" --aot tests/FoxRulesSmoke/bin/Release/net8.0/FoxRulesSmoke.dll /tmp/dnd-fox-rules.c
           cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dnd-fox-rules.c tests/fox_rules_host.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/dnd-fox-rules
           /tmp/dnd-fox-rules
+      - name: Validate Kart driving and peer-to-peer networking
+        if: matrix.group == 'audio-games'
+        run: |
+          dotnet run --project tests/KartRulesSmoke -c Release
+          dotnet build tests/KartNetworkSmoke -c Release
+          dotnet "$DND_COMPILER_DLL" --aot tests/KartNetworkSmoke/bin/Release/net8.0/KartNetworkSmoke.dll /tmp/kart-network.c
+          cc -pthread -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/kart-network.c tests/network_host.c source/network.c source/network_posix.c source/timing.c source/numeric.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/kart-network
+          python3 tests/kart_network_peer.py /tmp/kart-network --gc-stress
       - name: Test Snake rules, state persistence and timed autosaves
         if: matrix.group == 'audio-games'
         run: dotnet run --project tests/SnakeRulesSmoke/SnakeRulesSmoke.csproj -c Release
@@ -752,6 +760,13 @@ jobs:
           make -j2 CC="ccache $DEVKITPPC/bin/powerpc-eabi-gcc" -C footprint/shader
           python3 scripts/verify_dol_elf.py footprint/shader/Game.elf footprint/shader/Game.dol
           test -s footprint/shader/Game.dnd-addresses.json
+      - name: Build Kart peer-to-peer racer with source maps
+        run: |
+          dotnet build samples/Kart/Kart.sln -c Debug -p:DndBuildNative=false
+          dotnet "$DND_COMPILER_DLL" --bundle samples/Kart/bin/Debug/net8.0/Kart.dll footprint/kart --debug-symbols --sample-controls
+          make -j2 CC="ccache $DEVKITPPC/bin/powerpc-eabi-gcc" -C footprint/kart
+          python3 scripts/verify_dol_elf.py footprint/kart/Game.elf footprint/kart/Game.dol
+          test -s footprint/kart/Game.dnd-addresses.json
       - name: Build and validate Snake save/load GameCube DOL
         run: |
           dotnet build samples/Snake/Snake.csproj -c Release -p:DndBuildNative=false
@@ -1108,6 +1123,11 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_dolphin_shader.py
           python3 scripts/dolphin_shader_test.py dist/footprint/shader/Game.dol --logs dolphin-shader --seconds 90
+      - name: Verify offline Kart track and player rendering in Dolphin
+        if: matrix.group == 'games'
+        id: kart
+        continue-on-error: true
+        run: python3 scripts/dolphin_kart_test.py dist/footprint/kart/Game.dol --logs dolphin-kart --seconds 90
       - name: Verify Snake memory card initialization and frame rendering in Dolphin
         if: matrix.group == 'games'
         id: snake_boot
@@ -1205,7 +1225,7 @@ jobs:
         run: |
           python3 - <<'PYRESULTS'
           import json, os, sys
-          expected = {'games': ['pong_boot', 'snake_boot', 'green_men', 'fox', 'shader'], 'debugger': ['cs_breakpoints', 'cs_stack_steps', 'emulator_case_14', 'emulator_case_15', 'emulator_case_16'], 'runtime': ['minimal_boot', 'control_boot', 'app_boot', 'async_boot', 'numeric', 'strings', 'timing_boot', 'disc_access', 'disc_browser', 'disc_browser_iso'], 'controllers': ['controller_inputs']}
+          expected = {'games': ['pong_boot', 'snake_boot', 'green_men', 'fox', 'shader', 'kart'], 'debugger': ['cs_breakpoints', 'cs_stack_steps', 'emulator_case_14', 'emulator_case_15', 'emulator_case_16'], 'runtime': ['minimal_boot', 'control_boot', 'app_boot', 'async_boot', 'numeric', 'strings', 'timing_boot', 'disc_access', 'disc_browser', 'disc_browser_iso'], 'controllers': ['controller_inputs']}
           results = json.loads(os.environ['STEP_RESULTS'])
           failed = [name for name in expected[os.environ['GROUP']] if results.get(name, {}).get('outcome') != 'success']
           if failed:
@@ -1232,6 +1252,7 @@ jobs:
             dolphin-pong/
             dolphin-green-men/
             dolphin-shader/
+            dolphin-kart/
             dolphin-fox/
             dolphin-fox-rules/
             dolphin-green-men-rules/
