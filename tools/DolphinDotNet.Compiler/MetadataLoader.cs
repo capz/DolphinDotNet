@@ -123,6 +123,7 @@ internal static class MetadataLoader
   "System.Runtime.CompilerServices.ConfiguredTaskAwaitable+ConfiguredTaskAwaiter"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable+ConfiguredTaskAwaiter",
   "System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1+ConfiguredTaskAwaiter"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable`1+ConfiguredTaskAwaiter",
 
+  "System.Math"=>"Dolphin.Numerics.Math", "System.MathF"=>"Dolphin.Numerics.MathF", "System.Random"=>"Dolphin.Numerics.Random", "System.Convert"=>"Dolphin.Numerics.Convert", "System.MidpointRounding"=>"Dolphin.Numerics.MidpointRounding",
   "System.StringComparer"=>"Dolphin.Collections.StringComparer",
   "System.Threading.CancellationToken"=>"Dolphin.Threading.CancellationToken",
   "System.Threading.CancellationTokenSource"=>"Dolphin.Threading.CancellationTokenSource",

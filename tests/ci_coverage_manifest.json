@@ -11,7 +11,8 @@
       "Build AOT smoke assembly",
       "Lower AOT smoke assembly to native C",
       "Compile generated AOT C",
-      "Compile and execute generic sharing integration smoke"
+      "Compile and execute generic sharing integration smoke",
+      "Validate managed numeric contracts and floating-point semantics"
     ],
     "io": [
       "Test and package save-image command-line tool",
@@ -71,7 +72,8 @@
       "Build disc filesystem and DiscBrowser startup acceptance DOLs",
       "Build Green Men GameCube sample with source maps",
       "Build Fox polygon rail shooter with source maps",
-      "Build TEV shader demo with source maps"
+      "Build TEV shader demo with source maps",
+      "Build numeric contracts PowerPC acceptance DOL"
     ],
     "compat": [
       "Build generated standalone GameCube project",
@@ -116,7 +118,8 @@
       "Verify timing delays, callbacks and cleanup in Dolphin",
       "Verify ISO mounts and file access with real GameCube newlib",
       "Verify DiscBrowser starts without inserted media",
-      "Verify DiscBrowser reads inserted ISO metadata and files"
+      "Verify DiscBrowser reads inserted ISO metadata and files",
+      "Verify numeric contracts on PowerPC in Dolphin"
     ],
     "controllers": [
       "Verify all four controllers through Dolphin pipe inputs"

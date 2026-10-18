@@ -5,6 +5,17 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["Unary"]=("dnd_numeric_unary","id",false),
+        ["Binary"]=("dnd_numeric_binary","idd",false),
+        ["Round"]=("dnd_numeric_round","dii",false),
+        ["Sign"]=("dnd_numeric_sign","d",false),
+        ["Classify"]=("dnd_numeric_classify","id",false),
+        ["ParseI32"]=("dnd_numeric_i32","spi",false),
+        ["ParseU32"]=("dnd_numeric_u32","spi",false),
+        ["ParseI64"]=("dnd_numeric_i64","spi",false),
+        ["ParseU64"]=("dnd_numeric_u64","spi",false),
+        ["ParseF32"]=("dnd_numeric_f32","spi",false),
+        ["ParseF64"]=("dnd_numeric_f64","spi",false),
         ["DrawSin"]=("sinf","f",false),
         ["DrawCos"]=("cosf","f",false),
         ["DrawSqrt"]=("sqrtf","f",false),
@@ -132,7 +143,7 @@ internal static class NativeStorageBindings
     {
         if(call.Operation.StartsWith("Raw_",StringComparison.Ordinal)) {RawGXBindings.Emit(b,call);return;}
         if(!Bindings.TryGetValue(call.Operation,out var binding)||binding.Types.Length!=call.Arguments.Count)throw new NotSupportedException($"Invalid native storage binding {call.Operation}.");
-        var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'o'=>"DndObject*",'l'=>"int64_t",'f'=>"float",_=>"int"})})v{arg.Id}").ToList();
+        var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'o'=>"DndObject*",'l'=>"int64_t",'f'=>"float",'d'=>"double",'p'=>"intptr_t",_=>"int"})})v{arg.Id}").ToList();
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
         if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation is "ModelDraw" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");

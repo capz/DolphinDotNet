@@ -188,6 +188,15 @@ jobs:
       - name: Compiler integration tests
         if: matrix.group == 'compiler'
         run: dotnet run --project tools/DolphinDotNet.Compiler.Tests/DolphinDotNet.Compiler.Tests.csproj
+      - name: Validate managed numeric contracts and floating-point semantics
+        if: matrix.group == 'compiler'
+        run: |
+          dotnet run --project tests/NumericSmoke -c Release
+          dotnet "$DND_COMPILER_DLL" --aot tests/NumericSmoke/bin/Release/net8.0/NumericSmoke.dll /tmp/numeric.c
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/numeric.c tests/numeric_host.c source/numeric.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/numeric
+          /tmp/numeric
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/numeric.c tests/numeric_host.c source/numeric.c source/managed_runtime.c source/async_runtime.c -lm -o /tmp/numeric32
+          /tmp/numeric32
       - name: Build control-flow smoke assembly
         if: matrix.group == 'compiler'
         run: |
@@ -757,6 +766,13 @@ jobs:
           python3 scripts/ci_cc.py --compiler "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -mcpu=750 -meabi -mhard-float -I"$DEVKITPRO/libogc2/gamecube/include" tests/dolphin_control.c -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/dolphin_control.elf
           elf2dol footprint/dolphin_control.elf footprint/dolphin_control.dol
           python3 scripts/dol_sections.py --pad footprint/dolphin_control.dol
+      - name: Build numeric contracts PowerPC acceptance DOL
+        run: |
+          dotnet build tests/NumericSmoke -c Release
+          dotnet "$DND_COMPILER_DLL" --aot tests/NumericSmoke/bin/Release/net8.0/NumericSmoke.dll /tmp/numeric.c
+          python3 scripts/ci_cc.py --compiler "$DEVKITPPC/bin/powerpc-eabi-gcc" -O2 -Wall -Wextra -Werror -DGEKKO -mogc -Iinclude -I"$DEVKITPRO/libogc2/gamecube/include" tests/automatic_tasks_gamecube_entry.c /tmp/numeric.c source/numeric.c build/managed_runtime.o build/async_runtime.o -Lbuild/exi-overlay -L"$DEVKITPRO/libogc2/gamecube/lib" -logc -lm -o footprint/numeric.elf
+          elf2dol footprint/numeric.elf footprint/numeric.dol
+          python3 scripts/dol_sections.py --pad footprint/numeric.dol
       - name: Build automatic task execution DOL
         run: |
           dotnet build tests/AutomaticTaskSmoke/AutomaticTaskSmoke.csproj -c Release
@@ -1119,6 +1135,11 @@ jobs:
         id: app_boot
         continue-on-error: true
         run: python3 scripts/dolphin_smoke.py dist/DolphinDotNet.dol --binary /usr/games/dolphin-emu-nogui --seconds 55 --cpu-core 1 --gdb-port 2160 --elf dist/DolphinDotNet.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol "dnd_value_ManagedGameCube_Program_Main_*" --logs dolphin-smoke --require-boot
+      - name: Verify numeric contracts on PowerPC in Dolphin
+        if: matrix.group == 'runtime'
+        id: numeric
+        continue-on-error: true
+        run: python3 scripts/dolphin_smoke.py dist/footprint/numeric.dol --binary /usr/games/dolphin-emu-nogui --seconds 25 --cpu-core 1 --gdb-port 2186 --elf dist/footprint/numeric.elf --expect-word dnd_async_test_result=0x4153594e --memory-after-symbol dnd_async_test_done --logs dolphin-numeric --require-boot
       - name: Verify automatic async tasks complete and the service thread shuts down
         if: matrix.group == 'runtime'
         id: async_boot
@@ -1161,7 +1182,7 @@ jobs:
         run: |
           python3 - <<'PYRESULTS'
           import json, os, sys
-          expected = {'games': ['pong_boot', 'snake_boot', 'green_men', 'fox', 'shader'], 'debugger': ['cs_breakpoints', 'cs_stack_steps', 'emulator_case_14', 'emulator_case_15', 'emulator_case_16'], 'runtime': ['minimal_boot', 'control_boot', 'app_boot', 'async_boot', 'timing_boot', 'disc_access', 'disc_browser', 'disc_browser_iso'], 'controllers': ['controller_inputs']}
+          expected = {'games': ['pong_boot', 'snake_boot', 'green_men', 'fox', 'shader'], 'debugger': ['cs_breakpoints', 'cs_stack_steps', 'emulator_case_14', 'emulator_case_15', 'emulator_case_16'], 'runtime': ['minimal_boot', 'control_boot', 'app_boot', 'async_boot', 'numeric', 'timing_boot', 'disc_access', 'disc_browser', 'disc_browser_iso'], 'controllers': ['controller_inputs']}
           results = json.loads(os.environ['STEP_RESULTS'])
           failed = [name for name in expected[os.environ['GROUP']] if results.get(name, {}).get('outcome') != 'success']
           if failed:
@@ -1182,6 +1203,7 @@ jobs:
             dolphin-dap-stack/
             dolphin-dap-inspection/
             dolphin-async/
+            dolphin-numeric/
             dolphin-timing/
             dolphin-pong/
             dolphin-green-men/
