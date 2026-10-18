@@ -278,14 +278,20 @@ batch.FillRectangle(area, color);
 
 ### Texture2D
 
-Native GPU texture ownership from RGBA pixels or prebuilt `.dndtex` packages; supports async file loading.
+Native GPU texture ownership from RGBA pixels, in-memory PNGs or prebuilt `.dndtex` packages; supports async package file loading.
 
-**API:** `Create(width,height,rgba[,linear])`, `FromPackage(bytes[,linear])`, `LoadAsync(path[,token,linear])`, `Width`, `Height`, `NativeBytes`, `Dispose()`.
+**API:** `Create(width,height,rgba[,linear])`, `FromPng(bytes[,linear])`, `FromPackage(bytes[,linear])`, `LoadAsync(path[,token,linear])`, `Width`, `Height`, `NativeBytes`, `Dispose()`.
 
 ~~~csharp
 using var texture = Texture2D.Create(2, 2, new byte[16]);
 batch.DrawTexture(texture, new RectF(8, 8, 64, 64), Color32.White);
 ~~~
+
+`FromPng` decodes between frames, preserves straight alpha and uploads tiled
+GX_RGBA8. Input is bounded to 1 MiB, dimensions to 1024x1024 and decoder scratch
+to 8 MiB; invalid images, exhausted budgets and active frames throw
+`ArgumentException`. Decode once during asset loading. See
+[HttpTexture](../samples/HttpTexture/README.md) for `HttpClient` → PNG → screen.
 
 ### BitmapFont
 

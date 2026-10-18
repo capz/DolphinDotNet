@@ -18,6 +18,16 @@ public sealed class Texture2D : IDisposable
         if(token==0)throw new ArgumentException("Invalid RGBA pixels, dimensions, memory budget or active frame.");
         return new Texture2D(token);
     }
+    /// <summary>Decode a PNG in memory into a native tiled RGBA8 texture, preserving alpha.
+    /// Call between frames. Encoded input is limited to 1 MiB, dimensions to 1024x1024,
+    /// and decoder scratch allocations to 8 MiB. No file or asset converter is required.</summary>
+    public static Texture2D FromPng(byte[] png,bool linear=false)
+    {
+        if(png==null)throw new ArgumentNullException("png");
+        int token=NativeGraphics.TexturePng(png,linear?1:0);
+        if(token==0)throw new ArgumentException("Invalid or unsupported PNG, dimensions, decoding budget or active frame.");
+        return new Texture2D(token);
+    }
     public static Texture2D FromPackage(byte[] package,bool linear=false)
     {
         if(package==null)throw new ArgumentNullException("package");int token=NativeGraphics.TexturePackage(package,linear?1:0);

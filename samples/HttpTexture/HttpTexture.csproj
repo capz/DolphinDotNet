@@ -1,0 +1,12 @@
+<Project>
+  <Import Project="../../sdk/DolphinDotNet.Sdk/Sdk/Sdk.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
+  </ItemGroup>
+  <Import Project="../../sdk/DolphinDotNet.Sdk/Sdk/Sdk.targets" />
+</Project>

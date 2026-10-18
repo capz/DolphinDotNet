@@ -40,6 +40,7 @@ int dnd_draw_total_bytes(void);
 void dnd_draw_collect(void);
 void dnd_draw_shutdown(void);
 int dnd_texture_create(int width,int height,DndArray *rgba,int linear);
+int dnd_texture_png(DndArray *png,int linear);
 int dnd_texture_package(DndArray *package,int linear);
 int dnd_texture_dimension(int token,int axis);
 int dnd_mesh_create(DndArray *vertices,DndArray *indices,int format,int dynamic);

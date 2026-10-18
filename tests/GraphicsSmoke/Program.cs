@@ -14,6 +14,10 @@ internal static class Program
         var vertices=new[]{new VertexPositionColor(new Vector3(0,1,0),Color32.White),new VertexPositionColor(new Vector3(-1,-1,0),Color32.White),new VertexPositionColor(new Vector3(1,-1,0),Color32.White)};
         using var mesh=DynamicMesh.Create(vertices);
         mesh.SetVertices(vertices);
+        using var pngTexture=Texture2D.FromPng(new byte[]{137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,16,6,0,0,0,79,133,24,202,0,0,0,17,73,68,65,84,120,156,99,16,50,9,171,152,181,231,222,7,0,13,169,4,57,83,0,201,186,0,0,0,0,73,69,78,68,174,66,96,130},true);
+        if(pngTexture.Width!=1||pngTexture.Height!=1||pngTexture.NativeBytes!=64)return 6;
+        try{Texture2D.FromPng(new byte[]{137,80,78,71});return 7;}catch(ArgumentException){}
+        try{Texture2D.FromPng(null!);return 8;}catch(ArgumentNullException){}
         using var texture=Texture2D.Create(4,4,new byte[64]);
         using var batch=new Draw2D(device,new Draw2DOptions{VertexCapacity=12});
         using var buffer=NativeBuffer.Allocate(64);
