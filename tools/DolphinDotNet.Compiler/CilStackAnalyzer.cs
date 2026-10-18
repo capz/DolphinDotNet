@@ -98,7 +98,7 @@ internal static class CilStackAnalyzer
             case 0xfe15: Pop(s,i);break;
             case 0xfe06: Push(s,CilStackKind.NativeInt);break;
             case 0xfe07: Pop(s,i);Push(s,CilStackKind.NativeInt);break;
-            case >=0x46 and <=0x49 or 0x4a: Pop(s,i);Push(s,CilStackKind.I4);break;
+            case >=0x46 and <=0x4b: Pop(s,i);Push(s,CilStackKind.I4);break;
             case 0x4c: Pop(s,i);Push(s,CilStackKind.I8);break;
             case 0x4e or 0x4f: Pop(s,i);Push(s,CilStackKind.Float);break;
             case 0x50: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;

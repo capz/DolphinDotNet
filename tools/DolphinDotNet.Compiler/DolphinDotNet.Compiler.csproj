@@ -8,7 +8,7 @@
   <ItemGroup>
     <Content Include="../../source/*.inc" Link="native/source/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../source/*.c" Link="native/source/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="../../include/*.h" Link="native/include/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../../include/**/*" Link="native/include/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../scripts/build_exi_overlay.sh" Link="native/scripts/build_exi_overlay.sh" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../scripts/verify_exi_source.py" Link="native/scripts/verify_exi_source.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../vendor/libogc2/exi.c" Link="native/vendor/libogc2/exi.c" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
