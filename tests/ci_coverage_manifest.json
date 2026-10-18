@@ -47,7 +47,8 @@
       "Test Snake rules, state persistence and timed autosaves",
       "Compile Snake save/load game through managed AOT",
       "Validate Green Men rules and AOT gameplay",
-      "Validate Fox rules and AOT flight"
+      "Validate Fox rules and AOT flight",
+      "Validate Kart driving and peer-to-peer networking"
     ],
     "graphics-model": [
       "Validate raw and managed graphics layers",
@@ -75,7 +76,8 @@
       "Build Fox polygon rail shooter with source maps",
       "Build TEV shader demo with source maps",
       "Build numeric contracts PowerPC acceptance DOL",
-      "Build string contracts PowerPC acceptance DOL"
+      "Build string contracts PowerPC acceptance DOL",
+      "Build Kart peer-to-peer racer with source maps"
     ],
     "compat": [
       "Build generated standalone GameCube project",
@@ -103,7 +105,8 @@
       "Verify Snake memory card initialization and frame rendering in Dolphin",
       "Verify Green Men gameplay using real controller inputs",
       "Verify Fox flight using real controller inputs",
-      "Verify rendered TEV shader effects in Dolphin"
+      "Verify rendered TEV shader effects in Dolphin",
+      "Verify offline Kart track and player rendering in Dolphin"
     ],
     "debugger": [
       "Verify two consecutive C# source breakpoints in Dolphin",
