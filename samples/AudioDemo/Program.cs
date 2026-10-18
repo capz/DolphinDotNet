@@ -8,16 +8,26 @@ using Dolphin.Storage;
 
 internal static class Program
 {
+    // A disc probe is safe without media. Select a configured SD adapter and
+    // matching root explicitly; blind SD adapter probes can stall in Dolphin.
+    private const StorageDevice AudioStorage=StorageDevice.DvdDrive;
+    private const string AudioRoot="dvd:/audio/";
+    private static Sound Tone()
+    {
+        var pcm=new byte[1600];
+        for(int i=0;i<pcm.Length;i++)pcm[i]=(byte)(128+(i%32<16?40:-40)*(1600-i)/1600);
+        return Sound.FromPcm8(pcm,8000);
+    }
     private static async Task<int> Main()
     {
-        bool mounted=Storage.Mount(StorageDevice.SdSerialPort2);
+        bool mounted=AudioStorage==StorageDevice.DvdDrive?Storage.MountDisc():Storage.Mount(AudioStorage);
         Audio.Initialize();
         using var draw=new Draw2D(GraphicsDevice.Default,new Draw2DOptions {Width=640,Height=480});
         using var text=new SampleText();using var cancel=new CancellationTokenSource();
-        Task<Music>? loading=mounted?Music.LoadAsync("sd:/audio/theme.wav",cancel.Token):null;
-        Task<Sound>? soundLoading=mounted?Sound.LoadAsync("sd:/audio/laser.wav",cancel.Token):null;
-        Music? music=null;Sound? sound=null;SoundChannel? voice=null;
-        string status=mounted?"LOADING WAV - B CANCEL":"INSERT SD2SP2 WITH AUDIO FILES";
+        Task<Music>? loading=mounted?Music.LoadAsync(AudioRoot+"theme.wav",cancel.Token):null;
+        Task<Sound>? soundLoading=mounted?Sound.LoadAsync(AudioRoot+"laser.wav",cancel.Token):null;
+        Music? music=null;Sound? sound=mounted?null:Tone();SoundChannel? voice=null;
+        string status=mounted?"LOADING WAV - B CANCEL":"NO AUDIO DISC - A PLAYS GENERATED TONE";
         float volume=.4f,pitch=1;bool quit=false;Exception? failure=null;
         try
         {
@@ -41,9 +51,9 @@ internal static class Program
                 if(pad.A.WasPressed&&sound!=null){voice?.Dispose();voice=sound.Play();voice.Volume=volume;voice.Pitch=pitch;}
                 if(pad.Start.WasPressed&&music!=null){if(music.IsPlaying)music.Stop();else music.Play();}
                 if(pad.X.WasPressed&&loading==null&&mounted)
-                {music?.Dispose();music=null;loading=Music.LoadAsync("sd:/audio/theme.wav",cancel.Token);status="RELOADING WAV";}
+                {music?.Dispose();music=null;loading=Music.LoadAsync(AudioRoot+"theme.wav",cancel.Token);status="RELOADING WAV";}
                 if(pad.Y.WasPressed&&loading==null&&mounted)
-                {music?.Dispose();music=null;loading=Music.LoadAsync("sd:/audio/theme.adx",cancel.Token);status="LOADING ADX - L CUSTOM LOOP";}
+                {music?.Dispose();music=null;loading=Music.LoadAsync(AudioRoot+"theme.adx",cancel.Token);status="LOADING ADX - L CUSTOM LOOP";}
                 if(pad.L.WasPressed&&music!=null)
                 {
                     try{music.PlayLoop(8000,24000);status="CUSTOM LOOP 8000 TO 24000";}
@@ -64,7 +74,7 @@ internal static class Program
         if(loading!=null){try{(await loading).Dispose();}catch(Exception){}}
         if(soundLoading!=null){try{(await soundLoading).Dispose();}catch(Exception){}}
         voice?.Dispose();sound?.Dispose();music?.Dispose();
-        if(mounted)Storage.Unmount(StorageDevice.SdSerialPort2);
+        if(mounted)Storage.Unmount(AudioStorage);
         if(failure!=null)throw failure;
         return 0;
     }

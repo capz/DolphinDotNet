@@ -1,7 +1,17 @@
 # Interactive audio lab
 
-Place `audio/laser.wav` and `audio/theme.wav` on SD2SP2; optionally provide
-`audio/theme.adx`. Music and effects load asynchronously while the UI renders.
+Place `audio/laser.wav` and `audio/theme.wav` on an inserted GameCube ISO;
+optionally provide `audio/theme.adx`. The default reads `dvd:/audio/`. With no
+disc the UI still starts and A plays a generated tone, allowing volume/pitch
+experiments without external assets.
+
+For an explicitly configured SD Gecko, change `AudioStorage` to
+`StorageDevice.SdSlotA` and `AudioRoot` to `"carda:/audio/"`. Physical SD2SP2
+uses `StorageDevice.SdSerialPort2` and `"sd:/audio/"`. Do not select an adapter
+which is absent or not emulated: its native mount can block. The default avoids
+blind SD probes. Set Dolphin's Default ISO to provide disc audio assets.
+
+Music and effects load asynchronously while the UI renders.
 
 - A plays the effect; Start toggles music.
 - Up/down changes volume; left/right changes pitch.
