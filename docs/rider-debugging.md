@@ -1,10 +1,17 @@
 # Rider attach debugging (A6 / bounded A7 inspection)
 
-`plugins/rider` implements the approved native Rider attach configuration and target
-editor. It uses public XDebugger APIs and Eclipse LSP4J DAP over stdio to the bundled
+`plugins/rider` provides Run-menu attach, a saved target editor, and legacy attach
+configurations for multilaunch workflows. It uses public XDebugger APIs and Eclipse LSP4J DAP over stdio to the bundled
 .NET 8 adapter. It does not require LSP4IJ. The SDK is pinned to **Rider 2026.2.3.1
 (build 262)**, Java 25, Gradle 9.1.0 and IntelliJ Platform Gradle Plugin 2.19.0;
 LSP4J debug is pinned to 0.24.0. Compatibility is currently limited to 262.*.
+
+> Rider menu: use **Run → Attach to DolphinDotNet…** after starting the target's
+> debug build. The dialog provides the build folder, saved targets/Manage targets,
+> and optional source mappings. It remembers project-local settings without
+> changing the selected launch configuration. Existing attach configurations and
+> multilaunch setups remain supported. C# files in DolphinDotNet SDK projects
+> support DolphinDotNet gutter breakpoints before attach.
 
 **Baseline:** PR #77 passed the complete Gradle package, host protocol/PTY and
 real-Dolphin checks in [run 38944870062](https://github.com/capz/DolphinDotNet/actions/runs/38944870062).
@@ -38,7 +45,7 @@ cd plugins/rider
 ./gradlew -PriderSdk=/absolute/path/to/Rider test buildPlugin
 ```
 
-The 0.2 development plugin uses ID `com.dolphindotnet.debugger` for Plugin
+The 0.3 development plugin uses ID `com.dolphindotnet.debugger` for Plugin
 Verifier compatibility. Remove an older 0.1 development installation before
 installing this ZIP, since its earlier ID was `com.dolphindotnet.rider`.
 
@@ -79,23 +86,22 @@ interrupted native cleanup and NuGet restore errors.
    **<sample> in Dolphin (play without debugger)** launch keeps its own settings.
    For a console, start
    the matching debug DOL with its GDB stub waiting/stopped; upload remains external.
-2. Add a **DolphinDotNet Attach** run/debug configuration. Choose the debug build
+2. Choose **Run → Attach to DolphinDotNet…**. Choose the debug build
    folder containing exactly one `*.elf`, its `<name>.dnd-addresses.json`, and either
    the published `<name>.dnd-debug.json` or native-bundle `dnd-il-debug.json`.
    The three artifact rows display the resolved filenames; the adapter validates
    their matching SHA-256 identities before connecting.
 3. Open **Manage targets…**, add a named connection and save it. Choose that saved
-   target in the configuration dropdown. Missing/deleted target IDs produce an
+   target in the dialog dropdown. Missing/deleted target IDs produce an
    error; the plugin never silently switches to another console.
 4. Expand **Source path mappings** for CI/container builds. Add build-source prefix
    → local-source prefix entries. `$PROJECT_DIR$` is supported in the debug build
    folder and local mapping paths; mappings remain case-sensitive and bidirectional.
-5. Select the DolphinDotNet configuration **before** placing C# gutter breakpoints.
-   This enables its dedicated breakpoint type. Existing Rider .NET breakpoints
-   belong to the normal debugger and are not imported or rewritten. C# breakpoint
-   selection worked in the user's Snake session; broader coexistence still needs
-   acceptance on the pinned Rider.
-6. Use **Debug**. Attach performs initialize → attach → initialized → source
+5. Place C# gutter breakpoints in the DolphinDotNet SDK project. The plugin detects
+   both SDK declarations and repository SDK imports, independently of the selected
+   launch configuration. Linked/external sources also work during an active
+   DolphinDotNet session. Existing regular .NET breakpoints are not rewritten.
+6. Click **Attach**. Attach performs initialize → attach → initialized → source
    breakpoints → configurationDone. It initially leaves execution stopped. Use the
    standard Rider Resume, Pause, Step Into, Step Over and Step Out controls and
    stack frame source navigation. Stop disconnects the adapter without a target kill.
@@ -166,7 +172,7 @@ protocol fix; pulling the repository does not update an installed plugin.
 
 If Resume runs without hitting a breakpoint, open **Run → View Breakpoints** and
 check that it is under **DolphinDotNet C# line breakpoints**. A regular .NET line
-breakpoint is not sent to this adapter. Select **DolphinDotNet Attach**, then add a
+breakpoint is not sent to this adapter. Use **Run → Attach to DolphinDotNet…**, then add a
 fresh breakpoint on another executable line. Before each Resume the adapter prints
 the number of verified source breakpoints and native addresses. Rejected locations
 also appear in the console with their source path and reason; check the selected
@@ -176,7 +182,7 @@ For that sample launch, choose a saved **BBA / TCP** target at **127.0.0.1:2166*
 Older versions of the target dialog initialized new targets to **2828** even
 though the sample launcher uses **2166**. Existing saved targets keep their port;
 edit the selected target explicitly rather than assuming a plugin update changes it.
-Select the attach configuration before setting a breakpoint, for example Snake's
+Use the Run menu to attach, then set a DolphinDotNet breakpoint, for example Snake's
 `Controller.Update();` statement, then Debug and Resume. Dolphin waits at startup
 until the debugger connects. Run the launch profile first and leave it running
 while starting the separate attach session.
@@ -207,8 +213,9 @@ user profile is active. The ordinary launch profile does not enable GDB.
 ## Saved target properties
 
 Profiles live in the IDE's machine-local `dolphindotnet-targets.xml` with roaming
-**disabled**. Run configurations store a stable target ID; debug build/source paths
-remain per run configuration. Sharing a run configuration does not share serial
+**disabled**. The menu dialog remembers its target ID, build folder and source
+mappings in the machine-local project workspace. Legacy run configurations keep
+their own target ID and paths for multilaunch compatibility. Sharing a run configuration does not share serial
 paths or target endpoints: define/select a target on the receiving machine.
 The target dialog edits copies and commits changes only on Save; Cancel leaves the
 stored profiles intact.

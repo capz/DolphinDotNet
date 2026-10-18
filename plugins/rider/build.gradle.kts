@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.19.0"
 }
 
-version = "0.2.0"
+version = "0.3.0"
 group = "com.dolphindotnet"
 repositories {
     mavenCentral()

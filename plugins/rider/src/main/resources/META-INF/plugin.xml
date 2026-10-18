@@ -10,4 +10,10 @@
         <programRunner implementation="com.dolphindotnet.rider.AttachRunner"/>
         <xdebugger.breakpointType implementation="com.dolphindotnet.rider.SourceBreakpointType"/>
     </extensions>
+    <actions>
+        <action id="DolphinDotNet.Attach" class="com.dolphindotnet.rider.AttachAction"
+                text="Attach to DolphinDotNet…" description="Attach Rider to a running Dolphin or GameCube debug build">
+            <add-to-group group-id="RunMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>

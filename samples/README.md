@@ -93,7 +93,7 @@ Dolphin (wait for Rider)** is an equivalent alias. To play normally, select
 **<sample> in Dolphin (play without debugger)**. Debug **CLI** / project launches
 also wait on port 2166; Release CLI launches run normally. For debugging, install
 the [Rider attach plugin](../docs/rider-debugging.md),
-run **<sample> in Dolphin**, and add **DolphinDotNet Attach**. That launch creates
+run **<sample> in Dolphin**, then choose **Run → Attach to DolphinDotNet…**. That launch creates
 the emulator's GDB settings automatically in a separate profile, prints their
 location, and waits for Rider at **127.0.0.1:2166**. No manual `Dolphin.ini` edit
 is needed. If the configuration is not imported, create a **.NET Launch Settings
@@ -101,7 +101,9 @@ Profile** configuration for that sample's **Dolphin Debug** profile with a Build
 Choose `samples/<sample>/bin/Debug/net8.0` as its debug build folder, then save
 and select a TCP target matching Dolphin's host and GDB port. When opening the
 sample's solution directly, the folder is `$PROJECT_DIR$/bin/Debug/net8.0`.
-Select the attach configuration before placing C# gutter breakpoints.
+Click **Attach** in the dialog. C# gutter breakpoints recognize DolphinDotNet SDK
+projects automatically; selecting an attach run configuration is unnecessary.
+Existing attach configurations remain supported for multilaunch setups.
 
 To build and validate every sample in PowerShell:
 

@@ -59,22 +59,22 @@ existing configurations that refer to it pick up GDB after a reload. Choose
 **Dolphin Play** explicitly when creating a launch-settings profile for normal play.
 
 These configurations launch an emulator process. For C# source debugging, install
-the separate [DolphinDotNet Attach plugin](rider-debugging.md) and use an attach
-configuration after starting Dolphin with its GDB stub waiting/stopped. The attach
-configuration does not build, upload or launch the game. Select it before placing
-C# gutter breakpoints. Hot Reload is not supported.
+the [DolphinDotNet plugin](rider-debugging.md) and choose **Run → Attach to
+DolphinDotNet…** after starting Dolphin with its GDB stub waiting/stopped. The
+dialog remembers the debug build folder, saved target and source mappings.
+C# gutter breakpoints recognize DolphinDotNet SDK projects automatically.
+Existing attach configurations remain usable for multilaunch. Hot Reload is not supported.
 
 For Snake, open `samples/Snake/Snake.sln`, select **Debug**, and run **Snake in
 Dolphin (wait for Rider)**. This creates Dolphin's debugger settings automatically
 in a separate profile and prints their exact path; you do not need to locate or
 create `Dolphin.ini`. Dolphin waits for Rider on `127.0.0.1:2166`. In
-**Run → Edit Configurations → + → DolphinDotNet Attach**, select
+**Run → Attach to DolphinDotNet…**, select
 `$PROJECT_DIR$/bin/Debug/net8.0` as the debug build folder (when Snake's solution
 is open). It must contain `Snake.elf`, `Snake.dnd-debug.json` and
 `Snake.dnd-addresses.json` from the same successful build. Under **Manage targets…**,
 save and select a **BBA / TCP** target with host `127.0.0.1` and port `2166`.
-Leave that Dolphin launch running, then click Debug
-in Rider. The DOL/ELF are GameCube artifacts, not Windows executables.
+Leave that Dolphin launch running, then click **Attach** in the dialog. The DOL/ELF are GameCube artifacts, not Windows executables.
 
 ## Command line
 
