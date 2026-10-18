@@ -248,7 +248,16 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 var first = args.TryGetProperty("start", out var begin) ? begin.GetInt32() : 0;
                 var count = args.TryGetProperty("count", out var amount) ? amount.GetInt32() : 0;
                 if (first < 0 || count < 0) throw new ArgumentException("Invalid variable pagination.");
-                if (isPage) { first += page.Start; count = count == 0 ? page.Count : Math.Min(count, page.Count); }
+                if (isPage)
+                {
+                    if (first >= page.Count)
+                    {
+                        await connection.RespondAsync(request, new { variables = Array.Empty<object>() });
+                        break;
+                    }
+                    count = Math.Min(count == 0 ? page.Count : count, page.Count - first);
+                    first += page.Start;
+                }
                 var pageSize = count == 0 ? ObjectInspector.MaximumPageSize : Math.Min(count, ObjectInspector.MaximumPageSize);
                 if (args.TryGetProperty("filter", out var filter) && filter.GetString() == "indexed") pageSize = 0;
                 var values = new List<object>();

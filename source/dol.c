@@ -54,7 +54,7 @@ bool dnd_dol_validate(const uint8_t header[256], size_t length, DndDolPlan *plan
                 overlaps(section->offset, section->size, other->offset, other->size)) return false;
         }
         plan->count++;
-        if (i<7 && plan->entry >= section->address && plan->entry-section->address < section->size) executable = true;
+        if (i<7 && section->size>=4 && plan->entry >= section->address && plan->entry-section->address <= section->size-4) executable = true;
     }
     return executable;
 }

@@ -386,7 +386,7 @@ installed. Keep A4.4 physical BBA and USB Gecko validation deferred separately.
 Out of scope: DAP launch/build/upload orchestration, automatic target discovery or
 slot negotiation, verified hardware compatibility, reconnect, arrays/value types,
 expressions, managed exception filters, async stacks, real thread enumeration,
-reverse execution, Release target debugging, Visual Studio integration and Marketplace
+reverse execution, Release target debugging and Marketplace
 publishing. Recursive Step Into and same-line Step Over use CFA transitions;
 unsupported unwind states and instruction budgets still produce diagnostic stops.
 

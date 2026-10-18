@@ -667,6 +667,8 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(['Variables 1–128', 'Variables 129–129'], [g['name'] for g in groups])
         self.assertNotIn('m80010088,1', self.target.commands)
         self.assertEqual(128, len(self.variables(groups[0]['variablesReference'])))
+        self.assertEqual(['f127'], [v['name'] for v in self.variables(groups[0]['variablesReference'], start=127, count=2)])
+        self.assertEqual([], self.variables(groups[0]['variablesReference'], start=128))
         self.assertEqual(['f128'], [v['name'] for v in self.variables(groups[1]['variablesReference'])])
         stale = groups[1]['variablesReference']
         self.client.request('continue', dict(threadId=1))

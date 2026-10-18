@@ -57,6 +57,7 @@ int main(void) {
     valid();word(image+0xd8,0x80004000);assert(dnd_dol_validate(image,sizeof(image),&plan));
     valid();word(image+0xe0,0x80005000);assert(!dnd_dol_validate(image,sizeof(image),&plan));
     valid();word(image+0xe0,0x80004001);assert(!dnd_dol_validate(image,sizeof(image),&plan));
+    valid();word(image+0x90,1);assert(!dnd_dol_validate(image,sizeof(image),&plan));
     valid();assert(dnd_dol_validate(image,sizeof(image),&plan));
     assert(!dnd_dol_stage_safe(&plan,0x80003ff0,32));
     assert(!dnd_dol_stage_safe(&plan,0x80006040,64));
