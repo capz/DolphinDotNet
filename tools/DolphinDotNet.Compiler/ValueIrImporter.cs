@@ -195,7 +195,7 @@ internal static class ValueIrImporter
                     {
                         var value=Pop(stack,cil);var address=Pop(stack,cil);var size=cil.OpCode==0x52?1:cil.OpCode==0x53?2:cil.OpCode is 0x55 or 0x57?8:4;instructions.Add(new ValueIrStoreIndirect(address,value,size,value.Kind==IrValueKind.ObjectReference));break;
                     }
-                    case >=0x67 and <=0x6e or 0xd1 or 0xd2 or 0xd3 or 0xe0:
+                    case >=0x67 and <=0x6e or 0x76 or 0xd1 or 0xd2 or 0xd3 or 0xe0:
                     {
                         var input=Pop(stack,cil);var result=New(ResultKind(analysis,cil));instructions.Add(new ValueIrConvert(result,input,cil.OpCode));stack.Add(result);break;
                     }
@@ -542,7 +542,7 @@ internal static class ValueIrImporter
             else if(instruction is ValueIrNullableGetValue get&&addresses.TryGetValue(get.Address.Id,out var gi))storage[gi]=Math.Max(storage[gi],AlignNullable(get.ValueSize));
             else if(instruction is ValueIrNullableHasValue has&&addresses.TryGetValue(has.Address.Id,out var hi))storage[hi]=Math.Max(storage[hi],8);
         }
-        return kinds.Select((kind,index)=>new ValueIrLocal(index,kind,storage[index],declaredStorage[index].ReferenceOffsets)).ToArray();
+        return kinds.Select((kind,index)=>new ValueIrLocal(index,kind,storage[index],declaredStorage[index].ReferenceOffsets,declaredStorage[index].ScalarSize)).ToArray();
     }
     private static bool IsReferenceType(string type)=>type is "System.String" or "System.Object" || !type.StartsWith("System.",StringComparison.Ordinal);
     private static uint ElementSize(string type)=>type switch{"System.Boolean" or "System.Byte" or "System.SByte"=>1u,"System.Char" or "System.Int16" or "System.UInt16"=>2u,"System.Int64" or "System.UInt64" or "System.Double"=>8u,_=>4u};

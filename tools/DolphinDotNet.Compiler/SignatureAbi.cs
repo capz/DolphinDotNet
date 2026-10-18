@@ -15,7 +15,7 @@ internal sealed class SignatureAbi(CompilationModel model) : ISignatureTypeProvi
     {
         var sig=md.GetMethodDefinition(method.Handle).DecodeSignature(new SignatureAbi(model),new Context(types,methods));
         return new(sig.ParameterTypes.Select(t=>t.Kind??CilStackKind.Unknown).ToArray(),sig.ReturnType.Kind,
-            sig.ParameterTypes.Select(t=>new LocalStorage(t.Size,t.Kind??CilStackKind.Unknown,t.References)).ToArray(),new LocalStorage(sig.ReturnType.Size,sig.ReturnType.Kind??CilStackKind.Unknown,sig.ReturnType.References));
+            sig.ParameterTypes.Select(t=>new LocalStorage(t.Size,t.Kind??CilStackKind.Unknown,t.References,t.ScalarSize)).ToArray(),new LocalStorage(sig.ReturnType.Size,sig.ReturnType.Kind??CilStackKind.Unknown,sig.ReturnType.References,sig.ReturnType.ScalarSize));
     }
     public Type GetPrimitiveType(PrimitiveTypeCode code)=>Primitive(code) with { Name="System."+code };
     private Type Primitive(PrimitiveTypeCode code)=>code switch {

@@ -2,6 +2,8 @@
 
 Audit date: 2026-10-12. Implementation baseline: Phase 7 plus compiled collections, text, cooperative async, FST, recoverable save replacement and IPv4 networking. This index describes ordinary compiled C# development; it is not a full .NET Standard conformance report.
 
+Numeric update: 2026-10-18. NM01/NM02 now have a compiled subset, checked against .NET 8 and executed on portable hosts and GameCube PowerPC in Dolphin. See [numeric APIs and limitations](numerics.md).
+
 The managed Core project targets `netstandard2.0`, while the compiler smoke applications target `net8.0`. A target framework supplies compile-time references; it does not make every referenced API available in the generated GameCube program. .NET Standard 2.0 is the initial API inventory baseline, not a claim that DolphinDotNet implements its whole contract.
 
 ## Status definitions
@@ -13,7 +15,7 @@ The managed Core project targets `netstandard2.0`, while the compiler smoke appl
 - **Excluded:** permanently outside the project's stated scope.
 
 ## Wishlist
-NM01, NM02, CL05, ST01, ST02, ST03, ST04, AR01, AR02
+Remaining numeric wishlist: complete NM01/NM02 beyond the subset below. Other areas: CL05, ST01, ST02, ST03, ST04, AR01, AR02.
 
 ## Developer-facing inventory
 
@@ -37,7 +39,7 @@ NM01, NM02, CL05, ST01, ST02, ST03, ST04, AR01, AR02
 | AR02 | `Array.Length`, `LongLength`, `Rank`, bounds queries, `Clear`, `Copy`, `IndexOf` | Compiled subset | Selected overloads and array interface paths; general comparer-driven searches and sorting not established |
 | ST01 | `String.Length`, indexer, equality, `Substring`, two-string `Concat` | Compiled subset | UTF-16 storage/characters, selected operations and GC protection; full overload/exception matrix not established |
 | ST02 | String `StartsWith`, `EndsWith`, `Contains`, `IndexOf` | Compiler support | One-argument intrinsic paths; ordinal native behavior does not establish .NET culture-sensitive defaults/overloads |
-| ST03 | Primitive parameterless `ToString` | Compiled subset | Int32/Int64/UInt32/UInt64/Boolean/Char paths; format strings, parsing and culture missing |
+| ST03 | Primitive parameterless `ToString` | Compiled subset | Int32/Int64/UInt32/UInt64/Boolean/Char paths; format strings and culture missing. Selected parsing is covered separately by NM02 |
 | ST04 | `StringBuilder`, `String.Format`, composite/interpolated formatting | Missing | Compiler-generated interpolation can require unsupported framework APIs |
 | CL01 | `IEnumerable<T>`, `IEnumerator<T>`, nongeneric counterparts, `IDisposable` | Compiled subset | Custom class enumeration, explicit nongeneric Current and cleanup paths; standard array-as-interface enumeration and all variance cases not established |
 | CL02 | `ICollection<T>`, `IList<T>`, `IReadOnlyCollection<T>`, `IReadOnlyList<T>` | Compiled subset | Synthetic contracts, selected array calls and custom collection dispatch; contract semantics need fuller regression coverage |
@@ -50,8 +52,8 @@ NM01, NM02, CL05, ST01, ST02, ST03, ST04, AR01, AR02
 | IO02 | Directory and streams/text IO | Compiled subset | Stream/FileStream/MemoryStream, readers/writers, text files, pattern/recursive enumeration and cooperative async overloads; exact overloads and limitations are in [storage scope](storage-runtime.md) |
 | IO03 | Path helpers | Compiled subset | Selected normal Path calls use console device-prefix grammar. Guid/AppContext and full desktop path semantics remain missing |
 | IO04 | Console | Partial integration | GameCube WriteLine intrinsic and native overlay exist; general `System.Console` overload family is not registered in production intrinsic table |
-| NM01 | `Math`, `Random` | Native only | Integer Abs/Min/Max and PRNG primitives; normal managed APIs not wired up |
-| NM02 | Floating point, Decimal, BigInteger, Convert/Parse families | Missing/unverified broad support | IR kind names and signature recognition do not establish numeric semantics or library coverage |
+| NM01 | `Math`, `MathF`, `Random` | Compiled subset | Common libm functions, rounding, selected integer helpers and seeded Random with Next/NextDouble/NextBytes. Ordinary System calls are wired up; not every overload or newer API. [Exact scope](numerics.md) |
+| NM02 | Floating point, Decimal, BigInteger, Convert/Parse families | Compiled subset; Decimal/BigInteger missing | Single storage/argument/return precision, unsigned-to-floating conversion, remainder, classification, invariant string Parse/TryParse and typed checked Convert subset. Culture/provider/object overloads, floating formatting and full checked CIL remain gaps. [Exact scope and feasibility](numerics.md) |
 | TX01 | `Encoding`, globalization, culture and time/date APIs | Compiled subset; other families missing | UTF-8/UTF-16/ASCII/Latin-1 codecs, strict fallback exceptions and BOM/text buffering; globalization and time/date APIs remain absent |
 | TH01 | Tasks, async/await, cancellation, Thread and synchronization | Compiled cooperative subset | Task/Task<T>, builders/awaiters, completion sources, Yield/Run, WhenAll/WhenAny, ConfigureAwait, cancellation and chunked IO. [Exact async scope and namespace mapping](async-runtime.md). Integer-millisecond Task.Delay and [Dolphin.Timing](timing.md) clocks/frame/callback timers are supported. No async void, ValueTask, thread pool, Thread/locks, System.Threading.Timer or synchronization contexts |
 | NW01 | `System.Net`, sockets, HttpClient | Compiled subset | IPv4 UDP/TCP client/server, DNS A/CNAME and TCP fallback, streamed HTTP/1.1 and selected standard bindings. [Exact networking scope](network-runtime.md); TLS/HTTPS and hardware acceptance remain pending |
@@ -70,6 +72,7 @@ Standard List, selected streams/text and cooperative async now have compiled smo
 - `tests/GenericSharingSmoke/Program.cs`: combined compiled runtime/generic/nullable/collection regressions; its helper classes are test fixtures.
 - `tests/ControlFlowSmoke/Program.cs`, `tools/DolphinDotNet.Compiler.Tests/Program.cs`: control flow and compiler characterization.
 - `tests/managed_runtime_tests.c`: native mechanisms; native-only evidence must not promote a normal managed API to supported.
+- `tests/NumericSmoke/Program.cs`, `tests/numeric_host.c`: ordinary System numeric contracts on .NET 8, sanitizer/GC-stress AOT and 32-bit hosts. The numeric PowerPC acceptance DOL uses `tests/automatic_tasks_gamecube_entry.c`; local Dolphin execution reached the completion symbol with the success word. CI repeats these checks. This establishes the numeric subset only, not physical hardware or full numeric conformance.
 - `tools/DolphinDotNet.Compiler/IntrinsicRegistry.cs`, `ValueIrImporter.cs`, `ValueCBackend.cs`: production managed call bindings and emitted behavior.
 - `AotCompiler.EnsureEnumerationContracts`: synthetic generic/nongeneric collection contracts.
 - GameCube ELF/DOL linking is verified. Hardware/Dolphin execution and runtime stack high-water are still separate pending verification.
