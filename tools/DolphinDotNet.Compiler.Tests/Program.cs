@@ -30,6 +30,9 @@ Run(helloHost, "");
 var normalBundle = Path.Combine(tempDirectory, "normal-bundle");
 Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{normalBundle}\"");
 var normalMake = File.ReadAllText(Path.Combine(normalBundle, "Makefile"));
+foreach (var dependency in new[] { "s2d.c", "d2fixed.c", "LICENSE-Boost" })
+    if (!File.Exists(Path.Combine(normalBundle, "include", "ryu", dependency)))
+        throw new Exception("Standalone bundle is missing numeric dependency: " + dependency);
 if (normalMake.Contains("-ldb ", StringComparison.Ordinal) ||
     normalMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
     File.Exists(Path.Combine(normalBundle, "source/debug_gamecube.c")))

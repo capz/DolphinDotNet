@@ -123,6 +123,9 @@ internal static class MetadataLoader
   "System.Runtime.CompilerServices.ConfiguredTaskAwaitable+ConfiguredTaskAwaiter"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable+ConfiguredTaskAwaiter",
   "System.Runtime.CompilerServices.ConfiguredTaskAwaitable`1+ConfiguredTaskAwaiter"=>"Dolphin.Runtime.CompilerServices.ConfiguredTaskAwaitable`1+ConfiguredTaskAwaiter",
 
+  "System.IFormattable"=>"Dolphin.Text.IFormattable", "System.Globalization.CultureInfo"=>"Dolphin.Globalization.CultureInfo",
+  "System.Text.StringBuilder+AppendInterpolatedStringHandler"=>"Dolphin.Text.StringBuilder+AppendInterpolatedStringHandler",
+  "System.Text.StringBuilder"=>"Dolphin.Text.StringBuilder", "System.Runtime.CompilerServices.DefaultInterpolatedStringHandler"=>"Dolphin.Text.DefaultInterpolatedStringHandler", "System.StringComparison"=>"Dolphin.Text.StringComparison", "System.StringSplitOptions"=>"Dolphin.Text.StringSplitOptions",
   "System.Math"=>"Dolphin.Numerics.Math", "System.MathF"=>"Dolphin.Numerics.MathF", "System.Random"=>"Dolphin.Numerics.Random", "System.Convert"=>"Dolphin.Numerics.Convert", "System.MidpointRounding"=>"Dolphin.Numerics.MidpointRounding",
   "System.StringComparer"=>"Dolphin.Collections.StringComparer",
   "System.Threading.CancellationToken"=>"Dolphin.Threading.CancellationToken",

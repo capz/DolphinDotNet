@@ -3,6 +3,27 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+/* Managed execution uses IEEE subnormals. libogc's native default sets NI. */
+static inline uint64_t dnd_managed_fp_enter(void) {
+#if defined(__powerpc__) || defined(__PPC__)
+    union {double value;uint64_t bits;} saved,ieee;
+    __asm__ volatile("mffs %0":"=f"(saved.value)::"memory");
+    ieee.bits=saved.bits&~UINT64_C(4);
+    __asm__ volatile("mtfsf 255,%0"::"f"(ieee.value):"memory");
+    return saved.bits;
+#else
+    return 0;
+#endif
+}
+static inline void dnd_managed_fp_leave(uint64_t bits) {
+#if defined(__powerpc__) || defined(__PPC__)
+    union {double value;uint64_t bits;} saved;saved.bits=bits;
+    __asm__ volatile("mtfsf 255,%0"::"f"(saved.value):"memory");
+#else
+    (void)bits;
+#endif
+}
 #include <setjmp.h>
 
 typedef struct DndType DndType;
@@ -169,6 +190,7 @@ void dnd_managed_heap_init(DndManagedHeap *heap, void *memory, size_t size);
 DndObject *dnd_object_new(DndManagedHeap *heap, const DndType *type);
 DndString *dnd_string_from_utf16(DndManagedHeap *heap,const uint16_t *chars,uint32_t length);
 DndString *dnd_string_from_utf8(DndManagedHeap *heap, const char *text);
+DndString *dnd_string_repeat(DndManagedHeap *,int,int);
 DndString *dnd_string_concat(DndManagedHeap *heap, const DndString *a, const DndString *b);
 DndString *dnd_string_from_i64(DndManagedHeap *heap, int64_t value);
 DndString *dnd_string_from_u64(DndManagedHeap *heap, uint64_t value);
@@ -179,6 +201,7 @@ uint16_t dnd_string_char_at(const DndString *value, int32_t index);
 bool dnd_string_starts_with(const DndString *value, const DndString *prefix);
 bool dnd_string_ends_with(const DndString *value, const DndString *suffix);
 int32_t dnd_string_index_of(const DndString *value, const DndString *needle);
+DndString *dnd_string_substring_from(DndManagedHeap *,const DndString *,int32_t);
 DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, int32_t start, int32_t length);
 DndArray *dnd_managed_array_new(DndManagedHeap *heap, uint32_t length, uint32_t element_size);
 DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length, uint32_t element_size, const DndType *element_type, bool elements_are_references);

@@ -106,8 +106,12 @@ internal static class GameCubeBundle
         foreach (var sub in new[] { "source", "include", "scripts" })
             Directory.CreateDirectory(Path.Combine(directory, sub));
 
-        foreach (var path in Directory.GetFiles(Path.Combine(root, "include"), "*.h"))
-            File.Copy(path, Path.Combine(directory, "include", Path.GetFileName(path)), true);
+        foreach (var path in Directory.GetFiles(Path.Combine(root, "include"), "*", SearchOption.AllDirectories))
+        {
+            var destination=Path.Combine(directory,"include",Path.GetRelativePath(Path.Combine(root,"include"),path));
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(path,destination,true);
+        }
         foreach (var path in Directory.GetFiles(Path.Combine(root, "source"), "*.inc"))
             File.Copy(path, Path.Combine(directory, "source", Path.GetFileName(path)), true);
         Directory.CreateDirectory(Path.Combine(directory,"vendor","ufbx"));

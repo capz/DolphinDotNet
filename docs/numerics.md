@@ -32,7 +32,7 @@ Supported static primitive overloads:
 
 Integer parsing accepts decimal digits, an optional leading sign and surrounding ASCII numeric whitespace. It checks the complete 32/64-bit range without passing through floating point. Unsigned negative zero is accepted. Parse distinguishes null, format and overflow failures; TryParse returns false and writes zero on failure.
 
-Single/Double parsing accepts decimal/exponent syntax, optional invariant comma grouping in the integer portion, surrounding ASCII numeric whitespace, and case-insensitive NaN/Infinity. It preserves negative zero and follows the modern .NET overflow-to-infinity behavior. The trimmed input is bounded to 4096 UTF-16 characters; larger inputs fail as a format error. Single uses strtof directly to avoid a double-rounding parse. The runtime assumes the default C locale; locale changes are unsupported. This is a bounded invariant grammar, not a complete culture-aware .NET parser. Boolean parsing accepts case-insensitive True/False with surrounding Unicode whitespace.
+Single/Double parsing accepts decimal/exponent syntax, optional invariant comma grouping in the integer portion, surrounding ASCII numeric whitespace, and case-insensitive NaN/Infinity. It preserves negative zero and follows the modern .NET overflow-to-infinity behavior. The trimmed input is bounded to 4096 UTF-16 characters; larger inputs fail as a format error. Single uses a direct-width Ryu parser for short decimal input, with strtof fallback for longer inputs, to avoid double-rounding. Double uses the corresponding Ryu/strtod paths. The runtime assumes the default C locale; locale changes are unsupported. This is a bounded invariant grammar, not a complete culture-aware .NET parser. Boolean parsing accepts case-insensitive True/False with surrounding Unicode whitespace.
 
 Typed Convert overloads:
 
@@ -45,7 +45,7 @@ Typed Convert overloads:
 
 Numeric range violations raise OverflowException. Floating-to-integral Convert rounds ties to even and rejects NaN/infinity. Null strings convert to numeric zero or false; ToChar requires a non-null, single-character string. String conversions use the parsing rules above.
 
-Not implemented: NumberStyles, culture/provider, span, radix/base conversion, object/IConvertible and formatting overloads; primitive floating ToString; direct Byte/SByte/Int16/UInt16 Parse families. Unsupported calls fail AOT resolution rather than falling back to the desktop BCL.
+Not implemented for parsing/numeric conversion: NumberStyles, culture/provider, span, radix/base conversion, object/IConvertible and direct Byte/SByte/Int16/UInt16 Parse families. Primitive ToString, typed/object Convert.ToString and invariant formatting providers are now covered by [the string runtime](string-runtime.md). Unsupported calls fail AOT resolution rather than falling back to the desktop BCL.
 
 ## Floating-point lowering
 

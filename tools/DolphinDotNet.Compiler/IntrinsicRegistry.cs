@@ -11,11 +11,13 @@ internal enum IntrinsicKind
     StringFromChars,
     ObjectConstructor,
     ObjectGetHashCode,
+    ObjectToString,
     ObjectEquals,
     ObjectStaticEquals,
     StringLength,
     StringCharAt,
     StringEquals,
+    StringInstanceEquals,
     StringNotEquals,
     StringStartsWith,
     StringEndsWith,
@@ -24,6 +26,7 @@ internal enum IntrinsicKind
     StringSubstring,
     StringConcat,
     PrimitiveToString,
+    PrimitiveToStringProvider,
     ExceptionConstructor,
     ExceptionMessage,
     GameCubeWriteLine,
@@ -68,12 +71,12 @@ internal static class IntrinsicRegistry
 {
     public static IntrinsicKind Classify(MetadataReader md,EntityHandle handle)
     {
-        string? type=null;string? name=null;var parameterCount=-1;
+        string? type=null;string? name=null;var parameterCount=-1;string[] parameterTypes=Array.Empty<string>();
         if(handle.Kind==HandleKind.MethodSpecification) return Classify(md,md.GetMethodSpecification((MethodSpecificationHandle)handle).Method);
         if(handle.Kind==HandleKind.MemberReference)
         {
             var member=md.GetMemberReference((MemberReferenceHandle)handle);
-            type=MetadataLoader.ResolveTypeName(md,member.Parent);name=md.GetString(member.Name);var sr=md.GetBlobReader(member.Signature);var sh=sr.ReadSignatureHeader();if(sh.IsGeneric)sr.ReadCompressedInteger();parameterCount=sr.ReadCompressedInteger();
+            type=MetadataLoader.ResolveTypeName(md,member.Parent);name=md.GetString(member.Name);parameterTypes=member.DecodeMethodSignature(new MethodSignatureIdentity(),null).ParameterTypes.ToArray();var sr=md.GetBlobReader(member.Signature);var sh=sr.ReadSignatureHeader();if(sh.IsGeneric)sr.ReadCompressedInteger();parameterCount=sr.ReadCompressedInteger();
         }
         else if(handle.Kind==HandleKind.MethodDefinition)
         {
@@ -86,7 +89,7 @@ internal static class IntrinsicRegistry
         {
             ("Dolphin.Numerics.NativeNumeric",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Text.NativeText",_)=>IntrinsicKind.NativeStorage,
-            ("System.String",".ctor") when parameterCount is 1 or 3=>IntrinsicKind.StringFromChars,
+            ("System.String",".ctor") when (parameterCount is 1 or 3&&parameterTypes.FirstOrDefault()=="Char[]")||(parameterCount==2&&parameterTypes.FirstOrDefault()=="Char")=>IntrinsicKind.StringFromChars,
             ("Dolphin.Graphics.NativeModel",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Graphics.NativeGraphics",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Graphics.Raw.NativeGX",_)=>IntrinsicKind.NativeStorage,
@@ -103,26 +106,24 @@ internal static class IntrinsicRegistry
             ("Dolphin.Collections.NativeComparison",_)=>IntrinsicKind.NativeComparison,
             ("System.Runtime.CompilerServices.RuntimeHelpers","InitializeArray")=>IntrinsicKind.InitializeArray,
             ("System.Object",".ctor")=>IntrinsicKind.ObjectConstructor,
+            ("System.Object","ToString") when parameterCount==0=>IntrinsicKind.ObjectToString,
             ("System.Object","GetHashCode")=>IntrinsicKind.ObjectGetHashCode,
             ("System.Object","Equals") when parameterCount==2=>IntrinsicKind.ObjectStaticEquals,
             ("System.Object","Equals")=>IntrinsicKind.ObjectEquals,
+            ("System.String","Equals") when parameterCount==1&&parameterTypes[0]=="String"=>IntrinsicKind.StringInstanceEquals,
+            ("System.String","Equals") when parameterCount==2&&parameterTypes.All(t=>t=="String")=>IntrinsicKind.StringEquals,
+            ("System.String","StartsWith") when parameterCount==1&&parameterTypes[0]=="String"=>IntrinsicKind.StringStartsWith,
+            ("System.String","EndsWith") when parameterCount==1&&parameterTypes[0]=="String"=>IntrinsicKind.StringEndsWith,
+            ("System.String","Contains") when parameterCount==1&&parameterTypes[0]=="String"=>IntrinsicKind.StringContains,
+            ("System.String","IndexOf") when parameterCount==1&&parameterTypes[0]=="String"=>IntrinsicKind.StringIndexOf,
             ("System.String","get_Length")=>IntrinsicKind.StringLength,
             ("System.String","get_Chars")=>IntrinsicKind.StringCharAt,
-            ("System.String","Equals")=>IntrinsicKind.StringEquals,
             ("System.String","op_Equality")=>IntrinsicKind.StringEquals,
             ("System.String","op_Inequality")=>IntrinsicKind.StringNotEquals,
-            ("System.String","StartsWith") when parameterCount==1=>IntrinsicKind.StringStartsWith,
-            ("System.String","EndsWith") when parameterCount==1=>IntrinsicKind.StringEndsWith,
-            ("System.String","Contains") when parameterCount==1=>IntrinsicKind.StringContains,
-            ("System.String","IndexOf") when parameterCount==1=>IntrinsicKind.StringIndexOf,
             ("System.String","Substring") when parameterCount is 1 or 2=>IntrinsicKind.StringSubstring,
-            ("System.String","Concat") when parameterCount==2=>IntrinsicKind.StringConcat,
-            ("System.Int32","ToString") when parameterCount==0=>IntrinsicKind.PrimitiveToString,
-            ("System.Int64","ToString") when parameterCount==0=>IntrinsicKind.PrimitiveToString,
-            ("System.UInt32","ToString") when parameterCount==0=>IntrinsicKind.PrimitiveToString,
-            ("System.UInt64","ToString") when parameterCount==0=>IntrinsicKind.PrimitiveToString,
-            ("System.Boolean","ToString") when parameterCount==0=>IntrinsicKind.PrimitiveToString,
-            ("System.Char","ToString") when parameterCount==0=>IntrinsicKind.PrimitiveToString,
+            ("System.String","Concat") when parameterCount==2&&parameterTypes.All(t=>t=="String")=>IntrinsicKind.StringConcat,
+            ("System.Int32" or "System.Int64" or "System.UInt32" or "System.UInt64" or "System.Int16" or "System.UInt16" or "System.Byte" or "System.SByte" or "System.Single" or "System.Double" or "System.Boolean" or "System.Char","ToString") when (parameterCount==1&&parameterTypes[0].EndsWith("System.IFormatProvider",StringComparison.Ordinal))||(parameterCount==2&&parameterTypes[0]=="String"&&parameterTypes[1].EndsWith("System.IFormatProvider",StringComparison.Ordinal))=>IntrinsicKind.PrimitiveToStringProvider,
+            ("System.Int32" or "System.Int64" or "System.UInt32" or "System.UInt64" or "System.Int16" or "System.UInt16" or "System.Byte" or "System.SByte" or "System.Single" or "System.Double" or "System.Boolean" or "System.Char","ToString") when parameterCount==0||parameterCount==1&&parameterTypes[0]=="String"=>IntrinsicKind.PrimitiveToString,
 
             (_, ".ctor") when type?.EndsWith("Exception",StringComparison.Ordinal)==true=>IntrinsicKind.ExceptionConstructor,
             (_, "get_Message") when type?.EndsWith("Exception",StringComparison.Ordinal)==true=>IntrinsicKind.ExceptionMessage,

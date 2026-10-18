@@ -145,7 +145,7 @@ internal static class AotCompiler
         var def=assembly.Metadata.GetMethodDefinition(method.Handle);var body=assembly.PE.GetMethodBody(def.RelativeVirtualAddress);
         if(body.LocalSignature.IsNil)return Array.Empty<LocalStorage>();
         var types=assembly.Metadata.GetStandaloneSignature(body.LocalSignature).DecodeLocalSignature(new SignatureAbi(model),new SignatureAbi.Context(method.TypeArguments??Array.Empty<GenericRepresentation>(),method.MethodArguments??Array.Empty<GenericRepresentation>()));
-        return types.Select(t=>new LocalStorage(t.Size,t.Kind??CilStackKind.NativeInt,t.References,t.ScalarSize)).ToArray();
+        return types.Select(t=>new LocalStorage(t.Size,t.Kind??CilStackKind.NativeInt,t.References,t.ScalarSize,t.Name is "System.Boolean" or "System.Byte" or "System.Char" or "System.UInt16")).ToArray();
     }
 
     private static byte[] ReadFieldData(AssemblyModel assembly,CompilationModel model,CilInstruction instruction)
@@ -306,7 +306,8 @@ internal static class AotCompiler
                 _=>new CilCallStackEffect(1,size==8?CilStackKind.I8:CilStackKind.I4)
             };
         }
-        if(intrinsic==IntrinsicKind.PrimitiveToString)return new CilCallStackEffect(1,CilStackKind.ObjectReference);
+        if(intrinsic is IntrinsicKind.PrimitiveToString or IntrinsicKind.PrimitiveToStringProvider){var member=md.GetMemberReference((MemberReferenceHandle)MetadataTokens.EntityHandle(raw));var reader=md.GetBlobReader(member.Signature);reader.ReadSignatureHeader();return new CilCallStackEffect(1+reader.ReadCompressedInteger(),CilStackKind.ObjectReference);}
+        if(intrinsic==IntrinsicKind.ObjectToString)return new CilCallStackEffect(1,CilStackKind.ObjectReference);
         if(intrinsic==IntrinsicKind.ObjectGetHashCode)return new CilCallStackEffect(1,CilStackKind.I4);
         if(intrinsic is IntrinsicKind.ObjectEquals or IntrinsicKind.ObjectStaticEquals)return new CilCallStackEffect(2,CilStackKind.I4);
         if(intrinsic is IntrinsicKind.KeyValuePairConstructor)return i.OpCode==0x73?new CilCallStackEffect(2,CilStackKind.ManagedPointer):new CilCallStackEffect(3,null);

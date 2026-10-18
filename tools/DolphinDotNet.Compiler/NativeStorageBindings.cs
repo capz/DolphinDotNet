@@ -5,6 +5,12 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["TextArrayLength"]=("dnd_text_array_length","o",false),
+        ["TextArrayItem"]=("dnd_text_array_item","oi",true),
+        ["FromCharArray"]=("dnd_text_from_array","a",true),
+        ["TextCase"]=("dnd_text_case","si",true),
+        ["TextRangeEqual"]=("dnd_text_range_equal","sisiii",false),
+        ["RepeatChar"]=("dnd_string_repeat","ii",true),
         ["Unary"]=("dnd_numeric_unary","id",false),
         ["Binary"]=("dnd_numeric_binary","idd",false),
         ["Round"]=("dnd_numeric_round","dii",false),

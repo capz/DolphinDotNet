@@ -226,7 +226,9 @@ DndString *dnd_text_decode(DndManagedHeap *h, DndArray *a, int offset,
 }
 
 #include "dnd_unicode_upper.h"
+#include "dnd_unicode_lower.h"
 static uint32_t upper(uint32_t c) {
+  if(c==0x131)return c; /* Invariant/ordinal casing preserves dotless i. */
   size_t low = 0,
          high = sizeof(dnd_unicode_upper) / sizeof(dnd_unicode_upper[0]);
   while (low < high) {
@@ -241,17 +243,17 @@ static uint32_t upper(uint32_t c) {
              ? dnd_unicode_upper[low].to
              : c;
 }
-static int next_unit(DndString *s, uint32_t *index, int *pending, bool fold) {
+static int next_unit_limit(DndString *s, uint32_t *index, int *pending, bool fold,uint32_t end) {
   if (*pending >= 0) {
     int c = *pending;
     *pending = -1;
     return c;
   }
-  if (*index >= s->length)
+  if (*index >= end)
     return -1;
   uint32_t c = s->chars[(*index)++];
   if (fold) {
-    if (c >= 0xd800 && c <= 0xdbff && *index < s->length &&
+    if (c >= 0xd800 && c <= 0xdbff && *index < end &&
         s->chars[*index] >= 0xdc00 && s->chars[*index] <= 0xdfff)
       c = 0x10000 + ((c - 0xd800) << 10) + (s->chars[(*index)++] - 0xdc00);
     c = upper(c);
@@ -262,6 +264,13 @@ static int next_unit(DndString *s, uint32_t *index, int *pending, bool fold) {
     }
   }
   return (int)c;
+}
+static int next_unit(DndString *s,uint32_t *index,int *pending,bool fold){return next_unit_limit(s,index,pending,fold,s->length);}
+bool dnd_text_range_equal(DndString *a,int start_a,DndString *b,int start_b,int count,bool fold) {
+    if(!a||!b){dnd_exception_throw(DND_EXCEPTION_ARGUMENT_NULL,"Null comparison text.");return false;}
+    if(start_a<0||start_b<0||count<0||(uint32_t)start_a>a->length||(uint32_t)count>a->length-(uint32_t)start_a||(uint32_t)start_b>b->length||(uint32_t)count>b->length-(uint32_t)start_b){dnd_exception_throw(DND_EXCEPTION_ARGUMENT_OUT_OF_RANGE,"Invalid comparison range.");return false;}
+    uint32_t ai=(uint32_t)start_a,bi=(uint32_t)start_b;int ap=-1,bp=-1;
+    for(;;){int ac=next_unit_limit(a,&ai,&ap,fold,(uint32_t)(start_a+count)),bc=next_unit_limit(b,&bi,&bp,fold,(uint32_t)(start_b+count));if(ac!=bc)return false;if(ac<0)return true;}
 }
 int dnd_text_compare(DndString *a, DndString *b, bool fold) {
   if (a == b)
@@ -291,3 +300,35 @@ int dnd_text_hash(DndString *s, bool fold) {
     h = (h ^ (uint32_t)c) * 16777619u;
   return (int32_t)h;
 }
+
+DndString *dnd_text_case(DndManagedHeap *heap,DndString *s,bool lowercase) {
+    if(!s){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Null text.");return NULL;}
+    uint16_t *units=malloc(((size_t)s->length+1)*sizeof(uint16_t));
+    if(!units){dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY,"Casing buffer allocation failed.");return NULL;}
+    uint32_t count=0;
+    for(uint32_t i=0;i<s->length;i++){
+        uint32_t cp=s->chars[i];
+        if(cp>=0xd800&&cp<=0xdbff&&i+1<s->length&&s->chars[i+1]>=0xdc00&&s->chars[i+1]<=0xdfff){cp=0x10000+((cp-0xd800)<<10)+(s->chars[++i]-0xdc00);}
+        if(lowercase){
+            size_t low=0,high=sizeof(dnd_unicode_lower)/sizeof(dnd_unicode_lower[0]);
+            while(low<high){size_t mid=low+(high-low)/2;if(dnd_unicode_lower[mid].from<cp)low=mid+1;else high=mid;}
+            if(cp!=0x130&&low<sizeof(dnd_unicode_lower)/sizeof(dnd_unicode_lower[0])&&dnd_unicode_lower[low].from==cp)cp=dnd_unicode_lower[low].to;
+        }else cp=upper(cp);
+        if(cp>0xffff){cp-=0x10000;units[count++]=(uint16_t)(0xd800+(cp>>10));units[count++]=(uint16_t)(0xdc00+(cp&1023));}else units[count++]=(uint16_t)cp;
+    }
+    DndString *result=dnd_string_from_utf16(heap,units,count);free(units);return result;
+}
+
+int dnd_text_array_length(DndObject *value){return value&&(value->type->flags&DND_TYPE_FLAG_ARRAY)?(int)((DndArray*)value)->length:-1;}
+DndObject *dnd_text_array_item(DndManagedHeap *heap,DndObject *value,int index){
+    int count=dnd_text_array_length(value);if(index<0||index>=count){dnd_exception_throw(DND_EXCEPTION_ARGUMENT_OUT_OF_RANGE,"Invalid array index.");return NULL;}
+    DndArray *array=(DndArray*)value;
+    if(array->elements_are_references)return *(DndObject**)(array->data+(size_t)index*array->element_size);
+    if(!array->element_type||array->element_type->instance_size<sizeof(DndObject)+array->element_size){dnd_exception_throw(DND_EXCEPTION_NOT_SUPPORTED,"Untyped array formatting is unavailable.");return NULL;}
+    DndObject **slots[]={&value};DndGcFrame frame;dnd_gc_frame_push(&frame,slots,1);
+    DndObject *box=dnd_object_new(heap,array->element_type);
+    if(box)memcpy((uint8_t*)box+sizeof(DndObject),array->data+(size_t)index*array->element_size,array->element_size);
+    dnd_gc_frame_pop(&frame);return box;
+}
+
+DndString *dnd_text_from_array(DndManagedHeap *heap,DndArray *chars){return chars?dnd_text_from_chars(heap,chars,0,(int)chars->length):dnd_string_from_utf8(heap,"");}

@@ -2,6 +2,10 @@ using System;
 namespace Dolphin.Text;
 internal static class NativeText
 {
+    internal static int TextArrayLength(object value)=>throw new NotSupportedException("AOT intrinsic");
+    internal static object? TextArrayItem(object value,int index)=>throw new NotSupportedException("AOT intrinsic");
+    internal static string TextCase(string value,bool lowercase)=>throw new NotSupportedException("AOT intrinsic");
+    internal static bool TextRangeEqual(string a,int startA,string b,int startB,int count,bool ignoreCase)=>throw new NotSupportedException("AOT intrinsic");
     internal static int TextCompare(string? a,string? b,bool ignoreCase)=>throw new NotSupportedException("AOT intrinsic");
     internal static int TextHash(string text,bool ignoreCase)=>throw new NotSupportedException("AOT intrinsic");
     internal static byte[] Encode(string text,int codePage,bool strict)=>throw new NotSupportedException("AOT intrinsic");

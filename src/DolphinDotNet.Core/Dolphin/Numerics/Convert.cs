@@ -153,4 +153,32 @@ public static class Convert
     public static char ToChar(uint value){if(value>65535)throw new OverflowException();return (char)value;}
     public static char ToChar(long value){if(value<0||value>65535)throw new OverflowException();return (char)value;}
     public static char ToChar(ulong value){if(value>65535)throw new OverflowException();return (char)value;}
+    public static string ToString(sbyte value)=>value.ToString();
+    public static string ToString(sbyte value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(byte value)=>value.ToString();
+    public static string ToString(byte value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(short value)=>value.ToString();
+    public static string ToString(short value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(ushort value)=>value.ToString();
+    public static string ToString(ushort value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(int value)=>value.ToString();
+    public static string ToString(int value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(uint value)=>value.ToString();
+    public static string ToString(uint value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(long value)=>value.ToString();
+    public static string ToString(long value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(ulong value)=>value.ToString();
+    public static string ToString(ulong value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(float value)=>value.ToString();
+    public static string ToString(float value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(double value)=>value.ToString();
+    public static string ToString(double value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(bool value)=>value.ToString();
+    public static string ToString(bool value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string ToString(char value)=>value.ToString();
+    public static string ToString(char value,IFormatProvider? provider)=>value.ToString(provider);
+    public static string? ToString(string? value)=>value;
+    public static string? ToString(string? value,IFormatProvider? provider){Dolphin.Text.Formatter.Provider(provider);return value;}
+    public static string ToString(object? value)=>Dolphin.Text.Formatter.Value(value,null);
+    public static string ToString(object? value,IFormatProvider? provider){Dolphin.Text.Formatter.Provider(provider);return Dolphin.Text.Formatter.Value(value,null,provider);}
 }

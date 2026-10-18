@@ -295,6 +295,13 @@ DndString *dnd_string_from_char(DndManagedHeap *heap, uint16_t value) {
     return result;
 }
 
+DndString *dnd_string_repeat(DndManagedHeap *heap,int character,int count) {
+    if(count<0){dnd_exception_throw(DND_EXCEPTION_ARGUMENT_OUT_OF_RANGE,"Negative repeat count.");return NULL;}
+    if((uint32_t)count>(UINT32_MAX-sizeof(DndString)-7u)/2u-1u){dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY,"String is too large.");return NULL;}
+    DndString *s=(DndString*)allocate(heap,&DND_TYPE_STRING,sizeof(DndString)+((size_t)count+1)*2);
+    if(s){s->length=(uint32_t)count;for(int i=0;i<count;i++)s->chars[i]=(uint16_t)character;s->chars[count]=0;}return s;
+}
+
 DndString *dnd_string_concat(DndManagedHeap *heap, const DndString *a, const DndString *b) {
     uint32_t a_length = a ? a->length : 0;
     uint32_t b_length = b ? b->length : 0;
@@ -333,19 +340,19 @@ uint16_t dnd_string_char_at(const DndString *value, int32_t index) {
 
 bool dnd_string_starts_with(const DndString *value, const DndString *prefix) {
     if (!value) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "String is null."); return false; }
-    if (!prefix) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Prefix is null."); return false; }
+    if (!prefix) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT_NULL, "Prefix is null."); return false; }
     return prefix->length <= value->length && memcmp(value->chars, prefix->chars, (size_t)prefix->length * sizeof(uint16_t)) == 0;
 }
 
 bool dnd_string_ends_with(const DndString *value, const DndString *suffix) {
     if (!value) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "String is null."); return false; }
-    if (!suffix) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Suffix is null."); return false; }
+    if (!suffix) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT_NULL, "Suffix is null."); return false; }
     return suffix->length <= value->length && memcmp(value->chars + value->length - suffix->length, suffix->chars, (size_t)suffix->length * sizeof(uint16_t)) == 0;
 }
 
 int32_t dnd_string_index_of(const DndString *value, const DndString *needle) {
     if (!value) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "String is null."); return -1; }
-    if (!needle) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Search string is null."); return -1; }
+    if (!needle) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT_NULL, "Search string is null."); return -1; }
     if (needle->length == 0) return 0;
     if (needle->length > value->length) return -1;
     uint32_t last = value->length - needle->length;
@@ -358,10 +365,16 @@ int32_t dnd_string_index_of(const DndString *value, const DndString *needle) {
     return -1;
 }
 
+DndString *dnd_string_substring_from(DndManagedHeap *heap,const DndString *value,int32_t start){
+    if(!value){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"String is null.");return NULL;}
+    if(start<0||(uint32_t)start>value->length){dnd_exception_throw(DND_EXCEPTION_ARGUMENT_OUT_OF_RANGE,"Substring range is invalid.");return NULL;}
+    return dnd_string_substring(heap,value,start,(int32_t)(value->length-(uint32_t)start));
+}
+
 DndString *dnd_string_substring(DndManagedHeap *heap, const DndString *value, int32_t start, int32_t length) {
     if (!value) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "String is null."); return NULL; }
     if (start < 0 || length < 0 || (uint32_t)start > value->length || (uint32_t)length > value->length - (uint32_t)start) {
-        dnd_exception_throw(DND_EXCEPTION_ARGUMENT, "Substring range is invalid."); return NULL;
+        dnd_exception_throw(DND_EXCEPTION_ARGUMENT_OUT_OF_RANGE, "Substring range is invalid."); return NULL;
     }
     /* Collection during allocation must not reclaim the source string. */
     DndObject *source_root = (DndObject *)value;
