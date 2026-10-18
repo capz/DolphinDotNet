@@ -83,7 +83,7 @@ payload budget shared by buffers, textures, meshes and batches.
 `Material` provides vertex tint, one texture, alpha cutoff, culling, depth
 read/write, opaque/alpha/additive/premultiplied blending and unlit or fixed diffuse
 lighting. This is the GX fixed-function pipeline, with a camera-space headlight;
-programmable shaders, PBR and automatically sorted transparency are not provided.
+GLSL/HLSL programmable shaders, PBR and automatically sorted transparency are not provided.
 Draw transparent objects in the appropriate order. Transforms/cameras retain the
 existing column-major managed matrix convention.
 
@@ -144,3 +144,7 @@ raw pointer/color calls, asynchronous texture/font loading, text and nine-slice 
 GameCube DOL against libogc2. Host recording cannot establish visual correctness,
 GPU performance, lighting appearance or cache behavior on hardware. Validate
 those with Dolphin and real hardware before relying on a graphics workload.
+
+For real TEV pixel-combiner effects, see [ShaderDemo](../samples/ShaderDemo/README.md).
+[Shader support plans](shader-support.md) compare managed presets, a constrained
+material compiler, CPU effects, multipass effects and a programmable backend.
