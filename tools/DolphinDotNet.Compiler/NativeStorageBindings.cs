@@ -19,6 +19,7 @@ internal static class NativeStorageBindings
         ["RepeatChar"]=("dnd_string_repeat","ii",true),
         ["Unary"]=("dnd_numeric_unary","id",false),
         ["Binary"]=("dnd_numeric_binary","idd",false),
+        ["Fma"]=("dnd_numeric_fma","iddd",false),
         ["Round"]=("dnd_numeric_round","dii",false),
         ["Sign"]=("dnd_numeric_sign","d",false),
         ["Classify"]=("dnd_numeric_classify","id",false),

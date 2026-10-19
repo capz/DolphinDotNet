@@ -98,4 +98,6 @@ public sealed class StringBuilder
     public StringBuilder AppendJoin(string? separator,params object?[] values)=>Append(StringOps.Join(separator,values));
     public StringBuilder AppendJoin(char separator,params string?[] values)=>Append(StringOps.Join(separator,values));
     public StringBuilder AppendJoin(char separator,params object?[] values)=>Append(StringOps.Join(separator,values));
+    public StringBuilder AppendJoin<T>(string? separator,System.Collections.Generic.IEnumerable<T> values)=>Append(StringOps.Join(separator,values));
+    public StringBuilder AppendJoin<T>(char separator,System.Collections.Generic.IEnumerable<T> values)=>Append(StringOps.Join(separator,values));
 }

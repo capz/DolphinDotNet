@@ -4,4 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Optimize>true</Optimize>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/DolphinDotNet.Core/DolphinDotNet.Core.csproj" />
+  </ItemGroup>
 </Project>

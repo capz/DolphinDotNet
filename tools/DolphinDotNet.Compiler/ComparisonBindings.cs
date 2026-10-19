@@ -45,7 +45,7 @@ internal static class ComparisonBindings
         {
             b.AppendLine($"static inline int32_t dnd_comparison_{Id(type)}_{op.ToLowerInvariant()}(intptr_t a{(op=="Hash"?"":",intptr_t z")}) {{ (void)a;");
             var method=Find(type,op=="BoxEqual"?"Equal":op,op!="BoxEqual");
-            if(method is not null)b.AppendLine($"return (int32_t){ValueCBackend.Symbol(method.Key)}(a{(op=="Hash"?"":",z")});");
+            if(method is not null)b.AppendLine($"return (int32_t){ValueCBackend.Symbol(method.Key)}(a{(op=="Hash"?"":op=="BoxEqual"?",(z-sizeof(DndObject))":",z")});");
             else if(op=="Compare")b.AppendLine("(void)a;(void)z;dnd_exception_throw(DND_EXCEPTION_ARGUMENT,\"Type does not implement comparison.\");return 0;");
             else
             {
@@ -54,7 +54,7 @@ internal static class ComparisonBindings
                 foreach(var f in fields)
                 {
                     var r=f.Representation??new GenericRepresentation(f.IsReference?GenericRepresentationKind.PointerSized:GenericRepresentationKind.ValueType,f.Size,f.IsReference?new[]{0}:null,f.IsReference?"System.Object":f.Size==8?"System.Int64":"System.Int32");
-                    string Read(string v)=>r.IsAggregate&&r.TypeName is {} n&&model.Types.ContainsKey(n)?$"({v}+{f.Offset})":r.TypeName is "System.Single"?$"(*(float*)({v}+{f.Offset}))":r.TypeName is "System.Double"?$"(*(double*)({v}+{f.Offset}))":f.IsReference?$"(*(intptr_t*)({v}+{f.Offset}))":f.Size==8?$"dnd_read_i64((void*)({v}+{f.Offset}))":f.Size==1?$"(*(uint8_t*)({v}+{f.Offset}))":f.Size==2?$"dnd_read_u16((void*)({v}+{f.Offset}))":$"dnd_read_i32((void*)({v}+{f.Offset}))";
+                    string Read(string v)=>r.IsAggregate&&r.TypeName is {} n&&model.Types.ContainsKey(n)?$"({v}+{f.Offset})":r.TypeName is "System.Single"?$"dnd_read_float((void*)({v}+{f.Offset}))":r.TypeName is "System.Double"?$"dnd_read_double((void*)({v}+{f.Offset}))":f.IsReference?$"dnd_read_pointer((void*)({v}+{f.Offset}))":f.Size==8?$"dnd_read_i64((void*)({v}+{f.Offset}))":f.Size==1?$"(*(uint8_t*)({v}+{f.Offset}))":f.Size==2?$"dnd_read_u16((void*)({v}+{f.Offset}))":$"dnd_read_i32((void*)({v}+{f.Offset}))";
                     var e=Expression(op=="BoxEqual"?"Equal":op,r,op=="Hash"?new[]{Read("a")}:new[]{Read("a"),Read("z")},model);
                     b.AppendLine(op=="Hash"?$"h=(h*31u)+(uint32_t){e};":$"if(!{e})return 0;");
                 }

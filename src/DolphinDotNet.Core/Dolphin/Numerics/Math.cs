@@ -3,6 +3,29 @@ namespace Dolphin.Numerics;
 public enum MidpointRounding { ToEven=0,AwayFromZero=1,ToZero=2,ToNegativeInfinity=3,ToPositiveInfinity=4 }
 public static class Math
 {
+    public static Decimal Abs(Decimal x)=>Decimal.Abs(x);
+    public static int Sign(Decimal x)=>Decimal.Sign(x);
+    public static Decimal Min(Decimal a,Decimal b)=>Decimal.Min(a,b);
+    public static Decimal Max(Decimal a,Decimal b)=>Decimal.Max(a,b);
+    public static Decimal Clamp(Decimal x,Decimal min,Decimal max){if(min>max)throw new ArgumentException();return x<min?min:x>max?max:x;}
+    public static Decimal Floor(Decimal x)=>Decimal.Floor(x);
+    public static Decimal Ceiling(Decimal x)=>Decimal.Ceiling(x);
+    public static Decimal Truncate(Decimal x)=>Decimal.Truncate(x);
+    public static Decimal Round(Decimal x)=>Decimal.Round(x);
+    public static Decimal Round(Decimal x,int digits)=>Decimal.Round(x,digits);
+    public static Decimal Round(Decimal x,MidpointRounding mode)=>Decimal.Round(x,mode);
+    public static Decimal Round(Decimal x,int digits,MidpointRounding mode)=>Decimal.Round(x,digits,mode);
+    public static double Cbrt(double x)=>NativeNumeric.Unary(17,x);
+    public static double Log2(double x)=>NativeNumeric.Unary(18,x);
+    public static double Acosh(double x)=>NativeNumeric.Unary(19,x);
+    public static double Asinh(double x)=>NativeNumeric.Unary(20,x);
+    public static double Atanh(double x)=>NativeNumeric.Unary(21,x);
+    public static double BitIncrement(double x)=>NativeNumeric.Unary(22,x);
+    public static double BitDecrement(double x)=>NativeNumeric.Unary(23,x);
+    public static int ILogB(double x)=>(int)NativeNumeric.Unary(24,x);
+    public static double CopySign(double x,double sign)=>NativeNumeric.Binary(5,x,sign);
+    public static double ScaleB(double x,int n)=>NativeNumeric.Binary(6,x,n);
+    public static double FusedMultiplyAdd(double x,double y,double z)=>NativeNumeric.Fma(0,x,y,z);
     public static double Abs(double x)=>NativeNumeric.Unary(0,x);
     public static double Sqrt(double x)=>NativeNumeric.Unary(1,x);
     public static double Sin(double x)=>NativeNumeric.Unary(2,x);
@@ -69,6 +92,17 @@ public static class Math
 }
 public static class MathF
 {
+    public static float Cbrt(float x)=>(float)Math.Cbrt(x);
+    public static float Log2(float x)=>(float)Math.Log2(x);
+    public static float Acosh(float x)=>(float)Math.Acosh(x);
+    public static float Asinh(float x)=>(float)Math.Asinh(x);
+    public static float Atanh(float x)=>(float)Math.Atanh(x);
+    public static float BitIncrement(float x)=>(float)NativeNumeric.Unary(25,x);
+    public static float BitDecrement(float x)=>(float)NativeNumeric.Unary(26,x);
+    public static int ILogB(float x)=>Math.ILogB(x);
+    public static float CopySign(float x,float sign)=>(float)Math.CopySign(x,sign);
+    public static float ScaleB(float x,int n)=>(float)NativeNumeric.Binary(7,x,n);
+    public static float FusedMultiplyAdd(float x,float y,float z)=>(float)NativeNumeric.Fma(1,x,y,z);
     public static float Abs(float x)=>(float)Math.Abs(x);
     public static float Sqrt(float x)=>(float)Math.Sqrt(x);
     public static float Sin(float x)=>(float)Math.Sin(x);
@@ -103,6 +137,7 @@ internal static class NativeNumeric
     private static Exception Unsupported()=>new PlatformNotSupportedException("Requires DolphinDotNet AOT.");
     internal static double Unary(int op,double x)=>throw Unsupported();
     internal static double Binary(int op,double a,double b)=>throw Unsupported();
+    internal static double Fma(int op,double x,double y,double z)=>throw Unsupported();
     internal static double Round(double x,int digits,int mode)=>throw Unsupported();
     internal static int Sign(double x)=>throw Unsupported();
     internal static int Classify(int op,double x)=>throw Unsupported();

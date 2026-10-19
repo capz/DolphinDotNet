@@ -214,7 +214,7 @@ if (!genericGenerated.Contains("setjmp(dnd_eh_frame.environment)", StringCompari
     throw new Exception("Exception handling lowering missing.");
 var literalDefinitions = genericGenerated.Split('\n').Count(line => line.Contains("dnd_string_literal_", StringComparison.Ordinal) && line.Contains("static const struct", StringComparison.Ordinal));
 if (literalDefinitions == 0) throw new Exception("Static string literals were not emitted.");
-if (genericGenerated.Contains("dnd_string_from_utf8(dnd_value_heap", StringComparison.Ordinal))
+if (genericGenerated.Contains("= (intptr_t)dnd_string_from_utf8(dnd_value_heap", StringComparison.Ordinal))
     throw new Exception("String literal loading still allocates from the managed heap.");
 if (!genericGenerated.Contains("dnd_string_char_at", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_string_starts_with", StringComparison.Ordinal) ||

@@ -6,6 +6,7 @@ DndString *dnd_format_integer(DndManagedHeap *,int64_t,int,DndString *);
 DndString *dnd_format_float(DndManagedHeap *,double,int,DndString *);
 double dnd_numeric_unary(int op,double x);
 double dnd_numeric_binary(int op,double a,double b);
+double dnd_numeric_fma(int op,double x,double y,double z);
 double dnd_numeric_round(double x,int digits,int mode);
 int dnd_numeric_sign(double x);
 int dnd_numeric_classify(int op,double x);

@@ -8,6 +8,7 @@ public enum StringComparison { CurrentCulture, CurrentCultureIgnoreCase, Invaria
 // Instance System.String calls are lowered to static methods with a receiver.
 public static class StringOps
 {
+    public static CharEnumerator GetEnumerator(string value){Receiver(value);return new CharEnumerator(value); }
     public static readonly string Empty="";
     public static string Create(IFormatProvider? provider,ref DefaultInterpolatedStringHandler handler){Formatter.Provider(provider);return handler.ToStringAndClear();}
     internal static void Receiver(string value){if(value==null)throw new NullReferenceException();}
@@ -129,4 +130,13 @@ public static class StringOps
     public static string Join(char separator,object?[] values)=>Join(separator.ToString(),values);
     public static string Join<T>(char separator,IEnumerable<T> values)=>Join(separator.ToString(),values);
     private static string? ArrayJoin(string? separator,object values){int count=NativeText.TextArrayLength(values);if(count<0)return null;var b=new StringBuilder();for(int i=0;i<count;i++){if(i>0)b.Append(separator);b.Append(Formatter.ObjectValue(NativeText.TextArrayItem(values,i)));}return b.ToString();}
+    public static int Compare(string? a,int indexA,string? b,int indexB,int length)=>Compare(a,indexA,b,indexB,length,StringComparison.Ordinal);
+    public static int Compare(string? a,int indexA,string? b,int indexB,int length,StringComparison comparison)
+    {
+        if(length<0||indexA<0||indexB<0||indexA>(a==null?0:a.Length)||indexB>(b==null?0:b.Length))throw new ArgumentOutOfRangeException();
+        string? left=a==null?null:a.Substring(indexA,System.Math.Min(length,a.Length-indexA));
+        string? right=b==null?null:b.Substring(indexB,System.Math.Min(length,b.Length-indexB));
+        return Compare(left,right,comparison);
+    }
+    public static int CompareOrdinal(string? a,int indexA,string? b,int indexB,int length)=>Compare(a,indexA,b,indexB,length,StringComparison.Ordinal);
 }

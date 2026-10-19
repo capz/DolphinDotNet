@@ -13,7 +13,8 @@
       "Compile generated AOT C",
       "Compile and execute generic sharing integration smoke",
       "Validate managed numeric contracts and floating-point semantics",
-      "Validate string operations, formatting and interpolation"
+      "Validate string operations, formatting and interpolation",
+      "Validate wishlist collections, arrays, exact numbers and text"
     ],
     "io": [
       "Test and package save-image command-line tool",
@@ -77,7 +78,8 @@
       "Build TEV shader demo with source maps",
       "Build numeric contracts PowerPC acceptance DOL",
       "Build string contracts PowerPC acceptance DOL",
-      "Build Kart peer-to-peer racer with source maps"
+      "Build Kart peer-to-peer racer with source maps",
+      "Build wishlist PowerPC acceptance DOLs"
     ],
     "compat": [
       "Build generated standalone GameCube project",
@@ -125,7 +127,8 @@
       "Verify DiscBrowser starts without inserted media",
       "Verify DiscBrowser reads inserted ISO metadata and files",
       "Verify numeric contracts on PowerPC in Dolphin",
-      "Verify string contracts on PowerPC in Dolphin"
+      "Verify string contracts on PowerPC in Dolphin",
+      "Verify wishlist contracts on PowerPC in Dolphin"
     ],
     "controllers": [
       "Verify all four controllers through Dolphin pipe inputs"

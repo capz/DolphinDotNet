@@ -41,6 +41,7 @@ internal enum IntrinsicKind
     KeyValuePairConstructor,
     KeyValuePairKey,
     KeyValuePairValue,
+    ShapedArrayConstructor, ShapedArrayGet, ShapedArraySet, ShapedArrayAddress,
     ArrayLength,
     ArrayLongLength,
     ArrayRank,
@@ -71,12 +72,17 @@ internal static class IntrinsicRegistry
 {
     public static IntrinsicKind Classify(MetadataReader md,EntityHandle handle)
     {
-        string? type=null;string? name=null;var parameterCount=-1;string[] parameterTypes=Array.Empty<string>();
+        string? type=null;string? name=null;var genericMethod=false;var parameterCount=-1;string[] parameterTypes=Array.Empty<string>();
         if(handle.Kind==HandleKind.MethodSpecification) return Classify(md,md.GetMethodSpecification((MethodSpecificationHandle)handle).Method);
         if(handle.Kind==HandleKind.MemberReference)
         {
             var member=md.GetMemberReference((MemberReferenceHandle)handle);
-            type=MetadataLoader.ResolveTypeName(md,member.Parent);name=md.GetString(member.Name);parameterTypes=member.DecodeMethodSignature(new MethodSignatureIdentity(),null).ParameterTypes.ToArray();var sr=md.GetBlobReader(member.Signature);var sh=sr.ReadSignatureHeader();if(sh.IsGeneric)sr.ReadCompressedInteger();parameterCount=sr.ReadCompressedInteger();
+            if(member.Parent.Kind==HandleKind.TypeSpecification){
+                var arrayReader=md.GetBlobReader(md.GetTypeSpecification((TypeSpecificationHandle)member.Parent).Signature);
+                if(arrayReader.ReadSignatureTypeCode()==SignatureTypeCode.Array)return md.GetString(member.Name) switch {
+                    ".ctor"=>IntrinsicKind.ShapedArrayConstructor,"Get"=>IntrinsicKind.ShapedArrayGet,"Set"=>IntrinsicKind.ShapedArraySet,"Address"=>IntrinsicKind.ShapedArrayAddress,_=>IntrinsicKind.None};
+            }
+            type=MetadataLoader.ResolveTypeName(md,member.Parent);name=md.GetString(member.Name);parameterTypes=member.DecodeMethodSignature(new MethodSignatureIdentity(),null).ParameterTypes.ToArray();var sr=md.GetBlobReader(member.Signature);var sh=sr.ReadSignatureHeader();if(sh.IsGeneric){genericMethod=true;sr.ReadCompressedInteger();}parameterCount=sr.ReadCompressedInteger();
         }
         else if(handle.Kind==HandleKind.MethodDefinition)
         {
@@ -146,7 +152,7 @@ internal static class IntrinsicRegistry
             ("System.Array","GetUpperBound")=>IntrinsicKind.ArrayGetUpperBound,
             ("System.Array","Clear") when parameterCount==3=>IntrinsicKind.ArrayClear,
             ("System.Array","Copy") when parameterCount is 3 or 5=>IntrinsicKind.ArrayCopy,
-            ("System.Array","IndexOf")=>IntrinsicKind.ArrayIndexOf,
+            ("System.Array","IndexOf") when !genericMethod=>IntrinsicKind.ArrayIndexOf,
             ("System.Collections.Generic.ICollection`1","get_Count")=>IntrinsicKind.ArrayInterfaceCount,
             ("System.Collections.Generic.ICollection`1","get_IsReadOnly")=>IntrinsicKind.ArrayInterfaceIsReadOnly,
             ("System.Collections.Generic.IList`1","get_Item")=>IntrinsicKind.ArrayInterfaceItemGet,
@@ -164,6 +170,7 @@ internal static class IntrinsicRegistry
             ("System.ArraySegment`1+Enumerator","MoveNext")=>IntrinsicKind.ArraySegmentEnumeratorMoveNext,
             ("System.ArraySegment`1+Enumerator","get_Current")=>IntrinsicKind.ArraySegmentEnumeratorCurrent,
             ("System.ArraySegment`1+Enumerator","Dispose")=>IntrinsicKind.ArraySegmentEnumeratorDispose,
+            ("System.Console","WriteLine") when parameterCount==1&&parameterTypes[0]=="String"=>IntrinsicKind.GameCubeWriteLine,
             ("Dolphin.Diagnostics.DebugOverlay","WriteLine")=>IntrinsicKind.GameCubeWriteLine,
             ("Dolphin.Input.Controller","ReadButtonsDown")=>IntrinsicKind.GameCubeReadButtonsDown,
             (_, "GetEnumerator") when type?.Contains("ArraySegment",StringComparison.Ordinal)==true=>IntrinsicKind.ArraySegmentGetEnumerator,
