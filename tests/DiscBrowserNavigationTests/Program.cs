@@ -17,3 +17,15 @@ Check(0,up:true,now:450008,connected:false);Check(-1,up:true,now:450009);
 Check(-1,up:true,now:9000000);Check(0,up:true,now:9000001); // No repeat burst after a stall.
 navigation.Reset();Check(-1,up:true,now:9000002);
 Console.WriteLine("DiscBrowser stick, D-pad, repeat timing and disconnect navigation passed.");
+
+if(BrowserPath.Relative(true,"gcloader:/Games/PSO.ISO")!="Games/PSO.ISO")throw new Exception("GC Loader path");
+if(BrowserPath.Relative(false,"dvd:/dir/file.bin")!="dir/file.bin")throw new Exception("DVD path");
+if(BrowserPath.Relative(true,"gcloader:/")!="")throw new Exception("GC Loader root");
+if(!BrowserPath.IsDiscImage("gcloader:/GAMES/Game.GCM") ||
+   !BrowserPath.IsDiscImage("gcloader:/games/image.iso") ||
+   BrowserPath.IsDiscImage("gcloader:/games/readme.txt"))throw new Exception("ISO recognition");
+bool rejected=false;
+try{BrowserPath.Relative(true,"dvd:/wrong-device");}
+catch(ArgumentException){rejected=true;}
+if(!rejected)throw new Exception("Cross-device path was accepted");
+Console.WriteLine("DiscBrowser GC Loader/DVD paths and ISO selection passed.");
