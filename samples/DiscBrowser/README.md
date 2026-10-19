@@ -60,8 +60,8 @@ Probes an inserted GameCube disc/ODE first, then an optional GC Loader
 and a scrolling eight-row list. Enumeration is bounded to 256 directories plus
 256 files per directory; this is a browser demo, not an unbounded indexer.
 
-Up/down selects; A opens a directory; B opens its parent; X refreshes/remounts;
+The D-pad or left analog stick selects; holding a direction repeats after 350 ms, then every 100 ms. A opens a directory; B opens its parent; X refreshes/remounts;
 Start exits; Z toggles statistics. Missing media leaves a usable status screen.
-Refreshing disposes the previous banner and releases mounts before replacing them.
+Refreshing disposes the previous banner and releases filesystem mounts before replacing them. A ready drive is reused rather than reset; cover changes or drive errors still take the normal mount path.
 The browser lists files; it does not execute them. CI checks no-media startup and
-inserted ISO/banner/file access in Dolphin.
+inserted ISO/banner/file access and pipe-controller navigation (scrolling, A/B, refresh and exit) in Dolphin. Controller port 1 is used; a disconnected controller is reported on screen.
