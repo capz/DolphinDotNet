@@ -103,3 +103,53 @@ class SharedCaptureTests(unittest.TestCase):
         self.assertFalse(inspect.signature(capture.run).parameters['imported_models'].default)
         source=Path(capture.__file__).read_text()
         self.assertIn('run(parser.parse_args(),imported_models=True)',source)
+
+
+class FrameConversionTests(unittest.TestCase):
+    def test_conversion_has_bounded_workers_and_deadline(self):
+        import dolphin_shader_test as capture
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            log=Path(directory)/'decode.log'
+            with patch.object(capture.subprocess,'run',return_value=Mock(stdout=b'pixels',stderr=b'')) as run:
+                self.assertEqual(b'pixels',capture.run_ffmpeg(['-i','capture.avi','pipe:1'],log))
+            command=run.call_args.args[0]
+            self.assertEqual(['1','1'],[command[i+1] for i,arg in enumerate(command) if arg=='-threads'])
+            self.assertEqual('1',command[command.index('-filter_threads')+1])
+            self.assertEqual(30,run.call_args.kwargs['timeout'])
+
+    def test_timeout_preserves_decoder_diagnostics(self):
+        import dolphin_shader_test as capture
+        from tempfile import TemporaryDirectory
+        import subprocess
+        with TemporaryDirectory() as directory:
+            log=Path(directory)/'decode.log'
+            with patch.object(capture.subprocess,'run',side_effect=subprocess.TimeoutExpired('ffmpeg',30,stderr=b'decoder stalled')):
+                with self.assertRaisesRegex(RuntimeError,'decoder stalled'):
+                    capture.run_ffmpeg(['-i','capture.avi','pipe:1'],log)
+            self.assertEqual('decoder stalled',log.read_text())
+
+    def test_incomplete_decoded_frames_fail_before_pixel_checks(self):
+        import dolphin_shader_test as capture
+        for raw in (b'',bytes(640*480*3),bytes(640*480*3*2+1)):
+            with self.subTest(length=len(raw)),patch.object(capture,'run_ffmpeg',return_value=raw):
+                with self.assertRaisesRegex(ValueError,'Incomplete capture'):
+                    capture.decode_capture(Path('partial.avi'),Path('decode.log'))
+
+    def test_real_video_round_trip_and_invalid_input(self):
+        import dolphin_shader_test as capture
+        import shutil
+        from tempfile import TemporaryDirectory
+        if not shutil.which('ffmpeg'):self.skipTest('FFmpeg not installed')
+        with TemporaryDirectory() as directory:
+            root=Path(directory);video=root/'capture.avi'
+            capture.run_ffmpeg(['-f','rawvideo','-pix_fmt','rgb24','-s','32x24',
+                                '-i','pipe:0','-c:v','ffv1','-y',str(video)],
+                               root/'encode.log',input=bytes((20,80,160))*32*24*8)
+            frames=capture.decode_capture(video,root/'decode.log')
+            self.assertEqual(6,len(frames))
+            self.assertEqual(bytes((20,80,160)),frames[1][:3])
+            invalid=root/'invalid.avi';invalid.write_bytes(b'not a video')
+            with self.assertRaisesRegex(RuntimeError,'FFmpeg failed'):
+                capture.decode_capture(invalid,root/'invalid.log')
+            self.assertTrue((root/'invalid.log').read_text())

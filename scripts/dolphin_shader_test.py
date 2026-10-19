@@ -14,6 +14,7 @@ import time
 from dolphin_smoke import check
 
 CAPTURE_TIMEOUT_SECONDS=90
+FFMPEG_TIMEOUT_SECONDS=30
 
 
 def wait_for_capture(process,frames,seconds):
@@ -26,6 +27,33 @@ def wait_for_capture(process,frames,seconds):
         time.sleep(.05)
     sizes={p.name:p.stat().st_size for p in frames.glob('*.avi')}
     raise TimeoutError(f'No rendered shader frames within {seconds}s; capture files: {sizes}')
+
+
+def run_ffmpeg(arguments,log_path,**kwargs):
+    # Bound decoder, filter and encoder pools separately. Auto-sizing against
+    # host CPU count oversubscribes constrained CI runners (CI 1363).
+    command=['ffmpeg','-hide_banner','-loglevel','error','-nostdin',
+             '-threads','1','-filter_threads','1','-filter_complex_threads','1',
+             *arguments[:-1],'-threads','1',arguments[-1]]
+    try:
+        result=subprocess.run(command,check=True,stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE,timeout=FFMPEG_TIMEOUT_SECONDS,**kwargs)
+    except (subprocess.TimeoutExpired,subprocess.CalledProcessError) as error:
+        diagnostics=(error.stderr or b'').decode(errors='replace')
+        log_path.write_text(diagnostics)
+        raise RuntimeError(f'FFmpeg failed ({error}); diagnostics: {log_path}\n{diagnostics[-4000:]}') from error
+    log_path.write_bytes(result.stderr)
+    return result.stdout
+
+
+def decode_capture(capture,log_path):
+    # Normalize PAL/NTSC output to the sample's logical coordinates.
+    raw=run_ffmpeg(['-i',str(capture),'-vf','scale=640:480:flags=neighbor',
+                    '-frames:v','6','-f','rawvideo','-pix_fmt','rgb24','pipe:1'],log_path)
+    size=640*480*3
+    if len(raw)<2*size or len(raw)%size:
+        raise ValueError(f'Incomplete capture: {len(raw)} RGB bytes; need at least two complete frames')
+    return [raw[i:i+size] for i in range(0,len(raw),size)]
 
 
 def validate(rgb):
@@ -115,18 +143,15 @@ def run(args,imported_models=False):
             try:process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid,signal.SIGKILL);process.wait(timeout=5)
+        if process is not None:
+            try:os.killpg(process.pid,signal.SIGKILL)
+            except ProcessLookupError:pass
     diagnostics=(root/'emulator.log').read_text(errors='replace')
     for path in (root/'user'/'Logs').glob('*.log'):
         diagnostics+=path.read_text(errors='replace')
     errors=check(diagnostics)
     if errors:raise RuntimeError('\n'.join(errors))
-    # Normalize PAL/NTSC output to the sample's logical coordinates.
-    command=['ffmpeg','-hide_banner','-loglevel','error','-i',str(capture),
-             '-vf','scale=640:480:flags=neighbor','-frames:v','6']
-    raw=subprocess.run(command+['-f','rawvideo','-pix_fmt','rgb24','pipe:1'],
-                       check=True,stdout=subprocess.PIPE,timeout=10).stdout
-    size=640*480*3
-    frames=[raw[i:i+size] for i in range(0,len(raw),size)]
+    frames=decode_capture(capture,root/'decode.log')
     proof=None
     if not imported_models:
         proof=validate(frames[1])
@@ -144,9 +169,9 @@ def run(args,imported_models=False):
         break
     if proof is None:
         raise AssertionError('No valid imported-model default/effect/default cycle in first six frames')
-    subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-f','rawvideo','-pix_fmt','rgb24',
-                    '-s','640x480','-i','pipe:0','-frames:v','1','-y',str(root/'frame.png')],
-                   input=selected,check=True,timeout=10)
+    run_ffmpeg(['-f','rawvideo','-pix_fmt','rgb24','-s','640x480',
+                '-i','pipe:0','-frames:v','1','-y',str(root/'frame.png')],
+               root/'encode.log',input=selected)
     proof['elapsedSeconds']=round(time.monotonic()-started,3)
     (root/'results.json').write_text(json.dumps(proof,indent=2)+'\n')
     print(json.dumps(proof))
