@@ -22,7 +22,8 @@ Supported families and overloads:
 | CopyTo, ToCharArray | Character copy with ranges; full string or start/count array conversion |
 | Split | char/char[]/string/string[] separators, count/options combinations listed in StringOps.cs; None, RemoveEmptyEntries and TrimEntries |
 | ToUpperInvariant, ToLowerInvariant | Simple Unicode casing, including supplementary characters and preserved unmatched surrogates |
-| Compare/CompareOrdinal/CompareTo | Whole-string ordinal comparisons, explicit comparison option; CompareTo(string/object) |
+| Compare/CompareOrdinal/CompareTo | Whole-string and substring/range ordinal comparisons, explicit comparison option; CompareTo(string/object) |
+| GetEnumerator | CharEnumerator with Current/MoveNext/Reset/Clone/Dispose |
 | Copy, Clone, ToString | Selected legacy copy/identity paths |
 
 Concat/Join treat null entries as empty. Generic enumerable overloads work with managed lists/custom enumerables and have a dedicated path for typed scalar/reference/struct arrays, so they do not depend on general array-as-interface enumeration. Untyped or unmaterialized array element types remain unavailable. Object concatenation/joining uses virtual ToString; composite formatting and interpolation additionally honor IFormattable.
@@ -45,8 +46,8 @@ Supported ToString receivers: sbyte, byte, short, ushort, int, uint, long, ulong
 
 | Numeric types | Format codes |
 | --- | --- |
-| Fixed-width integers | D/d, X/x, B/b, G/g, F/f, N/n, E/e |
-| Single/Double | G/g, R/r, F/f, N/n, E/e |
+| Fixed-width integers | D/d, X/x, B/b, G/g, F/f, N/n, E/e, C/c, P/p |
+| Single/Double | G/g, R/r, F/f, N/n, E/e, C/c, P/p |
 
 Precision is bounded to 0–99. Integer hexadecimal/binary output preserves the receiver's two's-complement width. Integer G/E precision uses .NET's decimal half-up behavior; floating precision uses round-to-nearest-even. N uses invariant comma grouping and a period decimal separator. G/R use Ryu shortest conversion (up to 9 Single or 17 Double significant digits) and normalize exponent notation. F/N/E also use integer-based Ryu conversion. Negative zero, NaN and infinity have explicit output. The pinned Ryu source and Boost license are included under include/ryu. Its experimental 9/17-digit decimal parsers handle the short forms used for round trips; longer inputs fall back to libc after grammar validation. Fixed reference vectors establish tested cases, not exhaustive floating-bit-pattern conformance.
 
@@ -64,16 +65,18 @@ StringBuilder uses a managed growable char[] and returns immutable string snapsh
 - AppendLine with optional string; AppendFormat one/two/three/params object arguments and provider variants; AppendJoin string/char separators with string[] or object[].
 - Insert: string/repeat, primitives/object, char[] and slice; Remove; Replace char/string with optional range; CopyTo; content-based Equals(StringBuilder).
 
-Capacity growth is geometric; this implementation is not the desktop chunked builder. MaxCapacity is enforced strictly, and AppendLine emits LF for the console. Pointer/span/chunk enumeration and generic AppendJoin overloads are not implemented.
+Capacity growth is geometric; this implementation is not the desktop chunked builder. MaxCapacity is enforced strictly, and AppendLine emits LF for the console. Generic AppendJoin(string/char, IEnumerable<T>) is also supported. Pointer/span/chunk enumeration remains unavailable.
 
 String.Format and AppendFormat implement numbered items, repeated arguments, positive/negative alignment, optional numeric format strings and escaped literal braces. Null arguments become empty text. Missing arguments, malformed braces, invalid alignment/item syntax and unsupported numeric formats throw FormatException. Item indices/alignment are bounded below one million. Existing virtual ToString and IFormattable implementations are honored.
 
-Modern C# default interpolated strings, aligned/formatted items, String.Create(invariantProvider, $"…") and StringBuilder.Append/AppendLine interpolated handlers are supported. Handler values retain GC roots for their builders/providers. Span-based formatted items, arbitrary custom handler types and FormattableString are outside this slice.
+Modern C# default interpolated strings, aligned/formatted items, String.Create(invariantProvider, $"…") and StringBuilder.Append/AppendLine interpolated handlers are supported. Handler values retain GC roots for their builders/providers. Span-based formatted items, arbitrary custom handler types remain outside this slice. FormattableString, its compiler factory, argument access and invariant composite rendering are supported.
 
 ## Remaining gaps
 
-Full culture-sensitive collation/casing, normalization, complete String enumeration/interfaces, unsafe/span overloads and every newer framework overload remain incomplete. Decimal, BigInteger, Enum/date/time formatting, custom numeric patterns (such as "0.00"), currency/percent codes, custom IFormatProvider/ICustomFormatter services and precision above 99 remain unsupported. Nullable values can be boxed for formatting; direct Nullable<T>.ToString is explicitly rejected pending dedicated lowering. These gaps are not counted as full ST01–ST04 conformance.
+Full culture-sensitive collation/casing, normalization, complete String interface enumeration, unsafe/span overloads and every newer framework overload remain incomplete. Enum/date/time formatting, custom numeric patterns (such as "0.00"), custom IFormatProvider/ICustomFormatter services and precision above 99 remain unsupported. Nullable integer/Boolean/Char ToString returns empty for missing values and formats present values. Floating and aggregate nullable payloads remain unavailable. Decimal/BigInteger have the selected formats described in [numerics](numerics.md). These gaps are not counted as full ST01–ST04 conformance.
 
 ## Evidence
 
 tests/StringSmoke exercises the same ordinary System API source on .NET 8 and AOT. GoldenFormats.cs contains fixed invariant .NET output vectors for subnormals, limits, shortest/general notation, precision and grouping. The suite checks null/range/format errors, Unicode searches/casing, split limits, builder mutations/self-appends, custom formatting, interpolation and byte/char byrefs. It runs with forced GC, optimized ASan/UBSan, optimized 32-bit execution and GameCube PowerPC execution in Dolphin. CI verifies the target completion symbol and success word. Compiler integration and native managed-runtime regressions cover the shared lowering/runtime changes; physical hardware acceptance remains separate.
+
+`tests/WishlistSmoke` adds differential coverage for explicit CharEnumerator, nullable text, substring comparison, generic AppendJoin, FormattableString and invariant currency/percent output.

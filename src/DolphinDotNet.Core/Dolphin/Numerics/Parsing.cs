@@ -59,3 +59,27 @@ public static class Boolean
     {for(int i=0;i<word.Length;i++){char c=text[first+i];if(c>='A'&&c<='Z')c=(char)(c+32);if(c!=word[i])return false;}return true;}
     private static bool Space(char c)=>c>=9&&c<=13||c==32||c==0x85||c==0xa0||c==0x1680||c>=0x2000&&c<=0x200a||c==0x2028||c==0x2029||c==0x202f||c==0x205f||c==0x3000;
 }
+
+public static class Byte
+{
+    public static byte Parse(string text){int n=Int32.Parse(text);if(n<0||n>255)throw new OverflowException();return (byte)n;}
+    public static bool TryParse(string? text,out byte value){int n;bool success=Int32.TryParse(text,out n)&&n>=0&&n<=255;value=success?(byte)n:(byte)0;return success;}
+}
+
+public static class SByte
+{
+    public static sbyte Parse(string text){int n=Int32.Parse(text);if(n<-128||n>127)throw new OverflowException();return (sbyte)n;}
+    public static bool TryParse(string? text,out sbyte value){int n;bool success=Int32.TryParse(text,out n)&&n>=-128&&n<=127;value=success?(sbyte)n:(sbyte)0;return success;}
+}
+
+public static class Int16
+{
+    public static short Parse(string text){int n=Int32.Parse(text);if(n<-32768||n>32767)throw new OverflowException();return (short)n;}
+    public static bool TryParse(string? text,out short value){int n;bool success=Int32.TryParse(text,out n)&&n>=-32768&&n<=32767;value=success?(short)n:(short)0;return success;}
+}
+
+public static class UInt16
+{
+    public static ushort Parse(string text){int n=Int32.Parse(text);if(n<0||n>65535)throw new OverflowException();return (ushort)n;}
+    public static bool TryParse(string? text,out ushort value){int n;bool success=Int32.TryParse(text,out n)&&n>=0&&n<=65535;value=success?(ushort)n:(ushort)0;return success;}
+}

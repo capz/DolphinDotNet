@@ -77,6 +77,13 @@ static void grouped(char *out,const char *input) {
     if(start){out[at++]='-';}for(int i=start;i<end;i++){out[at++]=input[i];if((end-i-1)%3==0&&i+1<end)out[at++]=',';}
     while(input[end]){out[at++]=input[end++];}out[at]=0;
 }
+/* Invariant currency uses the currency sign, and percent keeps decimal scaling
+ * in digit space: multiplying a binary float by 100 would round twice. */
+static void decorated(char *out,const char *number,int currency) {
+    int negative=number[0]=='-';const char *digits=number+negative;char grouped_digits[2048];grouped(grouped_digits,digits);
+    if(currency){strcpy(out,negative?"(¤":"¤");strcat(out,grouped_digits);if(negative)strcat(out,")");}
+    else {out[0]=0;if(negative)strcat(out,"-");strcat(out,grouped_digits);strcat(out," %");}
+}
 DndString *dnd_format_integer(DndManagedHeap *heap,int64_t raw,int kind,DndString *format) {
     char code;int precision;if(!format_spec(format,&code,&precision))return NULL;
     char upper=code>='a'&&code<='z'?(char)(code-32):code;
@@ -93,7 +100,7 @@ DndString *dnd_format_integer(DndManagedHeap *heap,int64_t raw,int kind,DndStrin
         for(int i=0;i<length/2;i++){char c=digits[i];digits[i]=digits[length-1-i];digits[length-1-i]=c;}digits[length]=0;
         int at=0,exponent=length-1;
         if(upper=='D'||(upper=='G'&&precision<=0)){if(negative)out[at++]='-';while(precision>length){out[at++]='0';precision--;}memcpy(out+at,digits,(size_t)length+1);}
-        else if(upper=='F'||upper=='N'){if(precision<0)precision=2;if(negative)temporary[at++]='-';memcpy(temporary+at,digits,(size_t)length);at+=length;if(precision){temporary[at++]='.';for(int i=0;i<precision;i++)temporary[at++]='0';}temporary[at]=0;if(upper=='N')grouped(out,temporary);else memcpy(out,temporary,(size_t)at+1);}
+        else if(upper=='F'||upper=='N'||upper=='C'||upper=='P'){if(upper=='P'){digits[length++]='0';digits[length++]='0';}if(precision<0)precision=2;if(negative)temporary[at++]='-';memcpy(temporary+at,digits,(size_t)length);at+=length;if(precision){temporary[at++]='.';for(int i=0;i<precision;i++)temporary[at++]='0';}temporary[at]=0;if(upper=='N')grouped(out,temporary);else if(upper=='C'||upper=='P')decorated(out,temporary,upper=='C');else memcpy(out,temporary,(size_t)at+1);}
         else if(upper=='E'){if(precision<0)precision=6;length=round_digits(digits,length,precision+1,&exponent);scientific(out,digits,length,exponent,precision,code,negative);}
         else if(upper=='G'){length=round_digits(digits,length,precision,&exponent);while(length>1&&digits[length-1]=='0')length--;decimal_general(out,digits,length,exponent,precision,code=='g'?'e':'E',negative);}
         else return format_error();
@@ -103,14 +110,20 @@ DndString *dnd_format_integer(DndManagedHeap *heap,int64_t raw,int kind,DndStrin
 static __attribute__((noinline)) DndString *format_float_impl(DndManagedHeap *heap,double value,int single,DndString *format) {
     char code;int precision;if(!format_spec(format,&code,&precision))return NULL;
     char upper=code>='a'&&code<='z'?(char)(code-32):code;
-    if(upper!='G'&&upper!='R'&&upper!='F'&&upper!='N'&&upper!='E')return format_error();
+    if(upper!='G'&&upper!='R'&&upper!='F'&&upper!='N'&&upper!='E'&&upper!='C'&&upper!='P')return format_error();
     if(single)value=(float)value;
     if(isnan(value)){return dnd_string_from_utf8(heap,"NaN");}if(isinf(value))return dnd_string_from_utf8(heap,value<0?"-Infinity":"Infinity");
     char out[2048],temporary[1536],digits[128];int negative=signbit(value)!=0;
-    if(upper=='F'||upper=='N'){
+    if(upper=='F'||upper=='N'||upper=='C'||upper=='P'){
         if(precision<0)precision=2;
-        int used=d2fixed_buffered_n(value,(uint32_t)precision,temporary);temporary[used]=0;
-        if(upper=='N')grouped(out,temporary);else strcpy(out,temporary);
+        int used=d2fixed_buffered_n(value,(uint32_t)(precision+(upper=='P'?2:0)),temporary);temporary[used]=0;
+        if(upper=='P'){
+            char *point=strchr(temporary,'.');
+            /* Ryu emitted two extra fractional places, now move the decimal. */
+            if(point){memmove(point,point+1,2);if(precision)point[2]='.';else point[2]=0;}
+            char *start=temporary+(temporary[0]=='-');while(start[0]=='0'&&start[1]>='0'&&start[1]<='9')memmove(start,start+1,strlen(start));
+        }
+        if(upper=='N')grouped(out,temporary);else if(upper=='C'||upper=='P')decorated(out,temporary,upper=='C');else strcpy(out,temporary);
     }else {
         int used;
         if(upper=='E'){if(precision<0)precision=6;used=d2exp_buffered_n(value,(uint32_t)precision,temporary);}
@@ -129,13 +142,18 @@ static __attribute__((noinline)) DndString *format_float_impl(DndManagedHeap *he
 double dnd_numeric_unary(int op,double x) {
     switch(op){case 0:return fabs(x);case 1:return sqrt(x);case 2:return sin(x);case 3:return cos(x);case 4:return tan(x);
     case 5:return asin(x);case 6:return acos(x);case 7:return atan(x);case 8:return sinh(x);case 9:return cosh(x);case 10:return tanh(x);
-    case 11:return exp(x);case 12:return log(x);case 13:return log10(x);case 14:return floor(x);case 15:return ceil(x);case 16:return trunc(x);default:return NAN;}
+    case 11:return exp(x);case 12:return log(x);case 13:return log10(x);case 14:return floor(x);case 15:return ceil(x);case 16:return trunc(x);case 17:return cbrt(x);case 18:return log2(x);case 19:return acosh(x);case 20:return asinh(x);case 21:return atanh(x);
+    case 22:return isnan(x)||x==INFINITY?x:nextafter(x,INFINITY);case 23:return isnan(x)||x==-INFINITY?x:nextafter(x,-INFINITY);
+    case 24:return x==0?-2147483648.0:!isfinite(x)?2147483647.0:ilogb(x);
+    case 25:return isnan(x)||x==INFINITY?x:nextafterf((float)x,INFINITY);case 26:return isnan(x)||x==-INFINITY?x:nextafterf((float)x,-INFINITY);default:return NAN;}
 }
 double dnd_numeric_binary(int op,double a,double b) {
     switch(op){case 0:return pow(a,b);case 1:return atan2(a,b);case 2:return remainder(a,b);
     case 3:if(isnan(a))return a;if(isnan(b))return b;return a==b?(signbit(a)?a:b):(a<b?a:b);
-    case 4:if(isnan(a))return a;if(isnan(b))return b;return a==b?(signbit(a)?b:a):(a>b?a:b);default:return NAN;}
+    case 4:if(isnan(a))return a;if(isnan(b))return b;return a==b?(signbit(a)?b:a):(a>b?a:b);
+    case 5:return copysign(a,b);case 6:return scalbn(a,(int)b);case 7:return scalbnf((float)a,(int)b);default:return NAN;}
 }
+double dnd_numeric_fma(int op,double x,double y,double z){return op?fmaf((float)x,(float)y,(float)z):fma(x,y,z);}
 int dnd_numeric_classify(int op,double x) {
     switch(op){case 0:return isnan(x)!=0;case 1:return isinf(x)!=0;case 2:return isinf(x)&&x>0;case 3:return isinf(x)&&x<0;case 4:return isfinite(x)!=0;default:return 0;}
 }

@@ -45,8 +45,12 @@ internal static class AotCompiler
                 var localStorage=ReadLocalStorage(assembly,method,model);
                 var argumentKinds=(method.IsStatic?Array.Empty<CilStackKind>():new[]{CilStackKind.ObjectReference}).Concat(method.Abi?.Parameters??Array.Empty<CilStackKind>()).ToArray();
                 CilStackAnalysis stackAnalysis;try{stackAnalysis=CilStackAnalyzer.Analyze(cfg,i=>ResolveCallEffect(assembly.Metadata,model,i,method),method.ReturnsValue,body.ExceptionRegions,argumentKinds,localStorage.Select(s=>s.Size>0?CilStackKind.ManagedPointer:s.Kind).ToArray(),i=>FieldStackKind(ResolveField(assembly.Metadata,model,i,method),i.OpCode==0x7b));}catch(Exception ex){if(Environment.GetEnvironmentVariable("DND_DEBUG_IL")=="1")foreach(var i in cil)Console.Error.WriteLine($"{i.Offset:x4} {i.OpCode:x4} {i.Operand} {ResolveCallEffect(assembly.Metadata,model,i,method)}");throw new InvalidDataException($"Stack analysis failed for {method.Key}: {ex.Message}",ex);}
-                var valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,localStorage,i=>ResolveCall(assembly.Metadata,model,i,method),i=>ResolveCallEffect(assembly.Metadata,model,i,method),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i,method),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i,method),i=>ResolveTypeForContext(assembly.Metadata,model,method,i),i=>ResolveGenericTypeParameter(assembly.Metadata,model,method,i),t=>model.Types.TryGetValue(t,out var vm)&&vm.IsValueType?(vm.InstanceSize,model.Fields.Values.Where(f=>f.DeclaringType==t&&!f.IsStatic&&f.IsReference).Select(f=>f.Offset).ToArray()):(0,null),(constraint,name)=>ResolveConstrained(assembly.Metadata,model,method,constraint,name),i=>ResolveArrayEnumerator(assembly.Metadata,model,method,i),i=>ReadFieldData(assembly,model,i),body.ExceptionRegions)
+                ValueIrMethod valueIr;
+                try {
+                valueIr=ValueIrImporter.Import(method,cfg,stackAnalysis,localStorage,i=>ResolveCall(assembly.Metadata,model,i,method),i=>ResolveCallEffect(assembly.Metadata,model,i,method),i=>IsIgnoredCall(assembly.Metadata,i),i=>ResolveIntrinsic(assembly.Metadata,i),i=>NullableValueSize(assembly.Metadata,model,i),i=>GenericArguments(assembly.Metadata,model,i,method),i=>ResolveString(assembly.Metadata,i),i=>ResolveField(assembly.Metadata,model,i,method),i=>ResolveTypeForContext(assembly.Metadata,model,method,i),i=>ResolveGenericTypeParameter(assembly.Metadata,model,method,i),t=>model.Types.TryGetValue(t,out var vm)&&vm.IsValueType?(vm.InstanceSize,model.Fields.Values.Where(f=>f.DeclaringType==t&&!f.IsStatic&&f.IsReference).Select(f=>f.Offset).ToArray()):(0,null),(constraint,name)=>ResolveConstrained(assembly.Metadata,model,method,constraint,name),i=>ResolveArrayEnumerator(assembly.Metadata,model,method,i),i=>ReadFieldData(assembly,model,i),body.ExceptionRegions,i=>ShapedArrayBindings.Read(assembly.Metadata,model,i,method))
                     with { ExceptionRegions = ReadExceptionRegions(assembly.Metadata,body.ExceptionRegions) };
+                } catch(Exception error) { throw new InvalidDataException($"IR import failed for {method.Key}: {error.Message}",error); }
+
                 ValueIrVerifier.Verify(valueIr);valueOutput.Add(valueIr);
                 Discover(valueIr,model,graph);
                 DiscoverVirtuals(model,graph);
@@ -124,6 +128,7 @@ internal static class AotCompiler
                 case ValueIrDefaultComparison comparison: if(comparison.Type.TypeName is {} tn&&model.Types.ContainsKey(tn)){graph.AddType(tn);AddTypeClosure(tn,model,graph);}break;
                 case ValueIrNewDelegate: break;
                 case ValueIrDelegateInvoke: break;
+                case ValueIrUnboxAny unboxed:if(model.Types.ContainsKey(unboxed.TypeName)){graph.AddType(unboxed.TypeName);AddTypeClosure(unboxed.TypeName,model,graph);}break;
                 case ValueIrBox boxed:if(model.Types.ContainsKey(boxed.TypeName)){graph.AddType(boxed.TypeName);AddTypeClosure(boxed.TypeName,model,graph);}break;
                 case ValueIrValueConstructor value:graph.AddMethod(value.Constructor);graph.AddType(value.TypeName);break;
                 case ValueIrNewObject created: graph.AddMethod(created.Constructor);graph.AddType(created.TypeName);break;
@@ -135,6 +140,7 @@ internal static class AotCompiler
                 case ValueIrTypeTest test: graph.AddType(test.TypeName);break;
                 case ValueIrInitObject init: graph.AddType(init.TypeName);break;
                 case ValueIrCopyObject copy: graph.AddType(copy.TypeName);break;
+                case ValueIrNewShapedArray shaped:if(shaped.Shape.Element.TypeName is {} et&&model.Types.ContainsKey(et)){graph.AddType(et);AddTypeClosure(et,model,graph);}break;
                 case ValueIrNewArray array: if(!array.ElementType.StartsWith("System.",StringComparison.Ordinal))graph.AddType(array.ElementType);break;
             }
         }
@@ -210,6 +216,10 @@ internal static class AotCompiler
         if(handle.Kind!=HandleKind.TypeSpecification)return null;
         var reader=md.GetBlobReader(md.GetTypeSpecification((TypeSpecificationHandle)handle).Signature);
         var code=reader.ReadSignatureTypeCode();
+        if(code is SignatureTypeCode.GenericTypeInstance or SignatureTypeCode.SZArray){
+            reader=md.GetBlobReader(md.GetTypeSpecification((TypeSpecificationHandle)handle).Signature);
+            return GenericSharing.ReadRepresentation(md,ref reader,model,method);
+        }
         if(code is not (SignatureTypeCode.GenericTypeParameter or SignatureTypeCode.GenericMethodParameter))return null;
         var index=reader.ReadCompressedInteger();
         var args=code==SignatureTypeCode.GenericTypeParameter?method.TypeArguments:method.MethodArguments;
@@ -218,7 +228,7 @@ internal static class AotCompiler
 
     private static FieldModel? ResolveField(MetadataReader md,CompilationModel model,CilInstruction i,MethodModel? context=null)
     {
-        if(i.OpCode is not (0x7b or 0x7c or 0x7d or 0x7e or 0x80)||i.Operand is not CilMetadataToken { Token: var raw })return null;
+        if(i.OpCode is not (0x7b or 0x7c or 0x7d or 0x7e or 0x7f or 0x80)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         try
         {
             var handle=MetadataTokens.EntityHandle(raw);var field=MetadataResolver.ResolveField(md,model,handle);
@@ -253,6 +263,7 @@ internal static class AotCompiler
     {
         if(i.Operand is not CilMetadataToken { Token: var raw })return Array.Empty<GenericRepresentation>();
         var handle=MetadataTokens.EntityHandle(raw);
+        if(handle.Kind==HandleKind.TypeSpecification)return GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)handle,model,context);
         if(handle.Kind==HandleKind.MethodSpecification)return GenericSharing.ReadMethodArguments(md,(MethodSpecificationHandle)handle,model,context);
         if(handle.Kind!=HandleKind.MemberReference)return Array.Empty<GenericRepresentation>();var member=md.GetMemberReference((MemberReferenceHandle)handle);
         return member.Parent.Kind==HandleKind.TypeSpecification?GenericSharing.ReadTypeArguments(md,(TypeSpecificationHandle)member.Parent,model,context):Array.Empty<GenericRepresentation>();
@@ -280,6 +291,10 @@ internal static class AotCompiler
     {
         if(i.OpCode is not (0x28 or 0x6f or 0x73)||i.Operand is not CilMetadataToken { Token: var raw })return null;
         var arrayIntrinsic=ResolveIntrinsic(md,i);
+        if(arrayIntrinsic is IntrinsicKind.ShapedArrayConstructor or IntrinsicKind.ShapedArrayGet or IntrinsicKind.ShapedArraySet or IntrinsicKind.ShapedArrayAddress){
+            var shape=ShapedArrayBindings.Read(md,model,i,context!)!;
+            return new CilCallStackEffect(shape.Parameters+(arrayIntrinsic==IntrinsicKind.ShapedArrayConstructor?0:1),arrayIntrinsic==IntrinsicKind.ShapedArrayConstructor?CilStackKind.ObjectReference:arrayIntrinsic==IntrinsicKind.ShapedArraySet?null:arrayIntrinsic==IntrinsicKind.ShapedArrayAddress?CilStackKind.ManagedPointer:shape.Element.StackKind);
+        }
         if(arrayIntrinsic==IntrinsicKind.StringFromChars){var member=md.GetMemberReference((MemberReferenceHandle)MetadataTokens.EntityHandle(raw));var reader=md.GetBlobReader(member.Signature);reader.ReadSignatureHeader();return new CilCallStackEffect(reader.ReadCompressedInteger(),CilStackKind.ObjectReference);}
         if(arrayIntrinsic==IntrinsicKind.InitializeArray)return new CilCallStackEffect(2,null);
         if(arrayIntrinsic is IntrinsicKind.ArrayInterfaceCount or IntrinsicKind.ArrayInterfaceIsReadOnly) return new CilCallStackEffect(1,CilStackKind.I4);
@@ -372,7 +387,7 @@ internal static class AotCompiler
             var ctor=new MethodKey(type,".ctor","<contracts>","delegate-ctor");model.Methods[ctor]=new(ctor,default,false,2,false,"<contracts>",DeclaringTypeIsDelegate:true,Abi:new GenericAbi(new[]{CilStackKind.ObjectReference,CilStackKind.NativeInt},null));
             var invoke=new MethodKey(type,"Invoke","<contracts>","delegate-invoke");model.Methods[invoke]=new(invoke,default,false,parameters,returnsValue,"<contracts>",DeclaringTypeIsDelegate:true,Abi:new GenericAbi(Enumerable.Repeat(CilStackKind.NativeInt,parameters).ToArray(),returnsValue?CilStackKind.I4:null));
         }
-        Delegate("System.Action",0,false);Delegate("System.Action`1",1,false);Delegate("System.Predicate`1",1,true);Delegate("System.Comparison`1",2,true);Delegate("System.Func`1",0,true);Delegate("System.Func`2",1,true);
+        Delegate("System.Action",0,false);Delegate("System.Action`1",1,false);Delegate("System.Predicate`1",1,true);Delegate("System.Comparison`1",2,true);Delegate("System.Func`1",0,true);Delegate("System.Func`2",1,true);Delegate("System.Converter`2",1,true);
         Type("System.IComparable");Method("System.IComparable","CompareTo",true);
         Type("System.IComparable`1");Method("System.IComparable`1","CompareTo",true);
         Type("System.IEquatable`1");Method("System.IEquatable`1","Equals",true);
@@ -394,7 +409,7 @@ internal static class AotCompiler
     private static CilStackKind FieldStackKind(FieldModel? field,bool instance)
     {
         if(field is null)return CilStackKind.Unknown;
-        if(instance&&field.StorageSize>0)return CilStackKind.ManagedPointer;
+        if(field.StorageSize>0)return CilStackKind.ManagedPointer;
         if(field.IsReference)return CilStackKind.ObjectReference;
         if(field.Representation?.TypeName is "System.Single" or "System.Double")return CilStackKind.Float;
         return field.Size==8?CilStackKind.I8:CilStackKind.I4;

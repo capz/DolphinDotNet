@@ -28,7 +28,30 @@ static void callback(void *target, void *arg) {
     (void)target; invoked = *(int *)arg;
 }
 
+static void shaped_array_contracts(void) {
+    uint8_t memory[4096];DndManagedHeap heap;
+    dnd_managed_heap_init(&heap,memory,sizeof(memory));
+    int32_t dimensions[]={-2,2,5,3};
+    DndArray *array=dnd_managed_array_new_shaped(&heap,2,dimensions,true,4,&DND_TYPE_BOXED_INT32,false);
+    assert(array&&array->length==6&&dnd_array_rank(array)==2);
+    assert(dnd_array_get_lower_bound(array,0)==-2&&dnd_array_get_upper_bound(array,1)==7);
+    int32_t index[]={-1,7};int32_t *last=dnd_array_shaped_at(array,2,index);
+    assert(last==(int32_t*)(void*)(array->data+20));*last=73;
+    assert(dnd_array_load_i32(array,5)==73);
+    index[1]=8;assert(!dnd_array_shaped_at(array,2,index));assert(dnd_exception_kind()==DND_EXCEPTION_INDEX_OUT_OF_RANGE);dnd_exception_clear();
+    int32_t bad[]={-1,2};assert(!dnd_managed_array_new_shaped(&heap,2,bad,false,4,NULL,false));assert(dnd_exception_kind()==DND_EXCEPTION_OVERFLOW);dnd_exception_clear();
+    int32_t enormous[]={INT32_MAX,INT32_MAX};assert(!dnd_managed_array_new_shaped(&heap,2,enormous,false,8,NULL,false));assert(dnd_exception_kind()==DND_EXCEPTION_OUT_OF_MEMORY);dnd_exception_clear();
+    int32_t shape[]={1,1},zero[]={0,0};
+    DndArray *refs=dnd_managed_array_new_shaped(&heap,2,shape,false,sizeof(DndObject*),&DND_TYPE_STRING,true);
+    DndString *text=dnd_string_from_utf8(&heap,"kept");assert(dnd_array_shaped_store_ref(refs,2,zero,(DndObject*)text));
+    DndObject *wrong=dnd_box_i32(&heap,1);assert(!dnd_array_shaped_store_ref(refs,2,zero,wrong));assert(dnd_exception_kind()==DND_EXCEPTION_INVALID_CAST);dnd_exception_clear();
+    assert(dnd_array_load_ref(refs,0)==(DndObject*)text);
+    assert(!dnd_array_shaped_reference_address(refs,2,zero,&DND_TYPE_OBJECT));assert(dnd_exception_kind()==DND_EXCEPTION_INVALID_CAST);dnd_exception_clear();
+    assert(dnd_array_shaped_reference_address(refs,2,zero,&DND_TYPE_STRING));
+}
+
 int main(void) {
+    shaped_array_contracts();
     uint8_t memory[16384];
     DndManagedHeap heap;
     dnd_managed_heap_init(&heap, memory, sizeof(memory));

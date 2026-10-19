@@ -181,4 +181,26 @@ public static class Convert
     public static string? ToString(string? value,IFormatProvider? provider){Dolphin.Text.Formatter.Provider(provider);return value;}
     public static string ToString(object? value)=>Dolphin.Text.Formatter.Value(value,null);
     public static string ToString(object? value,IFormatProvider? provider){Dolphin.Text.Formatter.Provider(provider);return Dolphin.Text.Formatter.Value(value,null,provider);}
+    public static bool ToBoolean(Decimal value)=>value!=Decimal.Zero;
+    public static float ToSingle(Decimal value)=>(float)value;
+    public static double ToDouble(Decimal value)=>(double)value;
+    public static string ToString(Decimal value)=>value.ToString();
+    public static string ToString(Decimal value,IFormatProvider? provider)=>value.ToString(provider);
+    public static byte ToByte(Decimal value)=>(byte)Decimal.Round(value);
+    public static sbyte ToSByte(Decimal value)=>(sbyte)Decimal.Round(value);
+    public static short ToInt16(Decimal value)=>(short)Decimal.Round(value);
+    public static ushort ToUInt16(Decimal value)=>(ushort)Decimal.Round(value);
+    public static int ToInt32(Decimal value)=>(int)Decimal.Round(value);
+    public static uint ToUInt32(Decimal value)=>(uint)Decimal.Round(value);
+    public static long ToInt64(Decimal value)=>(long)Decimal.Round(value);
+    public static ulong ToUInt64(Decimal value)=>(ulong)Decimal.Round(value);
+    public static Decimal ToDecimal(int value)=>new Decimal(value);
+    public static Decimal ToDecimal(uint value)=>new Decimal(value);
+    public static Decimal ToDecimal(long value)=>new Decimal(value);
+    public static Decimal ToDecimal(ulong value)=>new Decimal(value);
+    public static Decimal ToDecimal(double value)=>new Decimal(value);
+    public static Decimal ToDecimal(float value)=>new Decimal(value);
+    public static Decimal ToDecimal(bool value)=>new Decimal(value?1:0);
+    public static Decimal ToDecimal(string? value)=>value==null?Decimal.Zero:Decimal.Parse(value);
+    public static Decimal ToDecimal(Decimal value)=>value;
 }

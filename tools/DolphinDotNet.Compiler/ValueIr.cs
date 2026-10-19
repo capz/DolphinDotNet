@@ -65,11 +65,11 @@ internal sealed record ValueIrNewException(IrValue Result,string TypeName,IrValu
 internal sealed record ValueIrExceptionMessage(IrValue Result,IrValue Exception):ValueIrInstruction;
 internal sealed record ValueIrLoadField(IrValue Result,IrValue Object,string TypeName,string FieldName,bool Address=false):ValueIrInstruction;
 internal sealed record ValueIrStoreField(IrValue Object,IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
-internal sealed record ValueIrLoadStaticField(IrValue Result,string TypeName,string FieldName):ValueIrInstruction;
+internal sealed record ValueIrLoadStaticField(IrValue Result,string TypeName,string FieldName,bool Address=false):ValueIrInstruction;
 internal sealed record ValueIrStoreStaticField(IrValue Value,string TypeName,string FieldName):ValueIrInstruction;
 internal sealed record ValueIrTypeTest(IrValue Result,IrValue Object,string TypeName,bool ThrowOnFailure):ValueIrInstruction;
 internal sealed record ValueIrStringLength(IrValue Result,IrValue String):ValueIrInstruction;
-internal sealed record ValueIrPrimitiveToString(IrValue Result,IrValue Value,string TypeName,IrValue? Format=null,IrValue? Provider=null):ValueIrInstruction;
+internal sealed record ValueIrPrimitiveToString(IrValue Result,IrValue Value,string TypeName,IrValue? Format=null,IrValue? Provider=null,bool Nullable=false):ValueIrInstruction;
 internal sealed record ValueIrStringOperation(IrValue Result,string Operation,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
 internal sealed record ValueIrNewArray(IrValue Result,IrValue Length,string ElementType,bool ElementsAreReferences,uint ElementSize):ValueIrInstruction;
 internal sealed record ValueIrBox(IrValue Result,IrValue Value,string TypeName):ValueIrInstruction;
@@ -140,3 +140,8 @@ internal sealed record ValueIrDataToken(IrValue Result,byte[] Data):ValueIrInstr
 internal sealed record ValueIrInitializeArray(IrValue Array,IrValue Data):ValueIrInstruction;
 
 internal sealed record ValueIrObjectText(IrValue Result,IrValue Object,bool BaseCall=false):ValueIrInstruction;
+
+internal sealed record ValueIrNewShapedArray(IrValue Result,ShapedArrayInfo Shape,IReadOnlyList<IrValue> Arguments):ValueIrInstruction;
+internal sealed record ValueIrShapedArrayAddress(IrValue Result,IrValue Array,IReadOnlyList<IrValue> Indices,string? ExactElementType=null):ValueIrInstruction;
+
+internal sealed record ValueIrShapedArrayStoreReference(IrValue Array,IReadOnlyList<IrValue> Indices,IrValue Value):ValueIrInstruction;

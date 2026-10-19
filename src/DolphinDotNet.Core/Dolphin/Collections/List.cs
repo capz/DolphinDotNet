@@ -11,6 +11,7 @@ public class List<T> : IList<T>, IReadOnlyList<T>
     public List():this(0){}
     public List(int capacity){if(capacity<0)throw new ArgumentOutOfRangeException("capacity");items=new T[capacity];}
     public List(IEnumerable<T> source):this(){AddRange(source);}
+    public ReadOnlyCollection<T> AsReadOnly()=>new ReadOnlyCollection<T>(this);
     public int Count=>count;
     public int Capacity {get=>items.Length;set {if(value<count)throw new ArgumentOutOfRangeException("value");if(value!=items.Length){var next=new T[value];Array.Copy(items,0,next,0,count);items=next;}}}
     public bool IsReadOnly=>false;

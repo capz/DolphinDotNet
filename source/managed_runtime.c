@@ -40,6 +40,7 @@ const DndType DND_TYPE_ARGUMENT_OUT_OF_RANGE_EXCEPTION = {"System.ArgumentOutOfR
 const DndType DND_TYPE_INDEX_OUT_OF_RANGE_EXCEPTION = {"System.IndexOutOfRangeException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_NULL_REFERENCE_EXCEPTION = {"System.NullReferenceException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_INVALID_CAST_EXCEPTION = {"System.InvalidCastException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_KEY_NOT_FOUND_EXCEPTION = {"System.Collections.Generic.KeyNotFoundException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_NOT_SUPPORTED_EXCEPTION = {"System.NotSupportedException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_OUT_OF_MEMORY_EXCEPTION = {"System.OutOfMemoryException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_IO_EXCEPTION = {"System.IO.IOException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
@@ -415,6 +416,55 @@ DndArray *dnd_managed_array_new_typed(DndManagedHeap *heap, uint32_t length,
     return array;
 }
 
+/* reserved[0]==0 denotes a vector. Shaped arrays append pairs of lower bound
+ * and length after their aligned payload, keeping vectors' ABI/footprint intact. */
+static int32_t *array_shape(DndArray *array) {
+    size_t bytes=(size_t)array->length*array->element_size;
+    return (int32_t*)(void*)(array->data+((bytes+3u)&~(size_t)3u));
+}
+int32_t dnd_array_rank(DndArray *array) {
+    if(!array){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return 0;}
+    return array->reserved[0]?array->reserved[0]:1;
+}
+DndArray *dnd_managed_array_new_shaped(DndManagedHeap *heap,uint32_t rank,const int32_t *dimensions,bool bounds,uint32_t element_size,const DndType *element_type,bool references) {
+    if(!rank||rank>32||!dimensions||!element_size||(references&&element_size!=sizeof(DndObject*))) {
+        dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Invalid array shape or element layout.");return NULL;
+    }
+    uint64_t length=1;
+    for(uint32_t i=0;i<rank;i++){
+        int32_t size=dimensions[bounds?i*2+1:i];int32_t lower=bounds?dimensions[i*2]:0;
+        if(size<0){dnd_exception_throw(DND_EXCEPTION_OVERFLOW,"Negative array length.");return NULL;}
+        if(size>0&&(int64_t)lower+size-1>INT32_MAX){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Array upper bound overflow.");return NULL;}
+        length*=(uint32_t)size;if(length>INT32_MAX){dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY,"Array size overflow.");return NULL;}
+    }
+    uint64_t bytes=(length*element_size+3u)&~UINT64_C(3);uint64_t total=sizeof(DndArray)+bytes+rank*8u;
+    if(total>UINT32_MAX-7u||total>SIZE_MAX){dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY,"Array size overflow.");return NULL;}
+    DndArray *array=(DndArray*)allocate(heap,&DND_TYPE_ARRAY,(size_t)total);if(!array)return NULL;
+    array->length=(uint32_t)length;array->element_size=element_size;array->element_type=element_type;array->elements_are_references=references?1:0;array->reserved[0]=(uint8_t)rank;
+    int32_t *shape=array_shape(array);for(uint32_t i=0;i<rank;i++){shape[i*2]=bounds?dimensions[i*2]:0;shape[i*2+1]=dimensions[bounds?i*2+1:i];}return array;
+}
+void *dnd_array_shaped_at(DndArray *array,uint32_t rank,const int32_t *indices) {
+    if(!array){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return NULL;}
+    if(!indices||rank!=(uint32_t)dnd_array_rank(array)){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Array rank mismatch.");return NULL;}
+    uint32_t offset=0;int32_t *shape=array->reserved[0]?array_shape(array):NULL;
+    for(uint32_t i=0;i<rank;i++){
+        int64_t index=(int64_t)indices[i]-(shape?shape[i*2]:0);uint32_t length=shape?(uint32_t)shape[i*2+1]:array->length;
+        if(index<0||(uint64_t)index>=length){dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE,"Array index out of bounds.");return NULL;}
+        offset=offset*length+(uint32_t)index;
+    }
+    return array->data+(size_t)offset*array->element_size;
+}
+
+void *dnd_array_shaped_reference_address(DndArray *array,uint32_t rank,const int32_t *indices,const DndType *exact_type) {
+    void *address=dnd_array_shaped_at(array,rank,indices);if(!address)return NULL;
+    if(!array->elements_are_references||array->element_type!=exact_type){dnd_exception_throw(DND_EXCEPTION_INVALID_CAST,"Writable array reference requires the exact element type.");return NULL;}
+    return address;
+}
+bool dnd_array_shaped_store_ref(DndArray *array,uint32_t rank,const int32_t *indices,DndObject *value) {
+    void *address=dnd_array_shaped_at(array,rank,indices);if(!address)return false;
+    return dnd_array_store_ref(array,(uint32_t)(((uint8_t*)address-array->data)/array->element_size),value);
+}
+
 DndArray *dnd_managed_array_new(DndManagedHeap *heap, uint32_t length, uint32_t element_size) {
     return dnd_managed_array_new_typed(heap, length, element_size, NULL, false);
 }
@@ -510,20 +560,21 @@ int64_t dnd_array_long_length(DndArray *array) { return (int64_t)dnd_array_lengt
 
 static bool dnd_array_dimension_ok(DndArray *array, int32_t dimension) {
     if (!array) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Array is null."); return false; }
-    if (dimension != 0) { dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE, "Array dimension out of range."); return false; }
+    if (dimension < 0 || dimension >= dnd_array_rank(array)) { dnd_exception_throw(DND_EXCEPTION_INDEX_OUT_OF_RANGE, "Array dimension out of range."); return false; }
     return true;
 }
 
 int32_t dnd_array_get_length(DndArray *array, int32_t dimension) {
-    return dnd_array_dimension_ok(array, dimension) ? (int32_t)array->length : 0;
+    return dnd_array_dimension_ok(array, dimension) ? (array->reserved[0]?array_shape(array)[dimension*2+1]:(int32_t)array->length) : 0;
 }
 
 int32_t dnd_array_get_lower_bound(DndArray *array, int32_t dimension) {
-    return dnd_array_dimension_ok(array, dimension) ? 0 : 0;
+    return dnd_array_dimension_ok(array, dimension) && array->reserved[0]?array_shape(array)[dimension*2]:0;
 }
 
 int32_t dnd_array_get_upper_bound(DndArray *array, int32_t dimension) {
-    return dnd_array_dimension_ok(array, dimension) ? (int32_t)array->length - 1 : -1;
+    if(!dnd_array_dimension_ok(array,dimension))return -1;
+    return (int32_t)((uint32_t)dnd_array_get_lower_bound(array,dimension)+(uint32_t)dnd_array_get_length(array,dimension)-1u);
 }
 
 bool dnd_array_clear(DndArray *array, int32_t index, int32_t length) {
@@ -638,6 +689,13 @@ DndObject *dnd_box_scalar(DndManagedHeap *heap, const DndType *type, uint64_t va
     return object;
 }
 
+bool dnd_unbox_value(DndObject *object,const DndType *type,void *destination,uint32_t size) {
+    if(!object){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Cannot unbox null.");return false;}
+    if(!type||object->type!=type||!destination||size!=type->instance_size-sizeof(DndObject)) {
+        dnd_exception_throw(DND_EXCEPTION_INVALID_CAST,"Boxed value has a different type.");return false;
+    }
+    memcpy(destination,(const unsigned char*)object+sizeof(DndObject),size);return true;
+}
 uint64_t dnd_unbox_scalar(DndObject *object, const DndType *type, uint32_t size) {
     uint64_t value = 0;
     if (!object) { dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Cannot unbox null."); return 0; }
@@ -801,6 +859,8 @@ static void mark_object(DndManagedHeap *heap, DndObject *object) {
     block->marked = 1;
 }
 
+/* Embedded reference slots in packed values need not have host pointer alignment. */
+static DndObject *read_reference(const void *slot){DndObject *value;memcpy(&value,slot,sizeof(value));return value;}
 static void scan_object_references(DndManagedHeap *heap, DndHeapBlock *block) {
     DndObject *object = block_object(block);
     const DndType *type = object->type;
@@ -808,14 +868,14 @@ static void scan_object_references(DndManagedHeap *heap, DndHeapBlock *block) {
         for (uint16_t i = 0; i < current->reference_count; i++) {
             uint32_t offset = current->reference_offsets[i];
             if ((size_t)offset <= block->size && sizeof(void *) <= block->size - offset)
-                mark_object(heap, *(DndObject **)((uint8_t *)object + offset));
+                mark_object(heap, read_reference((uint8_t *)object + offset));
         }
     }
     if (type == &DND_TYPE_ARRAY) {
         DndArray *array = (DndArray *)object;
         if (array->elements_are_references) {
             for (uint32_t i = 0; i < array->length; i++)
-                mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size));
+                mark_object(heap, read_reference(array->data + (size_t)i * array->element_size));
         } else if (array->element_type && array->element_type->reference_count) {
             for (uint32_t i = 0; i < array->length; i++)
                 for (uint16_t r = 0; r < array->element_type->reference_count; r++) {
@@ -823,7 +883,7 @@ static void scan_object_references(DndManagedHeap *heap, DndHeapBlock *block) {
                     if (offset >= sizeof(DndObject) &&
                         (size_t)(offset - sizeof(DndObject)) <= array->element_size &&
                         sizeof(void *) <= array->element_size - (offset - sizeof(DndObject)))
-                        mark_object(heap, *(DndObject **)(array->data + (size_t)i * array->element_size + offset - sizeof(DndObject)));
+                        mark_object(heap, read_reference(array->data + (size_t)i * array->element_size + offset - sizeof(DndObject)));
                 }
         }
     }
@@ -837,7 +897,7 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
     for (DndHeapBlock *block = first_block(heap); block; block = block->next) block->marked = 0;
     if (roots)
         for (size_t i = 0; i < roots->count; i++)
-            if (roots->slots[i]) mark_object(heap, *roots->slots[i]);
+            if (roots->slots[i]) mark_object(heap, read_reference(roots->slots[i]));
     /* Explicitly registered roots can outlive the immediate call stack.
        Future per-thread contexts will register their root sets here. */
     for (DndGcRootRegistration *registration = registered_roots;
@@ -845,7 +905,7 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
         if (registration->roots)
             for (size_t i = 0; i < registration->roots->count; ++i)
                 if (registration->roots->slots[i])
-                    mark_object(heap, *registration->roots->slots[i]);
+                    mark_object(heap, read_reference(registration->roots->slots[i]));
     /* Inactive sequential contexts retain live frames and exception objects.
        The owner must unregister them before frame storage goes out of scope.
        Concurrent mutation is NOT supported without stop-the-world locking. */
@@ -854,13 +914,13 @@ void dnd_gc_collect(DndManagedHeap *heap, const DndRootSet *roots) {
         if (context->exception_pending) mark_object(heap, context->exception_object);
         for (DndGcFrame *frame = context->gc_frames; frame; frame = frame->previous)
             for (size_t i = 0; i < frame->count; ++i)
-                if (frame->slots[i]) mark_object(heap, *frame->slots[i]);
+                if (frame->slots[i]) mark_object(heap, read_reference(frame->slots[i]));
     }
     /* A pending managed exception is a live root during stack unwinding. */
     if (exception_is_pending) mark_object(heap, exception_object);
     for (DndGcFrame *frame = gc_frames; frame; frame = frame->previous)
         for (size_t i = 0; i < frame->count; i++)
-            if (frame->slots[i]) mark_object(heap, *frame->slots[i]);
+            if (frame->slots[i]) mark_object(heap, read_reference(frame->slots[i]));
 
     /* No recursion and no allocations during collection. Each pass processes
        every newly discovered object, including cyclic and deeply linked graphs. */

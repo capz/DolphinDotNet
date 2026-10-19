@@ -88,6 +88,7 @@ internal static class CilStackAnalyzer
             case 0x7b: Pop(s,i);Push(s,resolveField?.Invoke(i)??CilStackKind.Unknown);break;
             case 0x7c: Pop(s,i);Push(s,CilStackKind.ManagedPointer);break;
             case 0x7d: Pop(s,i);Pop(s,i);break;
+            case 0x7f: Push(s,CilStackKind.ManagedPointer);break;
             case 0x7e: Push(s,resolveField?.Invoke(i)??CilStackKind.Unknown);break;
             case 0x80: Pop(s,i);break;
             case 0x8c: Pop(s,i);Push(s,CilStackKind.ObjectReference);break;

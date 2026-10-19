@@ -38,6 +38,18 @@ public class Random
         return (int)((long)(sample*range)+minValue);
     }
     public virtual double NextDouble()=>Sample();
+    public virtual float NextSingle()=>(float)((NextUInt32()>>8)*(1.0/16777216));
+    private uint NextUInt32(){uint a,b;do{a=(uint)InternalSample();}while(a>=2147418112U);do{b=(uint)InternalSample();}while(b>=2147418112U);return (a&65535)<<16|(b&65535);}
+    public virtual long NextInt64()=>NextInt64(0,long.MaxValue);
+    public virtual long NextInt64(long maxValue)=>NextInt64(0,maxValue);
+    public virtual long NextInt64(long minValue,long maxValue)
+    {
+        if(minValue>maxValue)throw new ArgumentOutOfRangeException("minValue");
+        ulong range=(ulong)maxValue-(ulong)minValue;if(range==0)return minValue;
+        ulong threshold=(0UL-range)%range,value;
+        do{value=(ulong)NextUInt32()<<32|NextUInt32();}while(value<threshold);
+        return (long)((ulong)minValue+value%range);
+    }
     public virtual void NextBytes(byte[] buffer)
     {
         if(buffer==null)throw new ArgumentNullException("buffer");
