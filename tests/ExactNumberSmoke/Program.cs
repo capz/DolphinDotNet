@@ -42,7 +42,7 @@ internal static class Program
         stage=6;Check((-1234.50m).ToString("C2",CultureInfo.InvariantCulture)=="(¤1,234.50)");
         Check((.125m).ToString("P1",CultureInfo.InvariantCulture)=="12.5 %");
         Check((.0012m).ToString("F5",CultureInfo.InvariantCulture)=="0.00120");
-        GoldenNumbers.Run();
+        GoldenNumbers.Run();DecimalStress.Run();
     }
     private static int Main(){try{Run();return 0;}catch(Exception error){Console.WriteLine(error.Message);return stage;}}
 }
