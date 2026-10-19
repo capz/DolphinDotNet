@@ -148,3 +148,9 @@ those with Dolphin and real hardware before relying on a graphics workload.
 For real TEV pixel-combiner effects, see [ShaderDemo](../samples/ShaderDemo/README.md).
 [Shader support plans](shader-support.md) compare managed presets, a constrained
 material compiler, CPU effects, multipass effects and a programmable backend.
+
+Imported models accept the same `GxEffect` through
+`Renderer.DrawModel(instance, transform, effectOverride)` or
+`Renderer.Draw(gameObject, effectOverride)`. The per-draw override replaces RGB
+on every mesh while preserving imported alpha, textures, samplers and geometry.
+See [the imported-model effect contract](effects.md#imported-models-per-draw-overrides).

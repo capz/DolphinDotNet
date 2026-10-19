@@ -308,7 +308,7 @@ batch.DrawText(font, "READY", new Vector2(20, 20), Color32.White);
 
 Convenience layer for a camera's 3D pass, meshes, primitives and model instances; can own a whole frame or attach to an existing one.
 
-**API:** `Renderer([device])`, `Begin3D(camera)`, `End3D()`, `DrawMesh(mesh,material,transform)`, `DrawPrimitives(vertices,offset,count,primitive,transform)`, `BeginFrame(camera/matrices)`, `Draw(gameObject)`, `DrawModel(instance,transform/matrix)`, `EndFrame()`.
+**API:** `Renderer([device])`, `Begin3D(camera)`, `End3D()`, `DrawMesh(mesh,material,transform)`, `DrawPrimitives(vertices,offset,count,primitive,transform)`, `BeginFrame(camera/matrices)`, `Draw(gameObject[,effectOverride])`, `DrawModel(instance,transform/matrix[,effectOverride])`, `EndFrame()`.
 
 ~~~csharp
 var renderer = new Renderer(device);
@@ -316,6 +316,13 @@ device.BeginFrame(Color32.Black);
 renderer.Begin3D(camera); renderer.DrawMesh(mesh, material, transform);
 renderer.End3D(); device.EndFrame();
 ~~~
+
+Imported model overrides replace RGB for every mesh in one draw. `null` preserves
+imported rendering; later draws do not inherit an override. Original texture alpha,
+samplers, skinning and material render state remain intact. A texture-requiring
+effect rejects a draw containing an untextured mesh with `ArgumentException`
+identifying `effectOverride`; a disposed effect throws `ObjectDisposedException`.
+Empty objects ignore unused effects. See [effects](effects.md#imported-models-per-draw-overrides).
 
 ### Mesh / DynamicMesh
 
@@ -1317,5 +1324,7 @@ Managed TEV RGB programs: `ColorRamp(dark,bright)`,
 `ToonBands(low,high,dark,middle,bright)`, `FromPackage(bytes)`,
 `LoadAsync(path[,token])`, `StageCount`, `UniformCount`, `RequiresTexture`,
 `GetUniformName(slot)`, `GetUniformSlot(name)`, `SetColor(slot/name,color)`,
-`Dispose()`. Bind using `Material.Effect` or `Draw2D.SetEffect(effect/null)`.
+`Dispose()`. Bind using `Material.Effect`, `Draw2D.SetEffect(effect/null)`, or
+per-draw `Renderer.DrawModel(instance,transform,effectOverride)` /
+`Renderer.Draw(gameObject,effectOverride)`.
 Uniform updates run between frames. See [effects and graph compilation](effects.md).

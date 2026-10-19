@@ -98,3 +98,9 @@ Default native budgets are 8 MiB per model and 4 MiB per instance; each can be c
 ## Validation
 
 CI exercises deterministic conversion, embedded/external textures, GLB and glTF, OBJ triangulation/materials, animated FBX, GX RGBA8 tiling, malformed sources/packages, interpolation, weighted positions/normals, ancestor animation, looping/fades, independent instances, ownership/budgets, cancellation and ARAM restore after the source file has been deleted. Native and managed AOT tests run under sanitizers and on 32-bit hosts with GC stress; the PowerPC ABI and full DOL build are compiled separately. Test fixtures are generated, including an explicitly corrected FBX timestamp fixture for an Assimp 5.3 exporter quirk. Real-console DMA/audio coexistence and visual/frame-budget acceptance must be measured on hardware.
+
+Pass a `GxEffect` as the third argument to either `DrawModel` overload, or the
+second argument to `Draw(GameObject, effectOverride)`, to override RGB per draw.
+The effect is caller-owned and independent of model/ARAM residency. See
+[imported-model effects](effects.md#imported-models-per-draw-overrides) for alpha,
+texture compatibility and lifecycle rules.

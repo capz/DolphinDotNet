@@ -30,6 +30,15 @@ static Resource *find(int token,int kind) {
     Resource *r=&slots[index];
     return r->kind && !r->pending && r->generation==(token>>10) && (!kind || r->kind==kind) ? r : NULL;
 }
+int dnd_effect_resolve(int token,const DndDrawEffect **result) {
+    if(!result)return -2;
+    *result=NULL;
+    if(!token)return 0;
+    Resource *resource=find(token,EFFECT);
+    if(!resource)return -2;
+    *result=(const DndDrawEffect*)resource->data;
+    return 0;
+}
 static int create(int kind,int bytes,int alignment) {
     if(dnd_raw_depth() || bytes<=0 || bytes>BUDGET-total_bytes || alignment<32 || alignment>4096 || (alignment&(alignment-1))) return 0;
     for(int i=0;i<SLOTS;i++) if(!slots[i].kind && slots[i].generation<0x1fffff) {

@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock,patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from dolphin_shader_test import CAPTURE_TIMEOUT_SECONDS,validate,wait_for_capture
+from dolphin_shader_test import CAPTURE_TIMEOUT_SECONDS,validate,validate_model,wait_for_capture
 
 
 def frame():
@@ -69,3 +69,28 @@ class ShaderCaptureTests(unittest.TestCase):
     def test_leaked_hud_effect_cannot_pass(self):
         rgb=frame();at=(411*640+33)*3;rgb[at:at+3]=bytes((70,220,248))
         with self.assertRaises(AssertionError):validate(rgb)
+
+
+class ImportedModelCaptureTests(unittest.TestCase):
+    def model_frame(self,effect=True):
+        rgb=frame()
+        for shift in (0,208,416):
+            custom=effect and shift==208
+            for x,color in ((40,(8,13,26)),(80,(70,220,248) if custom else (204,204,204)),
+                            (140,(30,90,158) if custom else (102,102,102))):
+                at=(116*640+x+shift)*3;rgb[at:at+3]=bytes(color)
+        return rgb
+    def test_imported_default_effect_default_signatures(self):
+        validate_model(self.model_frame(),True)
+        validate_model(self.model_frame(False),False)
+    def test_missing_override_fails(self):
+        with self.assertRaises(AssertionError):validate_model(self.model_frame(False))
+    def test_effect_leaking_to_subsequent_default_draw_fails(self):
+        rgb=self.model_frame();at=(116*640+496)*3;rgb[at:at+3]=bytes((70,220,248))
+        with self.assertRaises(AssertionError):validate_model(rgb)
+    def test_disabling_texture_for_raster_effect_fails(self):
+        rgb=self.model_frame();at=(116*640+248)*3;rgb[at:at+3]=bytes((70,220,248))
+        with self.assertRaises(AssertionError):validate_model(rgb)
+    def test_only_first_material_getting_effect_fails(self):
+        rgb=self.model_frame();at=(116*640+348)*3;rgb[at:at+3]=bytes((102,102,102))
+        with self.assertRaises(AssertionError):validate_model(rgb)

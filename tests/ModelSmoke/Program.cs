@@ -100,6 +100,7 @@ class Program
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 1;
         if(!Aram.Initialize())return 2;
         TransformChecks.Run();
+        ModelEffectChecks.Run();
         SourceImports();
         using(var transparentModel=Model.LoadFZeroGxAsync("sd:/fz-translucent.gma").Result)
         using(var instance=transparentModel.CreateInstance())

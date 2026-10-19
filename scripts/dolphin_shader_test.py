@@ -65,6 +65,23 @@ def validate(rgb):
     return dict(reference=pixel(112),ramp=ramp,toonBands=sorted(levels))
 
 
+def validate_model(rgb,effect=True):
+    """Imported textured cutout and untextured material, with per-draw defaults."""
+    if len(rgb)!=640*480*3:raise ValueError('Incomplete model frame')
+    def pixel(x):
+        at=(116*640+x)*3
+        return tuple(rgb[at:at+3])
+    def close(actual,expected,label):
+        if max(abs(a-b) for a,b in zip(actual,expected))>12:
+            raise AssertionError(f'{label}: {actual}, expected {expected}')
+    for shift in (0,208,416):
+        close(pixel(40+shift),(8,13,26),'Imported texture alpha cutout lost')
+        custom=effect and shift==208
+        close(pixel(80+shift),(70,220,248) if custom else (204,204,204),'Imported textured mesh combiner')
+        close(pixel(140+shift),(30,90,158) if custom else (102,102,102),'Imported untextured mesh combiner')
+    return dict(textured=pixel(288),untextured=pixel(348),cutout=pixel(248))
+
+
 def run(args):
     root=args.logs.resolve()
     if root.exists() and any(root.iterdir()):raise ValueError('Use a fresh capture directory')
@@ -76,7 +93,7 @@ def run(args):
     environment=dict(os.environ)
     # Mesa also presents the software backend's output. Its host-sized worker
     # pool can oversubscribe a small CI CPU quota during startup.
-    environment.update(HOME=str(root),DOLPHIN_EMU_USERPATH=str(root/'user'),
+    environment.update(DOLPHIN_EMU_USERPATH=str(root/'user'),
                        SDL_AUDIODRIVER='dummy',LP_NUM_THREADS='2')
     for key,name in [('XDG_CONFIG_HOME','config'),('XDG_CACHE_HOME','cache'),('XDG_DATA_HOME','data')]:
         path=root/name;path.mkdir(exist_ok=True);environment[key]=str(path)
@@ -105,11 +122,27 @@ def run(args):
     if errors:raise RuntimeError('\n'.join(errors))
     # Normalize PAL/NTSC output to the sample's logical coordinates.
     command=['ffmpeg','-hide_banner','-loglevel','error','-i',str(capture),
-             '-vf','select=eq(n\\,1),scale=640:480:flags=neighbor','-frames:v','1']
-    rgb=subprocess.run(command+['-f','rawvideo','-pix_fmt','rgb24','pipe:1'],
+             '-vf','scale=640:480:flags=neighbor','-frames:v','6']
+    raw=subprocess.run(command+['-f','rawvideo','-pix_fmt','rgb24','pipe:1'],
                        check=True,stdout=subprocess.PIPE,timeout=10).stdout
-    proof=validate(rgb)
-    subprocess.run(command+['-y',str(root/'frame.png')],check=True,timeout=10)
+    size=640*480*3
+    frames=[raw[i:i+size] for i in range(0,len(raw),size)]
+    proof=None
+    # Allow the initial video clear before the first managed frame. Require a
+    # complete default/effect/default cycle, including unchanged public mesh/UI.
+    for i in range(len(frames)-2):
+        try:
+            for j,custom in enumerate((False,True,False)):
+                validate(frames[i+j]);validate_model(frames[i+j],custom)
+        except (AssertionError,ValueError):continue
+        proof=validate(frames[i+1]);proof['importedModel']=validate_model(frames[i+1])
+        proof['defaultEffectDefaultFrames']=[i,i+1,i+2]
+        subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-f','rawvideo','-pix_fmt','rgb24',
+                        '-s','640x480','-i','pipe:0','-frames:v','1','-y',str(root/'frame.png')],
+                       input=frames[i+1],check=True,timeout=10)
+        break
+    if proof is None:
+        raise AssertionError('No valid imported-model default/effect/default cycle in first six frames')
     proof['elapsedSeconds']=round(time.monotonic()-started,3)
     (root/'results.json').write_text(json.dumps(proof,indent=2)+'\n')
     print(json.dumps(proof))

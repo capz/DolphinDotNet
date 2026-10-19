@@ -11,3 +11,5 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const 
 void dnd_draw_backend_copy(const DndDrawTexture *t,int x,int y,int w,int h){(void)t;(void)x;(void)y;(void)w;(void)h;}
 
 bool dnd_draw_backend_immediate_ready(void){return true;}
+
+void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound){(void)effect;(void)texture_bound;}

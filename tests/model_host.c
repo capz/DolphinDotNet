@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "dnd_aram.h"
+#include "dnd_draw.h"
 #include "dnd_model.h"
 #include "dnd_storage.h"
 #include <stdio.h>
@@ -15,7 +16,7 @@ int main(int argc, char **argv) {
   dnd_gc_set_stress(argc > 2);
   intptr_t result = dnd_value_aot_entry(&heap);
   if (result || dnd_exception_pending() || dnd_model_live_handles() ||
-      dnd_fs_open_handles() || dnd_aram_stat(4)) {
+      dnd_fs_open_handles() || dnd_aram_stat(4) || dnd_draw_live()) {
     fprintf(stderr,
             "model smoke result=%ld error=%d message=%s models=%d files=%d "
             "ARAM=%d\n",

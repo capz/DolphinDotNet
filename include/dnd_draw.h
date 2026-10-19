@@ -48,6 +48,9 @@ int dnd_mesh_create(DndArray *vertices,DndArray *indices,int format,int dynamic)
 int dnd_mesh_update(int token,DndArray *vertices,int offset,int count,int format);
 int dnd_effect_create(DndArray *package);
 int dnd_effect_color(int token,int slot,uint32_t color);
+/* Borrowed for this native call only. 0 resolves to NULL; invalid, wrong-kind,
+ * stale or pending resources return -2. Never retain across frame collection. */
+int dnd_effect_resolve(int token,const DndDrawEffect **result);
 int dnd_canvas_effect(int token,int effect);
 int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
 int dnd_mesh_draw(int mesh,int texture,DndArray *world,uint32_t color,int flags,float cutoff);
@@ -64,6 +67,8 @@ int dnd_draw_copy_texture(int texture,int x,int y,int width,int height);
 void dnd_draw_set_camera(const float *view,const float *projection);
 void dnd_draw_backend_vertices(const DndDrawVertex *vertices,int count,int primitive,const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world);
 void dnd_draw_backend_restore(void);
+/* Combiner state only: callers retain texture, raster, sampler and draw state. */
+void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound);
 void dnd_draw_backend_camera(const float *view,const float *projection);
 void dnd_draw_backend_2d(int width,int height);
 void dnd_draw_backend_viewport(int x,int y,int width,int height);

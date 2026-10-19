@@ -18,7 +18,7 @@ internal sealed class ShaderHud : IDisposable
     {
         draw.Begin();
         Text("TEV SHADER LAB",28,52,5,white);
-        Text("MANAGED PRESETS AND COMPILED GRAPH",28,88,2,dim);
+        Text("IMPORTED MODEL: DEFAULT / TOON / DEFAULT",28,88,2,dim);
         Text("REFERENCE",42,132,3,white);
         Text("COLOR RAMP",246,132,3,cyan);
         Text("TOON BANDS",450,132,3,gold);
