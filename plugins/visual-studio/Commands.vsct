@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable">
+  <Extern href="stdidcmd.h" /><Extern href="vsshlids.h" />
+  <Commands package="guidPackage">
+    <Groups><Group guid="guidCommands" id="AttachGroup" priority="0x0700"><Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_DEBUG" /></Group></Groups>
+    <Buttons><Button guid="guidCommands" id="Attach" priority="0x0100" type="Button">
+      <Parent guid="guidCommands" id="AttachGroup" /><Strings><ButtonText>Attach to DolphinDotNet...</ButtonText></Strings>
+    </Button></Buttons>
+  </Commands>
+  <Symbols>
+    <GuidSymbol name="guidPackage" value="{27F8D063-82A9-49D1-AA4E-7FCA219BA121}" />
+    <GuidSymbol name="guidCommands" value="{8DC7D557-5BBE-4D77-BF25-122185E14DD8}"><IDSymbol name="AttachGroup" value="0x1020" /><IDSymbol name="Attach" value="0x0100" /></GuidSymbol>
+  </Symbols>
+</CommandTable>

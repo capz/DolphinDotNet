@@ -276,7 +276,7 @@ paths, nonpositive baud, invalid TCP ports and invalid timeouts fail before conn
 The adapter supports one all-stop PowerPC context, source breakpoint replacement,
 stack pagination, continue/pause, bounded source Step Into/Over/Out and disconnect.
 Rider keeps desired breakpoint changes while running and applies them at the next
-stop (or before resume); direct DAP clients must pause before changing breakpoints.
+stop (or before resume); direct DAP clients now queue changes in the shared adapter until the next stop.
 Conditional breakpoints/logpoints remain explicitly unsupported. Native frames keep
 PCs without invented source positions; partial unwind/step-limit reasons go to the
 console. `scopes`/`variables` expose read-only primitive Arguments and Locals in
@@ -386,7 +386,7 @@ installed. Keep A4.4 physical BBA and USB Gecko validation deferred separately.
 Out of scope: DAP launch/build/upload orchestration, automatic target discovery or
 slot negotiation, verified hardware compatibility, reconnect, arrays/value types,
 expressions, managed exception filters, async stacks, real thread enumeration,
-reverse execution, Release target debugging, Visual Studio integration and Marketplace
+reverse execution, Release target debugging and Marketplace
 publishing. Recursive Step Into and same-line Step Over use CFA transitions;
 unsupported unwind states and instruction budgets still produce diagnostic stops.
 

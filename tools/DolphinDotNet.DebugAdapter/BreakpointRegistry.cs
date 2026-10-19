@@ -15,12 +15,13 @@ public sealed class BreakpointRegistry(RspClient client, Func<bool>? pauseReques
     public bool Contains(uint pc) => _wanted.ContainsKey(pc);
     public int[] HitIds(uint pc) => _wanted.TryGetValue(pc, out var ids) ? ids.ToArray() : Array.Empty<int>();
 
-    public async Task<Entry[]> ReplaceAsync(string source, int[] lines, SourceAddressMap symbols)
+    public int ReserveId() => Interlocked.Increment(ref _nextId);
+    public async Task<Entry[]> ReplaceAsync(string source, int[] lines, SourceAddressMap symbols, int[]? ids = null)
     {
         _sources.TryGetValue(source, out var old);
-        var entries = lines.Select(line =>
+        var entries = lines.Select((line, index) =>
         {
-            var id = old?.FirstOrDefault(e => e.Line == line)?.Id ?? ++_nextId;
+            var id = ids?[index] ?? old?.FirstOrDefault(e => e.Line == line)?.Id ?? ReserveId();
             try { return new Entry(id, line, symbols.Resolve(source, line).ToArray(), null); }
             catch (Exception error) when (error is ArgumentException or InvalidDataException)
             { return new Entry(id, line, Array.Empty<uint>(), error.Message); }

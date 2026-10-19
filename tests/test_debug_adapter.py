@@ -259,7 +259,7 @@ class AdapterTests(unittest.TestCase):
         self.target = None
         self.serial_relay = None
         self.telemetry_relay = None
-        self.client.request("initialize", dict(pathFormat="path", linesStartAt1=True), fragment=True)
+        self.client.request("initialize", dict(pathFormat="path", linesStartAt1=True, supportsVariablePaging=True), fragment=True)
 
     def tearDown(self):
         if self.target:
@@ -287,6 +287,33 @@ class AdapterTests(unittest.TestCase):
     def bp(self, path="Game.cs", lines=(10,)):
         return self.client.request("setBreakpoints", dict(source=dict(path="/local/日本/" + path),
             breakpoints=[dict(line=line) for line in lines]))["body"]["breakpoints"]
+
+    def test_breakpoint_changes_while_running_wait_for_stop_and_report_verification(self):
+        self.attach()
+        self.client.request('continue', dict(threadId=1))
+        self.assertTrue(self.target.continuing.wait(2))
+        commands = list(self.target.commands)
+        pending = self.bp(lines=(11,))
+        self.assertFalse(pending[0]['verified'])
+        self.assertIn('next stop', pending[0]['message'])
+        self.assertEqual(commands, self.target.commands)
+        self.client.request('pause', dict(threadId=1))
+        changed = self.client.event('breakpoint')
+        self.assertEqual('changed', changed['reason'])
+        self.assertTrue(changed['breakpoint']['verified'])
+        self.assertEqual(pending[0]['id'], changed['breakpoint']['id'])
+        self.client.event('stopped')
+        self.assertTrue(self.target.breakpoints)
+
+    def test_latest_running_breakpoint_replacement_can_cancel_an_addition(self):
+        self.attach()
+        self.client.request('continue', dict(threadId=1))
+        self.assertTrue(self.target.continuing.wait(2))
+        self.bp(lines=(11,))
+        self.assertEqual([], self.bp(lines=()))
+        self.client.request('pause', dict(threadId=1))
+        self.client.event('stopped')
+        self.assertEqual(set(), self.target.breakpoints)
 
     def telemetry_target(self, signature='444e443100000000', refused=False):
         data = json.loads(self.address.read_text())
@@ -625,6 +652,30 @@ class AdapterTests(unittest.TestCase):
         self.assertNotIn('m80010088,1', self.target.commands)
         last = self.variables(box['variablesReference'], start=128, count=1)
         self.assertEqual(['f128'], [v['name'] for v in last])
+
+    def test_client_without_variable_paging_can_expand_every_field(self):
+        self.client.close()
+        self.client = probe.DapProcess(ADAPTER)
+        self.client.request('initialize', dict(clientID='visualstudio', pathFormat='path', supportsVariablePaging=False))
+        def configure(data):
+            layout = data['inspection']['types'][0]
+            layout['size'] = 137
+            layout['fields'] = [dict(name=f'f{i}', type='System.Byte', offset=8+i, storageBytes=1, valueKind='primitive') for i in range(129)]
+        box = self.variables(self.attach_inspection(configure))[0]
+        self.assertEqual(2, box['namedVariables'])
+        groups = self.variables(box['variablesReference'])
+        self.assertEqual(['Variables 1–128', 'Variables 129–129'], [g['name'] for g in groups])
+        self.assertNotIn('m80010088,1', self.target.commands)
+        self.assertEqual(128, len(self.variables(groups[0]['variablesReference'])))
+        self.assertEqual(['f127'], [v['name'] for v in self.variables(groups[0]['variablesReference'], start=127, count=2)])
+        self.assertEqual([], self.variables(groups[0]['variablesReference'], start=128))
+        self.assertEqual(['f128'], [v['name'] for v in self.variables(groups[1]['variablesReference'])])
+        stale = groups[1]['variablesReference']
+        self.client.request('continue', dict(threadId=1))
+        self.assertTrue(self.target.continuing.wait(2))
+        self.client.request('pause', dict(threadId=1))
+        self.client.event('stopped')
+        self.client.request('variables', dict(variablesReference=stale), success=False)
 
     def test_unsupported_struct_field_does_not_read_guessed_storage(self):
         def configure(data):

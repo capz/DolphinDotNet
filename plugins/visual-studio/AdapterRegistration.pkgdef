@@ -1,0 +1,16 @@
+; This GUID names our adapter. Microsoft's host supplies the actual debug engine.
+[$RootKey$\AD7Metrics\Engine\{CD5691AC-E370-44AB-94CC-5940CD02A820}]
+"CLSID"="{DAB324E9-7B35-454C-ACA8-F6BB0D5C8673}"
+"AlwaysLoadLocal"=dword:00000001
+"AddressBP"=dword:00000000
+"CallStackBP"=dword:00000000
+; Attach uses our Debug-menu command, rather than Windows PID enumeration.
+"Attach"=dword:00000000
+"Exceptions"=dword:00000000
+"ExceptionConditions"=dword:00000000
+"Name"="DolphinDotNet"
+"Adapter"="$PackageFolder$\adapter\DolphinDotNet.DebugAdapter.exe"
+"Language"="C#"
+"LanguageId"="{3F5162F8-07C6-11D3-9053-00C04FA302A1}"
+"LocalsScopeName"="Locals"
+"SuppressModulesRequestOnAttach"=dword:00000001

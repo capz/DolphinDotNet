@@ -1,0 +1,50 @@
+name: Visual Studio VSIX
+on:
+  pull_request:
+    paths:
+      - 'plugins/visual-studio/**'
+      - 'tools/DolphinDotNet.DebugAdapter/**'
+      - 'tools/DolphinDotNet.Debugger/**'
+      - 'tests/VisualStudioTests/**'
+      - 'scripts/verify_vsix.py'
+      - '.github/workflows/visual-studio.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/visual-studio/**'
+      - 'tools/DolphinDotNet.DebugAdapter/**'
+      - 'tools/DolphinDotNet.Debugger/**'
+      - 'tests/VisualStudioTests/**'
+      - 'scripts/verify_vsix.py'
+      - '.github/workflows/visual-studio.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vsix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: microsoft/setup-msbuild@v2
+      - name: Validate attach settings and artifact discovery
+        run: dotnet run --project tests/VisualStudioTests -c Release
+      - name: Build installable VSIX with self-contained Windows adapter
+        run: msbuild plugins/visual-studio/DolphinDotNet.VisualStudio.csproj /restore /p:Configuration=Release /p:DeployExtension=false /verbosity:minimal
+      - name: Verify VSIX contents
+        shell: pwsh
+        run: |
+          $packages = @(Get-ChildItem plugins/visual-studio/bin/Release -Recurse -Filter *.vsix)
+          if ($packages.Count -ne 1) { throw 'Expected exactly one VSIX' }
+          python scripts/verify_vsix.py $packages[0].FullName
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DolphinDotNet-VisualStudio-plugin
+          path: plugins/visual-studio/bin/Release/**/*.vsix
+          if-no-files-found: error

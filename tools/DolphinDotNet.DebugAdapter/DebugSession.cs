@@ -25,6 +25,10 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     private readonly HashSet<UnwindStopReason> _reportedUnwindReasons = new();
     private readonly Dictionary<int, (FrameState Frame, DebugVariable[] Variables)> _variableScopes = new();
     private readonly Dictionary<int, ObjectView> _objectViews = new();
+    private readonly Dictionary<int, (int Reference, int Start, int Count)> _variablePages = new();
+    private readonly object _breakpointGate = new();
+    private readonly Dictionary<string, (int[] Lines, int[] Ids)> _pendingBreakpoints = new(StringComparer.Ordinal);
+    private bool _variablePaging;
     private int _nextVariable;
     private bool _telemetryReported;
     private DebugHeartbeat? _heartbeat;
@@ -68,6 +72,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             var format = args.TryGetProperty("pathFormat", out var f) ? f.GetString() : "path";
             if (format is not ("path" or "uri")) throw new ArgumentException("Unsupported pathFormat.");
             _uriPaths = format == "uri";
+            _variablePaging = args.TryGetProperty("supportsVariablePaging", out var paging) && paging.GetBoolean();
             _lineBase = args.TryGetProperty("linesStartAt1", out var lines) && !lines.GetBoolean() ? 0 : 1;
             _columnBase = args.TryGetProperty("columnsStartAt1", out var cols) && !cols.GetBoolean() ? 0 : 1;
             _initialized = true;
@@ -98,6 +103,8 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             _reportedUnwindReasons.Clear();
             _variableScopes.Clear();
             _objectViews.Clear();
+            _variablePages.Clear();
+            lock (_breakpointGate) _pendingBreakpoints.Clear();
             _symbols = SourceAddressMap.Load(Required(args, "elf"), Required(args, "sourceMap"), Required(args, "addressMap"));
             _paths = new SourcePathMapper(args);
             var transport = AttachTransport.Parse(args);
@@ -134,6 +141,39 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             await connection.RespondAsync(request);
             return;
         }
+        if (command == "setBreakpoints")
+        {
+            var path = Required(args.GetProperty("source"), "path");
+            if (_uriPaths) path = new Uri(path).LocalPath;
+            path = _paths!.ToBuild(path);
+            var points = args.TryGetProperty("breakpoints", out var bps) ? bps.EnumerateArray().ToArray() : Array.Empty<JsonElement>();
+            if (points.Any(p => p.TryGetProperty("condition", out _) || p.TryGetProperty("hitCondition", out _) || p.TryGetProperty("logMessage", out _)))
+                throw new NotSupportedException("Conditional breakpoints and logpoints are not supported.");
+            var lines = points.Select(p => checked(p.GetProperty("line").GetInt32() + 1 - _lineBase)).ToArray();
+            int[]? ids = null;
+            lock (_breakpointGate)
+            {
+                if (_running)
+                {
+                    ids = lines.Select(_ => _breakpoints.ReserveId()).ToArray();
+                    _pendingBreakpoints[path] = (lines, ids);
+                }
+            }
+            if (ids is not null)
+            {
+                await connection.RespondAsync(request, new { breakpoints = lines.Select((line, i) => new {
+                    id = ids[i], verified = false, line = line - 1 + _lineBase,
+                    message = "Pending until the next stop. Pause to apply breakpoint changes." }).ToArray() });
+            }
+            else
+            {
+                var entries = await _breakpoints.ReplaceAsync(path, lines, _symbols);
+                await connection.RespondAsync(request, new { breakpoints = entries.Select(BreakpointBody).ToArray() });
+                foreach (var entry in entries.Where(entry => entry.Error is not null))
+                    await connection.EventAsync("output", new { category = "stderr", output = $"Breakpoint rejected at {path}:{entry.Line}: {entry.Error}\n" });
+            }
+            return;
+        }
         if (_running) throw new InvalidOperationException("Target is running; pause before inspecting or changing breakpoints.");
         switch (command)
         {
@@ -142,18 +182,6 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 _configured = true;
                 await connection.RespondAsync(request);
                 await StoppedAsync("entry", "Attached; target is paused. Press Resume to run to a source breakpoint. Native startup code may not have a managed stack yet.");
-                break;
-            case "setBreakpoints":
-                var path = Required(args.GetProperty("source"), "path");
-                if (_uriPaths) path = new Uri(path).LocalPath;
-                path = _paths!.ToBuild(path);
-                var points = args.TryGetProperty("breakpoints", out var bps) ? bps.EnumerateArray().ToArray() : Array.Empty<JsonElement>();
-                if (points.Any(p => p.TryGetProperty("condition", out _) || p.TryGetProperty("hitCondition", out _) || p.TryGetProperty("logMessage", out _)))
-                    throw new NotSupportedException("Conditional breakpoints and logpoints are not supported.");
-                var entries = await _breakpoints.ReplaceAsync(path, points.Select(p => checked(p.GetProperty("line").GetInt32() + 1 - _lineBase)).ToArray(), _symbols);
-                await connection.RespondAsync(request, new { breakpoints = entries.Select(e => new { id = e.Id, verified = e.Error is null, line = e.Line - 1 + _lineBase, message = e.Error }).ToArray() });
-                foreach (var entry in entries.Where(entry => entry.Error is not null))
-                    await connection.EventAsync("output", new { category = "stderr", output = $"Breakpoint rejected at {path}:{entry.Line}: {entry.Error}\n" });
                 break;
             case "setExceptionBreakpoints":
                 if (new[] { "filters", "filterOptions", "exceptionOptions" }.Any(name =>
@@ -204,13 +232,15 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                     var id = ++_nextVariable;
                     var variables = group.ToArray();
                     _variableScopes.Add(id, (frameState, variables));
-                    return new { name = group.Key, variablesReference = id, namedVariables = variables.Length, expensive = false,
+                    return new { name = group.Key, variablesReference = id, namedVariables = ChildCount(variables.Length), expensive = false,
                         presentationHint = group.Key == "Arguments" ? "arguments" : "locals" };
                 }).ToArray();
                 await connection.RespondAsync(request, new { scopes });
                 break;
             case "variables":
                 var reference = args.GetProperty("variablesReference").GetInt32();
+                var isPage = _variablePages.TryGetValue(reference, out var page);
+                if (isPage) reference = page.Reference;
                 var isScope = _variableScopes.TryGetValue(reference, out var scope);
                 var isObject = _objectViews.TryGetValue(reference, out var view);
                 if (!isScope && !isObject)
@@ -218,11 +248,37 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 var first = args.TryGetProperty("start", out var begin) ? begin.GetInt32() : 0;
                 var count = args.TryGetProperty("count", out var amount) ? amount.GetInt32() : 0;
                 if (first < 0 || count < 0) throw new ArgumentException("Invalid variable pagination.");
+                if (isPage)
+                {
+                    if (first >= page.Count)
+                    {
+                        await connection.RespondAsync(request, new { variables = Array.Empty<object>() });
+                        break;
+                    }
+                    count = Math.Min(count == 0 ? page.Count : count, page.Count - first);
+                    first += page.Start;
+                }
                 var pageSize = count == 0 ? ObjectInspector.MaximumPageSize : Math.Min(count, ObjectInspector.MaximumPageSize);
                 if (args.TryGetProperty("filter", out var filter) && filter.GetString() == "indexed") pageSize = 0;
                 var values = new List<object>();
                 var inspector = new ObjectInspector(_client, _symbols);
                 var total = isScope ? scope.Variables.Length : view!.Layout.Fields.Count;
+                if (!_variablePaging && !isPage && total > ObjectInspector.MaximumPageSize)
+                {
+                    var pages = new List<object>();
+                    var groups = ChildCount(total);
+                    for (var group = first; group < groups && pages.Count < pageSize; group++)
+                    {
+                        var offset = group * ObjectInspector.MaximumPageSize;
+                        var length = Math.Min(ObjectInspector.MaximumPageSize, total - offset);
+                        var id = ++_nextVariable;
+                        _variablePages.Add(id, (reference, offset, length));
+                        pages.Add(new { name = $"Variables {offset + 1}–{offset + length}", value = "", variablesReference = id,
+                            namedVariables = length, presentationHint = new { kind = "virtual", attributes = new[] { "readOnly" } } });
+                    }
+                    await connection.RespondAsync(request, new { variables = pages });
+                    break;
+                }
                 foreach (var index in Enumerable.Range(0, total).Skip(first).Take(pageSize))
                 {
                     var value = isScope
@@ -236,7 +292,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                     }
                     var display = value.Children is not null && children == 0 ? value.Value + " <inspection handle limit>" : value.Value;
                     values.Add(new { name = value.Name, type = value.Type, value = display, variablesReference = children,
-                        namedVariables = children == 0 ? 0 : value.Children!.Layout.Fields.Count,
+                        namedVariables = children == 0 ? 0 : ChildCount(value.Children!.Layout.Fields.Count),
                         presentationHint = new { attributes = new[] { "readOnly" }, kind = "data" } });
                 }
                 await connection.RespondAsync(request, new { variables = values });
@@ -249,12 +305,13 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 if (!_configured) throw new InvalidOperationException("Finish configuration first.");
                 if (command == "continue")
                     await connection.EventAsync("output", new { category = "console", output = _breakpoints.VerifiedCount == 0
-                        ? "Resuming with no verified source breakpoints. In Rider, select DolphinDotNet Attach before adding a new gutter breakpoint; existing .NET breakpoints are not sent to this adapter. Check rejected breakpoint messages and source path mappings.\n"
+                        ? "Resuming with no verified source breakpoints. Attach using the DolphinDotNet debugger and check breakpoint messages and source path mappings.\n"
                         : $"Resuming with {_breakpoints.VerifiedCount} verified source breakpoint(s) at {_breakpoints.NativeAddressCount} native address(es).\n" });
                 _frames.Clear();
                 _stackTrace = null;
                 _variableScopes.Clear();
                 _objectViews.Clear();
+                _variablePages.Clear();
                 _running = true;
                 _pauseRequested = false;
                 await connection.RespondAsync(request, command == "continue" ? new { allThreadsContinued = true } : null);
@@ -300,13 +357,29 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 description = result.Reason.ToString();
                 if (!_stop.Exited) await breakpoints.RestoreAsync();
             }
-            _running = false;
             if (_stop!.Exited)
             {
+                _running = false;
                 _configured = false;
                 await connection.EventAsync("terminated");
             }
-            else await StoppedAsync(reason, description);
+            else
+            {
+                while (true)
+                {
+                    KeyValuePair<string, (int[] Lines, int[] Ids)>[] updates;
+                    lock (_breakpointGate)
+                    {
+                        updates = _pendingBreakpoints.ToArray();
+                        _pendingBreakpoints.Clear();
+                        if (updates.Length == 0) { _running = false; break; }
+                    }
+                    foreach (var update in updates)
+                        foreach (var entry in await breakpoints.ReplaceAsync(update.Key, update.Value.Lines, _symbols!, update.Value.Ids))
+                            await connection.EventAsync("breakpoint", new { reason = "changed", breakpoint = BreakpointBody(entry) });
+                }
+                await StoppedAsync(reason, description);
+            }
         }
         catch (Exception error)
         {
@@ -327,6 +400,11 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             reason, description, threadId = 1, allThreadsStopped = true,
             hitBreakpointIds = reason == "breakpoint" && _stop?.ProgramCounter is uint pc ? _breakpoints!.HitIds(pc) : Array.Empty<int>()
         });
+
+    private int ChildCount(int count) => !_variablePaging && count > ObjectInspector.MaximumPageSize
+        ? (count + ObjectInspector.MaximumPageSize - 1) / ObjectInspector.MaximumPageSize : count;
+    private object BreakpointBody(BreakpointRegistry.Entry entry) => new {
+        id = entry.Id, verified = entry.Error is null, line = entry.Line - 1 + _lineBase, message = entry.Error };
 
     private async Task CloseTargetAsync()
     {

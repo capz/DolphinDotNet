@@ -100,6 +100,7 @@ internal static class IntrinsicRegistry
             ("Dolphin.Timing.NativeTiming",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Diagnostics.NativeDiagnostics",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Memory.NativeAram",_)=>IntrinsicKind.NativeStorage,
+            ("Dolphin.IO.NativeDol",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Storage.NativeStorage",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Network.NativeNetwork",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Threading.Tasks.NativeAsync",_)=>IntrinsicKind.NativeStorage,

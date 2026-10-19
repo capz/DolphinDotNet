@@ -7,6 +7,8 @@ bool dnd_storage_mount_disc(int format);
 bool dnd_storage_mount_disc_image(DndString *path);
 DndArray *dnd_storage_disc_header(DndManagedHeap *heap);
 void dnd_storage_unmount(int device);
+/* Bootstrap only, after managed executors stop. Closes owned handles and volumes. */
+void dnd_storage_shutdown(void);
 bool dnd_storage_is_mounted(int device);
 DndString *dnd_storage_path(DndManagedHeap *, int device, DndString *path);
 DndString *dnd_fs_full_path(DndManagedHeap *, DndString *path);

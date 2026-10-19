@@ -1,0 +1,36 @@
+<Project>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblySearchPath_UseCandidateAssemblyFiles>false</AssemblySearchPath_UseCandidateAssemblyFiles>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+    <DeployExtension>false</DeployExtension>
+    <CreateVsixContainer>true</CreateVsixContainer>
+    <AdapterOutput>$(MSBuildProjectDirectory)/obj/adapter/</AdapterOutput>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2142" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Design" />
+    <VSCTCompile Include="Commands.vsct"><ResourceName>Menus.ctmenu</ResourceName></VSCTCompile>
+    <None Update="source.extension.vsixmanifest"><SubType>Designer</SubType></None>
+    <Content Include="AdapterRegistration.pkgdef"><IncludeInVSIX>true</IncludeInVSIX></Content>
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <Import Project="$(VSToolsPath)/VSSDK/Microsoft.VsSDK.targets" Condition="'$(CompileOnly)' != 'true'" />
+  <Target Name="PublishDebugAdapter" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="dotnet publish &quot;$(MSBuildProjectDirectory)/../../tools/DolphinDotNet.DebugAdapter/DolphinDotNet.DebugAdapter.csproj&quot; -c Release -r win-x64 --self-contained true -o &quot;$(AdapterOutput)&quot;" />
+    <ItemGroup>
+      <VSIXSourceItem Include="$(AdapterOutput)**/*"><VSIXSubPath>adapter/%(RecursiveDir)</VSIXSubPath></VSIXSourceItem>
+    </ItemGroup>
+  </Target>
+</Project>

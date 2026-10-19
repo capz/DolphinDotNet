@@ -25,6 +25,7 @@ tests/input_overlay_test
 tests/input_gamecube_test
 tests/hardware_gamecube_test
 tests/disc_mount_test
+tests/dol_test
 
 **/.gradle/
 **/.intellijPlatform/

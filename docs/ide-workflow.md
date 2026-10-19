@@ -37,6 +37,10 @@ container. Host-specific proxy hostnames must also resolve inside Docker.
 3. Build normally, then use **Ctrl+F5 / Start Without Debugging**. That action also
    builds before launching. A build failure prevents launch.
 
+For C# source debugging, install the [Visual Studio extension](visual-studio-debugging.md)
+and use **Debug → Attach to DolphinDotNet…** after launching a matching Debug DOL
+with its GDB stub waiting.
+
 ## Rider
 
 Open the same solution and select the checked-in **Pong in Dolphin (play without debugger)** run
