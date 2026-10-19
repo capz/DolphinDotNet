@@ -34,6 +34,7 @@ internal static class NativeModel
     internal static int ModelControl(int token,int op,float value)=>throw Unsupported();
     internal static int ModelNodeMatrix(int token,int node,float[] matrix)=>throw Unsupported();
     internal static int ModelDraw(int token,float[] matrix)=>throw Unsupported();
+    internal static int ModelDrawEffect(int token,float[] matrix,int effect)=>throw Unsupported();
     internal static int ModelFrameBegin(float[] view,float[] projection)=>throw Unsupported();
     internal static int ModelFrameEnd()=>throw Unsupported();
 }

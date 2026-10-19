@@ -38,16 +38,22 @@ public sealed class Renderer
 
     /// <summary>Draws the object's instance at its cached world transform. Empty objects submit no geometry.</summary>
     public void Draw(GameObject gameObject)
+        => Draw(gameObject, null);
+    /// <summary>Draws this object's model with a borrowed RGB effect for this draw only.</summary>
+    public void Draw(GameObject gameObject, GxEffect? effectOverride)
     {
         if (gameObject == null) throw new ArgumentNullException("gameObject");
         gameObject.Check();
         var model = gameObject.Model;
-        if (model != null) DrawModel(model, gameObject.Transform.WorldMatrix);
+        if (model != null) DrawModel(model, gameObject.Transform.WorldMatrix, effectOverride);
     }
     public void DrawModel(ModelInstance instance, Transform transform)
+        => DrawModel(instance, transform, null);
+    /// <summary>Replaces imported RGB combination without changing geometry, alpha or material state.</summary>
+    public void DrawModel(ModelInstance instance, Transform transform, GxEffect? effectOverride)
     {
         if (transform == null) throw new ArgumentNullException("transform");
-        DrawModel(instance, transform.WorldMatrix);
+        DrawModel(instance, transform.WorldMatrix, effectOverride);
     }
 
     public void BeginFrame(float[] viewMatrix, float[] projectionMatrix)
@@ -59,10 +65,19 @@ public sealed class Renderer
     }
 
     public void DrawModel(ModelInstance instance, float[] transform)
+        => DrawModel(instance, transform, null);
+    /// <summary>Overrides every mesh for this submission; null restores imported rendering.</summary>
+    public void DrawModel(ModelInstance instance, float[] transform, GxEffect? effectOverride)
     {
         if (instance == null) throw new ArgumentNullException("instance");
         instance.Check();
-        if (NativeModel.ModelDraw(instance.Token, transform) < 0)
+        if (effectOverride != null) effectOverride.Check();
+        var result = NativeModel.ModelDrawEffect(instance.Token, transform, effectOverride == null ? 0 : effectOverride.Token);
+        if (result == -3)
+            throw new ArgumentException("effectOverride requires a texture on every submitted mesh.", "effectOverride");
+        if (result == -2)
+            throw new InvalidOperationException("The effect override is invalid or pending disposal.");
+        if (result < 0)
             throw new InvalidOperationException("Model is cold, frame is inactive or transform is invalid.");
     }
 

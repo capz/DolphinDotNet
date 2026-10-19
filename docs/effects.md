@@ -1,7 +1,7 @@
 # Managed TEV effects and the material compiler
 
-`GxEffect` is a GameCube RGB pixel-combiner program, shared by `Material` and
-`Draw2D`. It uses TEV fixed-point arithmetic. It is not GLSL/HLSL and does not
+`GxEffect` is a GameCube RGB pixel-combiner program, shared by `Material`,
+`Draw2D` and imported-model draw overrides. It uses TEV fixed-point arithmetic. It is not GLSL/HLSL and does not
 provide programmable vertex shaders. Alpha retains the normal pipeline behavior:
 vertex/material alpha multiplied by texture alpha when a texture is bound.
 Lighting and material tint feed the raster RGB input before the effect.
@@ -54,6 +54,48 @@ managed effect throw. Uniform mutation during a frame is rejected. Effect
 creation and parameter updates run on the application executor. A texture-reading
 program requires a bound texture; missing/disposed textures are rejected before
 submission. The program does not own its input texture.
+
+## Imported models: per-draw overrides
+
+Pass an existing effect to `Renderer.DrawModel(instance, transform, effectOverride)`
+with either a `Transform` or a 16-float world matrix, or to
+`Renderer.Draw(gameObject, effectOverride)`. Existing overloads and an explicit
+`null` retain imported rendering. An empty GameObject submits nothing and does
+not validate an unused effect.
+
+```csharp
+using var toon = GxEffect.ToonBands(65, 165,
+    new Color32(12, 24, 64), new Color32(30, 90, 158), new Color32(70, 220, 248));
+// On the application executor, using an existing camera, instance and transform:
+renderer.BeginFrame(camera);
+renderer.DrawModel(instance, transform, toon);
+renderer.DrawModel(otherInstance, otherTransform, null);
+renderer.EndFrame();
+```
+
+The override replaces RGB combination on every submitted mesh for that call.
+It uses the original texture/UV0 and raster color: vertex color times imported
+tint, including the model renderer's diffuse shade unless unlit. It does not
+mutate the shared Model or its instances. Each later draw chooses its own effect.
+No per-draw material copies or vertex buffers are allocated.
+
+Texture alpha, alpha testing, blend factors, transparency sorting, depth writes,
+culling, skinning, filters, wrapping and mipmaps retain their imported behavior.
+`RequiresTexture == false` still keeps any imported texture bound for alpha.
+ColorRamp and ToonBands replace texture RGB with raster-driven color; combine
+texture RGB explicitly in a compiled graph if that is desired.
+
+A texture-requiring effect with any submitted untextured mesh throws
+`ArgumentException` identifying `effectOverride`, before sorting, triangle
+accounting or GX submission. Unreferenced materials do not count. A disposed
+managed effect throws `ObjectDisposedException`. Uniform updates remain forbidden
+inside a device frame; disposal after submission defers reclamation until frame
+completion and rejects later uses. Overrides are independent of ARAM snapshots:
+cold models reject draws, and `PrepareAsync` restores normal/default or effect
+drawing with the caller's chosen live effect.
+
+Per-material overrides, normal/position shader inputs, material editing and
+wireframe modes are outside this API.
 
 ## Compile a material graph at build time
 
@@ -127,13 +169,18 @@ managed wrapper and values live in the native effect.
 
 ## Validation and next limits
 
-ShaderDemo now uses preset effects through Material and the compiled toon graph
-through Draw2D. The existing software-Dolphin capture validates actual output;
+ShaderDemo uses preset effects through Material, imported-model draw overrides,
+and the compiled toon graph through Draw2D. Its original two-material glTF fixture
+is converted by `scripts/generate_model_effect_fixture.py`; no retail assets are
+needed. The capture requires a default/effect/default frame cycle with preserved
+texture cutouts and ordinary mesh/UI output. The existing software-Dolphin capture validates actual output;
 compiler tests compare all 256 intensities across threshold boundaries and test
 quantization, sharing, folding, deterministic output and resource diagnostics.
 Graphics AOT tests exercise deferred disposal, parameter mutation rejection,
 texture requirements, default restoration and native package validation under
-GC stress and sanitizers. Physical GameCube performance/precision remains a
+GC stress and sanitizers. A recording GX API also compiles the production model
+submission path and shared combiner, asserting binding order, preflight failures,
+skinning, samplers, mirrored culling, sorting and pending/stale resource handling. Physical GameCube performance/precision remains a
 hardware acceptance check.
 
 The next extensions can add additional texture inputs/coordinate generators,

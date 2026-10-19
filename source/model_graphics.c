@@ -4,7 +4,7 @@
 #include "dnd_performance.h"
 #include <math.h>
 #include <string.h>
-#ifdef DND_GAMECUBE_STORAGE
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
 #include <gccore.h>
 #endif
 static float frame_view[16], frame_projection[16];
@@ -29,7 +29,7 @@ int dnd_model_frame_begin(DndArray *view, DndArray *projection) {
   if (dnd_device_pass_begin(1) < 0)
     return -1;
   dnd_draw_set_camera(frame_view, frame_projection);
-#ifdef DND_GAMECUBE_STORAGE
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
   Mtx44 p;
   for (int r = 0; r < 4; r++)
     for (int c = 0; c < 4; c++)
@@ -106,12 +106,23 @@ void dnd_model_sort_draws(DndInstance *in, const float world[16],
   }
 }
 int dnd_model_draw(int token, DndArray *transform) {
+  return dnd_model_draw_effect(token, transform, 0);
+}
+int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {
   DndInstance *in = dnd_instance_find(token);
   float world[16];
   if (!in || !in->model->ready || !dnd_model_frame_active ||
       !matrix_array(transform, world))
     return -1;
   DndModel *model = in->model;
+  const DndDrawEffect *effect;
+  if (dnd_effect_resolve(effect_token, &effect) < 0)
+    return -2;
+  /* Preflight referenced meshes before sorting, counters or GX submission. */
+  if (effect && effect->texture)
+    for (unsigned mi = 0; mi < model->meshes; mi++)
+      if (model->material[model->mesh[mi].material].texture < 0)
+        return -3;
   dnd_model_sort_draws(in, world, frame_view);
   for (unsigned draw = 0; draw < model->meshes; draw++) {
     unsigned mi = in->draw_order ? in->draw_order[draw] : draw;
@@ -128,7 +139,8 @@ int dnd_model_draw(int token, DndArray *transform) {
     if (!dnd_model_inverse(normal, mv))
       return -1;
     dnd_performance_add_triangles(mesh->indices / 3);
-#ifdef DND_GAMECUBE_STORAGE
+    DndMaterial *mat = &model->material[mesh->material];
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     dnd_draw_backend_restore();
     Mtx matrix;
     for (int r = 0; r < 3; r++)
@@ -136,7 +148,6 @@ int dnd_model_draw(int token, DndArray *transform) {
         matrix[r][c] = mv[c * 4 + r];
     GX_LoadPosMtxImm(matrix, GX_PNMTX0);
     GX_SetCurrentMtx(GX_PNMTX0);
-    DndMaterial *mat = &model->material[mesh->material];
     float determinant =
         object[0] * (object[5] * object[10] - object[9] * object[6]) -
         object[4] * (object[1] * object[10] - object[9] * object[2]) +
@@ -166,12 +177,7 @@ int dnd_model_draw(int token, DndArray *transform) {
     GX_SetNumChans(1);
     GX_SetChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX,
                    GX_LIGHTNULL, GX_DF_NONE, GX_AF_NONE);
-    GX_SetNumTevStages(1);
     GX_SetNumTexGens(mat->texture >= 0 ? 1 : 0);
-    GX_SetTevOrder(
-        GX_TEVSTAGE0, mat->texture >= 0 ? GX_TEXCOORD0 : GX_TEXCOORDNULL,
-        mat->texture >= 0 ? GX_TEXMAP0 : GX_TEXMAP_NULL, GX_COLOR0A0);
-    GX_SetTevOp(GX_TEVSTAGE0, mat->texture >= 0 ? GX_MODULATE : GX_PASSCLR);
     if (mat->texture >= 0) {
       DndTexture *tx = &model->texture[mat->texture];
       GXTexObj tex;
@@ -187,6 +193,9 @@ int dnd_model_draw(int token, DndArray *transform) {
       GX_LoadTexObj(&tex, GX_TEXMAP0);
       GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
     }
+#endif
+    dnd_draw_backend_tev(effect, mat->texture >= 0);
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     for (unsigned first = 0; first < mesh->indices;) {
       unsigned count = mesh->indices - first;
       if (count > 65535)

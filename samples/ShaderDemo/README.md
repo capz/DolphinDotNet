@@ -8,6 +8,13 @@ immediately with three panels, each drawing the same grayscale disk and ramp:
 - **Toon bands:** a managed toon preset on the disk and a build-time compiled graph
   on the strip produce three discrete color bands. Their thresholds animate.
 
+The small top row draws one original imported model three times: default,
+toon override, default. It has a textured alpha-cutout material and an untextured
+material. The first three frames also exercise default/effect/default over time;
+then the middle panel stays toon shaded. `Renderer.DrawModel` borrows the effect
+per draw without changing the shared model. Regenerate the embedded fixture with
+`python3 scripts/generate_model_effect_fixture.py` (the existing glTF converter).
+
 The CPU submits geometry and changes a few registers. TEV computes the ramp and
 comparisons per fragment. This illustrates shading, not physical sphere lighting.
 No GLSL/HLSL, downloaded assets, SD card, network or custom Dolphin build is needed.
@@ -33,8 +40,9 @@ GameCube has no programmable vertex/fragment shader units. Its TEV hardware has
 material compiler, CPU effects, multipass effects and another-backend options.
 
 The automated acceptance check captures software-Dolphin output and checks the
-actual reference gradient, color ramp and three toon colors. It exits when enough
-frames have been captured, with a 30-second failure deadline (not a fixed soak):
+actual reference gradient, color ramp and three toon colors, plus the imported
+model default/effect/default cycle and cutout alpha. It exits when enough
+frames have been captured, with a 90-second failure deadline (not a fixed soak):
 
 ```sh
 python3 scripts/dolphin_shader_test.py samples/ShaderDemo/bin/Debug/net8.0/ShaderDemo.dol --logs /tmp/shader-check

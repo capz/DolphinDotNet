@@ -79,6 +79,7 @@ void dnd_draw_backend_restore(void) {
     GX_SetTexCoordScaleManually(GX_TEXCOORD0,GX_FALSE,1,1);GX_SetTexCoordBias(GX_TEXCOORD0,GX_FALSE,GX_FALSE);
     GX_SetClipMode(GX_CLIP_ENABLE);GX_SetCoPlanar(GX_FALSE);GX_SetFog(GX_FOG_NONE,0,1,0,1,(GXColor){0,0,0,0});
 }
+#include "dnd_tev_backend.inc"
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world) {
     dnd_draw_backend_restore();
     float mv[16];multiply(mv,view_matrix,world);Mtx m;Mtx44 p;
@@ -96,10 +97,8 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
     GX_SetTevSwapMode(GX_TEVSTAGE0,GX_TEV_SWAP0,GX_TEV_SWAP0);GX_SetTevSwapModeTable(GX_TEV_SWAP0,GX_CH_RED,GX_CH_GREEN,GX_CH_BLUE,GX_CH_ALPHA);
     GX_SetTexCoordScaleManually(GX_TEXCOORD0,GX_FALSE,1,1);GX_SetTexCoordBias(GX_TEXCOORD0,GX_FALSE,GX_FALSE);
     GX_SetLineWidth(6,GX_TO_ZERO);GX_SetPointSize(6,GX_TO_ZERO);
-    GX_SetNumIndStages(0);GX_SetNumChans(1);GX_SetNumTexGens(texture?1:0);GX_SetNumTevStages(1);GX_SetTevDirect(GX_TEVSTAGE0);
+    GX_SetNumIndStages(0);GX_SetNumChans(1);GX_SetNumTexGens(texture?1:0);
     GX_SetChanCtrl(GX_COLOR0A0,lit?GX_ENABLE:GX_DISABLE,GX_SRC_REG,GX_SRC_VTX,lit?GX_LIGHT0:GX_LIGHTNULL,lit?GX_DF_CLAMP:GX_DF_NONE,GX_AF_NONE);
-    GX_SetTevOrder(GX_TEVSTAGE0,texture?GX_TEXCOORD0:GX_TEXCOORDNULL,texture?GX_TEXMAP0:GX_TEXMAP_NULL,GX_COLOR0A0);
-    GX_SetTevOp(GX_TEVSTAGE0,texture?GX_MODULATE:GX_PASSCLR);
     GX_SetZMode((material->flags&16)?GX_FALSE:GX_TRUE,GX_LEQUAL,(material->flags&8)?GX_FALSE:GX_TRUE);
     GX_SetZCompLoc(GX_FALSE);GX_SetColorUpdate(GX_TRUE);GX_SetAlphaUpdate(GX_TRUE);
     GX_SetCullMode((material->flags&4)?GX_CULL_BACK:GX_CULL_NONE);
@@ -113,21 +112,7 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
         GX_InitTexObjLOD(&tex,texture->linear?GX_LINEAR:GX_NEAR,texture->linear?GX_LINEAR:GX_NEAR,0,0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
         GX_LoadTexObj(&tex,GX_TEXMAP0);GX_SetTexCoordGen(GX_TEXCOORD0,GX_TG_MTX2x4,GX_TG_TEX0,GX_IDENTITY);
     }
-    if(material->effect) {
-        const DndDrawEffect *fx=material->effect;
-        for(int k=0;k<fx->uniforms;k++)GX_SetTevKColor((u8)k,color(fx->colors[k]));
-        GX_SetNumTevStages((u8)fx->count);
-        for(int i=0;i<fx->count;i++) {
-            const DndTevStage *s=&fx->stages[i];u8 stage=(u8)i;
-            GX_SetTevDirect(stage);GX_SetTevSwapMode(stage,GX_TEV_SWAP0,GX_TEV_SWAP0);
-            GX_SetTevOrder(stage,texture?GX_TEXCOORD0:GX_TEXCOORDNULL,texture?GX_TEXMAP0:GX_TEXMAP_NULL,GX_COLOR0A0);
-            GX_SetTevKColorSel(stage,s->konst);
-            GX_SetTevColorIn(stage,s->a,s->b,s->c,s->d);
-            GX_SetTevColorOp(stage,s->op,GX_TB_ZERO,GX_CS_SCALE_1,GX_TRUE,s->dest);
-            GX_SetTevAlphaIn(stage,GX_CA_ZERO,texture?GX_CA_TEXA:GX_CA_ZERO,texture?GX_CA_RASA:GX_CA_ZERO,texture?GX_CA_ZERO:GX_CA_RASA);
-            GX_SetTevAlphaOp(stage,GX_TEV_ADD,GX_TB_ZERO,GX_CS_SCALE_1,GX_TRUE,GX_TEVPREV);
-        }
-    }
+    dnd_draw_backend_tev(material->effect,texture!=NULL);
     GX_ClearVtxDesc();GX_SetVtxDesc(GX_VA_POS,GX_DIRECT);GX_SetVtxDesc(GX_VA_CLR0,GX_DIRECT);
     GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_POS,GX_POS_XYZ,GX_F32,0);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_CLR0,GX_CLR_RGBA,GX_RGBA8,0);
     if(lit){GX_SetVtxDesc(GX_VA_NRM,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);}
@@ -232,6 +217,7 @@ void dnd_draw_backend_viewport(int x,int y,int w,int h){(void)x;(void)y;(void)w;
 void dnd_draw_backend_scissor(int x,int y,int w,int h){(void)x;(void)y;(void)w;(void)h;}
 void dnd_draw_backend_camera(const float *view,const float *projection){(void)view;(void)projection;}
 void dnd_draw_backend_2d(int w,int h){(void)w;(void)h;}
+void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound){(void)effect;(void)texture_bound;}
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const DndDrawTexture *t,const DndDrawMaterial *m,const float *world){(void)v;(void)n;(void)primitive;(void)t;(void)m;(void)world;}
 void dnd_draw_backend_copy(const DndDrawTexture *t,int x,int y,int w,int h){(void)t;(void)x;(void)y;(void)w;(void)h;}
 #endif

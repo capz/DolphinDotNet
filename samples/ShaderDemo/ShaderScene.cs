@@ -11,6 +11,10 @@ internal sealed class ShaderScene : IDisposable
     private readonly VertexPositionColor[] diskVertices=new VertexPositionColor[96];
     private readonly DynamicMesh disk;
     private readonly Mesh strip;
+    private readonly Model imported=Model.FromPackage(ImportedPanels.Package);
+    private readonly ModelInstance importedInstance;
+    private readonly GxEffect importedToon=GxEffect.ToonBands(65,165,new Color32(12,24,64),new Color32(30,90,158),new Color32(70,220,248));
+    private int frame;
     private readonly GxEffect ramp=GxEffect.ColorRamp(new Color32(12,18,58),new Color32(60,180,240));
     private readonly GxEffect toon=GxEffect.ToonBands(65,165,new Color32(12,24,64),new Color32(30,90,158),new Color32(70,220,248));
     private readonly GxEffect compiled=GxEffect.FromPackage(CompiledEffect.Package);
@@ -23,6 +27,7 @@ internal sealed class ShaderScene : IDisposable
     internal bool UseGraph=true;
     internal ShaderScene()
     {
+        importedInstance=imported.CreateInstance();
         camera.LookAt(new Vector3(0,0,1),new Vector3(0,0,0),new Vector3(0,1,0));
         left.LocalPosition=new Vector3(-208f/240,0,0);right.LocalPosition=new Vector3(208f/240,0,0);
         float x=0,y=-78;
@@ -51,6 +56,11 @@ internal sealed class ShaderScene : IDisposable
         for(int i=0;i<32;i++)diskVertices[i*3]=Vertex(-20+40*wave,240,255);
         disk.SetVertices(diskVertices);
         device.BeginFrame(new Color32(8,13,26));renderer.Begin3D(camera);
+        // The same shared imported model, borrowed effects, then restored defaults.
+        renderer.DrawModel(importedInstance,left);
+        renderer.DrawModel(importedInstance,middle,frame!=0&&frame!=2?importedToon:null);
+        renderer.DrawModel(importedInstance,right,null);
+        if(frame<3)frame++; // startup default/effect/default cycle, then a steady toon view
         renderer.DrawMesh(disk,reference,left);renderer.DrawMesh(strip,reference,left);
         renderer.DrawMesh(disk,rampMaterial,middle);renderer.DrawMesh(strip,rampMaterial,middle);
         renderer.DrawMesh(disk,toonMaterial,right);
@@ -63,5 +73,5 @@ internal sealed class ShaderScene : IDisposable
         draw.SetEffect(null);draw.End();
         hud.Present(paused,low,high,UseGraph);device.EndFrame();
     }
-    public void Dispose(){hud.Dispose();draw.Dispose();strip.Dispose();disk.Dispose();compiled.Dispose();toon.Dispose();ramp.Dispose();}
+    public void Dispose(){importedToon.Dispose();importedInstance.Dispose();imported.Dispose();hud.Dispose();draw.Dispose();strip.Dispose();disk.Dispose();compiled.Dispose();toon.Dispose();ramp.Dispose();}
 }

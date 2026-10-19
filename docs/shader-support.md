@@ -37,7 +37,8 @@ not an instruction count for arbitrary modern shader programs.
 ### 1. Managed effect presets — implemented
 
 `GxEffect.ColorRamp` and `GxEffect.ToonBands` bind through `Material.Effect` and
-`Draw2D.SetEffect`. Programs are immutable, named color parameters update between
+`Draw2D.SetEffect`, and imported models accept a per-draw effect through
+`Renderer.DrawModel`/`Renderer.Draw(GameObject, effectOverride)`. Programs are immutable, named color parameters update between
 frames, batch changes flush queued work, and native validation/lifetime rules
 protect resource use. ShaderDemo and rendered-pixel checks exercise the presets,
 a compiled graph, and restoration of the normal HUD pipeline. See

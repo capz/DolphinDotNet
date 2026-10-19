@@ -52,6 +52,10 @@ int dnd_model_control(
     float value); /* 0 update,1 pause,2 resume,3 stop,4 seek,5 speed */
 int dnd_model_node_matrix(int token, int node, DndArray *matrix);
 int dnd_model_draw(int token, DndArray *transform);
+/* Per-draw RGB override; no model/instance mutation or ownership transfer.
+ * 0=success, -1=invalid model/instance/frame/transform, -2=invalid/stale/pending
+ * effect, -3=texture-required effect on a referenced untextured mesh. */
+int dnd_model_draw_effect(int token,DndArray *transform,int effect);
 int dnd_model_frame_begin(DndArray *view, DndArray *projection);
 int dnd_model_frame_end(void);
 /* Reference-output inspection for tests and profiling, not managed heap

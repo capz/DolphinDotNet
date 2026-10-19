@@ -38,3 +38,5 @@ if(op==DND_RAW_GUMTXIDENTITY){assert(count==1&&args[0]&&(args[0]&31)==0);}
 graphics_raw_commands++;return 0;}
 
 bool dnd_draw_backend_immediate_ready(void){return true;}
+
+void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound){(void)effect;(void)texture_bound;}
