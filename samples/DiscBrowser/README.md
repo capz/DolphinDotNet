@@ -12,11 +12,12 @@ plain **ISO/GCM** file mounts its GameCube FST read-only at `dvd:/` and opens
 that image's directory listing. **B** goes to the parent directory; B at an
 opened image's root returns to the original GC Loader SD directory.
 
-**Y** switches the preferred source between GC Loader SD and the physical/ODE
+**Y** switches the source between GC Loader SD and the physical/ODE
 DVD interface, unmounting the previous source first. **X** refreshes/remounts
-the preferred source, **Start** exits, and **Z** toggles diagnostics. If the
-preferred source is unavailable, the browser tries the other one. An unavailable
-source does not prevent controller input or the status screen from rendering.
+the current source, **Start** exits, and **Z** toggles diagnostics. DVD is
+never auto-selected when an SD mount fails: the screen instead reports that
+GC Loader SD is unavailable (check firmware), and Y explicitly opens the DVD.
+An unavailable source does not prevent controller input or status rendering.
 
 Both an original disc or an ODE-presented disc and a plain ISO file are
 presented as the same read-only `dvd:/` filesystem:
@@ -44,8 +45,9 @@ dotnet run --project samples/DiscBrowser -c Release
 
 See [IDE setup](../../docs/ide-workflow.md) for prerequisites and local settings.
 For Dolphin, set **Default ISO** to an ordinary GameCube ISO/GCM if you want
-to browse a disc. Dolphin may not expose the real GC Loader SD block interface;
-the browser then falls back to the presented disc. Hardware testing is needed
+to browse a disc, then press **Y** after launch to switch to the DVD source.
+Dolphin may not expose the real GC Loader SD block interface; in this case
+the default screen reports SD unavailable rather than silently opening DVD. Hardware testing is needed
 to verify GC Loader firmware SD-sector access.
 
 Entries are sorted with directories first and are bounded to 256 folders plus

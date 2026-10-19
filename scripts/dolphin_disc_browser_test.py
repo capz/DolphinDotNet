@@ -69,7 +69,8 @@ def run(args):
             for address in (frame,finished):
                 if request(conn,f'Z0,{address:x},4')!='OK':raise RuntimeError('Breakpoint refused')
             if parse_stop_pc(request(conn,'c',30))!=frame:raise AssertionError('Browser did not render')
-            advance();require(number('disc')==1 and current()=='' and number('selection')==0,'mounted root')
+            advance();require(number('disc')==0 and current()=='' and number('selection')==0,'no automatic DVD selection')
+            advance({'buttons':['Y']});require(number('disc')==1 and current()=='' and number('selection')==0,'Y switches to mounted DVD')
             advance({'buttons':['D_DOWN']});require(number('selection')==1,'D-pad down')
             advance();advance({'buttons':['D_UP']});require(number('selection')==0,'D-pad up')
             advance();advance({'axis':1,'value':-1});require(number('selection')==1,'analog down')

@@ -100,9 +100,16 @@ internal static class Program
         Release();paths.Clear();title="DISC BROWSER";current="";
         // GC Loader exposes a separate SD filesystem. A presented DVD is not its
         // file browser: do not automatically pick the DVD ahead of the card.
-        if(preferLoader ? (TryLoader()||TryPhysicalDisc()) : (TryPhysicalDisc()||TryLoader()))
-            return;
-        status="GC LOADER SD AND GAME DISC UNAVAILABLE";
+        if(preferLoader)
+        {
+            if(TryLoader())return;
+            status="GC LOADER SD UNAVAILABLE; CHECK FIRMWARE / Y FOR DVD";
+        }
+        else
+        {
+            if(TryPhysicalDisc())return;
+            status="GAME DISC UNAVAILABLE; Y FOR GC LOADER SD";
+        }
         DebugOverlay.WriteLine(status);
     }
 
