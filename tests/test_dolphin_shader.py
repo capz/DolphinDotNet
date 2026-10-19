@@ -94,3 +94,12 @@ class ImportedModelCaptureTests(unittest.TestCase):
     def test_only_first_material_getting_effect_fails(self):
         rgb=self.model_frame();at=(116*640+348)*3;rgb[at:at+3]=bytes((102,102,102))
         with self.assertRaises(AssertionError):validate_model(rgb)
+
+
+class SharedCaptureTests(unittest.TestCase):
+    def test_model_cycle_is_explicitly_opted_in_by_shader_entry(self):
+        import inspect
+        import dolphin_shader_test as capture
+        self.assertFalse(inspect.signature(capture.run).parameters['imported_models'].default)
+        source=Path(capture.__file__).read_text()
+        self.assertIn('run(parser.parse_args(),imported_models=True)',source)

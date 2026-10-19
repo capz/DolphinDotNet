@@ -82,7 +82,7 @@ def validate_model(rgb,effect=True):
     return dict(textured=pixel(288),untextured=pixel(348),cutout=pixel(248))
 
 
-def run(args):
+def run(args,imported_models=False):
     root=args.logs.resolve()
     if root.exists() and any(root.iterdir()):raise ValueError('Use a fresh capture directory')
     config=root/'user'/'Config';config.mkdir(parents=True,exist_ok=True)
@@ -128,21 +128,25 @@ def run(args):
     size=640*480*3
     frames=[raw[i:i+size] for i in range(0,len(raw),size)]
     proof=None
+    if not imported_models:
+        proof=validate(frames[1])
+        selected=frames[1]
     # Allow the initial video clear before the first managed frame. Require a
     # complete default/effect/default cycle, including unchanged public mesh/UI.
-    for i in range(len(frames)-2):
+    for i in range(len(frames)-2) if imported_models else ():
         try:
             for j,custom in enumerate((False,True,False)):
                 validate(frames[i+j]);validate_model(frames[i+j],custom)
         except (AssertionError,ValueError):continue
         proof=validate(frames[i+1]);proof['importedModel']=validate_model(frames[i+1])
         proof['defaultEffectDefaultFrames']=[i,i+1,i+2]
-        subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-f','rawvideo','-pix_fmt','rgb24',
-                        '-s','640x480','-i','pipe:0','-frames:v','1','-y',str(root/'frame.png')],
-                       input=frames[i+1],check=True,timeout=10)
+        selected=frames[i+1]
         break
     if proof is None:
         raise AssertionError('No valid imported-model default/effect/default cycle in first six frames')
+    subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-f','rawvideo','-pix_fmt','rgb24',
+                    '-s','640x480','-i','pipe:0','-frames:v','1','-y',str(root/'frame.png')],
+                   input=selected,check=True,timeout=10)
     proof['elapsedSeconds']=round(time.monotonic()-started,3)
     (root/'results.json').write_text(json.dumps(proof,indent=2)+'\n')
     print(json.dumps(proof))
@@ -154,4 +158,4 @@ if __name__=='__main__':
     parser.add_argument('--binary',default='/usr/games/dolphin-emu-nogui')
     parser.add_argument('--logs',type=Path,default=Path('dolphin-shader'))
     parser.add_argument('--seconds',type=float,default=CAPTURE_TIMEOUT_SECONDS)
-    run(parser.parse_args())
+    run(parser.parse_args(),imported_models=True)
