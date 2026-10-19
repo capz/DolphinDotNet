@@ -303,6 +303,7 @@ jobs:
         run: |
           cc -std=c11 -O2 -g -Wall -Wextra -Werror -Iinclude tests/iso_image_test.c source/iso_file.c source/fst.c -o /tmp/dnd-iso-image
           /tmp/dnd-iso-image
+          dotnet run --project tests/DiscBrowserNavigationTests -c Release
           dotnet build samples/DiscBrowser/DiscBrowser.csproj -c Release -p:DndBuildNative=false
           dotnet "$DND_COMPILER_DLL" --aot samples/DiscBrowser/bin/Release/net8.0/DiscBrowser.dll /tmp/dnd-disc-browser.c
           cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/dnd-disc-browser.c -o /tmp/dnd-disc-browser.o
@@ -1280,6 +1281,7 @@ jobs:
         run: |
           python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --disc dist/footprint/test-disc.iso --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2172 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=Title: Fixture banner" --expect-text "lines=Banner RGBA size: 12288" --expect-text "lines=dvd:/top" --memory-after-symbol dnd_device_end --logs dolphin-disc-browser-iso --require-boot
           python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --disc dist/footprint/test-disc-many.iso --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2172 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=dvd:/file0.bin" --memory-after-symbol dnd_device_end --logs dolphin-disc-browser-many --require-boot
+          python3 scripts/dolphin_disc_browser_test.py dist/footprint/disc-browser/Game.dol --elf dist/footprint/disc-browser/Game.elf --disc dist/footprint/test-disc-many.iso --logs dolphin-disc-browser-input
       - name: Verify all four controllers through Dolphin pipe inputs
         if: matrix.group == 'controllers'
         id: controller_inputs
@@ -1334,6 +1336,7 @@ jobs:
             dolphin-disc-browser/
             dolphin-disc-browser-iso/
             dolphin-disc-browser-many/
+            dolphin-disc-browser-input/
           if-no-files-found: warn
 
 

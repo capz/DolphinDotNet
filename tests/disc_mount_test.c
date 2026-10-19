@@ -18,7 +18,9 @@ static const devoptab_t *registered;
 static bool reject_registration, fail_read;
 static int cover=DVD_COVER_OPEN, mount_result, mount_calls, iso_mounts, iso_unmounts;
 int __io_gcdvd;
+static int drive_ready;
 void DVD_Init(void) {}
+int DVD_CheckDisk(void) { return drive_ready; }
 int DVD_LowGetCoverStatus(void) { return cover; }
 int DVD_Mount(void) { mount_calls++; return mount_result; }
 s32 DVD_ReadAbs(dvdcmdblk *cmd,void *output,s32 count,s64 offset) {
@@ -108,6 +110,17 @@ int main(void) {
   char output[3];assert(registered->read_r(&r,file,output,3)==-1 && r._errno==EIO);
   free(file);fail_read=false;dnd_gc_unmount_disc();
   assert(!registered && !dnd_gc_fst_copy_header((uint8_t[0x440]){0}));
+  drive_ready=1;int previous_mounts=mount_calls;
+  assert(dnd_gc_mount_disc(2));access_files();
+  assert(mount_calls==previous_mounts); /* Refresh reuses the ready drive. */
+  dnd_gc_unmount_disc();
+  cover=DVD_COVER_OPEN;assert(!dnd_gc_mount_disc(2));
+  cover=DVD_COVER_CLOSED;
+  assert(dnd_gc_mount_disc(2));assert(mount_calls==previous_mounts+1);
+  dnd_gc_unmount_disc();previous_mounts=mount_calls;
+  drive_ready=0; /* A changed disc/drive error must take the mount path again. */
+  assert(dnd_gc_mount_disc(2));assert(mount_calls==previous_mounts+1);
+  dnd_gc_unmount_disc();
   assert(dnd_gc_mount_disc(1) && iso_mounts==1);
   dnd_gc_unmount_disc();assert(iso_unmounts==1);
   char path[]="/tmp/dnd-mount-XXXXXX";int fd=mkstemp(path);assert(fd>=0);

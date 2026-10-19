@@ -5,10 +5,12 @@ using Dolphin.Diagnostics;
 using Dolphin.Graphics;
 using Dolphin.Input;
 using Dolphin.Storage;
+using Dolphin.Timing;
 
 internal static class Program
 {
     private static readonly List<string> paths=new List<string>();
+    private static readonly BrowserNavigation navigation=new BrowserNavigation();
     private static int directories,selection,top;
     private static string current="",status="";
     private static bool disc,loader;
@@ -16,7 +18,7 @@ internal static class Program
     private static string title="DISC BROWSER";
     private static void Listing()
     {
-        paths.Clear();selection=top=0;
+        paths.Clear();selection=top=0;navigation.Reset();
         var folders=new List<string>();var files=new List<string>();
         foreach(var path in Storage.EnumerateDirectories(StorageDevice.DvdDrive,current))
         {if(folders.Count>=256)break;folders.Add(path);}
@@ -68,12 +70,13 @@ internal static class Program
                 Controller.Update();var pad=Controller.GetState();
                 if(pad.Start.WasPressed)return 0;
                 if(pad.X.WasPressed)Refresh();
+                int move=navigation.Update(pad.IsConnected,pad.DPadUp.IsHeld,pad.DPadDown.IsHeld,pad.Stick.Y,Clock.Timestamp);
                 if(disc)
                 {
                     try
                     {
-                        if(pad.DPadDown.WasPressed&&selection+1<paths.Count)selection++;
-                        if(pad.DPadUp.WasPressed&&selection>0)selection--;
+                        if(move>0&&selection+1<paths.Count)selection++;
+                        if(move<0&&selection>0)selection--;
                         if(pad.A.WasPressed&&selection<directories)
                         {current=paths[selection];if(current.StartsWith("dvd:/"))current=current.Substring(5);Listing();}
                         if(pad.B.WasPressed&&current.Length>0){current=Path.GetDirectoryName(current)??"";Listing();}
@@ -92,7 +95,8 @@ internal static class Program
                     int index=top+row;string name=Path.GetFileName(paths[index]);if(name.Length>52)name=name.Substring(0,52);
                     text.Draw(draw,(index==selection?"> ":"  ")+(index<directories?"DIR ":"FILE ")+name,24,250+row*21,2,index==selection?new Color32(255,210,104):Color32.White);
                 }
-                text.Draw(draw,"UP DOWN SELECT  A OPEN  B PARENT  X REFRESH  START EXIT",24,450,2,Color32.White);
+                text.Draw(draw,pad.IsConnected?"D-PAD / STICK SELECT  A OPEN DIR  B PARENT":"CONNECT CONTROLLER TO PORT 1",24,430,2,Color32.White);
+                text.Draw(draw,"X REFRESH  START EXIT  Z STATS",24,450,2,Color32.White);
                 draw.End();device.EndFrame();
             }
         }
