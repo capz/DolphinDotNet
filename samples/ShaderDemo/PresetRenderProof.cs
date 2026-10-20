@@ -25,17 +25,17 @@ internal sealed class PresetRenderProof : IDisposable
         Configure(toon.Material);Configure(metal.Material);Configure(glow.Material);Configure(world.Material);Configure(modelGlow.Material);
         plain=new Material{Texture=albedo};Configure(plain);
         for(int i=0;i<5;i++)patches[i]=Patch(36+i*80,i==4?new Vector3(-.70710678f,0,.70710678f):new Vector3(0,0,1),i==0?(byte)128:(byte)255);
-        instance=model.CreateInstance();modelTransform.LocalPosition=new Vector3(208f/240,-264f/240,0);
+        instance=model.CreateInstance();modelTransform.LocalScale=new Vector3(1,.5f,1);modelTransform.LocalPosition=new Vector3(208f/240,-184f/240,0);
     }
     private static void Configure(Material m){m.Lighting=LightingMode.Unlit;m.Cull=CullMode.None;m.DepthTest=false;m.DepthWrite=false;m.Blend=BlendMode.Alpha;}
     private static Texture2D Solid(byte r,byte g,byte b,byte a){var p=new byte[64];for(int i=0;i<64;i+=4){p[i]=r;p[i+1]=g;p[i+2]=b;p[i+3]=a;}return Texture2D.Create(4,4,p);}
     private static Mesh Patch(float x,Vector3 normal,byte intensity)
     {
         var c=new Color32(intensity,intensity,intensity);
-        var a=new VertexPositionNormalColorTexture(new Vector3((x-320)/240,(240-370)/240f,0),normal,c,new Vector2(.5f,.5f));
-        var b=new VertexPositionNormalColorTexture(new Vector3((x+56-320)/240,(240-370)/240f,0),normal,c,new Vector2(.5f,.5f));
-        var d=new VertexPositionNormalColorTexture(new Vector3((x-320)/240,(240-394)/240f,0),normal,c,new Vector2(.5f,.5f));
-        var e=new VertexPositionNormalColorTexture(new Vector3((x+56-320)/240,(240-394)/240f,0),normal,c,new Vector2(.5f,.5f));
+        var a=new VertexPositionNormalColorTexture(new Vector3((x-320)/240,(240-356)/240f,0),normal,c,new Vector2(.5f,.5f));
+        var b=new VertexPositionNormalColorTexture(new Vector3((x+56-320)/240,(240-356)/240f,0),normal,c,new Vector2(.5f,.5f));
+        var d=new VertexPositionNormalColorTexture(new Vector3((x-320)/240,(240-368)/240f,0),normal,c,new Vector2(.5f,.5f));
+        var e=new VertexPositionNormalColorTexture(new Vector3((x+56-320)/240,(240-368)/240f,0),normal,c,new Vector2(.5f,.5f));
         return Mesh.Create(new[]{a,b,e,a,e,d});
     }
     internal void Draw(Renderer renderer)

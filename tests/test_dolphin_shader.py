@@ -19,7 +19,7 @@ def frame():
         at=(y*640+528)*3;rgb[at:at+3]=bytes(color)
     at=(411*640+33)*3;rgb[at:at+3]=bytes((231,239,252))
     for x,color in ((60,(40,60,80)),(140,(140,100,100)),(220,(100,160,220)),(300,(80,120,160)),(380,(220,40,20)),(480,(40,80,120)),(560,(40,80,120))):
-        at=(380*640+x)*3;rgb[at:at+3]=bytes(color)
+        at=(362*640+x)*3;rgb[at:at+3]=bytes(color)
     return rgb
 
 
@@ -49,7 +49,7 @@ class ShaderCaptureTests(unittest.TestCase):
 
     def test_missing_each_preset_or_model_override_fails(self):
         for x in (60,140,220,300,380,480,560):
-            rgb=frame();at=(380*640+x)*3;rgb[at:at+3]=bytes((8,13,26))
+            rgb=frame();at=(362*640+x)*3;rgb[at:at+3]=bytes((8,13,26))
             with self.assertRaises(AssertionError):validate(rgb)
 
     def test_boot_or_clear_only_cannot_pass(self):
