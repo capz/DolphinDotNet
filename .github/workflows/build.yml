@@ -1274,7 +1274,7 @@ jobs:
         continue-on-error: true
         run: |
           python3 scripts/dolphin_disc_browser_test.py dist/footprint/disc-browser/Game.dol --elf dist/footprint/disc-browser/Game.elf --no-disc --logs dolphin-disc-browser
-      - name: Verify DiscBrowser explicitly mounts ISO metadata and navigates files
+      - name: Verify DiscBrowser reads inserted ISO metadata and files
         if: matrix.group == 'runtime'
         id: disc_browser_iso
         continue-on-error: true
