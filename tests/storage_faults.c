@@ -47,6 +47,13 @@ int main(void) {
   DndManagedHeap heap;
   dnd_managed_heap_init(&heap, memory, sizeof(memory));
   dnd_gc_set_stress(true);
+  /* Automatic allocation/repair must be opt-in and independently switchable.
+   * Explicit contiguous operations are a separate API. */
+  assert(!dnd_storage_auto_defrag_enabled());
+  dnd_storage_auto_defrag_set(true);
+  assert(dnd_storage_auto_defrag_enabled());
+  dnd_storage_auto_defrag_set(false);
+  assert(!dnd_storage_auto_defrag_enabled());
   DndObject *path = NULL, *bytes = NULL, *result = NULL;
   DndObject **slots[] = {&path, &bytes, &result};
   DndGcFrame frame;
