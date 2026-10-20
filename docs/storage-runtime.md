@@ -159,6 +159,50 @@ sample and separately runs deterministic native checkpoint-injection tests.
 Use a separate test card, measure FAT32 and exFAT, near-full media, and log
 firmware/card details before promoting the feature to hardware-verified.
 
+## Explicit maintenance, policy and streaming
+
+Opted-in writes preserve their existing .NET APIs. Advanced callers may also
+inspect or repair existing files on mounted FAT32/exFAT GameCube SD volumes:
+
+```csharp
+using Dolphin.IO;
+
+var before = Defrag.Analyze("sd:/games/game.iso");
+var result = Defrag.Optimize("sd:/games/game.iso");
+Console.WriteLine(result.Outcome + " " + result.After.ExtentCount);
+```
+
+`Optimize` runs independently of `OptIn` and returns an outcome of
+`AlreadyContiguous`, `Optimized`, `NoContiguousSpace` or `Unsupported`.
+The result reports physical extent counts before/after, copied bytes and elapsed
+milliseconds. Automatic policy remains disabled by default; `MinimumFileSize`
+defaults to 65,536 bytes and controls **automatic** optimization only. A scoped
+policy restores the previous process-wide setting:
+
+```csharp
+using (Defrag.BeginScope(true, 131072)) {
+    // Your existing managed filesystem writes.
+}
+```
+
+Scopes must not overlap across independent application threads. Large,
+known-length downloads can avoid allocating their entire payload and bypass
+post-write copying:
+
+```csharp
+using var input = File.OpenRead("sd:/download/source.bin");
+Defrag.WriteContiguousFrom(input, "sd:/games/new-game.bin", input.Length);
+```
+
+`WriteContiguousFrom` uses a fixed 16 KiB managed buffer, requires the target
+not to exist and publishes only after readback checks. It throws rather than
+silently accepting fragmentation or an incomplete input stream. The policy and
+manual APIs do not implement a whole-card defragmenter. The physical-name
+scanner handles valid UTF-8 paths and FAT32/exFAT UTF-16 names, including
+surrogate pairs. Non-ASCII names currently require the same Unicode spelling
+and casing as their stored name (ASCII casing is folded). Unicode canonical
+normalization and locale-specific case folding are not performed.
+
 ## Automatic fragmentation prevention and repair
 
 **Disabled by default.** Before starting the writes you want optimized, call
