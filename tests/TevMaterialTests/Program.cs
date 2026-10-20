@@ -21,7 +21,7 @@ static int[] Evaluate(byte[] p,int raster,int tex)
     }
     return regs[0];
 }
-var toon=TevMaterialPresets.WindWakerToon(new ToonMaterialOptions{
+var toon=TevMaterialPresets.Toon(new ToonMaterialOptions{
     Dark=new Color32(20,30,40),Middle=new Color32(80,90,100),Bright=new Color32(210,220,230)});
 Check(toon.StageCount==8&&toon.RequiresTexture&&toon.Lighting==LightingMode.Diffuse,"Toon pipeline");
 for(int r=0;r<256;r++)for(int t=0;t<256;t++){
@@ -29,14 +29,14 @@ for(int r=0;r<256;r++)for(int t=0;t<256;t++){
     var actual=Evaluate(toon.GetPackage(),r,t);
     for(int c=0;c<3;c++)Check(Math.Abs(actual[c]-palette[c]*t/255)<=1,"Toon band or albedo mismatch");
 }
-var untextured=TevMaterialPresets.WindWakerToon(new ToonMaterialOptions{Textured=false});
+var untextured=TevMaterialPresets.Toon(new ToonMaterialOptions{Textured=false});
 Check(untextured.StageCount==7&&!untextured.RequiresTexture,"Untextured toon");
-Reject<ArgumentException>(()=>TevMaterialPresets.WindWakerToon(new ToonMaterialOptions{Low=200,High=100}));
+Reject<ArgumentException>(()=>TevMaterialPresets.Toon(new ToonMaterialOptions{Low=200,High=100}));
 foreach(byte strength in new byte[]{0,64,128,255}){
-    var metal=TevMaterialPresets.MetroidPrimeMetallic(new MetallicMaterialOptions{
+    var metal=TevMaterialPresets.MetallicReflection(new MetallicMaterialOptions{
         BaseColor=Color32.White,ReflectionTint=Color32.White,ReflectionStrength=strength});
     Check(metal.StageCount==3&&metal.TextureCoordinates==TextureCoordinateMode.ViewNormal,"Metal pipeline");
-    var glow=TevMaterialPresets.PsoEmissive(new EmissiveMaterialOptions{
+    var glow=TevMaterialPresets.Emissive(new EmissiveMaterialOptions{
         BaseColor=Color32.White,EmissionColor=Color32.White,EmissionStrength=strength});
     Check(glow.StageCount==3&&glow.TextureCoordinates==TextureCoordinateMode.Uv0,"Emission pipeline");
     for(int r=0;r<256;r+=17)for(int t=0;t<256;t++){
@@ -46,7 +46,7 @@ foreach(byte strength in new byte[]{0,64,128,255}){
         Check(Math.Abs(emitted-Math.Min(255,r+t*strength/255.0))<=2,"Emission independence/saturation");
     }
 }
-var definition=TevMaterialPresets.PsoEmissive();var copy=definition.GetPackage();copy[8]=0;
+var definition=TevMaterialPresets.Emissive();var copy=definition.GetPackage();copy[8]=0;
 Check(definition.StageCount==3,"Definition leaked mutable package");
 Reject<ArgumentException>(()=>definition.Create()); // no native calls on missing binding
 var b=new TevProgramBuilder();

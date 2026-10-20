@@ -65,7 +65,7 @@ public sealed class EmissiveMaterialOptions
 /// All presets fit one texture, four colors and eight TEV stages.</summary>
 public static class TevMaterialPresets
 {
-    public static TevMaterialDefinition WindWakerToon(ToonMaterialOptions? options=null)
+    public static TevMaterialDefinition Toon(ToonMaterialOptions? options=null)
     {
         var o=options??new ToonMaterialOptions();
         if(o.Low>=o.High)throw new ArgumentException("Toon thresholds must be ordered.");
@@ -82,7 +82,7 @@ public static class TevMaterialPresets
         if(o.Textured)b.AddStage(TevInput.Zero,TevInput.Previous,TevInput.Texture,TevInput.Zero);
         return new TevMaterialDefinition(b,LightingMode.Diffuse);
     }
-    public static TevMaterialDefinition MetroidPrimeMetallic(MetallicMaterialOptions? options=null)
+    public static TevMaterialDefinition MetallicReflection(MetallicMaterialOptions? options=null)
     {
         var o=options??new MetallicMaterialOptions();var b=new TevProgramBuilder();
         b.AddColor("BaseColor",o.BaseColor);b.AddColor("ReflectionTint",o.ReflectionTint);
@@ -92,7 +92,7 @@ public static class TevMaterialPresets
         b.AddStage(TevInput.Color0,TevInput.Previous,TevInput.Constant,TevInput.Zero,colorSlot:2);
         return new TevMaterialDefinition(b,LightingMode.Diffuse,TextureCoordinateMode.ViewNormal);
     }
-    public static TevMaterialDefinition PsoEmissive(EmissiveMaterialOptions? options=null)
+    public static TevMaterialDefinition Emissive(EmissiveMaterialOptions? options=null)
     {
         var o=options??new EmissiveMaterialOptions();var b=new TevProgramBuilder();
         b.AddColor("BaseColor",o.BaseColor);b.AddColor("EmissionColor",o.EmissionColor);

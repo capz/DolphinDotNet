@@ -33,9 +33,9 @@ internal static class Program
         if(effect.StageCount!=2||effect.GetUniformName(effect.GetUniformSlot("Bright"))!="Bright")return 9;
         effect.SetColor("Bright",new Color32(20,100,200));
         var renderer=new Renderer();var camera=new Camera();var transform=new Transform();var material=new Material();
-        using var toonPreset=TevMaterialPresets.WindWakerToon().Create(loaded);
-        using var metalPreset=TevMaterialPresets.MetroidPrimeMetallic().Create(loaded);
-        using var emissionPreset=TevMaterialPresets.PsoEmissive().Create(loaded);
+        using var toonPreset=TevMaterialPresets.Toon().Create(loaded);
+        using var metalPreset=TevMaterialPresets.MetallicReflection().Create(loaded);
+        using var emissionPreset=TevMaterialPresets.Emissive().Create(loaded);
         metalPreset.Effect.SetColor("ReflectionStrength",new Color32(128,128,128));
         emissionPreset.Effect.SetColor("EmissionColor",new Color32(255,20,100));
         device.BeginFrame(Color32.Black);

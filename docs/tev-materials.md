@@ -1,9 +1,9 @@
 # Managed TEV materials
 
 `TevProgramBuilder`, `TevMaterialDefinition` and `TevMaterial` build on the existing
-`GxEffect` pipeline. These presets are original visual approximations of broad
-styles associated with Wind Waker, Metroid Prime and PSO. They contain no extracted
-game programs or art. Supply your own textures; no commercial disc images are needed.
+`GxEffect` pipeline. These presets provide toon shading, metallic reflections and emissive surfaces.
+They contain no extracted game programs or art. Supply your own textures;
+no commercial disc images are needed.
 
 ## Use a preset on a mesh
 
@@ -14,16 +14,16 @@ and parameter values. Changing options after creating a definition has no effect
 
 ```csharp
 // albedo, reflectionMap and emissionMap are caller-owned Texture2D resources.
-var toonDefinition = TevMaterialPresets.WindWakerToon(new ToonMaterialOptions {
+var toonDefinition = TevMaterialPresets.Toon(new ToonMaterialOptions {
     Low = 70, High = 170,
     Dark = new Color32(30, 40, 75),
     Middle = new Color32(100, 150, 180), Bright = Color32.White
 });
 using var toon = toonDefinition.Create(albedo);
-using var metal = TevMaterialPresets.MetroidPrimeMetallic(new MetallicMaterialOptions {
+using var metal = TevMaterialPresets.MetallicReflection(new MetallicMaterialOptions {
     ReflectionStrength = 190, ReflectionTint = new Color32(180, 220, 255)
 }).Create(reflectionMap);
-using var glow = TevMaterialPresets.PsoEmissive(new EmissiveMaterialOptions {
+using var glow = TevMaterialPresets.Emissive(new EmissiveMaterialOptions {
     BaseColor = new Color32(25, 40, 60), EmissionColor = new Color32(20, 230, 255),
     EmissionStrength = 200
 }).Create(emissionMap);
@@ -49,9 +49,9 @@ to drive raster RGB explicitly with vertex colors.
 
 | Preset | Stages | Named colors | Texture and result |
 | --- | --- | --- | --- |
-| WindWakerToon | 8 (7 without texture) | Thresholds, Dark, Middle, Bright | UV0 albedo times the palette selected by strict raster.r > Low/High comparisons |
-| MetroidPrimeMetallic | 3 | BaseColor, ReflectionTint, ReflectionStrength | mix(BaseColor × raster, reflectionMap × ReflectionTint, ReflectionStrength) |
-| PsoEmissive | 3 | BaseColor, EmissionColor, EmissionStrength | clamp(BaseColor × raster + emissionMap × EmissionColor × EmissionStrength) |
+| Toon | 8 (7 without texture) | Thresholds, Dark, Middle, Bright | UV0 albedo times the palette selected by strict raster.r > Low/High comparisons |
+| MetallicReflection | 3 | BaseColor, ReflectionTint, ReflectionStrength | mix(BaseColor × raster, reflectionMap × ReflectionTint, ReflectionStrength) |
+| Emissive | 3 | BaseColor, EmissionColor, EmissionStrength | clamp(BaseColor × raster + emissionMap × EmissionColor × EmissionStrength) |
 
 Strength colors are RGB factors: set all three bytes to the same intensity for
 a scalar, or vary channels for colored modulation. Uniform alpha does not affect
