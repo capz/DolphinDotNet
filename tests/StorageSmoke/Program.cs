@@ -14,6 +14,17 @@ internal static class Program
         if(!Defrag.IsEnabled)return 67;
         Defrag.OptIn(false);
         if(Defrag.IsEnabled)return 68;
+        if(Defrag.MinimumFileSize!=65536)return 71;
+        using(Defrag.BeginScope(true,4096))
+        {
+            if(!Defrag.IsEnabled || Defrag.MinimumFileSize!=4096)return 72;
+            using(Defrag.BeginScope(false,2048))
+                if(Defrag.IsEnabled || Defrag.MinimumFileSize!=2048)return 73;
+            if(!Defrag.IsEnabled || Defrag.MinimumFileSize!=4096)return 74;
+        }
+        if(Defrag.IsEnabled || Defrag.MinimumFileSize!=65536)return 75;
+        try{Defrag.MinimumFileSize=-1;return 76;}catch(ArgumentOutOfRangeException){} 
+
         var list=new Dolphin.Collections.List<long>();ICollection<long> values=list;
         for(var i=0;i<40;i++)values.Add(0x100000000L+i);
         var total=0L;foreach(var value in list)total+=value;if(total!=40*0x100000000L+780)return 2;
@@ -69,6 +80,15 @@ internal static class Program
         File.WriteAllBytes(Path.Combine(root,"empty.bin"),new byte[0]);if(File.ReadAllBytes(Path.Combine(root,"empty.bin")).Length!=0)return 34;File.Delete(Path.Combine(root,"empty.bin"));
         try{using(var contiguous=Storage.CreateContiguousFile(StorageDevice.SdSerialPort2,"not-supported.bin",3)){}return 45;}
         catch(NotSupportedException){}
+        // Explicit FAT inspection/repair is correctly unsupported on a POSIX
+        // host; only real GameCube FAT32/exFAT volumes report extents.
+        try{Defrag.Analyze(path);return 77;}catch(NotSupportedException){}
+        try{Defrag.Optimize(path);return 78;}catch(NotSupportedException){}
+        try{using(var input=File.OpenRead(path))
+            Defrag.WriteContiguousFrom(input,Path.Combine(root,"streaming.bin"),3);
+            return 79;
+        }catch(NotSupportedException){}
+        if(File.Exists(Path.Combine(root,"streaming.bin")))return 80;
         // Host media still performs normal writes when opt-in is enabled,
         // and the setting can be disabled without changing System.IO APIs.
         Defrag.OptIn(true);
