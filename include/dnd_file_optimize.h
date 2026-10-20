@@ -1,6 +1,7 @@
 #ifndef DND_FILE_OPTIMIZE_H
 #define DND_FILE_OPTIMIZE_H
 #include <stdint.h>
+#include <sys/stat.h>
 
 /* Status values are stable across the native/managed bridge. */
 enum {
@@ -18,8 +19,14 @@ typedef struct {
     int (*count_extents)(void *context, const char *path, unsigned *extents);
     /* Optional deterministic fault injection for host tests. */
     int (*checkpoint)(void *context, int point);
+    /* Return 0 only when all available attributes and timestamps have been
+     * copied, or -ENOTSUP to leave the original untouched. */
+    int (*preserve_metadata)(void *context,const char *original,
+                             const char *stage,const struct stat *metadata);
 } DndOptimizeOps;
 enum {
+    DND_OPT_AFTER_PREPARE = 4,
+    DND_OPT_DURING_COPY = 5,
     DND_OPT_BEFORE_BACKUP = 1,
     DND_OPT_AFTER_BACKUP = 2,
     DND_OPT_AFTER_PUBLISH = 3

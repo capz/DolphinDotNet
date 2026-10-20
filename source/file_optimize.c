@@ -8,10 +8,13 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #define DND_OPT_PATH 1024
 #define DND_OPT_BUFFER 16384
 #define DND_OPT_MAGIC "DNDFRG01"
+#define DND_OPT_PREPARE ".__dnd_opt.prepare"
+#define DND_OPT_COMMIT ".__dnd_opt.jrn"
 typedef struct {
     char magic[8];
     uint64_t bytes;
@@ -111,12 +114,12 @@ static int matches(const char *path, const DndOptimizeJournal *j) {
     int rc = full_digest(path, &bytes, &digest);
     return rc < 0 ? rc : (bytes == j->bytes && digest == j->digest);
 }
-static int journal_path(char *out, const char *root) {
-    return compose(out, root, ".__dnd_opt.jrn");
+static int journal_path(char *out, const char *root, const char *name) {
+    return compose(out, root, name);
 }
-static int journal_load(const char *root, DndOptimizeJournal *j) {
+static int journal_load(const char *root, const char *name, DndOptimizeJournal *j) {
     char file[DND_OPT_PATH];
-    int rc = journal_path(file, root);
+    int rc = journal_path(file, root, name);
     if (rc) return rc;
     int fd = open(file, O_RDONLY);
     if (fd < 0) return errno == ENOENT ? 0 : -errno;
@@ -158,9 +161,9 @@ static int journal_load(const char *root, DndOptimizeJournal *j) {
     if (compose(expected,root,leaf) || strcmp(expected,j->backup)) return -EINVAL;
     return 1;
 }
-static int journal_save(const char *root, DndOptimizeJournal *j) {
+static int journal_save(const char *root, const char *name, DndOptimizeJournal *j) {
     char path[DND_OPT_PATH];
-    int rc = journal_path(path, root);
+    int rc = journal_path(path, root, name);
     if (rc) return rc;
     memcpy(j->magic,DND_OPT_MAGIC,8);
     j->integrity = integrity(j,offsetof(DndOptimizeJournal,integrity));
@@ -172,43 +175,74 @@ static int journal_save(const char *root, DndOptimizeJournal *j) {
     if (rc) unlink(path);
     return rc;
 }
-static int remove_journal(const char *root) {
+static int remove_journal(const char *root,const char *name) {
     char path[DND_OPT_PATH];
-    int rc = journal_path(path,root);
+    int rc = journal_path(path,root,name);
     if (rc) return rc;
     return unlink(path) == 0 ? 0 : -errno;
 }
+/* Do not follow a symlink or operate on non-regular transaction files.
+ * On FAT/exFAT lstat is equivalent to stat; the host tests also cover links. */
+static int safe_file(const char *path) {
+    struct stat st;
+    if(lstat(path,&st)<0)return errno==ENOENT?0:-errno;
+    return S_ISREG(st.st_mode)?1:-EINVAL;
+}
+static int safe_unlink(const char *path) {
+    int rc=safe_file(path);
+    if(rc<=0)return rc;
+    return unlink(path)<0?-errno:0;
+}
 int dnd_optimize_recover(const char *root) {
-    DndOptimizeJournal j = {0};
-    int rc = journal_load(root,&j);
-    if (rc <= 0) return rc;
-    int source = exists(j.original), backup = exists(j.backup);
-    if (source < 0) return source;
-    if (backup < 0) return backup;
-    if (backup) {
-        if (!source) {
-            /* A crash between the two renames: restore the original. */
-            if (rename(j.backup,j.original)) return -errno;
+    DndOptimizeJournal prepare={0},committed={0};
+    int p=journal_load(root,DND_OPT_PREPARE,&prepare);
+    if(p<0)return p;
+    int q=journal_load(root,DND_OPT_COMMIT,&committed);
+    if(q<0)return q;
+    if(!p && !q)return 0;
+    if(!p || (q && (strcmp(prepare.original,committed.original) ||
+        strcmp(prepare.stage,committed.stage) ||
+        strcmp(prepare.backup,committed.backup) ||
+        prepare.bytes!=committed.bytes)))return -EINVAL;
+    const DndOptimizeJournal *j=q?&committed:&prepare;
+    int source=safe_file(j->original), backup=safe_file(j->backup);
+    if(source<0)return source;
+    if(backup<0)return backup;
+    if(!q) {
+        /* The preparation journal is durable BEFORE the temporary file can
+         * exist. No source rename is allowed before COMMIT is durable. */
+        if(!source || backup)return -EIO;
+        int rc=safe_unlink(j->stage);
+        if(rc<0)return rc;
+        return remove_journal(root,DND_OPT_PREPARE);
+    }
+    if(backup) {
+        if(!source) {
+            if(rename(j->backup,j->original))return -errno;
         } else {
-            /* The old copy stays untouched until the new one checks out. */
-            int good = matches(j.original,&j);
-            if (good < 0) return good;
-            if (!good) return -EIO;
-            if (unlink(j.backup)) return -errno;
+            int good=matches(j->original,j);
+            if(good<0)return good;
+            if(!good)return -EIO;
+            int rc=safe_unlink(j->backup);
+            if(rc<0)return rc;
         }
     } else {
-        if (!source) return -EIO;
-        /* Before any rename, the original and the staged copy have identical
-         * contents. After publication, the new one must match as well. */
-        int good = matches(j.original,&j);
-        if (good < 0) return good;
-        if (!good) return -EIO;
+        if(!source)return -EIO;
+        int good=matches(j->original,j);
+        if(good<0)return good;
+        /* Before the first rename, the original need not match a copy that
+         * was prepared but never published. The stage still exists then. */
+        int stage=safe_file(j->stage);
+        if(stage<0)return stage;
+        if(!stage && !good)return -EIO;
     }
-    if (unlink(j.stage) && errno != ENOENT) return -errno;
-    return remove_journal(root);
+    int rc=safe_unlink(j->stage);
+    if(rc<0)return rc;
+    rc=remove_journal(root,DND_OPT_COMMIT);
+    return rc<0?rc:remove_journal(root,DND_OPT_PREPARE);
 }
 static int copy_and_hash(const char *from, const char *to, uint64_t size,
-                         uint64_t *hash) {
+                         uint64_t *hash,const DndOptimizeOps *ops) {
     int input = open(from,O_RDONLY);
     if (input < 0) return -errno;
     int output = open(to,O_WRONLY|O_CREAT|O_EXCL,0600);
@@ -229,12 +263,27 @@ static int copy_and_hash(const char *from, const char *to, uint64_t size,
         if (rc) break;
         digest = digest_update(digest,buffer,(size_t)got);
         written += (uint64_t)got;
+        if(written==(uint64_t)got && ops->checkpoint) {
+            rc=ops->checkpoint(ops->context,DND_OPT_DURING_COPY);
+        }
     }
     if (!rc) rc = sync_close(output); else close_file(output);
     int closed = close_file(input);
     if (!rc) rc = closed;
     if (!rc) *hash = digest;
     return rc;
+}
+/* Preserve user-visible timestamps and POSIX permission bits on host.
+ * GameCube FAT attributes require the dedicated libdvm metadata callback. */
+static int preserve_metadata(const char *original,const char *stage,
+                             const struct stat *metadata) {
+    (void)original;
+    struct timeval times[2]={{0,0},{0,0}};
+    times[0].tv_sec=metadata->st_atime;
+    times[1].tv_sec=metadata->st_mtime;
+    if(utimes(stage,times)<0)return -errno;
+    if(chmod(stage,metadata->st_mode&07777)<0)return -errno;
+    return 0;
 }
 int dnd_optimize_file(const char *root, const char *path,
                       const DndOptimizeOps *ops) {
@@ -270,26 +319,56 @@ int dnd_optimize_file(const char *root, const char *path,
     if (occupied < 0) return occupied;
     if (backup < 0) return backup;
     if (occupied || backup) return -EEXIST; /* Never delete unknown files. */
-    rc = copy_and_hash(path,j.stage,j.bytes,&j.digest);
-    if (rc < 0) { unlink(j.stage); return rc; }
+    /* Record ownership before touching staging, including empty/partial
+     * copies. Recovery can safely remove an orphan after a power cut. */
+    rc=journal_save(root,DND_OPT_PREPARE,&j);
+    if(rc<0)return rc;
+    if(ops->checkpoint) {
+        rc=ops->checkpoint(ops->context,DND_OPT_AFTER_PREPARE);
+        if(rc<0)return rc;
+    }
+    rc = copy_and_hash(path,j.stage,j.bytes,&j.digest,ops);
+    if(rc<0) {
+        if(rc==-EINTR && ops->checkpoint)return rc;
+        int cleanup=dnd_optimize_recover(root);
+        return cleanup<0?cleanup:rc;
+    }
     uint64_t length=0, check=0;
     rc = full_digest(j.stage,&length,&check);
     if (rc < 0 || length != j.bytes || check != j.digest) {
-        unlink(j.stage);
+        int cleanup=dnd_optimize_recover(root);
+        if(cleanup<0)return cleanup;
         return rc < 0 ? rc : -EIO;
     }
     unsigned stage_extents=0;
     rc = ops->count_extents(ops->context,j.stage,&stage_extents);
     if (rc < 0 || stage_extents != 1) {
-        unlink(j.stage);
+        int cleanup=dnd_optimize_recover(root);
+        if(cleanup<0)return cleanup;
         return rc == -ENOTSUP ? DND_OPT_UNSUPPORTED
              : rc < 0 ? rc : DND_OPT_NO_CONTIGUOUS_SPACE;
     }
     /* Refuse to publish a stale staged copy if the source changed. */
-    rc = matches(path,&j);
-    if (rc < 0 || !rc) { unlink(j.stage); return rc < 0 ? rc : -EBUSY; }
-    rc = journal_save(root,&j);
-    if (rc < 0) { unlink(j.stage); return rc; }
+    rc=ops->preserve_metadata?
+       ops->preserve_metadata(ops->context,path,j.stage,&st):
+       preserve_metadata(path,j.stage,&st);
+    if(rc<0) {
+        int cleanup=dnd_optimize_recover(root);
+        return cleanup<0?cleanup:(rc==-ENOSYS || rc==-ENOTSUP?
+                                   DND_OPT_UNSUPPORTED:rc);
+    }
+    rc=matches(path,&j);
+    if(rc<0 || !rc) {
+        int cleanup=dnd_optimize_recover(root);
+        return cleanup<0?cleanup:(rc<0?rc:-EBUSY);
+    }
+    /* A second durable journal activates the rename transaction only after
+     * the staged copy, metadata and hash have all been verified. */
+    rc=journal_save(root,DND_OPT_COMMIT,&j);
+    if(rc<0) {
+        int cleanup=dnd_optimize_recover(root);
+        return cleanup<0?cleanup:rc;
+    }
     if (ops->checkpoint) {
         rc = ops->checkpoint(ops->context,DND_OPT_BEFORE_BACKUP);
         if (rc < 0) return rc; /* Recovery handles journal and stage. */

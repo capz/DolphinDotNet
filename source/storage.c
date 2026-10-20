@@ -4,6 +4,7 @@
 #include "dnd_contiguous_write.h"
 #include "dnd_file_optimize.h"
 #ifdef DND_GAMECUBE_STORAGE
+#include <fat.h>
 #include "dnd_fst.h"
 #endif
 #include <dirent.h>
@@ -15,6 +16,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #define PATH_CAP 1024
@@ -806,6 +808,16 @@ void dnd_fs_flush(int token) {
 static int auto_count_extents(void *context,const char *path,unsigned *extents) {
   return dnd_gc_contiguous_extents((int)(intptr_t)context,path,extents);
 }
+static int auto_copy_metadata(void *context,const char *original,
+                              const char *stage,const struct stat *st) {
+  (void)context;
+  int attrs=FAT_getAttr(original);
+  if(attrs<0)return -errno;
+  struct timeval timestamps[2]={{st->st_atime,0},{st->st_mtime,0}};
+  if(utimes(stage,timestamps)<0)return -errno;
+  if(FAT_setAttr(stage,(unsigned)attrs)<0)return -errno;
+  return 0;
+}
 #endif
 static void auto_clean_file(const char *canonical,int device) {
   if(!auto_defrag_enabled)return;
@@ -822,7 +834,8 @@ static void auto_clean_file(const char *canonical,int device) {
      st.st_size<DND_AUTO_OPT_MIN_BYTES)return;
   char root[PATH_CAP];
   contiguous_root(device,root);
-  DndOptimizeOps ops={(void *)(intptr_t)device,auto_count_extents,NULL};
+  DndOptimizeOps ops={(void *)(intptr_t)device,auto_count_extents,NULL,
+                       auto_copy_metadata};
   int rc=dnd_optimize_file(root,canonical,&ops);
   if(rc<0) {
     /* A failed optimization is not allowed to fail an already completed

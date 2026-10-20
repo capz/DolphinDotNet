@@ -61,7 +61,7 @@ int main(void) {
     snprintf(path,sizeof(path),"%s/application.bin",root);
     make_file(path,135169);
     Fixture fixture={0};
-    DndOptimizeOps ops={&fixture,extents,checkpoint};
+    DndOptimizeOps ops={&fixture,extents,checkpoint,NULL};
     assert(dnd_optimize_file(root,path,&ops) == DND_OPT_ALREADY_CONTIGUOUS);
     assert(fixture.probes == 1);
     expected_file(path,135169);
