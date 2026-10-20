@@ -553,6 +553,13 @@ int main(int argc, char **argv) {
   DndModel *om = dnd_model_find(obj, false);
   assert(om->textures == 1 && om->clips == 0 && om->mesh[0].indices == 9);
   assert(dnd_model_dispose(obj) == 0);
+  int translucent_obj=dnd_model_begin_obj(
+      dnd_string_from_utf8(&heap,"sd:/translucent.obj"),8*1024*1024);
+  assert(translucent_obj);
+  DndModel *tom=dnd_model_find(translucent_obj,false);
+  assert((tom->material[tom->mesh[0].material].mode&4)!=0);
+  near(tom->material[tom->mesh[0].material].color[3],.35f);
+  assert(dnd_model_dispose(translucent_obj)==0);
   int textured_fbx=dnd_model_begin_scene(dnd_string_from_utf8(&heap,"sd:/textured.fbx"),1,60,8*1024*1024,0);assert(textured_fbx);
   assert(dnd_model_find(textured_fbx,false)->textures==1);
   assert(dnd_model_dispose(textured_fbx)==0);
