@@ -45,7 +45,23 @@ static bool below_root(const char *root,const char *path) {
     if(path[n]!='/')return false;
     n++;
   }
-  return path[n]!=0 && strlen(path)<DND_CW_PATH_CAP;
+  if(!path[n] || strlen(path)>=DND_CW_PATH_CAP)return false;
+  /* Removable-media journal contents are untrusted: prohibit path aliases
+   * and traversal even if its inexpensive integrity checksum was forged. */
+  const char *p=path+n;
+  while(*p) {
+    const char *component=p;
+    while(*p && *p!='/') {
+      if(*p=='\\')return false;
+      p++;
+    }
+    size_t size=(size_t)(p-component);
+    if(size==0 || (size==1 && component[0]=='.') ||
+       (size==2 && component[0]=='.' && component[1]=='.'))
+      return false;
+    if(*p) {p++;if(!*p)return false;}
+  }
+  return true;
 }
 static int exists(const char *p) {
   struct stat s;
@@ -106,6 +122,13 @@ static int load_journal(const char *root,Journal *j) {
      j->expected>INT32_MAX ||
      hash32(j,offsetof(Journal,hash))!=j->hash)
     return -EINVAL;
+  /* Recompute the exact internal staging name: never unlink arbitrary paths
+   * copied from an SD-card journal, even if they are under the volume root. */
+  char name[48],expected_stage[DND_CW_PATH_CAP];
+  snprintf(name,sizeof(name),".__dndcw_%08x.part",
+           hash32(j->target,strlen(j->target)));
+  if(build_path(expected_stage,root,name) ||
+     strcmp(expected_stage,j->staged))return -EINVAL;
   return 1;
 }
 static int save_journal(const DndContiguousWriter *w) {
