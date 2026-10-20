@@ -167,6 +167,17 @@ ModelConverter.Convert(gltf,package+".second");if(!bytes.SequenceEqual(File.Read
     int layersTextureCount=checked((int)BinaryPrimitives.ReadUInt32BigEndian(layerBytes.AsSpan(layersTextureOffset,4)));
     if(layersTextureCount!=2)throw new Exception("Layered material did not bake a distinct GX texture.");
     if(bytes.SequenceEqual(layerBytes))throw new Exception("Layered material package unchanged.");
+    // Constant emissive color is a material contribution even without a map.
+    // It must never be silently dropped by the strict converter.
+    var emissionOnly=root.DeepClone().AsObject();
+    emissionOnly["materials"]![0]!["emissiveFactor"]=new JsonArray(0.2,0.1,0);
+    File.WriteAllText(gltf,emissionOnly.ToJsonString());
+    try{ModelConverter.Convert(gltf,package+".emissive-strict");throw new Exception("Constant emission silently dropped.");}
+    catch(InvalidDataException){}
+    ModelConverter.Convert(gltf,package+".emissive-baked",new(){ApproximateMaterials=true});
+    if(bytes.SequenceEqual(File.ReadAllBytes(package+".emissive-baked")))
+        throw new Exception("Constant emission baking produced no change.");
+    File.WriteAllText(gltf,layered.ToJsonString());
     layered["materials"]![0]!["emissiveTexture"]!["texCoord"]=1;
     File.WriteAllText(gltf,layered.ToJsonString());
     try{ModelConverter.Convert(gltf,package+".layers-bad-uv",new(){ApproximateMaterials=true});
