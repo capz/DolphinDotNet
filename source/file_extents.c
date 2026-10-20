@@ -256,6 +256,10 @@ int dnd_fat_count_extents(const DndSectorReader *reader,
                           const char *relative_path,unsigned *extents) {
     if (!reader || !reader->read_sector || !relative_path || !extents)
         return -EINVAL;
+    /* Our sector parser intentionally supports ASCII names only. Explicitly
+     * decline Unicode paths instead of claiming that a file is missing. */
+    for(const unsigned char *p=(const unsigned char *)relative_path;*p;p++)
+        if(*p>127)return -ENOTSUP;
     Volume v={0};
     v.reader=reader;
     int rc=boot(&v);
