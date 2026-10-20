@@ -6,6 +6,7 @@ using DolphinDotNet.Assets;
 
 string output=args.Length==0?Path.Combine(Path.GetTempPath(),"dnd-model-fixtures"):Path.GetFullPath(args[0]);Directory.CreateDirectory(output);Directory.CreateDirectory(Path.Combine(output,"sd"));
 PsoImportTests.Run(output);
+ModelCompatibilityTests.Run(output);
 FZeroImportTests.Run(output);
 GameCubeImportTests.Run(output);
 RenderWareMeleeFixtures.Run(output);
@@ -92,6 +93,43 @@ string gltf=Path.Combine(output,"animated.gltf"),package=Path.Combine(output,"sd
 byte[] bytes=File.ReadAllBytes(package);if(BinaryPrimitives.ReadUInt32BigEndian(bytes)!=0x444e444d)throw new Exception("Package magic.");
 int textureOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16+3*16+4)));var texture=bytes.AsSpan(textureOffset+4+28,64);if(texture[0]!=255||texture[1]!=0||texture[3]!=30||texture[32]!=0||texture[33]!=50||texture[40]!=40)throw new Exception("GX RGBA8 tile fixture.");
 ModelConverter.Convert(gltf,package+".second");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".second")))throw new Exception("Nondeterministic package.");
+{
+    // UV1 and KHR_texture_transform must survive as baked target UV0 without
+    // changing the runtime DNMD package layout.
+    var transformed=root.DeepClone().AsObject();
+    var primitive=transformed["meshes"]![0]!["primitives"]![0]!;
+    primitive["attributes"]!["TEXCOORD_1"]=uv;
+    transformed["extensionsUsed"]=new JsonArray("KHR_texture_transform");
+    transformed["extensionsRequired"]=new JsonArray("KHR_texture_transform");
+    transformed["materials"]![0]!["pbrMetallicRoughness"]!["baseColorTexture"]!["texCoord"]=1;
+    transformed["materials"]![0]!["pbrMetallicRoughness"]!["baseColorTexture"]!["extensions"]=new JsonObject {
+        ["KHR_texture_transform"]=new JsonObject {
+            ["offset"]=new JsonArray(0.25,0.5),["scale"]=new JsonArray(0.5,0.5),
+            ["rotation"]=0,["texCoord"]=1
+        }
+    };
+    File.WriteAllText(gltf,transformed.ToJsonString());
+    ModelConverter.Convert(gltf,package+".uv-transform");
+    var converted=File.ReadAllBytes(package+".uv-transform");
+    if(bytes.SequenceEqual(converted))
+        throw new Exception("Texture transform failed to modify geometry.");
+    // DNMD: mesh section offset at byte 36, one mesh count, 44-byte mesh
+    // header, then position(12) + normal(12) before UV(8).
+    int meshOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(converted.AsSpan(36,4)));
+    int firstUv=meshOffset+4+44+24;
+    float U(int offset)=>BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32BigEndian(converted.AsSpan(offset,4)));
+    if(Math.Abs(U(firstUv)-0.25f)>0.0001f||Math.Abs(U(firstUv+4)-0.5f)>0.0001f)
+        throw new Exception("Incorrect baked KHR_texture_transform offset/scale.");
+    // Second vertex originally has UV (1,0), transformed to (0.75,0.5).
+    if(Math.Abs(U(firstUv+80)-0.75f)>0.0001f||Math.Abs(U(firstUv+84)-0.5f)>0.0001f)
+        throw new Exception("Incorrect baked KHR_texture_transform UV1.");
+    transformed["materials"]![0]!["pbrMetallicRoughness"]!["baseColorTexture"]!["extensions"]!["KHR_texture_transform"]!["texCoord"]=2;
+    File.WriteAllText(gltf,transformed.ToJsonString());
+    try { ModelConverter.Convert(gltf,package+".bad-uv");throw new Exception("Invalid texture coordinate accepted."); }
+    catch(InvalidDataException) {}
+    File.WriteAllText(gltf,root.ToJsonString());
+}
+
 // External buffers and images, plus GLB binary geometry.
 root["buffers"]![0]!["uri"]="geometry.bin";root["images"]![0]!["uri"]="texture.png";File.WriteAllBytes(Path.Combine(output,"geometry.bin"),binary.ToArray());File.WriteAllBytes(Path.Combine(output,"texture.png"),png.ToArray());File.WriteAllText(gltf,root.ToJsonString());ModelConverter.Convert(gltf,package+".external");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".external")))throw new Exception("External dependencies differ.");
 root["buffers"]![0]!.AsObject().Remove("uri");var json=Encoding.UTF8.GetBytes(root.ToJsonString());int jsonLength=(json.Length+3)&~3,binLength=((int)binary.Length+3)&~3;using(var file=File.Create(Path.Combine(output,"animated.glb"))){using var w=new BinaryWriter(file);w.Write(0x46546c67);w.Write(2);w.Write(12+8+jsonLength+8+binLength);w.Write(jsonLength);w.Write(0x4e4f534a);w.Write(json);w.Write(Enumerable.Repeat((byte)32,jsonLength-json.Length).ToArray());w.Write(binLength);w.Write(0x004e4942);w.Write(binary.ToArray());w.Write(new byte[binLength-(int)binary.Length]);}ModelConverter.Convert(Path.Combine(output,"animated.glb"),package+".glb");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".glb")))throw new Exception("GLB differs.");
@@ -112,6 +150,9 @@ if(args.Length>1)
     // This independently specified 1-second fixture uses FBX's 46186158000 ticks/second.
     File.WriteAllText(fbx,File.ReadAllText(fbx).Replace("46186158000000","46186158000",StringComparison.Ordinal));
     ModelConverter.Convert(fbx,Path.Combine(output,"sd","fbx.dndmodel"),new(){Assimp=assimp,ApproximateMaterials=true});
+    // STL and PLY are accepted by the Assimp adapter, but the stock Ubuntu
+    // Assimp 5.3 GLB exporter fails for some untextured static input shapes.
+    // Qualify these with verified fixtures before making them mandatory CI.
     string obj=Path.Combine(output,"model.obj");File.WriteAllText(obj,"mtllib model.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\nusemtl Surface\nf 1/1 2/2 3/3 4/4\n");File.WriteAllText(Path.Combine(output,"model.mtl"),"newmtl Surface\nKd 1 1 1\nmap_Kd texture.png\n");ModelConverter.Convert(obj,Path.Combine(output,"sd","obj.dndmodel"),new(){Assimp=assimp,ApproximateMaterials=true});
 }
 var buildProject=new System.Xml.Linq.XElement("Project",new System.Xml.Linq.XAttribute("Sdk","Microsoft.NET.Sdk"),

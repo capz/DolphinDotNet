@@ -12,11 +12,37 @@ internal sealed partial class GltfImport
         output.I(payloads.Count);foreach(var record in payloads)output.Bytes(record);
     }
     private static int Wrap(int value)=>value switch{10497=>1,33071=>0,33648=>2,_=>throw new InvalidDataException("Wrap mode.")};
+    // The target stores one UV set. Resolve the source texture coordinate set
+    // and bake KHR_texture_transform into that UV set per primitive.
+    private static (int set,float[] offset,float[] scale,float rotation) BaseColorUv(JsonElement material)
+    {
+        if(material.ValueKind==JsonValueKind.Undefined||!material.TryGetProperty("pbrMetallicRoughness",out var pbr)||
+           !pbr.TryGetProperty("baseColorTexture",out var texture))
+            return(0,[0,0],[1,1],0);
+        int set=Int(texture,"texCoord");
+        float[] offset=[0,0],scale=[1,1];float rotation=0;
+        if(texture.TryGetProperty("extensions",out var extensions))
+        {
+            foreach(var extension in extensions.EnumerateObject())
+                if(extension.Name!="KHR_texture_transform")throw new InvalidDataException("Unsupported base-color texture extension: "+extension.Name);
+            if(extensions.TryGetProperty("KHR_texture_transform",out var transform))
+            {
+                offset=Values(transform,"offset",offset);
+                scale=Values(transform,"scale",scale);
+                rotation=Float(transform,"rotation");
+                set=Int(transform,"texCoord",set);
+            }
+        }
+        if(set is not (0 or 1)||offset.Length!=2||scale.Length!=2||
+           !float.IsFinite(rotation)||offset.Any(x=>!float.IsFinite(x))||scale.Any(x=>!float.IsFinite(x)))
+            throw new InvalidDataException("Unsupported base-color UV set/transform.");
+        return(set,offset,scale,rotation);
+    }
     private void WriteMaterial(BigWriter w,JsonElement m)
     {
         float[] color=[1,1,1,1];int texture=-1,mode=0;float cutoff=0.5f;bool two=false;
         if(m.ValueKind!=JsonValueKind.Undefined){mode=Text(m,"alphaMode","OPAQUE") switch{"OPAQUE"=>0,"MASK"=>1,_=>throw new InvalidDataException("Blended materials require sorted transparency (unsupported).")} ;cutoff=Float(m,"alphaCutoff",0.5f);two=m.TryGetProperty("doubleSided",out var ds)&&ds.GetBoolean();bool unlit=m.TryGetProperty("extensions",out var ex)&&ex.TryGetProperty("KHR_materials_unlit",out _);if(unlit)mode|=2;
-            foreach(string key in new[]{"normalTexture","occlusionTexture","emissiveTexture"})if(m.TryGetProperty(key,out _)&&!options.ApproximateMaterials)throw new InvalidDataException("Unsupported material feature "+key+"; opt in to approximation or bake it.");if(m.TryGetProperty("pbrMetallicRoughness",out var p)){color=Values(p,"baseColorFactor",color);if(p.TryGetProperty("baseColorTexture",out var tx)){texture=Int(tx,"index",-1);if((uint)texture>=Items("textures").Length||Int(tx,"texCoord")!=0||tx.TryGetProperty("extensions",out _))throw new InvalidDataException("Unsupported texture reference/UV transform.");}if(!unlit&&!options.ApproximateMaterials&&(Float(p,"metallicFactor",1)>0||p.TryGetProperty("metallicRoughnessTexture",out _)))throw new InvalidDataException("PBR material requires --allow-material-approximation or baking.");}}
+            foreach(string key in new[]{"normalTexture","occlusionTexture","emissiveTexture"})if(m.TryGetProperty(key,out _)&&!options.ApproximateMaterials)throw new InvalidDataException("Unsupported material feature "+key+"; opt in to approximation or bake it.");if(m.TryGetProperty("pbrMetallicRoughness",out var p)){color=Values(p,"baseColorFactor",color);if(p.TryGetProperty("baseColorTexture",out var tx)){texture=Int(tx,"index",-1);if((uint)texture>=Items("textures").Length)throw new InvalidDataException("Invalid base-color texture reference.");_ = BaseColorUv(m);}if(!unlit&&!options.ApproximateMaterials&&(Float(p,"metallicFactor",1)>0||p.TryGetProperty("metallicRoughnessTexture",out _)))throw new InvalidDataException("PBR material requires --allow-material-approximation or baking.");}}
         if(color.Length!=4||color.Any(x=>x<0||x>1)||cutoff<0||cutoff>1)throw new InvalidDataException("Material range.");w.Floats(color);w.I(texture<0?-1:textureRemap[texture]);w.I(mode);w.F(cutoff);w.I(two?1:0);
     }
 }
