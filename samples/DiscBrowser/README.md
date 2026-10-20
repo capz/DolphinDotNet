@@ -1,67 +1,62 @@
-# DiscBrowser — unified GameCube disc and ISO browsing
+# DiscBrowser — GC Loader SD and GameCube disc browsing
 
-Both the inserted/current ODE GameCube game and a plain GameCube ISO file
-are presented as the same read-only `dvd:/` filesystem. The only difference
-is the mount argument:
+DiscBrowser defaults to browsing the **GC Loader SD card**, rather than
+automatically opening the disc that GC Loader currently presents through the
+DVD interface. With compatible firmware, its root is available as `gcloader:/`
+through `Storage.Mount(StorageDevice.GcLoader)`. The browser enumerates files
+and directories on that card, not just one hard-coded `games/demo.iso`.
+
+Use the D-pad or left analog stick to select an entry (350 ms initial repeat,
+then every 100 ms). **A** opens a directory. On the GC Loader card, A on a
+plain **ISO/GCM** file mounts its GameCube FST read-only at `dvd:/` and opens
+that image's directory listing. **B** goes to the parent directory; B at an
+opened image's root returns to the original GC Loader SD directory.
+
+**Y** switches the source between GC Loader SD and the physical/ODE
+DVD interface, unmounting the previous source first. **X** refreshes/remounts
+the current source, **Start** exits, and **Z** toggles diagnostics. DVD is
+never auto-selected when an SD mount fails: the screen instead reports that
+GC Loader SD is unavailable (check firmware), and Y explicitly opens the DVD.
+An unavailable source does not prevent controller input or status rendering.
+
+Both an original disc or an ODE-presented disc and a plain ISO file are
+presented as the same read-only `dvd:/` filesystem:
 
 ```csharp
-Storage.MountDisc();              // Physical game or ODE-selected game
-Storage.MountDisc("sd:/games/game.iso"); // ISO file on a mounted SD volume
+Storage.MountDisc();                        // Physical or ODE-presented game
+Storage.MountDisc("gcloader:/games/game.iso"); // ISO from a mounted GC Loader SD
 ```
 
-After mounting, use the usual `Storage.GetFiles(StorageDevice.DvdDrive, "")`,
-`Storage.ReadAllBytes(StorageDevice.DvdDrive, "opening.bnr")`,
-`Storage.FileExists`, `Storage.GetDirectories`, or
-`Storage.Open(StorageDevice.DvdDrive, ...)`. All are read-only.
-
-For a GC Loader card, first call
-`Storage.Mount(StorageDevice.GcLoader)` and then mount a full path such as
-`Storage.MountDisc("gcloader:/games/demo.iso")`. This second mount requires
-firmware exposing the libogc2 `__io_gcode` block interface; **GC Loader SD
-storage and ODE DVD access might not operate concurrently**.
-
-Unmount in reverse order: close all `dvd:/` file streams, unmount
-`StorageDevice.DvdDrive`, then unmount the backing `StorageDevice.GcLoader`
-or other SD volume. Source unmount while the image is mounted is rejected.
-ISO/GCM only, not RVZ/CISO/Wii; the file must fit native 32-bit stdio seeking.
+For an ISO mount, keep the backing card mounted until the DVD FST is unmounted:
+close open streams, unmount `StorageDevice.DvdDrive`, and then unmount the
+backing `StorageDevice.GcLoader`. Firmware may not allow SD-sector access at
+the same time as ODE DVD access. ISO/GCM only, not RVZ/CISO/Wii; image files
+must fit native 32-bit stdio seeking. Non-image files can be highlighted but
+are not executed by this sample.
 
 Build:
 
-Open [DiscBrowser.sln](DiscBrowser.sln) in Visual Studio or Rider and use the Dolphin
-launch profile, or build and run from the repository root:
+Open [DiscBrowser.sln](DiscBrowser.sln) in Visual Studio or Rider and use the
+Dolphin launch profile, or build and run from the repository root:
 
 ```sh
 dotnet run --project samples/DiscBrowser -c Release
 ```
 
 See [IDE setup](../../docs/ide-workflow.md) for prerequisites and local settings.
+For Dolphin, set **Default ISO** to an ordinary GameCube ISO/GCM if you want
+to browse a disc, then press **Y** after launch to switch to the DVD source.
+Dolphin may not expose the real GC Loader SD block interface; in this case
+the default screen reports SD unavailable rather than silently opening DVD. Hardware testing is needed
+to verify GC Loader firmware SD-sector access.
 
-A DOL-only Dolphin launch may have no disc inserted. The sample then shows
-`NO GAMECUBE DISC OR DEMO ISO AVAILABLE` instead of waiting for a disc-cover
-close event. To browse a real game image, set Dolphin's **Default ISO** before
-launching the DOL (a plain GameCube ISO/GCM). The current disc is tried before GC Loader, whose probe resets the drive.
-GC Loader browsing additionally
-requires its firmware-backed SD interface; a PC file path is not a mounted
-GameCube filesystem path.
+Entries are sorted with directories first and are bounded to 256 folders plus
+256 files per directory. Eight rows are visible at once. Disc titles and banners
+are best-effort; unreadable metadata does not block folder navigation. Mounts
+and banner textures are cleaned up on refresh, source changes and exit.
 
-The sample shows a scrolling list with eight visible rows, sorts directories
-before files, and unmounts volumes even if metadata or directory reads fail.
-Errors remain visible on the result screen. Z toggles statistics; Start exits.
-
-CI exercises ISO mounting, file access, read-only errors, and cleanup through the
-actual GameCube devoptab/newlib interfaces in headless Dolphin, using a synthetic
-read-only backing device. It also starts DiscBrowser without media. GC Loader
-and physical drive behavior still require hardware testing.
-
-## Interactive disc browser
-
-Probes an inserted GameCube disc/ODE first, then an optional GC Loader
-`games/demo.iso`. Shows disc title and banner, sorted directories before files,
-and a scrolling eight-row list. Enumeration is bounded to 256 directories plus
-256 files per directory; this is a browser demo, not an unbounded indexer.
-
-The D-pad or left analog stick selects; holding a direction repeats after 350 ms, then every 100 ms. A opens a directory; B opens its parent; X refreshes/remounts;
-Start exits; Z toggles statistics. Missing media leaves a usable status screen.
-Refreshing disposes the previous banner and releases filesystem mounts before replacing them. A ready drive is reused rather than reset; cover changes or drive errors still take the normal mount path.
-The browser lists files; it does not execute them. CI checks no-media startup and
-inserted ISO/banner/file access and pipe-controller navigation (scrolling, A/B, refresh and exit) in Dolphin. Controller port 1 is used; a disconnected controller is reported on screen.
+CI checks plain-disc FST access through the native devoptab in headless Dolphin,
+as well as pipe-controller scrolling, A/B folder navigation, refresh and exit.
+The host regression tests additionally cover SD/DVD path normalization and
+ISO/GCM file recognition. GC Loader SD and ODE concurrency need testing on
+physical hardware.
