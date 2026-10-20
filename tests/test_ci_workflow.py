@@ -67,22 +67,27 @@ class WorkflowCoverageTests(unittest.TestCase):
         }
         for job_name, samples in source_jobs.items():
             section = job(job_name)
-            self.assertIn('scripts/package_sample_dols.py sample-zips', section)
+            self.assertIn('scripts/package_sample_dols.py stage sample-dols', section)
             for name, filename in samples.items():
                 with self.subTest(sample=name):
                     self.assertIn(f'{name}={filename}', section)
-            self.assertIn('path: sample-zips/*.zip', section)
+            self.assertIn('path: sample-dols/*.dol', section)
             pack = next(block for block in step_blocks(section)
-                        if 'name: Zip existing ' in block)
+                        if 'name: Stage existing ' in block)
             self.assertNotIn('dotnet build', pack)
             self.assertNotIn('make -', pack)
 
         release = job('release-gamecube')
         self.assertIn('      - gamecube-extra', release)
-        self.assertIn('pattern: DolphinDotNet-sample-zips-*', release)
+        self.assertIn('uses: actions/checkout@v4', release)
+        self.assertIn('pattern: DolphinDotNet-sample-dols-*', release)
         self.assertIn('merge-multiple: true', release)
-        self.assertIn('dist/sample-zips/*.zip', release)
-        self.assertIn('if: github.ref == \'refs/heads/main\'', release)
+        self.assertIn('scripts/package_sample_dols.py bundle dist/DolphinDotNet-samples.zip', release)
+        for sample in source_jobs['gamecube'] | source_jobs['gamecube-extra']:
+            self.assertIn(sample, release)
+        self.assertIn('gh release create "$TAG" dist/DolphinDotNet-samples.zip', release)
+        self.assertNotIn('dist/sample-dols/*.zip', release)
+        self.assertIn("if: github.ref == 'refs/heads/main'", release)
         self.assertIn('if-no-files-found: error', job('gamecube-extra'))
 
     def test_missing_or_failed_emulator_cases_cannot_pass(self):
