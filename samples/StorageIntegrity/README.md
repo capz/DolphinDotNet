@@ -11,7 +11,8 @@ power interruption on a card with irreplaceable data.
    or the GC Loader SD if the firmware exposes a writable volume. Do not arm
    both simultaneously; SD2SP2 is checked first.
 3. Boot the DOL. Read `/dnd-defrag-test/report.txt` for the 1 MiB
-   benchmark (ordinary write, opt-in with 16 KiB and 64 KiB chunks).
+   benchmark (known-length writes with opt-in off/on, ordinary streaming,
+   and opt-in with 16 KiB and 64 KiB chunks).
    Times are in elapsed milliseconds; verify must be `True`.
 4. Test FAT32 and exFAT media and representative cluster sizes. Repeat
    on a nearly full card with fragmented free space. Capture failures and
