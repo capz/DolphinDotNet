@@ -632,6 +632,18 @@ int main(int argc, char **argv) {
   assert(dnd_model_play(gi,0,0,0)==0&&dnd_model_control(gi,0,.5f)==0);
   assert(dnd_model_vertex(gi,0,0,v)==0);near(v[0],.5f);
   assert(dnd_model_instance_dispose(gi)==0&&dnd_model_dispose(glb)==0);
+  int blended_glb=dnd_model_begin_glb(dnd_string_from_utf8(&heap,"sd:/blended.glb"),
+                                       8*1024*1024,0);
+  assert(blended_glb);
+  DndModel *bm=dnd_model_find(blended_glb,false);
+  assert(bm->materials>=2);
+  assert((bm->material[bm->mesh[0].material].mode&4)!=0);
+  near(bm->material[bm->mesh[0].material].color[3],.35f);
+  int blended_instance=dnd_model_instance(blended_glb,4*1024*1024);
+  assert(blended_instance);
+  assert(dnd_instance_find(blended_instance)->draw_order!=NULL);
+  assert(dnd_model_instance_dispose(blended_instance)==0&&
+         dnd_model_dispose(blended_glb)==0);
   assert(dnd_model_begin_glb(glb_path,1024,0)==0);
   const char *bad_glb[]={"sd:/invalid-order.glb","sd:/external.glb","sd:/sparse.glb"};
   for(unsigned j=0;j<3;j++) {
