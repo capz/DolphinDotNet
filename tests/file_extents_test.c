@@ -78,12 +78,42 @@ int main(void) {
     put16(entry+lfn_offsets[idx],ch);
   }
   assert(dnd_fat_count_extents(&reader,longname,&runs)==0 && runs==2);
-  assert(dnd_fat_count_extents(&reader,"r\xc3\xa9sume.dol",&runs)==-ENOTSUP);
+  assert(dnd_fat_count_extents(&reader,"r\xc3\xa9sume.dol",&runs)==-ENOENT);
+  /* FAT32 long filename: Japanese BMP code points are UTF-16 entries. */
+  fat32(&fixture);
+  root=fixture.sectors[2];
+  memmove(root+32,root,32);
+  memset(root,0xff,32);
+  root[0]=0x41;root[11]=0x0f;root[12]=0;
+  checksum=0;
+  for(unsigned i=0;i<11;i++)
+    checksum=((checksum&1u)?0x80u:0u)+(checksum>>1)+root[32+i];
+  root[13]=(unsigned char)checksum;
+  const uint16_t japanese[]={0x65e5,0x672c,0x8a9e,'.','d','o','l',0};
+  for(unsigned i=0;i<13;i++)
+    put16(root+lfn_offsets[i],i<8?japanese[i]:0xffff);
+  assert(dnd_fat_count_extents(&reader,"\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e.dol",&runs)==0 && runs==2);
+  /* Surrogate pair in a FAT32 LFN: U+1F600. */
+  const uint16_t emoji[]={0xd83d,0xde00,'.','d','o','l',0};
+  for(unsigned i=0;i<13;i++)
+    put16(root+lfn_offsets[i],i<7?emoji[i]:0xffff);
+  assert(dnd_fat_count_extents(&reader,"\xf0\x9f\x98\x80.dol",&runs)==0 && runs==2);
+  assert(dnd_fat_count_extents(&reader,"\xf0\x28\x8c\x28.dol",&runs)==-ENOENT);
+
   /* Non-default FAT32 cluster size: file fits in just one four-sector run. */
   fat32(&fixture);
   fixture.sectors[0][13]=4;
   put32(fixture.sectors[1]+12,0x0fffffff);
   assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==0 && runs==1);
+  exfat(&fixture);
+  /* An exFAT name can contain Japanese characters and surrogate pairs. */
+  unsigned char *stream=fixture.sectors[2]+32,*name=fixture.sectors[2]+64;
+  stream[3]=7;
+  for(unsigned i=0;i<7;i++)put16(name+2+2*i,japanese[i]);
+  assert(dnd_fat_count_extents(&reader,"\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e.dol",&runs)==0 && runs==2);
+  stream[3]=6;
+  for(unsigned i=0;i<6;i++)put16(name+2+2*i,emoji[i]);
+  assert(dnd_fat_count_extents(&reader,"\xf0\x9f\x98\x80.dol",&runs)==0 && runs==2);
   exfat(&fixture);
   assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==0 && runs==2);
   fixture.sectors[2][33]=2; /* Stream.GeneralSecondaryFlags.NoFatChain */
