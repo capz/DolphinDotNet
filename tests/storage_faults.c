@@ -49,6 +49,10 @@ int main(void) {
   dnd_gc_set_stress(true);
   /* Automatic allocation/repair must be opt-in and independently switchable.
    * Explicit contiguous operations are a separate API. */
+  assert(dnd_storage_auto_defrag_min_size()==65536);
+  dnd_storage_auto_defrag_set_min_size(4096);
+  assert(dnd_storage_auto_defrag_min_size()==4096);
+  dnd_storage_auto_defrag_set_min_size(65536);
   assert(!dnd_storage_auto_defrag_enabled());
   dnd_storage_auto_defrag_set(true);
   assert(dnd_storage_auto_defrag_enabled());
