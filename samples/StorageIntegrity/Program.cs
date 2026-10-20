@@ -68,7 +68,7 @@ internal static class Program
         bool valid=Verify(path);
         File.Delete(path);
         return "known-size optin="+enabled+" ms="+watch.ElapsedMilliseconds+
-               " verify="+valid+"\\n";
+               " verify="+valid+"\n";
     }
 
     private static int Run(StorageDevice device,string folder)
