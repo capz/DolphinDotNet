@@ -77,8 +77,8 @@ internal static class Program
         var autoFile=Path.Combine(root,"automatic.bin");
         var autoBytes=new byte[65537];autoBytes[65536]=91;
         File.WriteAllBytes(autoFile,autoBytes);
-        // Do not allocate a second 65 KiB managed array: the host fixture
-        // deliberately uses a 128 KiB heap to detect accidental large buffers.
+        // Avoid a second 65 KiB managed allocation. The integration fixture
+        // covers previous live objects as well as the new large payload.
         using(var verify=File.OpenRead(autoFile))
         {
             if(verify.Length!=autoBytes.Length)return 64;
