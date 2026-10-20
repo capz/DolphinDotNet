@@ -175,7 +175,10 @@ Console.WriteLine(result.Outcome + " " + result.After.ExtentCount);
 `Optimize` runs independently of `OptIn` and returns an outcome of
 `AlreadyContiguous`, `Optimized`, `NoContiguousSpace` or `Unsupported`.
 The result reports physical extent counts before/after, copied bytes and elapsed
-milliseconds. Automatic policy remains disabled by default; `MinimumFileSize`
+milliseconds. For automatic writes, `Defrag.GetStatistics()` reports
+attempts, successful reservations and repairs, no-space/unsupported skips,
+failures, total bytes written/copied and the last outcome; call
+`Defrag.ResetStatistics()` to clear these process-local counters. Automatic policy remains disabled by default; `MinimumFileSize`
 defaults to 65,536 bytes and controls **automatic** optimization only. A scoped
 policy restores the previous process-wide setting:
 
