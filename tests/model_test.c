@@ -557,6 +557,9 @@ int main(int argc, char **argv) {
       dnd_string_from_utf8(&heap,"sd:/translucent.obj"),8*1024*1024);
   assert(translucent_obj);
   DndModel *tom=dnd_model_find(translucent_obj,false);
+  fprintf(stderr,"OBJ MTL opacity: mode=%d alpha=%g\\n",
+          tom->material[tom->mesh[0].material].mode,
+          tom->material[tom->mesh[0].material].color[3]);
   assert((tom->material[tom->mesh[0].material].mode&4)!=0);
   near(tom->material[tom->mesh[0].material].color[3],.35f);
   assert(dnd_model_dispose(translucent_obj)==0);
