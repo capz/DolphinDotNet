@@ -8,6 +8,7 @@
 
 #define DND_SECTOR 512u
 #define DND_NAME 256
+#define DND_UTF8_COMPONENT 1024
 typedef struct {
     const DndSectorReader *reader;
     bool exfat;
@@ -21,7 +22,6 @@ typedef struct {
     bool directory, contiguous;
 } FileInfo;
 typedef struct {
-    char name[DND_NAME];
     uint16_t unicode[DND_NAME];
     unsigned sequence, checksum;
     bool lfn_good;
@@ -107,6 +107,44 @@ static int same_ascii(const char *a,const char *b) {
     }
     return !*a && !*b;
 }
+/* Decode a UTF-8 filename into UTF-16 code units as stored by FAT32
+ * long-name entries and exFAT name extensions. Exact Unicode sequences
+ * are supported, including surrogate pairs; ASCII casing follows FAT.
+ * Reject overlong encodings, invalid sequences and unpaired surrogates. */
+static bool same_utf16(const uint16_t *name,unsigned length,const char *utf8) {
+    const unsigned char *p=(const unsigned char *)utf8;
+    unsigned n=0;
+    while(*p) {
+        uint32_t cp;
+        unsigned size;
+        if(p[0]<0x80) {cp=p[0];size=1;}
+        else if(p[0]>=0xc2 && p[0]<=0xdf) {cp=p[0]&0x1f;size=2;}
+        else if(p[0]>=0xe0 && p[0]<=0xef) {cp=p[0]&0x0f;size=3;}
+        else if(p[0]>=0xf0 && p[0]<=0xf4) {cp=p[0]&7;size=4;}
+        else return false;
+        for(unsigned k=1;k<size;k++) {
+            if(!p[k] || (p[k]&0xc0)!=0x80)return false;
+            cp=(cp<<6)|(p[k]&0x3f);
+        }
+        if((size==2 && cp<0x80) || (size==3 && cp<0x800) ||
+           (size==4 && cp<0x10000) || cp>0x10ffff ||
+           (cp>=0xd800 && cp<=0xdfff))return false;
+        if(cp<=0xffff) {
+            if(n>=length)return false;
+            uint16_t ch=name[n++];
+            if(cp>='A' && cp<='Z')cp+=32;
+            if(ch>='A' && ch<='Z')ch=(uint16_t)(ch+32);
+            if(ch!=cp)return false;
+        } else {
+            if(n+1>=length)return false;
+            cp-=0x10000;
+            if(name[n++]!=(uint16_t)(0xd800+(cp>>10)) ||
+               name[n++]!=(uint16_t)(0xdc00+(cp&0x3ff)))return false;
+        }
+        p+=size;
+    }
+    return n==length;
+}
 static int lfn_checksum(const unsigned char *s) {
     unsigned v=0;
     for (unsigned i=0;i<11;i++) v=((v&1u)?0x80u:0u)+(v>>1)+s[i];
@@ -130,17 +168,12 @@ static bool short_name(const unsigned char *e,char *out) {
     out[n]=0;
     return n>0;
 }
-static bool lfn_name(DirectoryState *s, char *out) {
-    if (!s->lfn_good || s->sequence != 1) return false;
-    unsigned n=0;
-    for (;n<255;n++) {
-        uint16_t ch=s->unicode[n];
-        if (!ch || ch==0xffff) break;
-        if (ch>127) return false;
-        out[n]=(char)ch;
-    }
-    out[n]=0;
-    return n>0;
+static bool lfn_matches(const DirectoryState *s,const char *wanted) {
+    if(!s->lfn_good || s->sequence!=1)return false;
+    unsigned length=0;
+    while(length<255 && s->unicode[length]!=0 &&
+          s->unicode[length]!=0xffff)length++;
+    return length>0 && same_utf16(s->unicode,length,wanted);
 }
 static void lfn_part(DirectoryState *s,const unsigned char *e) {
     unsigned order=e[0]&31u;
@@ -168,13 +201,14 @@ static int fat_entry(DirectoryState *s,const unsigned char *e,
     if (e[0]==0xe5) {s->lfn_good=false;return 0;}
     if (e[11]==0x0f) {lfn_part(s,e);return 0;}
     if (e[11]&0x08) {s->lfn_good=false;return 0;}
-    char name[DND_NAME];
-    bool valid=false;
-    if (s->lfn_good && s->checksum==(unsigned)lfn_checksum(e))
-        valid=lfn_name(s,name);
-    if (!valid) valid=short_name(e,name);
+    bool matches=s->lfn_good && s->checksum==(unsigned)lfn_checksum(e)
+                 && lfn_matches(s,wanted);
+    if(!matches) {
+        char name[DND_NAME];
+        matches=short_name(e,name) && same_ascii(name,wanted);
+    }
     s->lfn_good=false;
-    if (!valid || !same_ascii(name,wanted)) return 0;
+    if(!matches)return 0;
     found->directory=(e[11]&0x10)!=0;
     found->first=((uint32_t)le16(e+20)<<16)|le16(e+26);
     found->length=le32(e+28);
@@ -201,15 +235,17 @@ static int exfat_entry(DirectoryState *s,const unsigned char *e,
     } else if (e[0]==0xc1 && s->ex_stream) {
         for (unsigned i=0;i<15 && s->name_written<s->name_length;i++) {
             uint16_t c=le16(e+2+i*2);
-            if (c>127 || !c) s->ex_valid=false;
-            else s->name[s->name_written]=(char)c;
+            if(!c)s->ex_valid=false;
+            if(s->name_written<DND_NAME)
+                s->unicode[s->name_written]=c;
+            else s->ex_valid=false;
             s->name_written++;
         }
     } else s->ex_valid=false;
     s->remaining--;
     if (!s->remaining) {
         if (s->ex_valid && s->name_written==s->name_length &&
-            same_ascii(s->name,wanted)) {
+            same_utf16(s->unicode,s->name_length,wanted)) {
             *found=s->entry;
             return 1;
         }
@@ -256,10 +292,6 @@ int dnd_fat_count_extents(const DndSectorReader *reader,
                           const char *relative_path,unsigned *extents) {
     if (!reader || !reader->read_sector || !relative_path || !extents)
         return -EINVAL;
-    /* Our sector parser intentionally supports ASCII names only. Explicitly
-     * decline Unicode paths instead of claiming that a file is missing. */
-    for(const unsigned char *p=(const unsigned char *)relative_path;*p;p++)
-        if(*p>127)return -ENOTSUP;
     Volume v={0};
     v.reader=reader;
     int rc=boot(&v);
@@ -272,12 +304,12 @@ int dnd_fat_count_extents(const DndSectorReader *reader,
     bool directory_contiguous=false;
     FileInfo found={0};
     for (unsigned depth=0;depth<64;depth++) {
-        char part[DND_NAME];
+        char part[DND_UTF8_COMPONENT];
         unsigned n=0;
         while (*p && *p!='/' && *p!='\\') {
-            unsigned char c=(unsigned char)*p++;
-            if (!c || c>127 || n>=255) return -ENOTSUP;
-            part[n++]=(char)c;
+            unsigned char ch=(unsigned char)*p++;
+            if(!ch || n+1>=sizeof(part))return -ENAMETOOLONG;
+            part[n++]=(char)ch;
         }
         part[n]=0;
         if (!n || !strcmp(part,".") || !strcmp(part,"..")) return -EINVAL;
