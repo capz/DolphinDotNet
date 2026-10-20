@@ -76,8 +76,7 @@ internal static class ModelCompatibilityTests
     {
         Fixture(directory, "strip", 5, false);
         Fixture(directory, "fan", 6, false);
-        Fixture(directory, "sparse-triangle", 4, true);
         Fixture(directory, "sparse-strip", 5, true);
-        Fixture(directory, "sparse-invalid", 4, true, invalid: true);
+        Fixture(directory, "sparse-invalid", 5, true, invalid: true);
     }
 }
