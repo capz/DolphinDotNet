@@ -37,6 +37,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_ci_changes.py
           python3 -m unittest discover -s tests -p test_ci_workflow.py
+          python3 -m unittest discover -s tests -p test_sample_release.py
       - name: Select checks from the complete PR diff
         id: select
         run: python3 scripts/ci_changes.py
