@@ -104,6 +104,60 @@ int main(void) {
     assert(dnd_optimize_recover(root)<0);
     expected_file(path,135169);
     assert(unlink(prepare_path)==0);
+    /* A checksum-correct but forged preparation journal must not remove
+     * any file other than the deterministic internal staging path. */
+    typedef struct {
+        char magic[8];
+        uint64_t bytes,digest;
+        char original[1024],stage[1024],backup[1024];
+        uint32_t integrity;
+    } TestJournal;
+    fixture.fail_at=DND_OPT_AFTER_PREPARE;
+    assert(dnd_optimize_file(root,path,&ops)==-EINTR);
+    TestJournal forged={0};
+    int journal_fd=open(prepare_path,O_RDONLY);
+    assert(journal_fd>=0 && read(journal_fd,&forged,sizeof(forged))==
+           (ssize_t)sizeof(forged) && close(journal_fd)==0);
+    char keep[1024];
+    snprintf(keep,sizeof(keep),"%s/keep.bin",root);
+    int keep_fd=open(keep,O_WRONLY|O_CREAT|O_EXCL,0600);
+    assert(keep_fd>=0 && write(keep_fd,"keep",4)==4 && close(keep_fd)==0);
+    strcpy(forged.stage,keep);
+    const unsigned char *encoded=(const unsigned char *)&forged;
+    uint32_t hash=2166136261u;
+    for(size_t i=0;i<offsetof(TestJournal,integrity);i++)
+        hash=(hash^encoded[i])*16777619u;
+    forged.integrity=hash;
+    journal_fd=open(prepare_path,O_WRONLY|O_TRUNC);
+    assert(journal_fd>=0 && write(journal_fd,&forged,sizeof(forged))==
+           (ssize_t)sizeof(forged) && close(journal_fd)==0);
+    assert(dnd_optimize_recover(root)==-EINVAL);
+    assert(directory_contains(root,"keep.bin"));
+    expected_file(path,135169);
+    assert(unlink(prepare_path)==0);
+    assert(unlink(keep)==0);
+    fixture.fail_at=0;
+    /* A torn COMMIT journal fails closed. Restoring the intact record
+     * makes repeated recovery possible without data loss. */
+    fixture.fail_at=DND_OPT_BEFORE_BACKUP;
+    assert(dnd_optimize_file(root,path,&ops)==-EINTR);
+    char commit_path[1024];
+    snprintf(commit_path,sizeof(commit_path),"%s/.__dnd_opt.jrn",root);
+    TestJournal complete={0};
+    journal_fd=open(commit_path,O_RDONLY);
+    assert(journal_fd>=0 && read(journal_fd,&complete,sizeof(complete))==
+           (ssize_t)sizeof(complete) && close(journal_fd)==0);
+    journal_fd=open(commit_path,O_WRONLY|O_TRUNC);
+    assert(journal_fd>=0 && write(journal_fd,"torn",4)==4 &&
+           close(journal_fd)==0);
+    assert(dnd_optimize_recover(root)<0);
+    expected_file(path,135169);
+    journal_fd=open(commit_path,O_WRONLY|O_TRUNC);
+    assert(journal_fd>=0 && write(journal_fd,&complete,sizeof(complete))==
+           (ssize_t)sizeof(complete) && close(journal_fd)==0);
+    assert(dnd_optimize_recover(root)==0);
+    assert(dnd_optimize_recover(root)==0);
+    fixture.fail_at=0;
     for (int point=1;point<=3;point++) {
         fixture.fail_at = point;
         assert(dnd_optimize_file(root,path,&ops) == -EINTR);
