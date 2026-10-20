@@ -1149,7 +1149,7 @@ static int import_scene(const char *path, int fbx, float sample_rate,
     scalar(&section[2], (float)(color.z * mul));
     scalar(&section[2], (float)opacity);
     number(&section[2], texture < 0 ? UINT_MAX : (unsigned)texture);
-    number(&section[2], (tx ? 1u : 0u) |
+    number(&section[2], (tx && opacity >= 1 ? 1u : 0u) |
                             (m->features.unlit.enabled ? 2u : 0u) |
                             (opacity < 1 ? 4u : 0u));
     scalar(&section[2], .5f);
