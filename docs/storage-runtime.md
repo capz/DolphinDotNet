@@ -150,7 +150,33 @@ mandatory.
 
 ## Automatic fragmentation prevention and repair
 
-The managed file-writing APIs now use both strategies automatically on the
+**Disabled by default.** Before starting the writes you want optimized, call
+`Dolphin.IO.Defrag.OptIn(true)`. Disable the behavior again with
+`Dolphin.IO.Defrag.OptIn(false)`, and read its current process-wide setting
+through `Defrag.IsEnabled`. The setting is reset to off on a fresh runtime
+launch. It gates both new-file contiguous reservation and the post-write
+repair path; explicit calls to `Storage.CreateContiguousFile` remain available
+regardless of the setting. A stream's final close uses the setting active at
+close time; enable it before starting a multi-step write and leave it enabled
+through completion. Recovery of earlier interrupted operations still runs at
+mount even while the policy is off.
+
+```csharp
+using Dolphin.IO;
+
+Defrag.OptIn(true);
+try
+{
+    File.WriteAllBytes("sd:/downloads/package.dol", package);
+    // FileStream, File.Copy, text and async writes share the policy.
+}
+finally
+{
+    Defrag.OptIn(false);
+}
+```
+
+When opted in, the managed file-writing APIs use both strategies on the
 GameCube's mounted FAT32/exFAT SD volumes (carda:/, cardb:/, sd:/, or
 gcloader:/ where firmware exposes writable sectors).
 

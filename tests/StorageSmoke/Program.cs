@@ -2,11 +2,18 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using Dolphin.Storage;
+using Defrag = Dolphin.IO.Defrag;
 internal static class Program
 {
     private static int Main()
     {
         if(!Storage.Mount(StorageDevice.SdSerialPort2) || !Storage.Mount(StorageDevice.DvdDrive))return 1;
+        // Explicit opt-in controls both native automatic paths. Default is off.
+        if(Defrag.IsEnabled)return 66;
+        Defrag.OptIn(true);
+        if(!Defrag.IsEnabled)return 67;
+        Defrag.OptIn(false);
+        if(Defrag.IsEnabled)return 68;
         var list=new Dolphin.Collections.List<long>();ICollection<long> values=list;
         for(var i=0;i<40;i++)values.Add(0x100000000L+i);
         var total=0L;foreach(var value in list)total+=value;if(total!=40*0x100000000L+780)return 2;
@@ -62,6 +69,10 @@ internal static class Program
         File.WriteAllBytes(Path.Combine(root,"empty.bin"),new byte[0]);if(File.ReadAllBytes(Path.Combine(root,"empty.bin")).Length!=0)return 34;File.Delete(Path.Combine(root,"empty.bin"));
         try{using(var contiguous=Storage.CreateContiguousFile(StorageDevice.SdSerialPort2,"not-supported.bin",3)){}return 45;}
         catch(NotSupportedException){}
+        // Host media still performs normal writes when opt-in is enabled,
+        // and the setting can be disabled without changing System.IO APIs.
+        Defrag.OptIn(true);
+        if(!Defrag.IsEnabled)return 69;
         // Automatic policy remains transparent on host filesystems.
         var autoFile=Path.Combine(root,"automatic.bin");
         var autoBytes=new byte[65537];autoBytes[65536]=91;
@@ -74,6 +85,8 @@ internal static class Program
         }
         if(File.ReadAllBytes(autoFile)[65535]!=9)return 65;
         File.Delete(autoFile);
+        Defrag.OptIn(false);
+        if(Defrag.IsEnabled)return 70;
         File.Copy(path,Path.Combine(root,"copy.bin"));File.Move(Path.Combine(root,"copy.bin"),Path.Combine(root,"moved.bin"));
         Directory.CreateDirectory(Path.Combine(root,"nested"));
         if(Directory.GetFiles(root).Length!=2 || Directory.GetDirectories(root).Length!=1)return 13;

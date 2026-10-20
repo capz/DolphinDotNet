@@ -10,6 +10,10 @@ void dnd_storage_unmount(int device);
 /* Bootstrap only, after managed executors stop. Closes owned handles and volumes. */
 void dnd_storage_shutdown(void);
 bool dnd_storage_is_mounted(int device);
+/* Automatic contiguous allocation and selective post-write repair default
+ * to off. Explicit CreateContiguousFile is not gated by this policy. */
+void dnd_storage_auto_defrag_set(bool enabled);
+bool dnd_storage_auto_defrag_enabled(void);
 DndString *dnd_storage_path(DndManagedHeap *, int device, DndString *path);
 DndString *dnd_fs_full_path(DndManagedHeap *, DndString *path);
 bool dnd_fs_exists(DndString *path, bool directory);

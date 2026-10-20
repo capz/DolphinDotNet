@@ -67,7 +67,7 @@ public static partial class File
         private readonly string path;private readonly byte[] bytes;private readonly bool append;private readonly CancellationToken token;private FileStream? stream;private int offset;
         internal readonly TaskCompletionSource<int> Completion=new TaskCompletionSource<int>();
         internal WriteFileWork(string path,byte[] bytes,bool append,CancellationToken token){this.path=path;this.bytes=bytes;this.append=append;this.token=token;}
-        internal void Step(){try{token.ThrowIfCancellationRequested();if(stream==null){stream=Open(path,append?System.IO.FileMode.Append:System.IO.FileMode.Create,System.IO.FileAccess.Write,System.IO.FileShare.None);if(!append&&bytes.Length>=65536)stream.SetLength(bytes.Length);}var n=bytes.Length-offset;if(n>4096)n=4096;stream.Write(bytes,offset,n);offset+=n;if(offset<bytes.Length){TasksPost(Step);return;}stream.Dispose();Completion.SetResult(0);}catch(Exception error){if(stream!=null)stream.Dispose();Completion.SetException(error);}}
+        internal void Step(){try{token.ThrowIfCancellationRequested();if(stream==null){stream=Open(path,append?System.IO.FileMode.Append:System.IO.FileMode.Create,System.IO.FileAccess.Write,System.IO.FileShare.None);if(!append&&Defrag.IsEnabled&&bytes.Length>=65536)stream.SetLength(bytes.Length);}var n=bytes.Length-offset;if(n>4096)n=4096;stream.Write(bytes,offset,n);offset+=n;if(offset<bytes.Length){TasksPost(Step);return;}stream.Dispose();Completion.SetResult(0);}catch(Exception error){if(stream!=null)stream.Dispose();Completion.SetException(error);}}
     }
     private sealed class ReadTextWork
     {

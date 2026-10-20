@@ -142,6 +142,8 @@ internal static class NativeStorageBindings
         ["Decode"]=("dnd_text_decode","aiiii",true),
         ["FromChars"]=("dnd_text_from_chars","aii",true),
         ["Mount"]=("dnd_storage_mount","i",false),["Unmount"]=("dnd_storage_unmount","i",false),["IsMounted"]=("dnd_storage_is_mounted","i",false),
+        ["SetAutoDefrag"]=("dnd_storage_auto_defrag_set","i",false),
+        ["AutoDefragEnabled"]=("dnd_storage_auto_defrag_enabled","",false),
         ["GetPath"]=("dnd_storage_path","is",true),["FullPath"]=("dnd_fs_full_path","s",true),["Exists"]=("dnd_fs_exists","si",false),
         ["ReadAllBytes"]=("dnd_fs_read_all","s",true),["WriteAllBytes"]=("dnd_fs_write_all","sa",false),["Delete"]=("dnd_fs_delete","si",false),
         ["Move"]=("dnd_fs_move","ss",false),

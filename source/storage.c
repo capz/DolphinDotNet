@@ -21,6 +21,11 @@
 #define HANDLE_CAP 32
 static const char *prefixes[7] = {"carda", "cardb", "sd", "dvd", "mca", "mcb", "gcloader"};
 static bool mounted[7];
+/* Opt-in is explicitly off for each program launch; the application may
+ * enable automatic extent reservation/repair before initiating writes. */
+static bool auto_defrag_enabled;
+bool dnd_storage_auto_defrag_enabled(void) { return auto_defrag_enabled; }
+void dnd_storage_auto_defrag_set(bool enabled) { auto_defrag_enabled = enabled; }
 /* Keep backing mounted while its ISO is presented through dvd:/ */
 static int iso_source_device = -1;
 static unsigned card_users[2];
@@ -803,6 +808,7 @@ static int auto_count_extents(void *context,const char *path,unsigned *extents) 
 }
 #endif
 static void auto_clean_file(const char *canonical,int device) {
+  if(!auto_defrag_enabled)return;
 #ifdef DND_GAMECUBE_STORAGE
   if(device<0 || device==3 || device==4 || device==5 ||
      !mounted[device] || contiguous_tokens[device] ||
@@ -830,6 +836,7 @@ static void auto_clean_file(const char *canonical,int device) {
 #endif
 }
 static int auto_contiguous_write(DndString *path,DndArray *data) {
+  if(!auto_defrag_enabled)return 0;
 #ifdef DND_GAMECUBE_STORAGE
   if(data->length<DND_AUTO_OPT_MIN_BYTES)return 0;
   char canonical[PATH_CAP],native[PATH_CAP],root[PATH_CAP];
