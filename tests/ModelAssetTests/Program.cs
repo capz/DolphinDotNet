@@ -103,7 +103,7 @@ ModelConverter.Convert(gltf,package+".second");if(!bytes.SequenceEqual(File.Read
     ModelConverter.Convert(gltf,package+".blend");
     var blendPackage=File.ReadAllBytes(package+".blend");
     int materialsOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(blendPackage.AsSpan(52,4)));
-    int modeOffset=materialsOffset+4+16+4;
+    int modeOffset=materialsOffset+4+32+16+4;
     if(BinaryPrimitives.ReadUInt32BigEndian(blendPackage.AsSpan(modeOffset,4))!=6)
         throw new Exception("BLEND/unlit bits not retained in material.");
     blended["materials"]![0]!["alphaMode"]="UNKNOWN";
