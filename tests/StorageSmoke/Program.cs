@@ -2,11 +2,32 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using Dolphin.Storage;
+using Defrag = Dolphin.IO.Defrag;
 internal static class Program
 {
     private static int Main()
     {
         if(!Storage.Mount(StorageDevice.SdSerialPort2) || !Storage.Mount(StorageDevice.DvdDrive))return 1;
+        // Explicit opt-in controls both native automatic paths. Default is off.
+        if(Defrag.IsEnabled)return 66;
+        Defrag.OptIn(true);
+        if(!Defrag.IsEnabled)return 67;
+        Defrag.OptIn(false);
+        if(Defrag.IsEnabled)return 68;
+        Defrag.ResetStatistics();
+        var stats=Defrag.GetStatistics();
+        if(stats.Attempts!=0 || stats.Repairs!=0 || stats.LastOutcome!=-1)return 81;
+        if(Defrag.MinimumFileSize!=65536)return 71;
+        using(Defrag.BeginScope(true,4096))
+        {
+            if(!Defrag.IsEnabled || Defrag.MinimumFileSize!=4096)return 72;
+            using(Defrag.BeginScope(false,2048))
+                if(Defrag.IsEnabled || Defrag.MinimumFileSize!=2048)return 73;
+            if(!Defrag.IsEnabled || Defrag.MinimumFileSize!=4096)return 74;
+        }
+        if(Defrag.IsEnabled || Defrag.MinimumFileSize!=65536)return 75;
+        try{Defrag.MinimumFileSize=-1;return 76;}catch(ArgumentOutOfRangeException){} 
+
         var list=new Dolphin.Collections.List<long>();ICollection<long> values=list;
         for(var i=0;i<40;i++)values.Add(0x100000000L+i);
         var total=0L;foreach(var value in list)total+=value;if(total!=40*0x100000000L+780)return 2;
@@ -60,6 +81,46 @@ internal static class Program
         try{Directory.Delete("sd:/",true);return 32;}catch(UnauthorizedAccessException){}
         var active=Directory.EnumerateFiles(root).GetEnumerator();try{Storage.Unmount(StorageDevice.SdSerialPort2);return 33;}catch(IOException){}finally{active.Dispose();}
         File.WriteAllBytes(Path.Combine(root,"empty.bin"),new byte[0]);if(File.ReadAllBytes(Path.Combine(root,"empty.bin")).Length!=0)return 34;File.Delete(Path.Combine(root,"empty.bin"));
+        try{using(var contiguous=Storage.CreateContiguousFile(StorageDevice.SdSerialPort2,"not-supported.bin",3)){}return 45;}
+        catch(NotSupportedException){}
+        // Explicit FAT inspection/repair is correctly unsupported on a POSIX
+        // host; only real GameCube FAT32/exFAT volumes report extents.
+        try{Defrag.Analyze(path);return 77;}catch(NotSupportedException){}
+        try{Defrag.Optimize(path);return 78;}catch(NotSupportedException){}
+        try{using(var input=Dolphin.IO.File.OpenRead(path))
+            Defrag.WriteContiguousFrom(input,Path.Combine(root,"streaming.bin"),3);
+            return 79;
+        }catch(NotSupportedException){}
+        if(File.Exists(Path.Combine(root,"streaming.bin")))return 80;
+        // Host media still performs normal writes when opt-in is enabled,
+        // and the setting can be disabled without changing System.IO APIs.
+        Defrag.OptIn(true);
+        if(!Defrag.IsEnabled)return 69;
+        // Automatic policy remains transparent on host filesystems.
+        var autoFile=Path.Combine(root,"automatic.bin");
+        var autoBytes=new byte[65537];autoBytes[65536]=91;
+        File.WriteAllBytes(autoFile,autoBytes);
+        // Avoid a second 65 KiB managed allocation. The integration fixture
+        // covers previous live objects as well as the new large payload.
+        using(var verify=File.OpenRead(autoFile))
+        {
+            if(verify.Length!=autoBytes.Length)return 64;
+            verify.Seek(65536,SeekOrigin.Begin);
+            if(verify.ReadByte()!=91)return 64;
+        }
+        using(var autoStream=File.Open(autoFile,FileMode.Open,FileAccess.Write))
+        {
+            autoStream.Seek(65535,SeekOrigin.Begin);
+            autoStream.Write(bytes,0,1);
+        }
+        using(var verify=File.OpenRead(autoFile))
+        {
+            verify.Seek(65535,SeekOrigin.Begin);
+            if(verify.ReadByte()!=9 || verify.ReadByte()!=91)return 65;
+        }
+        File.Delete(autoFile);
+        Defrag.OptIn(false);
+        if(Defrag.IsEnabled)return 70;
         File.Copy(path,Path.Combine(root,"copy.bin"));File.Move(Path.Combine(root,"copy.bin"),Path.Combine(root,"moved.bin"));
         Directory.CreateDirectory(Path.Combine(root,"nested"));
         if(Directory.GetFiles(root).Length!=2 || Directory.GetDirectories(root).Length!=1)return 13;

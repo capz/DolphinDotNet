@@ -315,24 +315,48 @@ jobs:
         run: |
           dotnet build tests/DolLauncherSmoke -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/DolLauncherSmoke/bin/Release/net8.0/DolLauncherSmoke.dll /tmp/dol-launcher.c
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dol-launcher.c tests/dol_host.c source/dol.c source/storage.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/dol-launcher
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dol-launcher.c tests/dol_host.c source/dol.c source/storage.c source/contiguous_write.c source/file_optimize.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/dol-launcher
           /tmp/dol-launcher
           /tmp/dol-launcher --gc-stress
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dol-launcher.c tests/dol_host.c source/dol.c source/storage.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/dol-launcher32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dol-launcher.c tests/dol_host.c source/dol.c source/storage.c source/contiguous_write.c source/file_optimize.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/dol-launcher32
           /tmp/dol-launcher32 --gc-stress
+      - name: Compile headless SD2SP2 and GC Loader hardware probe
+        if: matrix.group == 'io'
+        run: |
+          dotnet build samples/StorageIntegrity/StorageIntegrity.csproj -c Release -p:DndBuildNative=false
+          dotnet "$DND_COMPILER_DLL" --aot samples/StorageIntegrity/bin/Release/net8.0/StorageIntegrity.dll /tmp/storage-integrity.c
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/storage-integrity.c -o /tmp/storage-integrity.o
+      - name: Test selective post-write repair and interrupted rename recovery
+        if: matrix.group == 'io'
+        run: |
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/file_optimize_test.c source/file_optimize.c -o /tmp/dnd-file-optimize
+          /tmp/dnd-file-optimize
+      - name: Test FAT32/exFAT physical allocation detection
+        if: matrix.group == 'io'
+        run: |
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/file_extents_test.c source/file_extents.c -o /tmp/dnd-file-extents
+          /tmp/dnd-file-extents
+      - name: Test contiguous reservation and recovery
+        if: matrix.group == 'io'
+        run: |
+          cc -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/contiguous_write_test.c source/contiguous_write.c -o /tmp/dnd-contiguous-write
+          /tmp/dnd-contiguous-write
       - name: Validate collections and storage I/O
         if: matrix.group == 'io'
-        timeout-minutes: 3
+        # AOT compiles sizable native code twice (64/32 bit) and executes
+        # normal + GC-stress smoke tests; the original 3-minute limit expired
+        # after the successful 64-bit runs, before the 32-bit link/tests.
+        timeout-minutes: 10
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/StorageSmoke/bin/Release/net8.0/StorageSmoke.dll /tmp/storage.c
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/text.c -o /tmp/storage
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c source/text.c source/timing.c -o /tmp/storage
           timeout 30s /tmp/storage
           timeout 30s /tmp/storage --gc-stress
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/text.c -o /tmp/storage32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/storage.c tests/storage_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c source/text.c source/timing.c -o /tmp/storage32
           timeout 30s /tmp/storage32
           timeout 30s /tmp/storage32 --gc-stress
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Iinclude tests/storage_faults.c source/managed_runtime.c source/async_runtime.c source/storage.c -Wl,--wrap=read,--wrap=write,--wrap=close -o /tmp/storage_faults
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Iinclude tests/storage_faults.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c -Wl,--wrap=read,--wrap=write,--wrap=close -o /tmp/storage_faults
           timeout 30s /tmp/storage_faults
       - name: Validate ARAM transfers and asset cache
         if: matrix.group == 'io'
@@ -471,7 +495,7 @@ jobs:
         run: |
           dotnet build tests/AudioFormatsSmoke -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/AudioFormatsSmoke/bin/Release/net8.0/AudioFormatsSmoke.dll /tmp/dnd-audio-formats-aot.c
-          cc -pthread -std=c11 -Wall -Wextra -Werror -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -Iinclude /tmp/dnd-audio-formats-aot.c tests/audio_formats_host.c source/audio.c source/managed_runtime.c source/async_runtime.c source/storage.c source/performance.c -lm -o /tmp/dnd-audio-formats-aot
+          cc -pthread -std=c11 -Wall -Wextra -Werror -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -Iinclude /tmp/dnd-audio-formats-aot.c tests/audio_formats_host.c source/audio.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c source/performance.c -lm -o /tmp/dnd-audio-formats-aot
           /tmp/dnd-audio-formats-aot /tmp/dnd-audio-fixtures --gc-stress
       - name: Compile managed AESND audio sample through current AOT pipeline
         if: matrix.group == 'audio-games'
@@ -563,10 +587,10 @@ jobs:
           git diff --exit-code -- src/DolphinDotNet.GameCube/Dolphin/Graphics/Raw include/dnd_gx_raw.h source/gx_raw.c tools/DolphinDotNet.Compiler/RawGXBindings.Generated.cs
           dotnet build tests/GraphicsSmoke/GraphicsSmoke.csproj -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/GraphicsSmoke/bin/Release/net8.0/GraphicsSmoke.dll /tmp/graphics-smoke.c
-          cc -pthread -DDND_GRAPHICS_TEST -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/text.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke
+          cc -pthread -DDND_GRAPHICS_TEST -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/contiguous_write.c source/file_optimize.c source/text.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke
           /tmp/graphics-smoke
           DND_ASYNC_MANUAL=0 /tmp/graphics-smoke
-          cc -pthread -m32 -DDND_GRAPHICS_TEST -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/text.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke32
+          cc -pthread -m32 -DDND_GRAPHICS_TEST -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/contiguous_write.c source/file_optimize.c source/text.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke32
           /tmp/graphics-smoke32
       - name: Convert, package and validate model assets
         if: matrix.group == 'graphics-model'
@@ -585,9 +609,9 @@ jobs:
           cmp /tmp/dnd-model-fixtures/sd/animated.dndmodel /tmp/dnd-model-fixtures/sd/built.dndmodel
           cc -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_inflate_test.c source/model_ufbx.c -lm -o /tmp/model-inflate
           /tmp/model-inflate
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native
           timeout 30s /tmp/model-native /tmp/dnd-model-fixtures
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native32
           timeout 30s /tmp/model-native32 /tmp/dnd-model-fixtures
           # Execute the production GX model path and shared TEV binder, recording GX commands.
           cc -pthread -DDND_MODEL_GX_TEST -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -ffunction-sections -fdata-sections -std=c11 -Wall -Wextra -Werror -Itests/model_effect_sdk -Iinclude tests/model_effect_test.c source/managed_runtime.c source/async_runtime.c source/model.c source/model_animation.c source/model_graphics.c source/graphics_device.c source/draw_resources.c source/performance.c -Wl,--gc-sections,--wrap=malloc,--wrap=calloc,--wrap=realloc -lm -o /tmp/model-effects
@@ -603,12 +627,12 @@ jobs:
           # Avoid pathological sanitizer compile times for large generated state machines.
           # Native code stays optimized; the 32-bit pass below also optimizes generated C.
           cc -pthread -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/model-smoke.c -o /tmp/model-smoke-generated.o
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke-generated.o tests/model_host.c source/text.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke-generated.o tests/model_host.c source/text.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
           timeout 30s /tmp/model-smoke /tmp/dnd-model-fixtures --gc-stress
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/text.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-smoke.c tests/model_host.c source/text.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c source/aram.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-smoke32
           timeout 30s /tmp/model-smoke32 /tmp/dnd-model-fixtures --gc-stress
 
       - name: Validate background model awaits, rendering and in-flight cancellation
@@ -620,10 +644,10 @@ jobs:
           dotnet build tests/ModelAsyncSmoke/ModelAsyncSmoke.csproj -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/ModelAsyncSmoke/bin/Release/net8.0/ModelAsyncSmoke.dll /tmp/model-async.c
           cc -pthread -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/model-async.c -o /tmp/model-async-generated.o
-          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-async-generated.o tests/model_async_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/timing.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -Wl,--wrap=ufbx_load_memory -lm -o /tmp/model-async
+          cc -pthread -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-async-generated.o tests/model_async_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c source/aram.c source/timing.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -Wl,--wrap=ufbx_load_memory -lm -o /tmp/model-async
           timeout 30s /tmp/model-async /tmp/dnd-model-fixtures
           timeout 30s /tmp/model-async /tmp/dnd-model-fixtures --gc-stress
-          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-async.c tests/model_async_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/aram.c source/timing.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -Wl,--wrap=ufbx_load_memory -lm -o /tmp/model-async32
+          cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/model-async.c tests/model_async_host.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c source/aram.c source/timing.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -Wl,--wrap=ufbx_load_memory -lm -o /tmp/model-async32
           timeout 30s /tmp/model-async32 /tmp/dnd-model-fixtures --gc-stress
 
       - name: Report native cache statistics

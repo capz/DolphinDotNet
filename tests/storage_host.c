@@ -31,7 +31,10 @@ int main(int argc, char **argv) {
     return 92;
   fputc(42, f);
   fclose(f);
-  static unsigned char memory[128 * 1024];
+  /* This integration includes a >64 KiB managed WriteAllBytes payload in a
+   single long-lived AOT test method; unlike the 128 KiB small-heap smoke,
+   it needs room for earlier live test objects and GC roots. */
+  static unsigned char memory[256 * 1024];
   DndManagedHeap heap;
   dnd_managed_heap_init(&heap, memory, sizeof(memory));
   dnd_gc_set_stress(argc > 1);

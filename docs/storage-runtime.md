@@ -104,6 +104,168 @@ libogc2 `__io_gcode` if supported by the installed GC Loader firmware.
 Availability and simultaneous ODE DVD use are hardware dependent; do not
 assume they can operate simultaneously. See [DiscBrowser](../samples/DiscBrowser/README.md).
 
+## Contiguous file creation (GameCube FAT32 and exFAT)
+
+Use `Storage.CreateContiguousFile(device, path, knownLength)` when writing a new
+large file whose length is known before downloading or generating it:
+
+```csharp
+using (var writer = Storage.CreateContiguousFile(StorageDevice.SdSerialPort2,
+        "downloads/package.dol", contentLength))
+{
+    // Stream chunks rather than allocating the whole file in managed memory.
+    writer.Write(buffer, 0, bytesRead);
+    // Repeat until exactly contentLength bytes have been written.
+    writer.Complete(); // Verifies on-media checksum and publishes the path.
+}
+```
+
+The writer creates an exclusive staging file on the same mounted volume,
+preallocates its full size through libdvm's existing ftruncate / FatFs
+f_expand path, flushes allocation metadata, **inspects the physical FAT32 or
+exFAT cluster chain**, and starts accepting data only when the reservation is
+one contiguous extent. libdvm ignores the f_expand return code, so checking
+the chain is necessary. Data transfers use an aligned 16-KiB native staging
+buffer, then the complete file is synced and read back for a checksum before
+it is renamed into place. `Complete()` must be called explicitly. Disposing
+without it aborts the transaction. Zero-length files need zero allocated
+extents. Individual file lengths are currently limited to 2,147,483,647 bytes.
+
+**Safety and limitations:** This is create-new, not atomic replacement. Existing
+destination files are never overwritten. A small journal identifies abandoned
+staging files so a subsequent `Storage.Mount` can remove them after a crash
+or power loss. Corrupt journals fail closed rather than deleting unknown
+files. `Unmount` refuses a volume with a live writer, and ISO-backed SD
+volumes cannot be modified while `dvd:/` is mounted from them. No FAT metadata
+is mutated directly by the extent scanner. A successfully returned `Complete`
+means the data and FAT allocation were checked, **not** that a FAT directory
+rename is guaranteed power-loss atomic on every card/firmware combination.
+Applications should keep authoritative download hashes/version manifests.
+Temporary and journal files occupy root-directory entries until publication.
+Only one contiguous writer can be active per volume. On host filesystems
+the feature fails as unsupported rather than claiming unverified contiguity.
+For GC Loader, raw SD mountability and firmware write support must be checked
+on the target console. Benchmarks and power-cut tests on real cards remain
+mandatory.
+
+## Hardware acceptance
+
+The new [headless StorageIntegrity probe](../samples/StorageIntegrity/README.md)
+benchmarks SD2SP2 and writable GC Loader volumes using 1 MiB writes and
+16/64 KiB buffers. Its opt-in `POWER` mode continuously exercises
+checksum-verified, journaled create-new writes and checks publication after
+reboot. It is **not** run by CI on actual devices; the CI job compiles the
+sample and separately runs deterministic native checkpoint-injection tests.
+Use a separate test card, measure FAT32 and exFAT, near-full media, and log
+firmware/card details before promoting the feature to hardware-verified.
+
+## Explicit maintenance, policy and streaming
+
+Opted-in writes preserve their existing .NET APIs. Advanced callers may also
+inspect or repair existing files on mounted FAT32/exFAT GameCube SD volumes:
+
+```csharp
+using Dolphin.IO;
+
+var before = Defrag.Analyze("sd:/games/game.iso");
+var result = Defrag.Optimize("sd:/games/game.iso");
+Console.WriteLine(result.Outcome + " " + result.After.ExtentCount);
+```
+
+`Optimize` runs independently of `OptIn` and returns an outcome of
+`AlreadyContiguous`, `Optimized`, `NoContiguousSpace` or `Unsupported`.
+The result reports physical extent counts before/after, copied bytes and elapsed
+milliseconds. For automatic writes, `Defrag.GetStatistics()` reports
+attempts, successful reservations and repairs, no-space/unsupported skips,
+failures, total bytes written/copied and the last outcome; call
+`Defrag.ResetStatistics()` to clear these process-local counters. Automatic policy remains disabled by default; `MinimumFileSize`
+defaults to 65,536 bytes and controls **automatic** optimization only. A scoped
+policy restores the previous process-wide setting:
+
+```csharp
+using (Defrag.BeginScope(true, 131072)) {
+    // Your existing managed filesystem writes.
+}
+```
+
+Scopes must not overlap across independent application threads. Large,
+known-length downloads can avoid allocating their entire payload and bypass
+post-write copying:
+
+```csharp
+using var input = File.OpenRead("sd:/download/source.bin");
+Defrag.WriteContiguousFrom(input, "sd:/games/new-game.bin", input.Length);
+```
+
+`WriteContiguousFrom` uses a fixed 16 KiB managed buffer, requires the target
+not to exist and publishes only after readback checks. It throws rather than
+silently accepting fragmentation or an incomplete input stream. The policy and
+manual APIs do not implement a whole-card defragmenter. The physical-name
+scanner handles valid UTF-8 paths and FAT32/exFAT UTF-16 names, including
+surrogate pairs. Non-ASCII names currently require the same Unicode spelling
+and casing as their stored name (ASCII casing is folded). Unicode canonical
+normalization and locale-specific case folding are not performed.
+
+## Automatic fragmentation prevention and repair
+
+**Disabled by default.** Before starting the writes you want optimized, call
+`Dolphin.IO.Defrag.OptIn(true)`. Disable the behavior again with
+`Dolphin.IO.Defrag.OptIn(false)`, and read its current process-wide setting
+through `Defrag.IsEnabled`. The setting is reset to off on a fresh runtime
+launch. It gates both new-file contiguous reservation and the post-write
+repair path; explicit calls to `Storage.CreateContiguousFile` remain available
+regardless of the setting. A stream's final close uses the setting active at
+close time; enable it before starting a multi-step write and leave it enabled
+through completion. Recovery of earlier interrupted operations still runs at
+mount even while the policy is off.
+
+```csharp
+using Dolphin.IO;
+
+Defrag.OptIn(true);
+try
+{
+    File.WriteAllBytes("sd:/downloads/package.dol", package);
+    // FileStream, File.Copy, text and async writes share the policy.
+}
+finally
+{
+    Defrag.OptIn(false);
+}
+```
+
+When opted in, the managed file-writing APIs use both strategies on the
+GameCube's mounted FAT32/exFAT SD volumes (carda:/, cardb:/, sd:/, or
+gcloader:/ where firmware exposes writable sectors).
+
+- **Known-length new writes:** `File.WriteAllBytes` / `Storage.WriteAllBytes`
+  attempt checked, single-extent preallocation and checksum-verified staging
+  before publishing files of at least **64 KiB**. If a contiguous region
+  cannot be reserved, the normal write path remains available.
+- **Managed streams, appends, copies, text and async writes:** FileStream
+  tracks modifications; after the final handle closes, only files at least
+  **64 KiB** are inspected for fragmentation. Single-extent files are
+  immediately skipped. If fragmented, a verified contiguous temporary copy
+  is staged and swapped under a recovery journal. `File.Copy` and nonappend
+  byte-array async writes also communicate the known length to the allocator.
+- **Safe fallback:** Lack of contiguous free space, unsupported/non-ASCII
+  filesystem metadata or insufficient space for an entire temporary copy
+  leave the file untouched rather than failing an otherwise successful write.
+  Files sharing an active handle or backing mounted DVD images are skipped.
+  Original contents are retained in a recoverable backup during replacement.
+  Failed recovery is surfaced as a storage I/O error.
+- **No whole-volume scan:** There is no scan/rewrite of unrelated SD files.
+  Small files and rename-only moves do not trigger a maintenance pass.
+  This affects only files written by the application, not all files already
+  on the card. An API for explicit large-file maintenance is a possible
+  separate feature.
+
+The post-write repair is synchronous and can require a full file copy.
+It is therefore unsuitable for latency-critical, frequently-written large
+files unless the application schedules those writes appropriately.
+Ordinary filesystem writes and renames are not guaranteed power-loss atomic;
+a safe unmount and real-device interrupted-power tests remain necessary.
+
 ## Native memory-card saves
 
 ```csharp

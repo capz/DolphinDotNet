@@ -10,6 +10,16 @@ void dnd_storage_unmount(int device);
 /* Bootstrap only, after managed executors stop. Closes owned handles and volumes. */
 void dnd_storage_shutdown(void);
 bool dnd_storage_is_mounted(int device);
+/* Automatic contiguous allocation and selective post-write repair default
+ * to off. Explicit CreateContiguousFile is not gated by this policy. */
+void dnd_storage_auto_defrag_set(bool enabled);
+bool dnd_storage_auto_defrag_enabled(void);
+int dnd_storage_auto_defrag_min_size(void);
+int64_t dnd_storage_auto_defrag_stat(int kind);
+void dnd_storage_auto_defrag_reset_stats(void);
+void dnd_storage_auto_defrag_set_min_size(int minimum);
+int dnd_fs_defrag_analyze(DndString *path);
+int dnd_fs_defrag_optimize(DndString *path);
 DndString *dnd_storage_path(DndManagedHeap *, int device, DndString *path);
 DndString *dnd_fs_full_path(DndManagedHeap *, DndString *path);
 bool dnd_fs_exists(DndString *path, bool directory);
@@ -17,6 +27,10 @@ DndArray *dnd_fs_read_all(DndManagedHeap *, DndString *path);
 void dnd_fs_write_all(DndString *path, DndArray *data);
 void dnd_fs_delete(DndString *path, bool directory);
 void dnd_fs_move(DndString *source, DndString *destination);
+int dnd_fs_contiguous_begin(DndString *path,int64_t expected_size);
+void dnd_fs_contiguous_write(int token,DndArray *data,int offset,int count);
+void dnd_fs_contiguous_complete(int token);
+void dnd_fs_contiguous_abort(int token);
 void dnd_fs_mkdir(DndString *path);
 int dnd_fs_open(DndString *path, int mode, int access, int share);
 /* Native asset readers use the same mounted-volume normalization and handles. */
