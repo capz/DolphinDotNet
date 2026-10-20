@@ -57,6 +57,20 @@ internal static class Program
                " verify="+valid+"\n";
     }
 
+    private static string TimedKnownLength(string folder,byte[] payload,bool enabled)
+    {
+        var path=Path.Combine(folder,"known-length.bin");
+        if(File.Exists(path))File.Delete(path);
+        Defrag.OptIn(enabled);
+        var watch=Stopwatch.StartNew();
+        File.WriteAllBytes(path,payload);
+        watch.Stop();
+        bool valid=Verify(path);
+        File.Delete(path);
+        return "known-size optin="+enabled+" ms="+watch.ElapsedMilliseconds+
+               " verify="+valid+"\\n";
+    }
+
     private static int Run(StorageDevice device,string folder)
     {
         string arm=Path.Combine(folder,"arm.txt");
@@ -79,6 +93,8 @@ internal static class Program
             Fill(data);
             string result="DolphinDotNet SD fragmentation benchmark\n";
             result+="device="+device+" size="+Size+"\n";
+            result+=TimedKnownLength(folder,data,false);
+            result+=TimedKnownLength(folder,data,true);
             result+=TimedWrite(folder,data,false,16384);
             result+=TimedWrite(folder,data,true,16384);
             result+=TimedWrite(folder,data,true,65536);
