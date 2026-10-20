@@ -13,7 +13,9 @@ power interruption on a card with irreplaceable data.
 3. Boot the DOL. Read `/dnd-defrag-test/report.txt` for the 1 MiB
    benchmark (known-length writes with opt-in off/on, ordinary streaming,
    and opt-in with 16 KiB and 64 KiB chunks).
-   Times are in elapsed milliseconds; verify must be `True`.
+   Times are in elapsed milliseconds; verify must be `True`. The report
+   includes physical extent counts, manual repair outcomes, and automatic
+   optimization counters for each benchmark.
 4. Test FAT32 and exFAT media and representative cluster sizes. Repeat
    on a nearly full card with fragmented free space. Capture failures and
    relevant speed differences. On GC Loader, report firmware revision and
