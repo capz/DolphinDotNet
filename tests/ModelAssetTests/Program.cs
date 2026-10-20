@@ -110,8 +110,19 @@ ModelConverter.Convert(gltf,package+".second");if(!bytes.SequenceEqual(File.Read
     };
     File.WriteAllText(gltf,transformed.ToJsonString());
     ModelConverter.Convert(gltf,package+".uv-transform");
-    if(bytes.SequenceEqual(File.ReadAllBytes(package+".uv-transform")))
+    var converted=File.ReadAllBytes(package+".uv-transform");
+    if(bytes.SequenceEqual(converted))
         throw new Exception("Texture transform failed to modify geometry.");
+    // DNMD: mesh section offset at byte 36, one mesh count, 44-byte mesh
+    // header, then position(12) + normal(12) before UV(8).
+    int meshOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(converted.AsSpan(36,4)));
+    int firstUv=meshOffset+4+44+24;
+    float U(int offset)=>BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32BigEndian(converted.AsSpan(offset,4)));
+    if(Math.Abs(U(firstUv)-0.25f)>0.0001f||Math.Abs(U(firstUv+4)-0.5f)>0.0001f)
+        throw new Exception("Incorrect baked KHR_texture_transform offset/scale.");
+    // Second vertex originally has UV (1,0), transformed to (0.75,0.5).
+    if(Math.Abs(U(firstUv+80)-0.75f)>0.0001f||Math.Abs(U(firstUv+84)-0.5f)>0.0001f)
+        throw new Exception("Incorrect baked KHR_texture_transform UV1.");
     transformed["materials"]![0]!["pbrMetallicRoughness"]!["baseColorTexture"]!["extensions"]!["KHR_texture_transform"]!["texCoord"]=2;
     File.WriteAllText(gltf,transformed.ToJsonString());
     try { ModelConverter.Convert(gltf,package+".bad-uv");throw new Exception("Invalid texture coordinate accepted."); }
