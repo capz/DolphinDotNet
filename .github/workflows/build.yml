@@ -1273,14 +1273,13 @@ jobs:
         id: disc_browser
         continue-on-error: true
         run: |
-          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2171 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=NO GAMECUBE DISC OR DEMO ISO AVAILABLE" --memory-after-symbol dnd_device_end --logs dolphin-disc-browser --require-boot
-      - name: Verify DiscBrowser reads inserted ISO metadata and files
+          python3 scripts/dolphin_disc_browser_test.py dist/footprint/disc-browser/Game.dol --elf dist/footprint/disc-browser/Game.elf --no-disc --logs dolphin-disc-browser
+      - name: Verify DiscBrowser explicitly mounts ISO metadata and navigates files
         if: matrix.group == 'runtime'
         id: disc_browser_iso
         continue-on-error: true
         run: |
-          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --disc dist/footprint/test-disc.iso --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2172 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=Title: Fixture banner" --expect-text "lines=Banner RGBA size: 12288" --expect-text "lines=dvd:/top" --memory-after-symbol dnd_device_end --logs dolphin-disc-browser-iso --require-boot
-          python3 scripts/dolphin_smoke.py dist/footprint/disc-browser/Game.dol --disc dist/footprint/test-disc-many.iso --binary /usr/games/dolphin-emu-nogui --seconds 20 --cpu-core 1 --gdb-port 2172 --elf dist/footprint/disc-browser/Game.elf --expect-text "lines=dvd:/file0.bin" --memory-after-symbol dnd_device_end --logs dolphin-disc-browser-many --require-boot
+          python3 scripts/dolphin_disc_browser_test.py dist/footprint/disc-browser/Game.dol --elf dist/footprint/disc-browser/Game.elf --disc dist/footprint/test-disc.iso --metadata-only --logs dolphin-disc-browser-iso
           python3 scripts/dolphin_disc_browser_test.py dist/footprint/disc-browser/Game.dol --elf dist/footprint/disc-browser/Game.elf --disc dist/footprint/test-disc-many.iso --logs dolphin-disc-browser-input
       - name: Verify all four controllers through Dolphin pipe inputs
         if: matrix.group == 'controllers'
