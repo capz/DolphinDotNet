@@ -37,6 +37,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_ci_changes.py
           python3 -m unittest discover -s tests -p test_ci_workflow.py
+          python3 -m unittest discover -s tests -p test_sample_release.py
       - name: Select checks from the complete PR diff
         id: select
         run: python3 scripts/ci_changes.py
@@ -944,6 +945,23 @@ jobs:
           test -s footprint/powerpc-disassembly.txt
           file DolphinDotNet.elf || true
           ls -lh DolphinDotNet.elf DolphinDotNet.dol
+      # Use DOLs already produced above; never invoke another native build.
+      - name: Zip existing emulator-job sample DOLs
+        run: |
+          python3 scripts/package_sample_dols.py sample-zips \
+            ManagedGameCube=DolphinDotNet.dol \
+            Pong=footprint/pong.dol \
+            GreenMen=footprint/green-men/Game.dol \
+            Fox=footprint/fox/Game.dol \
+            ShaderDemo=footprint/shader/Game.dol \
+            Kart=footprint/kart/Game.dol \
+            Snake=footprint/snake.dol \
+            DiscBrowser=footprint/disc-browser/Game.dol
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DolphinDotNet-sample-zips-main
+          path: sample-zips/*.zip
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: DolphinDotNet-gamecube
@@ -1125,6 +1143,22 @@ jobs:
           make -j2 CC="ccache $DEVKITPPC/bin/powerpc-eabi-gcc" -C /tmp/dnd-disc-browser-bundle
           test -s /tmp/dnd-disc-browser-bundle/Game.dol
           test -s /tmp/dnd-disc-browser-bundle/source/model_obj.c
+      # Package only sample binaries already built by each matrix runner.
+      - name: Zip existing matrix-job sample DOLs
+        run: |
+          if [ "${{ matrix.group }}" = compat ]; then
+            python3 scripts/package_sample_dols.py sample-zips \
+              HttpTexture=/tmp/dnd-http-texture/Game.dol
+          else
+            python3 scripts/package_sample_dols.py sample-zips \
+              AudioDemo=/tmp/dnd-audio-demo-ppc/Game.dol \
+              HardwareDiagnostics=/tmp/dnd-hardware-demo/Game.dol
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DolphinDotNet-sample-zips-${{ matrix.group }}
+          path: sample-zips/*.zip
+          if-no-files-found: error
       - name: Report native cache statistics
         if: always()
         run: ccache --show-stats
@@ -1397,7 +1431,7 @@ jobs:
           PY
 
   release-gamecube:
-    name: Publish GameCube build release
+    name: Publish GameCube sample release
     runs-on: ubuntu-latest
     needs:
       - ci-result
@@ -1406,21 +1440,39 @@ jobs:
       - ide-workflow
       - portable-runtime
       - gamecube
+      - gamecube-extra
       - dolphin-smoke
-    # Publish successful builds of main only; pull requests retain their Actions artifacts.
+    # Publish successful main builds only; pull requests retain their Actions artifacts.
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: write
     steps:
-      - name: Download verified GameCube build
+      - name: Download ZIPs of samples built during this CI run
         uses: actions/download-artifact@v4
         with:
-          name: DolphinDotNet-gamecube
-          path: dist
-      - name: Verify release files
+          pattern: DolphinDotNet-sample-zips-*
+          merge-multiple: true
+          path: dist/sample-zips
+      - name: Verify release includes every normally built sample
         run: |
-          test -s dist/DolphinDotNet.dol
-          test -s dist/DolphinDotNet.elf
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          expected = {
+              'ManagedGameCube', 'Pong', 'GreenMen', 'Fox', 'ShaderDemo', 'Kart',
+              'Snake', 'DiscBrowser', 'HttpTexture', 'AudioDemo', 'HardwareDiagnostics'
+          }
+          archives = {path.stem: path for path in Path('dist/sample-zips').glob('*.zip')}
+          if set(archives) != expected:
+              raise SystemExit(f'Missing/unexpected sample ZIPs: expected {sorted(expected)}, got {sorted(archives)}')
+          for sample, path in archives.items():
+              with ZipFile(path) as archive:
+                  names = archive.namelist()
+                  if names != [sample + '.dol'] or archive.getinfo(names[0]).file_size == 0:
+                      raise SystemExit(f'Invalid sample ZIP: {path}')
+              print(f'Verified {path}')
+          PY
       - name: Create downloadable prerelease
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1430,10 +1482,8 @@ jobs:
           BUILD_ATTEMPT: ${{ github.run_attempt }}
         run: |
           TAG="build-${BUILD_RUN}-${BUILD_ATTEMPT}"
-          gh release create "$TAG" \
-            dist/DolphinDotNet.dol \
-            dist/DolphinDotNet.elf \
+          gh release create "$TAG" dist/sample-zips/*.zip \
             --target "$BUILD_SHA" \
-            --title "GameCube build ${BUILD_RUN} (attempt ${BUILD_ATTEMPT})" \
-            --notes "Automated GameCube DOL build from commit ${BUILD_SHA}. Built and verified by CI run https://github.com/${GH_REPO}/actions/runs/${BUILD_RUN}." \
+            --title "GameCube samples build ${BUILD_RUN} (attempt ${BUILD_ATTEMPT})" \
+            --notes "Automated ZIPs of existing GameCube sample DOL builds from commit ${BUILD_SHA}. No additional samples were compiled for this release. Verified by CI run https://github.com/${GH_REPO}/actions/runs/${BUILD_RUN}." \
             --prerelease

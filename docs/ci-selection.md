@@ -34,6 +34,14 @@ Existing job names remain unchanged. `CI result` can be made the required check
 in repository branch protection; this implementation does not change protection
 settings.
 
+For successful `main` pushes and manual runs, the release job downloads ZIP
+artifacts created from sample DOLs **already built** by `gamecube` and
+`gamecube-extra`. Each release asset is named `<Sample>.zip` and contains
+`<Sample>.dol`; build-only and emulator acceptance fixtures are excluded.
+The packaging steps do not compile any additional samples. When a new sample
+starts producing a native DOL in the normal jobs, add that existing output to
+the package mapping and release verification list.
+
 Run selector regression tests with:
 
 ```sh

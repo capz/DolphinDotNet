@@ -47,6 +47,44 @@ class WorkflowCoverageTests(unittest.TestCase):
         self.assertIn('name: DolphinDotNet-gamecube\n',job('gamecube'))
         self.assertIn('name: DolphinDotNet-dolphin-smoke-${{ matrix.group }}',job('dolphin-smoke'))
 
+    def test_release_packages_only_dols_built_by_normal_gamecube_jobs(self):
+        source_jobs = {
+            'gamecube': {
+                'ManagedGameCube': 'DolphinDotNet.dol',
+                'Pong': 'footprint/pong.dol',
+                'GreenMen': 'footprint/green-men/Game.dol',
+                'Fox': 'footprint/fox/Game.dol',
+                'ShaderDemo': 'footprint/shader/Game.dol',
+                'Kart': 'footprint/kart/Game.dol',
+                'Snake': 'footprint/snake.dol',
+                'DiscBrowser': 'footprint/disc-browser/Game.dol',
+            },
+            'gamecube-extra': {
+                'HttpTexture': '/tmp/dnd-http-texture/Game.dol',
+                'AudioDemo': '/tmp/dnd-audio-demo-ppc/Game.dol',
+                'HardwareDiagnostics': '/tmp/dnd-hardware-demo/Game.dol',
+            },
+        }
+        for job_name, samples in source_jobs.items():
+            section = job(job_name)
+            self.assertIn('scripts/package_sample_dols.py sample-zips', section)
+            for name, filename in samples.items():
+                with self.subTest(sample=name):
+                    self.assertIn(f'{name}={filename}', section)
+            self.assertIn('path: sample-zips/*.zip', section)
+            pack = next(block for block in step_blocks(section)
+                        if 'name: Zip existing ' in block)
+            self.assertNotIn('dotnet build', pack)
+            self.assertNotIn('make -', pack)
+
+        release = job('release-gamecube')
+        self.assertIn('      - gamecube-extra', release)
+        self.assertIn('pattern: DolphinDotNet-sample-zips-*', release)
+        self.assertIn('merge-multiple: true', release)
+        self.assertIn('dist/sample-zips/*.zip', release)
+        self.assertIn('if: github.ref == \'refs/heads/main\'', release)
+        self.assertIn('if-no-files-found: error', job('gamecube-extra'))
+
     def test_missing_or_failed_emulator_cases_cannot_pass(self):
         section=job('dolphin-smoke')
         code=section.split("python3 - <<'PYRESULTS'\n",1)[1].split('          PYRESULTS',1)[0]
