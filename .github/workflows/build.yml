@@ -337,7 +337,10 @@ jobs:
           /tmp/dnd-contiguous-write
       - name: Validate collections and storage I/O
         if: matrix.group == 'io'
-        timeout-minutes: 3
+        # AOT compiles sizable native code twice (64/32 bit) and executes
+        # normal + GC-stress smoke tests; the original 3-minute limit expired
+        # after the successful 64-bit runs, before the 32-bit link/tests.
+        timeout-minutes: 10
         run: |
           dotnet build tests/StorageSmoke/StorageSmoke.csproj -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/StorageSmoke/bin/Release/net8.0/StorageSmoke.dll /tmp/storage.c
