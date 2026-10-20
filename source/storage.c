@@ -27,6 +27,18 @@ static bool mounted[7];
  * enable automatic extent reservation/repair before initiating writes. */
 static bool auto_defrag_enabled;
 static int auto_defrag_min_bytes = 64 * 1024;
+/* Process-local counters, incremented only by automatic write optimization.
+ * No allocation or filesystem I/O is required to inspect them. */
+static int64_t auto_stats[8];
+static int auto_last_result=-1; /* -1=none; 0..3=optimizer; 4=reserved; 5=error */
+int64_t dnd_storage_auto_defrag_stat(int kind) {
+  if(kind==8)return auto_last_result;
+  return kind>=0 && kind<8?auto_stats[kind]:0;
+}
+void dnd_storage_auto_defrag_reset_stats(void) {
+  memset(auto_stats,0,sizeof(auto_stats));
+  auto_last_result=-1;
+}
 bool dnd_storage_auto_defrag_enabled(void) { return auto_defrag_enabled; }
 void dnd_storage_auto_defrag_set(bool enabled) { auto_defrag_enabled = enabled; }
 int dnd_storage_auto_defrag_min_size(void) { return auto_defrag_min_bytes; }
@@ -842,7 +854,14 @@ static void auto_clean_file(const char *canonical,int device) {
   contiguous_root(device,root);
   DndOptimizeOps ops={(void *)(intptr_t)device,auto_count_extents,NULL,
                        auto_copy_metadata};
+  auto_stats[0]++;
   int rc=dnd_optimize_file(root,canonical,&ops);
+  auto_last_result=rc<0?5:rc;
+  if(rc==DND_OPT_REPAIRED) {auto_stats[2]++;auto_stats[7]+=(int64_t)st.st_size;}
+  else if(rc==DND_OPT_ALREADY_CONTIGUOUS)auto_stats[3]++;
+  else if(rc==DND_OPT_NO_CONTIGUOUS_SPACE)auto_stats[4]++;
+  else if(rc==DND_OPT_UNSUPPORTED)auto_stats[5]++;
+  else if(rc<0)auto_stats[6]++;
   if(rc<0) {
     /* A failed optimization is not allowed to fail an already completed
      * application write. Repair our own incomplete rename first, though. */
@@ -912,7 +931,11 @@ static int auto_contiguous_write(DndString *path,DndArray *data) {
   contiguous_root(device,root);
   DndContiguousWriter writer={0};
   DndContiguousOps ops={(void *)(intptr_t)device,auto_count_extents,NULL};
+  auto_stats[0]++;
   int rc=dnd_contiguous_begin(&writer,root,native,data->length,ops);
+  if(rc==-ENOSPC) {auto_stats[4]++;auto_last_result=DND_OPT_NO_CONTIGUOUS_SPACE;}
+  else if(rc==-ENOTSUP) {auto_stats[5]++;auto_last_result=DND_OPT_UNSUPPORTED;}
+  else if(rc<0) {auto_stats[6]++;auto_last_result=5;}
   /* Ordinary writes remain available when no contiguous run fits or the
    * filesystem cannot report extents. Never overwrite existing contents. */
   if(rc==-ENOSPC || rc==-ENOTSUP)return 0;
@@ -920,10 +943,15 @@ static int auto_contiguous_write(DndString *path,DndArray *data) {
   rc=dnd_contiguous_write(&writer,data->data,data->length);
   if(!rc)rc=dnd_contiguous_complete(&writer);
   if(rc<0) {
+    auto_stats[6]++;
+    auto_last_result=5;
     if(writer.active)dnd_contiguous_abort(&writer);
     fail(-rc,"Automatically contiguous file write failed.");
     return -1;
   }
+  auto_stats[1]++;
+  auto_stats[7]+=(int64_t)data->length;
+  auto_last_result=4;
   return 1;
 #else
   (void)path;(void)data;

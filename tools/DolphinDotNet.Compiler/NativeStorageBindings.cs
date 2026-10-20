@@ -145,6 +145,8 @@ internal static class NativeStorageBindings
         ["SetAutoDefrag"]=("dnd_storage_auto_defrag_set","i",false),
         ["AutoDefragEnabled"]=("dnd_storage_auto_defrag_enabled","",false),
         ["DefragMinFileSize"]=("dnd_storage_auto_defrag_min_size","",false),
+        ["AutoDefragStatistic"]=("dnd_storage_auto_defrag_stat","i",false),
+        ["ResetAutoDefragStatistics"]=("dnd_storage_auto_defrag_reset_stats","",false),
         ["SetDefragMinFileSize"]=("dnd_storage_auto_defrag_set_min_size","i",false),
         ["DefragAnalyze"]=("dnd_fs_defrag_analyze","s",false),
         ["DefragOptimize"]=("dnd_fs_defrag_optimize","s",false),

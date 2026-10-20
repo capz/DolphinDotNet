@@ -14,6 +14,33 @@ public sealed class DefragAnalysis
     internal DefragAnalysis(long length,int extents)
     { Length=length; ExtentCount=extents; }
 }
+/// <summary>Process-local statistics for automatic optimizations only.</summary>
+public sealed class DefragStatistics
+{
+    public long Attempts { get; }
+    public long ContiguousReservations { get; }
+    public long Repairs { get; }
+    public long AlreadyContiguous { get; }
+    public long NoSpace { get; }
+    public long Unsupported { get; }
+    public long Failures { get; }
+    public long BytesWrittenOrCopied { get; }
+    /// <summary>-1 none, 0 already contiguous, 1 repaired, 2 no space,
+    /// 3 unsupported, 4 reserved, 5 failed.</summary>
+    public int LastOutcome { get; }
+    internal DefragStatistics()
+    {
+        Attempts=NativeStorage.AutoDefragStatistic(0);
+        ContiguousReservations=NativeStorage.AutoDefragStatistic(1);
+        Repairs=NativeStorage.AutoDefragStatistic(2);
+        AlreadyContiguous=NativeStorage.AutoDefragStatistic(3);
+        NoSpace=NativeStorage.AutoDefragStatistic(4);
+        Unsupported=NativeStorage.AutoDefragStatistic(5);
+        Failures=NativeStorage.AutoDefragStatistic(6);
+        BytesWrittenOrCopied=NativeStorage.AutoDefragStatistic(7);
+        LastOutcome=(int)NativeStorage.AutoDefragStatistic(8);
+    }
+}
 public enum DefragOutcome
 {
     AlreadyContiguous=0,
@@ -38,6 +65,9 @@ public static class Defrag
     /// <summary>Automatic writes are not optimized until explicitly enabled.</summary>
     public static bool IsEnabled => NativeStorage.AutoDefragEnabled();
     public static void OptIn(bool enabled) => NativeStorage.SetAutoDefrag(enabled);
+    /// <summary>Observe automatic preallocation and repair outcomes.</summary>
+    public static DefragStatistics GetStatistics()=>new DefragStatistics();
+    public static void ResetStatistics()=>NativeStorage.ResetAutoDefragStatistics();
     /// <summary>Minimum length for automatic preallocation/repair, default 65536.</summary>
     public static int MinimumFileSize
     {

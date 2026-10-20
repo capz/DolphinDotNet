@@ -18,6 +18,8 @@ internal static class NativeStorage
     internal static void SetAutoDefrag(bool enabled)=>throw Unsupported();
     internal static bool AutoDefragEnabled()=>throw Unsupported();
     internal static int DefragMinFileSize()=>throw Unsupported();
+    internal static long AutoDefragStatistic(int kind)=>throw Unsupported();
+    internal static void ResetAutoDefragStatistics()=>throw Unsupported();
     internal static void SetDefragMinFileSize(int minimum)=>throw Unsupported();
     internal static int DefragAnalyze(string path)=>throw Unsupported();
     internal static int DefragOptimize(string path)=>throw Unsupported();

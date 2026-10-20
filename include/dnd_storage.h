@@ -15,6 +15,8 @@ bool dnd_storage_is_mounted(int device);
 void dnd_storage_auto_defrag_set(bool enabled);
 bool dnd_storage_auto_defrag_enabled(void);
 int dnd_storage_auto_defrag_min_size(void);
+int64_t dnd_storage_auto_defrag_stat(int kind);
+void dnd_storage_auto_defrag_reset_stats(void);
 void dnd_storage_auto_defrag_set_min_size(int minimum);
 int dnd_fs_defrag_analyze(DndString *path);
 int dnd_fs_defrag_optimize(DndString *path);
