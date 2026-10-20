@@ -556,6 +556,14 @@ int main(int argc, char **argv) {
   int textured_fbx=dnd_model_begin_scene(dnd_string_from_utf8(&heap,"sd:/textured.fbx"),1,60,8*1024*1024,0);assert(textured_fbx);
   assert(dnd_model_find(textured_fbx,false)->textures==1);
   assert(dnd_model_dispose(textured_fbx)==0);
+  int translucent_fbx=dnd_model_begin_scene(
+      dnd_string_from_utf8(&heap,"sd:/translucent.fbx"),1,60,8*1024*1024,0);
+  assert(translucent_fbx);
+  DndModel *tm=dnd_model_find(translucent_fbx,false);
+  assert(tm->materials>=2);
+  assert((tm->material[tm->mesh[0].material].mode&4)!=0);
+  near(tm->material[tm->mesh[0].material].color[3],.45f);
+  assert(dnd_model_dispose(translucent_fbx)==0);
   int binary_fbx=dnd_model_begin_scene(dnd_string_from_utf8(&heap,"sd:/embedded-binary.fbx"),1,60,8*1024*1024,0);assert(binary_fbx);
   assert(dnd_model_find(binary_fbx,false)->textures==1&&dnd_model_find(binary_fbx,false)->clips==0);
   assert(dnd_model_dispose(binary_fbx)==0);
