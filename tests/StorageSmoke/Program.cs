@@ -62,6 +62,18 @@ internal static class Program
         File.WriteAllBytes(Path.Combine(root,"empty.bin"),new byte[0]);if(File.ReadAllBytes(Path.Combine(root,"empty.bin")).Length!=0)return 34;File.Delete(Path.Combine(root,"empty.bin"));
         try{using(var contiguous=Storage.CreateContiguousFile(StorageDevice.SdSerialPort2,"not-supported.bin",3)){}return 45;}
         catch(NotSupportedException){}
+        // Automatic policy remains transparent on host filesystems.
+        var autoFile=Path.Combine(root,"automatic.bin");
+        var autoBytes=new byte[65537];autoBytes[65536]=91;
+        File.WriteAllBytes(autoFile,autoBytes);
+        if(File.ReadAllBytes(autoFile)[65536]!=91)return 64;
+        using(var autoStream=File.Open(autoFile,FileMode.Open,FileAccess.Write))
+        {
+            autoStream.Seek(65535,SeekOrigin.Begin);
+            autoStream.Write(bytes,0,1);
+        }
+        if(File.ReadAllBytes(autoFile)[65535]!=9)return 65;
+        File.Delete(autoFile);
         File.Copy(path,Path.Combine(root,"copy.bin"));File.Move(Path.Combine(root,"copy.bin"),Path.Combine(root,"moved.bin"));
         Directory.CreateDirectory(Path.Combine(root,"nested"));
         if(Directory.GetFiles(root).Length!=2 || Directory.GetDirectories(root).Length!=1)return 13;

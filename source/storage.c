@@ -2,6 +2,7 @@
 #include "dnd_storage.h"
 #include "dnd_card_transaction.h"
 #include "dnd_contiguous_write.h"
+#include "dnd_file_optimize.h"
 #ifdef DND_GAMECUBE_STORAGE
 #include "dnd_fst.h"
 #endif
@@ -26,7 +27,8 @@ static unsigned card_users[2];
 static char roots[7][PATH_CAP];
 static char cwd[PATH_CAP] = "sd:/";
 typedef struct {
-  int token, fd, access, share;
+  int token, fd, access, share, device;
+  bool dirty;
   int64_t append_origin;
   char path[PATH_CAP];
 } FileHandle;
@@ -272,6 +274,7 @@ bool dnd_storage_mount(int d) {
     char root[PATH_CAP];
     contiguous_root(d,root);
     int recovery=dnd_contiguous_recover(root);
+    if(!recovery)recovery=dnd_optimize_recover(root);
     if(recovery<0) {
 #ifdef DND_GAMECUBE_STORAGE
       dnd_gc_unmount(d);
@@ -622,6 +625,8 @@ int dnd_fs_open(DndString *path, int mode, int access, int share) {
                    .fd = fd,
                    .access = access,
                    .share = share,
+                   .device = d,
+                   .dirty = mode == 2 || mode == 5,
                    .append_origin = mode == 6 ? (int64_t)st.st_size : -1};
   strcpy(files[slot].path, canonical);
   if (mode == 6 && lseek(fd, 0, SEEK_END) < 0) {
@@ -704,6 +709,7 @@ void dnd_fs_write(int token, DndArray *data, int offset, int count) {
       return;
     }
     done += (int)n;
+    h->dirty = true;
   }
 }
 int64_t dnd_fs_seek(int token, int64_t offset, int origin) {
@@ -775,6 +781,7 @@ void dnd_fs_set_length(int token, int64_t length) {
     fail(errno, "Truncate failed.");
     return;
   }
+  h->dirty = true;
   off_t current = lseek(h->fd, 0, SEEK_CUR);
   if (current < 0 ||
       (current > (off_t)length && lseek(h->fd, (off_t)length, SEEK_SET) < 0))
@@ -785,14 +792,90 @@ void dnd_fs_flush(int token) {
   if (h && (h->access & 2) && fsync(h->fd))
     fail(errno, "Flush failed.");
 }
+
+/* Fast path: the existing libdvm allocator tries f_expand when size is
+ * known; after a write, only fragmented files are copied. Do not perform
+ * a full-volume scan or touch unrelated files. */
+#define DND_AUTO_OPT_MIN_BYTES (64 * 1024)
+#ifdef DND_GAMECUBE_STORAGE
+static int auto_count_extents(void *context,const char *path,unsigned *extents) {
+  return dnd_gc_contiguous_extents((int)(intptr_t)context,path,extents);
+}
+#endif
+static void auto_clean_file(const char *canonical,int device) {
+#ifdef DND_GAMECUBE_STORAGE
+  if(device<0 || device==3 || device==4 || device==5 ||
+     !mounted[device] || contiguous_tokens[device] ||
+     busy(canonical) || (device==iso_source_device && mounted[3]))
+    return;
+  /* Never optimize DolphinDotNet's own transaction artifacts. */
+  const char *filename=strrchr(canonical,'/');
+  if(filename && !strncmp(filename+1,".__dnd",6))return;
+  struct stat st;
+  if(stat(canonical,&st) || !S_ISREG(st.st_mode) ||
+     st.st_size<DND_AUTO_OPT_MIN_BYTES)return;
+  char root[PATH_CAP];
+  contiguous_root(device,root);
+  DndOptimizeOps ops={(void *)(intptr_t)device,auto_count_extents,NULL};
+  int rc=dnd_optimize_file(root,canonical,&ops);
+  if(rc<0) {
+    /* A failed optimization is not allowed to fail an already completed
+     * application write. Repair our own incomplete rename first, though. */
+    int recovery=dnd_optimize_recover(root);
+    if(recovery<0)fail(-recovery,
+        "Automatic fragmentation repair needs recovery on the next mount.");
+  }
+#else
+  (void)canonical;(void)device;
+#endif
+}
+static int auto_contiguous_write(DndString *path,DndArray *data) {
+#ifdef DND_GAMECUBE_STORAGE
+  if(data->length<DND_AUTO_OPT_MIN_BYTES)return 0;
+  char canonical[PATH_CAP],native[PATH_CAP],root[PATH_CAP];
+  int device=resolve(path,canonical,native);
+  if(device<0)return -1;
+  if(device==3 || device==4 || device==5 || contiguous_tokens[device] ||
+     busy(canonical) || (device==iso_source_device && mounted[3]))
+    return 0;
+  struct stat st;
+  if(!stat(native,&st) || errno!=ENOENT)return 0;
+  contiguous_root(device,root);
+  DndContiguousWriter writer={0};
+  DndContiguousOps ops={(void *)(intptr_t)device,auto_count_extents,NULL};
+  int rc=dnd_contiguous_begin(&writer,root,native,data->length,ops);
+  /* Ordinary writes remain available when no contiguous run fits or the
+   * filesystem cannot report extents. Never overwrite existing contents. */
+  if(rc==-ENOSPC || rc==-ENOTSUP)return 0;
+  if(rc<0){fail(-rc,"Cannot stage an automatically contiguous file.");return -1;}
+  rc=dnd_contiguous_write(&writer,data->data,data->length);
+  if(!rc)rc=dnd_contiguous_complete(&writer);
+  if(rc<0) {
+    if(writer.active)dnd_contiguous_abort(&writer);
+    fail(-rc,"Automatically contiguous file write failed.");
+    return -1;
+  }
+  return 1;
+#else
+  (void)path;(void)data;
+  return 0;
+#endif
+}
+
 void dnd_fs_close(int token) {
   FileHandle *h = handle(token);
   if (!h)
     return;
-  int fd = h->fd;
-  h->token = 0;
-  if (close(fd))
-    fail(errno, "Close failed.");
+  int fd=h->fd,device=h->device;
+  bool dirty=h->dirty;
+  char canonical[PATH_CAP];
+  strcpy(canonical,h->path);
+  h->token=0;
+  if(close(fd)) {
+    fail(errno,"Close failed.");
+    return;
+  }
+  if(dirty && !dnd_exception_pending())auto_clean_file(canonical,device);
 }
 DndArray *dnd_fs_read_all(DndManagedHeap *heap, DndString *path) {
   char canonical[PATH_CAP], native[PATH_CAP];
@@ -865,6 +948,8 @@ void dnd_fs_write_all(DndString *path, DndArray *data) {
   }
   if (!range(data, 0, (int)data->length))
     return;
+  int optimized=auto_contiguous_write(path,data);
+  if(optimized!=0)return;
   int token = dnd_fs_open(path, 2, 2, 0);
   if (!token)
     return;
@@ -881,12 +966,13 @@ void dnd_fs_write_all(DndString *path, DndArray *data) {
     }
     done += (size_t)n;
   }
-  int fd = h->fd;
-  h->token = 0;
-  if (close(fd) && !e)
-    e = errno;
-  if (e)
-    fail(e, "File write/close failed.");
+  int fd=h->fd,device=h->device;
+  char canonical[PATH_CAP];
+  strcpy(canonical,h->path);
+  h->token=0;
+  if(close(fd) && !e)e=errno;
+  if(e)fail(e,"File write/close failed.");
+  else auto_clean_file(canonical,device);
 }
 void dnd_fs_delete(DndString *path, bool directory) {
   char canonical[PATH_CAP], native[PATH_CAP];

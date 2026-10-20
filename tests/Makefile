@@ -3,7 +3,8 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
 
-test: file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
+test: file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
+	./file_optimize_test
 	./file_extents_test
 	./contiguous_write_test
 	./managed_runtime_tests
@@ -22,6 +23,9 @@ test: file_extents_test contiguous_write_test managed_runtime_tests fst_test car
 	./hardware_gamecube_test
 	./disc_mount_test
 	./dol_test
+
+file_optimize_test: file_optimize_test.c ../source/file_optimize.c
+	$(CC) $(CFLAGS) $^ -o $@
 
 file_extents_test: file_extents_test.c ../source/file_extents.c
 	$(CC) $(CFLAGS) $^ -o $@
@@ -78,5 +82,5 @@ debug_heartbeat_test: debug_heartbeat_test.c ../source/debug_heartbeat.c ../sour
 	$(CC) $(CFLAGS) -DDND_DEBUG_TELEMETRY $^ -o $@
 
 clean:
-	rm -f file_extents_test contiguous_write_test dol_test
+	rm -f file_optimize_test file_extents_test contiguous_write_test dol_test
 	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test

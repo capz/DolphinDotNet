@@ -148,6 +148,40 @@ For GC Loader, raw SD mountability and firmware write support must be checked
 on the target console. Benchmarks and power-cut tests on real cards remain
 mandatory.
 
+## Automatic fragmentation prevention and repair
+
+The managed file-writing APIs now use both strategies automatically on the
+GameCube's mounted FAT32/exFAT SD volumes (carda:/, cardb:/, sd:/, or
+gcloader:/ where firmware exposes writable sectors).
+
+- **Known-length new writes:** `File.WriteAllBytes` / `Storage.WriteAllBytes`
+  attempt checked, single-extent preallocation and checksum-verified staging
+  before publishing files of at least **64 KiB**. If a contiguous region
+  cannot be reserved, the normal write path remains available.
+- **Managed streams, appends, copies, text and async writes:** FileStream
+  tracks modifications; after the final handle closes, only files at least
+  **64 KiB** are inspected for fragmentation. Single-extent files are
+  immediately skipped. If fragmented, a verified contiguous temporary copy
+  is staged and swapped under a recovery journal. `File.Copy` and nonappend
+  byte-array async writes also communicate the known length to the allocator.
+- **Safe fallback:** Lack of contiguous free space, unsupported/non-ASCII
+  filesystem metadata or insufficient space for an entire temporary copy
+  leave the file untouched rather than failing an otherwise successful write.
+  Files sharing an active handle or backing mounted DVD images are skipped.
+  Original contents are retained in a recoverable backup during replacement.
+  Failed recovery is surfaced as a storage I/O error.
+- **No whole-volume scan:** There is no scan/rewrite of unrelated SD files.
+  Small files and rename-only moves do not trigger a maintenance pass.
+  This affects only files written by the application, not all files already
+  on the card. An API for explicit large-file maintenance is a possible
+  separate feature.
+
+The post-write repair is synchronous and can require a full file copy.
+It is therefore unsuitable for latency-critical, frequently-written large
+files unless the application schedules those writes appropriately.
+Ordinary filesystem writes and renames are not guaranteed power-loss atomic;
+a safe unmount and real-device interrupted-power tests remain necessary.
+
 ## Native memory-card saves
 
 ```csharp

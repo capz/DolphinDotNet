@@ -85,7 +85,12 @@ public static partial class File
             using(var input=OpenRead(source))
             using(var output=new FileStream(destination,overwrite?FileMode.Create:FileMode.CreateNew,FileAccess.Write))
             {
-                created=true;var buffer=new byte[4096];int read;
+                created=true;
+                // Tell libdvm the final length before writing so FatFs can
+                // reserve a contiguous run, with native close-time repair
+                // as a fallback when the reservation is not contiguous.
+                if(input.Length>=65536)output.SetLength(input.Length);
+                var buffer=new byte[4096];int read;
                 while((read=input.Read(buffer,0,buffer.Length))!=0)output.Write(buffer,0,read);
             }
         }
