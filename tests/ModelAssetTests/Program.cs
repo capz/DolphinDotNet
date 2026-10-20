@@ -93,6 +93,32 @@ string gltf=Path.Combine(output,"animated.gltf"),package=Path.Combine(output,"sd
 byte[] bytes=File.ReadAllBytes(package);if(BinaryPrimitives.ReadUInt32BigEndian(bytes)!=0x444e444d)throw new Exception("Package magic.");
 int textureOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16+3*16+4)));var texture=bytes.AsSpan(textureOffset+4+28,64);if(texture[0]!=255||texture[1]!=0||texture[3]!=30||texture[32]!=0||texture[33]!=50||texture[40]!=40)throw new Exception("GX RGBA8 tile fixture.");
 ModelConverter.Convert(gltf,package+".second");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".second")))throw new Exception("Nondeterministic package.");
+{
+    // UV1 and KHR_texture_transform must survive as baked target UV0 without
+    // changing the runtime DNMD package layout.
+    var transformed=root.DeepClone().AsObject();
+    var primitive=transformed["meshes"]![0]!["primitives"]![0]!;
+    primitive["attributes"]!["TEXCOORD_1"]=uv;
+    transformed["extensionsUsed"]=new JsonArray("KHR_texture_transform");
+    transformed["extensionsRequired"]=new JsonArray("KHR_texture_transform");
+    transformed["materials"]![0]!["pbrMetallicRoughness"]!["baseColorTexture"]!["texCoord"]=1;
+    transformed["materials"]![0]!["pbrMetallicRoughness"]!["baseColorTexture"]!["extensions"]=new JsonObject {
+        ["KHR_texture_transform"]=new JsonObject {
+            ["offset"]=new JsonArray(0.25,0.5),["scale"]=new JsonArray(0.5,0.5),
+            ["rotation"]=0,["texCoord"]=1
+        }
+    };
+    File.WriteAllText(gltf,transformed.ToJsonString());
+    ModelConverter.Convert(gltf,package+".uv-transform");
+    if(bytes.SequenceEqual(File.ReadAllBytes(package+".uv-transform")))
+        throw new Exception("Texture transform failed to modify geometry.");
+    transformed["materials"]![0]!["pbrMetallicRoughness"]!["baseColorTexture"]!["extensions"]!["KHR_texture_transform"]!["texCoord"]=2;
+    File.WriteAllText(gltf,transformed.ToJsonString());
+    try { ModelConverter.Convert(gltf,package+".bad-uv");throw new Exception("Invalid texture coordinate accepted."); }
+    catch(InvalidDataException) {}
+    File.WriteAllText(gltf,root.ToJsonString());
+}
+
 // External buffers and images, plus GLB binary geometry.
 root["buffers"]![0]!["uri"]="geometry.bin";root["images"]![0]!["uri"]="texture.png";File.WriteAllBytes(Path.Combine(output,"geometry.bin"),binary.ToArray());File.WriteAllBytes(Path.Combine(output,"texture.png"),png.ToArray());File.WriteAllText(gltf,root.ToJsonString());ModelConverter.Convert(gltf,package+".external");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".external")))throw new Exception("External dependencies differ.");
 root["buffers"]![0]!.AsObject().Remove("uri");var json=Encoding.UTF8.GetBytes(root.ToJsonString());int jsonLength=(json.Length+3)&~3,binLength=((int)binary.Length+3)&~3;using(var file=File.Create(Path.Combine(output,"animated.glb"))){using var w=new BinaryWriter(file);w.Write(0x46546c67);w.Write(2);w.Write(12+8+jsonLength+8+binLength);w.Write(jsonLength);w.Write(0x4e4f534a);w.Write(json);w.Write(Enumerable.Repeat((byte)32,jsonLength-json.Length).ToArray());w.Write(binLength);w.Write(0x004e4942);w.Write(binary.ToArray());w.Write(new byte[binLength-(int)binary.Length]);}ModelConverter.Convert(Path.Combine(output,"animated.glb"),package+".glb");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".glb")))throw new Exception("GLB differs.");
