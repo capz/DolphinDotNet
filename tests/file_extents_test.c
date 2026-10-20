@@ -5,13 +5,13 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef struct { unsigned char sectors[64][512]; } Fixture;
+typedef struct { unsigned char sectors[128][512]; } Fixture;
 static void put16(unsigned char *p,uint16_t x) {p[0]=(unsigned char)x;p[1]=(unsigned char)(x>>8);}
 static void put32(unsigned char *p,uint32_t x) {put16(p,(uint16_t)x);put16(p+2,(uint16_t)(x>>16));}
 static void put64(unsigned char *p,uint64_t x) {put32(p,(uint32_t)x);put32(p+4,(uint32_t)(x>>32));}
 static int sector(void *ctx,uint64_t lba,void *buffer) {
   Fixture *f=ctx;
-  if(lba>=64)return -EIO;
+  if(lba>=128)return -EIO;
   memcpy(buffer,f->sectors[lba],512);
   return 0;
 }
@@ -54,11 +54,46 @@ int main(void) {
   put32(fixture.sectors[1]+16,5);
   put32(fixture.sectors[1]+20,0x0fffffff);
   assert(dnd_fat_count_extents(&reader,"/app.dol",&runs)==0 && runs==1);
+  /* Valid FAT32 LFN sequence with checksum refers to the same short entry. */
+  fat32(&fixture);
+  unsigned char *root=fixture.sectors[2];
+  memmove(root+32,root,32);
+  memset(root,0xff,32);
+  root[0]=0x41;root[11]=0x0f;root[12]=0;
+  unsigned checksum=0;
+  for(unsigned i=0;i<11;i++)
+    checksum=((checksum&1u)?0x80u:0u)+(checksum>>1)+root[32+i];
+  root[13]=(unsigned char)checksum;
+  static const unsigned lfn_offsets[13]=
+    {1,3,5,7,9,14,16,18,20,22,24,28,30};
+  const char *longname="long.dol";
+  for(unsigned i=0;i<13;i++)
+    put16(root+lfn_offsets[i],i<8?(unsigned char)longname[i]:
+          i==8?0:0xffff);
+  assert(dnd_fat_count_extents(&reader,"long.dol",&runs)==0 && runs==2);
+  assert(dnd_fat_count_extents(&reader,"r\\xc3\\xa9sume.dol",&runs)==-ENOTSUP);
+  /* Non-default FAT32 cluster size: file fits in just one four-sector run. */
+  fat32(&fixture);
+  fixture.sectors[0][13]=4;
+  put32(fixture.sectors[1]+12,0x0fffffff);
+  assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==0 && runs==1);
   exfat(&fixture);
   assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==0 && runs==2);
   fixture.sectors[2][33]=2; /* Stream.GeneralSecondaryFlags.NoFatChain */
   assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==0 && runs==1);
-  fixture.sectors[0][108]=12;
+  /* exFAT with 1024-byte clusters: 1536 bytes occupy two contiguous runs. */
+  exfat(&fixture);
+  fixture.sectors[0][109]=1;
+  put32(fixture.sectors[1]+12,4);
+  assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==0 && runs==1);
+  put32(fixture.sectors[1]+12,6);
+  assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==0 && runs==2);
+  /* A near-full, fragmented FAT can still be inspected read-only. */
+  fat32(&fixture);
+  for(unsigned i=7;i<64;i++)put32(fixture.sectors[1]+i*4,0x0fffffff);
+  assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==0 && runs==2);
+  exfat(&fixture);
+    fixture.sectors[0][108]=12;
   assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==-ENOTSUP);
   puts("FAT32/exFAT cluster extent inspection passed");
   return 0;
