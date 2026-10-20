@@ -52,9 +52,11 @@ internal static class Program
         }
         watch.Stop();
         bool valid=Verify(path);
+        var repaired=Defrag.Optimize(path);
         File.Delete(path);
         return "optin="+enabled+" chunk="+chunk+" ms="+watch.ElapsedMilliseconds+
-               " verify="+valid+"\n";
+               " verify="+valid+" extents="+repaired.Before.ExtentCount+
+               " outcome="+repaired.Outcome+" after="+repaired.After.ExtentCount+"\n";
     }
 
     private static string TimedKnownLength(string folder,byte[] payload,bool enabled)
@@ -66,9 +68,11 @@ internal static class Program
         File.WriteAllBytes(path,payload);
         watch.Stop();
         bool valid=Verify(path);
+        var result=Defrag.Optimize(path);
         File.Delete(path);
         return "known-size optin="+enabled+" ms="+watch.ElapsedMilliseconds+
-               " verify="+valid+"\n";
+               " verify="+valid+" extents="+result.Before.ExtentCount+
+               " outcome="+result.Outcome+" after="+result.After.ExtentCount+"\n";
     }
 
     private static int Run(StorageDevice device,string folder)
@@ -98,6 +102,12 @@ internal static class Program
             result+=TimedWrite(folder,data,false,16384);
             result+=TimedWrite(folder,data,true,16384);
             result+=TimedWrite(folder,data,true,65536);
+            var stats=Defrag.GetStatistics();
+            result+="automatic attempts="+stats.Attempts+
+                    " reserved="+stats.ContiguousReservations+
+                    " repairs="+stats.Repairs+
+                    " no-space="+stats.NoSpace+
+                    " failures="+stats.Failures+"\n";
             Defrag.OptIn(false);
             File.WriteAllText(report,result);
             return 0;
