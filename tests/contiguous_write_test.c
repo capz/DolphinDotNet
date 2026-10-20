@@ -2,6 +2,8 @@
 #include "dnd_contiguous_write.h"
 #include <assert.h>
 #include <errno.h>
+#include <stdint.h>
+#include <stddef.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -106,7 +108,47 @@ int main(void) {
     } else assert(!present(path));
   }
   faults.interrupt_at=0;
-  /* Reject an untrusted journal without destroying user files. */
+  /* Even a structurally valid checksum is not authority to unlink any
+   * user-supplied path. The staging filename is derived from the target. */
+  typedef struct {
+    char magic[8];
+    uint64_t expected;
+    char target[DND_CW_PATH_CAP],staged[DND_CW_PATH_CAP];
+    uint32_t hash;
+  } TestJournal;
+  TestJournal forged={0};
+  memcpy(forged.magic,"DNDCTG01",8);
+  strcpy(forged.target,path);
+  char victim[1024];
+  snprintf(victim,sizeof(victim),"%s/keep.bin",root);
+  int victim_fd=open(victim,O_CREAT|O_EXCL|O_WRONLY,0600);
+  assert(victim_fd>=0);
+  assert(write(victim_fd,"safe",4)==4);
+  assert(close(victim_fd)==0);
+  strcpy(forged.staged,victim);
+  const unsigned char *raw=(const unsigned char *)&forged;
+  uint32_t checksum=2166136261u;
+  for(size_t i=0;i<offsetof(TestJournal,hash);i++)
+    checksum=(checksum^raw[i])*16777619u;
+  forged.hash=checksum;
+  fd=open(journal,O_CREAT|O_EXCL|O_WRONLY,0600);
+  assert(fd>=0 && write(fd,&forged,sizeof(forged))==(ssize_t)sizeof(forged));
+  assert(close(fd)==0);
+  assert(dnd_contiguous_recover(root)==-EINVAL);
+  assert(present(victim) && present(journal));
+  assert(unlink(journal)==0);
+  snprintf(forged.staged,sizeof(forged.staged),"%s/../victim",root);
+  raw=(const unsigned char *)&forged;checksum=2166136261u;
+  for(size_t i=0;i<offsetof(TestJournal,hash);i++)
+    checksum=(checksum^raw[i])*16777619u;
+  forged.hash=checksum;
+  fd=open(journal,O_CREAT|O_EXCL|O_WRONLY,0600);
+  assert(fd>=0 && write(fd,&forged,sizeof(forged))==(ssize_t)sizeof(forged));
+  assert(close(fd)==0);
+  assert(dnd_contiguous_recover(root)==-EINVAL);
+  assert(unlink(journal)==0);
+  assert(unlink(victim)==0);
+    /* Reject an untrusted journal without destroying user files. */
   fd=open(journal,O_CREAT|O_EXCL|O_WRONLY,0600);
   assert(fd>=0);
   assert(write(fd,"broken",6)==6);
