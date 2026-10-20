@@ -11,6 +11,10 @@ internal static class NativeImportTests
         BinaryFbxFixture.Write(Path.Combine(sd,"embedded-binary.fbx"),File.ReadAllBytes(Path.Combine(sd,"texture.png")));
         File.WriteAllText(Path.Combine(sd,"concave.mtl"),"newmtl Surface\nKd 0.8 0.6 0.4\nmap_Kd texture.png\n");
         File.WriteAllText(Path.Combine(sd,"concave.obj"),"mtllib concave.mtl\no Concave\nv 0 0 0\nv 2 0 0\nv 2 2 0\nv 1 1 0\nv 0 2 0\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0.5 0.5\nvt 0 1\ns 1\nusemtl Surface\nf -5/-5 -4/-4 -3/-3 -2/-2 -1/-1\n");
+        File.WriteAllText(Path.Combine(sd,"translucent.mtl"),"newmtl Surface\\nKd 0.8 0.6 0.4\\nd 0.35\\nmap_Kd texture.png\\n".Replace("\\\\n","\\n"));
+        File.WriteAllText(Path.Combine(sd,"translucent.obj"),
+            File.ReadAllText(Path.Combine(sd,"concave.obj")).Replace("concave.mtl","translucent.mtl",StringComparison.Ordinal));
+
         File.WriteAllText(Path.Combine(sd,"direct.fbx"),AnimatedFbx);
         string skinSource=AnimatedFbx.Replace("Objects: {","Objects: {\n"+SkinObjects,StringComparison.Ordinal)
             .Replace("Connections: {","Connections: {\n"+SkinConnections,StringComparison.Ordinal)
