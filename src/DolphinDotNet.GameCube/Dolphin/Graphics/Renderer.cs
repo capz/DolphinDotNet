@@ -99,6 +99,13 @@ public sealed class Renderer
             throw new InvalidOperationException("Model is cold, frame is inactive or transform is invalid.");
     }
 
+    private static float ModelDrawDepth(Camera camera,GameObject obj)
+    {
+        var matrix=obj.Transform.WorldMatrix;
+        return camera.View[2]*matrix[12]+camera.View[6]*matrix[13]+
+               camera.View[10]*matrix[14]+camera.View[14];
+    }
+
     /// <summary>
     /// Draws a set of model instances from farthest to nearest camera-space
     /// origins, using caller-owned order scratch (no frame-time allocations).
@@ -120,19 +127,13 @@ public sealed class Renderer
             _=models[i].Transform.WorldMatrix;
             order[i]=i;
         }
-        float Depth(int index)
-        {
-            var m=models[index].Transform.WorldMatrix;
-            return camera.View[2]*m[12]+camera.View[6]*m[13]+
-                   camera.View[10]*m[14]+camera.View[14];
-        }
         // Stable insertion order prevents equal-depth objects from flickering.
         for(int i=1;i<models.Length;i++)
         {
             int entry=order[i];
-            float depth=Depth(entry);
+            float depth=ModelDrawDepth(camera,models[entry]);
             int j=i;
-            while(j>0&&Depth(order[j-1])>depth)
+            while(j>0&&ModelDrawDepth(camera,models[order[j-1]])>depth)
             {
                 order[j]=order[j-1];
                 j--;
