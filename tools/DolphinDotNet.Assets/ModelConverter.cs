@@ -82,7 +82,7 @@ internal sealed partial class GltfImport
         }
         else root=JsonDocument.Parse(bytes).RootElement.Clone();
         if(!Text(root.GetProperty("asset"),"version").StartsWith("2."))throw new InvalidDataException("Expected glTF 2.x.");
-        foreach(var ex in Array(root,"extensionsRequired"))if(ex.GetString()!="KHR_materials_unlit")throw new InvalidDataException("Unsupported required extension: "+ex.GetString());
+        foreach(var ex in Array(root,"extensionsRequired"))if(ex.GetString() is not ("KHR_materials_unlit" or "KHR_texture_transform"))throw new InvalidDataException("Unsupported required extension: "+ex.GetString());
         foreach(var b in Items("buffers")){byte[] data=b.TryGetProperty("uri",out var uri)?ReadUri(uri.GetString()!):bin??throw new InvalidDataException("Missing buffer.");if(data.Length<Int(b,"byteLength"))throw new InvalidDataException("Truncated buffer.");buffers.Add(data);}
     }
     private byte[] ReadUri(string uri)
