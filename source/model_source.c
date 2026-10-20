@@ -1133,6 +1133,14 @@ static int import_scene(const char *path, int fbx, float sample_rate,
         goto done;
       opacity = fmin(opacity, 1.0 - transparency);
     }
+    if (m->fbx.transparency_color.has_value) {
+      ufbx_vec3 transmission = m->fbx.transparency_color.value_vec3;
+      double transparency = fmax(transmission.x,
+                                  fmax(transmission.y, transmission.z));
+      if (!isfinite(transparency) || transparency < 0 || transparency > 1)
+        goto done;
+      opacity = fmin(opacity, 1.0 - transparency);
+    }
     if (!isfinite(opacity) || opacity < 0 || opacity > 1)
       goto done;
     int texture = -1;
