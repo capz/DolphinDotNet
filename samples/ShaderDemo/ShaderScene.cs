@@ -21,6 +21,7 @@ internal sealed class ShaderScene : IDisposable
     private readonly Material reference=new Material{Cull=CullMode.None,DepthTest=false,DepthWrite=false};
     private readonly Material rampMaterial,toonMaterial;
     private readonly Draw2D draw;
+    private readonly PresetRenderProof presetProof=new PresetRenderProof();
     private readonly Transform left=new Transform(),middle=new Transform(),right=new Transform();
     private readonly int brightSlot,thresholdSlot,graphThresholdSlot;
     internal float LowOffset,HighOffset,ColorOffset;
@@ -64,7 +65,7 @@ internal sealed class ShaderScene : IDisposable
         renderer.DrawMesh(disk,reference,left);renderer.DrawMesh(strip,reference,left);
         renderer.DrawMesh(disk,rampMaterial,middle);renderer.DrawMesh(strip,rampMaterial,middle);
         renderer.DrawMesh(disk,toonMaterial,right);
-        renderer.End3D();
+        presetProof.Draw(renderer);renderer.End3D();
         draw.Begin();draw.SetEffect(UseGraph?compiled:toon);
         for(int x=0;x<156;x++){
             byte intensity=(byte)(x*255/155);
@@ -73,5 +74,5 @@ internal sealed class ShaderScene : IDisposable
         draw.SetEffect(null);draw.End();
         hud.Present(paused,low,high,UseGraph);device.EndFrame();
     }
-    public void Dispose(){importedToon.Dispose();importedInstance.Dispose();imported.Dispose();hud.Dispose();draw.Dispose();strip.Dispose();disk.Dispose();compiled.Dispose();toon.Dispose();ramp.Dispose();}
+    public void Dispose(){presetProof.Dispose();importedToon.Dispose();importedInstance.Dispose();imported.Dispose();hud.Dispose();draw.Dispose();strip.Dispose();disk.Dispose();compiled.Dispose();toon.Dispose();ramp.Dispose();}
 }

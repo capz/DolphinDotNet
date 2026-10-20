@@ -90,7 +90,22 @@ def validate(rgb):
     ramp=pixel(320)
     if not ramp[0]+35<ramp[1]<ramp[2] or ramp[2]<115:
         raise AssertionError(f'TEV color ramp differs: {ramp}')
-    return dict(reference=pixel(112),ramp=ramp,toonBands=sorted(levels))
+    presets=validate_presets(rgb)
+    return dict(reference=pixel(112),ramp=ramp,toonBands=sorted(levels),presets=presets)
+
+
+def validate_presets(rgb):
+    # Auxiliary maps have alpha zero. A wrong final texture/alpha stage makes
+    # these patches disappear, even if RGB stage arithmetic is otherwise right.
+    checks=((60,(40,60,80)),(140,(140,100,100)),(220,(100,160,220)),
+            (300,(80,120,160)),(380,(220,40,20)),(480,(40,80,120)),(560,(40,80,120)))
+    proof=[]
+    for x,expected in checks:
+        at=(380*640+x)*3;actual=tuple(rgb[at:at+3])
+        if max(abs(actual[c]-expected[c]) for c in range(3))>12:
+            raise AssertionError(f'Material preset/override differs at {x}: {actual}, expected {expected}')
+        proof.append(actual)
+    return proof
 
 
 def validate_model(rgb,effect=True):

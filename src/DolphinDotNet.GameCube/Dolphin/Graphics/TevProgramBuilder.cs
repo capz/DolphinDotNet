@@ -1,12 +1,12 @@
 using System;
 namespace Dolphin.Graphics;
 
-public enum TevInput { Previous=0, Color0=2, Color1=4, Color2=6, Texture=8, Raster=10, One=12, Constant=14, Zero=15 }
+public enum TevInput { Previous=0, Color0=2, Color1=4, Color2=6, Texture=8, Raster=10, One=12, Constant=14, Zero=15, SecondaryTexture=16 }
 public enum TevRegister { Previous, Color0, Color1, Color2 }
 public enum TevOperation { Add=0, GreaterRed=8 }
 public enum TevComponent { Rgb, Red, Green, Blue, Alpha }
 
-/// <summary>Builds bounded DNEF v1 programs without native allocations. Each stage computes
+/// <summary>Builds bounded DNEF v1/v2 programs without native allocations. Each stage computes
 /// clamp((1-C)*A + C*B + D), or D + (A.r &gt; B.r ? C : 0), into its RGB destination.
 /// Alpha is always raster alpha times bound texture alpha.</summary>
 public sealed class TevProgramBuilder
@@ -16,7 +16,7 @@ public sealed class TevProgramBuilder
     private readonly string[] names=new string[MaximumColors];
     private readonly Color32[] colors=new Color32[MaximumColors];
     private int count,uniforms,initialized;
-    private bool texture;
+    private int textures;
     public int StageCount => count;
     public int ColorCount => uniforms;
     public int AddColor(string name,Color32 color)
@@ -37,11 +37,15 @@ public sealed class TevProgramBuilder
             ||(int)component<0||(int)component>4||colorSlot < -1||colorSlot>=uniforms)
             throw new ArgumentException("Invalid TEV stage configuration.");
         Validate(a,colorSlot);Validate(b,colorSlot);Validate(c,colorSlot);Validate(d,colorSlot);
+        bool primary=a==TevInput.Texture||b==TevInput.Texture||c==TevInput.Texture||d==TevInput.Texture;
+        bool secondary=a==TevInput.SecondaryTexture||b==TevInput.SecondaryTexture||c==TevInput.SecondaryTexture||d==TevInput.SecondaryTexture;
+        if(primary&&secondary)throw new ArgumentException("A TEV stage can sample only one texture; use an intermediate register.");
         int at=count*8;
-        stages[at]=(byte)a;stages[at+1]=(byte)b;stages[at+2]=(byte)c;stages[at+3]=(byte)d;
+        stages[at]=(byte)(a==TevInput.SecondaryTexture?TevInput.Texture:a);stages[at+1]=(byte)(b==TevInput.SecondaryTexture?TevInput.Texture:b);stages[at+2]=(byte)(c==TevInput.SecondaryTexture?TevInput.Texture:c);stages[at+3]=(byte)(d==TevInput.SecondaryTexture?TevInput.Texture:d);
+        stages[at+7]=(byte)(secondary?1:0);
         stages[at+4]=(byte)operation;stages[at+5]=(byte)destination;
         stages[at+6]=(byte)(colorSlot<0?0:component==TevComponent.Rgb?12+colorSlot:12+(int)component*4+colorSlot);
-        texture=texture||a==TevInput.Texture||b==TevInput.Texture||c==TevInput.Texture||d==TevInput.Texture;
+        textures|=(primary?1:0)|(secondary?2:0);
         initialized|=1<<(int)destination;count++;
     }
     private void Validate(TevInput input,int slot)
@@ -49,20 +53,24 @@ public sealed class TevProgramBuilder
         int v=(int)input;
         if(v==0||v==2||v==4||v==6){if((initialized&(1<<(v/2)))==0)throw new ArgumentException("Read of an uninitialized TEV register.");}
         else if(input==TevInput.Constant){if(slot<0)throw new ArgumentException("Constant input needs a color slot.");}
-        else if(input!=TevInput.Texture&&input!=TevInput.Raster&&input!=TevInput.One&&input!=TevInput.Zero)
+        else if(input!=TevInput.Texture&&input!=TevInput.SecondaryTexture&&input!=TevInput.Raster&&input!=TevInput.One&&input!=TevInput.Zero)
             throw new ArgumentException("Invalid TEV input.");
     }
     /// <summary>Returns an independent package. Native validation runs again when creating an effect.</summary>
     public byte[] BuildPackage()
     {
         if(count==0||stages[(count-1)*8+5]!=0)throw new InvalidOperationException("The final stage must write Previous.");
-        var p=new byte[176+count*8];p[0]=68;p[1]=78;p[2]=69;p[3]=70;p[4]=1;
-        p[8]=(byte)count;p[12]=(byte)(texture?1:0);p[16]=(byte)uniforms;
+        bool dual=(textures&2)!=0;
+        if(dual&&count==MaximumStages)throw new InvalidOperationException("Two-texture programs reserve one of sixteen stages for base opacity.");
+        var p=new byte[176+(count+(dual?1:0))*8];p[0]=68;p[1]=78;p[2]=69;p[3]=70;p[4]=(byte)(dual?2:1);
+        p[8]=(byte)(count+(dual?1:0));p[12]=(byte)textures;p[16]=(byte)uniforms;
         for(int i=0;i<uniforms;i++){
             for(int j=0;j<names[i].Length;j++)p[32+i*36+j]=(byte)names[i][j];
             int at=64+i*36;p[at]=colors[i].R;p[at+1]=colors[i].G;p[at+2]=colors[i].B;p[at+3]=colors[i].A;
         }
-        Array.Copy(stages,0,p,176,count*8);return p;
+        Array.Copy(stages,0,p,176,count*8);
+        if(dual){int at=176+count*8;p[at]=15;p[at+1]=15;p[at+2]=15;/* D=Previous, TEX0 alpha */}
+        return p;
     }
     public GxEffect CreateEffect()=>GxEffect.FromPackage(BuildPackage());
 }
