@@ -45,7 +45,20 @@ static bool below_root(const char *root,const char *path) {
     if(path[n]!='/')return false;
     n++;
   }
-  return path[n]!=0 && strlen(path)<DND_CW_PATH_CAP;
+  if(!path[n] || strlen(path)>=DND_CW_PATH_CAP)return false;
+  const char *p=path+n;
+  while(*p) {
+    const char *part=p;
+    while(*p && *p!='/') {
+      if(*p=='\\')return false;
+      p++;
+    }
+    size_t len=(size_t)(p-part);
+    if(!len || (len==1 && part[0]=='.') ||
+       (len==2 && part[0]=='.' && part[1]=='.'))return false;
+    if(*p && !*++p)return false;
+  }
+  return true;
 }
 static int exists(const char *p) {
   struct stat s;
@@ -106,6 +119,13 @@ static int load_journal(const char *root,Journal *j) {
      j->expected>INT32_MAX ||
      hash32(j,offsetof(Journal,hash))!=j->hash)
     return -EINVAL;
+  /* Validate the EXACT internally generated staging name before cleanup,
+   * even when journal integrity is recomputed by an attacker. */
+  char leaf[48],expected[DND_CW_PATH_CAP];
+  snprintf(leaf,sizeof(leaf),".__dndcw_%08x.part",
+           hash32(j->target,strlen(j->target)));
+  if(build_path(expected,root,leaf)<0 || strcmp(expected,j->staged))
+    return -EINVAL;
   return 1;
 }
 static int save_journal(const DndContiguousWriter *w) {
@@ -137,7 +157,11 @@ int dnd_contiguous_recover(const char *root) {
   /* A published target is intentionally never removed during recovery.
    * The journal names only our staging path, so cleanup cannot overwrite a
    * user file. On media failure, leave the journal intact to retry later. */
-  if(unlink(journal.staged)<0 && errno!=ENOENT)return -errno;
+  struct stat staged;
+  if(lstat(journal.staged,&staged)==0) {
+    if(!S_ISREG(staged.st_mode))return -EINVAL;
+    if(unlink(journal.staged)<0)return -errno;
+  } else if(errno!=ENOENT)return -errno;
   return delete_journal(root);
 }
 static void reset(DndContiguousWriter *w) {
