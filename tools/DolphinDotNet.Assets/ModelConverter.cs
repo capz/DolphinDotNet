@@ -97,7 +97,7 @@ internal sealed partial class GltfImport
     private float[][] Access(int index,string type)
     {
         var list=Items("accessors");if((uint)index>=list.Length)throw new InvalidDataException("Invalid accessor.");var a=list[index];if(Text(a,"type")!=type)throw new InvalidDataException("Accessor shape.");
-        int width=type switch{"SCALAR"=>1,"VEC2"=>2,"VEC3"=>3,"VEC4"=>4,"MAT4"=>16,_=>throw new InvalidDataException("Accessor type.")},component=Int(a,"componentType"),size=component switch{5120 or 5121=>1,5122 or 5123=>2,5125 or 5126=>4,_=>throw new InvalidDataException("Component type.")},count=Int(a,"count"),v=Int(a,"bufferView",-1);if(count<1||count>1000000||v< -1)throw new InvalidDataException("Accessor count/view.");byte[] data=v>=0?View(v):Array.Empty<byte>();int stride=v>=0?Int(Items("bufferViews")[v],"byteStride",size*width):size*width,offset=Int(a,"byteOffset");if(offset<0||stride<size*width||(v>=0&&(long)offset+(long)(count-1)*stride+size*width>data.Length)||(v<0&&offset!=0))throw new InvalidDataException("Accessor range/stride.");bool normalized=a.TryGetProperty("normalized",out var norm)&&norm.GetBoolean();
+        int width=type switch{"SCALAR"=>1,"VEC2"=>2,"VEC3"=>3,"VEC4"=>4,"MAT4"=>16,_=>throw new InvalidDataException("Accessor type.")},component=Int(a,"componentType"),size=component switch{5120 or 5121=>1,5122 or 5123=>2,5125 or 5126=>4,_=>throw new InvalidDataException("Component type.")},count=Int(a,"count"),v=Int(a,"bufferView",-1);if(count<1||count>1000000||v< -1)throw new InvalidDataException("Accessor count/view.");byte[] data=v>=0?View(v):System.Array.Empty<byte>();int stride=v>=0?Int(Items("bufferViews")[v],"byteStride",size*width):size*width,offset=Int(a,"byteOffset");if(offset<0||stride<size*width||(v>=0&&(long)offset+(long)(count-1)*stride+size*width>data.Length)||(v<0&&offset!=0))throw new InvalidDataException("Accessor range/stride.");bool normalized=a.TryGetProperty("normalized",out var norm)&&norm.GetBoolean();
         float Decode(ReadOnlySpan<byte> b)
         {
             float x=component switch{5120=>(sbyte)b[0],5121=>b[0],5122=>BinaryPrimitives.ReadInt16LittleEndian(b),5123=>BinaryPrimitives.ReadUInt16LittleEndian(b),5125=>BinaryPrimitives.ReadUInt32LittleEndian(b),_=>BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(b))};
@@ -119,10 +119,10 @@ internal sealed partial class GltfImport
             for(int i=0;i<sparseCount;i++)
             {
                 var b=indexData.AsSpan(indexOffset+i*indexSize,indexSize);
-                uint index=indexType switch{5121=>b[0],5123=>BinaryPrimitives.ReadUInt16LittleEndian(b),_=>BinaryPrimitives.ReadUInt32LittleEndian(b)};
-                if(index>=count||index<=previous)throw new InvalidDataException("Sparse indices must be increasing, unique and in range.");
-                previous=(int)index;
-                for(int j=0;j<width;j++)result[(int)index][j]=Decode(valueData.AsSpan(valueOffset+(i*width+j)*size,size));
+                uint sparseIndex=indexType switch{5121=>b[0],5123=>BinaryPrimitives.ReadUInt16LittleEndian(b),_=>BinaryPrimitives.ReadUInt32LittleEndian(b)};
+                if(sparseIndex>=count||sparseIndex<=previous)throw new InvalidDataException("Sparse indices must be increasing, unique and in range.");
+                previous=(int)sparseIndex;
+                for(int j=0;j<width;j++)result[(int)sparseIndex][j]=Decode(valueData.AsSpan(valueOffset+(i*width+j)*size,size));
             }
         }
         return result;
