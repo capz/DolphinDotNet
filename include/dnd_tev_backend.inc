@@ -1,6 +1,9 @@
 /* Included by the real GX backend and the recording GX test backend. Keep this
  * combiner independent of texture binding, geometry and material render state. */
 void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound) {
+    /* Raw passes may leave indirect texturing enabled. Every shared combiner
+     * invocation, including imported-model draws, owns this global state. */
+    GX_SetNumIndStages(0);
     GX_SetTevSwapModeTable(GX_TEV_SWAP0,GX_CH_RED,GX_CH_GREEN,GX_CH_BLUE,GX_CH_ALPHA);
     /* DNEF rejects reads of uninitialized RGB registers. Clear them anyway so
      * every draw also starts with deterministic alpha/register/konst state. */

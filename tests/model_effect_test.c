@@ -9,6 +9,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include "dnd_tev_backend.inc"
+#include "dnd_material_math.h"
+#include "dnd_material_channels.inc"
+static int channel_test,channel_calls;
+static int indirect_resets;
+void GX_SetNumIndStages(int count){assert(count==0);indirect_resets++;}
 /* Linker wrappers catch transient allocations that stable budgets would miss. */
 static size_t allocations;
 void *__real_malloc(size_t size);
@@ -74,7 +79,13 @@ void GX_ClearVtxDesc(void){}
 void GX_SetVtxDesc(int attribute,int mode){(void)attribute;(void)mode;}
 void GX_SetVtxAttrFmt(int format,int attribute,int components,int type,int frac){(void)format;(void)attribute;(void)components;(void)type;(void)frac;}
 void GX_SetNumChans(int count){(void)count;}
-void GX_SetChanCtrl(int channel,int enable,int ambient,int material,int lights,int diffuse,int attenuation){(void)channel;(void)enable;(void)ambient;(void)material;(void)lights;(void)diffuse;(void)attenuation;}
+void GX_SetChanCtrl(int channel,int enable,int ambient,int material,int lights,int diffuse,int attenuation){
+ if(channel_test){
+  assert(ambient==GX_SRC_REG&&material==GX_SRC_VTX&&attenuation==GX_AF_NONE);
+  if(channel_calls++%2==0){assert(channel==GX_COLOR0&&enable==(channel_test==1)&&lights==(channel_test==1?GX_LIGHT0:GX_LIGHTNULL)&&diffuse==(channel_test==1?GX_DF_CLAMP:GX_DF_NONE));}
+  else assert(channel==GX_ALPHA0&&!enable&&lights==GX_LIGHTNULL&&diffuse==GX_DF_NONE);
+ }
+}
 void GX_SetTexCoordGen(int coordinate,int kind,int source,int matrix){(void)coordinate;(void)kind;(void)source;(void)matrix;}
 static int effect_create(int count,int textured) {
  DndArray *a=calloc(1,sizeof(*a)+176+count*8);assert(a);a->element_size=1;a->length=176+count*8;
@@ -95,6 +106,16 @@ static void assert_geometry_equal(Draw a,Draw b) {
  assert(!memcmp(&a,&b,sizeof(a)));
 }
 int main(void) {
+ channel_test=1;dnd_material_channels(true);channel_test=2;dnd_material_channels(false);
+ assert(channel_calls==4);channel_test=0;
+ /* Normal projection: unit directions, rotation, nonuniform scale and zero. */
+ float n[3][4]={{1,0,0,0},{0,1,0,0},{0,0,1,0}},u,v;
+ dnd_material_view_normal(n,1,0,0,&u,&v);assert(u==1&&v==.5f);
+ dnd_material_view_normal(n,0,1,0,&u,&v);assert(u==.5f&&v==0);
+ dnd_material_view_normal(n,0,0,0,&u,&v);assert(u==.5f&&v==.5f);
+ n[0][0]=.5f;dnd_material_view_normal(n,2,0,0,&u,&v);assert(u==1&&v==.5f);
+ n[0][0]=0;n[0][2]=1;n[2][0]=-1;n[2][2]=0;
+ dnd_material_view_normal(n,0,0,1,&u,&v);assert(u==1&&v==.5f);
  unsigned char data[3*80]={0},indices[12]={0},pixels[128]={0};float skinned[18]={0};
  for(int i=0;i<3;i++){
   float values[20]={0};float *v=values;v[0]=(float)i;v[5]=-1;v[6]=i*.25f;v[7]=i*.5f;
@@ -176,6 +197,7 @@ int main(void) {
  assert(dnd_model_frame_end()==0);
  assert(dnd_draw_release(short_effect)==0&&dnd_draw_release(textured)==0&&dnd_draw_release(replacement)==0&&dnd_draw_release(wrong)==0);
  assert(dnd_draw_total_bytes()==0&&dnd_draw_live()==0);
+ assert(indirect_resets>=draws);
  dnd_instances[0]=dnd_instances[1]=NULL;free(world);free(camera);
  puts("Model GX effect selection, alpha, geometry, preflight and lifetime passed.");return 0;
 }

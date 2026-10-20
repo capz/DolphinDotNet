@@ -8,6 +8,10 @@ Lighting and material tint feed the raster RGB input before the effect.
 
 ## Presets
 
+For reusable mesh materials, a managed stage builder, textured toon bands,
+normal-based metallic reflection maps and emissive masks, see
+[Managed TEV materials](tev-materials.md).
+
 Create effects between frames and reuse them. Uniform updates allocate no native
 storage and must happen between frames. Cache a slot for repeated updates.
 
