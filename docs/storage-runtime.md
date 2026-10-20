@@ -104,6 +104,50 @@ libogc2 `__io_gcode` if supported by the installed GC Loader firmware.
 Availability and simultaneous ODE DVD use are hardware dependent; do not
 assume they can operate simultaneously. See [DiscBrowser](../samples/DiscBrowser/README.md).
 
+## Contiguous file creation (GameCube FAT32 and exFAT)
+
+Use `Storage.CreateContiguousFile(device, path, knownLength)` when writing a new
+large file whose length is known before downloading or generating it:
+
+```csharp
+using (var writer = Storage.CreateContiguousFile(StorageDevice.SdSerialPort2,
+        "downloads/package.dol", contentLength))
+{
+    // Stream chunks rather than allocating the whole file in managed memory.
+    writer.Write(buffer, 0, bytesRead);
+    // Repeat until exactly contentLength bytes have been written.
+    writer.Complete(); // Verifies on-media checksum and publishes the path.
+}
+```
+
+The writer creates an exclusive staging file on the same mounted volume,
+preallocates its full size through libdvm's existing ftruncate / FatFs
+f_expand path, flushes allocation metadata, **inspects the physical FAT32 or
+exFAT cluster chain**, and starts accepting data only when the reservation is
+one contiguous extent. libdvm ignores the f_expand return code, so checking
+the chain is necessary. Data transfers use an aligned 16-KiB native staging
+buffer, then the complete file is synced and read back for a checksum before
+it is renamed into place. `Complete()` must be called explicitly. Disposing
+without it aborts the transaction. Zero-length files need zero allocated
+extents. Individual file lengths are currently limited to 2,147,483,647 bytes.
+
+**Safety and limitations:** This is create-new, not atomic replacement. Existing
+destination files are never overwritten. A small journal identifies abandoned
+staging files so a subsequent `Storage.Mount` can remove them after a crash
+or power loss. Corrupt journals fail closed rather than deleting unknown
+files. `Unmount` refuses a volume with a live writer, and ISO-backed SD
+volumes cannot be modified while `dvd:/` is mounted from them. No FAT metadata
+is mutated directly by the extent scanner. A successfully returned `Complete`
+means the data and FAT allocation were checked, **not** that a FAT directory
+rename is guaranteed power-loss atomic on every card/firmware combination.
+Applications should keep authoritative download hashes/version manifests.
+Temporary and journal files occupy root-directory entries until publication.
+Only one contiguous writer can be active per volume. On host filesystems
+the feature fails as unsupported rather than claiming unverified contiguity.
+For GC Loader, raw SD mountability and firmware write support must be checked
+on the target console. Benchmarks and power-cut tests on real cards remain
+mandatory.
+
 ## Native memory-card saves
 
 ```csharp

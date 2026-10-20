@@ -17,6 +17,10 @@ DndArray *dnd_fs_read_all(DndManagedHeap *, DndString *path);
 void dnd_fs_write_all(DndString *path, DndArray *data);
 void dnd_fs_delete(DndString *path, bool directory);
 void dnd_fs_move(DndString *source, DndString *destination);
+int dnd_fs_contiguous_begin(DndString *path,int64_t expected_size);
+void dnd_fs_contiguous_write(int token,DndArray *data,int offset,int count);
+void dnd_fs_contiguous_complete(int token);
+void dnd_fs_contiguous_abort(int token);
 void dnd_fs_mkdir(DndString *path);
 int dnd_fs_open(DndString *path, int mode, int access, int share);
 /* Native asset readers use the same mounted-volume normalization and handles. */

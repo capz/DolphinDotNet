@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "dnd_storage.h"
 #include "dnd_card_transaction.h"
+#include "dnd_contiguous_write.h"
 #ifdef DND_GAMECUBE_STORAGE
 #include "dnd_fst.h"
 #endif
@@ -37,6 +38,17 @@ typedef struct {
 static FileHandle files[HANDLE_CAP];
 static DirectoryHandle directories[HANDLE_CAP];
 static int next_token = 1;
+/* One outstanding staged write per writable FAT/exFAT volume. */
+static DndContiguousWriter contiguous_writers[7];
+static int contiguous_tokens[7], next_contiguous_token = 1;
+static void contiguous_root(int d,char path[PATH_CAP]) {
+#ifdef DND_GAMECUBE_STORAGE
+  snprintf(path,PATH_CAP,"%s:/",prefixes[d]);
+#else
+  strcpy(path,roots[d]);
+#endif
+}
+
 #ifdef DND_GAMECUBE_STORAGE
 bool dnd_gc_mount(int device);
 bool dnd_gc_mount_disc(int format);
@@ -50,6 +62,7 @@ int dnd_gc_card_write_save(int device,const char *name,const void *data,int leng
 int dnd_gc_card_recover(int device);
 int dnd_gc_card_delete(int device, const char *name);
 int dnd_gc_card_entries(int device, char names[127][33]);
+int dnd_gc_contiguous_extents(int device,const char *path,unsigned *extents);
 #endif
 static void fail(int error, const char *message) {
   DndExceptionKind kind = DND_EXCEPTION_IO;
@@ -255,6 +268,18 @@ bool dnd_storage_mount(int d) {
   struct stat st;
   mounted[d] = stat(roots[d], &st) == 0 && S_ISDIR(st.st_mode);
 #endif
+  if (mounted[d] && d != 3) {
+    char root[PATH_CAP];
+    contiguous_root(d,root);
+    int recovery=dnd_contiguous_recover(root);
+    if(recovery<0) {
+#ifdef DND_GAMECUBE_STORAGE
+      dnd_gc_unmount(d);
+#endif
+      mounted[d]=false;
+      fail(-recovery,"An interrupted contiguous write needs recovery.");
+    }
+  }
   return mounted[d];
 }
 bool dnd_storage_mount_disc(int format) {
@@ -341,6 +366,10 @@ static bool busy(const char *path) {
 void dnd_storage_unmount(int d) {
   if (!valid_device(d) || !mounted[d])
     return;
+  if(contiguous_tokens[d]) {
+    fail(EBUSY,"Volume has an unfinished contiguous file write.");
+    return;
+  }
   if (d == iso_source_device && mounted[3]) {
     fail(EBUSY, "Unmount the ISO-backed dvd volume before its source.");
     return;
@@ -366,6 +395,12 @@ void dnd_storage_unmount(int d) {
   if (d == 3) iso_source_device = -1;
 }
 void dnd_storage_shutdown(void) {
+  for(int d=0;d<7;d++) {
+    if(contiguous_tokens[d]) {
+      dnd_contiguous_abort(&contiguous_writers[d]);
+      contiguous_tokens[d]=0;
+    }
+  }
   for (int i = 0; i < HANDLE_CAP; i++) {
     if (files[i].token) dnd_fs_close(files[i].token);
     if (directories[i].token) dnd_fs_dir_close(directories[i].token);
@@ -903,6 +938,72 @@ void dnd_fs_move(DndString *source, DndString *destination) {
   if (rename(an, bn))
     fail(errno, "Move failed.");
 }
+
+static int contiguous_count(void *context,const char *path,unsigned *extents) {
+#ifdef DND_GAMECUBE_STORAGE
+  return dnd_gc_contiguous_extents((int)(intptr_t)context,path,extents);
+#else
+  (void)context;(void)path;(void)extents;
+  return -ENOTSUP; /* Host filesystem extents are not GameCube FAT extents. */
+#endif
+}
+static int contiguous_find(int token) {
+  for(int d=0;d<7;d++)if(token>0 && contiguous_tokens[d]==token)return d;
+  fail(EBADF,"Invalid contiguous file writer.");
+  return -1;
+}
+int dnd_fs_contiguous_begin(DndString *path,int64_t length) {
+  char canonical[PATH_CAP],native[PATH_CAP],root[PATH_CAP];
+  int d=resolve(path,canonical,native);
+  if(d<0)return 0;
+  if(d==3 || d==4 || d==5) {
+    fail(EROFS,"Contiguous files require writable SD storage.");
+    return 0;
+  }
+  if(length<0 || length>INT32_MAX) {
+    fail(EFBIG,"Contiguous file size exceeds native GameCube limits.");
+    return 0;
+  }
+  if(contiguous_tokens[d] || busy(canonical) ||
+     (d==iso_source_device && mounted[3])) {
+    fail(EBUSY,"Volume has open writers or backs the mounted DVD.");
+    return 0;
+  }
+  contiguous_root(d,root);
+  DndContiguousOps ops={(void *)(intptr_t)d,contiguous_count,NULL};
+  int rc=dnd_contiguous_begin(&contiguous_writers[d],root,native,
+                              (uint64_t)length,ops);
+  if(rc<0) {
+    fail(rc==-ENOTSUP?ENOSYS:-rc,"Contiguous reservation failed.");
+    return 0;
+  }
+  int token=next_contiguous_token++;
+  if(token<=0) {dnd_contiguous_abort(&contiguous_writers[d]);fail(EIO,"Writer token exhausted.");return 0;}
+  contiguous_tokens[d]=token;
+  return token;
+}
+void dnd_fs_contiguous_write(int token,DndArray *data,int offset,int count) {
+  int d=contiguous_find(token);
+  if(d<0 || !range(data,offset,count))return;
+  int rc=dnd_contiguous_write(&contiguous_writers[d],data->data+offset,(size_t)count);
+  if(rc<0)fail(-rc,"Contiguous file write failed.");
+}
+void dnd_fs_contiguous_complete(int token) {
+  int d=contiguous_find(token);
+  if(d<0)return;
+  int rc=dnd_contiguous_complete(&contiguous_writers[d]);
+  if(!contiguous_writers[d].active)contiguous_tokens[d]=0;
+  if(rc<0)fail(-rc,"Contiguous file publication failed.");
+}
+void dnd_fs_contiguous_abort(int token) {
+  for(int d=0;d<7;d++)if(token>0 && contiguous_tokens[d]==token) {
+    int rc=dnd_contiguous_abort(&contiguous_writers[d]);
+    contiguous_tokens[d]=0;
+    if(rc<0)fail(-rc,"Contiguous file cleanup failed.");
+    return;
+  }
+}
+
 void dnd_fs_mkdir(DndString *path) {
   char canonical[PATH_CAP], native[PATH_CAP];
   int d = resolve(path, canonical, native);

@@ -1,6 +1,7 @@
 #include "dnd_card_transaction.h"
 #include "dnd_fst.h"
 #include "dnd_storage.h"
+#include "dnd_file_extents.h"
 #ifdef DND_GAMECUBE_STORAGE
 #include <dvm.h>
 #include <errno.h>
@@ -20,6 +21,24 @@ static const char *names[] = {"carda", "cardb", "sd", "dvd", "mca", "mcb", "gclo
 static void *workareas[2];
 static char games[2][5], companies[2][3];
 static bool card_initialized;
+/* Retain the mounted cache-layer device and partition offset, so extent
+ * inspection sees the same filesystem state as the devoptab writer. */
+static DvmDisc *mounted_discs[7];
+static sec_t mounted_partition_lba[7];
+static int extent_sector_read(void *context,uint64_t lba,void *buffer) {
+  DvmDisc *disc=context;
+  if((uint64_t)(sec_t)lba!=lba)return -EIO;
+  return dvmDiscReadSectors(disc,buffer,(sec_t)lba,1)?0:-EIO;
+}
+int dnd_gc_contiguous_extents(int device,const char *native_path,unsigned *extents) {
+  if(device<0 || device>=7 || !mounted_discs[device])return -ENODEV;
+  if(mounted_discs[device]->sector_sz!=512)return -ENOTSUP;
+  const char *colon=strchr(native_path,':');
+  if(!colon || colon[1]!='/')return -EINVAL;
+  DndSectorReader sector={mounted_discs[device],extent_sector_read,
+                          (uint64_t)mounted_partition_lba[device]};
+  return dnd_fat_count_extents(&sector,colon+1,extents);
+}
 int dnd_gc_card_recover(int device);
 static int card_errno(int rc) {
   if (rc >= 0)
@@ -68,11 +87,18 @@ bool dnd_gc_mount(int device) {
   DvmPartInfo parts[4];
   unsigned count = dvmReadPartitionTable(disc, parts, 4, DVM_IDENT_FSTYPE);
   bool mounted = false;
+  sec_t selected_partition = 0;
   if (!count)
     mounted = dvmMountVolume(names[device], disc, 0, "exfat");
   for (unsigned i = 0; i < count && !mounted; i++)
-    if (parts[i].fstype)
-      mounted = dvmMountPartition(names[device], disc, &parts[i]);
+    if (parts[i].fstype && dvmMountPartition(names[device], disc, &parts[i])) {
+      mounted = true;
+      selected_partition = parts[i].start_sector;
+    }
+  if (mounted) {
+    mounted_discs[device] = disc;
+    mounted_partition_lba[device] = selected_partition;
+  }
   if (!mounted)
     disc->vt->destroy(disc);
   return mounted;
@@ -83,6 +109,8 @@ void dnd_gc_unmount(int device) {
     return;
   }
   if ((device >= 0 && device < 3) || device == 6) {
+    mounted_discs[device] = NULL;
+    mounted_partition_lba[device] = 0;
     dvmUnmountVolume(names[device]);
     return;
   }

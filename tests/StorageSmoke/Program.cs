@@ -60,6 +60,8 @@ internal static class Program
         try{Directory.Delete("sd:/",true);return 32;}catch(UnauthorizedAccessException){}
         var active=Directory.EnumerateFiles(root).GetEnumerator();try{Storage.Unmount(StorageDevice.SdSerialPort2);return 33;}catch(IOException){}finally{active.Dispose();}
         File.WriteAllBytes(Path.Combine(root,"empty.bin"),new byte[0]);if(File.ReadAllBytes(Path.Combine(root,"empty.bin")).Length!=0)return 34;File.Delete(Path.Combine(root,"empty.bin"));
+        try{using(var contiguous=Storage.CreateContiguousFile(StorageDevice.SdSerialPort2,"not-supported.bin",3)){}return 45;}
+        catch(NotSupportedException){}
         File.Copy(path,Path.Combine(root,"copy.bin"));File.Move(Path.Combine(root,"copy.bin"),Path.Combine(root,"moved.bin"));
         Directory.CreateDirectory(Path.Combine(root,"nested"));
         if(Directory.GetFiles(root).Length!=2 || Directory.GetDirectories(root).Length!=1)return 13;

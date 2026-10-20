@@ -3,9 +3,48 @@ using System.Collections.Generic;
 namespace Dolphin.Storage;
 public enum StorageDevice { SdSlotA, SdSlotB, SdSerialPort2, DvdDrive, MemoryCardSlotA, MemoryCardSlotB, GcLoader }
 public enum DiscFormat { Iso9660=1, Fst=2 }
+/// <summary>Streaming create-new writer. Only Complete publishes the file;
+/// disposing without Complete discards staged bytes. The file's final
+/// length must be known before allocation.</summary>
+public sealed class ContiguousFileWriter : IDisposable
+{
+    private int handle;
+    internal ContiguousFileWriter(string path,long expectedLength)
+    {
+        if(path==null)throw new ArgumentNullException("path");
+        if(expectedLength<0)throw new ArgumentOutOfRangeException("expectedLength");
+        handle=NativeStorage.ContiguousBegin(path,expectedLength);
+    }
+    public void Write(byte[] buffer,int offset,int count)
+    {
+        if(handle==0)throw new ObjectDisposedException("ContiguousFileWriter");
+        NativeStorage.ContiguousWrite(handle,buffer,offset,count);
+    }
+    public void Complete()
+    {
+        if(handle==0)throw new ObjectDisposedException("ContiguousFileWriter");
+        NativeStorage.ContiguousComplete(handle);
+        handle=0;
+    }
+    public void Dispose()
+    {
+        if(handle!=0) {
+            int old=handle;
+            handle=0;
+            NativeStorage.ContiguousAbort(old);
+        }
+    }
+}
 public static class Storage
 {
     public static bool Mount(StorageDevice device)=>NativeStorage.Mount((int)device);
+    /// <summary>Reserve contiguous clusters before streaming a new file.
+    /// Throws when the device is unsupported or no contiguous extent fits.
+    /// Existing files are never overwritten. Requires a mounted SD volume.</summary>
+    public static ContiguousFileWriter CreateContiguousFile(StorageDevice device,string path,long expectedLength)
+        =>new ContiguousFileWriter(GetPath(device,path),expectedLength);
+    public static ContiguousFileWriter CreateContiguousFile(string fullPath,long expectedLength)
+        =>new ContiguousFileWriter(fullPath,expectedLength);
     /// <summary>Mount a physical disc (or ODE-provided disc) at dvd:/.</summary>
     public static bool MountDisc(DiscFormat format)=>NativeStorage.MountDisc((int)format);
     /// <summary>Mount a plain GameCube ISO/GCM by full mounted-volume path as dvd:/.</summary>
