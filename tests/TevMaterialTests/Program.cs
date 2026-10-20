@@ -4,13 +4,13 @@ static void Check(bool ok,string message){if(!ok)throw new Exception(message);}
 static void Reject<T>(Action action) where T:Exception {try{action();}catch(T){return;}throw new Exception("Expected "+typeof(T).Name);}
 // Independent fixed-point TEV interpreter. It consumes the serialized package,
 // including register writes and channel selectors, rather than calling preset code.
-static int[] Evaluate(byte[] p,int raster,int tex)
+static int[] Evaluate(byte[] p,int raster,int tex,int secondary=0)
 {
     int[][] regs=[new int[3],new int[3],new int[3],new int[3]];
     for(int i=0;i<p[8];i++){
         int at=176+i*8,k=p[at+6];
         int Read(int input,int channel)=>input switch {
-            0 or 2 or 4 or 6=>regs[input/2][channel],8=>tex,10=>raster,12=>255,15=>0,
+            0 or 2 or 4 or 6=>regs[input/2][channel],8=>p[at+7]==1?secondary:tex,10=>raster,12=>255,15=>0,
             14=>p[64+(k-12)%4*36+(k<16?channel:(k-16)/4)],_=>throw new Exception("Invalid selector")};
         int[] result=new int[3];
         for(int c=0;c<3;c++){
@@ -66,3 +66,21 @@ Reject<InvalidOperationException>(()=>b.AddStage(TevInput.Zero,TevInput.Zero,Tev
 var unfinished=new TevProgramBuilder();unfinished.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.One,TevRegister.Color0);
 Reject<InvalidOperationException>(()=>unfinished.BuildPackage());
 Console.WriteLine("TEV materials: exhaustive toon, reflection/emission equations, package isolation and budgets passed.");
+foreach(byte strength in new byte[]{0,64,128,255}){
+    var metal=TevMaterialPresets.MetallicReflection(new MetallicMaterialOptions{SeparateBaseTexture=true,BaseColor=Color32.White,ReflectionTint=Color32.White,ReflectionStrength=strength,ReflectionCoordinates=TextureCoordinateMode.WorldReflection});
+    var glow=TevMaterialPresets.Emissive(new EmissiveMaterialOptions{SeparateBaseTexture=true,BaseColor=Color32.White,EmissionColor=Color32.White,EmissionStrength=strength});
+    Check(metal.StageCount==5&&metal.RequiresTexture&&metal.RequiresSecondaryTexture,"Dual texture pipeline");
+    foreach(int r in new[]{0,128,255})foreach(int t in new[]{0,64,255})foreach(int aux in new[]{0,100,255}){
+        double lit=r*t/255.0;
+        Check(Math.Abs(Evaluate(metal.GetPackage(),r,t,aux)[0]-(lit+(aux-lit)*strength/255.0))<=3,"Independent reflection texture");
+        Check(Math.Abs(Evaluate(glow.GetPackage(),r,t,aux)[0]-Math.Min(255,lit+aux*strength/255.0))<=3,"Independent emission texture");
+    }
+    var p=metal.GetPackage();Check(p[4]==2&&p[12]==3&&p[^1]==0,"DNEF v2 opacity epilogue");
+}
+var mixed=new TevProgramBuilder();
+Reject<ArgumentException>(()=>mixed.AddStage(TevInput.Texture,TevInput.SecondaryTexture,TevInput.One,TevInput.Zero));
+Check(mixed.StageCount==0,"Mixed texture failure mutated builder");
+mixed.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.SecondaryTexture);
+for(int i=1;i<16;i++)mixed.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Previous);
+Reject<InvalidOperationException>(()=>mixed.BuildPackage());
+Console.WriteLine("Dual-texture TEV arithmetic and opacity-stage budgets passed.");

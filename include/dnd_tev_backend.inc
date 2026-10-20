@@ -18,8 +18,9 @@ void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound) {
         u8 stage=(u8)i;
         GX_SetTevDirect(stage);
         GX_SetTevSwapMode(stage,GX_TEV_SWAP0,GX_TEV_SWAP0);
-        GX_SetTevOrder(stage,texture_bound?GX_TEXCOORD0:GX_TEXCOORDNULL,
-                       texture_bound?GX_TEXMAP0:GX_TEXMAP_NULL,GX_COLOR0A0);
+        bool secondary=effect&&effect->stages[i].reserved;
+        GX_SetTevOrder(stage,secondary?GX_TEXCOORD1:texture_bound?GX_TEXCOORD0:GX_TEXCOORDNULL,
+                       secondary?GX_TEXMAP1:texture_bound?GX_TEXMAP0:GX_TEXMAP_NULL,GX_COLOR0A0);
         GX_SetTevKColorSel(stage,effect?effect->stages[i].konst:GX_TEV_KCSEL_1);
         GX_SetTevKAlphaSel(stage,GX_TEV_KASEL_1);
         if(effect) {

@@ -65,6 +65,8 @@ void GX_SetNumIndStages(int count);
 #define GX_TEV_KCSEL_1 0
 #define GX_TEV_SWAP0 0
 #define GX_TEXCOORD0 0
+#define GX_TEXCOORD1 1
+#define GX_TEXMAP1 1
 #define GX_TEXCOORDNULL 255
 #define GX_TEXMAP0 0
 #define GX_TEXMAP_NULL 255

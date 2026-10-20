@@ -12,7 +12,7 @@
 #include "dnd_material_math.h"
 #include "dnd_material_channels.inc"
 static int channel_test,channel_calls;
-static int indirect_resets;
+static int indirect_resets,full_draws,full_skin;
 void GX_SetNumIndStages(int count){assert(count==0);indirect_resets++;}
 /* Linker wrappers catch transient allocations that stable budgets would miss. */
 static size_t allocations;
@@ -61,7 +61,7 @@ void GX_Color4u8(u8 r,u8 g,u8 b,u8 a){assert(color_index<3);state.vertex[color_i
 void GX_TexCoord2f32(float u,float v){assert(uv_index<6);state.uv[uv_index++]=u;state.uv[uv_index++]=v;}
 void GX_End(void){assert(position_index==9&&color_index==3&&uv_index==6);record[draws++%16]=state;}
 void dnd_draw_set_camera(const float *v,const float *p){(void)v;(void)p;}
-void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int p,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)n;(void)p;(void)t;(void)m;(void)w;assert(!"Models must retain their own geometry path");}
+void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int p,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){assert(n==3&&p==0x90&&t&&m->secondary&&m->flags==65&&m->color==0x12345678&&w[0]==-1);assert(v[0].nz==-1&&v[0].color==0xcc99667f);if(v[0].x==10)full_skin++;full_draws++;}
 void dnd_draw_backend_camera(const float *v,const float *p){(void)v;(void)p;}
 void dnd_draw_backend_2d(int w,int h){(void)w;(void)h;}
 void dnd_draw_backend_viewport(int x,int y,int w,int h){(void)x;(void)y;(void)w;(void)h;}
@@ -106,6 +106,8 @@ static void assert_geometry_equal(Draw a,Draw b) {
  assert(!memcmp(&a,&b,sizeof(a)));
 }
 int main(void) {
+ DndDrawEffect dual={.count=3,.texture=3,.stages={{15,15,15,10,0,0,0,0},{15,15,15,8,0,0,0,1},{15,15,15,0,0,0,0,0}}};
+ dnd_draw_backend_tev(&dual,true);assert(state.stages[0].tex==GX_TEXMAP0&&state.stages[1].tex==GX_TEXMAP1&&state.stages[1].coord==GX_TEXCOORD1&&state.stages[2].tex==GX_TEXMAP0);
  channel_test=1;dnd_material_channels(true);channel_test=2;dnd_material_channels(false);
  assert(channel_calls==4);channel_test=0;
  /* Normal projection: unit directions, rotation, nonuniform scale and zero. */
@@ -116,6 +118,13 @@ int main(void) {
  n[0][0]=.5f;dnd_material_view_normal(n,2,0,0,&u,&v);assert(u==1&&v==.5f);
  n[0][0]=0;n[0][2]=1;n[2][0]=-1;n[2][2]=0;
  dnd_material_view_normal(n,0,0,1,&u,&v);assert(u==1&&v==.5f);
+ float unit[3][4]={{1,0,0,0},{0,1,0,0},{0,0,1,0}};
+ dnd_material_world_reflection(unit,unit,0,0,1,0,0,-1,&u,&v);assert(fabsf(u-.5f)<.0001f&&fabsf(v-.5f)<.0001f);
+ dnd_material_world_reflection(unit,unit,0,0,1,1,0,-1,&u,&v);assert(fabsf(u-.625f)<.0001f);
+ dnd_material_world_reflection(unit,unit,0,0,1,-1,0,-1,&u,&v);assert(fabsf(u-.375f)<.0001f);
+ float rotated[3][4]={{0,0,1,0},{0,1,0,0},{-1,0,0,0}};
+ dnd_material_world_reflection(unit,rotated,0,0,1,0,0,-1,&u,&v);assert(fabsf(u-.75f)<.0001f);
+ dnd_material_world_reflection(unit,unit,0,0,0,0,0,-1,&u,&v);assert(u==.5f&&v==.5f);
  unsigned char data[3*80]={0},indices[12]={0},pixels[128]={0};float skinned[18]={0};
  for(int i=0;i<3;i++){
   float values[20]={0};float *v=values;v[0]=(float)i;v[5]=-1;v[6]=i*.25f;v[7]=i*.5f;
@@ -136,6 +145,8 @@ int main(void) {
  unsigned order[3]={99,98,97};float depths[3]={0};float *vertices[3]={NULL,skinned,NULL};
  DndInstance instance={.token=123,.model=&model,.global=(float*)camera->data,.vertices=vertices,.draw_order=order,.draw_depth=depths};
  DndInstance second=instance;second.token=124;dnd_instances[0]=&instance;dnd_instances[1]=&second;
+ DndArray *rgba=calloc(1,sizeof(*rgba)+64);assert(rgba);rgba->element_size=1;rgba->length=64;memset(rgba->data,255,64);
+ int override_texture=dnd_texture_create(4,4,rgba,0);assert(override_texture>0);free(rgba);
  int short_effect=effect_create(2,0),long_effect=effect_create(7,0),textured=effect_create(1,1);
  int wrong=dnd_buffer_create(32,32);assert(wrong>0);
  assert(dnd_model_draw_effect(123,world,short_effect)==-1);
@@ -194,6 +205,14 @@ int main(void) {
  assert(dnd_model_draw_effect(123,world,long_effect)==-2&&draws==before);
  model.ready=false;assert(dnd_model_draw_effect(123,world,short_effect)==-1);model.ready=true;
  assert(dnd_model_draw_effect(123,world,short_effect)==0);assert(record[before%16].konst[0].r==0x12);
+ size_t full_allocations=allocations;
+ assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)==0);
+ assert(full_draws==3&&full_skin==1&&order[0]==2&&order[1]==1&&order[2]==0&&allocations==full_allocations);
+ assert(!memcmp(original_materials,materials,sizeof(materials)));
+ assert(dnd_model_draw_material(123,world,wrong,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==3);
+ wm[0]=0;assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==3);wm[0]=-1;
+ assert(dnd_draw_release(override_texture)==0);
+ assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==3);
  assert(dnd_model_frame_end()==0);
  assert(dnd_draw_release(short_effect)==0&&dnd_draw_release(textured)==0&&dnd_draw_release(replacement)==0&&dnd_draw_release(wrong)==0);
  assert(dnd_draw_total_bytes()==0&&dnd_draw_live()==0);

@@ -8,7 +8,7 @@
 
 typedef struct { float x,y,z,nx,ny,nz,u,v; uint32_t color; } DndDrawVertex;
 typedef struct { const void *data; uint32_t bytes; int width,height,format; bool linear; } DndDrawTexture;
-typedef struct { uint32_t color; int flags; float cutoff; const DndDrawEffect *effect; } DndDrawMaterial;
+typedef struct { uint32_t color; int flags; float cutoff; const DndDrawEffect *effect; const DndDrawTexture *secondary; } DndDrawMaterial;
 /* One graphics owner and one active pass: 1=3D, 2=2D, 3=raw, 4=compatibility immediate. */
 int dnd_device_begin(float r,float g,float b,float a);
 int dnd_device_end(void);
@@ -52,6 +52,9 @@ int dnd_effect_color(int token,int slot,uint32_t color);
  * stale or pending resources return -2. Never retain across frame collection. */
 int dnd_effect_resolve(int token,const DndDrawEffect **result);
 int dnd_canvas_effect(int token,int effect);
+int dnd_texture_resolve(int token,DndDrawTexture *out);
+int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
+int dnd_model_draw_material(int token,DndArray *world,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect);
 int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
 int dnd_mesh_draw(int mesh,int texture,DndArray *world,uint32_t color,int flags,float cutoff);
 int dnd_mesh_primitives(DndArray *vertices,int offset,int count,int format,int primitive,DndArray *world,uint32_t color,int flags);

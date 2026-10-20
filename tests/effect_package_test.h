@@ -16,5 +16,14 @@ static void effect_package_tests(void) {
     a->length=183;assert(dnd_effect_create(a)==0);a->length=184;
     p[8]=17;assert(dnd_effect_create(a)==0);p[8]=1;
     a->elements_are_references=1;assert(dnd_effect_create(a)==0);free(a);
-    assert(dnd_draw_total_bytes()==0);
+    a=calloc(1,sizeof(*a)+192);assert(a);a->element_size=1;a->length=192;p=a->data;
+    memcpy(p,"DNEF",4);p[4]=2;p[8]=2;p[12]=2;
+    p[176]=p[177]=p[178]=15;p[179]=8;p[183]=1;
+    p[184]=p[185]=p[186]=15; // RGB passthrough, primary opacity epilogue
+    token=dnd_effect_create(a);assert(token>0);assert(dnd_draw_release(token)==0);
+    p[12]=0;assert(dnd_effect_create(a)==0);p[12]=2;
+    p[183]=2;assert(dnd_effect_create(a)==0);p[183]=1;
+    p[191]=1;assert(dnd_effect_create(a)==0);p[191]=0;
+    p[4]=1;assert(dnd_effect_create(a)==0);p[4]=3;assert(dnd_effect_create(a)==0);
+    free(a);assert(dnd_draw_total_bytes()==0);
 }

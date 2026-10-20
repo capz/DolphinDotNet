@@ -36,6 +36,8 @@ internal static class Program
         using var toonPreset=TevMaterialPresets.Toon().Create(loaded);
         using var metalPreset=TevMaterialPresets.MetallicReflection().Create(loaded);
         using var emissionPreset=TevMaterialPresets.Emissive().Create(loaded);
+        using var dualMetal=TevMaterialPresets.MetallicReflection(new MetallicMaterialOptions{SeparateBaseTexture=true,ReflectionCoordinates=TextureCoordinateMode.WorldReflection}).Create(loaded,texture);
+        using var dualGlow=TevMaterialPresets.Emissive(new EmissiveMaterialOptions{SeparateBaseTexture=true}).Create(loaded,texture);
         metalPreset.Effect.SetColor("ReflectionStrength",new Color32(128,128,128));
         emissionPreset.Effect.SetColor("EmissionColor",new Color32(255,20,100));
         device.BeginFrame(Color32.Black);
@@ -43,6 +45,7 @@ internal static class Program
         renderer.DrawMesh(normalMesh,toonPreset.Material,transform);
         renderer.DrawMesh(normalMesh,metalPreset.Material,transform);
         renderer.DrawMesh(normalMesh,emissionPreset.Material,transform);
+        renderer.DrawMesh(normalMesh,dualMetal.Material,transform);renderer.DrawMesh(normalMesh,dualGlow.Material,transform);
         try{renderer.DrawMesh(texturedMesh,metalPreset.Material,transform);return 13;}catch(InvalidOperationException){}
         material.Effect=textureEffect;
         try{renderer.DrawMesh(mesh,material,transform);return 12;}catch(ArgumentException){}

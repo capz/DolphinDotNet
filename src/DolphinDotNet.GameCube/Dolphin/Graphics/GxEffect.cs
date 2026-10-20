@@ -14,9 +14,10 @@ public sealed class GxEffect : IDisposable
     public int StageCount {get;}
     public int UniformCount => names.Length;
     public bool RequiresTexture {get;}
+    public bool RequiresSecondaryTexture {get;}
     private GxEffect(int token,byte[] package)
     {
-        Token=token;StageCount=package[8];RequiresTexture=package[12]!=0;
+        Token=token;StageCount=package[8];RequiresTexture=(package[12]&1)!=0;RequiresSecondaryTexture=(package[12]&2)!=0;
         names=new string[package[16]];
         for(int i=0;i<names.Length;i++){
             int at=32+i*36,n=0;while(package[at+n]!=0)n++;

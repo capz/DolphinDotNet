@@ -71,19 +71,19 @@ static void draw_sift(DndInstance *in, unsigned *order, unsigned count,
     root = child;
   }
 }
-void dnd_model_sort_draws(DndInstance *in, const float world[16],
-                          const float view[16]) {
+static void sort_material_draws(DndInstance *in, const float world[16],
+                          const float view[16],int override_blend) {
   if (!in->draw_order)
     return;
   DndModel *m = in->model;
   unsigned opaque = 0;
   for (unsigned i = 0; i < m->meshes; i++)
-    if (!(m->material[m->mesh[i].material].mode & 4))
+    if (!(override_blend<0?(m->material[m->mesh[i].material].mode & 4):override_blend))
       in->draw_order[opaque++] = i;
   unsigned count = 0;
   for (unsigned i = 0; i < m->meshes; i++) {
     DndMesh *mesh = &m->mesh[i];
-    if (!(m->material[mesh->material].mode & 4))
+    if (!(override_blend<0?(m->material[mesh->material].mode & 4):override_blend))
       continue;
     float object[16], mv[16];
     if (mesh->skin < 0)
@@ -105,8 +105,53 @@ void dnd_model_sort_draws(DndInstance *in, const float world[16],
     draw_sift(in, order, end - 1, 0);
   }
 }
+void dnd_model_sort_draws(DndInstance *in,const float world[16],const float view[16]){sort_material_draws(in,world,view,-1);}
 int dnd_model_draw(int token, DndArray *transform) {
   return dnd_model_draw_effect(token, transform, 0);
+}
+/* Full override submission shares the managed mesh backend, so lighting,
+ * coordinates, samplers, opacity and render state cannot diverge. Bounded
+ * application-executor scratch storage; never allocate or mutate model assets. */
+int dnd_model_draw_material(int token,DndArray *transform,int tex,int secondary,
+    uint32_t color,int flags,float cutoff,int effect_token) {
+  DndInstance *in=dnd_instance_find(token);float world[16];DndDrawTexture base,extra;
+  const DndDrawEffect *effect;
+  if(!in||!in->model->ready||!dnd_model_frame_active||!matrix_array(transform,world)||
+     flags<0||flags>255||(flags&192)==192||!isfinite(cutoff)||cutoff<0||cutoff>1||
+     dnd_texture_resolve(tex,&base)<0||dnd_texture_resolve(secondary,&extra)<0||
+     dnd_effect_resolve(effect_token,&effect)<0)return -1;
+  if((flags&192)&&!tex&&!secondary)return -1;
+  if(effect&&(((effect->texture&1)&&!tex)||((effect->texture&2)&&!secondary)))return -1;
+  DndModel *model=in->model;
+  /* Validate every submitted transform/skinned buffer before sorting or GX. */
+  for(unsigned i=0;i<model->meshes;i++){
+    DndMesh *mesh=&model->mesh[i];float object[16],mv[16],inverse[16];
+    if(mesh->skin<0)dnd_model_multiply(object,world,in->global+(unsigned)mesh->node*16);
+    else {if(!in->vertices[i])return -1;memcpy(object,world,64);}
+    dnd_model_multiply(mv,frame_view,object);if(!dnd_model_inverse(inverse,mv))return -1;
+  }
+  sort_material_draws(in,world,frame_view,(flags&3)!=0);
+  static DndDrawVertex vertices[768];
+  DndDrawMaterial material={color,flags,cutoff,effect,secondary?&extra:NULL};
+  for(unsigned draw=0;draw<model->meshes;draw++){
+    unsigned mi=in->draw_order?in->draw_order[draw]:draw;DndMesh *mesh=&model->mesh[mi];float object[16];
+    if(mesh->skin<0)dnd_model_multiply(object,world,in->global+(unsigned)mesh->node*16);else memcpy(object,world,64);
+    for(unsigned first=0;first<mesh->indices;){
+      unsigned count=mesh->indices-first;if(count>768)count=768;
+      for(unsigned j=0;j<count;j++){
+        unsigned index=dnd_model_u32(mesh->index+(first+j)*4);const unsigned char *src=mesh->data+index*80;
+        DndDrawVertex *v=&vertices[j];float values[6];
+        if(mesh->skin>=0)memcpy(values,in->vertices[mi]+index*6,24);
+        else for(int c=0;c<6;c++)values[c]=dnd_model_f32(src+c*4);
+        v->x=values[0];v->y=values[1];v->z=values[2];v->nx=values[3];v->ny=values[4];v->nz=values[5];
+        v->u=dnd_model_f32(src+24);v->v=dnd_model_f32(src+28);v->color=0;
+        for(int c=0;c<4;c++)v->color=(v->color<<8)|(uint32_t)(fminf(1,fmaxf(0,dnd_model_f32(src+32+c*4)))*255);
+      }
+      dnd_draw_backend_vertices(vertices,(int)count,0x90,tex?&base:NULL,&material,object);first+=count;
+    }
+    dnd_performance_add_triangles(mesh->indices/3);
+  }
+  return 0;
 }
 int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {
   DndInstance *in = dnd_instance_find(token);
@@ -119,7 +164,8 @@ int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {
   if (dnd_effect_resolve(effect_token, &effect) < 0)
     return -2;
   /* Preflight referenced meshes before sorting, counters or GX submission. */
-  if (effect && effect->texture)
+  if (effect && (effect->texture&2))return -3;
+  if (effect && (effect->texture&1))
     for (unsigned mi = 0; mi < model->meshes; mi++)
       if (model->material[model->mesh[mi].material].texture < 0)
         return -3;

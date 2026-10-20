@@ -22,7 +22,25 @@ public sealed class Renderer
     {
         if(mesh==null)throw new ArgumentNullException("mesh");if(material==null)throw new ArgumentNullException("material");if(transform==null)throw new ArgumentNullException("transform");
         mesh.Check();material.Check();
-        GraphicsDevice.Check(NativeGraphics.MeshDraw(mesh.Token,material.TextureToken,transform.WorldMatrix,material.Color.Packed,material.Flags,material.AlphaCutoff,material.EffectToken),"Invalid mesh, material, transform or 3D pass.");
+        GraphicsDevice.Check(NativeGraphics.MeshDrawMaterial(mesh.Token,material.TextureToken,material.SecondaryTextureToken,transform.WorldMatrix,material.Color.Packed,material.Flags,material.AlphaCutoff,material.EffectToken),"Invalid mesh, material, transform or 3D pass.");
+    }
+    /// <summary>Replaces all imported material state for this draw only. Geometry, animation and UV0 remain authored.</summary>
+    public void DrawModelWithMaterial(ModelInstance instance,Transform transform,Material material)
+    {
+        if(transform==null)throw new ArgumentNullException("transform");
+        DrawModelWithMaterial(instance,transform.WorldMatrix,material);
+    }
+    public void DrawModelWithMaterial(ModelInstance instance,float[] world,Material material)
+    {
+        if(instance==null)throw new ArgumentNullException("instance");
+        if(material==null)throw new ArgumentNullException("material");
+        instance.Check();material.Check();
+        GraphicsDevice.Check(NativeModel.ModelDrawMaterial(instance.Token,world,material.TextureToken,material.SecondaryTextureToken,material.Color.Packed,material.Flags,material.AlphaCutoff,material.EffectToken),"Invalid model material, cold model, transform or 3D pass.");
+    }
+    public void DrawWithMaterial(GameObject gameObject,Material material)
+    {
+        if(gameObject==null)throw new ArgumentNullException("gameObject");
+        gameObject.Check();if(gameObject.Model!=null)DrawModelWithMaterial(gameObject.Model,gameObject.Transform,material);
     }
     public void DrawPrimitives(VertexPositionColor[] vertices,int offset,int vertexCount,PrimitiveType primitive,Transform transform)
     {
@@ -71,7 +89,7 @@ public sealed class Renderer
     {
         if (instance == null) throw new ArgumentNullException("instance");
         instance.Check();
-        if (effectOverride != null) effectOverride.Check();
+        if (effectOverride != null) {effectOverride.Check();if(effectOverride.RequiresSecondaryTexture)throw new ArgumentException("Use DrawModelWithMaterial for two-texture effects.","effectOverride");}
         var result = NativeModel.ModelDrawEffect(instance.Token, transform, effectOverride == null ? 0 : effectOverride.Token);
         if (result == -3)
             throw new ArgumentException("effectOverride requires a texture on every submitted mesh.", "effectOverride");

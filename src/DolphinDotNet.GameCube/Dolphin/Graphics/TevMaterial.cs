@@ -8,21 +8,25 @@ public sealed class TevMaterialDefinition
     public LightingMode Lighting {get;}
     public TextureCoordinateMode TextureCoordinates {get;}
     public int StageCount => package[8];
-    public bool RequiresTexture => package[12]!=0;
+    public bool RequiresTexture => (package[12]&1)!=0;
+    public bool RequiresSecondaryTexture => (package[12]&2)!=0;
     public TevMaterialDefinition(TevProgramBuilder program,LightingMode lighting=LightingMode.Unlit,
         TextureCoordinateMode textureCoordinates=TextureCoordinateMode.Uv0)
     {
         if(program==null)throw new ArgumentNullException("program");
-        if((int)lighting<0||(int)lighting>1||(int)textureCoordinates<0||(int)textureCoordinates>1)throw new ArgumentException("Invalid pipeline defaults.");
+        if((int)lighting<0||(int)lighting>1||(int)textureCoordinates<0||(int)textureCoordinates>2)throw new ArgumentException("Invalid pipeline defaults.");
         package=program.BuildPackage();Lighting=lighting;TextureCoordinates=textureCoordinates;
     }
     public byte[] GetPackage(){var copy=new byte[package.Length];Array.Copy(package,copy,copy.Length);return copy;}
     /// <summary>Create between frames. The texture is borrowed and remains caller-owned.</summary>
-    public TevMaterial Create(Texture2D? texture=null)
+    public TevMaterial Create(Texture2D? texture=null,Texture2D? secondaryTexture=null)
     {
-        if((RequiresTexture||TextureCoordinates!=TextureCoordinateMode.Uv0)&&texture==null)throw new ArgumentException("This material requires a texture.");
+        if(RequiresTexture&&texture==null)throw new ArgumentException("This material requires a base texture.");
+        if(RequiresSecondaryTexture&&secondaryTexture==null)throw new ArgumentException("This material requires a secondary texture.");
+        if(TextureCoordinates!=TextureCoordinateMode.Uv0&&texture==null&&secondaryTexture==null)throw new ArgumentException("This material requires a reflection map.");
         if(texture!=null)texture.Check();
-        return new TevMaterial(GxEffect.FromPackage(package),texture,Lighting,TextureCoordinates);
+        if(secondaryTexture!=null)secondaryTexture.Check();
+        return new TevMaterial(GxEffect.FromPackage(package),texture,Lighting,TextureCoordinates,secondaryTexture);
     }
 }
 
@@ -32,9 +36,9 @@ public sealed class TevMaterial : IDisposable
 {
     public Material Material {get;}
     public GxEffect Effect {get;}
-    internal TevMaterial(GxEffect effect,Texture2D? texture,LightingMode lighting,TextureCoordinateMode coordinates)
+    internal TevMaterial(GxEffect effect,Texture2D? texture,LightingMode lighting,TextureCoordinateMode coordinates,Texture2D? secondaryTexture=null)
     {
-        Effect=effect;Material=new Material{Effect=effect,Texture=texture,Lighting=lighting,TextureCoordinates=coordinates};
+        Effect=effect;Material=new Material{Effect=effect,Texture=texture,SecondaryTexture=secondaryTexture,Lighting=lighting,TextureCoordinates=coordinates};
     }
     public void Dispose()=>Effect.Dispose();
 }
@@ -50,19 +54,22 @@ public sealed class ToonMaterialOptions
 }
 public sealed class MetallicMaterialOptions
 {
+    public bool SeparateBaseTexture {get;set;}
+    public TextureCoordinateMode ReflectionCoordinates {get;set;}=TextureCoordinateMode.ViewNormal;
     public Color32 BaseColor {get;set;}=new Color32(70,80,90);
     public Color32 ReflectionTint {get;set;}=Color32.White;
     public byte ReflectionStrength {get;set;}=180;
 }
 public sealed class EmissiveMaterialOptions
 {
+    public bool SeparateBaseTexture {get;set;}
     public Color32 BaseColor {get;set;}=new Color32(32,48,64);
     public Color32 EmissionColor {get;set;}=new Color32(40,220,255);
     public byte EmissionStrength {get;set;}=255;
 }
 
 /// <summary>Original visual approximations; no retail assets or game shader data.
-/// All presets fit one texture, four colors and eight TEV stages.</summary>
+/// Presets use at most two textures, four colors and eight total TEV stages.</summary>
 public static class TevMaterialPresets
 {
     public static TevMaterialDefinition Toon(ToonMaterialOptions? options=null)
@@ -88,9 +95,10 @@ public static class TevMaterialPresets
         b.AddColor("BaseColor",o.BaseColor);b.AddColor("ReflectionTint",o.ReflectionTint);
         b.AddColor("ReflectionStrength",new Color32(o.ReflectionStrength,o.ReflectionStrength,o.ReflectionStrength));
         b.AddStage(TevInput.Zero,TevInput.Raster,TevInput.Constant,TevInput.Zero,TevRegister.Color0,colorSlot:0);
-        b.AddStage(TevInput.Zero,TevInput.Texture,TevInput.Constant,TevInput.Zero,colorSlot:1);
+        if(o.SeparateBaseTexture)b.AddStage(TevInput.Zero,TevInput.Color0,TevInput.Texture,TevInput.Zero,TevRegister.Color0);
+        b.AddStage(TevInput.Zero,o.SeparateBaseTexture?TevInput.SecondaryTexture:TevInput.Texture,TevInput.Constant,TevInput.Zero,colorSlot:1);
         b.AddStage(TevInput.Color0,TevInput.Previous,TevInput.Constant,TevInput.Zero,colorSlot:2);
-        return new TevMaterialDefinition(b,LightingMode.Diffuse,TextureCoordinateMode.ViewNormal);
+        return new TevMaterialDefinition(b,LightingMode.Diffuse,o.ReflectionCoordinates);
     }
     public static TevMaterialDefinition Emissive(EmissiveMaterialOptions? options=null)
     {
@@ -98,7 +106,8 @@ public static class TevMaterialPresets
         b.AddColor("BaseColor",o.BaseColor);b.AddColor("EmissionColor",o.EmissionColor);
         b.AddColor("EmissionStrength",new Color32(o.EmissionStrength,o.EmissionStrength,o.EmissionStrength));
         b.AddStage(TevInput.Zero,TevInput.Raster,TevInput.Constant,TevInput.Zero,TevRegister.Color0,colorSlot:0);
-        b.AddStage(TevInput.Zero,TevInput.Texture,TevInput.Constant,TevInput.Zero,colorSlot:1);
+        if(o.SeparateBaseTexture)b.AddStage(TevInput.Zero,TevInput.Color0,TevInput.Texture,TevInput.Zero,TevRegister.Color0);
+        b.AddStage(TevInput.Zero,o.SeparateBaseTexture?TevInput.SecondaryTexture:TevInput.Texture,TevInput.Constant,TevInput.Zero,colorSlot:1);
         b.AddStage(TevInput.Zero,TevInput.Previous,TevInput.Constant,TevInput.Color0,colorSlot:2);
         return new TevMaterialDefinition(b,LightingMode.Diffuse);
     }
