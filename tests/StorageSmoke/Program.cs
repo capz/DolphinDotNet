@@ -77,13 +77,24 @@ internal static class Program
         var autoFile=Path.Combine(root,"automatic.bin");
         var autoBytes=new byte[65537];autoBytes[65536]=91;
         File.WriteAllBytes(autoFile,autoBytes);
-        if(File.ReadAllBytes(autoFile)[65536]!=91)return 64;
+        // Do not allocate a second 65 KiB managed array: the host fixture
+        // deliberately uses a 128 KiB heap to detect accidental large buffers.
+        using(var verify=File.OpenRead(autoFile))
+        {
+            if(verify.Length!=autoBytes.Length)return 64;
+            verify.Seek(65536,SeekOrigin.Begin);
+            if(verify.ReadByte()!=91)return 64;
+        }
         using(var autoStream=File.Open(autoFile,FileMode.Open,FileAccess.Write))
         {
             autoStream.Seek(65535,SeekOrigin.Begin);
             autoStream.Write(bytes,0,1);
         }
-        if(File.ReadAllBytes(autoFile)[65535]!=9)return 65;
+        using(var verify=File.OpenRead(autoFile))
+        {
+            verify.Seek(65535,SeekOrigin.Begin);
+            if(verify.ReadByte()!=9 || verify.ReadByte()!=91)return 65;
+        }
         File.Delete(autoFile);
         Defrag.OptIn(false);
         if(Defrag.IsEnabled)return 70;
