@@ -20,6 +20,13 @@ internal static class NativeImportTests
             .Replace("Connections: {","Connections: {\n"+TextureConnections,StringComparison.Ordinal)
             .Replace("PolygonVertexIndex: *3 { a: 0,1,-3 }","PolygonVertexIndex: *3 { a: 0,1,-3 }\n"+UvLayer,StringComparison.Ordinal);
         File.WriteAllText(Path.Combine(sd,"textured.fbx"),textured);
+        string translucent=AnimatedFbx.Replace("Objects: {","Objects: {\\n"+TextureObjects.Replace(
+                "P: \\"DiffuseColor\\", \\"Color\\", \\"\\", \\"A\\",1,1,1",
+                "P: \\"DiffuseColor\\", \\"Color\\", \\"\\", \\"A\\",1,1,1\\n            P: \\"Opacity\\", \\"double\\", \\"Number\\", \\"A\\",0.45",
+                StringComparison.Ordinal),StringComparison.Ordinal)
+            .Replace("Connections: {","Connections: {\\n"+TextureConnections,StringComparison.Ordinal)
+            .Replace("PolygonVertexIndex: *3 { a: 0,1,-3 }","PolygonVertexIndex: *3 { a: 0,1,-3 }\\n"+UvLayer,StringComparison.Ordinal);
+        File.WriteAllText(Path.Combine(sd,"translucent.fbx"),translucent);
         File.WriteAllText(Path.Combine(sd,"invalid.fbx"),"not an FBX file");
         File.WriteAllText(Path.Combine(sd,"invalid.obj"),"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 999\n");
         // Native image codec fixtures, independent of the desktop model importer.
