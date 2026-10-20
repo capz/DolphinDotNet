@@ -320,6 +320,12 @@ jobs:
           /tmp/dol-launcher --gc-stress
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/dol-launcher.c tests/dol_host.c source/dol.c source/storage.c source/contiguous_write.c source/file_optimize.c source/managed_runtime.c source/async_runtime.c source/text.c -o /tmp/dol-launcher32
           /tmp/dol-launcher32 --gc-stress
+      - name: Compile headless SD2SP2 and GC Loader hardware probe
+        if: matrix.group == 'io'
+        run: |
+          dotnet build samples/StorageIntegrity/StorageIntegrity.csproj -c Release -p:DndBuildNative=false
+          dotnet "$DND_COMPILER_DLL" --aot samples/StorageIntegrity/bin/Release/net8.0/StorageIntegrity.dll /tmp/storage-integrity.c
+          cc -pthread -std=c11 -Wall -Wextra -Werror -Iinclude -c /tmp/storage-integrity.c -o /tmp/storage-integrity.o
       - name: Test selective post-write repair and interrupted rename recovery
         if: matrix.group == 'io'
         run: |
