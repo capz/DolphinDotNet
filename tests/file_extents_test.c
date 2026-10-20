@@ -85,6 +85,7 @@ int main(void) {
   exfat(&fixture);
   fixture.sectors[0][109]=1;
   put32(fixture.sectors[1]+12,4);
+  put32(fixture.sectors[1]+16,0xffffffff); /* second cluster ends chain */
   assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==0 && runs==1);
   put32(fixture.sectors[1]+12,6);
   assert(dnd_fat_count_extents(&reader,"app.dol",&runs)==0 && runs==2);
