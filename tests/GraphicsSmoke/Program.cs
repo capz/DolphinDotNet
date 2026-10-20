@@ -44,9 +44,9 @@ internal static class Program
         renderer.Begin3D(camera);
         // Cross-instance alpha ordering uses preallocated scratch, with stable
         // origin-based depth sorting before the per-model draw path.
-        using var front=new GameObject();
-        using var rear=new GameObject();
-        using var middle=new GameObject();
+        var front=new GameObject();
+        var rear=new GameObject();
+        var middle=new GameObject();
         front.Transform.LocalPosition=new Vector3(0,0,2);
         rear.Transform.LocalPosition=new Vector3(0,0,-5);
         middle.Transform.LocalPosition=new Vector3(0,0,0);
