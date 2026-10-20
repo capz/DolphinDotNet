@@ -13,6 +13,10 @@ internal static class GlbImportTests
         views.Add(new JsonObject{["buffer"]=0,["byteOffset"]=imageOffset,["byteLength"]=image.Length});
         root["images"]=new JsonArray(new JsonObject{["bufferView"]=view,["mimeType"]="image/png"});
         string path=Path.Combine(output,"sd","embedded.glb");Write(path,root,binary);
+        var blended=root.DeepClone().AsObject();
+        blended["materials"]![0]!["alphaMode"]="BLEND";
+        blended["materials"]![0]!["pbrMetallicRoughness"]!["baseColorFactor"]=new JsonArray(1,1,1,0.35);
+        Write(Path.Combine(output,"sd","blended.glb"),blended,binary);
         // JSON-first is required by GLB, not merely a convention.
         Write(Path.Combine(output,"sd","invalid-order.glb"),root,binary,true);
         File.Copy(Path.Combine(output,"animated.glb"),Path.Combine(output,"sd","external.glb"),true);
