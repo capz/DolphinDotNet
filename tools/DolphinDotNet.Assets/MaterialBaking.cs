@@ -120,7 +120,8 @@ internal sealed partial class GltfImport
             if(!hasEmission&&!hasOcclusion)continue;
 
             bool hasPbr=material.TryGetProperty("pbrMetallicRoughness",out var pbr);
-            bool hasBase=hasPbr&&pbr.TryGetProperty("baseColorTexture",out var baseTx);
+            JsonElement baseTx=default;
+            bool hasBase=hasPbr&&pbr.TryGetProperty("baseColorTexture",out baseTx);
             int baseIndex=hasBase?Int(baseTx,"index",-1):-1;
             int emissionIndex=hasEmission?Int(emissionTx,"index",-1):-1;
             int occlusionIndex=hasOcclusion?Int(occlusionTx,"index",-1):-1;
