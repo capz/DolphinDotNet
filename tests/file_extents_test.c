@@ -54,23 +54,30 @@ int main(void) {
   put32(fixture.sectors[1]+16,5);
   put32(fixture.sectors[1]+20,0x0fffffff);
   assert(dnd_fat_count_extents(&reader,"/app.dol",&runs)==0 && runs==1);
-  /* Valid FAT32 LFN sequence with checksum refers to the same short entry. */
+  /* A two-entry FAT32 LFN sequence (20 ASCII chars) resolves to the
+   * same 8.3 directory entry after validating the checksum. */
   fat32(&fixture);
   unsigned char *root=fixture.sectors[2];
-  memmove(root+32,root,32);
-  memset(root,0xff,32);
-  root[0]=0x41;root[11]=0x0f;root[12]=0;
+  memmove(root+64,root,32);
+  memset(root,0xff,64);
+  root[0]=0x42;root[11]=0x0f;root[12]=0;
+  root[32]=0x01;root[32+11]=0x0f;root[32+12]=0;
   unsigned checksum=0;
   for(unsigned i=0;i<11;i++)
-    checksum=((checksum&1u)?0x80u:0u)+(checksum>>1)+root[32+i];
-  root[13]=(unsigned char)checksum;
+    checksum=((checksum&1u)?0x80u:0u)+(checksum>>1)+root[64+i];
+  root[13]=root[32+13]=(unsigned char)checksum;
   static const unsigned lfn_offsets[13]=
     {1,3,5,7,9,14,16,18,20,22,24,28,30};
-  const char *longname="long.dol";
-  for(unsigned i=0;i<13;i++)
-    put16(root+lfn_offsets[i],i<8?(unsigned char)longname[i]:
-          i==8?0:0xffff);
-  assert(dnd_fat_count_extents(&reader,"long.dol",&runs)==0 && runs==2);
+  const char *longname="verylongfilename.dol";
+  size_t name_length=strlen(longname);
+  for(unsigned i=0;i<26;i++) {
+    unsigned char *entry=i<13?root+32:root;
+    unsigned idx=i%13;
+    uint16_t ch=i<name_length?(unsigned char)longname[i]:
+                i==name_length?0:0xffff;
+    put16(entry+lfn_offsets[idx],ch);
+  }
+  assert(dnd_fat_count_extents(&reader,longname,&runs)==0 && runs==2);
   assert(dnd_fat_count_extents(&reader,"r\xc3\xa9sume.dol",&runs)==-ENOTSUP);
   /* Non-default FAT32 cluster size: file fits in just one four-sector run. */
   fat32(&fixture);
