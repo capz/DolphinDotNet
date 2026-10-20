@@ -71,7 +71,7 @@ int main(void) {
     put16(root+lfn_offsets[i],i<8?(unsigned char)longname[i]:
           i==8?0:0xffff);
   assert(dnd_fat_count_extents(&reader,"long.dol",&runs)==0 && runs==2);
-  assert(dnd_fat_count_extents(&reader,"r\\xc3\\xa9sume.dol",&runs)==-ENOTSUP);
+  assert(dnd_fat_count_extents(&reader,"r\xc3\xa9sume.dol",&runs)==-ENOTSUP);
   /* Non-default FAT32 cluster size: file fits in just one four-sector run. */
   fat32(&fixture);
   fixture.sectors[0][13]=4;
