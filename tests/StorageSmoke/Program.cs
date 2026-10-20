@@ -87,7 +87,7 @@ internal static class Program
         // host; only real GameCube FAT32/exFAT volumes report extents.
         try{Defrag.Analyze(path);return 77;}catch(NotSupportedException){}
         try{Defrag.Optimize(path);return 78;}catch(NotSupportedException){}
-        try{using(var input=File.OpenRead(path))
+        try{using(var input=Dolphin.IO.File.OpenRead(path))
             Defrag.WriteContiguousFrom(input,Path.Combine(root,"streaming.bin"),3);
             return 79;
         }catch(NotSupportedException){}
