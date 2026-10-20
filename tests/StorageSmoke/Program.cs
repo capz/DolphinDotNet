@@ -14,6 +14,9 @@ internal static class Program
         if(!Defrag.IsEnabled)return 67;
         Defrag.OptIn(false);
         if(Defrag.IsEnabled)return 68;
+        Defrag.ResetStatistics();
+        var stats=Defrag.GetStatistics();
+        if(stats.Attempts!=0 || stats.Repairs!=0 || stats.LastOutcome!=-1)return 81;
         if(Defrag.MinimumFileSize!=65536)return 71;
         using(Defrag.BeginScope(true,4096))
         {
