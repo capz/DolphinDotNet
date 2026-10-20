@@ -6,6 +6,7 @@ using DolphinDotNet.Assets;
 
 string output=args.Length==0?Path.Combine(Path.GetTempPath(),"dnd-model-fixtures"):Path.GetFullPath(args[0]);Directory.CreateDirectory(output);Directory.CreateDirectory(Path.Combine(output,"sd"));
 PsoImportTests.Run(output);
+ModelCompatibilityTests.Run(output);
 FZeroImportTests.Run(output);
 GameCubeImportTests.Run(output);
 RenderWareMeleeFixtures.Run(output);
