@@ -148,6 +148,17 @@ For GC Loader, raw SD mountability and firmware write support must be checked
 on the target console. Benchmarks and power-cut tests on real cards remain
 mandatory.
 
+## Hardware acceptance
+
+The new [headless StorageIntegrity probe](../samples/StorageIntegrity/README.md)
+benchmarks SD2SP2 and writable GC Loader volumes using 1 MiB writes and
+16/64 KiB buffers. Its opt-in `POWER` mode continuously exercises
+checksum-verified, journaled create-new writes and checks publication after
+reboot. It is **not** run by CI on actual devices; the CI job compiles the
+sample and separately runs deterministic native checkpoint-injection tests.
+Use a separate test card, measure FAT32 and exFAT, near-full media, and log
+firmware/card details before promoting the feature to hardware-verified.
+
 ## Automatic fragmentation prevention and repair
 
 **Disabled by default.** Before starting the writes you want optimized, call
