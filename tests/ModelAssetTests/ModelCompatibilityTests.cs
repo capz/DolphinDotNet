@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using DolphinDotNet.Assets;
 using System.Text.Json.Nodes;
 
@@ -68,7 +69,23 @@ internal static class ModelCompatibilityTests
         else
         {
             ModelConverter.Convert(source, target);
-            if (new FileInfo(target).Length < 160) throw new Exception("Missing converted model.");
+            var package=File.ReadAllBytes(target);
+            if (package.Length < 160) throw new Exception("Missing converted model.");
+            int meshSection=checked((int)BinaryPrimitives.ReadUInt32BigEndian(package.AsSpan(36,4)));
+            int primitive=meshSection+4;
+            int vertexCount=checked((int)BinaryPrimitives.ReadUInt32BigEndian(package.AsSpan(primitive+12,4)));
+            int triangleIndexCount=checked((int)BinaryPrimitives.ReadUInt32BigEndian(package.AsSpan(primitive+16,4)));
+            int start=primitive+44+80*vertexCount;
+            var actual=Enumerable.Range(0,triangleIndexCount)
+                .Select(i=>checked((int)BinaryPrimitives.ReadUInt32BigEndian(package.AsSpan(start+i*4,4)))).ToArray();
+            int[] expected=mode switch
+            {
+                5=>[0,1,2,2,1,3],
+                6=>[0,1,2,0,2,3],
+                _=>[0,1,2]
+            };
+            if(!actual.SequenceEqual(expected))throw new Exception(
+                $"Incorrect triangle winding for mode {mode}: {string.Join(",",actual)}");
         }
     }
 
