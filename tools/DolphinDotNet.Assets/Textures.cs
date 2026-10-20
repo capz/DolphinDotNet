@@ -43,6 +43,13 @@ internal sealed partial class GltfImport
         float[] color=[1,1,1,1];int texture=-1,mode=0;float cutoff=0.5f;bool two=false;
         if(m.ValueKind!=JsonValueKind.Undefined){mode=Text(m,"alphaMode","OPAQUE") switch{"OPAQUE"=>0,"MASK"=>1,"BLEND"=>4,_=>throw new InvalidDataException("Unsupported alpha mode.")} ;cutoff=Float(m,"alphaCutoff",0.5f);two=m.TryGetProperty("doubleSided",out var ds)&&ds.GetBoolean();bool unlit=m.TryGetProperty("extensions",out var ex)&&ex.TryGetProperty("KHR_materials_unlit",out _);if(unlit)mode|=2;
             foreach(string key in new[]{"normalTexture","occlusionTexture","emissiveTexture"})if(m.TryGetProperty(key,out _)&&!options.ApproximateMaterials)throw new InvalidDataException("Unsupported material feature "+key+"; opt in to approximation or bake it.");if(m.TryGetProperty("pbrMetallicRoughness",out var p)){color=Values(p,"baseColorFactor",color);if(p.TryGetProperty("baseColorTexture",out var tx)){texture=Int(tx,"index",-1);if((uint)texture>=Items("textures").Length)throw new InvalidDataException("Invalid base-color texture reference.");_ = BaseColorUv(m);}if(!unlit&&!options.ApproximateMaterials&&(Float(p,"metallicFactor",1)>0||p.TryGetProperty("metallicRoughnessTexture",out _)))throw new InvalidDataException("PBR material requires --allow-material-approximation or baking.");}}
+        if(m.ValueKind!=JsonValueKind.Undefined&&!options.ApproximateMaterials&&
+           m.TryGetProperty("emissiveFactor",out var sourceEmission))
+        {
+            var values=sourceEmission.EnumerateArray().Select(x=>x.GetSingle()).ToArray();
+            if(values.Length!=3||values.Any(x=>x>0))
+                throw new InvalidDataException("Emissive color requires explicit material approximation or baking.");
+        }
         if(m.ValueKind!=JsonValueKind.Undefined&&options.ApproximateMaterials)
         {
             if(m.TryGetProperty("normalTexture",out _))
