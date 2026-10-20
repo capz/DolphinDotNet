@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/model-import-compatibility-phase1
   workflow_dispatch:
 
 permissions:
