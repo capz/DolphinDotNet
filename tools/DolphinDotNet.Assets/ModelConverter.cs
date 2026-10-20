@@ -21,10 +21,10 @@ public static class ModelConverter
         try
         {
             GltfImport importer;
-            if(ext is ".fbx" or ".obj")
+            if(ext is ".fbx" or ".obj" or ".dae" or ".3ds" or ".stl" or ".ply")
             {
                 temp=Path.Combine(Path.GetDirectoryName(input)!,".dnd-"+Guid.NewGuid().ToString("N")+".glb");
-                string version=Run(options.Assimp,"version");if(!version.Contains("Version 5.3 ")&&!version.Contains("Version 5.3."))throw new InvalidDataException("FBX/OBJ require Assimp CLI 5.3.x; found: "+version.Trim());
+                string version=Run(options.Assimp,"version");if(!version.Contains("Version 5.3 ")&&!version.Contains("Version 5.3."))throw new InvalidDataException("FBX/OBJ/DAE/3DS/STL/PLY require Assimp CLI 5.3.x; found: "+version.Trim());
                 Console.Error.WriteLine("Import adapter: "+version.Trim()+". Verify FBX sampled curves/pivots against the authoring application.");
                 Run(options.Assimp,"dump",input,temp+".assxml","-tri");
                 var durations=AssimpAudit.Check(temp+".assxml");
@@ -43,7 +43,7 @@ public static class ModelConverter
                 return;
             }
             else if(ext is ".gltf" or ".glb")importer=new(input,options);
-            else throw new ArgumentException("Supported inputs: FBX, OBJ, glTF, GLB, PSO GameCube GJ and Blue Burst XJ geometry.");
+            else throw new ArgumentException("Supported inputs: FBX, OBJ, DAE, 3DS, STL, PLY, glTF, GLB, PSO GameCube GJ and Blue Burst XJ geometry.");
             var package=importer.Build();Directory.CreateDirectory(Path.GetDirectoryName(output)!);string staged=output+"."+Guid.NewGuid().ToString("N")+".tmp";
             try{File.WriteAllBytes(staged,package);File.Move(staged,output,true);}finally{File.Delete(staged);}
             File.WriteAllText(output+".deps.json",JsonSerializer.Serialize(importer.Dependencies.OrderBy(x=>x,StringComparer.Ordinal).Select(x=>new{path=x,sha256=System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(x)))})));
@@ -96,8 +96,35 @@ internal sealed partial class GltfImport
     }
     private float[][] Access(int index,string type)
     {
-        var list=Items("accessors");if((uint)index>=list.Length)throw new InvalidDataException("Invalid accessor.");var a=list[index];if(Text(a,"type")!=type)throw new InvalidDataException("Accessor shape.");if(a.TryGetProperty("sparse",out _))throw new InvalidDataException("Sparse accessors require expansion.");
-        int width=type switch{"SCALAR"=>1,"VEC2"=>2,"VEC3"=>3,"VEC4"=>4,"MAT4"=>16,_=>throw new InvalidDataException("Accessor type.")},component=Int(a,"componentType"),size=component switch{5120 or 5121=>1,5122 or 5123=>2,5125 or 5126=>4,_=>throw new InvalidDataException("Component type.")},count=Int(a,"count"),v=Int(a,"bufferView",-1);if(count<1||count>1000000||v<0)throw new InvalidDataException("Accessor count/view.");byte[] data=View(v);int stride=Int(Items("bufferViews")[v],"byteStride",size*width),offset=Int(a,"byteOffset");if(offset<0||stride<size*width||(long)offset+(long)(count-1)*stride+size*width>data.Length)throw new InvalidDataException("Accessor range/stride.");bool normalized=a.TryGetProperty("normalized",out var norm)&&norm.GetBoolean();
-        var result=new float[count][];for(int i=0;i<count;i++){result[i]=new float[width];for(int j=0;j<width;j++){var b=data.AsSpan(offset+i*stride+j*size,size);float x=component switch{5120=>(sbyte)b[0],5121=>b[0],5122=>BinaryPrimitives.ReadInt16LittleEndian(b),5123=>BinaryPrimitives.ReadUInt16LittleEndian(b),5125=>BinaryPrimitives.ReadUInt32LittleEndian(b),_=>BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(b))};if(normalized)x=component switch{5120=>Math.Max(-1,x/127),5121=>x/255,5122=>Math.Max(-1,x/32767),5123=>x/65535,_=>throw new InvalidDataException("Invalid normalization.")};if(!float.IsFinite(x))throw new InvalidDataException("Non-finite accessor.");result[i][j]=x;}}return result;
+        var list=Items("accessors");if((uint)index>=list.Length)throw new InvalidDataException("Invalid accessor.");var a=list[index];if(Text(a,"type")!=type)throw new InvalidDataException("Accessor shape.");
+        int width=type switch{"SCALAR"=>1,"VEC2"=>2,"VEC3"=>3,"VEC4"=>4,"MAT4"=>16,_=>throw new InvalidDataException("Accessor type.")},component=Int(a,"componentType"),size=component switch{5120 or 5121=>1,5122 or 5123=>2,5125 or 5126=>4,_=>throw new InvalidDataException("Component type.")},count=Int(a,"count"),v=Int(a,"bufferView",-1);if(count<1||count>1000000||v< -1)throw new InvalidDataException("Accessor count/view.");byte[] data=v>=0?View(v):Array.Empty<byte>();int stride=v>=0?Int(Items("bufferViews")[v],"byteStride",size*width):size*width,offset=Int(a,"byteOffset");if(offset<0||stride<size*width||(v>=0&&(long)offset+(long)(count-1)*stride+size*width>data.Length)||(v<0&&offset!=0))throw new InvalidDataException("Accessor range/stride.");bool normalized=a.TryGetProperty("normalized",out var norm)&&norm.GetBoolean();
+        float Decode(ReadOnlySpan<byte> b)
+        {
+            float x=component switch{5120=>(sbyte)b[0],5121=>b[0],5122=>BinaryPrimitives.ReadInt16LittleEndian(b),5123=>BinaryPrimitives.ReadUInt16LittleEndian(b),5125=>BinaryPrimitives.ReadUInt32LittleEndian(b),_=>BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(b))};
+            if(normalized)x=component switch{5120=>Math.Max(-1,x/127),5121=>x/255,5122=>Math.Max(-1,x/32767),5123=>x/65535,_=>throw new InvalidDataException("Invalid normalization.")};
+            if(!float.IsFinite(x))throw new InvalidDataException("Non-finite accessor.");
+            return x;
+        }
+        var result=new float[count][];
+        for(int i=0;i<count;i++){result[i]=new float[width];if(v>=0)for(int j=0;j<width;j++)result[i][j]=Decode(data.AsSpan(offset+i*stride+j*size,size));}
+        if(a.TryGetProperty("sparse",out var sparse))
+        {
+            int sparseCount=Int(sparse,"count",-1);
+            if(sparseCount<1||sparseCount>count)throw new InvalidDataException("Sparse accessor count.");
+            var indexInfo=sparse.GetProperty("indices");int indexType=Int(indexInfo,"componentType",-1),indexSize=indexType switch{5121=>1,5123=>2,5125=>4,_=>throw new InvalidDataException("Sparse index type.")};
+            var indexData=View(Int(indexInfo,"bufferView",-1));int indexOffset=Int(indexInfo,"byteOffset");
+            var valueInfo=sparse.GetProperty("values");var valueData=View(Int(valueInfo,"bufferView",-1));int valueOffset=Int(valueInfo,"byteOffset");
+            if(indexOffset<0||valueOffset<0||(long)indexOffset+(long)sparseCount*indexSize>indexData.Length||(long)valueOffset+(long)sparseCount*width*size>valueData.Length)throw new InvalidDataException("Sparse accessor bounds.");
+            int previous=-1;
+            for(int i=0;i<sparseCount;i++)
+            {
+                var b=indexData.AsSpan(indexOffset+i*indexSize,indexSize);
+                uint index=indexType switch{5121=>b[0],5123=>BinaryPrimitives.ReadUInt16LittleEndian(b),_=>BinaryPrimitives.ReadUInt32LittleEndian(b)};
+                if(index>=count||index<=previous)throw new InvalidDataException("Sparse indices must be increasing, unique and in range.");
+                previous=(int)index;
+                for(int j=0;j<width;j++)result[(int)index][j]=Decode(valueData.AsSpan(valueOffset+(i*width+j)*size,size));
+            }
+        }
+        return result;
     }
 }
