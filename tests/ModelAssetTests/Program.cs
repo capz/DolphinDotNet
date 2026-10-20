@@ -150,6 +150,30 @@ ModelConverter.Convert(gltf,package+".second");if(!bytes.SequenceEqual(File.Read
     File.WriteAllText(gltf,root.ToJsonString());
 }
 
+
+{
+    // Explicit material approximation composites multiple compatible source
+    // maps instead of discarding emissive and occlusion textures.
+    var layered=root.DeepClone().AsObject();
+    layered["materials"]![0]!["emissiveTexture"]=new JsonObject{["index"]=0};
+    layered["materials"]![0]!["emissiveFactor"]=new JsonArray(0.25,0,0);
+    layered["materials"]![0]!["occlusionTexture"]=new JsonObject{["index"]=0,["strength"]=0.5};
+    File.WriteAllText(gltf,layered.ToJsonString());
+    try{ModelConverter.Convert(gltf,package+".layers-strict");throw new Exception("Multi-texture layers silently accepted in strict mode.");}
+    catch(InvalidDataException){}
+    ModelConverter.Convert(gltf,package+".layers",new(){ApproximateMaterials=true});
+    var layerBytes=File.ReadAllBytes(package+".layers");
+    int layersTextureOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(layerBytes.AsSpan(68,4)));
+    int layersTextureCount=checked((int)BinaryPrimitives.ReadUInt32BigEndian(layerBytes.AsSpan(layersTextureOffset,4)));
+    if(layersTextureCount!=2)throw new Exception("Layered material did not bake a distinct GX texture.");
+    if(bytes.SequenceEqual(layerBytes))throw new Exception("Layered material package unchanged.");
+    layered["materials"]![0]!["emissiveTexture"]!["texCoord"]=1;
+    File.WriteAllText(gltf,layered.ToJsonString());
+    try{ModelConverter.Convert(gltf,package+".layers-bad-uv",new(){ApproximateMaterials=true});
+        throw new Exception("Mismatched multi-map UVs accepted.");}
+    catch(InvalidDataException){}
+    File.WriteAllText(gltf,root.ToJsonString());
+}
 // External buffers and images, plus GLB binary geometry.
 root["buffers"]![0]!["uri"]="geometry.bin";root["images"]![0]!["uri"]="texture.png";File.WriteAllBytes(Path.Combine(output,"geometry.bin"),binary.ToArray());File.WriteAllBytes(Path.Combine(output,"texture.png"),png.ToArray());File.WriteAllText(gltf,root.ToJsonString());ModelConverter.Convert(gltf,package+".external");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".external")))throw new Exception("External dependencies differ.");
 root["buffers"]![0]!.AsObject().Remove("uri");var json=Encoding.UTF8.GetBytes(root.ToJsonString());int jsonLength=(json.Length+3)&~3,binLength=((int)binary.Length+3)&~3;using(var file=File.Create(Path.Combine(output,"animated.glb"))){using var w=new BinaryWriter(file);w.Write(0x46546c67);w.Write(2);w.Write(12+8+jsonLength+8+binLength);w.Write(jsonLength);w.Write(0x4e4f534a);w.Write(json);w.Write(Enumerable.Repeat((byte)32,jsonLength-json.Length).ToArray());w.Write(binLength);w.Write(0x004e4942);w.Write(binary.ToArray());w.Write(new byte[binLength-(int)binary.Length]);}ModelConverter.Convert(Path.Combine(output,"animated.glb"),package+".glb");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".glb")))throw new Exception("GLB differs.");
