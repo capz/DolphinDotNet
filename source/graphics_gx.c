@@ -8,6 +8,7 @@
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
+#include "dnd_material_math.h"
 #ifdef DND_GAMECUBE_STORAGE
 #include <gccore.h>
 #include <malloc.h>
@@ -80,17 +81,21 @@ void dnd_draw_backend_restore(void) {
     GX_SetClipMode(GX_CLIP_ENABLE);GX_SetCoPlanar(GX_FALSE);GX_SetFog(GX_FOG_NONE,0,1,0,1,(GXColor){0,0,0,0});
 }
 #include "dnd_tev_backend.inc"
+#include "dnd_material_channels.inc"
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world) {
     dnd_draw_backend_restore();
     float mv[16];multiply(mv,view_matrix,world);Mtx m;Mtx44 p;
     for(int r=0;r<3;r++)for(int c=0;c<4;c++)m[r][c]=mv[c*4+r];
     for(int r=0;r<4;r++)for(int c=0;c<4;c++)p[r][c]=projection_matrix[c*4+r];
     GX_LoadProjectionMtx(p,projection_ortho?GX_ORTHOGRAPHIC:GX_PERSPECTIVE);GX_LoadPosMtxImm(m,GX_PNMTX0);GX_SetCurrentMtx(GX_PNMTX0);
-    bool lit=(material->flags&32)!=0;
-    if(lit) {
-        Mtx inverse,normal;
+    bool lit=(material->flags&32)!=0,environment=(material->flags&64)!=0;
+    Mtx normal;
+    if(lit||environment) {
+        Mtx inverse;
         if(!guMtxInverse(m,inverse))return;
         guMtxTranspose(inverse,normal);GX_LoadNrmMtxImm(normal,GX_PNMTX0);
+    }
+    if(lit) {
         GXLightObj light={0};GX_InitLightPos(&light,0,0,1000000);GX_InitLightColor(&light,(GXColor){192,192,192,255});GX_LoadLightObj(&light,GX_LIGHT0);
         GX_SetChanAmbColor(GX_COLOR0A0,(GXColor){64,64,64,255});
     }
@@ -98,7 +103,7 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
     GX_SetTexCoordScaleManually(GX_TEXCOORD0,GX_FALSE,1,1);GX_SetTexCoordBias(GX_TEXCOORD0,GX_FALSE,GX_FALSE);
     GX_SetLineWidth(6,GX_TO_ZERO);GX_SetPointSize(6,GX_TO_ZERO);
     GX_SetNumIndStages(0);GX_SetNumChans(1);GX_SetNumTexGens(texture?1:0);
-    GX_SetChanCtrl(GX_COLOR0A0,lit?GX_ENABLE:GX_DISABLE,GX_SRC_REG,GX_SRC_VTX,lit?GX_LIGHT0:GX_LIGHTNULL,lit?GX_DF_CLAMP:GX_DF_NONE,GX_AF_NONE);
+    dnd_material_channels(lit);
     GX_SetZMode((material->flags&16)?GX_FALSE:GX_TRUE,GX_LEQUAL,(material->flags&8)?GX_FALSE:GX_TRUE);
     GX_SetZCompLoc(GX_FALSE);GX_SetColorUpdate(GX_TRUE);GX_SetAlphaUpdate(GX_TRUE);
     GX_SetCullMode((material->flags&4)?GX_CULL_BACK:GX_CULL_NONE);
@@ -122,7 +127,11 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
         GX_Position3f32(v[i].x,v[i].y,v[i].z);
         if(lit)GX_Normal3f32(v[i].nx,v[i].ny,v[i].nz);
         GXColor c=color(tint(v[i].color,material->color));GX_Color4u8(c.r,c.g,c.b,c.a);
-        if(texture)GX_TexCoord2f32(v[i].u,v[i].v);
+        if(texture){
+            float u=v[i].u,t=v[i].v;
+            if(environment)dnd_material_view_normal(normal,v[i].nx,v[i].ny,v[i].nz,&u,&t);
+            GX_TexCoord2f32(u,t);
+        }
     }
     GX_End();
 }

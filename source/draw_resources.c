@@ -192,7 +192,10 @@ static bool texture(int token,DndDrawTexture *out) {
 }
 int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect) {
     Resource *r=find(token,MESH);DndDrawTexture tx;float transform[16];
-    if(dnd_device_pass()!=1||!r||!texture(tex,&tx)||!matrix(world,transform)||flags<0||flags>63||!isfinite(cutoff)||cutoff<0||cutoff>1)return -1;
+    if(dnd_device_pass()!=1||!r||!texture(tex,&tx)||!matrix(world,transform)||flags<0||flags>127||!isfinite(cutoff)||cutoff<0||cutoff>1)return -1;
+    /* Reflection coordinates require authored normals, not the fallback +Z used
+     * by color-only meshes. Reject before any submission or triangle counters. */
+    if((flags&64)&&(!tex||r->format!=2))return -1;
     Resource *fx=effect?find(effect,EFFECT):NULL;
     if(effect&&(!fx||(((DndDrawEffect*)fx->data)->texture&&!tex)))return -1;
     DndDrawMaterial material={color,flags,cutoff,fx?(DndDrawEffect*)fx->data:NULL};

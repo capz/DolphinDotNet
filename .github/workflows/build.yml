@@ -550,6 +550,7 @@ jobs:
         if: matrix.group == 'graphics-model'
         run: |
           dotnet run --project tests/EffectCompilerTests -c Release
+          dotnet run --project tests/TevMaterialTests -c Release
           dotnet run --project tools/DolphinDotNet.Effects -c Release -- samples/ShaderDemo/toon.dndfx.json /tmp/toon.dndfx samples/ShaderDemo/CompiledEffect.g.cs
           git diff --exit-code -- samples/ShaderDemo/CompiledEffect.g.cs
           python3 scripts/generate_model_effect_fixture.py --check

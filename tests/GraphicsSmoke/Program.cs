@@ -33,8 +33,18 @@ internal static class Program
         if(effect.StageCount!=2||effect.GetUniformName(effect.GetUniformSlot("Bright"))!="Bright")return 9;
         effect.SetColor("Bright",new Color32(20,100,200));
         var renderer=new Renderer();var camera=new Camera();var transform=new Transform();var material=new Material();
+        using var toonPreset=TevMaterialPresets.Toon().Create(loaded);
+        using var metalPreset=TevMaterialPresets.MetallicReflection().Create(loaded);
+        using var emissionPreset=TevMaterialPresets.Emissive().Create(loaded);
+        metalPreset.Effect.SetColor("ReflectionStrength",new Color32(128,128,128));
+        emissionPreset.Effect.SetColor("EmissionColor",new Color32(255,20,100));
         device.BeginFrame(Color32.Black);
-        renderer.Begin3D(camera);material.Effect=textureEffect;
+        renderer.Begin3D(camera);
+        renderer.DrawMesh(normalMesh,toonPreset.Material,transform);
+        renderer.DrawMesh(normalMesh,metalPreset.Material,transform);
+        renderer.DrawMesh(normalMesh,emissionPreset.Material,transform);
+        try{renderer.DrawMesh(texturedMesh,metalPreset.Material,transform);return 13;}catch(InvalidOperationException){}
+        material.Effect=textureEffect;
         try{renderer.DrawMesh(mesh,material,transform);return 12;}catch(ArgumentException){}
         material.Texture=loaded;renderer.DrawMesh(mesh,material,transform);material.Texture=null;material.Effect=effect;renderer.DrawMesh(mesh,material,transform);material.Effect=null;material.Texture=texture;renderer.DrawMesh(texturedMesh,material,transform);material.Lighting=LightingMode.Diffuse;renderer.DrawMesh(normalMesh,material,transform);renderer.End3D();
         device.BeginRaw();GX.GX_SetCopyClear(new GXColor(0x11,0x22,0x33,0x44),0xffffff);GX.GX_SetTevColorS10(0,new GXColorS10(-1,2,-3,4));GU.guMtxIdentity(buffer.Address);GX.GX_Begin((byte)GXConstants.GX_TRIANGLES,(byte)GXConstants.GX_VTXFMT0,3);

@@ -7,6 +7,12 @@ typedef float Mtx[3][4];typedef float Mtx44[4][4];
 typedef struct {u8 r,g,b,a;} GXColor;
 typedef struct {void *data;int width,height,format,wrap_s,wrap_t,mips,min_filter,mag_filter;float max_lod;} GXTexObj;
 #define GX_AF_NONE 2
+#define GX_COLOR0 0
+#define GX_ALPHA0 2
+#define GX_ENABLE 1
+#define GX_LIGHT0 1
+#define GX_DF_CLAMP 2
+void GX_SetNumIndStages(int count);
 #define GX_ALWAYS 7
 #define GX_ANISO_1 0
 #define GX_AOP_AND 0
