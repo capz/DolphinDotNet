@@ -37,8 +37,10 @@ enum {
  * Return a status above or a negative errno. */
 int dnd_optimize_file(const char *root, const char *path,
                       const DndOptimizeOps *ops);
-/* Call before exposing the newly mounted volume. Never discards a backup
- * unless the published file has been completely verified. */
+/* Call before exposing the newly mounted volume. The PREPARE journal
+ * precedes creation of staged bytes, so interrupted partial copies are
+ * reclaimable; the COMMIT journal precedes source renames. Never discards
+ * a backup unless published data is verified. Invalid journals fail closed. */
 int dnd_optimize_recover(const char *root);
 
 #endif
