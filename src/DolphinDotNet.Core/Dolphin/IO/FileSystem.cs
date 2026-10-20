@@ -89,7 +89,7 @@ public static partial class File
                 // Tell libdvm the final length before writing so FatFs can
                 // reserve a contiguous run, with native close-time repair
                 // as a fallback when the reservation is not contiguous.
-                if(Defrag.IsEnabled && input.Length>=65536)output.SetLength(input.Length);
+                if(Defrag.IsEnabled && input.Length>=Defrag.MinimumFileSize)output.SetLength(input.Length);
                 var buffer=new byte[4096];int read;
                 while((read=input.Read(buffer,0,buffer.Length))!=0)output.Write(buffer,0,read);
             }

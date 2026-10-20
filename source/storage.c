@@ -26,8 +26,14 @@ static bool mounted[7];
 /* Opt-in is explicitly off for each program launch; the application may
  * enable automatic extent reservation/repair before initiating writes. */
 static bool auto_defrag_enabled;
+static int auto_defrag_min_bytes = 64 * 1024;
 bool dnd_storage_auto_defrag_enabled(void) { return auto_defrag_enabled; }
 void dnd_storage_auto_defrag_set(bool enabled) { auto_defrag_enabled = enabled; }
+int dnd_storage_auto_defrag_min_size(void) { return auto_defrag_min_bytes; }
+void dnd_storage_auto_defrag_set_min_size(int minimum) {
+  if(minimum<0) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Invalid minimum file size.");return; }
+  auto_defrag_min_bytes=minimum;
+}
 /* Keep backing mounted while its ISO is presented through dvd:/ */
 static int iso_source_device = -1;
 static unsigned card_users[2];
@@ -803,7 +809,7 @@ void dnd_fs_flush(int token) {
 /* Fast path: the existing libdvm allocator tries f_expand when size is
  * known; after a write, only fragmented files are copied. Do not perform
  * a full-volume scan or touch unrelated files. */
-#define DND_AUTO_OPT_MIN_BYTES (64 * 1024)
+#define DND_AUTO_OPT_MIN_BYTES auto_defrag_min_bytes
 #ifdef DND_GAMECUBE_STORAGE
 static int auto_count_extents(void *context,const char *path,unsigned *extents) {
   return dnd_gc_contiguous_extents((int)(intptr_t)context,path,extents);
@@ -846,6 +852,49 @@ static void auto_clean_file(const char *canonical,int device) {
   }
 #else
   (void)canonical;(void)device;
+#endif
+}
+/* Manual inspection and repair never depend on the global opt-in policy.
+ * They must not run while another managed handle still references the file:
+ * a rename would leave that handle bound to the old allocation. */
+int dnd_fs_defrag_analyze(DndString *path) {
+  char canonical[PATH_CAP],native[PATH_CAP];
+  int d=resolve(path,canonical,native);
+  if(d<0)return -1;
+  if(d==3 || d==4 || d==5) {fail(ENOSYS,"Extent analysis requires FAT32/exFAT SD storage.");return -1;}
+  if(busy(canonical) || contiguous_tokens[d]) {fail(EBUSY,"File is open or a contiguous write is active.");return -1;}
+#ifdef DND_GAMECUBE_STORAGE
+  unsigned extents=0;
+  int rc=dnd_gc_contiguous_extents(d,native,&extents);
+  if(rc<0) {fail(rc==-ENOTSUP?ENOSYS:-rc,"Cannot inspect FAT allocation.");return -1;}
+  if(extents>INT_MAX) {fail(EFBIG,"Too many extents.");return -1;}
+  return (int)extents;
+#else
+  fail(ENOSYS,"FAT extent inspection requires GameCube hardware.");
+  return -1;
+#endif
+}
+int dnd_fs_defrag_optimize(DndString *path) {
+  char canonical[PATH_CAP],native[PATH_CAP],root[PATH_CAP];
+  int d=resolve(path,canonical,native);
+  if(d<0)return -1;
+  if(d==3 || d==4 || d==5) {fail(EROFS,"Optimization requires writable SD storage.");return -1;}
+  if(busy(canonical) || contiguous_tokens[d] ||
+     (d==iso_source_device && mounted[3])) {
+    fail(EBUSY,"File is in use or the SD volume backs a mounted DVD.");
+    return -1;
+  }
+#ifdef DND_GAMECUBE_STORAGE
+  contiguous_root(d,root);
+  DndOptimizeOps ops={(void *)(intptr_t)d,auto_count_extents,NULL,
+                      auto_copy_metadata};
+  int rc=dnd_optimize_file(root,native,&ops);
+  if(rc<0) {fail(rc==-ENOTSUP?ENOSYS:-rc,"Cannot optimize file.");return -1;}
+  return rc;
+#else
+  (void)root;
+  fail(ENOSYS,"FAT optimization requires GameCube hardware.");
+  return -1;
 #endif
 }
 static int auto_contiguous_write(DndString *path,DndArray *data) {

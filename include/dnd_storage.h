@@ -14,6 +14,10 @@ bool dnd_storage_is_mounted(int device);
  * to off. Explicit CreateContiguousFile is not gated by this policy. */
 void dnd_storage_auto_defrag_set(bool enabled);
 bool dnd_storage_auto_defrag_enabled(void);
+int dnd_storage_auto_defrag_min_size(void);
+void dnd_storage_auto_defrag_set_min_size(int minimum);
+int dnd_fs_defrag_analyze(DndString *path);
+int dnd_fs_defrag_optimize(DndString *path);
 DndString *dnd_storage_path(DndManagedHeap *, int device, DndString *path);
 DndString *dnd_fs_full_path(DndManagedHeap *, DndString *path);
 bool dnd_fs_exists(DndString *path, bool directory);

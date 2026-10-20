@@ -17,6 +17,10 @@ internal static class NativeStorage
     internal static void WriteAllBytes(string path,byte[] data)=>throw Unsupported();
     internal static void SetAutoDefrag(bool enabled)=>throw Unsupported();
     internal static bool AutoDefragEnabled()=>throw Unsupported();
+    internal static int DefragMinFileSize()=>throw Unsupported();
+    internal static void SetDefragMinFileSize(int minimum)=>throw Unsupported();
+    internal static int DefragAnalyze(string path)=>throw Unsupported();
+    internal static int DefragOptimize(string path)=>throw Unsupported();
     internal static void Delete(string path,bool directory)=>throw Unsupported();
     internal static void Move(string source,string destination)=>throw Unsupported();
     internal static int ContiguousBegin(string path,long expectedLength)=>throw Unsupported();
