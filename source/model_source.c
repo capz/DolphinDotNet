@@ -1125,6 +1125,14 @@ static int import_scene(const char *path, int fbx, float sample_rate,
         base.has_value ? base.value_vec3 : (ufbx_vec3){.x = 1, .y = 1, .z = 1};
     double mul = factor.has_value ? factor.value_real : 1;
     double opacity = m->pbr.opacity.has_value ? m->pbr.opacity.value_real : 1;
+    /* OBJ MTL dissolve/Tr and older FBX materials can retain alpha in the
+     * classic transparency factor rather than ufbx's PBR opacity field. */
+    if (m->fbx.transparency_factor.has_value) {
+      double transparency = m->fbx.transparency_factor.value_real;
+      if (!isfinite(transparency) || transparency < 0 || transparency > 1)
+        goto done;
+      opacity = fmin(opacity, 1.0 - transparency);
+    }
     if (!isfinite(opacity) || opacity < 0 || opacity > 1)
       goto done;
     int texture = -1;
