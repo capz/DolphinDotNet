@@ -117,7 +117,9 @@ internal sealed partial class GltfImport
             var material=mats[m];
             bool hasEmission=material.TryGetProperty("emissiveTexture",out var emissionTx);
             bool hasOcclusion=material.TryGetProperty("occlusionTexture",out var occlusionTx);
-            if(!hasEmission&&!hasOcclusion)continue;
+            var sourceEmission=Values(material,"emissiveFactor",[0,0,0]);
+            bool hasConstantEmission=sourceEmission.Length==3&&sourceEmission.Any(x=>x>0);
+            if(!hasEmission&&!hasOcclusion&&!hasConstantEmission)continue;
 
             bool hasPbr=material.TryGetProperty("pbrMetallicRoughness",out var pbr);
             JsonElement baseTx=default;
@@ -125,13 +127,14 @@ internal sealed partial class GltfImport
             int baseIndex=hasBase?Int(baseTx,"index",-1):-1;
             int emissionIndex=hasEmission?Int(emissionTx,"index",-1):-1;
             int occlusionIndex=hasOcclusion?Int(occlusionTx,"index",-1):-1;
-            int primary=baseIndex>=0?baseIndex:hasEmission?emissionIndex:occlusionIndex;
-            using var primaryImage=DecodeSourceTexture(primary);
+            int primary=baseIndex>=0?baseIndex:hasEmission?emissionIndex:hasOcclusion?occlusionIndex:-1;
+            using var primaryImage=primary>=0?DecodeSourceTexture(primary):
+                new RasterImage(4,4,new Rgba32(255,255,255,255));
             int width=Dimension(primaryImage.Width,options.TextureLimit);
             int height=Dimension(primaryImage.Height,options.TextureLimit);
 
             var baseUv=hasBase?TextureUv(baseTx):(0,new float[]{0,0},new float[]{1,1},0f);
-            var sampler=SamplerOf(primary);
+            var sampler=primary>=0?SamplerOf(primary):(wrapS:1,wrapT:1,linear:1);
             void ValidateLayer(JsonElement layer,int textureIndex)
             {
                 if(!SameUv(baseUv,TextureUv(layer)))
@@ -161,9 +164,9 @@ internal sealed partial class GltfImport
             {
                 var b=baseImage[x,y];var e=emissionImage?[x,y];var o=occlusionImage?[x,y];
                 float occlusion=o.HasValue?1-strength+strength*o.Value.R/255f:1;
-                float R=(b.R/255f)*factor[0]*occlusion+(e?.R??0)/255f*emissive[0];
-                float G=(b.G/255f)*factor[1]*occlusion+(e?.G??0)/255f*emissive[1];
-                float B=(b.B/255f)*factor[2]*occlusion+(e?.B??0)/255f*emissive[2];
+                float R=(b.R/255f)*factor[0]*occlusion+(e?.R??255)/255f*emissive[0];
+                float G=(b.G/255f)*factor[1]*occlusion+(e?.G??255)/255f*emissive[1];
+                float B=(b.B/255f)*factor[2]*occlusion+(e?.B??255)/255f*emissive[2];
                 baked[x,y]=new Rgba32(Clamp255(R),Clamp255(G),Clamp255(B),Clamp255((b.A/255f)*factor[3]));
             }
             bakedMaterials[m]=AddUnique(payloads,unique,PackedTexture(baked,sampler));
