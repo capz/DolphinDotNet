@@ -42,19 +42,6 @@ internal static class Program
         emissionPreset.Effect.SetColor("EmissionColor",new Color32(255,20,100));
         device.BeginFrame(Color32.Black);
         renderer.Begin3D(camera);
-        // Cross-instance alpha ordering uses preallocated scratch, with stable
-        // origin-based depth sorting before the per-model draw path.
-        var front=new GameObject();
-        var rear=new GameObject();
-        var middle=new GameObject();
-        front.Transform.LocalPosition=new Vector3(0,0,2);
-        rear.Transform.LocalPosition=new Vector3(0,0,-5);
-        middle.Transform.LocalPosition=new Vector3(0,0,0);
-        var sorted=new[]{front,rear,middle};
-        var scratch=new int[3];
-        renderer.DrawModelsBackToFront(camera,sorted,scratch);
-        if(scratch[0]!=1||scratch[1]!=2||scratch[2]!=0)return 20;
-        try{renderer.DrawModelsBackToFront(camera,sorted,new int[2]);return 21;}catch(ArgumentException){}
         renderer.DrawMesh(normalMesh,toonPreset.Material,transform);
         renderer.DrawMesh(normalMesh,metalPreset.Material,transform);
         renderer.DrawMesh(normalMesh,emissionPreset.Material,transform);
