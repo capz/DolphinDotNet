@@ -128,7 +128,7 @@ public static class Defrag
         if(source==null)throw new ArgumentNullException(nameof(source));
         if(destination==null)throw new ArgumentNullException(nameof(destination));
         if(knownLength<0)throw new ArgumentOutOfRangeException(nameof(knownLength));
-        using(var writer=Storage.CreateContiguousFile(destination,knownLength))
+        using(var writer=Dolphin.Storage.Storage.CreateContiguousFile(destination,knownLength))
         {
             var buffer=new byte[16384];
             long remaining=knownLength;
