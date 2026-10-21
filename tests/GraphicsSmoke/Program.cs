@@ -50,6 +50,7 @@ internal static class Program
         metalPreset.Effect.SetColor("ReflectionStrength",new Color32(128,128,128));
         emissionPreset.Effect.SetColor("EmissionColor",new Color32(255,20,100));
         // Texture strategy queue: same material grouped into one logical batch.
+        var expiredTexture=Texture2D.CreateNative(8,8,NativeTextureFormat.Cmpr);
         var renderQueue=new RenderQueue(4);
         device.BeginFrame(Color32.Black);
         renderer.Begin3D(camera);
@@ -72,7 +73,6 @@ internal static class Program
         if(batch.DrawCalls!=2)return 1;
         var finishFence=device.InsertFence();
         if(finishFence.IsCompleted)return 35;
-        var expiredTexture=Texture2D.CreateNative(8,8,NativeTextureFormat.Cmpr);
         device.RetireAfter(finishFence,expiredTexture);
         device.EndFrame();
         if(!finishFence.IsCompleted)return 36;

@@ -561,10 +561,10 @@ jobs:
           git diff --exit-code -- src/DolphinDotNet.GameCube/Dolphin/Graphics/Raw include/dnd_gx_raw.h source/gx_raw.c tools/DolphinDotNet.Compiler/RawGXBindings.Generated.cs
           dotnet build tests/GraphicsSmoke/GraphicsSmoke.csproj -c Release
           dotnet "$DND_COMPILER_DLL" --aot tests/GraphicsSmoke/bin/Release/net8.0/GraphicsSmoke.dll /tmp/graphics-smoke.c
-          cc -pthread -DDND_GRAPHICS_TEST -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/contiguous_write.c source/file_optimize.c source/text.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke
+          cc -pthread -DDND_GRAPHICS_TEST -O2 -g -fsanitize=address,undefined -fno-sanitize-recover=all -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/contiguous_write.c source/file_optimize.c source/text.c source/managed_runtime.c source/async_runtime.c source/aram.c source/performance.c -lm -o /tmp/graphics-smoke
           /tmp/graphics-smoke
           DND_ASYNC_MANUAL=0 /tmp/graphics-smoke
-          cc -pthread -m32 -DDND_GRAPHICS_TEST -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/contiguous_write.c source/file_optimize.c source/text.c source/managed_runtime.c source/async_runtime.c source/performance.c -lm -o /tmp/graphics-smoke32
+          cc -pthread -m32 -DDND_GRAPHICS_TEST -O2 -std=c11 -Wall -Wextra -Werror -Iinclude /tmp/graphics-smoke.c tests/graphics_host.c tests/graphics_backend.c source/graphics_device.c source/draw_resources.c source/gx_raw.c source/gx_guard.c source/model*.c source/storage.c source/contiguous_write.c source/file_optimize.c source/text.c source/managed_runtime.c source/async_runtime.c source/aram.c source/performance.c -lm -o /tmp/graphics-smoke32
           /tmp/graphics-smoke32
       - name: Convert, package and validate model assets
         if: matrix.group == 'graphics-model'
