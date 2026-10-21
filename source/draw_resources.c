@@ -9,6 +9,11 @@
 #include <gccore.h>
 #endif
 #include "dnd_texture_png.h"
+/* Isolated host fixtures can link texture/resource plumbing without GX. */
+#if !defined(DND_GAMECUBE_STORAGE)
+__attribute__((weak)) void dnd_draw_backend_publish_texture(void){}
+#endif
+
 #define SLOTS 512
 #define BUDGET (16*1024*1024)
 enum { BUFFER=1,TEXTURE,MESH,CANVAS,EFFECT };
