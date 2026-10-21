@@ -32,6 +32,15 @@ internal static class Program
         using var effect=GxEffect.ColorRamp(Color32.Black,Color32.White);
         if(effect.StageCount!=2||effect.GetUniformName(effect.GetUniformSlot("Bright"))!="Bright")return 9;
         effect.SetColor("Bright",new Color32(20,100,200));
+        // Native CMPR payloads and streaming-resource replacement.
+        using var compressed=Texture2D.CreateNative(8,8,NativeTextureFormat.Cmpr);
+        if(compressed.NativeBytes!=32)return 30;
+        compressed.ReplaceNative(new byte[32]);
+        try{compressed.ReplaceNative(new byte[31]);return 31;}catch(ArgumentOutOfRangeException){}
+        using var streamed=new StreamingTexture(8,8);
+        if(streamed.IsResident)return 32;
+        streamed.UploadNative(new byte[32]);
+        if(!streamed.IsResident||streamed.ContentGeneration!=1)return 33;
         var renderer=new Renderer();var camera=new Camera();var transform=new Transform();var material=new Material();
         using var toonPreset=TevMaterialPresets.Toon().Create(loaded);
         using var metalPreset=TevMaterialPresets.MetallicReflection().Create(loaded);
@@ -40,8 +49,14 @@ internal static class Program
         using var dualGlow=TevMaterialPresets.Emissive(new EmissiveMaterialOptions{SeparateBaseTexture=true}).Create(loaded,texture);
         metalPreset.Effect.SetColor("ReflectionStrength",new Color32(128,128,128));
         emissionPreset.Effect.SetColor("EmissionColor",new Color32(255,20,100));
+        // Texture strategy queue: same material grouped into one logical batch.
+        var renderQueue=new RenderQueue(4);
         device.BeginFrame(Color32.Black);
         renderer.Begin3D(camera);
+        renderQueue.Submit(mesh,material,transform);
+        renderQueue.Submit(mesh,material,transform);
+        var queuedStats=renderQueue.Execute(renderer);
+        if(queuedStats.Draws!=2||queuedStats.Groups!=1)return 34;
         renderer.DrawMesh(normalMesh,toonPreset.Material,transform);
         renderer.DrawMesh(normalMesh,metalPreset.Material,transform);
         renderer.DrawMesh(normalMesh,emissionPreset.Material,transform);
@@ -55,7 +70,37 @@ internal static class Program
         batch.Begin();batch.FillRectangle(new RectF(0,0,10,10),Color32.White);batch.FillRectangle(new RectF(10,0,10,10),Color32.White);
         batch.DrawTexture(texture,new RectF(0,0,4,4),Color32.White);texture.Dispose();batch.End();
         if(batch.DrawCalls!=2)return 1;
+        var finishFence=device.InsertFence();
+        if(finishFence.IsCompleted)return 35;
+        var expiredTexture=Texture2D.CreateNative(8,8,NativeTextureFormat.Cmpr);
+        device.RetireAfter(finishFence,expiredTexture);
         device.EndFrame();
+        if(!finishFence.IsCompleted)return 36;
+        try{expiredTexture.ReplaceNative(new byte[32]);return 37;}catch(ObjectDisposedException){}
+        var renderStats=Dolphin.Diagnostics.GpuProfiler.Snapshot();
+        if(renderStats.DrawSubmissions<0||renderStats.TextureBindings<0)return 38;
+        using var diskTarget=NativeBuffer.Allocate(64);
+        var testPath="sd:/graphics_stream_test.bin";
+        var testBytes=new byte[96];
+        for(int i=0;i<testBytes.Length;i++)testBytes[i]=(byte)(i*13);
+        Dolphin.IO.File.WriteAllBytes(testPath,testBytes);
+        using(var asset=new Dolphin.Storage.AssetStream(testPath))
+        {
+            if(await asset.ReadAtAsync(16,diskTarget,0,64)!=64)return 39;
+            var verify=new byte[64];diskTarget.Read(verify);
+            for(int i=0;i<verify.Length;i++)if(verify[i]!=testBytes[i+16])return 40;
+        }
+        Dolphin.IO.File.Delete(testPath);
+        if(Dolphin.Memory.Aram.Initialize())
+        {
+            using var transfer=Dolphin.Memory.Aram.Allocate(64);
+            diskTarget.Write(testBytes,0,0,64);
+            await AramTransferQueue.CopyToAramAsync(diskTarget,0,transfer,0,64);
+            diskTarget.Write(new byte[64]);
+            await AramTransferQueue.CopyToMainAsync(transfer,0,diskTarget,0,64);
+            var verify=new byte[64];diskTarget.Read(verify);
+            for(int i=0;i<verify.Length;i++)if(verify[i]!=testBytes[i])return 41;
+        }
         using var queued=GxEffect.ToonBands(65,165,Color32.Black,new Color32(50,100,150),Color32.White);
         device.BeginFrame(Color32.Black);batch.Begin();batch.SetEffect(queued);
         batch.DrawTexture(loaded,new RectF(0,0,4,4),Color32.White);

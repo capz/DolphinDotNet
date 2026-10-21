@@ -1,5 +1,9 @@
 #include "dnd_aram.h"
 #include "dnd_draw.h"
+#ifndef DND_GAMECUBE_STORAGE
+/* Some isolated ARAM host tests intentionally do not link the graphics module. */
+extern uint64_t dnd_buffer_held_address(int token,int offset,int count) __attribute__((weak));
+#endif
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -131,6 +135,9 @@ int dnd_aram_begin_native(int token,int offset,int buffer_token,int bo,int count
  if(i<0 || slots[i].holds<=0 || offset<0 || bo<0 ||
     count<=0 || count>65536 || ((offset|bo|count)&31) ||
     offset>slots[i].length || count>slots[i].length-offset)return -EINVAL;
+#ifndef DND_GAMECUBE_STORAGE
+ if(!dnd_buffer_held_address)return -EINVAL;
+#endif
  uint64_t address=dnd_buffer_held_address(buffer_token,bo,count);
  if(!address || (address&31u))return -EINVAL;
  transfer.active=true;transfer.direct=true;transfer.native=(void*)(uintptr_t)address;
