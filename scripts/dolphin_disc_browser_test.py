@@ -85,6 +85,42 @@ def run(args):
                 advance()
                 advance({'buttons':['START']},exit_expected=True)
                 results.append('Start exits')
+            elif args.images:
+                require(number('loader')==1,'GC Loader source mounted')
+                require(number('directories')==1,'GC Loader root lists games folder')
+                advance({'buttons':['A']})
+                require(current()=='games','A opens GC Loader directory')
+                advance();advance({'buttons':['A']})
+                require(number('disc')==0 and current()=='games' and
+                        'CANNOT MOUNT IMAGE' in managed_text('status'),
+                        'invalid image leaves card directory usable')
+                advance();advance({'buttons':['D_DOWN']})
+                advance();advance({'buttons':['A']})
+                require(number('disc')==1 and number('viewingImage')==1 and
+                        managed_text('title')=='First image','A opens first ISO')
+                advance();advance({'buttons':['B']})
+                require(number('disc')==0 and number('loader')==1 and current()=='games',
+                        'B returns from image to GC Loader directory')
+                advance();advance({'buttons':['D_DOWN']})
+                advance();advance({'buttons':['D_DOWN']})
+                advance();advance({'buttons':['A']})
+                require(number('disc')==1 and managed_text('title')=='Second image',
+                        'another GCM opens after closing first ISO')
+                advance();advance({'buttons':['Y']})
+                require(number('loader')==0 and number('viewingImage')==0 and
+                        number('disc')==1 and managed_text('title')=='Fixture banner',
+                        'Y releases image and card then opens presented DVD')
+                advance();advance({'buttons':['X']})
+                require(number('disc')==1 and managed_text('title')=='Fixture banner',
+                        'X refresh keeps presented DVD responsive')
+                advance();advance({'buttons':['Y']})
+                require(number('disc')==0 and number('loader')==1 and current()=='',
+                        'Y returns from DVD to GC Loader root')
+                advance();advance({'buttons':['X']})
+                require(number('loader')==1 and number('directories')==1,
+                        'X refresh remounts GC Loader source')
+                advance();advance({'buttons':['START']},exit_expected=True)
+                results.append('Start exits')
             else:
                 advance({'buttons':['Y']})
                 require(number('disc')==1 and current()=='' and number('selection')==0,
@@ -137,6 +173,7 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('dol',type=Path);parser.add_argument('--elf',type=Path,required=True)
     parser.add_argument('--disc',type=Path,help='Synthetic ISO from tests/make_disc_fixture.py')
+    parser.add_argument('--images',action='store_true',help='Exercise test-only GC Loader card with two image files')
     parser.add_argument('--no-disc',action='store_true',help='Verify no-media startup and source switching')
     parser.add_argument('--metadata-only',action='store_true',help='Verify small ISO, title, banner, and directory')
     parser.add_argument('--binary',default='/usr/games/dolphin-emu-nogui')
@@ -145,6 +182,8 @@ if __name__=='__main__':
     args=parser.parse_args()
     if args.no_disc == bool(args.disc):
         parser.error('choose exactly one of --no-disc or --disc')
+    if args.images and (args.no_disc or args.metadata_only):
+        parser.error('--images requires --disc and the test-only source volume DOL')
     if args.metadata_only and args.no_disc:
         parser.error('--metadata-only requires --disc')
     run(args)

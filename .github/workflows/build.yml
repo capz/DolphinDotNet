@@ -923,6 +923,10 @@ jobs:
           dotnet build samples/DiscBrowser/DiscBrowser.csproj -c Release -p:DndBuildNative=false
           dotnet "$DND_COMPILER_DLL" --bundle samples/DiscBrowser/bin/Release/net8.0/DiscBrowser.dll footprint/disc-browser --sample-controls
           make -j2 CC="ccache $DEVKITPPC/bin/powerpc-eabi-gcc" -C footprint/disc-browser
+          cp -a footprint/disc-browser footprint/disc-browser-sources
+          cp tests/disc_browser_source_gamecube.c footprint/disc-browser-sources/source/
+          echo 'LDFLAGS += -Wl,--wrap=dnd_gc_mount,--wrap=dnd_gc_unmount' >> footprint/disc-browser-sources/Makefile
+          make -j2 CC="ccache $DEVKITPPC/bin/powerpc-eabi-gcc" -C footprint/disc-browser-sources
       - name: Report GameCube runtime footprint
         run: |
           mkdir -p footprint
@@ -1340,6 +1344,7 @@ jobs:
         run: |
           python3 scripts/dolphin_disc_browser_test.py dist/footprint/disc-browser/Game.dol --elf dist/footprint/disc-browser/Game.elf --disc dist/footprint/test-disc.iso --metadata-only --logs dolphin-disc-browser-iso
           python3 scripts/dolphin_disc_browser_test.py dist/footprint/disc-browser/Game.dol --elf dist/footprint/disc-browser/Game.elf --disc dist/footprint/test-disc-many.iso --logs dolphin-disc-browser-input
+          python3 scripts/dolphin_disc_browser_test.py dist/footprint/disc-browser-sources/Game.dol --elf dist/footprint/disc-browser-sources/Game.elf --disc dist/footprint/test-disc.iso --images --logs dolphin-disc-browser-images
       - name: Verify all four controllers through Dolphin pipe inputs
         if: matrix.group == 'controllers'
         id: controller_inputs
@@ -1395,6 +1400,7 @@ jobs:
             dolphin-disc-browser-iso/
             dolphin-disc-browser-many/
             dolphin-disc-browser-input/
+            dolphin-disc-browser-images/
           if-no-files-found: warn
 
 
