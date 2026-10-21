@@ -11,6 +11,7 @@ public sealed class ImportOptions
     public string Assimp { get; set; } = "assimp";
     public bool ApproximateMaterials { get; set; }
     public bool CompileGxMaterials { get; set; }
+    public bool BakeNeutralStudio { get; set; }
 }
 public static class ModelConverter
 {
@@ -18,6 +19,7 @@ public static class ModelConverter
     {
         options??=new();
         if(options.TextureLimit<4||options.TextureLimit>1024||(options.TextureLimit&(options.TextureLimit-1))!=0)throw new ArgumentException("Texture limit must be a power of two from 4 to 1024.");
+        if(options.BakeNeutralStudio&&(options.CompileGxMaterials||options.ApproximateMaterials))throw new ArgumentException("Neutral studio baking is separate from GX mapping/approximation.");
         input=Path.GetFullPath(input);output=Path.GetFullPath(output);string ext=Path.GetExtension(input).ToLowerInvariant();string? temp=null;
         try
         {
@@ -35,6 +37,7 @@ public static class ModelConverter
             }
             else if(ext is ".gj" or ".xj")
             {
+                if(options.BakeNeutralStudio)throw new InvalidDataException("Studio baking requires a static glTF/GLB or Assimp scene with UV0.");
                 var native=PsoGjImport.Convert(input,options.ApproximateMaterials);
                 Directory.CreateDirectory(Path.GetDirectoryName(output)!);
                 string tmp=output+"."+Guid.NewGuid().ToString("N")+".tmp";
@@ -48,6 +51,7 @@ public static class ModelConverter
             var package=importer.Build();Directory.CreateDirectory(Path.GetDirectoryName(output)!);string staged=output+"."+Guid.NewGuid().ToString("N")+".tmp";
             try{File.WriteAllBytes(staged,package);File.Move(staged,output,true);}finally{File.Delete(staged);}
             File.WriteAllText(output+".deps.json",JsonSerializer.Serialize(importer.Dependencies.OrderBy(x=>x,StringComparer.Ordinal).Select(x=>new{path=x,sha256=System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(x)))})));
+            if(options.BakeNeutralStudio)NeutralStudioReport.Write(output,options.TextureLimit);
         }
         finally{if(temp!=null){File.Delete(temp);File.Delete(temp+".assxml");}}
     }
@@ -60,7 +64,7 @@ public static class ModelConverter
 }
 internal sealed partial class GltfImport
 {
-    private readonly JsonElement root;
+    private JsonElement root;
     private readonly string directory;
     private readonly ImportOptions options;
     private readonly List<byte[]> buffers=new();
@@ -83,7 +87,7 @@ internal sealed partial class GltfImport
         }
         else root=JsonDocument.Parse(bytes).RootElement.Clone();
         if(!Text(root.GetProperty("asset"),"version").StartsWith("2."))throw new InvalidDataException("Expected glTF 2.x.");
-        foreach(var ex in Array(root,"extensionsRequired"))if(ex.GetString() is not ("KHR_materials_unlit" or "KHR_texture_transform"))throw new InvalidDataException("Unsupported required extension: "+ex.GetString());
+        foreach(var ex in Array(root,"extensionsRequired"))if(ex.GetString() is not ("KHR_materials_unlit" or "KHR_texture_transform")&&!(options.BakeNeutralStudio&&ex.GetString()=="KHR_materials_emissive_strength"))throw new InvalidDataException("Unsupported required extension: "+ex.GetString());
         foreach(var b in Items("buffers")){byte[] data=b.TryGetProperty("uri",out var uri)?ReadUri(uri.GetString()!):bin??throw new InvalidDataException("Missing buffer.");if(data.Length<Int(b,"byteLength"))throw new InvalidDataException("Truncated buffer.");buffers.Add(data);}
     }
     private byte[] ReadUri(string uri)

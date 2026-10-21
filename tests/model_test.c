@@ -549,6 +549,10 @@ int main(int argc, char **argv) {
     assert(dnd_model_vertex(fi,0,0,v)==0);near(v[0],.5f);
     assert(dnd_model_instance_dispose(fi)==0&&dnd_model_dispose(fbx)==0);
   }
+  int studio=load("sd:/studio.dndmodel");DndModel *studio_model=dnd_model_find(studio,false);
+  assert(studio_model&&studio_model->clips==0&&studio_model->textures==1);
+  assert(studio_model->material[studio_model->mesh[0].material].mode==6);
+  assert(dnd_model_dispose(studio)==0);
   int imported_gx=load("sd:/gx-material.dndmodel");DndModel *gx_model=dnd_model_find(imported_gx,false);
   assert(gx_model&&gx_model->materials==2&&gx_model->material[1].secondary>=0&&gx_model->material[1].combiner==2);
   unsigned char *bad_gx=malloc(gx_model->length);assert(bad_gx);

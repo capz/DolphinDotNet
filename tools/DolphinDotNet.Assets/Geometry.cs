@@ -5,6 +5,7 @@ internal sealed partial class GltfImport
 {
     public byte[] Build()
     {
+        if(options.BakeNeutralStudio&&!studioBaked)BakeStudioScene();
         using var nodes=new BigWriter();using var meshes=new BigWriter();using var materials=new BigWriter();using var textures=new BigWriter();using var skins=new BigWriter();using var clips=new BigWriter();
         var ns=Items("nodes");if(ns.Length==0||ns.Length>1024)throw new InvalidDataException("Model requires 1..1024 nodes.");var parent=Enumerable.Repeat(-1,ns.Length).ToArray();for(int i=0;i<ns.Length;i++)foreach(var c in Array(ns[i],"children")){int j=c.GetInt32();if((uint)j>=ns.Length||parent[j]!=-1||j==i)throw new InvalidDataException("Invalid/multiple node parents.");parent[j]=i;}
         for(int i=0;i<ns.Length;i++){int j=i;for(int n=0;j!=-1;n++,j=parent[j])if(n>=128)throw new InvalidDataException("Node cycle.");}

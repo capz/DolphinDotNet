@@ -138,6 +138,13 @@ class Program
             var batch=new Renderer();batch.BeginFrame(new Camera());
             batch.DrawModels(new[]{placement},new int[1],new float[16]);batch.EndFrame();
         }
+        using(var studio=Model.LoadAsync("sd:/studio.dndmodel").Result)
+        using(var placement=new GameObject(studio.CreateInstance()))
+        {
+            studio.UnloadToAramAsync().Wait();studio.PrepareAsync().Wait();
+            var studioRenderer=new Renderer();studioRenderer.BeginFrame(new Camera());
+            studioRenderer.DrawModels(new[]{placement},new int[1],new float[16]);studioRenderer.EndFrame();
+        }
         AwaitModel().GetAwaiter().GetResult();
         var task=Model.LoadAsync("sd:/cache.dndmodel");if(task.IsCompleted)return 4;var model=task.Result;
         if(model.Animations.Count!=5||!model.TryGetAnimation("Walk",out var clip)||clip.DurationSeconds!=1||model.TryGetAnimation("walk",out _))return 5;

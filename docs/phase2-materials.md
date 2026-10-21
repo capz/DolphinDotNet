@@ -86,7 +86,9 @@ checks second-texture stage selection, final base-alpha selection, per-draw
 override precedence, opaque-first/global submesh order, stable ties, zero draw-time
 allocation and whole-batch rejection before submission.
 
-Faithful PBR baking remains a separate decision: it requires a chosen lighting
-or HDR environment and a policy for view-dependent reflections. No authoring
-lighting is guessed. Physical-console and independent visual-reference acceptance
-remain necessary; command recording and host smoke tests do not prove pixels.
+The separate `--bake-neutral-studio` mode evaluates static metallic/roughness
+materials with a defined direct-light rig and fixed view. See the
+[neutral studio proposal, implementation and remaining work](neutral-studio-baking.md).
+It does not provide dynamic PBR or full environment lighting. Physical-console and
+independent visual-reference acceptance remain necessary; command recording and
+host smoke tests do not prove pixels.

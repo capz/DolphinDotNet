@@ -126,3 +126,10 @@ submission, uses caller-managed scratch and 64 KiB of fixed native scratch, and
 accepts at most 128 objects / 4096 meshes. Equal depths retain input/mesh order.
 The older `DrawModelsBackToFront` helper only sorts whole objects by origin.
 Neither algorithm resolves intersections or sorts individual triangles.
+
+For static fixed-view material presentation, `--bake-neutral-studio` evaluates
+metallic/roughness, normal, emission and occlusion contributions offline into unlit
+DNMD v1 textures. The [neutral studio setup and remaining work](neutral-studio-baking.md)
+defines the light/view/color contract and restrictions. Baked highlights do not
+respond to camera orbit or changing lights; this flag is separate from runtime
+GX mapping and explicit diffuse approximation.
