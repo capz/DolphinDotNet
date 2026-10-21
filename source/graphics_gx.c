@@ -83,6 +83,7 @@ void dnd_draw_backend_restore(void) {
 #include "dnd_tev_backend.inc"
 #include "dnd_material_channels.inc"
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world) {
+    dnd_performance_add_draw((texture?1u:0u)+(material->secondary?1u:0u));
     dnd_draw_backend_restore();
     float mv[16];multiply(mv,view_matrix,world);Mtx m;Mtx44 p;
     for(int r=0;r<3;r++)for(int c=0;c<4;c++)m[r][c]=mv[c*4+r];

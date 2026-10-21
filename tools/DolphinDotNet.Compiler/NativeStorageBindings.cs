@@ -61,6 +61,7 @@ internal static class NativeStorageBindings
         ["DrawRelease"]=("dnd_draw_release","i",false),
         ["DrawBytes"]=("dnd_draw_bytes","i",false),
         ["DrawTotalBytes"]=("dnd_draw_total_bytes","",false),
+        ["PerformanceRenderStat"]=("dnd_performance_render_stat","i",false),
         ["TextureCreate"]=("dnd_texture_create","iiai",false),
         ["TexturePng"]=("dnd_texture_png","ai",false),
         ["TexturePackage"]=("dnd_texture_package","ai",false),

@@ -32,7 +32,11 @@ public sealed class Texture2D : IDisposable
     /// full-image replacement. Input bytes must use native GX tile order.</summary>
     public static Texture2D CreateNative(int width,int height,NativeTextureFormat format,bool linear=true)
     {
-        if(!Enum.IsDefined(typeof(NativeTextureFormat),format))throw new ArgumentOutOfRangeException("format");
+        if(format!=NativeTextureFormat.I4 && format!=NativeTextureFormat.I8 &&
+           format!=NativeTextureFormat.Ia4 && format!=NativeTextureFormat.Ia8 &&
+           format!=NativeTextureFormat.Rgb565 && format!=NativeTextureFormat.Rgb5A3 &&
+           format!=NativeTextureFormat.Rgba8 && format!=NativeTextureFormat.Cmpr)
+            throw new ArgumentOutOfRangeException("format");
         int token=NativeGraphics.TextureAllocateNative(width,height,(int)format,linear?1:0);
         if(token==0)throw new ArgumentException("Invalid native texture dimensions, format or memory budget.");
         return new Texture2D(token);

@@ -44,6 +44,7 @@ internal static class NativeGraphics
     internal static int DrawRelease(int token) => throw Unsupported();
     internal static int DrawBytes(int token) => throw Unsupported();
     internal static int DrawTotalBytes() => throw Unsupported();
+    internal static int PerformanceRenderStat(int kind) => throw Unsupported();
     internal static int TextureCreate(int width,int height,byte[] rgba,int linear) => throw Unsupported();
     internal static int TexturePng(byte[] png,int linear) => throw Unsupported();
     internal static int TexturePackage(byte[] package,int linear) => throw Unsupported();

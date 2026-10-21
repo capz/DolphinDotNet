@@ -36,7 +36,24 @@ void dnd_performance_set_visible(int enabled) {
 #endif
 }
 int dnd_performance_visible(void) { return visible; }
-void dnd_performance_begin_frame(void) { stats.triangles = 0; }
+void dnd_performance_begin_frame(void) {
+  stats.triangles = 0;
+  stats.draw_submissions = 0;
+  stats.texture_binds = 0;
+}
+void dnd_performance_add_draw(uint32_t binds) {
+  if(stats.draw_submissions != UINT32_MAX)stats.draw_submissions++;
+  stats.texture_binds = binds > UINT32_MAX - stats.texture_binds
+    ? UINT32_MAX : stats.texture_binds + binds;
+}
+int dnd_performance_render_stat(int kind) {
+  switch(kind) {
+    case 0:return (int)stats.draw_submissions;
+    case 1:return (int)stats.texture_binds;
+    case 2:return (int)stats.triangles;
+    default:return -1;
+  }
+}
 void dnd_performance_add_triangles(uint32_t triangles) {
   stats.triangles = triangles > UINT32_MAX - stats.triangles
                         ? UINT32_MAX : stats.triangles + triangles;
