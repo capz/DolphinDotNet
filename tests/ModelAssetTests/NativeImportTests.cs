@@ -11,6 +11,11 @@ internal static class NativeImportTests
         BinaryFbxFixture.Write(Path.Combine(sd,"embedded-binary.fbx"),File.ReadAllBytes(Path.Combine(sd,"texture.png")));
         File.WriteAllText(Path.Combine(sd,"concave.mtl"),"newmtl Surface\nKd 0.8 0.6 0.4\nmap_Kd texture.png\n");
         File.WriteAllText(Path.Combine(sd,"concave.obj"),"mtllib concave.mtl\no Concave\nv 0 0 0\nv 2 0 0\nv 2 2 0\nv 1 1 0\nv 0 2 0\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0.5 0.5\nvt 0 1\ns 1\nusemtl Surface\nf -5/-5 -4/-4 -3/-3 -2/-2 -1/-1\n");
+        File.WriteAllText(Path.Combine(sd,"translucent.mtl"),
+            "newmtl Surface\nKd 0.8 0.6 0.4\nd 0.35\nmap_Kd texture.png\n");
+        File.WriteAllText(Path.Combine(sd,"translucent.obj"),
+            File.ReadAllText(Path.Combine(sd,"concave.obj")).Replace("concave.mtl","translucent.mtl",StringComparison.Ordinal));
+
         File.WriteAllText(Path.Combine(sd,"direct.fbx"),AnimatedFbx);
         string skinSource=AnimatedFbx.Replace("Objects: {","Objects: {\n"+SkinObjects,StringComparison.Ordinal)
             .Replace("Connections: {","Connections: {\n"+SkinConnections,StringComparison.Ordinal)
@@ -20,6 +25,16 @@ internal static class NativeImportTests
             .Replace("Connections: {","Connections: {\n"+TextureConnections,StringComparison.Ordinal)
             .Replace("PolygonVertexIndex: *3 { a: 0,1,-3 }","PolygonVertexIndex: *3 { a: 0,1,-3 }\n"+UvLayer,StringComparison.Ordinal);
         File.WriteAllText(Path.Combine(sd,"textured.fbx"),textured);
+        string translucent=textured.Replace(
+            "P: \"DiffuseColor\", \"Color\", \"\", \"A\",1,1,1",
+            "P: \"DiffuseColor\", \"Color\", \"\", \"A\",1,1,1\n            P: \"Opacity\", \"double\", \"Number\", \"A\",0.45",
+            StringComparison.Ordinal);
+        File.WriteAllText(Path.Combine(sd,"translucent.fbx"),translucent);
+        string classic=textured.Replace(
+            "P: \"DiffuseColor\", \"Color\", \"\", \"A\",1,1,1",
+            "P: \"DiffuseColor\", \"Color\", \"\", \"A\",1,1,1\n            P: \"TransparencyFactor\", \"Number\", \"\", \"A\",0.5\n            P: \"TransparentColor\", \"Color\", \"\", \"A\",0.4,0.4,0.4",StringComparison.Ordinal);
+        File.WriteAllText(Path.Combine(sd,"translucent-classic.fbx"),classic);
+
         File.WriteAllText(Path.Combine(sd,"invalid.fbx"),"not an FBX file");
         File.WriteAllText(Path.Combine(sd,"invalid.obj"),"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 999\n");
         // Native image codec fixtures, independent of the desktop model importer.

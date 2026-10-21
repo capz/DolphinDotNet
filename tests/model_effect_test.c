@@ -25,8 +25,8 @@ void *__wrap_realloc(void *data,size_t size){allocations++;return __real_realloc
 typedef struct {int a,b,c,d,op,dest,coord,tex,raster,konst,alpha[4],direct,swap;} Stage;
 typedef struct {
   int count,texgens,cull,zwrite,blend,src,dst,compare,cutoff;
-  Stage stages[16]; GXColor colors[4],konst[4]; GXTexObj texture;
-  float position[9],uv[6]; GXColor vertex[3];
+  Stage stages[16]; GXColor colors[4],konst[4]; GXTexObj texture,secondary;
+  float position[9],uv[6],world_x; GXColor vertex[3];
 } Draw;
 static Draw state,record[16];static int draws,restores,position_index,color_index,uv_index;
 void dnd_draw_backend_restore(void){memset(&state,0,sizeof(state));memset(state.colors,0x5a,sizeof(state.colors));memset(state.konst,0x5a,sizeof(state.konst));state.count=-1;restores++;}
@@ -46,16 +46,16 @@ void GX_SetTevAlphaOp(int s,int op,int bias,int scale,int clamp,int dest){(void)
 void GX_SetNumTexGens(int n){state.texgens=n;}
 void GX_InitTexObj(GXTexObj *t,void *p,u16 w,u16 h,int f,int s,int v,int m){*t=(GXTexObj){.data=p,.width=w,.height=h,.format=f,.wrap_s=s,.wrap_t=v,.mips=m};}
 void GX_InitTexObjLOD(GXTexObj *t,int min,int mag,float lo,float hi,float bias,int clamp,int edge,int aniso){assert(!lo&&!bias&&!clamp&&!edge&&!aniso);t->min_filter=min;t->mag_filter=mag;t->max_lod=hi;}
-void GX_LoadTexObj(GXTexObj *t,int slot){assert(slot==0&&state.count==-1);state.texture=*t;}
+void GX_LoadTexObj(GXTexObj *t,int slot){assert((slot==0||slot==1)&&state.count==-1);if(slot==0)state.texture=*t;else state.secondary=*t;}
 void GX_SetCullMode(int c){state.cull=c;}
 void GX_SetZMode(int e,int c,int w){assert(e&&c==GX_LEQUAL);state.zwrite=w;}
 void GX_SetBlendMode(int m,int s,int d,int op){assert(!op);state.blend=m;state.src=s;state.dst=d;}
 void GX_SetAlphaCompare(int c,int cutoff,int op,int other,int ref){assert(!op&&other==GX_ALWAYS&&!ref);state.compare=c;state.cutoff=cutoff;}
 void GX_Begin(int p,int f,u16 n){assert(p==GX_TRIANGLES&&f==0&&n==3&&state.count>0);position_index=color_index=uv_index=0;
  for(int i=0;i<state.count;i++){Stage *s=&state.stages[i];assert(s->direct==1&&s->swap==1&&s->raster==GX_COLOR0A0);
- assert(s->coord==(state.texgens?GX_TEXCOORD0:GX_TEXCOORDNULL));assert(s->tex==(state.texgens?GX_TEXMAP0:GX_TEXMAP_NULL));
- assert(s->alpha[0]==GX_CA_ZERO&&s->alpha[1]==(state.texgens?GX_CA_TEXA:GX_CA_ZERO));
- assert(s->alpha[2]==(state.texgens?GX_CA_RASA:GX_CA_ZERO)&&s->alpha[3]==(state.texgens?GX_CA_ZERO:GX_CA_RASA));}}
+ if(s->tex==GX_TEXMAP1)assert(state.texgens==2&&s->coord==GX_TEXCOORD1);else {assert(s->coord==(state.texture.data?GX_TEXCOORD0:GX_TEXCOORDNULL));assert(s->tex==(state.texture.data?GX_TEXMAP0:GX_TEXMAP_NULL));}
+ assert(s->alpha[0]==GX_CA_ZERO&&s->alpha[1]==(state.texture.data?GX_CA_TEXA:GX_CA_ZERO));
+ assert(s->alpha[2]==(state.texture.data?GX_CA_RASA:GX_CA_ZERO)&&s->alpha[3]==(state.texture.data?GX_CA_ZERO:GX_CA_RASA));}}
 void GX_Position3f32(float x,float y,float z){assert(position_index<9);state.position[position_index++]=x;state.position[position_index++]=y;state.position[position_index++]=z;}
 void GX_Color4u8(u8 r,u8 g,u8 b,u8 a){assert(color_index<3);state.vertex[color_index++]=(GXColor){r,g,b,a};}
 void GX_TexCoord2f32(float u,float v){assert(uv_index<6);state.uv[uv_index++]=u;state.uv[uv_index++]=v;}
@@ -73,7 +73,7 @@ void dnd_draw_backend_external(void){}
 void dnd_draw_backend_flush(void *p,int n,int i){(void)p;(void)n;(void)i;}
 bool dnd_draw_backend_immediate_ready(void){return true;}
 void GX_LoadProjectionMtx(Mtx44 p,int kind){(void)p;(void)kind;}
-void GX_LoadPosMtxImm(Mtx m,int slot){(void)m;(void)slot;}
+void GX_LoadPosMtxImm(Mtx m,int slot){state.world_x=m[0][3];(void)slot;}
 void GX_SetCurrentMtx(int slot){(void)slot;}
 void GX_ClearVtxDesc(void){}
 void GX_SetVtxDesc(int attribute,int mode){(void)attribute;(void)mode;}
@@ -195,6 +195,48 @@ int main(void) {
  before=draws;assert(dnd_model_draw(123,world)==0);
  for(int i=0;i<3;i++)assert_geometry_equal(sorted[i],record[(before+i)%16]);
  materials[0]=original_materials[0];
+ // Imported v2 materials select TEX1 for RGB and return to base alpha.
+ materials[0].secondary=0;materials[0].combiner=1;before=draws;
+ assert(dnd_model_draw(123,world)==0);
+ assert(record[before%16].count==3&&record[before%16].secondary.data==pixels);
+ assert(record[before%16].stages[1].tex==GX_TEXMAP1&&record[before%16].stages[1].c==GX_CC_TEXC);
+ materials[0].combiner=2;before=draws;assert(dnd_model_draw(123,world)==0);
+ assert(record[before%16].stages[1].dest==1&&record[before%16].stages[2].d==GX_CC_C0);
+ assert(record[before%16].stages[2].tex==GX_TEXMAP0);
+ materials[0].texture=-1;before=draws;assert(dnd_model_draw(123,world)==0);
+ assert(record[before%16].texgens==2&&record[before%16].stages[2].tex==GX_TEXMAP_NULL);
+ assert(record[before%16].stages[2].alpha[3]==GX_CA_RASA);
+ // A per-draw override supersedes the imported combiner for this draw only.
+ before=draws;assert(dnd_model_draw_effect(123,world,short_effect)==0);
+ assert(record[before%16].count==2&&!record[before%16].secondary.data);
+ materials[0]=original_materials[0];
+ // Global submesh sorting: distinct model origins are insufficient when mesh
+ // depths interleave. The recording backend verifies actual submission order.
+ DndArray *ids=calloc(1,sizeof(*ids)+8),*worlds=calloc(1,sizeof(*worlds)+128);assert(ids&&worlds);
+ ids->element_size=worlds->element_size=4;ids->length=2;worlds->length=32;
+ ((int*)ids->data)[0]=123;((int*)ids->data)[1]=124;
+ memcpy(worlds->data,world->data,64);memcpy(worlds->data+64,world->data,64);
+ ((float*)worlds->data)[16+12]=100;((float*)worlds->data)[16+14]=-1;
+ materials[0].mode=4;materials[2].mode=4;
+ float z0=meshes[0].center[2],z2=meshes[2].center[2];meshes[0].center[2]=-10;meshes[2].center[2]=-2;
+ before=draws;size_t batch_allocations=allocations;
+ assert(dnd_model_draw_models(ids,worlds,2)==0&&draws==before+6&&allocations==batch_allocations);
+ for(int i=0;i<2;i++)assert(record[(before+i)%16].blend==GX_BM_NONE);
+ assert(record[(before+2)%16].world_x==100); // far mesh from object 1
+ assert(record[(before+3)%16].world_x==0);   // far mesh from object 0
+ assert(record[(before+4)%16].world_x==100); // near mesh from object 1
+ assert(record[(before+5)%16].world_x==0);
+ // Equal depths retain input order; invalid later objects cannot partially draw.
+ ((float*)worlds->data)[16+14]=0;before=draws;
+ assert(dnd_model_draw_models(ids,worlds,2)==0);
+ assert(record[(before+2)%16].world_x==0&&record[(before+3)%16].world_x==100);
+ ((int*)ids->data)[1]=-1;before=draws;triangles=dnd_performance_stats()->triangles;
+ assert(dnd_model_draw_models(ids,worlds,2)<0&&draws==before&&dnd_performance_stats()->triangles==triangles);
+ ((int*)ids->data)[1]=124;((float*)worlds->data)[16]=0;
+ assert(dnd_model_draw_models(ids,worlds,2)<0&&draws==before);
+ assert(dnd_model_draw_models(ids,worlds,129)<0&&draws==before);
+ free(ids);free(worlds);materials[0]=original_materials[0];materials[2]=original_materials[2];
+ meshes[0].center[2]=z0;meshes[2].center[2]=z2;
  int live=dnd_draw_live();bytes=dnd_draw_total_bytes();size_t allocation_baseline=allocations;
  for(int i=0;i<2000;i++)assert(dnd_model_draw_effect(123,world,i%2?short_effect:0)==0);
  assert(allocations==allocation_baseline&&dnd_draw_live()==live&&dnd_draw_total_bytes()==bytes&&!memcmp(original_materials,materials,sizeof(materials)));

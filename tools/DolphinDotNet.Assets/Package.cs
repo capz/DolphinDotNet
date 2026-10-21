@@ -17,12 +17,12 @@ internal sealed class BigWriter : IDisposable
 internal static class Package
 {
     public static uint Hash(ReadOnlySpan<byte> data) { uint h=2166136261; foreach(byte b in data) h=unchecked((h^b)*16777619); return h; }
-    public static byte[] Write(byte[][] sections)
+    public static byte[] Write(byte[][] sections, uint version=1)
     {
         int offset=160; var offsets=new int[sections.Length];
         for(int i=0;i<sections.Length;i++) { offsets[i]=offset; offset=checked((offset+sections[i].Length+31)&~31); }
         if(offset>16*1024*1024) throw new InvalidDataException("Package exceeds 16 MiB limit.");
-        using var w=new BigWriter(); w.U(0x444e444d);w.U(1);w.I(offset);w.I(sections.Length);
+        using var w=new BigWriter(); w.U(0x444e444d);w.U(version);w.I(offset);w.I(sections.Length);
         for(int i=0;i<sections.Length;i++){w.I(i+1);w.I(offsets[i]);w.I(sections[i].Length);w.U(Hash(sections[i]));}
         var result=new byte[offset]; w.Data.CopyTo(result,0);
         for(int i=0;i<sections.Length;i++)sections[i].CopyTo(result,offsets[i]);

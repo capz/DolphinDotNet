@@ -12,7 +12,7 @@ artifacts/bin/dnd-assets model player.glb player.dndmodel --texture-limit 256
 
 PSO GJ/XJ geometry conversion is implemented directly in .NET and requires no Blender or external importer. Textures and NJM animations are not yet decoded: textured PSO files require explicit `--allow-material-approximation` and become flat-color geometry.\n\nGLB/glTF import is managed and preserves STEP, LINEAR and CUBICSPLINE tracks. Desktop conversion accepts glTF triangle strips/fans, sparse accessors (including accessors without a base buffer view), UV1 selection and baked base-color KHR_texture_transform UV coordinates. FBX, OBJ, DAE, 3DS, STL and PLY require the Assimp 5.3 CLI (`--assimp /path/to/assimp`); Ubuntu 24.04's 5.3.1 package is exercised in CI. Native importer dependencies stay off the console. The adapter checks source bone influences before export so weights are not silently truncated to four, and checks clip retention. It preserves imported clip durations. FBX interpolation, pivots, constraints, axes and units depend on Assimp's evaluation; complex authoring scenes should be baked and compared with the authoring application. This is not an Autodesk SDK implementation or a guarantee of reproducing every FBX feature.
 
-The supported shading subset is unlit or simple diffuse lighting, vertex colors, opaque/alpha-tested base-color textures and two-sided surfaces. PBR/normal/occlusion/emissive features require explicit `--allow-material-approximation` or authoring-tool baking; the opt-in discards unsupported surface contributions. Blended transparency, morph targets, extra UV sets/influence sets, compressed accessors and required unsupported extensions fail conversion. Sparse accessors are expanded during desktop conversion. OBJ contains no skeletal animation. Export models in a consistent right-handed Y-up coordinate system and meter convention; OBJ has no unit metadata, and FBX unit conversion must be verified against the source.
+The supported shading subset is unlit or simple diffuse lighting, vertex colors, opaque/alpha-tested/alpha-blended base-color textures and two-sided surfaces. PBR/normal/occlusion/emissive features require explicit `--allow-material-approximation` or authoring-tool baking; the opt-in discards unsupported surface contributions. Blended materials use native GX source-alpha blending with per-model submesh depth sorting; global cross-model or per-triangle sorting is not automatic. Morph targets, extra UV sets/influence sets, compressed accessors and required unsupported extensions fail conversion. Sparse accessors are expanded during desktop conversion. OBJ contains no skeletal animation. Export models in a consistent right-handed Y-up coordinate system and meter convention; OBJ has no unit metadata, and FBX unit conversion must be verified against the source.
 
 Textures are decoded offline, resized to bounded power-of-two dimensions, mipmapped down to 4 pixels on the shorter dimension, and encoded as GX-tiled RGBA8. Wrapping and nearest/linear magnification are preserved; minification uses the generated mip chain. Identical texture records and material records are deduplicated in the package. A native immutable texture cache additionally shares identical pixel payloads across loaded models.
 
@@ -107,4 +107,29 @@ texture compatibility and lifecycle rules.
 
 ## Compatibility implementation phases
 
-Phase 1 extends the desktop importer with triangle strips/fans, sparse accessor expansion, base-color UV1 and KHR_texture_transform baking, and additional Assimp-backed format adapters (DAE, 3DS, STL and PLY). These formats still need representative real-world fixture qualification; Assimp accepting an extension does not guarantee feature-complete scene conversion. All native on-console source loaders and current DNMD schema remain unchanged. Future phases cover imported material transparency and texture transforms, morph/complex-skin baking, compressed glTF decoding, native texture formats and hardware visual/performance acceptance. Unsupported contributions must continue to fail explicitly unless approximation is requested.
+Phase 1 extends the desktop importer with triangle strips/fans, sparse accessor expansion, base-color UV1 and KHR_texture_transform baking, and additional Assimp-backed format adapters (DAE, 3DS, STL and PLY). These formats still need representative real-world fixture qualification; Assimp accepting an extension does not guarantee feature-complete scene conversion. All native on-console source loaders and current DNMD schema remain unchanged. Phase 2 adds GLB/FBX/OBJ source and offline glTF BLEND/opacity retention through the existing GX per-model sorted alpha path. In explicit `--allow-material-approximation` mode, compatible base/emissive/occlusion maps with matching UV sets, transforms and sampler settings are baked into a single GX RGBA8 texture; base-color tint/alpha is included in the baked pixels. The existing imported material TEV path multiplies this texture with vertex lighting. Since emissive contributions are included in diffuse, this is an approximation rather than source-faithful PBR or dynamic multistage TEV. Normal maps, metallic/roughness shading and differing UV layouts remain unsupported except for explicitly acknowledged approximation. A new `Renderer.DrawModelsBackToFront(camera, objects, orderScratch)` helper sorts separate model instances by camera-space object origin without per-frame allocation. Depth ordering is not per-triangle or globally automatic; overlapping objects may still require manual draw ordering. Later phases cover morph/complex-skin baking, compressed glTF decoding, native texture formats and hardware visual/performance acceptance. Unsupported contributions must continue to fail explicitly unless approximation is requested.
+
+
+## Phase 2 imported GX materials and global transparency
+
+Use `dnd-assets model INPUT OUTPUT --compile-gx-materials` for the explicit
+fixed-function material mapping described in [phase 2 materials](phase2-materials.md).
+It emits DNMD v2 material records, retaining up to two runtime texture maps and
+selecting imported multiply/add TEV stages. Default conversions and native source
+importers still emit v1; the runtime accepts both. This does not enable faithful
+PBR shading or silently opt into normal/metallic/roughness approximation.
+
+`Renderer.DrawModels(objects, instanceScratch, worldScratch)` uses the active
+frame camera, submits all opaque meshes first, then sorts translucent submeshes
+across all objects by transformed mesh center. It validates the whole batch before
+submission, uses caller-managed scratch and 64 KiB of fixed native scratch, and
+accepts at most 128 objects / 4096 meshes. Equal depths retain input/mesh order.
+The older `DrawModelsBackToFront` helper only sorts whole objects by origin.
+Neither algorithm resolves intersections or sorts individual triangles.
+
+For static fixed-view material presentation, `--bake-neutral-studio` evaluates
+metallic/roughness, normal, emission and occlusion contributions offline into unlit
+DNMD v1 textures. The [neutral studio setup and remaining work](neutral-studio-baking.md)
+defines the light/view/color contract and restrictions. Baked highlights do not
+respond to camera orbit or changing lights; this flag is separate from runtime
+GX mapping and explicit diffuse approximation.

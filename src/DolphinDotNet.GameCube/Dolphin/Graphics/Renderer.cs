@@ -99,6 +99,73 @@ public sealed class Renderer
             throw new InvalidOperationException("Model is cold, frame is inactive or transform is invalid.");
     }
 
+    /// <summary>Submits up to 128 objects / 4096 total meshes. All opaque meshes
+    /// precede a stable global back-to-front translucent submesh pass. Caller
+    /// scratch holds one token and 16 floats per object. No per-frame allocations.
+    /// This does not sort individual triangles or resolve intersecting surfaces.</summary>
+    public void DrawModels(GameObject[] models,int[] instanceScratch,float[] worldScratch)
+    {
+        if(!active)throw new InvalidOperationException("Begin a model frame first.");
+        if(models==null)throw new ArgumentNullException("models");
+        if(models.Length>128)throw new ArgumentException("At most 128 model objects per batch.","models");
+        if(instanceScratch==null||instanceScratch.Length<models.Length)throw new ArgumentException("One token per object is required.","instanceScratch");
+        if(worldScratch==null||worldScratch.Length<models.Length*16)throw new ArgumentException("16 matrix floats per object are required.","worldScratch");
+        for(int i=0;i<models.Length;i++)
+        {
+            if(models[i]==null)throw new ArgumentException("Null model object.","models");
+            models[i].Check();var instance=models[i].Model;
+            if(instance!=null)instance.Check();
+            instanceScratch[i]=instance==null?0:instance.Token;
+            var matrix=models[i].Transform.WorldMatrix;
+            for(int j=0;j<16;j++)worldScratch[i*16+j]=matrix[j];
+        }
+        GraphicsDevice.Check(NativeModel.ModelDrawModels(instanceScratch,worldScratch,models.Length),"Invalid/cold model, transform, inactive pass or batch exceeding 4096 meshes.");
+    }
+
+    private static float ModelDrawDepth(Camera camera,GameObject obj)
+    {
+        var matrix=obj.Transform.WorldMatrix;
+        return camera.View[2]*matrix[12]+camera.View[6]*matrix[13]+
+               camera.View[10]*matrix[14]+camera.View[14];
+    }
+
+    /// <summary>
+    /// Draws a set of model instances from farthest to nearest camera-space
+    /// origins, using caller-owned order scratch (no frame-time allocations).
+    /// Intended for separate translucent models. Within each model, native
+    /// mesh-level sorting remains active. Overlapping meshes in different
+    /// models may still need manual draw grouping or further mesh splitting.
+    /// </summary>
+    public void DrawModelsBackToFront(Camera camera, GameObject[] models, int[] order)
+    {
+        if(!active)throw new InvalidOperationException("Begin a model frame first.");
+        if(camera==null)throw new ArgumentNullException("camera");
+        if(models==null)throw new ArgumentNullException("models");
+        if(order==null||order.Length<models.Length)throw new ArgumentException("Order scratch must hold each model index.", "order");
+        for(int i=0;i<models.Length;i++)
+        {
+            if(models[i]==null)throw new ArgumentException("Null model object.", "models");
+            models[i].Check();
+            if(models[i].Model!=null)models[i].Model!.Check();
+            _=models[i].Transform.WorldMatrix;
+            order[i]=i;
+        }
+        // Stable insertion order prevents equal-depth objects from flickering.
+        for(int i=1;i<models.Length;i++)
+        {
+            int entry=order[i];
+            float depth=ModelDrawDepth(camera,models[entry]);
+            int j=i;
+            while(j>0&&ModelDrawDepth(camera,models[order[j-1]])>depth)
+            {
+                order[j]=order[j-1];
+                j--;
+            }
+            order[j]=entry;
+        }
+        for(int i=0;i<models.Length;i++)Draw(models[order[i]]);
+    }
+
     public void EndFrame()
     {
         if(!ownsFrame)throw new InvalidOperationException("Use End3D for an externally owned device frame.");

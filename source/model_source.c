@@ -410,8 +410,7 @@ static int import_glb(const char *path, int budget, int approximate,
   for (size_t i = 0; i < data->materials_count; i++) {
     cgltf_material *m = &data->materials[i];
     cgltf_texture_view tx = m->pbr_metallic_roughness.base_color_texture;
-    if (m->alpha_mode == cgltf_alpha_mode_blend || tx.texcoord != 0 ||
-        tx.has_transform)
+    if (tx.texcoord != 0 || tx.has_transform)
       goto done;
     if (!approximate &&
         (m->normal_texture.texture || m->occlusion_texture.texture ||
@@ -427,7 +426,8 @@ static int import_glb(const char *path, int budget, int approximate,
     number(&sections[2],
            tx.texture ? (unsigned)(tx.texture - data->textures) : UINT_MAX);
     number(&sections[2], (m->alpha_mode == cgltf_alpha_mode_mask ? 1u : 0u) |
-                             (m->unlit ? 2u : 0u));
+                             (m->unlit ? 2u : 0u) |
+                             (m->alpha_mode == cgltf_alpha_mode_blend ? 4u : 0u));
     scalar(&sections[2], m->alpha_cutoff);
     number(&sections[2], m->double_sided ? 1 : 0);
   }
@@ -1125,7 +1125,26 @@ static int import_scene(const char *path, int fbx, float sample_rate,
         base.has_value ? base.value_vec3 : (ufbx_vec3){.x = 1, .y = 1, .z = 1};
     double mul = factor.has_value ? factor.value_real : 1;
     double opacity = m->pbr.opacity.has_value ? m->pbr.opacity.value_real : 1;
-    if (opacity < 0 || opacity > 1 || (!approximate && opacity < 1))
+    // Some FBX exporters retain the classic Opacity property without mapping
+    // it to the selected shader's normalized PBR fields (eg. Lambert).
+    double authored_opacity = ufbx_find_real(&m->props, "Opacity", 1);
+    if (!isfinite(authored_opacity) || authored_opacity < 0 || authored_opacity > 1)
+      goto done;
+    opacity = fmin(opacity, authored_opacity);
+    /* OBJ MTL dissolve/Tr and older FBX materials can retain alpha in the
+     * classic transparency factor rather than ufbx's PBR opacity field. */
+    if (m->fbx.transparency_factor.has_value || m->fbx.transparency_color.has_value) {
+      double factor = m->fbx.transparency_factor.has_value ? m->fbx.transparency_factor.value_real : 1;
+      ufbx_vec3 color = m->fbx.transparency_color.has_value ? m->fbx.transparency_color.value_vec3 : (ufbx_vec3){.x=1,.y=1,.z=1};
+      if (!isfinite(factor) || factor<0 || factor>1 ||
+          !isfinite(color.x) || !isfinite(color.y) || !isfinite(color.z) ||
+          color.x<0 || color.x>1 || color.y<0 || color.y>1 || color.z<0 || color.z>1)
+        goto done;
+      // FBX transparency color is modulated by its factor, not an
+      // independent opacity override. Use the maximum channel for scalar GX alpha.
+      opacity = fmin(opacity, 1.0 - factor * fmax(color.x,fmax(color.y,color.z)));
+    }
+    if (!isfinite(opacity) || opacity < 0 || opacity > 1)
       goto done;
     int texture = -1;
     ufbx_texture *tx = base.texture;
@@ -1149,8 +1168,9 @@ static int import_scene(const char *path, int fbx, float sample_rate,
     scalar(&section[2], (float)(color.z * mul));
     scalar(&section[2], (float)opacity);
     number(&section[2], texture < 0 ? UINT_MAX : (unsigned)texture);
-    number(&section[2], (tx || opacity < 1 ? 1u : 0u) |
-                            (m->features.unlit.enabled ? 2u : 0u));
+    number(&section[2], (tx && opacity >= 1 ? 1u : 0u) |
+                            (m->features.unlit.enabled ? 2u : 0u) |
+                            (opacity < 1 ? 4u : 0u));
     scalar(&section[2], .5f);
     number(&section[2], m->features.double_sided.enabled ? 1 : 0);
   }
