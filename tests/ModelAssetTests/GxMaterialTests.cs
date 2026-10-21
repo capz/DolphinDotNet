@@ -49,6 +49,19 @@ static class GxMaterialTests
         File.WriteAllText(input,root.ToJsonString());ModelConverter.Convert(input,file+".combined",new(){CompileGxMaterials=true});
         data=File.ReadAllBytes(file+".combined");offset=I(data,52);record=offset+4+40;
         if(I(data,record+36)!=2||I(data,record+16)==0)throw new Exception("Base/AO contribution was discarded.");
+        mat["extensions"]=new JsonObject{["KHR_materials_unlit"]=new JsonObject()};
+        File.WriteAllText(input,root.ToJsonString());ModelConverter.Convert(input,file+".unlit",new(){CompileGxMaterials=true});
+        data=File.ReadAllBytes(file+".unlit");record=I(data,52)+4+40;
+        if(I(data,record+32)!=-1||I(data,record+36)!=0)throw new Exception("Unlit source acquired lit surface contributions.");
+        // A constant emission map needs no authored texture coordinate stream.
+        root=source.DeepClone().AsObject();mat=root["materials"]![0]!.AsObject();mat.Remove("extensions");
+        mat["pbrMetallicRoughness"]!.AsObject().Remove("baseColorTexture");
+        mat["emissiveFactor"]=new JsonArray(0.2,0.1,0);
+        root["meshes"]![0]!["primitives"]![0]!["attributes"]!.AsObject().Remove("TEXCOORD_0");
+        File.WriteAllText(input,root.ToJsonString());ModelConverter.Convert(input,file+".constant",new(){CompileGxMaterials=true});
+        data=File.ReadAllBytes(file+".constant");record=I(data,52)+4+40;
+        if(I(data,record+16)!=-1||I(data,record+32)<0||I(data,record+36)!=2)
+            throw new Exception("Constant emission without UVs was lost.");
         Console.WriteLine("Versioned GX material records, source mapping and invalid input checks passed.");
     }
 }

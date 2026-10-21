@@ -203,6 +203,9 @@ int main(void) {
  materials[0].combiner=2;before=draws;assert(dnd_model_draw(123,world)==0);
  assert(record[before%16].stages[1].dest==1&&record[before%16].stages[2].d==GX_CC_C0);
  assert(record[before%16].stages[2].tex==GX_TEXMAP0);
+ materials[0].texture=-1;before=draws;assert(dnd_model_draw(123,world)==0);
+ assert(record[before%16].texgens==2&&record[before%16].stages[2].tex==GX_TEXMAP_NULL);
+ assert(record[before%16].stages[2].alpha[3]==GX_CA_RASA);
  // A per-draw override supersedes the imported combiner for this draw only.
  before=draws;assert(dnd_model_draw_effect(123,world,short_effect)==0);
  assert(record[before%16].count==2&&!record[before%16].secondary.data);

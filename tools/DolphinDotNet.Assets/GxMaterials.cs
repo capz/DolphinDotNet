@@ -40,7 +40,10 @@ internal sealed partial class GltfImport
             }
             if(hasEm)Validate(em);if(ao)Validate(occ);
             using var original=primary>=0?DecodeSourceTexture(primary):new RasterImage(4,4,new Rgba32(255,255,255,255));
-            using var baseImage=original.Resized(Dimension(original.Width,options.TextureLimit),Dimension(original.Height,options.TextureLimit));
+            // Without a base map, retain the AO map's resolution when resolving
+            // it into a white base for the three-source-map combination.
+            using var sizeSource=primary<0&&ao?DecodeSourceTexture(Int(occ,"index",-1)):null;
+            using var baseImage=original.Resized(Dimension(sizeSource?.Width??original.Width,options.TextureLimit),Dimension(sizeSource?.Height??original.Height,options.TextureLimit));
             int secondary=-1,combiner=0;
             if(ao)
             {
