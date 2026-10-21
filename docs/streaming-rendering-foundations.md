@@ -63,6 +63,7 @@ Do not retire a texture still referenced by a material submitted on a subsequent
 
 - GPU submissions are synchronous from the application executor; native DMA progresses through the background queue. Do not issue raw GX in DMA callbacks.
 - A frame fence is signaled **only** after GX has finished the corresponding frame. Marking a resource for retirement does not imply it can be used subsequently.
+- AOT native-call lowering normally enforces application-executor access for every graphics and texture operation. Only `TextureStageArray` and `TextureStageBuffer` bypass that check: these detached operations use CPU memory copies and data-cache flushing, and cannot issue GPU commands. `TexturePublishStaged`, allocation, draws, and cache invalidation remain application-executor-only.
 - `StageUploadAsync` writes only the inactive GX allocation; no GPU wait occurs. After `TryPublish`, the previously active allocation is not reused until the current GPU frame finishes. Rebind each material to `StreamingTexture.Texture` after publication; existing materials retain the previous `Texture2D` object.
 - Publishing issues a GPU texture-cache invalidate but is not a GPU-fence wait; do not publish while raw GX primitives are active.
 - `RenderQueue` merges only identical material and transform *object* references. Non-identical transforms and transparency still submit separately. GX material-state caching is invalidated at pass changes and raw/2D transitions.
