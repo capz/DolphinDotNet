@@ -33,6 +33,9 @@ void dnd_immediate_end(void);
 bool dnd_draw_backend_immediate_ready(void);
 
 int dnd_buffer_create(int bytes,int alignment);
+int dnd_buffer_hold(int token);
+int dnd_buffer_unhold(int token);
+uint64_t dnd_buffer_held_address(int token,int offset,int count);
 uint64_t dnd_buffer_address(int token,int offset);
 int dnd_buffer_copy(int token,int offset,DndArray *array,int index,int count,int write);
 int dnd_buffer_write(int token,int offset,DndArray *a,int index,int count);

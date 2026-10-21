@@ -35,6 +35,12 @@ internal static class NativeGraphics
     internal static ulong BufferUncached(int token) => throw Unsupported();
     internal static int NativeObjectSize(int kind) => throw Unsupported();
     internal static int BufferFlush(int token,int offset,int count,int invalidate) => throw Unsupported();
+    internal static int BufferHold(int token) => throw Unsupported();
+    internal static int BufferUnhold(int token) => throw Unsupported();
+    internal static int AramTransferHold(int token) => throw Unsupported();
+    internal static int AramTransferRelease(int token) => throw Unsupported();
+    internal static int AramNativeBegin(int token,int aramOffset,int bufferToken,int bufferOffset,int count,int write) => throw Unsupported();
+    internal static int AramNativePoll() => throw Unsupported();
     internal static int DrawRelease(int token) => throw Unsupported();
     internal static int DrawBytes(int token) => throw Unsupported();
     internal static int DrawTotalBytes() => throw Unsupported();

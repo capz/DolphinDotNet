@@ -44,6 +44,7 @@ public sealed class AramBuffer : IDisposable
     private bool disposed;
     public int Length {get;}
     internal AramBuffer(int token,int length){this.token=token;Length=length;}
+    internal int NativeTransferToken { get { if(disposed)throw new ObjectDisposedException("AramBuffer");return token; } }
     public Task WriteAsync(byte[] source,int sourceOffset,int destinationOffset,int count,CancellationToken cancellationToken=default)=>Transfer(source,sourceOffset,destinationOffset,count,true,cancellationToken);
     public Task ReadAsync(int sourceOffset,byte[] destination,int destinationOffset,int count,CancellationToken cancellationToken=default)=>Transfer(destination,destinationOffset,sourceOffset,count,false,cancellationToken);
     private Task Transfer(byte[] array,int arrayOffset,int offset,int count,bool write,CancellationToken cancellation)

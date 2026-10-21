@@ -17,6 +17,7 @@ typedef struct {
     unsigned char *data;
     int kind,bytes,generation;
     bool pending;
+    int holds;
     int effect;
     int width,height,format,linear,vertices,indices,dynamic,capacity,count,texture,blend,draws,flushes;
 } Resource;
@@ -61,11 +62,35 @@ static void release(Resource *r) {
 int dnd_draw_release(int token) {
     if(dnd_raw_depth() || token==active_canvas) return -1;
     Resource *r=find(token,0); if(!r) return -1;
-    if(dnd_device_active()) r->pending=true;
+    if(dnd_device_active() || r->holds) r->pending=true;
     else { dnd_draw_backend_wait(); release(r); }
     return 0;
 }
-void dnd_draw_collect(void) { for(int i=0;i<SLOTS;i++) if(slots[i].pending) release(&slots[i]); }
+void dnd_draw_collect(void) { for(int i=0;i<SLOTS;i++) if(slots[i].pending && !slots[i].holds) release(&slots[i]); }
+/* DMA pins survive managed Dispose, but do not permit new GPU submissions. */
+int dnd_buffer_hold(int token) {
+    Resource *r=find(token,BUFFER);
+    if(!r || r->holds==INT_MAX)return -1;
+    ++r->holds;return 0;
+}
+int dnd_buffer_unhold(int token) {
+    int index=(token&1023)-1;
+    if(index<0 || index>=SLOTS || token<=0)return -1;
+    Resource *r=&slots[index];
+    if(r->kind!=BUFFER || r->generation!=(token>>10) || r->holds<=0)return -1;
+    if(--r->holds==0 && r->pending && !dnd_device_active()){
+        dnd_draw_backend_wait();release(r);
+    }
+    return 0;
+}
+uint64_t dnd_buffer_held_address(int token,int offset,int count) {
+    int index=(token&1023)-1;
+    if(index<0 || index>=SLOTS || token<=0 || offset<0 || count<0)return 0;
+    Resource *r=&slots[index];
+    if(r->kind!=BUFFER || r->generation!=(token>>10) || r->holds<=0 ||
+       offset>r->bytes || count>r->bytes-offset)return 0;
+    return (uint64_t)(uintptr_t)(r->data+offset);
+}
 void dnd_draw_shutdown(void) { active_canvas=0;for(int i=0;i<SLOTS;i++) if(slots[i].kind) release(&slots[i]); }
 int dnd_draw_live(void) { int n=0;for(int i=0;i<SLOTS;i++) if(slots[i].kind)n++;return n; }
 int dnd_draw_total_bytes(void) { return total_bytes; }
