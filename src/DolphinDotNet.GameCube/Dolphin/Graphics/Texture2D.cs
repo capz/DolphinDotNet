@@ -65,6 +65,24 @@ public sealed class Texture2D : IDisposable
         GraphicsDevice.Check(NativeGraphics.TextureUpdateFromBuffer(Token,source.Token,sourceOffset,bytes),
             "Native texture replacement requires a valid source and no active frame.");
     }
+    // Background CPU-only copy into a *detached* texture. The caller must prove
+    // that this token cannot be referenced by an in-flight GX submission.
+    internal void StageDetached(byte[] pixels,int offset)
+    {
+        Check();
+        int bytes=NativeBytes;
+        GraphicsDevice.Check(NativeGraphics.TextureStageArray(Token,pixels,offset,bytes),
+            "Invalid detached GX texture upload.");
+    }
+    internal void StageDetached(NativeBuffer pixels,int offset)
+    {
+        Check();
+        int bytes=NativeBytes;
+        GraphicsDevice.Check(NativeGraphics.TextureStageBuffer(Token,pixels.Token,offset,bytes),
+            "Invalid detached GX texture upload.");
+    }
+    internal void PublishDetached()
+        => GraphicsDevice.Check(NativeGraphics.TexturePublishStaged(Token),"Cannot publish staged GX texture inside raw commands.");
     public static Texture2D FromPackage(byte[] package,bool linear=false)
     {
         if(package==null)throw new ArgumentNullException("package");int token=NativeGraphics.TexturePackage(package,linear?1:0);

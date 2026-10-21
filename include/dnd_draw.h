@@ -53,6 +53,13 @@ int dnd_texture_package(DndArray *package,int linear);
 int dnd_texture_allocate_native(int width,int height,int format,int linear);
 int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int count);
 int dnd_texture_update_buffer(int texture_token,int buffer_token,int source_offset,int count);
+/* CPU-only staging to a texture allocation that is NOT referenced by in-flight GX
+ * commands. No GX call, no GPU wait, safe for the background executor. */
+int dnd_texture_stage_array(int texture_token,DndArray *payload,int offset,int count);
+int dnd_texture_stage_buffer(int texture_token,int buffer_token,int offset,int count);
+/* Application-executor publication: GPU-cache invalidate, no GX_DrawDone. */
+int dnd_texture_publish_staged(int texture_token);
+
 
 int dnd_texture_dimension(int token,int axis);
 int dnd_mesh_create(DndArray *vertices,DndArray *indices,int format,int dynamic);
@@ -92,6 +99,7 @@ void dnd_draw_backend_wait(void);
 void dnd_draw_backend_external(void);
 void dnd_draw_backend_abort(void);
 void dnd_draw_backend_flush(void *data,int bytes,int invalidate);
+void dnd_draw_backend_publish_texture(void);
 /* Raw command guard: no executor handoff while a primitive/display list is open. */
 int dnd_raw_enter(int kind);
 int dnd_raw_leave(int kind);

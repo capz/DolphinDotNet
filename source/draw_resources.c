@@ -177,6 +177,30 @@ int dnd_texture_update_buffer(int texture_token,int buffer_token,int source_offs
     dnd_draw_backend_flush(texture->data,count,2);
     return 0;
 }
+/* Detached upload: the managed double buffer guarantees that this token is not
+ * bound in any in-flight GPU command. Do not touch GX on the worker executor. */
+int dnd_texture_stage_array(int token,DndArray *payload,int offset,int count) {
+    Resource *r=find(token,TEXTURE);
+    if(!r || !payload || payload->elements_are_references || payload->element_size!=1 ||
+       offset<0 || count!=r->bytes || (uint32_t)offset>payload->length ||
+       (uint32_t)count>payload->length-(uint32_t)offset)return -1;
+    memcpy(r->data,(unsigned char*)payload->data+offset,(size_t)count);
+    dnd_draw_backend_flush(r->data,count,0);return 0;
+}
+int dnd_texture_stage_buffer(int token,int buffer_token,int offset,int count) {
+    Resource *r=find(token,TEXTURE),*source=find(buffer_token,BUFFER);
+    if(!r||!source||offset<0||count!=r->bytes||offset>source->bytes||
+       count>source->bytes-offset)return -1;
+    memcpy(r->data,source->data+offset,(size_t)count);
+    dnd_draw_backend_flush(r->data,count,0);return 0;
+}
+int dnd_texture_publish_staged(int token) {
+    dnd_async_require_application_thread();
+    if(dnd_raw_depth() || !find(token,TEXTURE))return -1;
+    /* The backend issues GX_InvalidateTexAll only; no GPU completion wait. */
+    dnd_draw_backend_publish_texture();
+    return 0;
+}
 static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
     int bytes=texture_size(w,h,6);
     if(dnd_device_active() || bytes<0 || !src)return 0;
