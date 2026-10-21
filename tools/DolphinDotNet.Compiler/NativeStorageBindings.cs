@@ -74,6 +74,7 @@ internal static class NativeStorageBindings
         ["TexturePublishStaged"]=("dnd_texture_publish_staged","i",false),
         ["MeshDraw"]=("dnd_mesh_draw_effect","iiaiifi",false),
         ["MeshDrawMaterial"]=("dnd_mesh_draw_material","iiiaiifi",false),
+        ["MeshDrawBatch"]=("dnd_mesh_draw_batch","aiiiaiifi",false),
         ["MeshPrimitives"]=("dnd_mesh_primitives","aiiiiaii",false),
         ["CanvasCreate"]=("dnd_canvas_create","i",false),
         ["CanvasBegin"]=("dnd_canvas_begin","iii",false),

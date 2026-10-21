@@ -72,6 +72,7 @@ int dnd_effect_resolve(int token,const DndDrawEffect **result);
 int dnd_canvas_effect(int token,int effect);
 int dnd_texture_resolve(int token,DndDrawTexture *out);
 int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
+int dnd_mesh_draw_batch(DndArray *mesh_tokens,int count,int tex,int secondary,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
 int dnd_model_draw_material(int token,DndArray *world,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect);
 int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
 int dnd_mesh_draw(int mesh,int texture,DndArray *world,uint32_t color,int flags,float cutoff);

@@ -297,6 +297,49 @@ int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint3
     }
     dnd_performance_add_triangles((uint32_t)count/3);return 0;
 }
+/* A merged GX stream for meshes with one material and the SAME world matrix.
+ * Validates every source before submitting any draw. 768 vertices per GX_Begin
+ * preserves the existing staging limit, and keeps triangle boundaries intact. */
+int dnd_mesh_draw_batch(DndArray *mesh_tokens,int count,int tex,int secondary,DndArray *world,
+                        uint32_t color,int flags,float cutoff,int effect) {
+    DndDrawTexture tx,extra;float transform[16];
+    if(dnd_device_pass()!=1 || !mesh_tokens || mesh_tokens->elements_are_references ||
+       mesh_tokens->element_size!=4 || count<2 || count>128 ||
+       (uint32_t)count>mesh_tokens->length || !matrix(world,transform) ||
+       !texture(tex,&tx) || !texture(secondary,&extra) ||
+       flags<0 || flags>255 || (flags&192)==192 ||
+       !isfinite(cutoff) || cutoff<0 || cutoff>1)return -1;
+    Resource *fx=effect?find(effect,EFFECT):NULL;
+    if(effect&&(!fx||((((DndDrawEffect*)fx->data)->texture&1)&&!tex)||
+       ((((DndDrawEffect*)fx->data)->texture&2)&&!secondary)))return -1;
+    const int *tokens=(const int*)mesh_tokens->data;
+    uint32_t triangles=0;
+    for(int i=0;i<count;i++) {
+        Resource *r=find(tokens[i],MESH);
+        if(!r || ((flags&192) && ((!tex&&!secondary)||r->format!=2)))return -1;
+        int n=r->indices?r->indices:r->vertices;
+        if(n<3 || n%3 || (uint32_t)n>UINT32_MAX-3*triangles)return -1;
+        triangles+=(uint32_t)n/3;
+    }
+    DndDrawMaterial mat={color,flags,cutoff,fx?(DndDrawEffect*)fx->data:NULL,secondary?&extra:NULL};
+    int staged=0;
+    for(int i=0;i<count;i++) {
+        Resource *r=find(tokens[i],MESH);
+        const DndDrawVertex *src=(const DndDrawVertex*)r->data;
+        const uint16_t *indices=(const uint16_t*)(r->data+r->vertices*sizeof(DndDrawVertex));
+        int n=r->indices?r->indices:r->vertices;
+        for(int j=0;j<n;j++) {
+            staging[staged++]=src[r->indices?indices[j]:j];
+            if(staged==768) {
+                dnd_draw_backend_vertices(staging,staged,0x90,tex?&tx:NULL,&mat,transform);
+                staged=0;
+            }
+        }
+    }
+    if(staged)dnd_draw_backend_vertices(staging,staged,0x90,tex?&tx:NULL,&mat,transform);
+    dnd_performance_add_triangles(triangles);
+    return 0;
+}
 int dnd_mesh_draw(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff) {
     return dnd_mesh_draw_effect(token,tex,world,color,flags,cutoff,0);
 }

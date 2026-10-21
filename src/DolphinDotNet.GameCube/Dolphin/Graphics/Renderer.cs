@@ -24,6 +24,19 @@ public sealed class Renderer
         mesh.Check();material.Check();
         GraphicsDevice.Check(NativeGraphics.MeshDrawMaterial(mesh.Token,material.TextureToken,material.SecondaryTextureToken,transform.WorldMatrix,material.Color.Packed,material.Flags,material.AlphaCutoff,material.EffectToken),"Invalid mesh, material, transform or 3D pass.");
     }
+    /// <summary>Merge 2–128 compatible native meshes into a single GX vertex
+    /// stream, splitting only at the backend's 768-vertex hardware staging
+    /// limit. All meshes must share the given material AND world transform.
+    /// Native validates every source before submitting any draw.</summary>
+    internal void DrawMeshBatch(int[] meshTokens,int count,Material material,Transform transform)
+    {
+        if(meshTokens==null||material==null||transform==null)throw new ArgumentNullException();
+        material.Check();
+        GraphicsDevice.Check(NativeGraphics.MeshDrawBatch(meshTokens,count,material.TextureToken,
+            material.SecondaryTextureToken,transform.WorldMatrix,material.Color.Packed,
+            material.Flags,material.AlphaCutoff,material.EffectToken),
+            "Invalid merged mesh group or inactive 3D pass.");
+    }
     /// <summary>Replaces all imported material state for this draw only. Geometry, animation and UV0 remain authored.</summary>
     public void DrawModelWithMaterial(ModelInstance instance,Transform transform,Material material)
     {
