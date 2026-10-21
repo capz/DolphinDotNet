@@ -57,6 +57,10 @@ and banner textures are cleaned up on refresh, source changes and exit.
 
 CI checks plain-disc FST access through the native devoptab in headless Dolphin,
 as well as pipe-controller scrolling, A/B folder navigation, refresh and exit.
-The host regression tests additionally cover SD/DVD path normalization and
+A separate test-only GC Loader volume exercises invalid-image recovery, opening an
+ISO, returning to its card folder, opening a different GCM, and switching between
+the card and the presented DVD using real controller input. Only card discovery
+and file contents are synthetic; the managed browser and native ISO/FST mounts
+are the production implementations. The host regression tests additionally cover SD/DVD path normalization and
 ISO/GCM file recognition. GC Loader SD and ODE concurrency need testing on
 physical hardware.

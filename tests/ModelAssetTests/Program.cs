@@ -205,8 +205,9 @@ if(args.Length>1)
     // This independently specified 1-second fixture uses FBX's 46186158000 ticks/second.
     File.WriteAllText(fbx,File.ReadAllText(fbx).Replace("46186158000000","46186158000",StringComparison.Ordinal));
     ModelConverter.Convert(fbx,Path.Combine(output,"sd","fbx.dndmodel"),new(){Assimp=assimp,ApproximateMaterials=true});
-    // Assimp 5.3's GLB exporter fails on some bare STL/PLY fixtures.
-    // Keep these adapters opt-in until portable fixture coverage is available.
+    // STL and PLY are accepted by the Assimp adapter, but the stock Ubuntu
+    // Assimp 5.3 GLB exporter fails for some untextured static input shapes.
+    // Qualify these with verified fixtures before making them mandatory CI.
     string obj=Path.Combine(output,"model.obj");File.WriteAllText(obj,"mtllib model.mtl\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\nusemtl Surface\nf 1/1 2/2 3/3 4/4\n");File.WriteAllText(Path.Combine(output,"model.mtl"),"newmtl Surface\nKd 1 1 1\nmap_Kd texture.png\n");ModelConverter.Convert(obj,Path.Combine(output,"sd","obj.dndmodel"),new(){Assimp=assimp,ApproximateMaterials=true});
 }
 var buildProject=new System.Xml.Linq.XElement("Project",new System.Xml.Linq.XAttribute("Sdk","Microsoft.NET.Sdk"),
