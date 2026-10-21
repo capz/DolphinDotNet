@@ -77,7 +77,12 @@ public static class AramTransferQueue
                     pending=false;position+=chunk;
                 }
                 cancellation.ThrowIfCancellationRequested();
-                if(position==count){Finish();Completion.SetResult(position);return true;}
+                if(position==count)
+                {
+                    int completed=position;
+                    Scheduler.Post(()=>{Finish();Completion.SetResult(completed);},0);
+                    return true;
+                }
                 chunk=count-position;if(chunk>ChunkSize)chunk=ChunkSize;
                 int status=NativeGraphics.AramNativeBegin(aram,aramOffset+position,buffer,bufferOffset+position,chunk,write?1:0);
                 if(status==-16)return false; // Other ARAM transfers share the same DMA channel.
@@ -87,7 +92,10 @@ public static class AramTransferQueue
             catch(Exception ex)
             {
                 // Failed transfers are expected to have completed or been refused.
-                Finish();Completion.SetException(ex);return true;
+                // Native-buffer/ARAM pins are released on the application executor
+                // to avoid racing Dispose and frame-based native resource collection.
+                Scheduler.Post(()=>{Finish();Completion.SetException(ex);},0);
+                return true;
             }
         }
         private void Finish()
