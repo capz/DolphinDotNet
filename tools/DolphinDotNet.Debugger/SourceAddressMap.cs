@@ -92,10 +92,22 @@ public sealed class SourceAddressMap
                     if (kind is not ("cfaOffset" or "register" or "unavailable")) throw new InvalidDataException("Unsupported variable location.");
                     var register = location.TryGetProperty("register", out var reg) ? reg.GetInt32() : 0;
                     if (register is < 0 or > 31) throw new InvalidDataException("Invalid variable register.");
+                    var ranges = new List<DebugAddressRange>();
+                    if (variable.TryGetProperty("visibleRanges", out var visibleRanges))
+                    foreach (var range in visibleRanges.EnumerateArray())
+                    {
+                        var start = ParseAddress(range.GetProperty("start").GetString());
+                        var end = ParseAddress(range.GetProperty("end").GetString());
+                        var extent = result._methods.LastOrDefault(m => m.Symbol == symbol);
+                        if (end <= start || extent is null || start < extent.Start || end > extent.End)
+                            throw new InvalidDataException("Invalid variable visibility extent.");
+                        ranges.Add(new(start, end));
+                    }
                     entries.Add(new DebugVariable(variable.GetProperty("name").GetString()!, variable.GetProperty("type").GetString()!,
                         group, storage, variable.GetProperty("visibleAddresses").EnumerateArray().Select(a => ParseAddress(a.GetString())).ToHashSet(),
                         kind, location.TryGetProperty("offset", out var offset) ? offset.GetInt32() : 0, register,
-                        location.TryGetProperty("reason", out var reason) ? reason.GetString() : null, valueKind));
+                        location.TryGetProperty("reason", out var reason) ? reason.GetString() : null, valueKind,
+                        variable.TryGetProperty("visibleRanges", out _) ? ranges : null));
                 }
                 result._variables.Add(symbol, entries);
             }
@@ -176,8 +188,12 @@ public sealed class SourceAddressMap
     public IReadOnlyList<DebugVariable> FindVariables(uint address)
     {
         var symbol = FindMethod(address)?.Symbol;
+        // New ranges are authoritative, including an empty set for ambiguous
+        // scope. Only older maps fall back to exact statement addresses.
         return symbol is not null && _variables.TryGetValue(symbol, out var variables)
-            ? variables.Where(v => v.VisibleAddresses.Contains(address)).ToArray() : Array.Empty<DebugVariable>();
+            ? variables.Where(v => v.VisibleRanges is { } ranges
+                ? ranges.Any(range => range.Start <= address && address < range.End)
+                : v.VisibleAddresses.Contains(address)).ToArray() : Array.Empty<DebugVariable>();
     }
 
     public UnwindRule? FindUnwindRule(uint address)

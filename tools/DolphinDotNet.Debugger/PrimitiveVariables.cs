@@ -6,7 +6,9 @@ namespace DolphinDotNet.Debugger;
 
 public sealed record DebugVariable(string Name, string Type, string Group, int StorageBytes,
     IReadOnlySet<uint> VisibleAddresses, string LocationKind, int Offset, int Register, string? UnavailableReason,
-    string ValueKind = "primitive");
+    string ValueKind = "primitive", IReadOnlyList<DebugAddressRange>? VisibleRanges = null);
+/// <summary>A verified half-open native interval; its end is never visible.</summary>
+public sealed record DebugAddressRange(uint Start, uint End);
 public sealed record PrimitiveValue(string Name, string Type, string Value, bool Available);
 
 /// <summary>Read-only scalar inspection from verified DWARF locations. Never evaluates expressions.</summary>

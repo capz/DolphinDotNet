@@ -18,7 +18,7 @@ def norm(path):
     return re.sub('/+', '/', path.strip().replace('\\', '/')).lower()
 
 
-def parse_lines(output):
+def parse_line_ranges(output):
     rows, heading = [], ''
     pending = None
     for text in output.splitlines():
@@ -34,7 +34,8 @@ def parse_lines(output):
         # in this ordering so they can supersede an earlier C# row as well.
         if pending is not None and address > pending[2]:
             if pending[1] > 0 and pending[2] != 0 and pending[2] % 4 == 0:
-                rows.append(pending)
+                if address % 4 == 0:
+                    rows.append((*pending, address))
         pending = None
         if match['line'] == '-':  # end_sequence is an exclusive boundary
             continue
@@ -47,6 +48,29 @@ def parse_lines(output):
         pending = (file, number, address)
     # A final row without a successor/end_sequence has no proven extent.
     return rows
+
+
+def parse_lines(output):
+    return [(file, line, begin) for file, line, begin, _ in parse_line_ranges(output)]
+
+
+def unambiguous_line_ranges(rows):
+    """Sweep all sequences once; conflicting source/hidden rows prove no scope."""
+    events = {}
+    for file, line, begin, end in rows:
+        events.setdefault(begin, []).append(((file, line), 1))
+        events.setdefault(end, []).append(((file, line), -1))
+    active, result, previous = {}, [], None
+    for pc in sorted(events):
+        if previous is not None and previous < pc and len(active) == 1:
+            file, line = next(iter(active))
+            result.append((file, line, previous, pc))
+        for identity, delta in events[pc]:
+            active[identity] = active.get(identity, 0) + delta
+            if active[identity] == 0:
+                del active[identity]
+        previous = pc
+    return result
 
 
 def parse_symbols(output):
@@ -83,7 +107,9 @@ def matches(dwarf_file, document, basename_index):
 def resolve(source_map, line_dump, symbol_dump):
     if source_map.get('schemaVersion') != 2:
         raise ValueError('Expected matching Portable PDB source map schemaVersion 2')
-    lines = parse_lines(line_dump)
+    line_ranges = parse_line_ranges(line_dump)
+    verified_ranges = unambiguous_line_ranges(line_ranges)
+    lines = [(file, line, begin) for file, line, begin, _ in line_ranges]
     symbols = parse_symbols(symbol_dump)
     if not symbols:
         raise ValueError('No generated native function symbols found')
@@ -113,9 +139,13 @@ def resolve(source_map, line_dump, symbol_dump):
                                 if begin <= pc < begin + size and number == line
                                 and matches(filename, document, basenames)})
             if addresses:
+                ranges = {(pc, min(end, begin + size)) for filename, number, pc, end in verified_ranges
+                          if begin <= pc < begin + size and number == line
+                          and matches(filename, document, basenames)}
                 breakpoints.append({
                     'document': document, 'line': line, 'ilOffsets': sorted(il_offsets),
-                    'addresses': [f'0x{pc:08x}' for pc in addresses]})
+                    'addresses': [f'0x{pc:08x}' for pc in addresses],
+                    'ranges': [{'start': f'0x{a:08x}', 'end': f'0x{b:08x}'} for a, b in sorted(ranges)]})
         result.append({'symbol': name, 'assembly': method['assembly'],
                        'methodToken': method['methodToken'],
                        'nativeStart': f'0x{begin:08x}', 'nativeSize': size,
@@ -333,6 +363,7 @@ def attach_variables(mapped, source_map, info_dump, location_dump=''):
             value['location'] = locations.get(method['symbol'], {}).get(variable['nativeName'],
                 {'kind': 'unavailable', 'reason': 'Missing native DWARF variable'})
             visible = []
+            visible_ranges = []
             for point in method['breakpoints']:
                 offsets = [p['ilOffset'] for p in source.get('sourceLocations', [])
                            if p['document'] == point['document'] and p['startLine'] == point['line']]
@@ -340,18 +371,37 @@ def attach_variables(mapped, source_map, info_dump, location_dump=''):
                 # unavailable rather than guessed from the line number alone.
                 if offsets and all(variable['scopeStart'] <= i < variable['scopeEnd'] for i in offsets):
                     visible.extend(point['addresses'])
+                    visible_ranges.extend((int(r['start'], 16), int(r['end'], 16))
+                                          for r in point.get('ranges', []))
             location = value['location']
             if location['kind'] == 'rangeList':
                 by_location = {}
+                def add(resolved, pcs=(), ranges=()):
+                    key = json.dumps(resolved, sort_keys=True)
+                    entry = by_location.setdefault(key, (resolved, set(), set()))
+                    entry[1].update(pcs)
+                    entry[2].update(ranges)
                 for pc in sorted(set(visible)):
                     candidates = [loc for begin, end, loc in location['ranges'] if begin <= int(pc, 16) < end]
                     resolved = candidates[0] if len(candidates) == 1 else {'kind': 'unavailable', 'reason': 'Missing or ambiguous DWARF location range'}
-                    key = json.dumps(resolved, sort_keys=True)
-                    by_location.setdefault(key, (resolved, []))[1].append(pc)
-                for resolved, pcs in by_location.values():
-                    variables.append(dict(value, location=resolved, visibleAddresses=pcs))
+                    add(resolved, pcs=[pc])
+                # A location can change inside a source row. Split at every
+                # native boundary; gaps/overlaps remain explicitly unavailable.
+                for begin, end in sorted(set(visible_ranges)):
+                    boundaries = sorted({begin, end} | {pc for a, b, _ in location['ranges']
+                                                        for pc in (a, b) if begin < pc < end})
+                    for a, b in zip(boundaries, boundaries[1:]):
+                        candidates = [loc for low, high, loc in location['ranges'] if low <= a and b <= high]
+                        resolved = candidates[0] if len(candidates) == 1 else {'kind': 'unavailable', 'reason': 'Missing or ambiguous DWARF location range'}
+                        add(resolved, ranges=[(a, b)])
+                for resolved, pcs, ranges in by_location.values():
+                    variables.append(dict(value, location=resolved, visibleAddresses=sorted(pcs),
+                                          visibleRanges=[dict(start=f'0x{a:08x}', end=f'0x{b:08x}')
+                                                         for a, b in sorted(ranges)]))
             else:
                 value['visibleAddresses'] = sorted(set(visible))
+                value['visibleRanges'] = [dict(start=f'0x{a:08x}', end=f'0x{b:08x}')
+                                          for a, b in sorted(set(visible_ranges))]
                 variables.append(value)
         method['variables'] = variables
 
