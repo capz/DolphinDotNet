@@ -43,10 +43,14 @@ public sealed class StreamingTexture : IDisposable
     {
         if(nativePixels==null)throw new ArgumentNullException("nativePixels");
         ValidateUpload(offset,nativePixels.Length);
-        var destination=buffers[1-front];
+        // Resolve the managed texture and its native size on the application
+        // executor. The worker performs only the bounded native memory copy.
+        int destinationToken=buffers[1-front].Token;
+        int bytes=buffers[1-front].NativeBytes;
         staging=Task.Run(()=>{
             cancellationToken.ThrowIfCancellationRequested();
-            destination.StageDetached(nativePixels,offset);
+            if(NativeGraphics.TextureStageArray(destinationToken,nativePixels,offset,bytes)<0)
+                throw new InvalidOperationException("Background GX-native page staging failed.");
         },cancellationToken);
         return staging;
     }
@@ -60,21 +64,23 @@ public sealed class StreamingTexture : IDisposable
         if(NativeGraphics.BufferHold(source.Token)<0)throw new InvalidOperationException("Cannot retain native staging buffer.");
         try
         {
-            var task=StageBufferAsync(buffers[1-front],source,offset,cancellationToken);
+            var task=StageBufferAsync(buffers[1-front].Token,source.Token,
+                buffers[1-front].NativeBytes,offset,cancellationToken);
             staging=task;return task;
         }
         catch{NativeGraphics.BufferUnhold(source.Token);throw;}
     }
-    private static async Task StageBufferAsync(Texture2D target,NativeBuffer source,int offset,CancellationToken cancellationToken)
+    private static async Task StageBufferAsync(int targetToken,int sourceToken,int bytes,int offset,CancellationToken cancellationToken)
     {
         try
         {
             await Task.Run(()=>{
                 cancellationToken.ThrowIfCancellationRequested();
-                target.StageDetached(source,offset);
+                if(NativeGraphics.TextureStageBuffer(targetToken,sourceToken,offset,bytes)<0)
+                    throw new InvalidOperationException("Background native-buffer page staging failed.");
             },cancellationToken);
         }
-        finally{NativeGraphics.BufferUnhold(source.Token);}
+        finally{NativeGraphics.BufferUnhold(sourceToken);}
     }
     /// <summary>Nonblocking publication, valid between GX primitives even during
     /// an active graphics frame. Returns false while the background copy is pending.</summary>
