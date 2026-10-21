@@ -42,6 +42,7 @@ class Target:
         self.duplicate_interrupt_stop = False
         self.delayed_interrupt_stop = None
         self.empty_register = False
+        self.step_reply = None
         self.step_destinations = {}
         self.step_stack_pointers = {}
         self.continue_stop = None
@@ -109,6 +110,9 @@ class Target:
                         self.breakpoints.discard(int(command.split(",")[1], 16))
                         self.reply("OK")
                     elif command == "s":
+                        if self.step_reply is not None:
+                            self.reply(self.step_reply)
+                            continue
                         self.stack_pointer = self.step_stack_pointers.get(self.pc, self.stack_pointer)
                         self.pc = self.step_destinations.get(self.pc, self.pc + 4)
                         self.reply(f"T0540:{self.pc:08x};")
@@ -746,6 +750,8 @@ class AdapterTests(unittest.TestCase):
         self.target.empty_register = True
         result = self.client.request('stackTrace', dict(threadId=1), success=False)
         self.assertIn('Invalid register response', result['message'])
+        self.client.event('terminated')
+        self.client.request('threads', success=False)
 
     def attach_call_target(self, opcode=0x48001001, same_line=False):
         data = json.loads(self.address.read_text())
@@ -896,6 +902,18 @@ class AdapterTests(unittest.TestCase):
         self.client.request('next', dict(threadId=1))
         self.client.event('terminated')
         self.assertEqual('c', self.target.commands[-1])
+
+    def test_exit_while_resuming_from_breakpoint_does_not_reinstall_breakpoints(self):
+        self.attach()
+        self.bp(lines=(10, 11))
+        self.client.request('continue', dict(threadId=1))
+        self.client.event('stopped')
+        self.target.step_reply = 'W00'
+        self.client.request('continue', dict(threadId=1))
+        self.client.event('terminated')
+        self.assertEqual('s', self.target.commands[-1])
+        self.assertFalse(self.target.breakpoints)
+        self.client.request('threads', success=False)
 
     def test_stack_snapshot_reuses_frames_and_refreshes_after_execution(self):
         self.attach()
@@ -1085,6 +1103,18 @@ class AdapterTests(unittest.TestCase):
         self.client.request("variables", dict(variablesReference=1), success=False)
         self.client.request("threads", {})
         self.client.request("stackTrace", dict(threadId=2), success=False)
+
+    def test_invalid_source_mapping_request_does_not_terminate_healthy_target(self):
+        self.target = Target()
+        self.client.request('attach', dict(host='127.0.0.1', port=self.target.port,
+            elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address),
+            sourceFileMap={'/build/one':'/local', '/build/two':'/local'}))
+        self.client.event('initialized')
+        result = self.client.request('setBreakpoints', dict(source=dict(path='/local/Game.cs'),
+            breakpoints=[dict(line=10)]), success=False)
+        self.assertIn('Ambiguous source path mapping', result['message'])
+        self.client.request('threads')
+        self.assertFalse(any(message.get('event')=='terminated' for message in self.client.events))
 
     def test_uri_paths_and_zero_based_lines(self):
         self.client.close()

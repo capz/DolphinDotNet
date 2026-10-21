@@ -16,6 +16,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     private volatile bool _running;
     private volatile bool _pauseRequested;
     private bool _initialized, _configured, _closed;
+    private int _terminated;
     private int _lineBase = 1, _columnBase = 1, _nextFrame;
     private bool _uriPaths;
     private sealed record FrameState(NativeStackFrame Frame, bool TopFrame, uint Lookup);
@@ -49,12 +50,9 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 catch (Exception error)
                 {
                     await connection.RespondAsync(request, error: error.Message);
-                    if (error is IOException or OperationCanceledException && _client is not null)
+                    if (error is IOException or InvalidDataException or OperationCanceledException or ObjectDisposedException && _client is not null)
                     {
-                        await StopHeartbeatAsync();
-                        await _client.DisposeAsync();
-                        _client = null;
-                        await connection.EventAsync("terminated");
+                        await EndTargetAsync(_client);
                     }
                 }
             }
@@ -90,12 +88,14 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             await CloseTargetAsync();
             _closed = true;
             await connection.RespondAsync(request);
-            await connection.EventAsync("terminated");
+            await TerminatedAsync();
             return;
         }
         if (command == "attach")
         {
             if (_client is not null) throw new InvalidOperationException("Already attached.");
+            if (_execution is { IsCompleted: false }) throw new InvalidOperationException("Previous target is still shutting down.");
+            Interlocked.Exchange(ref _terminated, 0);
             _telemetryReported = false;
             _configured = false;
             _frames.Clear();
@@ -325,12 +325,15 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
 
     private async Task ExecuteAsync(string command)
     {
+        // Keep this execution's transport even if request-side failure clears
+        // the session field. Cleanup must never dereference a cleared field.
+        var client = _client!;
         string reason = "step";
         string? description = null;
         try
         {
             var breakpoints = _breakpoints!;
-            var stepper = new SourceStepper(_client!, _symbols!, breakpoints.Contains, breakpoints.ContinueToAsync,
+            var stepper = new SourceStepper(client, _symbols!, breakpoints.Contains, breakpoints.ContinueToAsync,
                 () => _pauseRequested);
             await breakpoints.SuspendAsync();
             if (command == "continue")
@@ -338,10 +341,13 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 // Step off an installed breakpoint before resuming so it cannot retrigger.
                 var steppedOff = _stop!.ProgramCounter is uint pc && breakpoints.Contains(pc);
                 if (steppedOff)
-                    _stop = await stepper.ReadProgramCounterAsync(await _client!.StepInstructionAsync(_lifetime.Token), _lifetime.Token);
-                await breakpoints.RestoreAsync();
-                if (!_stop!.Exited && (!steppedOff || _stop.Signal == 5))
-                    _stop = await stepper.ReadProgramCounterAsync(await _client!.ContinueAsync(_lifetime.Token, () => _pauseRequested), _lifetime.Token);
+                    _stop = await stepper.ReadProgramCounterAsync(await client.StepInstructionAsync(_lifetime.Token), _lifetime.Token);
+                if (!_stop!.Exited)
+                {
+                    await breakpoints.RestoreAsync();
+                    if (!steppedOff || _stop.Signal == 5)
+                        _stop = await stepper.ReadProgramCounterAsync(await client.ContinueAsync(_lifetime.Token, () => _pauseRequested), _lifetime.Token);
+                }
                 reason = _pauseRequested ? "pause" : _stop.Signal == 5 && _stop.ProgramCounter is uint stoppedPc && breakpoints.Contains(stoppedPc) ? "breakpoint" : "exception";
             }
             else
@@ -359,9 +365,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             }
             if (_stop!.Exited)
             {
-                _running = false;
-                _configured = false;
-                await connection.EventAsync("terminated");
+                await EndTargetAsync(client);
             }
             else
             {
@@ -385,13 +389,23 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
         {
             // A timed-out/corrupt RSP operation may leave an unread reply. Never
             // advertise a usable stopped session or issue new commands on it.
-            await StopHeartbeatAsync();
-            await _client!.DisposeAsync();
-            _client = null;
-            _running = false;
             await connection.EventAsync("output", new { category = "stderr", output = $"Debug session ended: {error.Message}\n" });
-            await connection.EventAsync("terminated");
+            await EndTargetAsync(client);
         }
+    }
+
+    private Task TerminatedAsync()
+        => Interlocked.Exchange(ref _terminated, 1) == 0
+            ? connection.EventAsync("terminated") : Task.CompletedTask;
+
+    private async Task EndTargetAsync(RspClient client)
+    {
+        await StopHeartbeatAsync();
+        if (ReferenceEquals(_client, client)) _client = null;
+        await client.DisposeAsync();
+        _running = false;
+        _configured = false;
+        await TerminatedAsync();
     }
 
     private Task StoppedAsync(string reason, string? description = null)

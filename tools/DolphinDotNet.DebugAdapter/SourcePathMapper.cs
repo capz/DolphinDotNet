@@ -22,7 +22,7 @@ public sealed class SourcePathMapper
         var matches = mappings.Where(p => path == p.From || path.StartsWith(p.From + "/", StringComparison.Ordinal))
             .OrderByDescending(p => p.From.Length).ToArray();
         if (matches.Length > 1 && matches[0].From.Length == matches[1].From.Length)
-            throw new InvalidDataException("Ambiguous source path mapping.");
+            throw new ArgumentException("Ambiguous source path mapping.");
         return matches.Length == 0 ? path : matches[0].To + path[matches[0].From.Length..];
     }
 }

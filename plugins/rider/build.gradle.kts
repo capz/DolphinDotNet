@@ -45,6 +45,8 @@ tasks.prepareSandbox {
 tasks.test {
     useJUnitPlatform()
     dependsOn(publishAdapter)
+    // Adapter changes must rerun the packaged Java client's integration tests.
+    inputs.dir(adapterOutput)
     systemProperty("dnd.adapter", adapterOutput.get().file("DolphinDotNet.DebugAdapter.dll").asFile.absolutePath)
     systemProperty("dnd.repositoryRoot", rootDir.resolve("../..").canonicalPath)
 }

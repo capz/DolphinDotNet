@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 
-GROUPS = ("debugger", "rider", "managed", "ide", "portable", "gamecube", "dolphin")
+GROUPS = ("debugger", "rider", "visualstudio", "managed", "ide", "portable", "gamecube", "dolphin")
 BUILD = {"managed", "ide", "gamecube", "dolphin"}
 
 
@@ -17,12 +17,16 @@ def select(paths):
             continue
         if path.startswith("plugins/rider/"):
             selected.add("rider")
+        elif path.startswith(("plugins/visual-studio/", "tests/VisualStudioTests/")) or path in {"scripts/verify_vsix.py", ".github/workflows/visual-studio.yml"}:
+            selected.add("visualstudio")
+        elif path == ".github/workflows/rider.yml":
+            selected.add("rider")
         elif path in {"tests/test_debug_adapter.py", "tests/rider_dap_fixture.py"}:
             selected.update({"debugger", "rider"})
         elif path.startswith("tests/DebuggerTests/"):
             selected.add("debugger")
         elif path.startswith(("tools/DolphinDotNet.Debugger/", "tools/DolphinDotNet.Debugger.Probe/", "tools/DolphinDotNet.DebugAdapter/")) or path == "scripts/dnd_dap_probe.py":
-            selected.update({"debugger", "rider", "gamecube", "dolphin"})
+            selected.update({"debugger", "rider", "visualstudio", "gamecube", "dolphin"})
         elif path in {"scripts/dolphin_smoke.py", "scripts/dolphin_gdb_probe.py", "tests/test_dolphin_smoke.py"}:
             selected.update({"gamecube", "dolphin"})
         elif path.startswith("tests/DolphinLaunchProbe/") or path == "tests/build_workflow_test.py":

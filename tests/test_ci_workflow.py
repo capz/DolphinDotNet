@@ -85,10 +85,51 @@ class WorkflowCoverageTests(unittest.TestCase):
         self.assertIn('scripts/package_sample_dols.py bundle dist/DolphinDotNet-samples.zip', release)
         for sample in source_jobs['gamecube'] | source_jobs['gamecube-extra']:
             self.assertIn(sample, release)
-        self.assertIn('gh release create "$TAG" dist/DolphinDotNet-samples.zip', release)
+        self.assertIn('gh release create "$TAG" "${assets[@]}"', release)
         self.assertNotIn('dist/sample-dols/*.zip', release)
         self.assertIn("if: github.ref == 'refs/heads/main'", release)
         self.assertIn('if-no-files-found: error', job('gamecube-extra'))
+
+    def test_extensions_are_independent_reusable_workflows_and_release_assets(self):
+        release = job('release-gamecube')
+        gate = job('ci-result')
+        for name, workflow, group, artifact in (
+            ('rider-plugin', 'rider', 'rider', 'DolphinDotNet-Rider-plugin'),
+            ('visual-studio-extension', 'visual-studio', 'visualstudio', 'DolphinDotNet-VisualStudio-plugin')):
+            self.assertIn(f'uses: ./.github/workflows/{workflow}.yml', job(name))
+            source = (ROOT / f'.github/workflows/{workflow}.yml').read_text()
+            self.assertIn('  workflow_call:', source)
+            self.assertIn('  workflow_dispatch:', source)
+            self.assertIn(f'name: {artifact}', source)
+            self.assertIn('if-no-files-found: error', source)
+            self.assertIn(f"'{name}': '{group}'", gate)
+            self.assertIn(f'      - {name}', release)
+            self.assertIn(f"if: needs.{name}.result == 'success'", release)
+            self.assertIn(f'name: {artifact}', release)
+        self.assertIn('scripts/release_assets.py', release)
+        self.assertNotIn('gradle --no-daemon', WORKFLOW)
+
+    def test_selected_extension_failure_blocks_ci_gate(self):
+        section = job('ci-result')
+        code = section.split("python3 - <<'PY'\n", 1)[1].split('          PY', 1)[0]
+        code = '\n'.join(line[10:] for line in code.splitlines())
+        jobs = {'debugger-protocol': 'debugger', 'rider-plugin': 'rider',
+                'visual-studio-extension': 'visualstudio', 'managed': 'managed',
+                'ide-workflow': 'ide', 'portable-runtime': 'portable',
+                'gamecube': 'gamecube', 'gamecube-extra': 'gamecube', 'dolphin-smoke': 'dolphin'}
+        for extension in ('rider-plugin', 'visual-studio-extension'):
+            outputs = {group: 'false' for group in jobs.values()}
+            outputs[jobs[extension]] = 'true'
+            for outcome in ('success', 'failure', 'cancelled', 'skipped'):
+                results = {name: {'result': 'skipped'} for name in jobs}
+                results['changes'] = {'result': 'success', 'outputs': outputs}
+                results[extension]['result'] = outcome
+                with self.subTest(extension=extension, outcome=outcome), patch.dict(os.environ, {'JOB_RESULTS': json.dumps(results)}):
+                    if outcome == 'success':
+                        exec(code, {})
+                    else:
+                        with self.assertRaises(SystemExit):
+                            exec(code, {})
 
     def test_missing_or_failed_emulator_cases_cannot_pass(self):
         section=job('dolphin-smoke')

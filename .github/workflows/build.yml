@@ -25,6 +25,7 @@ jobs:
     outputs:
       debugger: ${{ steps.select.outputs.debugger }}
       rider: ${{ steps.select.outputs.rider }}
+      visualstudio: ${{ steps.select.outputs.visualstudio }}
       managed: ${{ steps.select.outputs.managed }}
       ide: ${{ steps.select.outputs.ide }}
       portable: ${{ steps.select.outputs.portable }}
@@ -39,6 +40,7 @@ jobs:
           python3 -m unittest discover -s tests -p test_ci_changes.py
           python3 -m unittest discover -s tests -p test_ci_workflow.py
           python3 -m unittest discover -s tests -p test_sample_release.py
+          python3 -m unittest discover -s tests -p test_release_assets.py
       - name: Select checks from the complete PR diff
         id: select
         run: python3 scripts/ci_changes.py
@@ -64,50 +66,12 @@ jobs:
   rider-plugin:
     needs: changes
     if: needs.changes.outputs.rider == 'true'
-    name: Rider attach plugin
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.1.0'
-      - name: Compile, test real adapter integration, package and verify Rider compatibility
-        working-directory: plugins/rider
-        run: gradle --no-daemon test buildPlugin verifyPlugin
-      - name: Verify plugin ZIP includes the adapter and serial runtime dependencies
-        run: |
-          python3 - <<'PYZIP'
-          from pathlib import Path
-          from zipfile import ZipFile
-          packages = list(Path('plugins/rider/build/distributions').glob('*.zip'))
-          assert len(packages) == 1, packages
-          with ZipFile(packages[0]) as archive:
-              names = archive.namelist()
-              for required in ['DolphinDotNet.DebugAdapter.dll', 'DolphinDotNet.DebugAdapter.deps.json',
-                               'DolphinDotNet.DebugAdapter.runtimeconfig.json', 'DolphinDotNet.Debugger.dll', 'System.IO.Ports.dll']:
-                  assert any(name.endswith('/adapter/' + required) for name in names), required
-              assert any('Ports.Native' in name for name in names), 'Missing serial native runtimes'
-          PYZIP
-      - uses: actions/upload-artifact@v4
-        with:
-          name: DolphinDotNet-Rider-plugin
-          path: plugins/rider/build/distributions/*.zip
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: Rider-plugin-test-reports
-          path: |
-            plugins/rider/build/reports/tests/
-            plugins/rider/build/reports/pluginVerifier/
+    uses: ./.github/workflows/rider.yml
+
+  visual-studio-extension:
+    needs: changes
+    if: needs.changes.outputs.visualstudio == 'true'
+    uses: ./.github/workflows/visual-studio.yml
 
   managed:
     needs: changes
@@ -1412,7 +1376,7 @@ jobs:
     name: CI result
     if: always()
     runs-on: ubuntu-24.04
-    needs: [changes, debugger-protocol, rider-plugin, managed, ide-workflow, portable-runtime, gamecube, gamecube-extra, dolphin-smoke]
+    needs: [changes, debugger-protocol, rider-plugin, visual-studio-extension, managed, ide-workflow, portable-runtime, gamecube, gamecube-extra, dolphin-smoke]
     steps:
       - name: Require every selected check to pass
         env:
@@ -1424,7 +1388,7 @@ jobs:
           if jobs['changes']['result'] != 'success':
               sys.exit('CI selection failed')
           selected = jobs['changes']['outputs']
-          groups = {'debugger-protocol': 'debugger', 'rider-plugin': 'rider', 'managed': 'managed',
+          groups = {'debugger-protocol': 'debugger', 'rider-plugin': 'rider', 'visual-studio-extension': 'visualstudio', 'managed': 'managed',
                     'ide-workflow': 'ide', 'portable-runtime': 'portable',
                     'gamecube': 'gamecube', 'gamecube-extra': 'gamecube', 'dolphin-smoke': 'dolphin'}
           failed = []
@@ -1441,10 +1405,12 @@ jobs:
           PY
 
   release-gamecube:
-    name: Publish GameCube sample release
+    name: Publish samples and built IDE extensions
     runs-on: ubuntu-latest
     needs:
       - ci-result
+      - rider-plugin
+      - visual-studio-extension
       - debugger-protocol
       - managed
       - ide-workflow
@@ -1464,6 +1430,18 @@ jobs:
           pattern: DolphinDotNet-sample-dols-*
           merge-multiple: true
           path: dist/sample-dols
+      - name: Download Rider package built during this run
+        if: needs.rider-plugin.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: DolphinDotNet-Rider-plugin
+          path: dist/extensions/rider
+      - name: Download Visual Studio package built during this run
+        if: needs.visual-studio-extension.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: DolphinDotNet-VisualStudio-plugin
+          path: dist/extensions/visual-studio
       - name: Create and verify single sample ZIP
         run: |
           python3 scripts/package_sample_dols.py bundle dist/DolphinDotNet-samples.zip dist/sample-dols \
@@ -1476,10 +1454,17 @@ jobs:
           BUILD_SHA: ${{ github.sha }}
           BUILD_RUN: ${{ github.run_id }}
           BUILD_ATTEMPT: ${{ github.run_attempt }}
+          RIDER_RESULT: ${{ needs.rider-plugin.result }}
+          VS_RESULT: ${{ needs.visual-studio-extension.result }}
         run: |
           TAG="build-${BUILD_RUN}-${BUILD_ATTEMPT}"
-          gh release create "$TAG" dist/DolphinDotNet-samples.zip \
+          package_args=()
+          if [ "$RIDER_RESULT" = success ]; then package_args+=(--rider-dir dist/extensions/rider); fi
+          if [ "$VS_RESULT" = success ]; then package_args+=(--visual-studio-dir dist/extensions/visual-studio); fi
+          python3 scripts/release_assets.py dist/DolphinDotNet-samples.zip "${package_args[@]}" > dist/release-assets.txt
+          mapfile -t assets < dist/release-assets.txt
+          gh release create "$TAG" "${assets[@]}" \
             --target "$BUILD_SHA" \
-            --title "GameCube samples build ${BUILD_RUN} (attempt ${BUILD_ATTEMPT})" \
-            --notes "One ZIP containing the 11 existing GameCube sample DOL builds from commit ${BUILD_SHA}. No additional samples were compiled for this release. Verified by CI run https://github.com/${GH_REPO}/actions/runs/${BUILD_RUN}." \
+            --title "DolphinDotNet build ${BUILD_RUN} (attempt ${BUILD_ATTEMPT})" \
+            --notes "One ZIP containing the 11 existing GameCube sample DOL builds from commit ${BUILD_SHA}. Includes the installable Rider and Visual Studio extensions when built in this run. No additional samples were compiled for this release. Verified by CI run https://github.com/${GH_REPO}/actions/runs/${BUILD_RUN}." \
             --prerelease
