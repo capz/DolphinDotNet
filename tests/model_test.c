@@ -590,6 +590,11 @@ int main(int argc, char **argv) {
   assert((tm->material[tm->mesh[0].material].mode&4)!=0);
   near(tm->material[tm->mesh[0].material].color[3],.45f);
   assert(dnd_model_dispose(translucent_fbx)==0);
+  int classic_fbx=dnd_model_begin_scene(dnd_string_from_utf8(&heap,"sd:/translucent-classic.fbx"),1,60,8*1024*1024,0);
+  assert(classic_fbx);DndModel *classic_model=dnd_model_find(classic_fbx,false);
+  assert((classic_model->material[classic_model->mesh[0].material].mode&4)!=0);
+  near(classic_model->material[classic_model->mesh[0].material].color[3],.8f);
+  assert(dnd_model_dispose(classic_fbx)==0);
   int binary_fbx=dnd_model_begin_scene(dnd_string_from_utf8(&heap,"sd:/embedded-binary.fbx"),1,60,8*1024*1024,0);assert(binary_fbx);
   assert(dnd_model_find(binary_fbx,false)->textures==1&&dnd_model_find(binary_fbx,false)->clips==0);
   assert(dnd_model_dispose(binary_fbx)==0);

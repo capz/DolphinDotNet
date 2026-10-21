@@ -572,6 +572,14 @@ jobs:
           grep -q 'dnd_card_mount' /tmp/dnd-snake-bundle/source/generated_program.c
           grep -q 'dnd_card_write_save' /tmp/dnd-snake-bundle/source/generated_program.c
           grep -q -- '-DDND_NO_AUTONETWORK' /tmp/dnd-snake-bundle/Makefile
+      - name: Validate imported model GX submission
+        if: matrix.group == 'graphics-model'
+        run: |
+          # Execute the production GX model path and shared TEV binder, recording GX commands.
+          cc -pthread -DDND_MODEL_GX_TEST -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -ffunction-sections -fdata-sections -std=c11 -Wall -Wextra -Werror -Itests/model_effect_sdk -Iinclude tests/model_effect_test.c source/managed_runtime.c source/async_runtime.c source/model.c source/model_animation.c source/model_graphics.c source/graphics_device.c source/draw_resources.c source/performance.c -Wl,--gc-sections,--wrap=malloc,--wrap=calloc,--wrap=realloc -lm -o /tmp/model-effects
+          /tmp/model-effects
+          cc -pthread -m32 -DDND_MODEL_GX_TEST -O2 -ffunction-sections -fdata-sections -std=c11 -Wall -Wextra -Werror -Itests/model_effect_sdk -Iinclude tests/model_effect_test.c source/managed_runtime.c source/async_runtime.c source/model.c source/model_animation.c source/model_graphics.c source/graphics_device.c source/draw_resources.c source/performance.c -Wl,--gc-sections,--wrap=malloc,--wrap=calloc,--wrap=realloc -lm -o /tmp/model-effects32
+          /tmp/model-effects32
       - name: Validate raw and managed graphics layers
         if: matrix.group == 'graphics-model'
         run: |
@@ -615,11 +623,6 @@ jobs:
           timeout 30s /tmp/model-native /tmp/dnd-model-fixtures
           cc -pthread -m32 -O2 -std=c11 -Wall -Wextra -Werror -Iinclude tests/model_test.c source/managed_runtime.c source/async_runtime.c source/storage.c source/contiguous_write.c source/file_optimize.c source/model*.c source/graphics_device.c source/draw_resources.c source/graphics_gx.c source/performance.c -lm -o /tmp/model-native32
           timeout 30s /tmp/model-native32 /tmp/dnd-model-fixtures
-          # Execute the production GX model path and shared TEV binder, recording GX commands.
-          cc -pthread -DDND_MODEL_GX_TEST -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -ffunction-sections -fdata-sections -std=c11 -Wall -Wextra -Werror -Itests/model_effect_sdk -Iinclude tests/model_effect_test.c source/managed_runtime.c source/async_runtime.c source/model.c source/model_animation.c source/model_graphics.c source/graphics_device.c source/draw_resources.c source/performance.c -Wl,--gc-sections,--wrap=malloc,--wrap=calloc,--wrap=realloc -lm -o /tmp/model-effects
-          /tmp/model-effects
-          cc -pthread -m32 -DDND_MODEL_GX_TEST -O2 -ffunction-sections -fdata-sections -std=c11 -Wall -Wextra -Werror -Itests/model_effect_sdk -Iinclude tests/model_effect_test.c source/managed_runtime.c source/async_runtime.c source/model.c source/model_animation.c source/model_graphics.c source/graphics_device.c source/draw_resources.c source/performance.c -Wl,--gc-sections,--wrap=malloc,--wrap=calloc,--wrap=realloc -lm -o /tmp/model-effects32
-          /tmp/model-effects32
       - name: Validate model AOT, transforms, animation and ARAM residency
         if: matrix.group == 'graphics-model'
         timeout-minutes: 5

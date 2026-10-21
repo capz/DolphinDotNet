@@ -1133,19 +1133,16 @@ static int import_scene(const char *path, int fbx, float sample_rate,
     opacity = fmin(opacity, authored_opacity);
     /* OBJ MTL dissolve/Tr and older FBX materials can retain alpha in the
      * classic transparency factor rather than ufbx's PBR opacity field. */
-    if (m->fbx.transparency_factor.has_value) {
-      double transparency = m->fbx.transparency_factor.value_real;
-      if (!isfinite(transparency) || transparency < 0 || transparency > 1)
+    if (m->fbx.transparency_factor.has_value || m->fbx.transparency_color.has_value) {
+      double factor = m->fbx.transparency_factor.has_value ? m->fbx.transparency_factor.value_real : 1;
+      ufbx_vec3 color = m->fbx.transparency_color.has_value ? m->fbx.transparency_color.value_vec3 : (ufbx_vec3){1,1,1};
+      if (!isfinite(factor) || factor<0 || factor>1 ||
+          !isfinite(color.x) || !isfinite(color.y) || !isfinite(color.z) ||
+          color.x<0 || color.x>1 || color.y<0 || color.y>1 || color.z<0 || color.z>1)
         goto done;
-      opacity = fmin(opacity, 1.0 - transparency);
-    }
-    if (m->fbx.transparency_color.has_value) {
-      ufbx_vec3 transmission = m->fbx.transparency_color.value_vec3;
-      double transparency = fmax(transmission.x,
-                                  fmax(transmission.y, transmission.z));
-      if (!isfinite(transparency) || transparency < 0 || transparency > 1)
-        goto done;
-      opacity = fmin(opacity, 1.0 - transparency);
+      // FBX transparency color is modulated by its factor, not an
+      // independent opacity override. Use the maximum channel for scalar GX alpha.
+      opacity = fmin(opacity, 1.0 - factor * fmax(color.x,fmax(color.y,color.z)));
     }
     if (!isfinite(opacity) || opacity < 0 || opacity > 1)
       goto done;

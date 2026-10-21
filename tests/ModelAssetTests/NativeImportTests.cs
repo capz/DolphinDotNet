@@ -30,6 +30,11 @@ internal static class NativeImportTests
             "P: \"DiffuseColor\", \"Color\", \"\", \"A\",1,1,1\n            P: \"Opacity\", \"double\", \"Number\", \"A\",0.45",
             StringComparison.Ordinal);
         File.WriteAllText(Path.Combine(sd,"translucent.fbx"),translucent);
+        string classic=textured.Replace(
+            "P: \"DiffuseColor\", \"Color\", \"\", \"A\",1,1,1",
+            "P: \"DiffuseColor\", \"Color\", \"\", \"A\",1,1,1\n            P: \"TransparencyFactor\", \"Number\", \"\", \"A\",0.5\n            P: \"TransparentColor\", \"Color\", \"\", \"A\",0.4,0.4,0.4",StringComparison.Ordinal);
+        File.WriteAllText(Path.Combine(sd,"translucent-classic.fbx"),classic);
+
         File.WriteAllText(Path.Combine(sd,"invalid.fbx"),"not an FBX file");
         File.WriteAllText(Path.Combine(sd,"invalid.obj"),"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 999\n");
         // Native image codec fixtures, independent of the desktop model importer.
