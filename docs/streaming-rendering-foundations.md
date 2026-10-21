@@ -28,8 +28,9 @@ using Dolphin.Storage;
 
 // Construction between frames; stage asynchronously while the game renders.
 using var page=new StreamingTexture(136,136,NativeTextureFormat.Cmpr);
+var material=new Material();
 await page.StageUploadAsync(compiledGxCmprPage); // exactly page.NativeBytes bytes
-if(page.TryPublish()) material.Texture=page.Texture; // rebind after swap
+page.TryPublish(material); // binds newly published texture
 
 // Optionally prefetch asset bytes into reusable native memory:
 using var staging=NativeBuffer.Allocate(64*1024);
@@ -37,7 +38,7 @@ using var stream=new AssetStream("sd:/world.gcpak");
 int read=await stream.ReadAtAsync(8192,staging,0,64*1024);
 // Publish one GX-native page from a native staging region, with no byte[] copy:
 // await page.StageUploadAsync(staging,0); // source contains 136x136 CMPR bytes
-// if(page.TryPublish()) material.Texture=page.Texture;
+// page.TryPublish(material);
 
 // Direct ARAM promotion (after ARAM initialized and both addresses aligned):
 using var aram=Aram.Allocate(64*1024);

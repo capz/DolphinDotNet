@@ -92,6 +92,15 @@ public sealed class StreamingTexture : IDisposable
         staging=null;
         return true;
     }
+    /// <summary>Publish and immediately update the supplied material's primary
+    /// texture binding. Other materials using this page require their own rebinding.</summary>
+    public bool TryPublish(Material material)
+    {
+        if(material==null)throw new ArgumentNullException("material");
+        if(!TryPublish())return false;
+        material.Texture=Texture;
+        return true;
+    }
     /// <summary>Legacy synchronous upload to the currently exposed texture,
     /// between frames only. Prefer StageUploadAsync + TryPublish.</summary>
     public void UploadNative(byte[] nativePixels,int offset=0)

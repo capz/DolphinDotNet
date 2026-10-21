@@ -199,7 +199,7 @@ int dnd_texture_stage_buffer(int token,int buffer_token,int offset,int count) {
 }
 int dnd_texture_publish_staged(int token) {
     dnd_async_require_application_thread();
-    if(dnd_raw_depth() || !find(token,TEXTURE))return -1;
+    if(dnd_raw_depth() || dnd_device_pass()==3 || !find(token,TEXTURE))return -1;
     /* The backend issues GX_InvalidateTexAll only; no GPU completion wait. */
     dnd_draw_backend_publish_texture();
     return 0;
