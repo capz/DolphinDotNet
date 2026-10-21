@@ -50,6 +50,19 @@ internal static class Program
         }
         catch(InvalidOperationException){return 44;}
         if(!Dolphin.Threading.Tasks.Scheduler.IsApplicationThread)return 49;
+        // Regression: CPU-only texture staging is permitted on the service
+        // executor, but publishing GX state from that executor must still fail.
+        // In manual mode Task.Run executes on the application executor instead.
+        await Task.Run(()=>
+        {
+            if(!Dolphin.Threading.Tasks.Scheduler.IsApplicationThread)
+            {
+                bool refused=false;
+                try{streamed.TryPublish();}
+                catch(InvalidOperationException){refused=true;}
+                if(!refused)throw new InvalidOperationException("Worker published GX texture state.");
+            }
+        });
         try
         {
             if(!streamed.TryPublish()||streamed.ContentGeneration!=2)return 42;
