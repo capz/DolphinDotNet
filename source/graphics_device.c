@@ -4,6 +4,11 @@
 #include "dnd_async.h"
 #include <math.h>
 #include <stdint.h>
+/* Isolated model host tests intentionally omit the full GX backend.
+ * Their device passes have no persistent GX state to invalidate. */
+#if !defined(DND_GAMECUBE_STORAGE)
+__attribute__((weak)) void dnd_draw_backend_invalidate_cache(void){}
+#endif
 static bool active,external;
 /* GX presentation synchronizes the GPU; never signal an in-flight frame. */
 static uint32_t frame_completed;
