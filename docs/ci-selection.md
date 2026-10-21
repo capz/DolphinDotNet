@@ -9,7 +9,9 @@ runtime. We do not assume an earlier commit's checks validated the current tree.
 |---|---|
 | `docs/`, README, security policy, license only | Selection tests and final CI result |
 | `tests/DebuggerTests/` only | Host GDB protocol |
-| Debugger library or acceptance probe | Host GDB protocol, GameCube DOL, Dolphin boot |
+| Debugger library or acceptance probe | Host GDB protocol, both IDE packages, GameCube DOL, Dolphin boot |
+| Rider plugin or its workflow | Rider plugin |
+| Visual Studio extension, its tests, verifier or workflow | Visual Studio VSIX |
 | Dolphin smoke/protocol scripts or their unit tests | GameCube DOL, Dolphin boot |
 | IDE launch probe or build-workflow test only | IDE workflow on all three platforms |
 | Compiler, SDK, managed libraries, samples, assets/build tools | Managed compiler, IDE workflow, GameCube DOL, Dolphin boot |
@@ -36,7 +38,7 @@ settings.
 
 For successful `main` pushes and manual runs, the release job gathers
 sample DOL artifacts **already built** by `gamecube` and `gamecube-extra`.
-It publishes **one** `DolphinDotNet-samples.zip` release asset containing
+It publishes `DolphinDotNet-samples.zip` containing
 `<Sample>.dol` for each normally built sample. Build-only and emulator
 acceptance fixtures are excluded. Staging and packaging do not compile any
 additional samples. When a new sample starts producing a native DOL in the
@@ -51,3 +53,22 @@ python3 -m unittest discover -s tests -p test_ci_changes.py
 
 Extend filters conservatively when adding components. Include all consumers,
 shared compiler/runtime dependencies, and producer jobs needed for artifacts.
+
+## Independent IDE packages
+
+Rider and Visual Studio each have their own reusable Actions workflow:
+`.github/workflows/rider.yml` (**Rider plugin**) and
+`.github/workflows/visual-studio.yml` (**Visual Studio VSIX**). In Actions, select
+one workflow, then **Run workflow** and choose a branch to build just that
+extension. Download its `DolphinDotNet-Rider-plugin` ZIP artifact or
+`DolphinDotNet-VisualStudio-plugin` VSIX artifact. Standalone builds do not
+publish a release or build GameCube samples.
+
+The main workflow calls the same package workflows when the path selector
+requires them. Main pushes and full manual builds build both packages. Their
+results are required by the CI gate. The release job downloads each selected
+extension from the **same run** and attaches its installable ZIP or VSIX beside
+the samples ZIP. It never substitutes artifacts from a different commit or run.
+A selected package that is missing, empty or ambiguous fails publication;
+unselected packages are omitted. Rider keeps its Java/.NET integration tests and
+JetBrains Plugin Verifier, and VSIX keeps its Windows packaging verification.

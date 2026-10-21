@@ -1,27 +1,11 @@
 name: Visual Studio VSIX
 on:
-  pull_request:
-    paths:
-      - 'plugins/visual-studio/**'
-      - 'tools/DolphinDotNet.DebugAdapter/**'
-      - 'tools/DolphinDotNet.Debugger/**'
-      - 'tests/VisualStudioTests/**'
-      - 'scripts/verify_vsix.py'
-      - '.github/workflows/visual-studio.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'plugins/visual-studio/**'
-      - 'tools/DolphinDotNet.DebugAdapter/**'
-      - 'tools/DolphinDotNet.Debugger/**'
-      - 'tests/VisualStudioTests/**'
-      - 'scripts/verify_vsix.py'
-      - '.github/workflows/visual-studio.yml'
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: vsix-${{ github.event.pull_request.number || github.ref }}
+  group: vsix-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   package:

@@ -6,7 +6,7 @@ The DolphinDotNet VSIX adds **Debug → Attach to DolphinDotNet…** to Visual S
 runtime. Installing the VSIX requires restarting Visual Studio.
 
 Download **DolphinDotNet-VisualStudio-plugin** from the **Visual Studio VSIX**
-workflow, extract the `.vsix`, close Visual Studio and install it with VSIXInstaller.
+workflow (or the VSIX asset from a full main-build release), extract the `.vsix`, close Visual Studio and install it with VSIXInstaller.
 This is a first integration: automated checks cover extension compilation,
 packaging, configuration and real adapter protocol behavior. Interactive Visual
 Studio UI validation and physical-console compatibility remain required before
@@ -73,7 +73,8 @@ dotnet run --project tests/VisualStudioTests -c Release
 ```
 
 The VSIX appears under `plugins/visual-studio/bin/Release/net472/`. The separate
-Windows workflow verifies its manifest, engine registration and self-contained
+Windows workflow can be run independently with Actions → Visual Studio VSIX → Run workflow,
+and the main CI calls it when selected. It verifies its manifest, engine registration and self-contained
 adapter payload. On non-Windows hosts, `-p:CompileOnly=true` compiles extension
 code against the VS SDK without invoking Windows packaging tools.
 

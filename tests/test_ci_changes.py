@@ -18,16 +18,16 @@ class CiSelectionTests(unittest.TestCase):
         self.assertEqual(ci.select(["tests/DebuggerTests/Program.cs"]), {"debugger"})
 
     def test_debugger_requires_live_emulator_and_fresh_artifacts(self):
-        self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger/RspClient.cs"]), {"debugger", "rider", "gamecube", "dolphin"})
+        self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger/RspClient.cs"]), {"debugger", "rider", "visualstudio", "gamecube", "dolphin"})
 
     def test_dap_dependency_selection(self):
         self.assertEqual(ci.select(["tests/test_debug_adapter.py"]), {"debugger", "rider"})
         self.assertEqual(ci.select(["tests/rider_dap_fixture.py"]), {"debugger", "rider"})
         for path in ["tools/DolphinDotNet.DebugAdapter/DebugSession.cs", "scripts/dnd_dap_probe.py"]:
-            self.assertEqual(ci.select([path]), {"debugger", "rider", "gamecube", "dolphin"})
+            self.assertEqual(ci.select([path]), {"debugger", "rider", "visualstudio", "gamecube", "dolphin"})
 
     def test_probe_has_same_target_dependencies(self):
-        self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger.Probe/Program.cs"]), {"debugger", "rider", "gamecube", "dolphin"})
+        self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger.Probe/Program.cs"]), {"debugger", "rider", "visualstudio", "gamecube", "dolphin"})
 
     def test_native_runtime_runs_host_and_target_checks(self):
         self.assertEqual(ci.select(["source/managed_runtime.c"]), ci.BUILD | {"portable"})
@@ -40,6 +40,12 @@ class CiSelectionTests(unittest.TestCase):
 
     def test_rider_plugin_only(self):
         self.assertEqual(ci.select(["plugins/rider/src/main/java/TargetProfile.java"]), {"rider"})
+
+    def test_extension_workflows_select_only_their_packages(self):
+        for path in ("plugins/visual-studio/Package.cs", "tests/VisualStudioTests/Program.cs",
+                     "scripts/verify_vsix.py", ".github/workflows/visual-studio.yml"):
+            self.assertEqual(ci.select([path]), {"visualstudio"})
+        self.assertEqual(ci.select([".github/workflows/rider.yml"]), {"rider"})
 
     def test_ide_fixture_only(self):
         self.assertEqual(ci.select(["tests/DolphinLaunchProbe/Program.cs"]), {"ide"})

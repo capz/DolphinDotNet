@@ -1,0 +1,55 @@
+name: Rider plugin
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rider-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  package:
+    name: Rider attach plugin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.1.0'
+      - name: Compile, test real adapter integration, package and verify Rider compatibility
+        working-directory: plugins/rider
+        run: gradle --no-daemon test buildPlugin verifyPlugin
+      - name: Verify plugin ZIP includes the adapter and serial runtime dependencies
+        run: |
+          python3 - <<'PYZIP'
+          from pathlib import Path
+          from zipfile import ZipFile
+          packages = list(Path('plugins/rider/build/distributions').glob('*.zip'))
+          assert len(packages) == 1, packages
+          with ZipFile(packages[0]) as archive:
+              names = archive.namelist()
+              for required in ['DolphinDotNet.DebugAdapter.dll', 'DolphinDotNet.DebugAdapter.deps.json',
+                               'DolphinDotNet.DebugAdapter.runtimeconfig.json', 'DolphinDotNet.Debugger.dll', 'System.IO.Ports.dll']:
+                  assert any(name.endswith('/adapter/' + required) for name in names), required
+              assert any('Ports.Native' in name for name in names), 'Missing serial native runtimes'
+          PYZIP
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DolphinDotNet-Rider-plugin
+          path: plugins/rider/build/distributions/*.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: Rider-plugin-test-reports
+          path: |
+            plugins/rider/build/reports/tests/
+            plugins/rider/build/reports/pluginVerifier/
