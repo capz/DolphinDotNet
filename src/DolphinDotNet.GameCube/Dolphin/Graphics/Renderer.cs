@@ -99,6 +99,29 @@ public sealed class Renderer
             throw new InvalidOperationException("Model is cold, frame is inactive or transform is invalid.");
     }
 
+    /// <summary>Submits up to 128 objects / 4096 total meshes. All opaque meshes
+    /// precede a stable global back-to-front translucent submesh pass. Caller
+    /// scratch holds one token and 16 floats per object. No per-frame allocations.
+    /// This does not sort individual triangles or resolve intersecting surfaces.</summary>
+    public void DrawModels(GameObject[] models,int[] instanceScratch,float[] worldScratch)
+    {
+        if(!active)throw new InvalidOperationException("Begin a model frame first.");
+        if(models==null)throw new ArgumentNullException("models");
+        if(models.Length>128)throw new ArgumentException("At most 128 model objects per batch.","models");
+        if(instanceScratch==null||instanceScratch.Length<models.Length)throw new ArgumentException("One token per object is required.","instanceScratch");
+        if(worldScratch==null||worldScratch.Length<models.Length*16)throw new ArgumentException("16 matrix floats per object are required.","worldScratch");
+        for(int i=0;i<models.Length;i++)
+        {
+            if(models[i]==null)throw new ArgumentException("Null model object.","models");
+            models[i].Check();var instance=models[i].Model;
+            if(instance!=null)instance.Check();
+            instanceScratch[i]=instance==null?0:instance.Token;
+            var matrix=models[i].Transform.WorldMatrix;
+            for(int j=0;j<16;j++)worldScratch[i*16+j]=matrix[j];
+        }
+        GraphicsDevice.Check(NativeModel.ModelDrawModels(instanceScratch,worldScratch,models.Length),"Invalid/cold model, transform, inactive pass or batch exceeding 4096 meshes.");
+    }
+
     private static float ModelDrawDepth(Camera camera,GameObject obj)
     {
         var matrix=obj.Transform.WorldMatrix;

@@ -153,6 +153,7 @@ int dnd_model_draw_material(int token,DndArray *transform,int tex,int secondary,
   }
   return 0;
 }
+static int draw_model_selected(DndInstance *in,const float world[16],const DndDrawEffect *effect,int filter,int only);
 int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {
   DndInstance *in = dnd_instance_find(token);
   float world[16];
@@ -169,9 +170,15 @@ int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {
     for (unsigned mi = 0; mi < model->meshes; mi++)
       if (model->material[model->mesh[mi].material].texture < 0)
         return -3;
-  dnd_model_sort_draws(in, world, frame_view);
-  for (unsigned draw = 0; draw < model->meshes; draw++) {
-    unsigned mi = in->draw_order ? in->draw_order[draw] : draw;
+  return draw_model_selected(in,world,effect,0,-1);
+}
+static int draw_model_selected(DndInstance *in,const float world[16],const DndDrawEffect *effect,int filter,int only) {
+  DndModel *model=in->model;
+  if(only<0)dnd_model_sort_draws(in, world, frame_view);
+  for (unsigned draw = 0; draw < (only>=0?1:model->meshes); draw++) {
+    unsigned mi = only>=0?(unsigned)only:in->draw_order ? in->draw_order[draw] : draw;
+    bool translucent=(model->material[model->mesh[mi].material].mode&4)!=0;
+    if((filter==1&&translucent)||(filter==2&&!translucent))continue;
     DndMesh *mesh = &model->mesh[mi];
     float object[16], mv[16], normal[16];
     if (mesh->skin < 0)
@@ -223,7 +230,7 @@ int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {
     GX_SetNumChans(1);
     GX_SetChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX,
                    GX_LIGHTNULL, GX_DF_NONE, GX_AF_NONE);
-    GX_SetNumTexGens(mat->texture >= 0 ? 1 : 0);
+    GX_SetNumTexGens(!effect&&mat->combiner ? 2 : mat->texture >= 0 ? 1 : 0);
     if (mat->texture >= 0) {
       DndTexture *tx = &model->texture[mat->texture];
       GXTexObj tex;
@@ -240,7 +247,26 @@ int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {
       GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
     }
 #endif
-    dnd_draw_backend_tev(effect, mat->texture >= 0);
+    DndDrawEffect imported={0};
+    const DndDrawEffect *selected=effect;
+    if(!effect&&mat->combiner){
+      imported.count=3;
+      imported.stages[0]=(DndTevStage){15,mat->texture>=0?8:15,mat->texture>=0?10:15,mat->texture>=0?15:10,0,0,0,0};
+      imported.stages[1]=mat->combiner==1?(DndTevStage){15,0,8,15,0,0,0,1}:(DndTevStage){15,15,15,8,0,1,0,1};
+      imported.stages[2]=mat->combiner==1?(DndTevStage){15,15,15,0,0,0,0,0}:(DndTevStage){15,15,15,2,0,0,0,0};
+      // Add emission to the previously lit base; final stage returns to TEX0
+      // so opacity remains base texture alpha * raster alpha.
+      if(mat->combiner==2)imported.stages[2]=(DndTevStage){15,0,12,2,0,0,0,0};
+      selected=&imported;
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
+      DndTexture *tx=&model->texture[mat->secondary];GXTexObj tex;
+      GX_InitTexObj(&tex,tx->data,(u16)tx->width,(u16)tx->height,GX_TF_RGBA8,(u8)tx->wrap_s,(u8)tx->wrap_t,tx->levels>1);
+      GX_InitTexObjLOD(&tex,tx->levels>1?(tx->linear?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):(tx->linear?GX_LINEAR:GX_NEAR),tx->linear?GX_LINEAR:GX_NEAR,0,(f32)(tx->levels-1),0,GX_FALSE,GX_FALSE,GX_ANISO_1);
+      GX_LoadTexObj(&tex,GX_TEXMAP1);
+      GX_SetTexCoordGen(GX_TEXCOORD1,GX_TG_MTX2x4,GX_TG_TEX0,GX_IDENTITY);
+#endif
+    }
+    dnd_draw_backend_tev(selected, mat->texture >= 0);
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     for (unsigned first = 0; first < mesh->indices;) {
       unsigned count = mesh->indices - first;
@@ -279,6 +305,53 @@ int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {
       first += count;
     }
 #endif
+  }
+  return 0;
+}
+
+/* A synchronous batch borrows the caller's flattened matrices. References are
+ * bounded and application-executor-owned; no model handles or pointers survive
+ * this call. Opaque meshes from all instances precede the global alpha pass. */
+typedef struct {unsigned object,mesh,sequence;float depth;} ModelSubmission;
+static ModelSubmission alpha_submissions[4096];
+static bool submission_later(ModelSubmission a,ModelSubmission b){
+  return a.depth>b.depth||(a.depth==b.depth&&a.sequence>b.sequence);
+}
+static void submission_sift(unsigned count,unsigned root){
+  for(;;){unsigned child=root*2+1;if(child>=count)return;
+    if(child+1<count&&submission_later(alpha_submissions[child+1],alpha_submissions[child]))child++;
+    if(!submission_later(alpha_submissions[child],alpha_submissions[root]))return;
+    ModelSubmission temp=alpha_submissions[root];alpha_submissions[root]=alpha_submissions[child];alpha_submissions[child]=temp;root=child;}
+}
+int dnd_model_draw_models(DndArray *tokens,DndArray *matrices,int count){
+  if(!dnd_model_frame_active||count<0||count>DND_INSTANCE_SLOTS||!tokens||!matrices||
+     tokens->element_size!=4||tokens->elements_are_references||tokens->length<(unsigned)count||
+     matrices->element_size!=4||matrices->elements_are_references||matrices->length<(unsigned)count*16)return -1;
+  int *ids=(int*)tokens->data;float *worlds=(float*)matrices->data;unsigned alpha_count=0,total=0;
+  // All validation precedes sorting, accounting or any GX submissions.
+  for(int i=0;i<count;i++){
+    if(!ids[i])continue;
+    DndInstance *in=dnd_instance_find(ids[i]);if(!in||!in->model->ready)return -1;
+    float *world=worlds+i*16;for(int k=0;k<16;k++)if(!isfinite(world[k]))return -1;
+    DndModel *model=in->model;if(model->meshes>4096-total)return -1;total+=model->meshes;
+    for(unsigned j=0;j<model->meshes;j++){
+      DndMesh *mesh=&model->mesh[j];float object[16],mv[16],inverse[16];
+      if(mesh->skin<0)dnd_model_multiply(object,world,in->global+(unsigned)mesh->node*16);
+      else {if(!in->vertices[j])return -1;memcpy(object,world,64);}
+      dnd_model_multiply(mv,frame_view,object);if(!dnd_model_inverse(inverse,mv))return -1;
+      if(model->material[mesh->material].mode&4){
+        float depth=mv[2]*mesh->center[0]+mv[6]*mesh->center[1]+mv[10]*mesh->center[2]+mv[14];
+        if(!isfinite(depth))return -1;
+        alpha_submissions[alpha_count]=(ModelSubmission){(unsigned)i,j,alpha_count,depth};alpha_count++;
+      }
+    }
+  }
+  for(unsigned i=alpha_count/2;i>0;i--)submission_sift(alpha_count,i-1);
+  for(unsigned end=alpha_count;end>1;end--){ModelSubmission t=alpha_submissions[0];alpha_submissions[0]=alpha_submissions[end-1];alpha_submissions[end-1]=t;submission_sift(end-1,0);}
+  for(int i=0;i<count;i++)if(ids[i]&&draw_model_selected(dnd_instance_find(ids[i]),worlds+i*16,NULL,1,-1)<0)return -1;
+  for(unsigned i=0;i<alpha_count;i++){
+    ModelSubmission s=alpha_submissions[i];
+    if(draw_model_selected(dnd_instance_find(ids[s.object]),worlds+s.object*16,NULL,0,(int)s.mesh)<0)return -1;
   }
   return 0;
 }

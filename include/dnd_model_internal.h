@@ -31,6 +31,7 @@ typedef struct {
 typedef struct {
   float color[4], cutoff;
   int texture, mode, two;
+  int secondary, combiner; /* DNMD v2: 0=original, 1=multiply, 2=add */
 } DndMaterial;
 typedef struct {
   unsigned width, height, levels, size;

@@ -308,7 +308,7 @@ batch.DrawText(font, "READY", new Vector2(20, 20), Color32.White);
 
 Convenience layer for a camera's 3D pass, meshes, primitives and model instances; can own a whole frame or attach to an existing one.
 
-**API:** `Renderer([device])`, `Begin3D(camera)`, `End3D()`, `DrawMesh(mesh,material,transform)`, `DrawPrimitives(vertices,offset,count,primitive,transform)`, `BeginFrame(camera/matrices)`, `Draw(gameObject[,effectOverride])`, `DrawModel(instance,transform/matrix[,effectOverride])`, `EndFrame()`.
+**API:** `Renderer([device])`, `Begin3D(camera)`, `End3D()`, `DrawMesh(mesh,material,transform)`, `DrawPrimitives(vertices,offset,count,primitive,transform)`, `BeginFrame(camera/matrices)`, `Draw(gameObject[,effectOverride])`, `DrawModel(instance,transform/matrix[,effectOverride])`, `DrawModels(objects,instanceScratch,worldScratch)`, `EndFrame()`.
 
 ~~~csharp
 var renderer = new Renderer(device);

@@ -10,6 +10,7 @@ public sealed class ImportOptions
     public int TextureLimit { get; set; } = 256;
     public string Assimp { get; set; } = "assimp";
     public bool ApproximateMaterials { get; set; }
+    public bool CompileGxMaterials { get; set; }
 }
 public static class ModelConverter
 {

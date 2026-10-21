@@ -26,6 +26,7 @@ void GX_SetNumIndStages(int count);
 #define GX_CA_TEXA 4
 #define GX_CA_ZERO 7
 #define GX_CC_RASC 10
+#define GX_CC_C0 2
 #define GX_CC_TEXC 8
 #define GX_CC_ZERO 15
 #define GX_CH_ALPHA 3

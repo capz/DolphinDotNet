@@ -108,3 +108,21 @@ texture compatibility and lifecycle rules.
 ## Compatibility implementation phases
 
 Phase 1 extends the desktop importer with triangle strips/fans, sparse accessor expansion, base-color UV1 and KHR_texture_transform baking, and additional Assimp-backed format adapters (DAE, 3DS, STL and PLY). These formats still need representative real-world fixture qualification; Assimp accepting an extension does not guarantee feature-complete scene conversion. All native on-console source loaders and current DNMD schema remain unchanged. Phase 2 adds GLB/FBX/OBJ source and offline glTF BLEND/opacity retention through the existing GX per-model sorted alpha path. In explicit `--allow-material-approximation` mode, compatible base/emissive/occlusion maps with matching UV sets, transforms and sampler settings are baked into a single GX RGBA8 texture; base-color tint/alpha is included in the baked pixels. The existing imported material TEV path multiplies this texture with vertex lighting. Since emissive contributions are included in diffuse, this is an approximation rather than source-faithful PBR or dynamic multistage TEV. Normal maps, metallic/roughness shading and differing UV layouts remain unsupported except for explicitly acknowledged approximation. A new `Renderer.DrawModelsBackToFront(camera, objects, orderScratch)` helper sorts separate model instances by camera-space object origin without per-frame allocation. Depth ordering is not per-triangle or globally automatic; overlapping objects may still require manual draw ordering. Later phases cover morph/complex-skin baking, compressed glTF decoding, native texture formats and hardware visual/performance acceptance. Unsupported contributions must continue to fail explicitly unless approximation is requested.
+
+
+## Phase 2 imported GX materials and global transparency
+
+Use `dnd-assets model INPUT OUTPUT --compile-gx-materials` for the explicit
+fixed-function material mapping described in [phase 2 materials](phase2-materials.md).
+It emits DNMD v2 material records, retaining up to two runtime texture maps and
+selecting imported multiply/add TEV stages. Default conversions and native source
+importers still emit v1; the runtime accepts both. This does not enable faithful
+PBR shading or silently opt into normal/metallic/roughness approximation.
+
+`Renderer.DrawModels(objects, instanceScratch, worldScratch)` uses the active
+frame camera, submits all opaque meshes first, then sorts translucent submeshes
+across all objects by transformed mesh center. It validates the whole batch before
+submission, uses caller-managed scratch and 64 KiB of fixed native scratch, and
+accepts at most 128 objects / 4096 meshes. Equal depths retain input/mesh order.
+The older `DrawModelsBackToFront` helper only sorts whole objects by origin.
+Neither algorithm resolves intersections or sorts individual triangles.

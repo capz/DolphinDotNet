@@ -32,6 +32,7 @@ internal sealed partial class GltfImport
     private (int wrapS,int wrapT,int linear) SamplerOf(int textureIndex)
     {
         var textures=Items("textures");var samplers=Items("samplers");
+        if((uint)textureIndex>=textures.Length)throw new InvalidDataException("Invalid texture reference.");
         var tx=textures[textureIndex];int index=Int(tx,"sampler",-1);
         if(index< -1||index>=samplers.Length)throw new InvalidDataException("Invalid texture sampler.");
         var sampler=index<0?default:samplers[index];
