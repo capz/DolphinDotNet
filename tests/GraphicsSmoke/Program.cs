@@ -47,9 +47,14 @@ internal static class Program
         try
         {
             await streamed.StageUploadAsync(stagedPixels);
-            if(!streamed.TryPublish()||streamed.ContentGeneration!=2)return 42;
         }
         catch(InvalidOperationException){return 44;}
+        if(!Dolphin.Threading.Tasks.Scheduler.IsApplicationThread)return 49;
+        try
+        {
+            if(!streamed.TryPublish()||streamed.ContentGeneration!=2)return 42;
+        }
+        catch(InvalidOperationException){return 48;}
         using var pendingNative=NativeBuffer.Allocate(32);
         pendingNative.Write(stagedPixels);
         try
