@@ -1135,7 +1135,7 @@ static int import_scene(const char *path, int fbx, float sample_rate,
      * classic transparency factor rather than ufbx's PBR opacity field. */
     if (m->fbx.transparency_factor.has_value || m->fbx.transparency_color.has_value) {
       double factor = m->fbx.transparency_factor.has_value ? m->fbx.transparency_factor.value_real : 1;
-      ufbx_vec3 color = m->fbx.transparency_color.has_value ? m->fbx.transparency_color.value_vec3 : (ufbx_vec3){1,1,1};
+      ufbx_vec3 color = m->fbx.transparency_color.has_value ? m->fbx.transparency_color.value_vec3 : (ufbx_vec3){.x=1,.y=1,.z=1};
       if (!isfinite(factor) || factor<0 || factor>1 ||
           !isfinite(color.x) || !isfinite(color.y) || !isfinite(color.z) ||
           color.x<0 || color.x>1 || color.y<0 || color.y>1 || color.z<0 || color.z>1)
