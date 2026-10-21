@@ -101,6 +101,8 @@ void dnd_draw_backend_external(void);
 void dnd_draw_backend_abort(void);
 void dnd_draw_backend_flush(void *data,int bytes,int invalidate);
 void dnd_draw_backend_publish_texture(void);
+/* Forget GX state after an external/raw/2D pass changes the hardware registers. */
+void dnd_draw_backend_invalidate_cache(void);
 /* Raw command guard: no executor handoff while a primitive/display list is open. */
 int dnd_raw_enter(int kind);
 int dnd_raw_leave(int kind);

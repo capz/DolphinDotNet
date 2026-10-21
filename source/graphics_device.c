@@ -42,12 +42,15 @@ int dnd_device_pass_begin(int next) {
     dnd_async_require_application_thread();
     if(!active || pass || next<1 || next>4 || raw_depth) return -1;
     if(next!=3){dnd_draw_backend_viewport(viewport[0],viewport[1],viewport[2],viewport[3]);dnd_draw_backend_scissor(scissor[0],scissor[1],scissor[2],scissor[3]);}
+    dnd_draw_backend_invalidate_cache();
     pass=next; return 0;
 }
 int dnd_device_pass_end(int expected) {
     dnd_async_require_application_thread();
     if(!active || pass!=expected || raw_depth) return -1;
-    pass=0; return 0;
+    pass=0;
+    dnd_draw_backend_invalidate_cache();
+    return 0;
 }
 int dnd_device_pass(void) { return pass; }
 bool dnd_device_active(void) { return active; }
