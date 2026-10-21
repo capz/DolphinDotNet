@@ -82,7 +82,9 @@ internal sealed class TransferWork
             cancellation.ThrowIfCancellationRequested();
             if(position==count){NativeAram.AramRelease(token);Completion.SetResult(position);return true;}
             chunk=count-position;if(chunk>4096)chunk=4096;
-            if(NativeAram.AramBegin(token,offset+position,array,arrayOffset+position,chunk,write?1:0)<0)throw new System.IO.IOException("ARAM transfer could not start.");
+            int status=NativeAram.AramBegin(token,offset+position,array,arrayOffset+position,chunk,write?1:0);
+            if(status==-16)return false; // ARQ is busy with another native or managed transfer.
+            if(status<0)throw new System.IO.IOException("ARAM transfer could not start.");
             pending=true;return false;
         }
         catch(Exception error){NativeAram.AramRelease(token);Completion.SetException(error);return true;}

@@ -46,10 +46,10 @@ public sealed class RenderQueue
             var target=entries[i].Material;
             if(!Groupable(target))continue;
             bool first=true;
-            for(int j=0;j<i;j++)if(ReferenceEquals(entries[j].Material,target)){first=false;break;}
+            for(int j=0;j<i;j++)if(entries[j].Material==target){first=false;break;}
             if(!first)continue;
             groups++;
-            for(int j=i;j<count;j++)if(ReferenceEquals(entries[j].Material,target))
+            for(int j=i;j<count;j++)if(entries[j].Material==target)
             {
                 var e=entries[j];renderer.DrawMesh(e.Mesh,e.Material,e.Transform);draws++;
             }

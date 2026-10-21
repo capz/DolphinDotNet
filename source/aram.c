@@ -127,7 +127,8 @@ int dnd_aram_poll(DndArray *a,int ao){
  * The caller holds both the ARAM allocation and native buffer until poll ends. */
 int dnd_aram_begin_native(int token,int offset,int buffer_token,int bo,int count,int write) {
  int i=locate(token);
- if(i<0 || slots[i].holds<=0 || transfer.active || offset<0 || bo<0 ||
+ if(transfer.active)return -EBUSY;
+ if(i<0 || slots[i].holds<=0 || offset<0 || bo<0 ||
     count<=0 || count>65536 || ((offset|bo|count)&31) ||
     offset>slots[i].length || count>slots[i].length-offset)return -EINVAL;
  uint64_t address=dnd_buffer_held_address(buffer_token,bo,count);

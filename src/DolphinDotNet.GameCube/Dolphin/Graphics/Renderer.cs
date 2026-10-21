@@ -172,6 +172,7 @@ public sealed class Renderer
         if (NativeModel.ModelFrameEnd() < 0)
             throw new InvalidOperationException("No active model frame.");
         ownsFrame=false;active=false;
+        device.CollectRetired();
     }
 
 }

@@ -79,8 +79,9 @@ public static class AramTransferQueue
                 cancellation.ThrowIfCancellationRequested();
                 if(position==count){Finish();Completion.SetResult(position);return true;}
                 chunk=count-position;if(chunk>ChunkSize)chunk=ChunkSize;
-                if(NativeGraphics.AramNativeBegin(aram,aramOffset+position,buffer,bufferOffset+position,chunk,write?1:0)<0)
-                    throw new System.IO.IOException("Native ARAM DMA could not start.");
+                int status=NativeGraphics.AramNativeBegin(aram,aramOffset+position,buffer,bufferOffset+position,chunk,write?1:0);
+                if(status==-16)return false; // Other ARAM transfers share the same DMA channel.
+                if(status<0)throw new System.IO.IOException("Native ARAM DMA could not start.");
                 pending=true;return false;
             }
             catch(Exception ex)
