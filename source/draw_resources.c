@@ -116,6 +116,30 @@ int dnd_texture_package(DndArray *a,int linear) {
     r->width=w;r->height=h;r->format=format;r->linear=linear!=0;memcpy(r->data,p+32,(size_t)bytes);
     dnd_draw_backend_flush(r->data,bytes,2);return token;
 }
+/* Allocates GX-native tiled texture storage; upload only between frames. */
+int dnd_texture_allocate_native(int w,int h,int format,int linear) {
+    int bytes=texture_size(w,h,format);
+    if(dnd_device_active() || dnd_raw_depth() || bytes<0 || (linear!=0&&linear!=1))return 0;
+    int token=create(TEXTURE,bytes,32);
+    Resource *r=find(token,TEXTURE);
+    if(!r)return 0;
+    r->width=w;r->height=h;r->format=format;r->linear=linear;
+    dnd_draw_backend_flush(r->data,bytes,2);
+    return token;
+}
+int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int count) {
+    Resource *r=find(token,TEXTURE);
+    if(dnd_device_active() || dnd_raw_depth() || !r || !payload ||
+       payload->elements_are_references || payload->element_size!=1 ||
+       source_offset<0 || count!=r->bytes ||
+       (uint32_t)source_offset>payload->length ||
+       (uint32_t)count>payload->length-(uint32_t)source_offset)return -1;
+    /* Conservative synchronization: prevent stale queued GX reads before replacement. */
+    dnd_draw_backend_wait();
+    memcpy(r->data,(unsigned char*)payload->data+source_offset,(size_t)count);
+    dnd_draw_backend_flush(r->data,count,2);
+    return 0;
+}
 static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
     int bytes=texture_size(w,h,6);
     if(dnd_device_active() || bytes<0 || !src)return 0;

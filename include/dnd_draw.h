@@ -23,6 +23,10 @@ int dnd_device_scissor(int x,int y,int width,int height);
 int dnd_device_width(void);
 int dnd_device_height(void);
 int dnd_device_wait(void);
+/* Conservative frame fence: a frame completes after GX_DrawDone on present. */
+int dnd_device_fence_insert(void);
+int dnd_device_fence_completed(int fence);
+
 void dnd_device_shutdown(void);
 void dnd_immediate_begin(float r,float g,float b,float a);
 void dnd_immediate_end(void);
@@ -43,6 +47,9 @@ void dnd_draw_shutdown(void);
 int dnd_texture_create(int width,int height,DndArray *rgba,int linear);
 int dnd_texture_png(DndArray *png,int linear);
 int dnd_texture_package(DndArray *package,int linear);
+int dnd_texture_allocate_native(int width,int height,int format,int linear);
+int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int count);
+
 int dnd_texture_dimension(int token,int axis);
 int dnd_mesh_create(DndArray *vertices,DndArray *indices,int format,int dynamic);
 int dnd_mesh_update(int token,DndArray *vertices,int offset,int count,int format);

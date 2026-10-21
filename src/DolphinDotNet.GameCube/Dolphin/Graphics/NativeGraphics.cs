@@ -27,6 +27,9 @@ internal static class NativeGraphics
     internal static int DeviceViewport(int x,int y,int w,int h) => throw Unsupported();
     internal static int DeviceScissor(int x,int y,int w,int h) => throw Unsupported();
     internal static int DeviceWait() => throw Unsupported();
+    internal static int DeviceFenceInsert() => throw Unsupported();
+    internal static int DeviceFenceCompleted(int fence) => throw Unsupported();
+
     internal static int BufferCreate(int bytes,int alignment) => throw Unsupported();
     internal static ulong BufferAddress(int token,int offset) => throw Unsupported();
     internal static ulong BufferUncached(int token) => throw Unsupported();
@@ -39,6 +42,9 @@ internal static class NativeGraphics
     internal static int TexturePng(byte[] png,int linear) => throw Unsupported();
     internal static int TexturePackage(byte[] package,int linear) => throw Unsupported();
     internal static int TextureDimension(int token,int axis) => throw Unsupported();
+    internal static int TextureAllocateNative(int width,int height,int format,int linear) => throw Unsupported();
+    internal static int TextureUpdateNative(int token,byte[] pixels,int sourceOffset,int count) => throw Unsupported();
+
     internal static int EffectCreate(byte[] package) => throw Unsupported();
     internal static int EffectColor(int token,int slot,uint color) => throw Unsupported();
     internal static int CanvasEffect(int token,int effect) => throw Unsupported();

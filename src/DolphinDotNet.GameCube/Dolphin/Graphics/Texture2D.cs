@@ -28,6 +28,26 @@ public sealed class Texture2D : IDisposable
         if(token==0)throw new ArgumentException("Invalid or unsupported PNG, dimensions, decoding budget or active frame.");
         return new Texture2D(token);
     }
+    /// <summary>Create a GX-tiled, uncompressed-or-CMPR texture ready for repeated
+    /// full-image replacement. Input bytes must use native GX tile order.</summary>
+    public static Texture2D CreateNative(int width,int height,NativeTextureFormat format,bool linear=true)
+    {
+        if(!Enum.IsDefined(typeof(NativeTextureFormat),format))throw new ArgumentOutOfRangeException("format");
+        int token=NativeGraphics.TextureAllocateNative(width,height,(int)format,linear?1:0);
+        if(token==0)throw new ArgumentException("Invalid native texture dimensions, format or memory budget.");
+        return new Texture2D(token);
+    }
+    /// <summary>Replace the entire GX-native payload between frames. Synchronous;
+    /// waits for prior GPU reads before writing and invalidates GX's texture cache.</summary>
+    public void ReplaceNative(byte[] pixels,int sourceOffset=0)
+    {
+        Check();
+        if(pixels==null)throw new ArgumentNullException("pixels");
+        int bytes=NativeBytes;
+        if(sourceOffset<0 || sourceOffset>pixels.Length || bytes>pixels.Length-sourceOffset)throw new ArgumentOutOfRangeException("sourceOffset");
+        GraphicsDevice.Check(NativeGraphics.TextureUpdateNative(Token,pixels,sourceOffset,bytes),
+            "Texture replacement requires a complete GX-native payload outside a frame.");
+    }
     public static Texture2D FromPackage(byte[] package,bool linear=false)
     {
         if(package==null)throw new ArgumentNullException("package");int token=NativeGraphics.TexturePackage(package,linear?1:0);
