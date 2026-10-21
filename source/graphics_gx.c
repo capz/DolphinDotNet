@@ -131,6 +131,7 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
         if(!guMtxInverse(m,inverse))return;
         guMtxTranspose(inverse,normal);GX_LoadNrmMtxImm(normal,GX_PNMTX0);
     }
+    float determinant=world[0]*(world[5]*world[10]-world[9]*world[6])-world[4]*(world[1]*world[10]-world[9]*world[2])+world[8]*(world[1]*world[6]-world[5]*world[2]);
     if(!same) {
     if(lit) {
         GXLightObj light={0};GX_InitLightPos(&light,0,0,1000000);GX_InitLightColor(&light,(GXColor){192,192,192,255});GX_LoadLightObj(&light,GX_LIGHT0);
@@ -143,7 +144,7 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
     dnd_material_channels(lit);
     GX_SetZMode((material->flags&16)?GX_FALSE:GX_TRUE,GX_LEQUAL,(material->flags&8)?GX_FALSE:GX_TRUE);
     GX_SetZCompLoc(GX_FALSE);GX_SetColorUpdate(GX_TRUE);GX_SetAlphaUpdate(GX_TRUE);
-    float determinant=world[0]*(world[5]*world[10]-world[9]*world[6])-world[4]*(world[1]*world[10]-world[9]*world[2])+world[8]*(world[1]*world[6]-world[5]*world[2]);
+
     GX_SetAlphaCompare(material->cutoff>0?GX_GEQUAL:GX_ALWAYS,(u8)(material->cutoff*255),GX_AOP_AND,GX_ALWAYS,0);
     int blend=material->flags&3;
     GX_SetBlendMode(blend?GX_BM_BLEND:GX_BM_NONE,blend==2?GX_BL_ONE:GX_BL_SRCALPHA,blend==2?GX_BL_ONE:blend==3?GX_BL_INVSRCALPHA:GX_BL_INVSRCALPHA,GX_LO_CLEAR);
