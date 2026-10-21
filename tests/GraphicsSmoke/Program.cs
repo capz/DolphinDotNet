@@ -43,12 +43,21 @@ internal static class Program
         if(!streamed.IsResident||streamed.ContentGeneration!=1)return 33;
         // CPU-only async stage should publish without a full GX fence.
         var stagedPixels=new byte[32];stagedPixels[0]=0x55;
-        await streamed.StageUploadAsync(stagedPixels);
-        if(!streamed.TryPublish()||streamed.ContentGeneration!=2)return 42;
+        // Distinct diagnostic return codes for background-context failures.
+        try
+        {
+            await streamed.StageUploadAsync(stagedPixels);
+            if(!streamed.TryPublish()||streamed.ContentGeneration!=2)return 42;
+        }
+        catch(InvalidOperationException){return 44;}
         using var pendingNative=NativeBuffer.Allocate(32);
         pendingNative.Write(stagedPixels);
-        await streamed.StageUploadAsync(pendingNative);
-        if(!streamed.TryPublish()||streamed.ContentGeneration!=3)return 43;
+        try
+        {
+            await streamed.StageUploadAsync(pendingNative);
+            if(!streamed.TryPublish()||streamed.ContentGeneration!=3)return 43;
+        }
+        catch(InvalidOperationException){return 45;}
         var renderer=new Renderer();var camera=new Camera();var transform=new Transform();var material=new Material();
         using var toonPreset=TevMaterialPresets.Toon().Create(loaded);
         using var metalPreset=TevMaterialPresets.MetallicReflection().Create(loaded);
@@ -64,7 +73,9 @@ internal static class Program
         renderer.Begin3D(camera);
         renderQueue.Submit(mesh,material,transform);
         renderQueue.Submit(mesh,material,transform);
-        var queuedStats=renderQueue.Execute(renderer);
+        RenderQueueStatistics queuedStats;
+        try{queuedStats=renderQueue.Execute(renderer);}
+        catch(InvalidOperationException){return 46;}
         if(queuedStats.Draws!=1||queuedStats.Groups!=1||
            queuedStats.LogicalMeshes!=2||queuedStats.MeshesMerged!=1)return 34;
         renderer.DrawMesh(normalMesh,toonPreset.Material,transform);
@@ -93,12 +104,16 @@ internal static class Program
         var testBytes=new byte[96];
         for(int i=0;i<testBytes.Length;i++)testBytes[i]=(byte)(i*13);
         Dolphin.IO.File.WriteAllBytes(testPath,testBytes);
+        try
+        {
         using(var asset=new Dolphin.Storage.AssetStream(testPath))
         {
             if(await asset.ReadAtAsync(16,diskTarget,0,64)!=64)return 39;
             var verify=new byte[64];diskTarget.Read(verify);
             for(int i=0;i<verify.Length;i++)if(verify[i]!=testBytes[i+16])return 40;
         }
+        }
+        catch(InvalidOperationException){return 47;}
         Dolphin.IO.File.Delete(testPath);
         // Exercise the direct MEM1 staging -> GX-native texture path.
         compressed.ReplaceNative(diskTarget,0);
