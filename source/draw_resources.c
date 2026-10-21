@@ -188,10 +188,13 @@ int dnd_texture_stage_array(int token,DndArray *payload,int offset,int count) {
     dnd_draw_backend_flush(r->data,count,0);return 0;
 }
 int dnd_texture_stage_buffer(int token,int buffer_token,int offset,int count) {
-    Resource *r=find(token,TEXTURE),*source=find(buffer_token,BUFFER);
-    if(!r||!source||offset<0||count!=r->bytes||offset>source->bytes||
-       count>source->bytes-offset)return -1;
-    memcpy(r->data,source->data+offset,(size_t)count);
+    Resource *r=find(token,TEXTURE);
+    if(!r||offset<0||count!=r->bytes)return -1;
+    /* Held native source stays readable even if managed Dispose occurred
+     * after the asynchronous transfer was queued. */
+    uint64_t address=dnd_buffer_held_address(buffer_token,offset,count);
+    if(!address)return -1;
+    memcpy(r->data,(const void*)(uintptr_t)address,(size_t)count);
     dnd_draw_backend_flush(r->data,count,0);return 0;
 }
 int dnd_texture_publish_staged(int token) {

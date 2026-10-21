@@ -41,6 +41,14 @@ internal static class Program
         if(streamed.IsResident)return 32;
         streamed.UploadNative(new byte[32]);
         if(!streamed.IsResident||streamed.ContentGeneration!=1)return 33;
+        // CPU-only async stage should publish without a full GX fence.
+        var stagedPixels=new byte[32];stagedPixels[0]=0x55;
+        await streamed.StageUploadAsync(stagedPixels);
+        if(!streamed.TryPublish()||streamed.ContentGeneration!=2)return 42;
+        using var pendingNative=NativeBuffer.Allocate(32);
+        pendingNative.Write(stagedPixels);
+        await streamed.StageUploadAsync(pendingNative);
+        if(!streamed.TryPublish()||streamed.ContentGeneration!=3)return 43;
         var renderer=new Renderer();var camera=new Camera();var transform=new Transform();var material=new Material();
         using var toonPreset=TevMaterialPresets.Toon().Create(loaded);
         using var metalPreset=TevMaterialPresets.MetallicReflection().Create(loaded);
@@ -57,7 +65,8 @@ internal static class Program
         renderQueue.Submit(mesh,material,transform);
         renderQueue.Submit(mesh,material,transform);
         var queuedStats=renderQueue.Execute(renderer);
-        if(queuedStats.Draws!=2||queuedStats.Groups!=1)return 34;
+        if(queuedStats.Draws!=1||queuedStats.Groups!=1||
+           queuedStats.LogicalMeshes!=2||queuedStats.MeshesMerged!=1)return 34;
         renderer.DrawMesh(normalMesh,toonPreset.Material,transform);
         renderer.DrawMesh(normalMesh,metalPreset.Material,transform);
         renderer.DrawMesh(normalMesh,emissionPreset.Material,transform);

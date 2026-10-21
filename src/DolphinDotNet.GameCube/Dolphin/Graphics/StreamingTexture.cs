@@ -82,7 +82,8 @@ public sealed class StreamingTexture : IDisposable
     {
         Check();
         if(staging==null || !staging.IsCompleted)return false;
-        staging.GetAwaiter().GetResult(); // Surface cancellation/errors; retry/Dispose safely.
+        try{staging.GetAwaiter().GetResult();}
+        catch{staging=null;throw;} // Failed/cancelled page never becomes visible.
         var back=buffers[1-front];
         back.PublishDetached(); // GX cache invalidate; no GX_DrawDone.
         previousFrame=GraphicsDevice.Default.IsFrameActive?GraphicsDevice.Default.InsertFence():default;
