@@ -51,6 +51,7 @@ internal static class NativeGraphics
     internal static int TextureDimension(int token,int axis) => throw Unsupported();
     internal static int TextureAllocateNative(int width,int height,int format,int linear) => throw Unsupported();
     internal static int TextureUpdateNative(int token,byte[] pixels,int sourceOffset,int count) => throw Unsupported();
+    internal static int TextureUpdateFromBuffer(int textureToken,int bufferToken,int sourceOffset,int count) => throw Unsupported();
 
     internal static int EffectCreate(byte[] package) => throw Unsupported();
     internal static int EffectColor(int token,int slot,uint color) => throw Unsupported();

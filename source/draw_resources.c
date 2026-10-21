@@ -165,6 +165,18 @@ int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int 
     dnd_draw_backend_flush(r->data,count,2);
     return 0;
 }
+/* Native MEM1 -> GX texture copy. Allows ARAM/storage promotion without a
+ * managed byte-array roundtrip. Source must remain valid for this call. */
+int dnd_texture_update_buffer(int texture_token,int buffer_token,int source_offset,int count) {
+    Resource *texture=find(texture_token,TEXTURE),*source=find(buffer_token,BUFFER);
+    if(dnd_device_active() || dnd_raw_depth() || !texture || !source ||
+       source_offset<0 || count!=texture->bytes || source_offset>source->bytes ||
+       count>source->bytes-source_offset)return -1;
+    dnd_draw_backend_wait();
+    memcpy(texture->data,source->data+source_offset,(size_t)count);
+    dnd_draw_backend_flush(texture->data,count,2);
+    return 0;
+}
 static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
     int bytes=texture_size(w,h,6);
     if(dnd_device_active() || bytes<0 || !src)return 0;

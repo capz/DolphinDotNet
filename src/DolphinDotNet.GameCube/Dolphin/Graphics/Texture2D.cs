@@ -52,6 +52,19 @@ public sealed class Texture2D : IDisposable
         GraphicsDevice.Check(NativeGraphics.TextureUpdateNative(Token,pixels,sourceOffset,bytes),
             "Texture replacement requires a complete GX-native payload outside a frame.");
     }
+    /// <summary>Replace the complete native texture payload from an aligned native
+    /// staging buffer, without an intermediate managed array. Between frames only.</summary>
+    public void ReplaceNative(NativeBuffer source,int sourceOffset=0)
+    {
+        Check();
+        if(source==null)throw new ArgumentNullException("source");
+        source.GetAddress(0);
+        int bytes=NativeBytes;
+        if(sourceOffset<0 || sourceOffset>source.Length || bytes>source.Length-sourceOffset)
+            throw new ArgumentOutOfRangeException("sourceOffset");
+        GraphicsDevice.Check(NativeGraphics.TextureUpdateFromBuffer(Token,source.Token,sourceOffset,bytes),
+            "Native texture replacement requires a valid source and no active frame.");
+    }
     public static Texture2D FromPackage(byte[] package,bool linear=false)
     {
         if(package==null)throw new ArgumentNullException("package");int token=NativeGraphics.TexturePackage(package,linear?1:0);

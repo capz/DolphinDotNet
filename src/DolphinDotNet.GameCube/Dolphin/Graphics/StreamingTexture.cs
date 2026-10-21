@@ -24,6 +24,14 @@ public sealed class StreamingTexture : IDisposable
         resident=true;
         if(generation<int.MaxValue)generation++;
     }
+    /// <summary>Publish a full page from MEM1 staging without managed copying.</summary>
+    public void UploadNative(NativeBuffer source,int sourceOffset=0)
+    {
+        Check();
+        texture.ReplaceNative(source,sourceOffset);
+        resident=true;
+        if(generation<int.MaxValue)generation++;
+    }
     private void Check(){if(disposed)throw new ObjectDisposedException("StreamingTexture");}
     public void Dispose()
     {

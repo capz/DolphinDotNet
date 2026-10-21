@@ -68,6 +68,7 @@ internal static class NativeStorageBindings
         ["TextureDimension"]=("dnd_texture_dimension","ii",false),
         ["TextureAllocateNative"]=("dnd_texture_allocate_native","iiii",false),
         ["TextureUpdateNative"]=("dnd_texture_update_native","iaii",false),
+        ["TextureUpdateFromBuffer"]=("dnd_texture_update_buffer","iiii",false),
         ["MeshDraw"]=("dnd_mesh_draw_effect","iiaiifi",false),
         ["MeshDrawMaterial"]=("dnd_mesh_draw_material","iiiaiifi",false),
         ["MeshPrimitives"]=("dnd_mesh_primitives","aiiiiaii",false),

@@ -52,6 +52,7 @@ int dnd_texture_png(DndArray *png,int linear);
 int dnd_texture_package(DndArray *package,int linear);
 int dnd_texture_allocate_native(int width,int height,int format,int linear);
 int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int count);
+int dnd_texture_update_buffer(int texture_token,int buffer_token,int source_offset,int count);
 
 int dnd_texture_dimension(int token,int axis);
 int dnd_mesh_create(DndArray *vertices,DndArray *indices,int format,int dynamic);

@@ -91,6 +91,8 @@ internal static class Program
             for(int i=0;i<verify.Length;i++)if(verify[i]!=testBytes[i+16])return 40;
         }
         Dolphin.IO.File.Delete(testPath);
+        // Exercise the direct MEM1 staging -> GX-native texture path.
+        compressed.ReplaceNative(diskTarget,0);
         if(Dolphin.Memory.Aram.Initialize())
         {
             using var transfer=Dolphin.Memory.Aram.Allocate(64);
