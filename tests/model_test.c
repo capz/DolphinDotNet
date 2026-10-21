@@ -549,18 +549,18 @@ int main(int argc, char **argv) {
     assert(dnd_model_vertex(fi,0,0,v)==0);near(v[0],.5f);
     assert(dnd_model_instance_dispose(fi)==0&&dnd_model_dispose(fbx)==0);
   }
-  int imported_gx=load("sd:/gx-material.dndmodel");DndModel *gm=dnd_model_find(imported_gx,false);
-  assert(gm&&gm->materials==2&&gm->material[1].secondary>=0&&gm->material[1].combiner==2);
-  unsigned char *bad_gx=malloc(gm->length);assert(bad_gx);
+  int imported_gx=load("sd:/gx-material.dndmodel");DndModel *gx_model=dnd_model_find(imported_gx,false);
+  assert(gx_model&&gx_model->materials==2&&gx_model->material[1].secondary>=0&&gx_model->material[1].combiner==2);
+  unsigned char *bad_gx=malloc(gx_model->length);assert(bad_gx);
   for(int invalid=0;invalid<3;invalid++){
-    memcpy(bad_gx,gm->package,gm->length);
+    memcpy(bad_gx,gx_model->package,gx_model->length);
     unsigned off=dnd_model_u32(bad_gx+52),size=dnd_model_u32(bad_gx+56);
     unsigned at=off+4+40;
     if(invalid==0)put(bad_gx+at+32,9999); // out-of-range second texture
     if(invalid==1)put(bad_gx+at+36,3);    // unknown combiner
     if(invalid==2)put(bad_gx+at+36,0);    // secondary without a combiner
     put(bad_gx+60,dnd_model_hash(bad_gx+off,size));
-    assert(!dnd_model_begin_data(bad_gx,gm->length,8*1024*1024));
+    assert(!dnd_model_begin_data(bad_gx,gx_model->length,8*1024*1024));
   }
   free(bad_gx);
   int imported_instance=dnd_model_instance(imported_gx,4*1024*1024);assert(imported_instance);
