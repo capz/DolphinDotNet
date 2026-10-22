@@ -10,8 +10,8 @@ from pathlib import Path
 import re
 import subprocess
 
-MATRIX = ("native", "compiler", "storage", "network", "audio", "graphics", "assets", "sdk")
-GROUPS = MATRIX + ("gamecube", "debugger", "ide")
+MATRIX = ("native", "compiler", "storage", "network", "audio", "graphics", "assets", "sdk", "gamecube")
+GROUPS = MATRIX + ("debugger", "ide")
 ALL = set(GROUPS)
 
 # Shared runtime and compiler changes fan out to their downstream consumers.
@@ -144,7 +144,8 @@ def main():
         selected, reason = selection(os.environ.get("GITHUB_EVENT_NAME", ""), event)
     except (KeyError, ValueError, OSError):
         selected, reason = set(ALL), "Event unavailable; run all tests"
-    outputs = {key: str(key in selected).lower() for key in ("gamecube", "debugger", "ide")}
+    outputs = {key: str(key in selected).lower() for key in ("debugger", "ide")}
+    outputs["framework"] = str(bool(set(MATRIX) & selected)).lower()
     outputs["matrix"] = json.dumps([key for key in MATRIX if key in selected], separators=(",", ":"))
     print(reason, json.dumps(outputs, sort_keys=True))
     if os.environ.get("GITHUB_OUTPUT"):
