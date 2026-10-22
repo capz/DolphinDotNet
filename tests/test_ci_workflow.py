@@ -36,6 +36,12 @@ class WorkflowCoverageTests(unittest.TestCase):
             self.assertNotIn("samples/",content,path)
             self.assertNotIn("samples\\",content,path)
         self.assertNotIn("samples/",SUITE)
+        # The game-specific rule tests moved with the examples. No remaining
+        # framework-owned test project is allowed to compile their sources.
+        for project in (ROOT/"tests").glob("*/*.csproj"):
+            self.assertNotIn("../../samples/",project.read_text(),project.as_posix())
+            self.assertNotIn("..\\..\\samples\\",project.read_text(),project.as_posix())
+
         self.assertIn("tests/fixtures/toon.dndfx.json",(ROOT/"tests/EffectCompilerTests/Program.cs").read_text())
         self.assertIn("tests/HelloGameCube",(ROOT/"tools/DolphinDotNet.Compiler.Tests/Program.cs").read_text())
     def test_gate_fails_closed_on_failed_skipped_or_cancelled(self):

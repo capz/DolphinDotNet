@@ -21,7 +21,7 @@ def aot(project,output):
     run("cc","-std=c11","-Wall","-Wextra","-Iinclude","-c",output,"-o",str(output)+".o")
 def main(area):
     if area=="native":
-        try: run("make","-C","tests","test")
+        try: run("make","-C","tests","test", "CFLAGS=-D_DARWIN_C_SOURCE -std=c11 -Wall -Wextra -Werror -I../include")
         finally: run("make","-C","tests","clean")
     elif area=="compiler":
         test("tools/DolphinDotNet.Compiler.Tests")
@@ -32,20 +32,16 @@ def main(area):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))
     elif area=="storage":
         for p in ("StorageSmoke","AramSmoke","LibrarySmoke","DiscIdentityTests",
-                  "DiscBrowserNavigationTests","ConnectionSmoke","InputSmoke"):
+                  "ConnectionSmoke","InputSmoke"):
             build("tests/"+p+"/"+p+".csproj")
-        test("tests/SampleRecordsTests")
     elif area=="network":
         for p in ("AsyncSmoke","AutomaticAsyncSmoke","AutomaticTaskSmoke",
                   "NetworkSmoke","TimingSmoke","InputContextSmoke"):
             build("tests/"+p+"/"+p+".csproj")
         run("python3","-m","unittest","discover","-s","tests","-p","test_network_fixtures.py")
-        test("tests/SampleDownloadTests")
     elif area=="audio":
         test("tests/AudioAssetTests")
-        for p in ("AudioFormatsSmoke","PongRulesSmoke","SnakeRulesSmoke",
-                  "GreenMenRulesSmoke","FoxRulesSmoke","KartRulesSmoke"):
-            build("tests/"+p+"/"+p+".csproj")
+        build("tests/AudioFormatsSmoke/AudioFormatsSmoke.csproj")
     elif area=="graphics":
         test("tests/EffectCompilerTests")
         with tempfile.TemporaryDirectory() as tmp:

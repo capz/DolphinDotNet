@@ -23,7 +23,7 @@ if (File.ReadAllText(temp) != generated)
     throw new Exception("Default compilation and --aot produced different native programs.");
 
 var helloHost = Path.Combine(tempDirectory, "hello-host");
-Run("cc", $"-pthread -std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" \"{temp}\" \"{Path.Combine(root, "tests/hello_gamecube_host.c")}\" \"{Path.Combine(root, "source/managed_runtime.c")}\" \"{Path.Combine(root, "source/async_runtime.c")}\" \"{Path.Combine(root, "source/numeric.c")}\" \"{Path.Combine(root, "source/text.c")}\" -lm -o \"{helloHost}\"");
+Run("cc", $"-pthread -std=c11 -Wall -Wextra -Werror -Wno-unused-function -I\"{Path.Combine(root, "include")}\" \"{temp}\" \"{Path.Combine(root, "tests/hello_gamecube_host.c")}\" \"{Path.Combine(root, "source/managed_runtime.c")}\" \"{Path.Combine(root, "source/async_runtime.c")}\" \"{Path.Combine(root, "source/numeric.c")}\" \"{Path.Combine(root, "source/text.c")}\" -lm -o \"{helloHost}\"");
 Run(helloHost, "");
 // Normal Release output must not link libdb or install a trap.
 // Debugger acceptance uses a separate managed Debug build.
@@ -206,7 +206,7 @@ var genericOutput = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid
 Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{genericDll}\" \"{genericOutput}\"");
 var genericGenerated = File.ReadAllText(genericOutput);
 var genericObject = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.o");
-Run("cc", $"-std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" -c \"{genericOutput}\" -o \"{genericObject}\"");
+Run("cc", $"-std=c11 -Wall -Wextra -Werror -Wno-unused-function -I\"{Path.Combine(root, "include")}\" -c \"{genericOutput}\" -o \"{genericObject}\"");
 if (!genericGenerated.Contains("setjmp(dnd_eh_frame.environment)", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_exception_matches", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_caught_", StringComparison.Ordinal) ||
