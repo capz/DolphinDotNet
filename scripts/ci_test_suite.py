@@ -14,7 +14,7 @@ def test(project):
     run("dotnet","run","--project",project,"-c","Release","-p:DndBuildNative=false")
 def aot(project,output):
     build(project)
-    compiler="tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll"
+    compiler=ROOT/"tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll"
     name=Path(project).stem
     dll=Path(project).parent/"bin/Release/net8.0"/(name+".dll")
     run("dotnet",compiler,"--aot",dll,output)
