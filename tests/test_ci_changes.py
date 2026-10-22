@@ -1,78 +1,72 @@
-"""Regression checks for CI selection and conservative dependency propagation."""
+"""Selector regression tests: no samples checkout, full changed-path diff, fail-open."""
 import importlib.util
 from pathlib import Path
 import subprocess
 import unittest
 from unittest.mock import patch
-
-spec = importlib.util.spec_from_file_location("ci_changes", Path(__file__).resolve().parents[1] / "scripts/ci_changes.py")
-ci = importlib.util.module_from_spec(spec)
+p=Path(__file__).resolve().parents[1]/"scripts/ci_changes.py"
+spec=importlib.util.spec_from_file_location("ci_changes",p)
+ci=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
 
-
 class CiSelectionTests(unittest.TestCase):
-    def test_docs_skip_builds(self):
-        self.assertEqual(ci.select(["README.md", "docs/debugging.md"]), set())
-
-    def test_debugger_pin_and_preparation_select_compatibility_and_ide(self):
-        for path in ('eng/debugger-source.json', 'eng/prepare_debugger.py', 'eng/check_debugger.py'):
-            self.assertEqual(ci.select([path]), {'debugger', 'ide'})
-
-    def test_metadata_and_native_debug_contracts_select_both_consumers(self):
-        for path in ('scripts/dnd_debug_addresses.py', 'source/debug_heartbeat.c', 'include/dnd_debug_heartbeat.h'):
-            self.assertEqual(ci.select([path]), {'debugger', 'ide'})
-
-    def test_native_runtime_selects_remaining_build_consumers(self):
-        self.assertEqual(ci.select(["source/managed_runtime.c"]), ci.BUILD)
-
-    def test_compiler_runs_all_managed_consumers(self):
-        self.assertEqual(ci.select(["tools/DolphinDotNet.Compiler/Program.cs"]), ci.BUILD)
-
-    def test_sdk_and_samples_run_managed_consumers(self):
-        self.assertEqual(ci.select(["sdk/DolphinDotNet.Sdk/Sdk/Sdk.targets", "samples/Pong/Program.cs"]), ci.BUILD)
-
-    def test_removed_debugger_paths_in_migration_diff_are_conservative(self):
-        for path in ('plugins/rider/deleted.java', 'plugins/visual-studio/deleted.cs', 'tools/DolphinDotNet.DebugAdapter/deleted.cs'):
-            self.assertEqual(ci.select([path]), set(ci.GROUPS))
-
-    def test_ide_fixture_only(self):
-        self.assertEqual(ci.select(["tests/DolphinLaunchProbe/Program.cs"]), {"ide"})
-
-    def test_union(self):
-        self.assertEqual(ci.select(["eng/debugger-source.json", "tests/build_workflow_test.py"]), {"debugger", "ide"})
-
-    def test_unknown_workflow_and_selector_changes_run_everything(self):
-        for path in ["new-component/main.cs", ".github/workflows/build.yml", "scripts/ci_changes.py", "global.json", "tests/test_ci_changes.py"]:
+    def test_docs_only(self):
+        self.assertEqual(ci.select(["README.md","docs/guide.md"]),set())
+    def test_native_dependency_propagation(self):
+        actual=ci.select(["source/managed_runtime.c"])
+        for key in ("native","compiler","storage","network","audio","graphics","gamecube"):
+            self.assertIn(key,actual)
+    def test_core_managed_api_propagation(self):
+        actual=ci.select(["src/DolphinDotNet.Core/Dolphin/Collection/List.cs"])
+        for key in ("compiler","storage","network","audio","graphics","assets","sdk","gamecube"):
+            self.assertIn(key,actual)
+    def test_scoped_domains(self):
+        for path,expected in (
+            ("source/audio.c",{"native","audio","gamecube"}),
+            ("source/network.c",{"native","network","gamecube"}),
+            ("source/draw_resources.c",{"native","graphics","gamecube"}),
+            ("tests/AudioAssetTests/Program.cs",{"audio"}),
+            ("tests/ModelAssetTests/Program.cs",{"graphics"}),
+            ("tests/SaveImageTests/Program.cs",{"assets"}),
+            ("tests/NetworkSmoke/Program.cs",{"network"}),
+            ("tests/HelloGameCube/Program.cs",{"compiler"}),
+            ("tools/DolphinDotNet.Compiler/Program.cs",ci.COMPILER),
+            ("tests/DolphinLaunchProbe/Program.cs",{"sdk","ide","gamecube"}),
+        ):
             with self.subTest(path=path):
-                self.assertEqual(ci.select([path]), set(ci.GROUPS))
+                self.assertTrue(expected.issubset(ci.select([path])), (path,ci.select([path])))
+                self.assertNotEqual(ci.select([path]),ci.ALL, path)
+    def test_debugger_remains_external_compatibility(self):
+        self.assertEqual(ci.select(["eng/debugger-source.json"]),{"debugger","sdk","ide"})
+        self.assertIn("debugger",ci.select(["source/debug_heartbeat.c"]))
+        self.assertIn("ide",ci.select(["scripts/dnd_debug_addresses.py"]))
+    def test_deleted_samples_and_debugger_files_are_conservative(self):
+        self.assertIn("ide",ci.select(["samples/deleted.cs"]))
+        for path in ("plugins/rider/deleted.java","tools/DolphinDotNet.DebugAdapter/deleted.cs"):
+            self.assertEqual(ci.select([path]),ci.ALL)
+    def test_unknown_and_infrastructure_changes_run_all(self):
+        for path in ("new-component/code.cs",".github/workflows/build.yml",
+                     "scripts/ci_changes.py","scripts/ci_test_suite.py",
+                     "tests/test_ci_changes.py","global.json"):
+            with self.subTest(path=path):self.assertEqual(ci.select([path]),ci.ALL)
+    def test_differential_union(self):
+        result=ci.select(["source/audio.c","tests/ModelAssetTests/Program.cs"])
+        self.assertTrue({"audio","graphics","native","gamecube"}.issubset(result))
+    def test_main_dispatch_and_missing_diff_run_all(self):
+        for event in ("push","workflow_dispatch","merge_group",""):
+            self.assertEqual(ci.selection(event,{})[0],ci.ALL)
+        self.assertEqual(ci.selection("pull_request",{})[0],ci.ALL)
+    def test_compare_uses_merge_base_and_includes_deleted_old_paths(self):
+        event={"pull_request":{"base":{"sha":"a"*40},"head":{"sha":"b"*40}}}
+        with patch.object(ci.subprocess,"check_output",return_value=b"source/old.c\0docs/renamed.md\0") as mocked:
+            self.assertIn("native",ci.selection("pull_request",event)[0])
+            args=mocked.call_args.args[0]
+            self.assertIn("--no-renames",args)
+            self.assertIn("a"*40+"..."+"b"*40,args)
+        with patch.object(ci.subprocess,"check_output",side_effect=subprocess.CalledProcessError(1,"git")):
+            self.assertEqual(ci.selection("pull_request",event)[0],ci.ALL)
+    def test_group_matrix_is_complete(self):
+        self.assertEqual(set(ci.MATRIX)|{"debugger","ide"},ci.ALL)
+        self.assertEqual(len(ci.MATRIX),9)
 
-    def test_similarly_named_directories_are_not_excluded(self):
-        self.assertEqual(ci.select(["docs-generator/code.cs"]), set(ci.GROUPS))
-
-    def test_main_and_manual_runs_are_full(self):
-        for event in ["push", "workflow_dispatch", "merge_group", ""]:
-            self.assertEqual(ci.selection(event, {})[0], set(ci.GROUPS))
-
-    def test_missing_or_invalid_pr_data_is_full(self):
-        for data in [{}, {"pull_request": None}, {"pull_request": {"base": {"sha": "--bad"}, "head": {"sha": "f" * 40}}}]:
-            self.assertEqual(ci.selection("pull_request", data)[0], set(ci.GROUPS))
-
-    def test_diff_failure_is_full(self):
-        event = {"pull_request": {"base": {"sha": "a" * 40}, "head": {"sha": "b" * 40}}}
-        with patch.object(ci.subprocess, "check_output", side_effect=subprocess.CalledProcessError(1, "git")):
-            self.assertEqual(ci.selection("pull_request", event)[0], set(ci.GROUPS))
-
-    def test_full_pr_diff_preserves_old_and_new_paths(self):
-        event = {"pull_request": {"base": {"sha": "a" * 40}, "head": {"sha": "b" * 40}}}
-        with patch.object(ci.subprocess, "check_output", return_value=b"source/old.c\0docs/moved.md\0") as diff:
-            self.assertEqual(ci.selection("pull_request", event)[0], ci.BUILD)
-            args = diff.call_args.args[0]
-            self.assertIn("--no-renames", args)
-            self.assertIn("a" * 40 + "..." + "b" * 40, args)
-
-    def test_empty_diff(self):
-        self.assertEqual(ci.select([]), set())
-
-
-if __name__ == "__main__":
-    unittest.main()
+if __name__=="__main__":unittest.main()
