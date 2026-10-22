@@ -28,6 +28,8 @@ void dnd_draw_backend_copy(const DndDrawTexture *t,int x,int y,int w,int h){(voi
             assert(data[at+32]==(rgba?rgba[1]:0)&&data[at+33]==(rgba?rgba[2]:0));
         }
     }}
+void dnd_draw_backend_invalidate_cache(void){}
+void dnd_draw_backend_publish_texture(void){}
 void dnd_draw_backend_wait(void){}
 void dnd_draw_backend_abort(void){}
 void dnd_draw_backend_external(void){}
