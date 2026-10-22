@@ -102,7 +102,7 @@ jobs:
           restore-keys: |
             ccache-${{ runner.os }}-managed-${{ matrix.group }}-
       - name: Install host compiler prerequisites
-        timeout-minutes: 8
+        timeout-minutes: 12
         env:
           DND_CI_MANAGED_GROUP: ${{ matrix.group }}
         run: bash scripts/ci_install_host_deps.sh

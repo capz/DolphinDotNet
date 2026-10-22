@@ -53,6 +53,10 @@ apt_options=(
     -o Acquire::Retries=0
     -o Acquire::http::Timeout=15
     -o Acquire::https::Timeout=15
+    # The runner only needs Packages indexes, not translations or CNF indexes.
+    # Noble universe translations + CNF metadata made refresh exceed 70s.
+    -o Acquire::Languages=none
+    -o Acquire::IndexTargets::deb::CNF::DefaultEnabled=false
     -o DPkg::Lock::Timeout=30
 )
 # Switch endpoints on retry instead of downloading from the same slow mirror.
@@ -60,16 +64,16 @@ mirrors=("http://archive.ubuntu.com/ubuntu" "http://us.archive.ubuntu.com/ubuntu
 for i in "${!mirrors[@]}"; do
     attempt=$((i+1))
     mirror="${mirrors[$i]}"
-    printf 'deb [arch=amd64] %s %s main restricted universe multiverse\n' "$mirror" "$codename" > "$sources"
-    printf 'deb [arch=amd64] %s %s-updates main restricted universe multiverse\n' "$mirror" "$codename" >> "$sources"
-    printf 'deb [arch=amd64] http://security.ubuntu.com/ubuntu %s-security main restricted universe multiverse\n' "$codename" >> "$sources"
+    printf 'deb [arch=amd64] %s %s main universe\n' "$mirror" "$codename" > "$sources"
+    printf 'deb [arch=amd64] %s %s-updates main universe\n' "$mirror" "$codename" >> "$sources"
+    printf 'deb [arch=amd64] http://security.ubuntu.com/ubuntu %s-security main universe\n' "$codename" >> "$sources"
     echo "::notice::Using Ubuntu package mirror $mirror (attempt $attempt/2)."
     echo "::group::Refresh APT package indexes (attempt $attempt/2)"
-    if timeout --signal=TERM --kill-after=5s 70s sudo env DEBIAN_FRONTEND=noninteractive \
+    if timeout --signal=TERM --kill-after=5s 100s sudo env DEBIAN_FRONTEND=noninteractive \
         apt-get "${apt_options[@]}" update; then
         echo "::endgroup::"
         echo "::group::Install ccache and gcc-multilib (attempt $attempt/2)"
-        if timeout --signal=TERM --kill-after=5s 170s sudo env DEBIAN_FRONTEND=noninteractive \
+        if timeout --signal=TERM --kill-after=5s 185s sudo env DEBIAN_FRONTEND=noninteractive \
             apt-get "${apt_options[@]}" install -y --no-install-recommends "${packages[@]}"; then
             echo "::endgroup::"
             command -v ccache

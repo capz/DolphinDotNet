@@ -165,7 +165,7 @@ class WorkflowCoverageTests(unittest.TestCase):
                      if block.startswith('      - name: Install host compiler prerequisites\n'))
         setup=next(block for block in step_blocks(section)
                    if block.startswith('      - name: Prepare shared compiler and native object cache\n'))
-        self.assertIn('timeout-minutes: 8',install)
+        self.assertIn('timeout-minutes: 12',install)
         self.assertIn('run: bash scripts/ci_install_host_deps.sh',install)
         self.assertIn('DND_CI_MANAGED_GROUP: ${{ matrix.group }}',install)
         self.assertIn('packages+=(ffmpeg)',(ROOT/'scripts/ci_install_host_deps.sh').read_text())
@@ -185,10 +185,12 @@ class WorkflowCoverageTests(unittest.TestCase):
         self.assertIn('archive.ubuntu.com/ubuntu',script)
         self.assertIn('us.archive.ubuntu.com/ubuntu',script)
         self.assertIn('security.ubuntu.com/ubuntu',script)
+        self.assertIn('Acquire::Languages=none',script)
+        self.assertIn('Acquire::IndexTargets::deb::CNF::DefaultEnabled=false',script)
         self.assertIn('Dir::Etc::sourcelist=',script)
         self.assertIn('Dir::Etc::sourceparts=-',script)
         self.assertIn('for i in "${!mirrors[@]}"',script)
-        self.assertIn('timeout --signal=TERM --kill-after=5s 170s',script)
+        self.assertIn('timeout --signal=TERM --kill-after=5s 185s',script)
         self.assertIn('if command -v ccache >/dev/null 2>&1',section)
 
     def test_executor_ownership_acceptance_uses_automatic_runtime(self):
