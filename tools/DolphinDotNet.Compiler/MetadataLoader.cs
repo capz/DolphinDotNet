@@ -233,7 +233,16 @@ internal static class MetadataLoader
  { reader.Offset--;var layout=GenericSharing.ReadGenericLocalLayout(md,ref reader,model);return layout.Size>0?(layout.Size,false):(8,true); }
  private static (int Size,bool Reference) ReadTypeHandleLayout(MetadataReader md,ref BlobReader r,CompilationModel model){var h=r.ReadTypeHandle();var name=ResolveTypeName(md,h);return name is "System.IO.FileMode" or "System.IO.FileAccess" or "System.IO.FileShare" or "System.IO.SeekOrigin" or "System.IO.SearchOption"?(4,false):name is not null&&model.Types.TryGetValue(name,out var t)&&t.IsValueType?(Math.Max(1,t.InstanceSize),false):(8,true);}
  private static int Align(int value,int alignment)=>(value+alignment-1)&~(alignment-1);
- private static string DefinitionFullName(MetadataReader md,TypeDefinitionHandle handle){var t=md.GetTypeDefinition(handle);var name=md.GetString(t.Name);var declaring=t.GetDeclaringType();return declaring.IsNil?Full(md.GetString(t.Namespace),name):DefinitionFullName(md,declaring)+"+"+name;}
+ private static string DefinitionFullName(MetadataReader md,TypeDefinitionHandle handle)
+ {
+  var type=md.GetTypeDefinition(handle);var name=md.GetString(type.Name);var declaring=type.GetDeclaringType();
+  // Roslyn embeds assembly-local data holders and attribute definitions in
+  // multiple assemblies. Their identities must never collide across packages.
+  if(declaring.IsNil&&(name=="<PrivateImplementationDetails>"||
+     ((type.Attributes&TypeAttributes.VisibilityMask)==TypeAttributes.NotPublic&&ResolveTypeName(md,type.BaseType)=="System.Attribute")))
+   name+="@"+md.GetString(md.GetAssemblyDefinition().Name);
+  return declaring.IsNil?Full(md.GetString(type.Namespace),name):DefinitionFullName(md,declaring)+"+"+name;
+ }
  private static string ReferenceFullName(MetadataReader md,TypeReferenceHandle handle){var t=md.GetTypeReference(handle);var name=md.GetString(t.Name);return t.ResolutionScope.Kind==HandleKind.TypeReference?ReferenceFullName(md,(TypeReferenceHandle)t.ResolutionScope)+"+"+name:Full(md.GetString(t.Namespace),name);}
  private static string Full(string ns,string name)=>string.IsNullOrEmpty(ns)?name:ns+"."+name;
 }
