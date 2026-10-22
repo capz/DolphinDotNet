@@ -59,7 +59,7 @@ def select(paths):
         if path in {"eng/debugger-source.json", "eng/prepare_debugger.py", "eng/check_debugger.py"}:
             selected.update({"debugger", "sdk", "ide"})
         elif path.startswith(("source/debug_", "include/dnd_debug")) or path == "scripts/dnd_debug_addresses.py":
-            selected.update({"native", "debugger", "gamecube", "ide"})
+            selected.update({"native", "debugger", "gamecube", "ide", "sdk"})
         elif path.startswith(("sdk/", "templates/")) or path in {"eng/pack.py", "eng/Package.props"}:
             selected.update({"sdk", "compiler", "ide", "gamecube"})
         elif path.startswith("tools/DolphinDotNet.Compiler/") or path.startswith("tools/DolphinDotNet.Compiler.Tests/"):
@@ -79,12 +79,12 @@ def select(paths):
             lower = path.lower()
             if any(name in lower for name in ("managed_runtime", "async_runtime", "numeric",
                                                "text.c", "bcl", "stw", "worker", "gc_", "main.c")):
-                selected.update(RUNTIME)
+                selected.update(RUNTIME | {"sdk"})
             else:
                 matched = [values for name, values in DOMAIN.items() if name in lower]
-                selected.update(set().union(*matched) if matched else RUNTIME)
+                selected.update((set().union(*matched) if matched else RUNTIME) | {"sdk"})
         elif path.startswith("vendor/") or path in {"Makefile", "tests/Makefile"}:
-            selected.update({"native", "assets", "graphics", "gamecube"})
+            selected.update({"native", "assets", "graphics", "gamecube", "sdk"})
         elif path.startswith("samples/"):
             # Covers the old path in PRs that remove local examples.
             selected.update({"ide", "sdk", "gamecube"})
