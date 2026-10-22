@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup>
-  <ItemGroup>
-    <Compile Include="../../samples/DiscBrowser/BrowserNavigation.cs" Link="BrowserNavigation.cs" />
-    <Compile Include="../../samples/DiscBrowser/BrowserPath.cs" Link="BrowserPath.cs" />
-  </ItemGroup>
-</Project>
