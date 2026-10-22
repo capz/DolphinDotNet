@@ -25,6 +25,13 @@ class WorkflowCoverageTests(unittest.TestCase):
         self.assertIn("fromJSON(needs.changes.outputs.matrix)",WORKFLOW)
         self.assertIn("fail-fast: false",job("framework-tests"))
         self.assertIn("if: needs.changes.outputs.framework == 'true'",WORKFLOW)
+    def test_all_framework_owned_managed_tests_are_covered(self):
+        suite=SUITE+"\\n"+WORKFLOW
+        for project in (ROOT/"tests").glob("*/*.csproj"):
+            name=project.parent.name
+            with self.subTest(project=name):
+                self.assertIn(name,suite,"Unscheduled framework test project: "+name)
+
     def test_no_external_sample_repository_dependency(self):
         for path in (ROOT/".github/workflows").glob("*.yml"):
             self.assertNotIn("DolphinDotNet.Samples",path.read_text(),path.name)

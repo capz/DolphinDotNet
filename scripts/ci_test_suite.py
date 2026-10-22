@@ -25,11 +25,23 @@ def main(area):
         finally: run("make","-C","tests","clean")
     elif area=="compiler":
         test("tools/DolphinDotNet.Compiler.Tests")
-        for p in ("NumericSmoke","StringSmoke","WishlistSmoke","ExactNumberSmoke"):
-            test("tests/"+p)
+        # Numeric and string facade contracts must execute against the
+        # GameCube AOT runtime, not locale-sensitive desktop CLR behavior.
         with tempfile.TemporaryDirectory() as tmp:
-            for p in ("ControlFlowSmoke","GenericSharingSmoke"):
+            for p in ("AotSmoke","ControlFlowSmoke","GenericSharingSmoke"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))
+            for p,host in (("NumericSmoke","numeric_host.c"),
+                           ("StringSmoke","string_host.c"),
+                           ("WishlistSmoke","wishlist_host.c"),
+                           ("ExactNumberSmoke","wishlist_host.c")):
+                generated=Path(tmp)/(p+".c")
+                aot("tests/"+p+"/"+p+".csproj",generated)
+                binary=Path(tmp)/p
+                run("cc","-pthread","-O1","-std=c11","-Iinclude",generated,
+                    "tests/"+host,"source/numeric.c","source/text.c",
+                    "source/managed_runtime.c","source/async_runtime.c",
+                    "-lm","-o",binary)
+                run(binary)
     elif area=="storage":
         for p in ("StorageSmoke","AramSmoke","LibrarySmoke","DiscIdentityTests",
                   "ConnectionSmoke","InputSmoke"):
@@ -61,7 +73,9 @@ def main(area):
         # Hardware/emulator execution belongs in independent console acceptance.
         build("tools/DolphinDotNet.Compiler")
         with tempfile.TemporaryDirectory() as tmp:
-            for p in ("HelloGameCube","GraphicsSmoke","AramSmoke","NetworkSmoke"):
+            for p in ("HelloGameCube","GraphicsSmoke","AramSmoke","NetworkSmoke",
+                      "ControllerDolphinSmoke","DolLauncherSmoke",
+                      "DebuggerStackSmoke","DebuggerInspectionSmoke"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))
     else: raise ValueError("Unknown framework area: "+area)
 if __name__=="__main__":
