@@ -1075,6 +1075,102 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual("-1", values[0]["value"])
         self.client.request("variables", dict(variablesReference=ref, start=-1), success=False)
 
+    def test_generated_variable_ranges_survive_interior_stops_and_location_changes(self):
+        spec = importlib.util.spec_from_file_location('addresses', Path(__file__).resolve().parents[1] / 'scripts/dnd_debug_addresses.py')
+        addresses = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(addresses)
+        symbol = 'dnd_value_Program_Main_test'
+        source = dict(schemaVersion=2, methods=[dict(symbol=symbol, assembly='Demo', methodToken=1,
+            declaringType='Program', name='Main', sourceLocations=[
+                dict(document='/build/日本/Game.cs', startLine=11, ilOffset=1),
+                dict(document='/build/日本/Game.cs', startLine=12, ilOffset=3)], variables=[
+                dict(nativeName='l0', name='local', type='System.Int32', group='Locals', storageBytes=4,
+                     scopeStart=0, scopeEnd=2)])])
+        lines = '''/build/日本/Game.cs:
+Game.cs 11 0x80004008 x
+generated_program.c 1 0x80004018 x
+Game.cs 12 0x80004020 x
+Game.cs - 0x80004028
+'''
+        mapped = addresses.resolve(source, lines, f'1: 80004000 256 FUNC GLOBAL DEFAULT 2 {symbol}\n')
+        info = f''' <1><10>: Abbrev Number: 3 (DW_TAG_subprogram)
+    <11> DW_AT_name : {symbol}
+    <12> DW_AT_low_pc : 0x80004000
+    <13> DW_AT_frame_base : 1 byte block: 9c (DW_OP_call_frame_cfa)
+ <2><20>: Abbrev Number: 5 (DW_TAG_variable)
+    <21> DW_AT_name : l0
+    <22> DW_AT_location : 0x10 (location list)
+'''
+        locs = '''00000010 80004008 80004010 (DW_OP_fbreg: 8)
+00000018 80004010 80004018 (DW_OP_fbreg: 4)
+00000020 <End of list>
+'''
+        addresses.attach_variables(mapped, source, info, locs)
+        self.source.write_text(json.dumps(source))
+        previous = json.loads(self.address.read_text())
+        mapped.update(elfSha256=previous['elfSha256'],
+            sourceMapSha256=hashlib.sha256(self.source.read_bytes()).hexdigest(), unwind=previous['unwind'])
+        self.address.write_text(json.dumps(mapped))
+        target = Target()
+        target.pc = 0x8000400c  # Inside a row, without an exact source/breakpoint address.
+        self.attach(target=target)
+        old_ref = None
+        for pc, expected in [(0x8000400c, '-1'), (0x80004010, '3'), (0x80004014, '3'),
+                             (0x80004018, None), (0x80004020, None), (0x80004028, None)]:
+            with self.subTest(pc=hex(pc)):
+                if target.pc != pc:
+                    target.continue_stop = f'T0540:{pc:08x};'
+                    self.client.request('continue', dict(threadId=1))
+                    self.client.event('stopped')
+                    if old_ref is not None:
+                        self.client.request('variables', dict(variablesReference=old_ref), success=False)
+                frame = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]
+                scopes = self.client.request('scopes', dict(frameId=frame['id']))['body']['scopes']
+                if expected is None:
+                    self.assertEqual([], scopes)
+                else:
+                    self.assertEqual('Locals', scopes[0]['name'])
+                    old_ref = scopes[0]['variablesReference']
+                    values = self.client.request('variables', dict(variablesReference=old_ref))['body']['variables']
+                    self.assertEqual([('local', expected)], [(v['name'], v['value']) for v in values])
+
+    def test_invalid_variable_ranges_are_rejected(self):
+        base = json.loads(self.address.read_text())
+        for start, end in [('0x80004010', '0x80004010'), ('0x80004010', '0x8000400c'),
+                           ('0x80003ffc', '0x80004008'), ('0x80004008', '0x80004104'),
+                           ('0x80004009', '0x80004010')]:
+            with self.subTest(start=start, end=end):
+                data = dict(base)
+                data['methods'][0]['variables'] = [dict(name='local', type='System.Int32', group='Locals',
+                    storageBytes=4, location=dict(kind='cfaOffset', offset=8), visibleAddresses=[],
+                    visibleRanges=[dict(start=start, end=end)])]
+                self.address.write_text(json.dumps(data))
+                response = self.client.request('attach', dict(host='127.0.0.1', port=1, elf=str(self.elf),
+                    sourceMap=str(self.source), addressMap=str(self.address)), success=False)
+                self.assertIn('Invalid PowerPC metadata address' if start.endswith('09') else
+                              'Invalid variable visibility extent', response['message'])
+
+    def test_caller_variable_ranges_use_call_pc_and_caller_cfa(self):
+        data = json.loads(self.address.read_text())
+        data['methods'][0]['variables'] = [dict(name='local', type='System.Int32', group='Locals',
+            storageBytes=4, location=dict(kind='cfaOffset', offset=8), visibleAddresses=['0x80004008'],
+            visibleRanges=[dict(start='0x80004008', end='0x80004010')])]
+        data['methods'].append(dict(symbol='callee', nativeStart='0x80005000', nativeSize=256, breakpoints=[]))
+        data['unwind'].append(dict(start='0x80005000', end='0x80005100', supported=True,
+            cfaRegister=1, cfaOffset=32, registers={'65': dict(kind='memory', offset=-4)}))
+        self.address.write_text(json.dumps(data))
+        target = Target()
+        target.pc = 0x80005000
+        target.memory[0x8170001c] = bytes.fromhex('80004010')  # Call PC is 0x8000400c, inside the range.
+        target.memory[0x81700028] = bytes.fromhex('00000007')
+        self.attach(target=target)
+        frames = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames']
+        self.assertEqual(2, len(frames))
+        self.assertEqual('0x80004010', frames[1]['instructionPointerReference'])
+        scopes = self.client.request('scopes', dict(frameId=frames[1]['id']))['body']['scopes']
+        values = self.client.request('variables', dict(variablesReference=scopes[0]['variablesReference']))['body']['variables']
+        self.assertEqual([('local', '7')], [(v['name'], v['value']) for v in values])
+
     def test_pause_and_disconnect_while_continuing(self):
         self.attach()
         self.client.request("continue", dict(threadId=1))

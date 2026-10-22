@@ -298,8 +298,13 @@ Values are decoded as big-endian Boolean, Char, signed/unsigned integers, native
 integers, Single or Double. Caller frames permit proven CFA-relative memory only;
 register-backed values are restricted to the top frame. Missing, ambiguous or
 unsupported locations display an explicit unavailable reason. No expression is
-evaluated to recover a value. Scope visibility is restricted to proven mapped
-statement addresses.
+evaluated to recover a value. Scope visibility uses verified DWARF statement
+ranges, including stops between line-row addresses. Ranges end at hidden rows,
+method boundaries and lexical scope boundaries; ambiguous source lines stay
+excluded. Location-list changes split ranges so inspection uses the location
+valid at the stopped PC. Older address maps retain exact-address inspection.
+Rebuild the target Debug artifacts and update the adapter/plugin to enable range
+inspection; rebuilding the plugin alone does not update existing target maps.
 
 The next slice exposes reference arguments, locals and class `this`. Supported
 non-generic classes expand into scalar fields, string previews and nested class
