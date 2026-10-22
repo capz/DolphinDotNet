@@ -158,6 +158,26 @@ class WorkflowCoverageTests(unittest.TestCase):
         self.assertIn('--verify-rejection',section)
         self.assertIn('dolphin-controller/',section)
 
+    def test_managed_toolchain_bootstrap_cannot_block_ci_indefinitely(self):
+        section=job('managed')
+        self.assertIn('timeout-minutes: 45',section)
+        install=next(block for block in step_blocks(section)
+                     if block.startswith('      - name: Install host compiler prerequisites\\n'))
+        setup=next(block for block in step_blocks(section)
+                   if block.startswith('      - name: Prepare shared compiler and native object cache\\n'))
+        self.assertIn('timeout-minutes: 8',install)
+        self.assertIn('run: bash scripts/ci_install_host_deps.sh',install)
+        self.assertIn('timeout-minutes: 8',setup)
+        self.assertIn('run: bash scripts/ci_setup_builds.sh',setup)
+        self.assertNotIn('sudo apt-get update -qq',section)
+        script=(ROOT/'scripts/ci_install_host_deps.sh').read_text()
+        self.assertIn('gcc-multilib',script)
+        self.assertIn('ccache',script)
+        self.assertIn('timeout --signal=TERM',script)
+        self.assertIn('Acquire::http::Timeout',script)
+        self.assertIn('Acquire::https::Timeout',script)
+        self.assertIn('command -v ccache',script)
+
     def test_executor_ownership_acceptance_uses_automatic_runtime(self):
         section=job('managed')
         block=next(b for b in step_blocks(section) if b.startswith('      - name: Validate controller and memory-card connection transitions\n'))
