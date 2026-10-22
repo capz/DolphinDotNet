@@ -109,8 +109,7 @@ missing/unsupported API diagnostics, and optionally builds external Pong with
 Debug mappings. The existing Dolphin smoke harness can test the resulting
 `ExternalPong.dol` and ELF; require boot and `main`, `dnd_aot_entry`,
 `dnd_audio_create_pcm8`, and `dnd_device_end` probes. See [release process](releases.md)
-for test and publication requirements. Repository samples retain direct SDK
-imports and continue to build the compiler/driver from source.
+for test and publication requirements. The [standalone examples](https://github.com/capz/DolphinDotNet.Samples) now reference the published preview SDK and runtime packages, instead of local source projects. CI checks out that repository when integration tests require sample code.
 
 ## Optional content tools
 
