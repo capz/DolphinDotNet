@@ -103,6 +103,8 @@ jobs:
             ccache-${{ runner.os }}-managed-${{ matrix.group }}-
       - name: Install host compiler prerequisites
         timeout-minutes: 8
+        env:
+          DND_CI_MANAGED_GROUP: ${{ matrix.group }}
         run: bash scripts/ci_install_host_deps.sh
       - name: Prepare shared compiler and native object cache
         timeout-minutes: 8
@@ -442,7 +444,7 @@ jobs:
       - name: Validate audio conversion and named loop sidecars
         if: matrix.group == 'audio-games'
         run: |
-          sudo apt-get install -y ffmpeg
+          command -v ffmpeg
           dotnet run --project tests/AudioAssetTests/AudioAssetTests.csproj -c Release
       - name: Validate native WAV parser, voice ownership and DSP controls
         if: matrix.group == 'audio-games'
@@ -575,7 +577,7 @@ jobs:
         if: matrix.group == 'graphics-model'
         timeout-minutes: 5
         run: |
-          sudo apt-get install -y assimp-utils
+          command -v assimp
           assimp version
           dotnet run --project tests/ModelAssetTests/ModelAssetTests.csproj -c Release -- /tmp/dnd-model-fixtures /usr/bin/assimp
           test -s /tmp/dnd-model-fixtures/sd/geometry-gj.dndmodel

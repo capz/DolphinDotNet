@@ -8,7 +8,28 @@ set -euo pipefail
 probe="$RUNNER_TEMP/dnd-ci-multilib-probe-$$"
 trap 'rm -f "$probe"' EXIT
 
-if command -v ccache >/dev/null 2>&1 &&
+# The audio and model matrix shards also need host conversion tools.
+# Install them through the same bounded, alternate-mirror APT transaction.
+group="${DND_CI_MANAGED_GROUP:-}"
+packages=(ccache gcc-multilib)
+extra_ready=true
+case "$group" in
+    audio-games)
+        if ! command -v ffmpeg >/dev/null 2>&1; then
+            packages+=(ffmpeg)
+            extra_ready=false
+        fi
+        ;;
+    graphics-model)
+        if ! command -v assimp >/dev/null 2>&1; then
+            packages+=(assimp-utils)
+            extra_ready=false
+        fi
+        ;;
+esac
+
+if "$extra_ready" &&
+   command -v ccache >/dev/null 2>&1 &&
    printf 'int main(void) { return 0; }\n' | cc -m32 -x c - -o "$probe" >/dev/null 2>&1; then
     echo "ccache and 32-bit host compiler are already available; skipping APT."
     exit 0
@@ -49,10 +70,12 @@ for i in "${!mirrors[@]}"; do
         echo "::endgroup::"
         echo "::group::Install ccache and gcc-multilib (attempt $attempt/2)"
         if timeout --signal=TERM --kill-after=5s 170s sudo env DEBIAN_FRONTEND=noninteractive \
-            apt-get "${apt_options[@]}" install -y --no-install-recommends ccache gcc-multilib; then
+            apt-get "${apt_options[@]}" install -y --no-install-recommends "${packages[@]}"; then
             echo "::endgroup::"
             command -v ccache
             printf 'int main(void) { return 0; }\n' | cc -m32 -x c - -o "$probe"
+            if [[ "$group" == "audio-games" ]]; then command -v ffmpeg; fi
+            if [[ "$group" == "graphics-model" ]]; then command -v assimp; fi
             echo "Host compiler prerequisites verified."
             exit 0
         fi
