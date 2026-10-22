@@ -7,5 +7,8 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking><NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
-  <ItemGroup><Content Include="content/**/*" Exclude="content/**/bin/**;content/**/obj/**" /></ItemGroup>
+  <ItemGroup>
+    <Content Include="content/**/*" Exclude="content/**/bin/**;content/**/obj/**"
+             PackagePath="content/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

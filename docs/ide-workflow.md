@@ -10,7 +10,7 @@ Install the **.NET 8 SDK**, **Dolphin**, and one build backend:
 
 | Backend | Setup |
 | --- | --- |
-| Docker (Windows, Linux, macOS) | Install Docker Desktop/Engine, start it, and select Linux containers. The first build downloads the same toolchain image as CI, pinned by digest. |
+| Docker (Windows, Linux, macOS) | Install Docker Desktop/Engine, start it, and select Linux containers. The first build downloads the native toolchain image, pinned by digest. |
 | Native (Linux/macOS) | Install devkitPPC and libogc2, including fat/dvm/iso9660/bba/aesnd libraries. Set `DEVKITPRO` and `DEVKITPPC`. Install `make`, Bash, Git and Python 3; the SDK must include `elf2dol`. Restart the IDE after changing environment variables. |
 
 The container backend uses `linux/amd64`; on Apple Silicon, enable Docker
@@ -224,7 +224,8 @@ output name. A Rider shared configuration must point at the new `.csproj`.
 
 For compiler/host tests that only need the managed assembly, explicitly set
 `-p:DndBuildNative=false`. Such builds do not create or update a runnable DOL.
-All samples use these imports. Compiler/host CI paths explicitly disable native
-building; the IDE workflow jobs build every sample solution and native DOL.
+All samples use these imports. Windows/macOS CI builds every sample solution with
+native compilation disabled and verifies the launch and SDK settings. Native DOL
+builds and emulator execution must be checked separately on a configured host.
 
 For projects outside this checkout, use the [NuGet SDK and templates](nuget-sdk.md); generated projects include Dolphin Play/Debug launch profiles.

@@ -17,20 +17,20 @@ class CiSelectionTests(unittest.TestCase):
     def test_debugger_tests_only(self):
         self.assertEqual(ci.select(["tests/DebuggerTests/Program.cs"]), {"debugger"})
 
-    def test_debugger_requires_live_emulator_and_fresh_artifacts(self):
-        self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger/RspClient.cs"]), {"debugger", "rider", "visualstudio", "gamecube", "dolphin"})
+    def test_debugger_requires_both_extension_packages(self):
+        self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger/RspClient.cs"]), {"debugger", "rider", "visualstudio"})
 
     def test_dap_dependency_selection(self):
         self.assertEqual(ci.select(["tests/test_debug_adapter.py"]), {"debugger", "rider"})
         self.assertEqual(ci.select(["tests/rider_dap_fixture.py"]), {"debugger", "rider"})
         for path in ["tools/DolphinDotNet.DebugAdapter/DebugSession.cs", "scripts/dnd_dap_probe.py"]:
-            self.assertEqual(ci.select([path]), {"debugger", "rider", "visualstudio", "gamecube", "dolphin"})
+            self.assertEqual(ci.select([path]), {"debugger", "rider", "visualstudio"})
 
     def test_probe_has_same_target_dependencies(self):
-        self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger.Probe/Program.cs"]), {"debugger", "rider", "visualstudio", "gamecube", "dolphin"})
+        self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger.Probe/Program.cs"]), {"debugger", "rider", "visualstudio"})
 
-    def test_native_runtime_runs_host_and_target_checks(self):
-        self.assertEqual(ci.select(["source/managed_runtime.c"]), ci.BUILD | {"portable"})
+    def test_native_runtime_selects_remaining_build_consumers(self):
+        self.assertEqual(ci.select(["source/managed_runtime.c"]), ci.BUILD)
 
     def test_compiler_runs_all_managed_consumers(self):
         self.assertEqual(ci.select(["tools/DolphinDotNet.Compiler/Program.cs"]), ci.BUILD)
@@ -77,7 +77,7 @@ class CiSelectionTests(unittest.TestCase):
     def test_full_pr_diff_preserves_old_and_new_paths(self):
         event = {"pull_request": {"base": {"sha": "a" * 40}, "head": {"sha": "b" * 40}}}
         with patch.object(ci.subprocess, "check_output", return_value=b"source/old.c\0docs/moved.md\0") as diff:
-            self.assertEqual(ci.selection("pull_request", event)[0], ci.BUILD | {"portable"})
+            self.assertEqual(ci.selection("pull_request", event)[0], ci.BUILD)
             args = diff.call_args.args[0]
             self.assertIn("--no-renames", args)
             self.assertIn("a" * 40 + "..." + "b" * 40, args)

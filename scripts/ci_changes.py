@@ -6,8 +6,8 @@ from pathlib import Path
 import re
 import subprocess
 
-GROUPS = ("debugger", "rider", "visualstudio", "managed", "ide", "portable", "gamecube", "dolphin")
-BUILD = {"managed", "ide", "gamecube", "dolphin"}
+GROUPS = ("debugger", "rider", "visualstudio", "ide")
+BUILD = {"ide"}
 
 
 def select(paths):
@@ -26,13 +26,13 @@ def select(paths):
         elif path.startswith("tests/DebuggerTests/"):
             selected.add("debugger")
         elif path.startswith(("tools/DolphinDotNet.Debugger/", "tools/DolphinDotNet.Debugger.Probe/", "tools/DolphinDotNet.DebugAdapter/")) or path == "scripts/dnd_dap_probe.py":
-            selected.update({"debugger", "rider", "visualstudio", "gamecube", "dolphin"})
+            selected.update({"debugger", "rider", "visualstudio"})
         elif path in {"scripts/dolphin_smoke.py", "scripts/dolphin_gdb_probe.py", "tests/test_dolphin_smoke.py"}:
-            selected.update({"gamecube", "dolphin"})
+            selected.update(BUILD)
         elif path.startswith("tests/DolphinLaunchProbe/") or path == "tests/build_workflow_test.py":
             selected.add("ide")
         elif path.startswith(("source/", "include/", "vendor/")) or path in {"Makefile", "tests/Makefile"}:
-            selected.update(BUILD | {"portable"})
+            selected.update(BUILD)
         elif path.startswith(("src/", "sdk/", "samples/", "tools/DolphinDotNet.Compiler/",
                               "tools/DolphinDotNet.Compiler.Tests/", "tools/DolphinDotNet.Build/",
                               "tools/DolphinDotNet.ApiCompat/", "tools/DolphinDotNet.Assets/",
@@ -42,9 +42,6 @@ def select(paths):
             # Includes CI configuration/selector, unknown tests, toolchain files,
             # new directories and shared scripts. Extend rules only after auditing consumers.
             selected.update(GROUPS)
-    # Dolphin always consumes artifacts built in this run; never stale cached DOLs.
-    if "dolphin" in selected:
-        selected.add("gamecube")
     return selected
 
 

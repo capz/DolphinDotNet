@@ -30,6 +30,13 @@ def main():
     if len(sdk_packages) != 1:
         parser.error('--feed must contain exactly one SDK version')
     sdk_package = sdk_packages[0]
+    template_packages = list(feed.glob('DolphinDotNet.Templates.*.nupkg'))
+    assert len(template_packages) == 1, template_packages
+    with ZipFile(template_packages[0]) as archive:
+        for template in ('gamecube', 'gamecube-game', 'gamecube-lib'):
+            config = f'content/{template}/.template.config/template.json'
+            assert config in archive.namelist(), f'Missing template root: {config}'
+            assert json.loads(archive.read(config))['shortName'] == template
     with ZipFile(sdk_package) as archive:
         import xml.etree.ElementTree as ET
         metadata = ET.fromstring(archive.read('DolphinDotNet.Sdk.nuspec'))

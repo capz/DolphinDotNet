@@ -10,7 +10,7 @@ concurrency:
 jobs:
   package:
     name: Rider attach plugin
-    runs-on: ubuntu-24.04
+    runs-on: macos-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
