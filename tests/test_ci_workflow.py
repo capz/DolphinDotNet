@@ -177,6 +177,14 @@ class WorkflowCoverageTests(unittest.TestCase):
         self.assertIn('Acquire::http::Timeout',script)
         self.assertIn('Acquire::https::Timeout',script)
         self.assertIn('command -v ccache',script)
+        self.assertIn('archive.ubuntu.com/ubuntu',script)
+        self.assertIn('us.archive.ubuntu.com/ubuntu',script)
+        self.assertIn('security.ubuntu.com/ubuntu',script)
+        self.assertIn('Dir::Etc::sourcelist=',script)
+        self.assertIn('Dir::Etc::sourceparts=-',script)
+        self.assertIn('for i in "${!mirrors[@]}"',script)
+        self.assertIn('timeout --signal=TERM --kill-after=5s 170s',script)
+        self.assertIn('if command -v ccache >/dev/null 2>&1',section)
 
     def test_executor_ownership_acceptance_uses_automatic_runtime(self):
         section=job('managed')

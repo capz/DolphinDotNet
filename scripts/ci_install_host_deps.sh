@@ -14,19 +14,41 @@ if command -v ccache >/dev/null 2>&1 &&
     exit 0
 fi
 
+# Use independent Ubuntu mirrors instead of the hosted runner's Azure
+# mirror+file source. CI #1481 confirmed intermittent package throttling.
+# Do not mutate system APT configuration or consume unrelated repositories.
+. /etc/os-release
+codename="${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}"
+if [[ "${ID:-}" != "ubuntu" || -z "$codename" ]]; then
+    echo "::error::The managed host toolchain bootstrap expects an Ubuntu runner."
+    exit 1
+fi
+sources="$RUNNER_TEMP/dnd-ci-ubuntu-sources-$$.list"
+trap 'rm -f "$probe" "$sources"' EXIT
+
 apt_options=(
-    -o Acquire::Retries=1
-    -o Acquire::http::Timeout=20
-    -o Acquire::https::Timeout=20
+    -o "Dir::Etc::sourcelist=$sources"
+    -o "Dir::Etc::sourceparts=-"
+    -o Acquire::Retries=0
+    -o Acquire::http::Timeout=15
+    -o Acquire::https::Timeout=15
     -o DPkg::Lock::Timeout=30
 )
-for attempt in 1 2; do
+# Switch endpoints on retry instead of downloading from the same slow mirror.
+mirrors=("http://archive.ubuntu.com/ubuntu" "http://us.archive.ubuntu.com/ubuntu")
+for i in "${!mirrors[@]}"; do
+    attempt=$((i+1))
+    mirror="${mirrors[$i]}"
+    printf 'deb [arch=amd64] %s %s main restricted universe multiverse\n' "$mirror" "$codename" > "$sources"
+    printf 'deb [arch=amd64] %s %s-updates main restricted universe multiverse\n' "$mirror" "$codename" >> "$sources"
+    printf 'deb [arch=amd64] http://security.ubuntu.com/ubuntu %s-security main restricted universe multiverse\n' "$codename" >> "$sources"
+    echo "::notice::Using Ubuntu package mirror $mirror (attempt $attempt/2)."
     echo "::group::Refresh APT package indexes (attempt $attempt/2)"
-    if timeout --signal=TERM --kill-after=10s 90s sudo env DEBIAN_FRONTEND=noninteractive \
+    if timeout --signal=TERM --kill-after=5s 70s sudo env DEBIAN_FRONTEND=noninteractive \
         apt-get "${apt_options[@]}" update; then
         echo "::endgroup::"
         echo "::group::Install ccache and gcc-multilib (attempt $attempt/2)"
-        if timeout --signal=TERM --kill-after=10s 150s sudo env DEBIAN_FRONTEND=noninteractive \
+        if timeout --signal=TERM --kill-after=5s 170s sudo env DEBIAN_FRONTEND=noninteractive \
             apt-get "${apt_options[@]}" install -y --no-install-recommends ccache gcc-multilib; then
             echo "::endgroup::"
             command -v ccache
@@ -34,12 +56,13 @@ for attempt in 1 2; do
             echo "Host compiler prerequisites verified."
             exit 0
         fi
+        echo "::endgroup::"
     else
         echo "::endgroup::"
     fi
-    echo "::warning::APT prerequisite installation attempt $attempt failed or timed out."
+    echo "::warning::APT mirror $mirror failed or exceeded its bounded download time."
     if (( attempt == 1 )); then sleep 5; fi
 done
 
-echo "::error::Unable to install host compiler prerequisites within the bounded APT retries."
+echo "::error::Unable to install host compiler prerequisites from either Ubuntu mirror."
 exit 1

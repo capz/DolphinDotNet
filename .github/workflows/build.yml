@@ -627,7 +627,12 @@ jobs:
 
       - name: Report native cache statistics
         if: always()
-        run: ccache --show-stats
+        run: |
+          if command -v ccache >/dev/null 2>&1; then
+            ccache --show-stats
+          else
+            echo "::notice::ccache not installed (toolchain bootstrap did not complete)."
+          fi
 
   ide-workflow:
     needs: changes
