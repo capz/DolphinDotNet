@@ -229,6 +229,15 @@ Program.cs - 0x80001018
         self.assertEqual([dict(start='0x80001000', end='0x80001008')],
                          mapped['methods'][0]['variables'][0]['visibleRanges'])
 
+    def test_unaligned_host_row_end_preserves_exact_breakpoint(self):
+        # Host GCC fixtures can have byte-aligned instruction boundaries. Keep
+        # the existing exact breakpoint, but never emit an unaligned PPC range.
+        lines = 'C:/project/Program.cs:\nProgram.cs 7 0x80001000 x\nProgram.cs - 0x80001007\n'
+        self.assertEqual([('c:/project/program.cs', 7, 0x80001000)], module.parse_lines(lines))
+        point = module.resolve(MAP, lines, SYMBOLS)['methods'][0]['breakpoints'][0]
+        self.assertEqual(['0x80001000'], point['addresses'])
+        self.assertEqual([], point['ranges'])
+
 
 class AddressResolution(unittest.TestCase):
     def test_cli_preserves_long_windows_pdb_paths_in_real_dwarf(self):

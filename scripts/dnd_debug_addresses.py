@@ -34,8 +34,7 @@ def parse_line_ranges(output):
         # in this ordering so they can supersede an earlier C# row as well.
         if pending is not None and address > pending[2]:
             if pending[1] > 0 and pending[2] != 0 and pending[2] % 4 == 0:
-                if address % 4 == 0:
-                    rows.append((*pending, address))
+                rows.append((*pending, address))
         pending = None
         if match['line'] == '-':  # end_sequence is an exclusive boundary
             continue
@@ -141,6 +140,7 @@ def resolve(source_map, line_dump, symbol_dump):
             if addresses:
                 ranges = {(pc, min(end, begin + size)) for filename, number, pc, end in verified_ranges
                           if begin <= pc < begin + size and number == line
+                          and pc % 4 == 0 and min(end, begin + size) % 4 == 0
                           and matches(filename, document, basenames)}
                 breakpoints.append({
                     'document': document, 'line': line, 'ilOffsets': sorted(il_offsets),
