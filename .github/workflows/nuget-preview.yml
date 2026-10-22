@@ -1,0 +1,112 @@
+name: NuGet preview
+on:
+  pull_request:
+    paths:
+      - 'sdk/**'
+      - 'src/**'
+      - 'tools/**'
+      - 'source/**'
+      - 'include/**'
+      - 'scripts/**'
+      - 'vendor/**'
+      - 'templates/**'
+      - 'eng/**'
+      - 'tests/sdk_consumer.py'
+      - '.github/workflows/nuget-preview.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish tested preview packages to NuGet (requires protected environment approval)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - id: version
+        run: echo "version=0.1.0-preview.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - run: python3 eng/pack.py --include-tools --version '${{ steps.version.outputs.version }}'
+      - run: python3 tests/sdk_consumer.py --native --workspace "$RUNNER_TEMP/external consumer"
+      - name: Stage external emulator artifacts
+        run: |
+          mkdir -p out/external
+          cp "$RUNNER_TEMP/external consumer/ExternalPong/bin/Debug/net8.0/ExternalPong."* out/external/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: external-gamecube
+          path: out/external/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget-preview
+          path: out/packages/*.nupkg
+          if-no-files-found: error
+  smoke:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container:
+      image: debian:trixie
+      options: --shm-size=1g
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dolphin-emu xvfb xauth python3 binutils libxcb-cursor0
+      - uses: actions/download-artifact@v4
+        with:
+          name: external-gamecube
+          path: external
+      - name: Observe external Pong execution in Dolphin
+        run: python3 scripts/dolphin_smoke.py external/ExternalPong.dol --binary /usr/games/dolphin-emu-nogui --seconds 65 --minimum-seconds 65 --cpu-core 1 --gdb-port 2163 --elf external/ExternalPong.elf --expect-symbol main --expect-symbol dnd_aot_entry --expect-symbol dnd_audio_create_pcm8 --expect-symbol dnd_device_end --logs dolphin-external --require-boot
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: external-dolphin-logs
+          path: dolphin-external/
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    needs: [verify, smoke]
+    runs-on: ubuntu-24.04
+    environment: nuget-preview
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget-preview
+          path: packages
+      - name: Validate trusted-publishing configuration
+        env:
+          NUGET_USER: ${{ vars.NUGET_USER }}
+        run: |
+          if [ -z "$NUGET_USER" ]; then
+            echo "::error::Set the NUGET_USER variable in the nuget-preview environment to your NuGet profile username."
+            exit 1
+          fi
+      - name: Authenticate to NuGet with GitHub OIDC
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+      - name: Publish verified preview packages
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          test -n "$NUGET_API_KEY"
+          for package in packages/*.nupkg; do
+            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
+          done

@@ -77,6 +77,10 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
     <_DndCompilerProject>$(_DndRoot)/tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj</_DndCompilerProject>
     <_DndTools>$(_DndRoot)/tools/DolphinDotNet.Build/bin/$(Configuration)/net8.0/</_DndTools>
     <_DndCompiler>$(_DndRoot)/tools/DolphinDotNet.Compiler/bin/$(Configuration)/net8.0/DolphinDotNet.Compiler.dll</_DndCompiler>
+    <_DndTools Condition="'$(_DndPackaged)' == 'true'">$(_DndPackageRoot)tools/build/</_DndTools>
+    <_DndCompiler Condition="'$(_DndPackaged)' == 'true'">$(_DndPackageRoot)tools/compiler/DolphinDotNet.Compiler.dll</_DndCompiler>
+    <_DndEffects>$(_DndRoot)/tools/DolphinDotNet.Effects/bin/$(Configuration)/net8.0/DolphinDotNet.Effects.dll</_DndEffects>
+    <_DndEffects Condition="'$(_DndPackaged)' == 'true'">$(_DndPackageRoot)tools/effects/DolphinDotNet.Effects.dll</_DndEffects>
     <_DndDotnet Condition="'$(DotNetHostPath)' != ''">$(DotNetHostPath)</_DndDotnet>
     <_DndDotnet Condition="'$(_DndDotnet)' == ''">dotnet</_DndDotnet>
     <DolphinUserDirectory Condition="'$(DolphinUserDirectory)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(BaseIntermediateOutputPath)dolphin-user'))</DolphinUserDirectory>
@@ -93,16 +97,16 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
           Condition="'@(DndEffect)' != '' and '$(DesignTimeBuild)' != 'true'">
     <Error Condition="'%(DndEffect.GeneratedSource)' == '' or '%(DndEffect.ClassName)' == ''"
            Text="DndEffect requires GeneratedSource and ClassName metadata." />
-    <MSBuild Projects="$(_DndRoot)/tools/DolphinDotNet.Effects/DolphinDotNet.Effects.csproj" Targets="Restore;Build"
+    <MSBuild Condition="'$(_DndPackaged)' != 'true'" Projects="$(_DndRoot)/tools/DolphinDotNet.Effects/DolphinDotNet.Effects.csproj" Targets="Restore;Build"
              Properties="Configuration=$(Configuration)"
              RemoveProperties="OutputPath;BaseOutputPath;BaseIntermediateOutputPath;IntermediateOutputPath;TargetFramework;RuntimeIdentifier;SelfContained;DndBuildNative" />
     <MakeDir Directories="$(IntermediateOutputPath)dnd-effects" />
-    <DndRunTool Tool="$(_DndDotnet)" Arguments="$(_DndRoot)/tools/DolphinDotNet.Effects/bin/$(Configuration)/net8.0/DolphinDotNet.Effects.dll;%(DndEffect.FullPath);$(IntermediateOutputPath)dnd-effects/%(DndEffect.Filename).dndfx;%(DndEffect.GeneratedSource);%(DndEffect.ClassName)" />
+    <DndRunTool Tool="$(_DndDotnet)" Arguments="$(_DndEffects);%(DndEffect.FullPath);$(IntermediateOutputPath)dnd-effects/%(DndEffect.Filename).dndfx;%(DndEffect.GeneratedSource);%(DndEffect.ClassName)" />
   </Target>
   <Target Name="BuildDol" AfterTargets="Build"
-          Condition="'$(DndBuildNative)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingProject)' != 'false' and '$(IsCrossTargetingBuild)' != 'true'">
+          Condition="'$(DndBuildNative)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingProject)' != 'false' and '$(IsCrossTargetingBuild)' != 'true' and '$(OutputType)' != 'Library'">
     <Delete Files="$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)$(AssemblyName).dnd-debug.json;$(TargetDir)$(AssemblyName).dnd-addresses.json;$(TargetDir)dolphin-run.json" />
-    <MSBuild Projects="$(_DndBuildProject);$(_DndCompilerProject)" Targets="Restore;Rebuild"
+    <MSBuild Condition="'$(_DndPackaged)' != 'true'" Projects="$(_DndBuildProject);$(_DndCompilerProject)" Targets="Restore;Rebuild"
              Properties="Configuration=$(Configuration)"
              RemoveProperties="OutputPath;BaseOutputPath;BaseIntermediateOutputPath;IntermediateOutputPath;TargetFramework;RuntimeIdentifier;SelfContained;DndBuildNative" />
     <PropertyGroup>

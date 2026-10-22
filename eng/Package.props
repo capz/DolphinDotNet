@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <Version Condition="'$(Version)' == ''">0.1.0-preview.1</Version>
+    <Authors>DolphinDotNet contributors</Authors>
+    <Description>Closed-world AOT development framework for Nintendo GameCube.</Description>
+    <PackageProjectUrl>https://github.com/capz/DolphinDotNet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/capz/DolphinDotNet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>GPL-2.0-only</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <ItemGroup><None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath="/" /><None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="/" /></ItemGroup>
+</Project>

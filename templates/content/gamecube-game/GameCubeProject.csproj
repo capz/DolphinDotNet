@@ -1,0 +1,4 @@
+<Project Sdk="DolphinDotNet.Sdk/0.1.0-preview.1">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="0.1.0-preview.1" /></ItemGroup>
+</Project>

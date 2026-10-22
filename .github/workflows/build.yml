@@ -222,7 +222,8 @@ jobs:
           /tmp/embedded-icon-test
           /tmp/embedded-icon-test --gc-stress
           dotnet pack tools/DolphinDotNet.SaveImage/DolphinDotNet.SaveImage.csproj -c Release -o /tmp/dnd-tools
-          dotnet tool install DolphinDotNet.SaveImage --version 0.1.0 --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
+          tool_version=$(dotnet msbuild tools/DolphinDotNet.SaveImage/DolphinDotNet.SaveImage.csproj -getProperty:Version)
+          dotnet tool install DolphinDotNet.SaveImage --version "$tool_version" --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
           /tmp/dnd-tool-install/dnd-save-image --help
       - name: Validate standard List, comparers, streams, text and async state machines
         if: matrix.group == 'io'
@@ -577,7 +578,8 @@ jobs:
           test -s /tmp/dnd-model-fixtures/sd/geometry-xj.dndmodel
           test -s /tmp/dnd-model-fixtures/sd/live.obj
           dotnet pack tools/DolphinDotNet.Assets/DolphinDotNet.Assets.csproj -c Release -o /tmp/dnd-tools
-          dotnet tool install DolphinDotNet.Assets --version 0.1.0 --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
+          tool_version=$(dotnet msbuild tools/DolphinDotNet.Assets/DolphinDotNet.Assets.csproj -getProperty:Version)
+          dotnet tool install DolphinDotNet.Assets --version "$tool_version" --add-source /tmp/dnd-tools --tool-path /tmp/dnd-tool-install
           /tmp/dnd-tool-install/dnd-assets --help
           dotnet build /tmp/dnd-model-fixtures/Build.csproj -c Release -p:DndAssetsCommand=/tmp/dnd-tool-install/dnd-assets
           cmp /tmp/dnd-model-fixtures/sd/animated.dndmodel /tmp/dnd-model-fixtures/sd/built.dndmodel
