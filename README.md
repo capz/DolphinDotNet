@@ -28,7 +28,7 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
 Install the **.NET 8 SDK**, **Dolphin**, and a native build backend:
 
 - **Windows, Linux or macOS:** Docker Desktop/Engine running Linux containers.
-  The first build downloads the pinned toolchain image used by CI.
+  The first build downloads the pinned native toolchain image.
 - **Linux or macOS alternative:** devkitPPC and libogc2, with `DEVKITPRO` and
   `DEVKITPPC` configured, plus Make, Bash, Git and Python 3. See the
   [IDE setup guide](docs/ide-workflow.md) for the required libraries.

@@ -4,11 +4,13 @@ import argparse
 from pathlib import Path
 
 
-def collect_assets(samples, rider_dir=None, visual_studio_dir=None):
-    samples = Path(samples)
-    assets = [samples]
-    if samples.suffix != '.zip':
-        raise ValueError('Samples must be a ZIP archive')
+def collect_assets(samples=None, rider_dir=None, visual_studio_dir=None):
+    assets = []
+    if samples is not None:
+        samples = Path(samples)
+        if samples.suffix != '.zip':
+            raise ValueError('Samples must be a ZIP archive')
+        assets.append(samples)
     for directory, suffix in ((rider_dir, '.zip'), (visual_studio_dir, '.vsix')):
         if directory is None:
             continue
@@ -16,6 +18,8 @@ def collect_assets(samples, rider_dir=None, visual_studio_dir=None):
         if len(matches) != 1:
             raise ValueError(f'Expected exactly one {suffix} package in {directory}, found {len(matches)}')
         assets.extend(matches)
+    if not assets:
+        raise ValueError('At least one release asset is required')
     for path in assets:
         if not path.is_file() or path.stat().st_size == 0:
             raise ValueError(f'Missing or empty release asset: {path}')
@@ -28,7 +32,7 @@ def collect_assets(samples, rider_dir=None, visual_studio_dir=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('samples', type=Path)
+    parser.add_argument('samples', type=Path, nargs='?')
     parser.add_argument('--rider-dir', type=Path)
     parser.add_argument('--visual-studio-dir', type=Path)
     args = parser.parse_args()

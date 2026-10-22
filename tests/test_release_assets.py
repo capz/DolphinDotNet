@@ -10,6 +10,19 @@ spec.loader.exec_module(release)
 
 
 class ReleaseAssetsTests(unittest.TestCase):
+    def test_extension_only_release_and_empty_selection(self):
+        with self.assertRaisesRegex(ValueError, 'At least one'):
+            release.collect_assets()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            rider, vs = root / 'rider', root / 'vs'
+            rider.mkdir(); vs.mkdir()
+            plugin, extension = rider / 'plugin.zip', vs / 'plugin.vsix'
+            plugin.write_bytes(b'rider'); extension.write_bytes(b'vs')
+            self.assertEqual([plugin], release.collect_assets(rider_dir=rider))
+            self.assertEqual([extension], release.collect_assets(visual_studio_dir=vs))
+            self.assertEqual([plugin, extension], release.collect_assets(rider_dir=rider, visual_studio_dir=vs))
+
     def test_all_extension_selection_combinations(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

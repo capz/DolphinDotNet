@@ -8,13 +8,15 @@ changes increment minor, fixes increment patch. Preview builds use
 `0.1.0-preview.<workflow-run>.<attempt>`; release versions are immutable.
 
 The **NuGet preview** workflow builds packages and tests an isolated external
-consumer on pull requests affecting distribution or its inputs. It also builds
-external Debug Pong through Docker. Existing build/native/sample and IDE CI
-workflows remain in place. Inspect their results as well as package verification.
+consumer on macOS for pull requests affecting distribution or its inputs.
+CI uses Windows and macOS runners only. Native GameCube/container builds,
+Linux-specific checks and real-Dolphin smoke tests are no longer scheduled.
+Main CI builds both IDE packages and publishes the extensions produced by a
+successful main run; it no longer publishes a prebuilt GameCube sample ZIP.
 Run the Dolphin smoke harness against an external build on an emulator-capable
-host before promoting a release. Verify Visual Studio on Windows, Rider on its
-supported hosts, the Native devkitPPC path, and hardware separately; a Linux
-Docker check does not substitute for these.
+host before promoting a release. Verify native DOL generation, Visual Studio on
+Windows, Rider on its supported hosts, the Native devkitPPC path, and hardware
+separately. A green Windows/macOS build does not establish console execution.
 
 Publishing is opt-in: manually dispatch the workflow on `main` with `publish`
 enabled after review/merge. Authentication uses [NuGet trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing)

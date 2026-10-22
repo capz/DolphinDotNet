@@ -115,9 +115,9 @@ Get-ChildItem samples/*/*.sln | ForEach-Object {
 python scripts/validate_sample_build.py
 ```
 
-The same validation runs in CI after every sample's container build. Windows,
-macOS and Linux host checks also verify every sample's SDK imports, launch target,
-and evaluated Debug/Release settings.
+Run this validation locally after native sample builds. Windows/macOS CI builds
+the managed sample solutions and verifies their SDK imports, launch targets and
+evaluated Debug/Release settings; it does not build native DOLs or boot Dolphin.
 
 The shared build fixes apply to every sample: Windows selects `docker.exe`, native
 cleanup handles read-only Git metadata and retains ownership on failure, emitted
