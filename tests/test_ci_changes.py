@@ -14,20 +14,13 @@ class CiSelectionTests(unittest.TestCase):
     def test_docs_skip_builds(self):
         self.assertEqual(ci.select(["README.md", "docs/debugging.md"]), set())
 
-    def test_debugger_tests_only(self):
-        self.assertEqual(ci.select(["tests/DebuggerTests/Program.cs"]), {"debugger"})
+    def test_debugger_pin_and_preparation_select_compatibility_and_ide(self):
+        for path in ('eng/debugger-source.json', 'eng/prepare_debugger.py', 'eng/check_debugger.py'):
+            self.assertEqual(ci.select([path]), {'debugger', 'ide'})
 
-    def test_debugger_requires_both_extension_packages(self):
-        self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger/RspClient.cs"]), {"debugger", "rider", "visualstudio"})
-
-    def test_dap_dependency_selection(self):
-        self.assertEqual(ci.select(["tests/test_debug_adapter.py"]), {"debugger", "rider"})
-        self.assertEqual(ci.select(["tests/rider_dap_fixture.py"]), {"debugger", "rider"})
-        for path in ["tools/DolphinDotNet.DebugAdapter/DebugSession.cs", "scripts/dnd_dap_probe.py"]:
-            self.assertEqual(ci.select([path]), {"debugger", "rider", "visualstudio"})
-
-    def test_probe_has_same_target_dependencies(self):
-        self.assertEqual(ci.select(["tools/DolphinDotNet.Debugger.Probe/Program.cs"]), {"debugger", "rider", "visualstudio"})
+    def test_metadata_and_native_debug_contracts_select_both_consumers(self):
+        for path in ('scripts/dnd_debug_addresses.py', 'source/debug_heartbeat.c', 'include/dnd_debug_heartbeat.h'):
+            self.assertEqual(ci.select([path]), {'debugger', 'ide'})
 
     def test_native_runtime_selects_remaining_build_consumers(self):
         self.assertEqual(ci.select(["source/managed_runtime.c"]), ci.BUILD)
@@ -38,20 +31,15 @@ class CiSelectionTests(unittest.TestCase):
     def test_sdk_and_samples_run_managed_consumers(self):
         self.assertEqual(ci.select(["sdk/DolphinDotNet.Sdk/Sdk/Sdk.targets", "samples/Pong/Program.cs"]), ci.BUILD)
 
-    def test_rider_plugin_only(self):
-        self.assertEqual(ci.select(["plugins/rider/src/main/java/TargetProfile.java"]), {"rider"})
-
-    def test_extension_workflows_select_only_their_packages(self):
-        for path in ("plugins/visual-studio/Package.cs", "tests/VisualStudioTests/Program.cs",
-                     "scripts/verify_vsix.py", ".github/workflows/visual-studio.yml"):
-            self.assertEqual(ci.select([path]), {"visualstudio"})
-        self.assertEqual(ci.select([".github/workflows/rider.yml"]), {"rider"})
+    def test_removed_debugger_paths_in_migration_diff_are_conservative(self):
+        for path in ('plugins/rider/deleted.java', 'plugins/visual-studio/deleted.cs', 'tools/DolphinDotNet.DebugAdapter/deleted.cs'):
+            self.assertEqual(ci.select([path]), set(ci.GROUPS))
 
     def test_ide_fixture_only(self):
         self.assertEqual(ci.select(["tests/DolphinLaunchProbe/Program.cs"]), {"ide"})
 
     def test_union(self):
-        self.assertEqual(ci.select(["tests/DebuggerTests/Program.cs", "tests/build_workflow_test.py"]), {"debugger", "ide"})
+        self.assertEqual(ci.select(["eng/debugger-source.json", "tests/build_workflow_test.py"]), {"debugger", "ide"})
 
     def test_unknown_workflow_and_selector_changes_run_everything(self):
         for path in ["new-component/main.cs", ".github/workflows/build.yml", "scripts/ci_changes.py", "global.json", "tests/test_ci_changes.py"]:

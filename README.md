@@ -165,3 +165,5 @@ for feature-specific usage and limits.
 Raw GX/GU/VIDEO bindings and managed meshes, textures, materials and Draw2D are documented in [Graphics APIs](docs/graphics.md).
 
 External consumers: see the [NuGet SDK guide](docs/nuget-sdk.md) and [release process](docs/releases.md).
+
+IDE plugins, the shared debug adapter and their releases now live in [DolphinDotNet.Debuggers](https://github.com/capz/DolphinDotNet.Debuggers). See the [repository boundary and pinned SDK dependency](docs/debugger-components.md).

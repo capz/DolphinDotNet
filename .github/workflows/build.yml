@@ -24,8 +24,6 @@ jobs:
     runs-on: macos-latest
     outputs:
       debugger: ${{ steps.select.outputs.debugger }}
-      rider: ${{ steps.select.outputs.rider }}
-      visualstudio: ${{ steps.select.outputs.visualstudio }}
       ide: ${{ steps.select.outputs.ide }}
     steps:
       - uses: actions/checkout@v4
@@ -35,8 +33,8 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_ci_changes.py
           python3 -m unittest discover -s tests -p test_ci_workflow.py
+          python3 -m unittest discover -s tests -p test_debugger_dependency.py
           python3 -m unittest discover -s tests -p test_sample_release.py
-          python3 -m unittest discover -s tests -p test_release_assets.py
       - name: Select checks from the complete PR diff
         id: select
         run: python3 scripts/ci_changes.py
@@ -51,23 +49,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Build .NET debugger acceptance probe
-        run: dotnet build tools/DolphinDotNet.Debugger.Probe -c Release
-      - name: Test RSP over loopback TCP and mock serial stream
-        run: dotnet run --project tests/DebuggerTests/DebuggerTests.csproj -c Release
-      - name: Build attach-only DAP adapter
-        run: dotnet build tools/DolphinDotNet.DebugAdapter -c Release
-      - name: Test DAP process against fake RSP target
-        run: python3 -m unittest discover -s tests -p test_debug_adapter.py
-  rider-plugin:
-    needs: changes
-    if: needs.changes.outputs.rider == 'true'
-    uses: ./.github/workflows/rider.yml
-
-  visual-studio-extension:
-    needs: changes
-    if: needs.changes.outputs.visualstudio == 'true'
-    uses: ./.github/workflows/visual-studio.yml
+      - name: Check pinned debugger compatibility with SDK metadata and runtime
+        run: python3 eng/check_debugger.py
 
   ide-workflow:
     needs: changes
@@ -106,7 +89,7 @@ jobs:
     name: CI result
     if: always()
     runs-on: macos-latest
-    needs: [changes, debugger-protocol, rider-plugin, visual-studio-extension, ide-workflow]
+    needs: [changes, debugger-protocol, ide-workflow]
     steps:
       - name: Require every selected check to pass
         env:
@@ -118,7 +101,7 @@ jobs:
           if jobs['changes']['result'] != 'success':
               sys.exit('CI selection failed')
           selected = jobs['changes']['outputs']
-          groups = {'debugger-protocol': 'debugger', 'rider-plugin': 'rider', 'visual-studio-extension': 'visualstudio', 'ide-workflow': 'ide'}
+          groups = {'debugger-protocol': 'debugger', 'ide-workflow': 'ide'}
           failed = []
           for job, group in groups.items():
               if selected.get(group) not in ('true', 'false'):
@@ -131,54 +114,3 @@ jobs:
           if failed:
               sys.exit('Unexpected CI results: ' + ', '.join(failed))
           PY
-
-  release-extensions:
-    name: Publish built IDE extensions
-    runs-on: macos-latest
-    needs:
-      - ci-result
-      - rider-plugin
-      - visual-studio-extension
-      - debugger-protocol
-      - ide-workflow
-    # Publish only extensions produced by this successful main run.
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (needs.rider-plugin.result == 'success' || needs.visual-studio-extension.result == 'success')
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download Rider package built during this run
-        if: needs.rider-plugin.result == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: DolphinDotNet-Rider-plugin
-          path: dist/extensions/rider
-      - name: Download Visual Studio package built during this run
-        if: needs.visual-studio-extension.result == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: DolphinDotNet-VisualStudio-plugin
-          path: dist/extensions/visual-studio
-      - name: Create downloadable prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          BUILD_SHA: ${{ github.sha }}
-          BUILD_RUN: ${{ github.run_id }}
-          BUILD_ATTEMPT: ${{ github.run_attempt }}
-          RIDER_RESULT: ${{ needs.rider-plugin.result }}
-          VS_RESULT: ${{ needs.visual-studio-extension.result }}
-        run: |
-          TAG="build-${BUILD_RUN}-${BUILD_ATTEMPT}"
-          package_args=()
-          if [ "$RIDER_RESULT" = success ]; then package_args+=(--rider-dir dist/extensions/rider); fi
-          if [ "$VS_RESULT" = success ]; then package_args+=(--visual-studio-dir dist/extensions/visual-studio); fi
-          mkdir -p dist
-          python3 scripts/release_assets.py "${package_args[@]}" > dist/release-assets.txt
-          assets=()
-          while IFS= read -r asset; do assets+=("$asset"); done < dist/release-assets.txt
-          gh release create "$TAG" "${assets[@]}" \
-            --target "$BUILD_SHA" \
-            --title "DolphinDotNet build ${BUILD_RUN} (attempt ${BUILD_ATTEMPT})" \
-            --notes "Installable IDE extensions built from commit ${BUILD_SHA}. Native GameCube builds and Dolphin smoke tests are not part of the Windows/macOS CI matrix. Verified by CI run https://github.com/${GH_REPO}/actions/runs/${BUILD_RUN}." \
-            --prerelease

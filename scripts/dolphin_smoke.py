@@ -169,7 +169,7 @@ def main() -> int:
         def capture_guest_state_inner():
             if args.dap_adapter:
                 try:
-                    result = subprocess.run([sys.executable, str(Path(__file__).with_name("dnd_dap_probe.py")),
+                    result = subprocess.run([sys.executable, str(args.dap_adapter.parent / "dnd_dap_probe.py"),
                         "--adapter", str(args.dap_adapter), "--port", str(args.gdb_port),
                         "--elf", str(args.elf), "--source-map", str(args.source_map),
                         "--address-map", str(args.address_map),
