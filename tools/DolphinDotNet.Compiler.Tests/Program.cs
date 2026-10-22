@@ -4,13 +4,13 @@ using System.IO;
 using System.Linq;
 
 var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-var sample = Path.Combine(root, "samples/HelloGameCube/HelloGameCube.csproj");
+var sample = Path.Combine(root, "tests/HelloGameCube/HelloGameCube.csproj");
 var compiler = Path.Combine(root, "tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj");
 var tempDirectory = Path.Combine(Path.GetTempPath(), $"dnd-{Guid.NewGuid():N}");
 var temp = Path.Combine(tempDirectory, "hello.c");
 
 Run("dotnet", $"build \"{sample}\" -c Release -p:DndBuildNative=false");
-var dll = Path.Combine(root, "samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll");
+var dll = Path.Combine(root, "tests/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll");
 Run("dotnet", $"run --project \"{compiler}\" -- \"{dll}\" \"{temp}\"");
 
 var generated = File.ReadAllText(temp);
@@ -46,7 +46,7 @@ if (!File.ReadAllText(Path.Combine(sampleBundle, "Makefile")).Contains("-DDND_SA
     throw new Exception("Sample controls did not reach the native build.");
 
 Run("dotnet", $"build \"{sample}\" -c Debug -p:DndBuildNative=false -p:DndDebugSymbols=true");
-var debugDll = Path.Combine(root, "samples/HelloGameCube/bin/Debug/net8.0/HelloGameCube.dll");
+var debugDll = Path.Combine(root, "tests/HelloGameCube/bin/Debug/net8.0/HelloGameCube.dll");
 
 var symbolsBundle = Path.Combine(tempDirectory, "symbols-only");
 Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{debugDll}\" \"{symbolsBundle}\" --debug-symbols");

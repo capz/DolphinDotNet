@@ -71,7 +71,7 @@ def main():
         assert not list(project.rglob('*.dol'))
     effects = work / 'ExternalEffects'
     effects.mkdir()
-    shutil.copy2(ROOT / 'samples/ShaderDemo/toon.dndfx.json', effects)
+    shutil.copy2(ROOT / 'tests/fixtures/toon.dndfx.json', effects)
     write(effects / 'ExternalEffects.csproj', f'<Project Sdk="DolphinDotNet.Sdk/{version}"><ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="{version}" /><DndEffect Include="toon.dndfx.json" GeneratedSource="CompiledEffect.g.cs" ClassName="CompiledEffect" /></ItemGroup></Project>')
     write(effects / 'Program.cs', 'internal static class Program { static int Main() => 0; }')
     run('dotnet', 'build', str(effects), '-p:DndBuildNative=false')
@@ -123,9 +123,8 @@ def main():
         # package SDK/API references and a relocated NuGet cache.
         pong = work / 'ExternalPong'
         pong.mkdir(exist_ok=True)
-        for source in (ROOT / 'samples/Pong').glob('*.cs'):
-            shutil.copy2(source, pong)
-        for source in (ROOT / 'samples/Common').glob('*.cs'):
+        # Dedicated SDK consumer fixture: no dependency on the samples repo.
+        for source in (ROOT / 'tests/NativeConsumerFixture').glob('*.cs'):
             shutil.copy2(source, pong)
         write(pong / 'ExternalPong.csproj', f'<Project Sdk="DolphinDotNet.Sdk/{version}"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="{version}" /></ItemGroup></Project>')
         run('dotnet', 'build', str(pong), '-c', 'Debug', '-p:DndBuildBackend=Docker')
