@@ -88,6 +88,10 @@ def select(paths):
         elif path.startswith("samples/"):
             # Covers the old path in PRs that remove local examples.
             selected.update({"ide", "sdk", "gamecube"})
+        elif path.startswith("tests/HelloGameCube/") or path.startswith("tests/NativeConsumerFixture/"):
+            selected.update({"compiler", "gamecube", "sdk"})
+        elif path.startswith("tests/fixtures/"):
+            selected.update({"graphics", "assets", "sdk"})
         elif path.startswith("tests/"):
             relative = path[6:].lower().replace("_", "")
             if relative.startswith(("testci", "citest", "testworkflow", "testsample",
