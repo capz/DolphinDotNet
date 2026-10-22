@@ -1,9 +1,0 @@
-<Project>
-  <PropertyGroup>
-    <!-- Shared native sample controls: Z toggles statistics; Start leaves result screens. -->
-    <DndSampleControls Condition="'$(DndSampleControls)' == ''">true</DndSampleControls>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Common/*.cs" Link="Common/%(Filename)%(Extension)" />
-  </ItemGroup>
-</Project>

@@ -28,12 +28,18 @@ assert dotnet and driver.exists()
 # its own project. Evaluate actual MSBuild settings rather than inspecting text.
 primary_launches = []
 play_launches = []
-for project in sorted((root / 'samples').glob('*/*.csproj')):
+sample_projects = sorted((root / 'samples').glob('*/*.csproj'))
+assert len(sample_projects) == 15, "Checkout capz/DolphinDotNet.Samples under samples/ before running IDE integration tests."
+for project in sample_projects:
     sample = project.stem
     tree = ET.parse(project).getroot()
-    imports = [(project.parent / node.attrib['Project']).resolve() for node in tree.findall('Import')]
-    sdk = root / 'sdk/DolphinDotNet.Sdk/Sdk'
-    assert imports == [sdk / 'Sdk.props', sdk / 'Sdk.targets'], project
+    assert tree.attrib.get('Sdk') == 'DolphinDotNet.Sdk', project
+    package_refs = tree.findall('.//PackageReference')
+    assert len(package_refs) == 1, project
+    assert package_refs[0].attrib == {
+        'Include': 'DolphinDotNet.GameCube', 'Version': '$(DndPackageVersion)'
+    }, project
+    assert not tree.findall('.//ProjectReference'), project
     assert (project.parent / f'{sample}.sln').is_file(), project
     launch = json.loads((project.parent / 'Properties/launchSettings.json').read_text())['profiles']
     assert launch['CLI']['commandName'] == 'Project', project
