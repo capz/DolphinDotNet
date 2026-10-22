@@ -78,6 +78,9 @@ jobs:
     needs: [verify, smoke]
     runs-on: ubuntu-24.04
     environment: nuget-preview
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/setup-dotnet@v4
         with:
@@ -86,9 +89,22 @@ jobs:
         with:
           name: nuget-preview
           path: packages
+      - name: Validate trusted-publishing configuration
+        env:
+          NUGET_USER: ${{ vars.NUGET_USER }}
+        run: |
+          if [ -z "$NUGET_USER" ]; then
+            echo "::error::Set the NUGET_USER variable in the nuget-preview environment to your NuGet profile username."
+            exit 1
+          fi
+      - name: Authenticate to NuGet with GitHub OIDC
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
       - name: Publish verified preview packages
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
           test -n "$NUGET_API_KEY"
           for package in packages/*.nupkg; do

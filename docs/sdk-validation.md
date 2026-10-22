@@ -54,7 +54,7 @@ tools and clean staging without changing native compilation or adapter code.
 - Physical GameCube hardware, BBA/USB Gecko targets and other hardware behavior.
 - Full preexisting sample/test/CI matrices and hosted execution of the new
   GitHub Actions workflow. Local representative tests do not establish full CI.
-- Actual nuget.org publication, package ownership, scoped release credentials,
+- Actual nuget.org publication, package ownership, trusted-publishing policies,
   protected-environment approval configuration and NuGet ingestion. Publishing
   was intentionally not performed for testing.
 - Future environment snapshot restoration. This fresh restored coding workspace
