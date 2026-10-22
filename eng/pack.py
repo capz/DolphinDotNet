@@ -7,6 +7,7 @@ import subprocess
 import shutil
 import tempfile
 import xml.etree.ElementTree as ET
+from prepare_debugger import prepare
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_VERSION = ET.parse(ROOT / 'eng/Package.props').findtext('.//Version')
@@ -24,7 +25,9 @@ def main():
         parser.error('version must be a three-part NuGet version, optionally with a prerelease suffix')
     output = pathlib.Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    for tool in ('Compiler', 'Build', 'Effects', 'DebugAdapter'):
+    debugger = prepare()
+    run('dotnet', 'restore', str(debugger / 'tools/DolphinDotNet.DebugAdapter'))
+    for tool in ('Compiler', 'Build', 'Effects'):
         run('dotnet', 'restore', f'tools/DolphinDotNet.{tool}')
     for project in ('src/DolphinDotNet.Core', 'src/DolphinDotNet.GameCube', 'sdk/DolphinDotNet.Sdk'):
         run('dotnet', 'pack', project, '-c', 'Release', '-o', str(output), f'-p:Version={args.version}')

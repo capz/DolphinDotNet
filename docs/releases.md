@@ -11,8 +11,10 @@ The **NuGet preview** workflow builds packages and tests an isolated external
 consumer on macOS for pull requests affecting distribution or its inputs.
 CI uses Windows and macOS runners only. Native GameCube/container builds,
 Linux-specific checks and real-Dolphin smoke tests are no longer scheduled.
-Main CI builds both IDE packages and publishes the extensions produced by a
-successful main run; it no longer publishes a prebuilt GameCube sample ZIP.
+IDE extensions are built and released from
+[DolphinDotNet.Debuggers](https://github.com/capz/DolphinDotNet.Debuggers).
+The SDK includes its pinned adapter dependency; this repository no longer
+publishes IDE extension releases or prebuilt GameCube sample ZIPs.
 Run the Dolphin smoke harness against an external build on an emulator-capable
 host before promoting a release. Verify native DOL generation, Visual Studio on
 Windows, Rider on its supported hosts, the Native devkitPPC path, and hardware

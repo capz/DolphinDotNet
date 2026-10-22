@@ -10,8 +10,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / '.github/workflows/build.yml').read_text()
-GROUPS = {'debugger-protocol': 'debugger', 'rider-plugin': 'rider',
-          'visual-studio-extension': 'visualstudio', 'ide-workflow': 'ide'}
+GROUPS = {'debugger-protocol': 'debugger', 'ide-workflow': 'ide'}
 
 
 def job(name):
@@ -36,7 +35,7 @@ class WorkflowCoverageTests(unittest.TestCase):
 
     def test_removed_jobs_and_native_build_steps_are_not_selected(self):
         names = set(re.findall(r'^  ([\w-]+):$', WORKFLOW.split('jobs:\n', 1)[1], re.M))
-        self.assertEqual({'changes', 'ci-result', 'release-extensions'} | set(GROUPS), names)
+        self.assertEqual({'changes', 'ci-result'} | set(GROUPS), names)
         self.assertNotIn('DndBuildBackend=Docker', WORKFLOW)
         self.assertIn('-p:DndBuildNative=false', job('ide-workflow'))
         outputs = set(re.findall(r'^      (\w+): \$\{\{ steps.select.outputs.', job('changes'), re.M))
@@ -69,25 +68,16 @@ class WorkflowCoverageTests(unittest.TestCase):
             check(dict(results, changes={'result': 'failure', 'outputs': outputs}), False)
             check(dict(results, changes={'result': 'success', 'outputs': {}}), False)
 
-    def test_extension_packages_are_reusable_and_published_after_gate(self):
-        release = job('release-extensions')
-        self.assertIn('      - ci-result', release)
-        self.assertIn("github.ref == 'refs/heads/main'", release)
-        self.assertIn('scripts/release_assets.py "${package_args[@]}"', release)
-        self.assertNotIn('sample-dols', release)
-        self.assertNotIn('mapfile', release)  # macOS system Bash is 3.2.
-        for name, workflow, group, artifact in (
-            ('rider-plugin', 'rider', 'rider', 'DolphinDotNet-Rider-plugin'),
-            ('visual-studio-extension', 'visual-studio', 'visualstudio', 'DolphinDotNet-VisualStudio-plugin')):
-            self.assertIn(f'uses: ./.github/workflows/{workflow}.yml', job(name))
-            self.assertIn(f"needs.changes.outputs.{group} == 'true'", job(name))
-            source = (ROOT / f'.github/workflows/{workflow}.yml').read_text()
-            self.assertIn('  workflow_call:', source)
-            self.assertIn('  workflow_dispatch:', source)
-            self.assertIn('if-no-files-found: error', source)
-            self.assertIn(f'name: {artifact}', source)
-            self.assertIn(f'name: {artifact}', release)
-            self.assertIn(f"if: needs.{name}.result == 'success'", release)
+    def test_debugger_implementation_and_release_ownership_are_external(self):
+        self.assertIn('python3 eng/check_debugger.py', job('debugger-protocol'))
+        for path in ('plugins', 'tools/DolphinDotNet.DebugAdapter', 'tools/DolphinDotNet.Debugger',
+                     'tools/DolphinDotNet.Debugger.Probe', 'tests/DebuggerTests',
+                     '.github/workflows/rider.yml', '.github/workflows/visual-studio.yml'):
+            self.assertFalse((ROOT / path).exists(), path)
+        self.assertNotIn('release-extensions:', WORKFLOW)
+        manifest = json.loads((ROOT / 'eng/debugger-source.json').read_text())
+        self.assertEqual('https://github.com/capz/DolphinDotNet.Debuggers.git', manifest['repository'])
+        self.assertRegex(manifest['revision'], r'^[0-9a-f]{40}$')
 
     def test_nuget_preview_keeps_consumer_check_and_protected_publication(self):
         preview = (ROOT / '.github/workflows/nuget-preview.yml').read_text()

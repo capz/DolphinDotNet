@@ -1,5 +1,7 @@
 # Plan A: on-device GameCube native GDB debugging
 
+Debugger implementation paths in this plan now live in [DolphinDotNet.Debuggers](https://github.com/capz/DolphinDotNet.Debuggers). Compiler metadata generation and native target support remain here; see [the component boundary](debugger-components.md).
+
 Status: **A1–A4.3 implemented and emulator CI validated** (run 38910696313).
 A4.5 source stepping is in progress. A4.4 physical USB Gecko/BBA validation is
 **deferred: the user currently has no access to hardware**. Continue emulator,
@@ -369,7 +371,7 @@ mockup first. Rider itself remains unvalidated and A4.4 stays deferred.
 ## A6 first implementation: Rider attach and saved targets
 
 The user approved the native Rider configuration and Manage targets modal mockups.
-`plugins/rider` now provides a run configuration with a debug-build folder, resolved
+[The Rider plugin](https://github.com/capz/DolphinDotNet.Debuggers/tree/main/plugins/rider) provides a run configuration with a debug-build folder, resolved
 artifact rows, saved-target dropdown, target manager and source prefix mappings.
 Machine-local profiles support BBA/TCP (also Dolphin) and USB Gecko VCP; stable IDs
 keep run configurations independent of profile renames. USB slot A/B is expected
