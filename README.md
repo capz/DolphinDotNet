@@ -20,6 +20,8 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
 
 ## Current focus ##
    - **Supporting live debugging via emulator**
+   - **Splitting off samples and IDE plugins into separate repos**
+   - **Distributing the toolchain via nuget**
    - Supporting on-device debugging via BBA (LAN)
    - Supporting on-device debugging via USB Gecko (serial port)
 
