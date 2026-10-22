@@ -226,3 +226,5 @@ For compiler/host tests that only need the managed assembly, explicitly set
 `-p:DndBuildNative=false`. Such builds do not create or update a runnable DOL.
 All samples use these imports. Compiler/host CI paths explicitly disable native
 building; the IDE workflow jobs build every sample solution and native DOL.
+
+For projects outside this checkout, use the [NuGet SDK and templates](nuget-sdk.md); generated projects include Dolphin Play/Debug launch profiles.

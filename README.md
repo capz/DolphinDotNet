@@ -163,3 +163,5 @@ platform targets, [async APIs](docs/async-runtime.md),
 for feature-specific usage and limits.
 
 Raw GX/GU/VIDEO bindings and managed meshes, textures, materials and Draw2D are documented in [Graphics APIs](docs/graphics.md).
+
+External consumers: see the [NuGet SDK guide](docs/nuget-sdk.md) and [release process](docs/releases.md).
