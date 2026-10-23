@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include "resident.h"
 #include <gccore.h>
 #include <network.h>
 #include <ogc/usbgecko.h>
@@ -87,6 +88,15 @@ static void serve(Connection c) {
          * The relocated stub then uses registers only, even over the old loader. */
         SYS_ResetSystem(SYS_SHUTDOWN,0,0);
         IRQ_Disable();
+        /* The target CRT reads these before its kernel/heap allocations. Keep
+         * our pristine image out of its arena even if shutdown updated lowmem. */
+        *(volatile uint32_t *)0x80000034=DND_RESIDENT_BASE;
+        *(volatile uint32_t *)0x80000038=DND_RESIDENT_BASE;
+        *(volatile uint32_t *)0x800000ec=DND_RESIDENT_BASE;
+        *(volatile uint32_t *)0x80000030=0;
+        *(volatile uint32_t *)0x800000f4=0;
+        DCFlushRange((void *)0x80000020,32);
+        DCFlushRange((void *)0x800000e0,32);
         ((void (*)(DndElfPlan *,void *))c.stage->stub)(&c.stage->plan,image);
         __builtin_unreachable();
     }
@@ -121,10 +131,11 @@ int main(void) {
     void *framebuffer=MEM_K0_TO_K1(SYS_AllocateFramebuffer(mode));
     console_init(framebuffer,20,20,mode->fbWidth-40,mode->xfbHeight-40,mode->fbWidth*VI_DISPLAY_PIX_SZ);
     VIDEO_Configure(mode); VIDEO_SetNextFramebuffer(framebuffer); VIDEO_SetBlack(false); VIDEO_Flush(); VIDEO_WaitVSync();
-    printf("DolphinDotNet ELF Launcher v1\n\n");
-    if (!reservation || reservation_end>0x81800000u || (uintptr_t)reservation<0x80003100u) {
+    printf("DolphinDotNet ELF Launcher v1 (resident return enabled)\n\n");
+    if (!reservation || reservation_end>DND_RESIDENT_BASE || (uintptr_t)reservation<0x80003100u) {
         printf("Cannot reserve ELF staging memory.\n"); for (;;) VIDEO_WaitVSync();
     }
+    printf("Applications return here on normal libogc exit.\nTop 2 MiB reserved; upload memory checked separately.\n\n");
     printf("USB Gecko slots A/B: waiting for IDE handshake.\nBBA: configuring network...\n");
     lwp_t thread;
     if (LWP_CreateThread(&thread,start_network,NULL,network_stack,sizeof(network_stack),80)<0) listener=-1;

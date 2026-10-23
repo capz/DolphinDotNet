@@ -37,8 +37,10 @@ docker run --rm --mount "type=bind,source=$PWD,target=/src" \
 ```
 
 On PowerShell use `${PWD}` and a single line, or PowerShell's line continuation.
-The output is `build/DolphinDotNet.Launcher.dol` plus its ELF/map. The current
-linked DOL is about 0.3 MiB. These generated files are ignored by Git.
+The bootable output is `build/DolphinDotNet.Launcher.dol` plus its bootstrap
+ELF/map. The receiver's own symbols are in `build/receiver.elf` / `receiver.map`.
+The DOL includes a pristine receiver image, packed from loadable segments only;
+debug metadata consumes no resident memory. Generated files are ignored by Git.
 
 Default networking uses DHCP, with TCP upload port **4299**. Static builds can
 use `make clean` followed by:
@@ -49,9 +51,41 @@ make PORT=4299 IP=192.168.1.80 NETMASK=255.255.255.0 GATEWAY=192.168.1.1
 
 The upload port must differ from the application's GDB port (commonly 2166 or
 2828). Configure those ports separately in the debugger. USB uses the selected
-virtual serial device and existing baud compatibility setting. This is a
-one-shot chainload: the receiver is replaced by the uploaded program. Return to
-the launcher through your boot method before the next upload.
+virtual serial device and existing baud compatibility setting.
+
+## Return to the receiver
+
+The launcher remains resident across application runs. When a DolphinDotNet
+application returns from native `main` or calls `exit`, libogc2 shuts down its
+devices and threads, then jumps to our reload stub. The receiver restarts with
+fresh runtime, network and USB state and accepts the next readiness check and
+upload. Boot the launcher once, then use the same IDE run configuration again.
+No new plugin setting, protocol version or external host process is required.
+
+This uses libogc2's existing `STUBHAXX` reload convention at `0x80001800` and
+its boot-time arena ceiling, as implemented in the
+[platform runtime](https://github.com/extremscorner/libogc2/blob/master/libogc/system.c).
+Existing SDK executables using the normal GameCube CRT need no new return hook.
+Builds with sample controls intentionally keep running after managed `Main`;
+press START to exit and return. Detaching the debugger leaves the program
+running; return happens when the program actually exits. A crash, infinite loop,
+forced hardware reset or power loss does not provide a normal exit path.
+
+The top **2 MiB of MEM1 (`0x81600000..0x81800000`)** holds an immutable copy of
+the receiver's initialized load bytes, its restore plan and a stackless restore
+trampoline. A tiny bootstrap copies them there before the first receiver CRT
+invocation. The low-memory reload stub survives below executable load ranges.
+On exit it reapplies the arena ceiling, restores original code **and initialized
+data**, zeros BSS and enters the receiver's original CRT. It never resumes the
+old receiver stack, libc state, sockets or threads. The preserved image can be
+restored repeatedly; it is not the receiver's working heap or upload buffer.
+
+Applications must honor libogc2's boot-time arena ceiling and leave the reload
+stub and reserved region intact. Custom CRTs, explicit arena overrides, raw
+MEM1 writes or another chainloader can violate that contract and are unsupported.
+The ELF validator rejects load segments (including BSS) touching resident memory;
+it cannot constrain later arbitrary application writes. To leave the resident
+development loop, reboot or power-cycle the console.
 
 ## Executable and memory limits
 
@@ -64,8 +98,9 @@ are not executed or interpreted.
 The file limit is **16 MiB minus 4096 bytes**, advertised during readiness. A
 16 MiB high-MEM1 arena is reserved before video/network allocations; each image,
 its load plan and stackless trampoline are placed at the top of that arena.
-Destinations must stay inside cached MEM1, `0x80003100..0x81800000`, and must
-not overwrite this actual staging allocation. This is a deliberate minimal
+Destinations must stay inside cached MEM1 below the resident reservation,
+`0x80003100..0x81600000`, and must not overwrite the actual staging allocation.
+The staging arena is also below resident memory. This is a deliberate minimal
 in-memory loader, without ARAM staging: a valid ELF whose load ranges collide
 with staging is rejected. File size alone does not establish that it fits.
 
@@ -78,8 +113,7 @@ interrupts, then uses an original position-independent PowerPC trampoline to
 copy/zero segments, flush D-cache, invalidate I-cache and branch to the new CRT.
 The trampoline uses no old stack, libc, TOC/SDA or external relocation.
 
-No command-line arguments, persistent resident service or automatic return to
-the receiver is implemented. CRC32 and the session nonce detect corruption and
+No command-line arguments are implemented. CRC32 and the session nonce detect corruption and
 stale replies; they are not authentication. Run it on a trusted development LAN.
 
 ## Readiness and protocol
@@ -131,19 +165,32 @@ The subsequent GDB connection confirms the application's debugger is responding.
 cd tools/DolphinDotNet.Launcher
 make -f tests/Makefile test 'HOST_CFLAGS=-std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined'
 python3 tests/wire_test.py
-python3 tests/wire_test.py --elf build/DolphinDotNet.Launcher.elf
+python3 tests/wire_test.py --elf build/receiver.elf
+# Optional CPU tests (test-only dependency; also run in CI):
+python3 -m pip install unicorn==2.1.4
+python3 tests/resident_cpu_test.py
 ```
 
-The native parser/state machine runs under ASan/UBSan. The independent Python
-wire vectors exercise the production C core, including the real linked ELF.
+The native parser/state machine runs under ASan/UBSan, including resident-range
+and BSS overlap rejection. Portable packer tests verify bounds and original load
+bytes. The independent Python wire vectors exercise the production C core,
+including the real linked receiver ELF.
 `build/stdio_receiver` is a host-only test peer: it validates and reports a plan
 and never executes uploaded code. Debugger tests can use it by setting
 `DND_NATIVE_LAUNCHER_COMMAND` to a JSON command array (including an optional
 `docker run -i` command) before running `test_console_launcher.py`.
 
-Local validation includes the native GameCube compile/link, a relocation-free
+The CPU test executes the linked PowerPC bootstrap and three subsequent returns
+with an unusable old stack/SDA, overwriting the entire old receiver/bootstrap
+between runs. It verifies original code/data, zero BSS, immutable resident bytes,
+reload signature, disabled interrupts and arena ceilings. It stops at CRT entry;
+Unicorn does not test GameCube peripherals or physical cache coherency.
+
+Local validation also includes the native compile/link, a relocation-free
 handoff object, host sanitizer tests, and the real .NET adapter talking to the
-production C core before a fake GDB breakpoint session. These are not physical
-BBA/EXI or PowerPC execution acceptance. Before hardware use, verify boot,
-readiness, upload, visible application startup, GDB breakpoint/resume, disconnect,
-and a second upload after returning to the launcher, for each transport.
+production C core before a fake GDB breakpoint session. Physical BBA/EXI and
+complete CRT/device lifecycle acceptance remain outstanding. On hardware verify
+boot, readiness, upload, startup, GDB breakpoint/resume, normal exit, receiver
+readiness again, and a second upload, for each transport. Verify both `main`
+return and `exit()` (including sample START), and that detaching alone does not
+stop the application.
