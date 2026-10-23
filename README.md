@@ -20,6 +20,8 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
 
 ## Current focus ##
    - **Supporting live debugging via emulator**
+   - **Splitting off samples and IDE plugins into separate repos**
+   - **Distributing the toolchain via nuget**
    - Supporting on-device debugging via BBA (LAN)
    - Supporting on-device debugging via USB Gecko (serial port)
 
@@ -28,12 +30,12 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
 Install the **.NET 8 SDK**, **Dolphin**, and a native build backend:
 
 - **Windows, Linux or macOS:** Docker Desktop/Engine running Linux containers.
-  The first build downloads the pinned toolchain image used by CI.
+  The first build downloads the pinned native toolchain image.
 - **Linux or macOS alternative:** devkitPPC and libogc2, with `DEVKITPRO` and
   `DEVKITPPC` configured, plus Make, Bash, Git and Python 3. See the
   [IDE setup guide](docs/ide-workflow.md) for the required libraries.
 
-Open [`samples/Pong/Pong.sln`](samples/Pong/Pong.sln):
+Clone the independent [DolphinDotNet.Samples repository](https://github.com/capz/DolphinDotNet.Samples) and open `Pong/Pong.sln`:
 
 - **Visual Studio 2022 (17.8+):** select Pong as the startup project, choose the
   **Dolphin Play** launch profile, and press **Ctrl+F5**.
@@ -45,14 +47,16 @@ Open [`samples/Pong/Pong.sln`](samples/Pong/Pong.sln):
 Or, from the repository root:
 
 ```sh
-dotnet run --project samples/Pong -c Release
+git clone https://github.com/capz/DolphinDotNet.Samples.git
+cd DolphinDotNet.Samples
+dotnet run --project Pong -c Release
 ```
 
 Build/Run compiles the managed project, generates native C, builds
-`samples/Pong/bin/<configuration>/net8.0/Pong.dol` and `Pong.elf`, and launches Dolphin.
+`Pong/bin/<configuration>/net8.0/Pong.dol` and `Pong.elf`, and launches Dolphin.
 Every build performs the full native build; there is no native incremental
-cache. To build without launching, use `dotnet build samples/Pong/Pong.sln`.
-To launch the last successful Release build, use `dotnet run --project samples/Pong -c Release --no-build`.
+cache. To build without launching, use `dotnet build Pong/Pong.sln`.
+To launch the last successful Release build, use `dotnet run --project Pong -c Release --no-build`.
 
 Dolphin is discovered automatically in standard locations or on `PATH`.
 For a portable installation, set `DOLPHIN_PATH` to its executable and restart
@@ -60,7 +64,7 @@ the IDE. On first launch, configure both controller ports in Dolphin's
 **Controllers** dialog. Emulator settings persist in the sample's isolated
 `obj/dolphin-user/` directory.
 
-Every [sample](samples/README.md) includes its own `.sln` and Dolphin launch
+Every [sample](https://github.com/capz/DolphinDotNet.Samples/blob/main/README.md) includes its own `.sln` and Dolphin launch
 profiles, using the same workflow.
 
 The [IDE setup guide](docs/ide-workflow.md) covers backend selection, local
@@ -121,7 +125,7 @@ internal static class Program
 }
 ```
 
-See the [samples](samples/README.md) for [peer-to-peer kart racing](samples/Kart/README.md), [TEV shader effects](samples/ShaderDemo/README.md), [HTTP PNG textures](samples/HttpTexture/README.md), [Fox](samples/Fox/README.md), [Green Men](samples/GreenMen/README.md), two-player Pong, memory-card Snake, rendering, automatic async networking and
+See the [samples](https://github.com/capz/DolphinDotNet.Samples/blob/main/README.md) for [peer-to-peer kart racing](https://github.com/capz/DolphinDotNet.Samples/blob/main/Kart/README.md), [TEV shader effects](https://github.com/capz/DolphinDotNet.Samples/blob/main/ShaderDemo/README.md), [HTTP PNG textures](https://github.com/capz/DolphinDotNet.Samples/blob/main/HttpTexture/README.md), [Fox](https://github.com/capz/DolphinDotNet.Samples/blob/main/Fox/README.md), [Green Men](https://github.com/capz/DolphinDotNet.Samples/blob/main/GreenMen/README.md), two-player Pong, memory-card Snake, rendering, automatic async networking and
 HTTP-to-ARAM streaming. Native platform APIs execute in the compiled console
 program. Every sample integrates the shared SDK so `dotnet run` builds the DOL
 and launches it in Dolphin.
@@ -136,9 +140,9 @@ native GX, FAT/libdvm and ISO9660. Configure `DEVKITPRO` and `DEVKITPPC` for the
 From the repository root:
 
 ```sh
-dotnet build samples/HelloGameCube/HelloGameCube.csproj -c Release -p:DndBuildNative=false
+dotnet build DolphinDotNet.Samples/HelloGameCube/HelloGameCube.csproj -c Release -p:DndBuildNative=false
 dotnet run --project tools/DolphinDotNet.Compiler -- \
-  --bundle samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll \
+  --bundle DolphinDotNet.Samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll \
   out/HelloGameCube --platform gamecube
 make -C out/HelloGameCube
 ```
@@ -152,7 +156,7 @@ To emit C without packaging the native build:
 
 ```sh
 dotnet run --project tools/DolphinDotNet.Compiler -- \
-  --aot samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll hello.c
+  --aot DolphinDotNet.Samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll hello.c
 ```
 
 See [standalone builds](docs/standalone-native-builds.md) for SDK dependencies and
@@ -163,3 +167,7 @@ platform targets, [async APIs](docs/async-runtime.md),
 for feature-specific usage and limits.
 
 Raw GX/GU/VIDEO bindings and managed meshes, textures, materials and Draw2D are documented in [Graphics APIs](docs/graphics.md).
+
+External consumers: see the [NuGet SDK guide](docs/nuget-sdk.md) and [release process](docs/releases.md).
+
+IDE plugins, the shared debug adapter and their releases now live in [DolphinDotNet.Debuggers](https://github.com/capz/DolphinDotNet.Debuggers). See the [repository boundary and pinned SDK dependency](docs/debugger-components.md).

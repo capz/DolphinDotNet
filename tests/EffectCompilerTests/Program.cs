@@ -22,7 +22,7 @@ static int[] Evaluate(byte[] p,int intensity,int? thresholdLow=null,int? thresho
     }
     return registers[0];
 }
-string source=File.ReadAllText("samples/ShaderDemo/toon.dndfx.json");
+string source=File.ReadAllText("tests/fixtures/toon.dndfx.json");
 var compiled=EffectCompiler.Compile(source);Check(compiled.StageCount==9&&compiled.PeakRegisters<=4,"Unexpected toon budgets");
 for(int low=40;low<=120;low+=20)for(int value=0;value<256;value++){
     int high=low+100;var actual=Evaluate(compiled.Package,value,low,high);

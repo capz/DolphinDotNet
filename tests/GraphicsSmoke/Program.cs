@@ -32,6 +32,50 @@ internal static class Program
         using var effect=GxEffect.ColorRamp(Color32.Black,Color32.White);
         if(effect.StageCount!=2||effect.GetUniformName(effect.GetUniformSlot("Bright"))!="Bright")return 9;
         effect.SetColor("Bright",new Color32(20,100,200));
+        // Native CMPR payloads and streaming-resource replacement.
+        using var compressed=Texture2D.CreateNative(8,8,NativeTextureFormat.Cmpr);
+        if(compressed.NativeBytes!=32)return 30;
+        compressed.ReplaceNative(new byte[32]);
+        try{compressed.ReplaceNative(new byte[31]);return 31;}catch(ArgumentOutOfRangeException){}
+        using var streamed=new StreamingTexture(8,8);
+        if(streamed.IsResident)return 32;
+        streamed.UploadNative(new byte[32]);
+        if(!streamed.IsResident||streamed.ContentGeneration!=1)return 33;
+        // CPU-only async stage should publish without a full GX fence.
+        var stagedPixels=new byte[32];stagedPixels[0]=0x55;
+        // Distinct diagnostic return codes for background-context failures.
+        try
+        {
+            await streamed.StageUploadAsync(stagedPixels);
+        }
+        catch(InvalidOperationException){return 44;}
+        if(!Dolphin.Threading.Tasks.Scheduler.IsApplicationThread)return 49;
+        // Regression: CPU-only texture staging is permitted on the service
+        // executor, but publishing GX state from that executor must still fail.
+        // In manual mode Task.Run executes on the application executor instead.
+        await Task.Run(()=>
+        {
+            if(!Dolphin.Threading.Tasks.Scheduler.IsApplicationThread)
+            {
+                bool refused=false;
+                try{streamed.TryPublish();}
+                catch(InvalidOperationException){refused=true;}
+                if(!refused)throw new InvalidOperationException("Worker published GX texture state.");
+            }
+        });
+        try
+        {
+            if(!streamed.TryPublish()||streamed.ContentGeneration!=2)return 42;
+        }
+        catch(InvalidOperationException){return 48;}
+        using var pendingNative=NativeBuffer.Allocate(32);
+        pendingNative.Write(stagedPixels);
+        try
+        {
+            await streamed.StageUploadAsync(pendingNative);
+            if(!streamed.TryPublish()||streamed.ContentGeneration!=3)return 43;
+        }
+        catch(InvalidOperationException){return 45;}
         var renderer=new Renderer();var camera=new Camera();var transform=new Transform();var material=new Material();
         using var toonPreset=TevMaterialPresets.Toon().Create(loaded);
         using var metalPreset=TevMaterialPresets.MetallicReflection().Create(loaded);
@@ -40,8 +84,18 @@ internal static class Program
         using var dualGlow=TevMaterialPresets.Emissive(new EmissiveMaterialOptions{SeparateBaseTexture=true}).Create(loaded,texture);
         metalPreset.Effect.SetColor("ReflectionStrength",new Color32(128,128,128));
         emissionPreset.Effect.SetColor("EmissionColor",new Color32(255,20,100));
+        // Texture strategy queue: same material grouped into one logical batch.
+        var expiredTexture=Texture2D.CreateNative(8,8,NativeTextureFormat.Cmpr);
+        var renderQueue=new RenderQueue(4);
         device.BeginFrame(Color32.Black);
         renderer.Begin3D(camera);
+        renderQueue.Submit(mesh,material,transform);
+        renderQueue.Submit(mesh,material,transform);
+        RenderQueueStatistics queuedStats;
+        try{queuedStats=renderQueue.Execute(renderer);}
+        catch(InvalidOperationException){return 46;}
+        if(queuedStats.Draws!=1||queuedStats.Groups!=1||
+           queuedStats.LogicalMeshes!=2||queuedStats.MeshesMerged!=1)return 34;
         renderer.DrawMesh(normalMesh,toonPreset.Material,transform);
         renderer.DrawMesh(normalMesh,metalPreset.Material,transform);
         renderer.DrawMesh(normalMesh,emissionPreset.Material,transform);
@@ -55,7 +109,42 @@ internal static class Program
         batch.Begin();batch.FillRectangle(new RectF(0,0,10,10),Color32.White);batch.FillRectangle(new RectF(10,0,10,10),Color32.White);
         batch.DrawTexture(texture,new RectF(0,0,4,4),Color32.White);texture.Dispose();batch.End();
         if(batch.DrawCalls!=2)return 1;
+        var finishFence=device.InsertFence();
+        if(finishFence.IsCompleted)return 35;
+        device.RetireAfter(finishFence,expiredTexture);
         device.EndFrame();
+        if(!finishFence.IsCompleted)return 36;
+        try{expiredTexture.ReplaceNative(new byte[32]);return 37;}catch(ObjectDisposedException){}
+        var renderStats=Dolphin.Diagnostics.GpuProfiler.Snapshot();
+        if(renderStats.DrawSubmissions<0||renderStats.TextureBindings<0)return 38;
+        using var diskTarget=NativeBuffer.Allocate(64);
+        var testPath="sd:/graphics_stream_test.bin";
+        var testBytes=new byte[96];
+        for(int i=0;i<testBytes.Length;i++)testBytes[i]=(byte)(i*13);
+        Dolphin.IO.File.WriteAllBytes(testPath,testBytes);
+        try
+        {
+        using(var asset=new Dolphin.Storage.AssetStream(testPath))
+        {
+            if(await asset.ReadAtAsync(16,diskTarget,0,64)!=64)return 39;
+            var verify=new byte[64];diskTarget.Read(verify);
+            for(int i=0;i<verify.Length;i++)if(verify[i]!=testBytes[i+16])return 40;
+        }
+        }
+        catch(InvalidOperationException){return 47;}
+        Dolphin.IO.File.Delete(testPath);
+        // Exercise the direct MEM1 staging -> GX-native texture path.
+        compressed.ReplaceNative(diskTarget,0);
+        if(Dolphin.Memory.Aram.Initialize())
+        {
+            using var transfer=Dolphin.Memory.Aram.Allocate(64);
+            diskTarget.Write(testBytes,0,0,64);
+            await AramTransferQueue.CopyToAramAsync(diskTarget,0,transfer,0,64);
+            diskTarget.Write(new byte[64]);
+            await AramTransferQueue.CopyToMainAsync(transfer,0,diskTarget,0,64);
+            var verify=new byte[64];diskTarget.Read(verify);
+            for(int i=0;i<verify.Length;i++)if(verify[i]!=testBytes[i])return 41;
+        }
         using var queued=GxEffect.ToonBands(65,165,Color32.Black,new Color32(50,100,150),Color32.White);
         device.BeginFrame(Color32.Black);batch.Begin();batch.SetEffect(queued);
         batch.DrawTexture(loaded,new RectF(0,0,4,4),Color32.White);

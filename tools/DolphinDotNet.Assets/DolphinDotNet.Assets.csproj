@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><PackAsTool>true</PackAsTool><ToolCommandName>dnd-assets</ToolCommandName><PackageId>DolphinDotNet.Assets</PackageId><Version>0.1.0</Version></PropertyGroup>
+  <Import Project="../../eng/Package.props" />
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><PackAsTool>true</PackAsTool><ToolCommandName>dnd-assets</ToolCommandName><PackageId>DolphinDotNet.Assets</PackageId></PropertyGroup>
   <ItemGroup><ProjectReference Include="../DolphinDotNet.Imaging/DolphinDotNet.Imaging.csproj" /></ItemGroup>
   <ItemGroup><None Include="msbuild/DolphinDotNet.Assets.targets" Pack="true" PackagePath="build/" /></ItemGroup>
 </Project>

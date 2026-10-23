@@ -1328,3 +1328,5 @@ Managed TEV RGB programs: `ColorRamp(dark,bright)`,
 per-draw `Renderer.DrawModel(instance,transform,effectOverride)` /
 `Renderer.Draw(gameObject,effectOverride)`.
 Uniform updates run between frames. See [effects and graph compilation](effects.md).
+
+For consuming these APIs through NuGet, dependency AOT constraints and diagnostics, see the [SDK guide](nuget-sdk.md).

@@ -14,8 +14,16 @@
 static int channel_test,channel_calls;
 static int indirect_resets,full_draws,full_skin;
 void GX_SetNumIndStages(int count){assert(count==0);indirect_resets++;}
-/* Linker wrappers catch transient allocations that stable budgets would miss. */
+/* Wrappers catch transient allocations that stable budgets would miss. The
+ * portable CI build redirects production calls at compile time, leaving this
+ * fixture's libc calls intact; older GNU builds can still use --wrap. */
 static size_t allocations;
+#ifdef DND_MODEL_ALLOC_COMPILE_TEST
+#define __real_malloc malloc
+#define __real_calloc calloc
+#define __real_realloc realloc
+void *__wrap_aligned_alloc(size_t alignment,size_t size){allocations++;return aligned_alloc(alignment,size);}
+#endif
 void *__real_malloc(size_t size);
 void *__real_calloc(size_t count,size_t size);
 void *__real_realloc(void *data,size_t size);
@@ -247,6 +255,7 @@ int main(void) {
  assert(dnd_model_draw_effect(123,world,long_effect)==-2&&draws==before);
  model.ready=false;assert(dnd_model_draw_effect(123,world,short_effect)==-1);model.ready=true;
  assert(dnd_model_draw_effect(123,world,short_effect)==0);assert(record[before%16].konst[0].r==0x12);
+ assert(allocations>0); /* Prove the production allocation hooks are active. */
  size_t full_allocations=allocations;
  assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)==0);
  assert(full_draws==3&&full_skin==1&&order[0]==2&&order[1]==1&&order[2]==0&&allocations==full_allocations);

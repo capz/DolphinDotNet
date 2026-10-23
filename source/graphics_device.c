@@ -3,7 +3,15 @@
 #include "dnd_performance.h"
 #include "dnd_async.h"
 #include <math.h>
+#include <stdint.h>
+/* Isolated model host tests intentionally omit the full GX backend.
+ * Their device passes have no persistent GX state to invalidate. */
+#if !defined(DND_GAMECUBE_STORAGE)
+__attribute__((weak)) void dnd_draw_backend_invalidate_cache(void){}
+#endif
 static bool active,external;
+/* GX presentation synchronizes the GPU; never signal an in-flight frame. */
+static uint32_t frame_completed;
 static int pass, raw_depth;
 static int viewport[4], scissor[4];
 static bool finite_color(float x) { return isfinite(x) && x>=0 && x<=1; }
@@ -29,6 +37,8 @@ int dnd_device_end(void) {
     dnd_graphics_present();
 #endif
     active=false;
+    frame_completed++;
+    if(frame_completed==0)frame_completed=1;
     dnd_draw_collect();
     dnd_async_leave_critical();
     return 0;
@@ -37,12 +47,15 @@ int dnd_device_pass_begin(int next) {
     dnd_async_require_application_thread();
     if(!active || pass || next<1 || next>4 || raw_depth) return -1;
     if(next!=3){dnd_draw_backend_viewport(viewport[0],viewport[1],viewport[2],viewport[3]);dnd_draw_backend_scissor(scissor[0],scissor[1],scissor[2],scissor[3]);}
+    dnd_draw_backend_invalidate_cache();
     pass=next; return 0;
 }
 int dnd_device_pass_end(int expected) {
     dnd_async_require_application_thread();
     if(!active || pass!=expected || raw_depth) return -1;
-    pass=0; return 0;
+    pass=0;
+    dnd_draw_backend_invalidate_cache();
+    return 0;
 }
 int dnd_device_pass(void) { return pass; }
 bool dnd_device_active(void) { return active; }
@@ -76,6 +89,15 @@ int dnd_device_scissor(int x,int y,int w,int h) {
     dnd_async_require_application_thread();
     if(!active || pass || !rectangle(x,y,w,h)) return -1;
     scissor[0]=x;scissor[1]=y;scissor[2]=w;scissor[3]=h;dnd_draw_backend_scissor(x,y,w,h); return 0;
+}
+int dnd_device_fence_insert(void) {
+    dnd_async_require_application_thread();
+    if(!active || raw_depth || frame_completed==UINT32_MAX)return 0;
+    return (int)(frame_completed+1u);
+}
+int dnd_device_fence_completed(int fence) {
+    /* modulo-2^32 comparison, safe for fences younger than 2^31 frames */
+    return fence!=0 && (int32_t)(frame_completed-(uint32_t)fence)>=0;
 }
 int dnd_device_wait(void) {
     dnd_async_require_application_thread();

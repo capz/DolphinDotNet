@@ -9,6 +9,11 @@
 #include <gccore.h>
 #endif
 #include "dnd_texture_png.h"
+/* Isolated host fixtures can link texture/resource plumbing without GX. */
+#if !defined(DND_GAMECUBE_STORAGE)
+__attribute__((weak)) void dnd_draw_backend_publish_texture(void){}
+#endif
+
 #define SLOTS 512
 #define BUDGET (16*1024*1024)
 enum { BUFFER=1,TEXTURE,MESH,CANVAS,EFFECT };
@@ -17,6 +22,7 @@ typedef struct {
     unsigned char *data;
     int kind,bytes,generation;
     bool pending;
+    int holds;
     int effect;
     int width,height,format,linear,vertices,indices,dynamic,capacity,count,texture,blend,draws,flushes;
 } Resource;
@@ -61,11 +67,35 @@ static void release(Resource *r) {
 int dnd_draw_release(int token) {
     if(dnd_raw_depth() || token==active_canvas) return -1;
     Resource *r=find(token,0); if(!r) return -1;
-    if(dnd_device_active()) r->pending=true;
+    if(dnd_device_active() || r->holds) r->pending=true;
     else { dnd_draw_backend_wait(); release(r); }
     return 0;
 }
-void dnd_draw_collect(void) { for(int i=0;i<SLOTS;i++) if(slots[i].pending) release(&slots[i]); }
+void dnd_draw_collect(void) { for(int i=0;i<SLOTS;i++) if(slots[i].pending && !slots[i].holds) release(&slots[i]); }
+/* DMA pins survive managed Dispose, but do not permit new GPU submissions. */
+int dnd_buffer_hold(int token) {
+    Resource *r=find(token,BUFFER);
+    if(!r || r->holds==INT_MAX)return -1;
+    ++r->holds;return 0;
+}
+int dnd_buffer_unhold(int token) {
+    int index=(token&1023)-1;
+    if(index<0 || index>=SLOTS || token<=0)return -1;
+    Resource *r=&slots[index];
+    if(r->kind!=BUFFER || r->generation!=(token>>10) || r->holds<=0)return -1;
+    if(--r->holds==0 && r->pending && !dnd_device_active()){
+        dnd_draw_backend_wait();release(r);
+    }
+    return 0;
+}
+uint64_t dnd_buffer_held_address(int token,int offset,int count) {
+    int index=(token&1023)-1;
+    if(index<0 || index>=SLOTS || token<=0 || offset<0 || count<0)return 0;
+    Resource *r=&slots[index];
+    if(r->kind!=BUFFER || r->generation!=(token>>10) || r->holds<=0 ||
+       offset>r->bytes || count>r->bytes-offset)return 0;
+    return (uint64_t)(uintptr_t)(r->data+offset);
+}
 void dnd_draw_shutdown(void) { active_canvas=0;for(int i=0;i<SLOTS;i++) if(slots[i].kind) release(&slots[i]); }
 int dnd_draw_live(void) { int n=0;for(int i=0;i<SLOTS;i++) if(slots[i].kind)n++;return n; }
 int dnd_draw_total_bytes(void) { return total_bytes; }
@@ -115,6 +145,69 @@ int dnd_texture_package(DndArray *a,int linear) {
     int token=create(TEXTURE,bytes,32);Resource *r=find(token,TEXTURE);if(!r)return 0;
     r->width=w;r->height=h;r->format=format;r->linear=linear!=0;memcpy(r->data,p+32,(size_t)bytes);
     dnd_draw_backend_flush(r->data,bytes,2);return token;
+}
+/* Allocates GX-native tiled texture storage; upload only between frames. */
+int dnd_texture_allocate_native(int w,int h,int format,int linear) {
+    int bytes=texture_size(w,h,format);
+    if(dnd_device_active() || dnd_raw_depth() || bytes<0 || (linear!=0&&linear!=1))return 0;
+    int token=create(TEXTURE,bytes,32);
+    Resource *r=find(token,TEXTURE);
+    if(!r)return 0;
+    r->width=w;r->height=h;r->format=format;r->linear=linear;
+    dnd_draw_backend_flush(r->data,bytes,2);
+    return token;
+}
+int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int count) {
+    Resource *r=find(token,TEXTURE);
+    if(dnd_device_active() || dnd_raw_depth() || !r || !payload ||
+       payload->elements_are_references || payload->element_size!=1 ||
+       source_offset<0 || count!=r->bytes ||
+       (uint32_t)source_offset>payload->length ||
+       (uint32_t)count>payload->length-(uint32_t)source_offset)return -1;
+    /* Conservative synchronization: prevent stale queued GX reads before replacement. */
+    dnd_draw_backend_wait();
+    memcpy(r->data,(unsigned char*)payload->data+source_offset,(size_t)count);
+    dnd_draw_backend_flush(r->data,count,2);
+    return 0;
+}
+/* Native MEM1 -> GX texture copy. Allows ARAM/storage promotion without a
+ * managed byte-array roundtrip. Source must remain valid for this call. */
+int dnd_texture_update_buffer(int texture_token,int buffer_token,int source_offset,int count) {
+    Resource *texture=find(texture_token,TEXTURE),*source=find(buffer_token,BUFFER);
+    if(dnd_device_active() || dnd_raw_depth() || !texture || !source ||
+       source_offset<0 || count!=texture->bytes || source_offset>source->bytes ||
+       count>source->bytes-source_offset)return -1;
+    dnd_draw_backend_wait();
+    memcpy(texture->data,source->data+source_offset,(size_t)count);
+    dnd_draw_backend_flush(texture->data,count,2);
+    return 0;
+}
+/* Detached upload: the managed double buffer guarantees that this token is not
+ * bound in any in-flight GPU command. Do not touch GX on the worker executor. */
+int dnd_texture_stage_array(int token,DndArray *payload,int offset,int count) {
+    Resource *r=find(token,TEXTURE);
+    if(!r || !payload || payload->elements_are_references || payload->element_size!=1 ||
+       offset<0 || count!=r->bytes || (uint32_t)offset>payload->length ||
+       (uint32_t)count>payload->length-(uint32_t)offset)return -1;
+    memcpy(r->data,(unsigned char*)payload->data+offset,(size_t)count);
+    dnd_draw_backend_flush(r->data,count,0);return 0;
+}
+int dnd_texture_stage_buffer(int token,int buffer_token,int offset,int count) {
+    Resource *r=find(token,TEXTURE);
+    if(!r||offset<0||count!=r->bytes)return -1;
+    /* Held native source stays readable even if managed Dispose occurred
+     * after the asynchronous transfer was queued. */
+    uint64_t address=dnd_buffer_held_address(buffer_token,offset,count);
+    if(!address)return -1;
+    memcpy(r->data,(const void*)(uintptr_t)address,(size_t)count);
+    dnd_draw_backend_flush(r->data,count,0);return 0;
+}
+int dnd_texture_publish_staged(int token) {
+    dnd_async_require_application_thread();
+    if(dnd_raw_depth() || dnd_device_pass()==3 || !find(token,TEXTURE))return -1;
+    /* The backend issues GX_InvalidateTexAll only; no GPU completion wait. */
+    dnd_draw_backend_publish_texture();
+    return 0;
 }
 static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
     int bytes=texture_size(w,h,6);
@@ -211,6 +304,49 @@ int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint3
         dnd_draw_backend_vertices(staging,n,0x90,tex?&tx:NULL,&material,transform);start+=n;
     }
     dnd_performance_add_triangles((uint32_t)count/3);return 0;
+}
+/* A merged GX stream for meshes with one material and the SAME world matrix.
+ * Validates every source before submitting any draw. 768 vertices per GX_Begin
+ * preserves the existing staging limit, and keeps triangle boundaries intact. */
+int dnd_mesh_draw_batch(DndArray *mesh_tokens,int count,int tex,int secondary,DndArray *world,
+                        uint32_t color,int flags,float cutoff,int effect) {
+    DndDrawTexture tx,extra;float transform[16];
+    if(dnd_device_pass()!=1 || !mesh_tokens || mesh_tokens->elements_are_references ||
+       mesh_tokens->element_size!=4 || count<2 || count>128 ||
+       (uint32_t)count>mesh_tokens->length || !matrix(world,transform) ||
+       !texture(tex,&tx) || !texture(secondary,&extra) ||
+       flags<0 || flags>255 || (flags&192)==192 ||
+       !isfinite(cutoff) || cutoff<0 || cutoff>1)return -1;
+    Resource *fx=effect?find(effect,EFFECT):NULL;
+    if(effect&&(!fx||((((DndDrawEffect*)fx->data)->texture&1)&&!tex)||
+       ((((DndDrawEffect*)fx->data)->texture&2)&&!secondary)))return -1;
+    const int *tokens=(const int*)mesh_tokens->data;
+    uint32_t triangles=0;
+    for(int i=0;i<count;i++) {
+        Resource *r=find(tokens[i],MESH);
+        if(!r || ((flags&192) && ((!tex&&!secondary)||r->format!=2)))return -1;
+        int n=r->indices?r->indices:r->vertices;
+        if(n<3 || n%3 || (uint32_t)n>UINT32_MAX-3*triangles)return -1;
+        triangles+=(uint32_t)n/3;
+    }
+    DndDrawMaterial mat={color,flags,cutoff,fx?(DndDrawEffect*)fx->data:NULL,secondary?&extra:NULL};
+    int staged=0;
+    for(int i=0;i<count;i++) {
+        Resource *r=find(tokens[i],MESH);
+        const DndDrawVertex *src=(const DndDrawVertex*)r->data;
+        const uint16_t *indices=(const uint16_t*)(r->data+r->vertices*sizeof(DndDrawVertex));
+        int n=r->indices?r->indices:r->vertices;
+        for(int j=0;j<n;j++) {
+            staging[staged++]=src[r->indices?indices[j]:j];
+            if(staged==768) {
+                dnd_draw_backend_vertices(staging,staged,0x90,tex?&tx:NULL,&mat,transform);
+                staged=0;
+            }
+        }
+    }
+    if(staged)dnd_draw_backend_vertices(staging,staged,0x90,tex?&tx:NULL,&mat,transform);
+    dnd_performance_add_triangles(triangles);
+    return 0;
 }
 int dnd_mesh_draw(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff) {
     return dnd_mesh_draw_effect(token,tex,world,color,flags,cutoff,0);

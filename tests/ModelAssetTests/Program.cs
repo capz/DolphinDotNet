@@ -185,6 +185,7 @@ ModelConverter.Convert(gltf,package+".second");if(!bytes.SequenceEqual(File.Read
     catch(InvalidDataException){}
     File.WriteAllText(gltf,root.ToJsonString());
 }
+MaterialBakingTests.Run(root,output);
 GxMaterialTests.Run(root,output);
 StudioBakeTests.Run(root,output);
 // External buffers and images, plus GLB binary geometry.

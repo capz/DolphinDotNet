@@ -1,4 +1,9 @@
 #include "dnd_aram.h"
+#include "dnd_draw.h"
+#ifndef DND_GAMECUBE_STORAGE
+/* Some isolated ARAM host tests intentionally do not link the graphics module. */
+extern uint64_t dnd_buffer_held_address(int token,int offset,int count) __attribute__((weak));
+#endif
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -19,7 +24,7 @@ static int next_token=1;
 static bool initialized;
 static _Alignas(32) unsigned char staging[CHUNK+32];
 static unsigned char patch[CHUNK];
-static struct {bool active,write;int phase,count,skip;unsigned address,size;} transfer;
+static struct {bool active,write,direct;int phase,count,skip;unsigned address,size;void *native;} transfer;
 static volatile int completed;
 #ifdef DND_GAMECUBE_STORAGE
 static ARQRequest request;
@@ -87,10 +92,12 @@ int dnd_aram_dispose(int token){int i=locate(token);if(i<0)return -EINVAL;slots[
 static void submit(bool write){
  completed=0;
 #ifdef DND_GAMECUBE_STORAGE
- if(write)DCFlushRange(staging,transfer.size);else DCInvalidateRange(staging,transfer.size);
- ARQ_PostRequestAsync(&request,OWNER,write?ARQ_MRAMTOARAM:ARQ_ARAMTOMRAM,ARQ_PRIO_LO,transfer.address,(u32)staging,transfer.size,finished);
+ void *address=transfer.direct?transfer.native:staging;
+ if(write)DCFlushRange(address,transfer.size);else DCInvalidateRange(address,transfer.size);
+ ARQ_PostRequestAsync(&request,OWNER,write?ARQ_MRAMTOARAM:ARQ_ARAMTOMRAM,ARQ_PRIO_LO,transfer.address,(u32)address,transfer.size,finished);
 #else
- if(write)memcpy(memory+transfer.address,staging,transfer.size);else memcpy(staging,memory+transfer.address,transfer.size);
+ void *address=transfer.direct?transfer.native:staging;
+ if(write)memcpy(memory+transfer.address,address,transfer.size);else memcpy(address,memory+transfer.address,transfer.size);
  completed=1;
 #endif
 }
@@ -99,12 +106,12 @@ int dnd_aram_begin(int token,int offset,DndArray *a,int ao,int count,int write){
  int i=locate(token);if(i<0 || slots[i].holds<=0 || offset<0 || count<=0 || count>CHUNK || offset>slots[i].length || count>slots[i].length-offset || !range(a,ao,count))return -EINVAL;
  if(transfer.active)return -EBUSY;
  unsigned address=slots[i].offset+(unsigned)offset;
- transfer.active=true;transfer.write=write!=0;transfer.phase=1;transfer.count=count;transfer.skip=(int)(address%ALIGN);transfer.address=address&~31u;transfer.size=((unsigned)transfer.skip+(unsigned)count+31u)&~31u;
+ transfer.active=true;transfer.direct=false;transfer.native=NULL;transfer.write=write!=0;transfer.phase=1;transfer.count=count;transfer.skip=(int)(address%ALIGN);transfer.address=address&~31u;transfer.size=((unsigned)transfer.skip+(unsigned)count+31u)&~31u;
  if(write)memcpy(patch,(unsigned char*)a->data+ao,(size_t)count);
  submit(false);return 0;
 }
 int dnd_aram_poll(DndArray *a,int ao){
- if(!transfer.active)return -EINVAL;
+ if(!transfer.active || transfer.direct)return -EINVAL;
  if(!completed)return 0;
 #ifdef DND_ARAM_TEST
  if(fail_next){fail_next=false;transfer.active=false;return -EIO;}
@@ -118,4 +125,34 @@ int dnd_aram_poll(DndArray *a,int ao){
   memcpy((unsigned char*)a->data+ao,staging+transfer.skip,(size_t)transfer.count);
  }
  transfer.active=false;return 1;
+}
+
+/* Native DMA path requires 32-byte-aligned ranges; no read/modify/write.
+ * The caller holds both the ARAM allocation and native buffer until poll ends. */
+int dnd_aram_begin_native(int token,int offset,int buffer_token,int bo,int count,int write) {
+ int i=locate(token);
+ if(transfer.active)return -EBUSY;
+ if(i<0 || slots[i].holds<=0 || offset<0 || bo<0 ||
+    count<=0 || count>65536 || ((offset|bo|count)&31) ||
+    offset>slots[i].length || count>slots[i].length-offset)return -EINVAL;
+#ifndef DND_GAMECUBE_STORAGE
+ if(!dnd_buffer_held_address)return -EINVAL;
+#endif
+ uint64_t address=dnd_buffer_held_address(buffer_token,bo,count);
+ if(!address || (address&31u))return -EINVAL;
+ transfer.active=true;transfer.direct=true;transfer.native=(void*)(uintptr_t)address;
+ transfer.write=write!=0;transfer.phase=2;transfer.count=count;transfer.skip=0;
+ transfer.address=slots[i].offset+(unsigned)offset;transfer.size=(unsigned)count;
+ submit(write!=0);return 0;
+}
+int dnd_aram_poll_native(void) {
+ if(!transfer.active || !transfer.direct)return -EINVAL;
+ if(!completed)return 0;
+#ifdef DND_ARAM_TEST
+ if(fail_next){fail_next=false;transfer.active=false;transfer.direct=false;return -EIO;}
+#endif
+#ifdef DND_GAMECUBE_STORAGE
+ if(!transfer.write)DCInvalidateRange(transfer.native,transfer.size);
+#endif
+ transfer.active=false;transfer.direct=false;transfer.native=NULL;return 1;
 }
