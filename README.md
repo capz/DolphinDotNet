@@ -177,3 +177,5 @@ For on-device launch, [DolphinDotNet.Launcher](tools/DolphinDotNet.Launcher/READ
 is a standalone GameCube ELF receiver over BBA or USB Gecko, with an IDE readiness
 handshake and a validated execution handoff. Its companion debugger mode uploads
 an existing Debug ELF, then attaches to the application's waiting GDB stub.
+The resident receiver returns to readiness after a normal application exit,
+allowing repeated uploads without rebooting the launcher.

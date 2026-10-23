@@ -78,6 +78,12 @@ int main(void) {
     assert(!dnd_elf_validate(elf,256,0x81700000,0x10000,&plan)); /* Entry in BSS. */
     fixture(elf); put32(elf+52,2);
     assert(!dnd_elf_validate(elf,256,0x81700000,0x10000,&plan)); /* PT_DYNAMIC. */
+    fixture(elf); put32(elf+24,0x815fffc0); put32(elf+60,0x815fffc0); put32(elf+64,0x815fffc0);
+    assert(dnd_elf_validate(elf,256,0x81400000,0x10000,&plan)); /* Ends exactly at resident base. */
+    put32(elf+72,65);
+    assert(!dnd_elf_validate(elf,256,0x81400000,0x10000,&plan)); /* One BSS byte destroys receiver. */
+    put32(elf+72,64); put32(elf+24,0x81600000); put32(elf+60,0x81600000); put32(elf+64,0x81600000);
+    assert(!dnd_elf_validate(elf,256,0x81400000,0x10000,&plan)); /* Resident code/image. */
     Peer p;
     prepare(&p,DND_EXECUTE); assert(session(&p)==1 && p.written==48);
     assert(p.output[7]==DND_READY && be32(p.output+8)==0x12345678 && be32(p.output+12)==512);
@@ -91,6 +97,11 @@ int main(void) {
     prepare(&p,DND_EXECUTE); p.input[32]=0;
     put32(p.input+28,dnd_launcher_crc32(p.input+32,256));
     assert(session(&p)==-1 && be32(p.output+24)==DND_BAD_ELF);
+    prepare(&p,DND_EXECUTE);
+    put32(p.input+32+24,0x81600000); put32(p.input+32+60,0x81600000); put32(p.input+32+64,0x81600000);
+    put32(p.input+28,dnd_launcher_crc32(p.input+32,256));
+    assert(session(&p)==-1 && p.written==32 && be32(p.output+24)==DND_BAD_ELF);
+    assert(!(p.states & ((1u<<DND_ACCEPTED)|(1u<<DND_EXECUTING))));
     prepare(&p,DND_EXECUTE); put32(p.input+24,513);
     assert(session(&p)==-1 && !p.allocations && be32(p.output+24)==DND_TOO_LARGE);
     prepare(&p,DND_EXECUTE); p.limit=0;

@@ -1,4 +1,5 @@
 #include "elf.h"
+#include "resident.h"
 #include <string.h>
 
 static uint16_t be16(const uint8_t *p) { return (uint16_t)((uint16_t)p[0] << 8 | p[1]); }
@@ -23,8 +24,8 @@ bool dnd_elf_validate(const uint8_t *image, size_t size, uintptr_t stage, size_t
         if (type==2 || type==3) return false; /* Dynamic linker/relocation unsupported. */
         if (type!=1 || !memory) continue;
         if (plan->count==DND_ELF_SEGMENTS || (physical && physical!=address) || files>memory ||
-            offset>size || files>size-offset || address<0x80003100u || address>=0x81800000u ||
-            memory>0x81800000u-address || (flags & ~7u) ||
+            offset>size || files>size-offset || address<0x80003100u || address>=DND_RESIDENT_BASE ||
+            memory>DND_RESIDENT_BASE-address || (flags & ~7u) ||
             (align>1 && ((align & (align-1)) || (address & (align-1))!=(offset & (align-1)))) ||
             overlaps(address, memory, stage, stage_size)) return false;
         for (unsigned j=0; j<plan->count; j++)
