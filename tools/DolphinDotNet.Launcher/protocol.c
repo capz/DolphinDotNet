@@ -49,6 +49,10 @@ int dnd_launcher_session(DndLauncherIo *io, uint8_t **image, DndElfPlan *plan) {
     if (h[7]==DND_CANCEL && be32(h+8)==nonce && !be32(h+12)) return 0;
     if (h[7]!=DND_EXECUTE || be32(h+8)!=nonce || be32(h+12)) return reject(io,DND_BAD_REQUEST);
     if (!send(io,DND_EXECUTING,nonce,0)) return -1;
+    /* Do not shut down the NIC until the host proves it received EXECUTING. */
+    if (!header(io,h)) return -1;
+    if (h[7]==DND_CANCEL && be32(h+8)==nonce && !be32(h+12)) return 0;
+    if (h[7]!=DND_COMMIT || be32(h+8)!=nonce || be32(h+12)) return reject(io,DND_BAD_REQUEST);
     if (io->status) io->status(io->context,DND_EXECUTING);
     *image=buffer;
     return 1;

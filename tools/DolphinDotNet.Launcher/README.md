@@ -38,7 +38,7 @@ docker run --rm --mount "type=bind,source=$PWD,target=/src" \
 
 On PowerShell use `${PWD}` and a single line, or PowerShell's line continuation.
 The output is `build/DolphinDotNet.Launcher.dol` plus its ELF/map. The current
-linked DOL is approximately 312 KiB. These generated files are ignored by Git.
+linked DOL is about 0.3 MiB. These generated files are ignored by Git.
 
 Default networking uses DHCP, with TCP upload port **4299**. Static builds can
 use `make clean` followed by:
@@ -104,6 +104,7 @@ This is **DNDL v1**, distinct from Swiss wiiload. Every control frame is 16 byte
 | 6 EXECUTING | nonce | 0 |
 | 7 ERROR | error code | 0 |
 | 8 CANCEL | nonce | 0 |
+| 9 COMMIT | nonce | 0 |
 
 After READY the host may CANCEL a readiness-only check, or send UPLOAD followed
 by exactly the declared number of uncompressed ELF bytes. Only after ACCEPTED
@@ -113,6 +114,11 @@ No upload or execute operation is automatically replayed. TCP EOF aborts the
 session. A native session has a 60-second total deadline; USB cannot report host
 EOF, so an abandoned partial serial upload may need a launcher restart or the
 deadline to expire before a new handshake.
+
+After EXECUTING the host sends COMMIT, proving it received the acknowledgement
+before the receiver tears down networking. Until COMMIT arrives the receiver
+does not execute, and CANCEL is still accepted. No final console reply is sent
+after COMMIT, so the NIC cannot shut down with a required reply still queued.
 
 Readiness means the correct receiver responded to the current configuration;
 it does not prove that a particular ELF will fit or that its GDB stub is built

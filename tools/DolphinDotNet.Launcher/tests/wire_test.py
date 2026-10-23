@@ -31,9 +31,11 @@ def run(peer, image):
     probe = request(hello+frame(8, nonce))
     assert probe.stdout == ready and b'VALIDATED' not in probe.stderr
     upload = hello+frame(3, len(image), crc)+image
-    good = request(upload+frame(5, nonce))
+    good = request(upload+frame(5, nonce)+frame(9, nonce))
     assert good.stdout == ready+frame(4, len(image), crc)+frame(6, nonce)
     assert b'VALIDATED entry=' in good.stderr
+    assert b'VALIDATED' not in request(upload+frame(5, nonce), False).stderr
+    assert b'VALIDATED' not in request(upload+frame(5, nonce)+frame(8, nonce)).stderr
     assert request(upload+frame(8, nonce)).stdout == ready+frame(4, len(image), crc)
     assert request(upload+frame(5, nonce+1), False).stdout.endswith(frame(7, 1))
     assert request(hello+frame(3, len(image), crc ^ 1)+image, False).stdout == ready+frame(7, 3)

@@ -47,7 +47,7 @@ static void prepare(Peer *p, unsigned last) {
     fixture(p->input+32);
     frame(p->input,DND_HELLO,0x12345678,0);
     frame(p->input+16,DND_UPLOAD,256,dnd_launcher_crc32(p->input+32,256));
-    frame(p->input+288,last,0x12345678,0); p->length=304;
+    frame(p->input+288,last,0x12345678,0); frame(p->input+304,DND_COMMIT,0x12345678,0); p->length=320;
 }
 static int session(Peer *peer) {
     DndLauncherIo io={peer,rd,wr,alloc,state,512};
@@ -97,7 +97,9 @@ int main(void) {
     assert(session(&p)==-1 && be32(p.output+24)==DND_NO_MEMORY);
     prepare(&p,DND_EXECUTE); p.input[299]^=1; assert(session(&p)==-1); /* Wrong nonce. */
     prepare(&p,DND_EXECUTE); p.fail_write=32; assert(session(&p)==-1); /* Cannot ACK execution. */
-    for (size_t i=0; i<304; i++) { prepare(&p,DND_EXECUTE); p.length=i; assert(session(&p)!=1); }
+    prepare(&p,DND_EXECUTE); frame(p.input+304,DND_CANCEL,0x12345678,0); assert(session(&p)==0);
+    prepare(&p,DND_EXECUTE); frame(p.input+304,DND_COMMIT,0x87654321,0); assert(session(&p)==-1);
+    for (size_t i=0; i<320; i++) { prepare(&p,DND_EXECUTE); p.length=i; assert(session(&p)!=1); }
     puts("ELF validation, staging protection, CRC32, readiness, short I/O, cancellation and execution gate passed.");
     return 0;
 }
