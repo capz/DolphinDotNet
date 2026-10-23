@@ -1,0 +1,25 @@
+name: GameCube ELF launcher
+on:
+  pull_request:
+    paths:
+      - 'tools/DolphinDotNet.Launcher/**'
+      - '.github/workflows/launcher.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/DolphinDotNet.Launcher/**'
+      - '.github/workflows/launcher.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  receiver-core:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test production ELF validator and protocol with sanitizers
+        working-directory: tools/DolphinDotNet.Launcher
+        run: make -f tests/Makefile test 'HOST_CFLAGS=-std=c11 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined'
+      - name: Test independent host wire vectors
+        working-directory: tools/DolphinDotNet.Launcher
+        run: python3 tests/wire_test.py
