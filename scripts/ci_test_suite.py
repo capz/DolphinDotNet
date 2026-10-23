@@ -24,6 +24,9 @@ def main(area):
         try: run("make","-C","tests","test", "CFLAGS=-D_DARWIN_C_SOURCE -std=c11 -Wall -Wextra -Werror -I../include")
         finally: run("make","-C","tests","clean")
     elif area=="compiler":
+        # Compiler.Tests is independent of the CLI executable; the AOT
+        # integration fixtures below need the compiler itself built first.
+        build("tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj")
         test("tools/DolphinDotNet.Compiler.Tests")
         # Numeric and string facade contracts must execute against the
         # GameCube AOT runtime, not locale-sensitive desktop CLR behavior.
