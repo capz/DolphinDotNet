@@ -171,3 +171,8 @@ Raw GX/GU/VIDEO bindings and managed meshes, textures, materials and Draw2D are 
 External consumers: see the [NuGet SDK guide](docs/nuget-sdk.md) and [release process](docs/releases.md).
 
 IDE plugins, the shared debug adapter and their releases now live in [DolphinDotNet.Debuggers](https://github.com/capz/DolphinDotNet.Debuggers). See the [repository boundary and pinned SDK dependency](docs/debugger-components.md).
+
+For on-device launch, [DolphinDotNet.Launcher](tools/DolphinDotNet.Launcher/README.md)
+is a standalone GameCube ELF receiver over BBA or USB Gecko, with an IDE readiness
+handshake and a validated execution handoff. Its companion debugger mode uploads
+an existing Debug ELF, then attaches to the application's waiting GDB stub.
