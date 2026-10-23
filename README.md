@@ -170,4 +170,7 @@ Raw GX/GU/VIDEO bindings and managed meshes, textures, materials and Draw2D are 
 
 External consumers: see the [NuGet SDK guide](docs/nuget-sdk.md) and [release process](docs/releases.md).
 
+Remaining emulator, hardware, IDE and release qualification is tracked in the
+[repository-wide manual testing TODO](docs/manual-testing-todo.md).
+
 IDE plugins, the shared debug adapter and their releases now live in [DolphinDotNet.Debuggers](https://github.com/capz/DolphinDotNet.Debuggers). See the [repository boundary and pinned SDK dependency](docs/debugger-components.md).
