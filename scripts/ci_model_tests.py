@@ -60,7 +60,12 @@ def main(fixtures):
     compiler = ROOT / "tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll"
     run("dotnet", compiler, "--aot", "tests/ModelSmoke/bin/Release/net8.0/ModelSmoke.dll", generated)
     smoke = work / "model-smoke"
-    run(cc, *flags, generated, "tests/model_host.c", "source/text.c", "source/aram.c",
+    # AOT emits shared static inline helpers that this entry point may not use.
+    # Clang diagnoses those even at -O1. Keep the exception confined to generated
+    # code; every runtime and host source still compiles with strict warnings.
+    generated_object = work / "model-smoke-generated.o"
+    run(cc, *flags, "-Wno-unused-function", "-c", generated, "-o", generated_object)
+    run(cc, *flags, generated_object, "tests/model_host.c", "source/text.c", "source/aram.c",
         *runtime, "-lm", "-o", smoke)
     run(smoke, fixtures)
     # Smoke mutates cache/stream fixtures; regenerate before the GC-stress run.

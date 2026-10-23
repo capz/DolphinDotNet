@@ -33,6 +33,10 @@ class ModelAcceptanceSchedulingTests(unittest.TestCase):
         self.assertTrue(any(c[-1] == "--gc-stress" for c in commands))
         self.assertTrue(any("-Wl,-dead_strip" in c for c in commands))
         self.assertFalse(any("--wrap=" in arg for c in commands for arg in c))
+        exceptions = [c for c in commands if "-Wno-unused-function" in c]
+        self.assertEqual(len(exceptions), 1)
+        self.assertIn("-c", exceptions[0])
+        self.assertTrue(any(arg.endswith("model-smoke.c") for arg in exceptions[0]))
         for allocation in ("malloc", "calloc", "realloc", "aligned_alloc"):
             self.assertTrue(any(f"-D{allocation}=__wrap_{allocation}" in c for c in commands))
         smoke_runs = [i for i, c in enumerate(commands) if Path(c[0]).name == "model-smoke"]
