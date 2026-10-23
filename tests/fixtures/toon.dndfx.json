@@ -1,0 +1,21 @@
+{
+  "uniforms": [
+    {"name":"Thresholds","rgba":[65,165,0,255]},
+    {"name":"Dark","rgba":[12,24,64,255]},
+    {"name":"Middle","rgba":[30,90,158,255]},
+    {"name":"Bright","rgba":[70,220,248,255]}
+  ],
+  "nodes": [
+    {"id":"intensity","op":"raster"},
+    {"id":"low","op":"uniform","name":"Thresholds","channel":"r"},
+    {"id":"high","op":"uniform","name":"Thresholds","channel":"g"},
+    {"id":"dark","op":"uniform","name":"Dark"},
+    {"id":"middle","op":"uniform","name":"Middle"},
+    {"id":"bright","op":"uniform","name":"Bright"},
+    {"id":"stepLow","op":"greater","a":"intensity","b":"low"},
+    {"id":"stepHigh","op":"greater","a":"intensity","b":"high"},
+    {"id":"lowerBands","op":"mix","a":"dark","b":"middle","t":"stepLow"},
+    {"id":"toon","op":"mix","a":"lowerBands","b":"bright","t":"stepHigh"}
+  ],
+  "output":"toon"
+}
