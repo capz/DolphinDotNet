@@ -10,6 +10,7 @@ internal sealed partial class GltfImport
     // This is not physically based rendering: emissive is baked into diffuse,
     // and metallic/roughness/normal inputs remain approximation-only.
     private readonly Dictionary<int,int> bakedMaterials = new();
+    private readonly HashSet<int> bakedUvMaterials = new();
 
     private static int Dimension(int input,int maximum)
     {
@@ -134,7 +135,11 @@ internal sealed partial class GltfImport
             int width=Dimension(primaryImage.Width,options.TextureLimit);
             int height=Dimension(primaryImage.Height,options.TextureLimit);
 
-            var baseUv=hasBase?TextureUv(baseTx):(0,new float[]{0,0},new float[]{1,1},0f);
+            // A constant base has no UV layout of its own. Use the first
+            // actual map, matching the UV stream selected by the primitive.
+            var basis=hasBase?baseTx:hasEmission?emissionTx:hasOcclusion?occlusionTx:default;
+            var baseUv=basis.ValueKind==JsonValueKind.Undefined?
+                (0,new float[]{0,0},new float[]{1,1},0f):TextureUv(basis);
             var sampler=primary>=0?SamplerOf(primary):(wrapS:1,wrapT:1,linear:1);
             void ValidateLayer(JsonElement layer,int textureIndex)
             {
@@ -171,6 +176,7 @@ internal sealed partial class GltfImport
                 baked[x,y]=new Rgba32(Clamp255(R),Clamp255(G),Clamp255(B),Clamp255((b.A/255f)*factor[3]));
             }
             bakedMaterials[m]=AddUnique(payloads,unique,PackedTexture(baked,sampler));
+            if(hasBase||hasEmission||hasOcclusion)bakedUvMaterials.Add(m);
             Console.Error.WriteLine($"Material {m}: baked compatible base/emissive/occlusion maps into a GX texture (diffuse approximation).");
         }
     }

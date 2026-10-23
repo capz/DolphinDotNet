@@ -61,6 +61,7 @@ def main(area):
         test("tests/EffectCompilerTests")
         with tempfile.TemporaryDirectory() as tmp:
             run("dotnet","run","--project","tests/ModelAssetTests","-c","Release","--",tmp)
+            run("python3","scripts/ci_model_tests.py",tmp)
         for p in ("GraphicsSmoke","ModelSmoke","ModelAsyncSmoke","TevMaterialTests"):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="assets":

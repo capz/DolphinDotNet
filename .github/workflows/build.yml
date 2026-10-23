@@ -31,6 +31,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_ci_changes.py
           python3 -m unittest discover -s tests -p test_ci_workflow.py
+          python3 -m unittest discover -s tests -p test_ci_model_tests.py
           python3 -m unittest discover -s tests -p test_debugger_dependency.py
       - name: Select checks from the entire PR diff
         id: select
