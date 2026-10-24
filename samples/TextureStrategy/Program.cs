@@ -11,7 +11,11 @@ internal static class Program
         DebugOverlay.PerformanceVisible=true;
         using var scene=new StrategyScene();
         var clock=new FrameClock { MaximumDeltaSeconds=.1f };
+#if DND_TEXTURE_ATLAS_START
+        bool atlas=true;
+#else
         bool atlas=false;
+#endif
         int frames=0;
         float seconds=0;
         while(true)
