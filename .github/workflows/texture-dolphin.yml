@@ -82,6 +82,8 @@ jobs:
             out/dolphin-texture/results.json
             out/dolphin-texture/diagnostics.json
             out/dolphin-texture/emulator.log
+            samples/TextureStrategy/obj/${{ matrix.configuration }}/net8.0/native/source/generated_program.c
+            samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.elf
       - name: Preserve DOL, ELF, emulator logs, capture and pixel proof
         if: always()
         uses: actions/upload-artifact@v4
