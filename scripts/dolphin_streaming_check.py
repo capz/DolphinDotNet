@@ -2,6 +2,11 @@
 import math
 
 FRAME_BYTES = 640 * 480 * 3
+class RenderMismatch(AssertionError):
+    def __init__(self, message, rgb, state):
+        super().__init__(message)
+        self.rgb, self.state = rgb, state
+
 FIELDS = ("magic", "version", "frame", "mode", "cameraX256", "cameraY256",
           "residentKiB", "promotions", "evictions", "fallbackCells", "detailCells",
           "failures", "cancelled", "switches", "reversals", "peakResidentKiB",
@@ -56,7 +61,7 @@ def rendered_world(rgb, state):
             elif distance(fallback) <= 18:
                 coarse += 1
     if total < 8 or coarse + detailed < total - 1:
-        raise AssertionError(f"World holes/wrong pixels at camera {cx},{cy}: {coarse + detailed}/{total} cells")
+        raise RenderMismatch(f"World holes/wrong pixels at camera {cx},{cy}: {coarse + detailed}/{total} cells", rgb, state)
     return coarse, detailed
 
 
