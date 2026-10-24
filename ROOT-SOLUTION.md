@@ -1,6 +1,6 @@
 # Open and build from the repository root
 
-Open `DolphinDotNet.sln` in Visual Studio 2022 (17.8+) or Rider with .NET 8 support. It groups the runtime, tools, samples and managed tests into solution folders. The Windows Visual Studio extension is built separately using its existing workflow; it requires VSSDK targets and is not included in this cross-platform solution.
+Open `DolphinDotNet.sln` in Visual Studio 2022 (17.8+) or Rider with .NET 8 support. It groups the runtime, tools, TextureStrategy PoC and framework-owned managed tests into solution folders. The other samples and debugger projects live in the independent [Samples](https://github.com/capz/DolphinDotNet.Samples) and [Debuggers](https://github.com/capz/DolphinDotNet.Debuggers) repositories and are not part of this solution.
 
 For the Hypercube rendering PoC, open `TextureStrategy.slnf` instead. This solution filter loads TextureStrategy and its two runtime dependencies. Select TextureStrategy as the startup project. The SDK builds its compiler and build driver when generating the native output.
 
@@ -20,7 +20,7 @@ Build the whole solution:
 dotnet build DolphinDotNet.sln -c Release -m:1
 ```
 
-Use one MSBuild node (`-m:1`) for native solution builds: sample build targets rebuild shared compiler/driver outputs. In the IDE, build the selected sample project, or configure solution builds to use one project at a time. Building every sample also builds samples with their own asset/runtime requirements; see the [sample catalog](samples/README.md).
+Use one MSBuild node (`-m:1`) for native solution builds: the PoC build targets rebuild shared compiler/driver outputs. In the IDE, build TextureStrategy, or configure solution builds to use one project at a time.
 
 For managed compilation only:
 
@@ -30,4 +30,4 @@ dotnet build DolphinDotNet.sln -c Release -p:DndBuildNative=false -m:1
 
 Managed-only builds do not produce runnable GameCube DOL files. Building the solution compiles test projects; follow their existing instructions to execute tests.
 
-Existing per-sample solutions continue to work. Add new projects to the root solution with `dotnet sln DolphinDotNet.sln add path/to/Project.csproj`.
+The other samples' solutions are maintained in the Samples repository. Add new projects that belong to this repository with `dotnet sln DolphinDotNet.sln add path/to/Project.csproj`.

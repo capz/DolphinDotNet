@@ -1,9 +1,19 @@
-using System;
-
 // Deterministic *logical* residency trace: unlike the rendering half, this does
 // not move assets to ARAM or fetch storage. Provides comparable miss/byte counts.
 internal static class CacheTrace
 {
+    internal readonly struct Totals
+    {
+        internal readonly int Pages;
+        internal readonly int Atlases;
+
+        internal Totals(int pages, int atlases)
+        {
+            Pages = pages;
+            Atlases = atlases;
+        }
+    }
+
     private sealed class Cache
     {
         private readonly int[] ids, ages;
@@ -27,7 +37,7 @@ internal static class CacheTrace
             ids[victim]=id;ages[victim]=tick;Misses++;
         }
     }
-    internal static (int Pages,int Atlases) Run()
+    internal static Totals Run()
     {
         // Equal nominal 192 KiB budget: 48 RGBA8 32x32 pages versus
         // three 128x128 atlases (64 KiB each); same texels, no compression.
@@ -45,6 +55,6 @@ internal static class CacheTrace
                 atlases.Touch((y/4)*3+x/4);
             }
         }
-        return (pages.Misses,atlases.Misses);
+        return new Totals(pages.Misses, atlases.Misses);
     }
 }

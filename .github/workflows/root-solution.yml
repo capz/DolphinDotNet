@@ -1,0 +1,33 @@
+name: Root solution builds
+
+on:
+  push:
+    branches: [main, codex/root-solution-texture-poc]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Solution and texture filter / ${{ matrix.os }} / ${{ matrix.configuration }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build the repository solution without a console toolchain
+        run: dotnet build DolphinDotNet.sln -c ${{ matrix.configuration }} -p:DndBuildNative=false -m:1
+      - name: Build the texture solution filter
+        run: dotnet build TextureStrategy.slnf -c ${{ matrix.configuration }} -p:DndBuildNative=false -m:1
+      - name: Compile the texture PoC to a GameCube C bundle
+        run: dotnet tools/DolphinDotNet.Compiler/bin/${{ matrix.configuration }}/net8.0/DolphinDotNet.Compiler.dll --bundle samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dll out/TextureStrategy --platform gamecube
