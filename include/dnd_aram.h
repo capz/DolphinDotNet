@@ -13,6 +13,9 @@ int dnd_aram_release(int token);
 int dnd_aram_dispose(int token);
 int dnd_aram_begin(int token,int offset,DndArray *array,int array_offset,int count,int write);
 int dnd_aram_poll(DndArray *array,int array_offset);
+/* Aligned zero-copy ARAM DMA to/from pinned native MEM1 buffers. */
+int dnd_aram_begin_native(int token,int aram_offset,int buffer_token,int buffer_offset,int count,int write);
+int dnd_aram_poll_native(void);
 #ifdef DND_ARAM_TEST
 void dnd_aram_test_fail_next(void);
 #endif

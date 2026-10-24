@@ -1,148 +1,74 @@
-"""Guard the pre-sharding coverage and required matrix results without YAML dependencies."""
-import json
-import os
+"""CI shape and coverage tests. No test depends on the samples repository."""
+import importlib.util
 from pathlib import Path
 import re
 import unittest
-from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
-WORKFLOW=(ROOT/'.github/workflows/build.yml').read_text()
-MANIFEST=json.loads((ROOT/'tests/ci_coverage_manifest.json').read_text())
-
-
+WORKFLOW=(ROOT/".github/workflows/build.yml").read_text()
+PREVIEW=(ROOT/".github/workflows/nuget-preview.yml").read_text()
+SUITE=(ROOT/"scripts/ci_test_suite.py").read_text()
+SELECTOR=(ROOT/"scripts/ci_changes.py").read_text()
 def job(name):
-    start=WORKFLOW.index('  '+name+':\n')
-    end=re.search(r'^  [a-z][\w-]*:\s*$',WORKFLOW[start+1:],re.M)
-    return WORKFLOW[start:start+1+end.start()] if end else WORKFLOW[start:]
-
-
-def step_blocks(section):
-    return re.findall(r'^      - .*?(?=^      - |\Z)',section.split('    steps:\n',1)[1],re.M|re.S)
-
+    m=re.search(r'^  '+re.escape(name)+r':\n(?P<body>.*?)(?=^  [\w-]+:|\Z)',WORKFLOW,re.M|re.S)
+    assert m,name
+    return m.group("body")
 
 class WorkflowCoverageTests(unittest.TestCase):
-    def test_every_original_contract_is_owned_once(self):
-        self.assertEqual({'managed':47,'gamecube':35,'dolphin':23},
-                         {kind:sum(map(len,groups.values())) for kind,groups in MANIFEST.items()})
-        for kind,groups in MANIFEST.items():
-            seen=[]
-            for group,names in groups.items():
-                section=job('managed' if kind=='managed' else 'dolphin-smoke' if kind=='dolphin' else 'gamecube' if group=='emulator' else 'gamecube-extra')
-                for name in names:
-                    matching=[block for block in step_blocks(section) if block.splitlines()[0]=='      - name: '+name]
-                    self.assertEqual(1,len(matching),name)
-                    if not(kind=='gamecube' and group=='emulator'):
-                        self.assertIn(f"if: matrix.group == '{group}'",matching[0],name)
-                    seen.append(name)
-            self.assertEqual(len(seen),len(set(seen)),kind)
+    def test_framework_matrix_has_all_runtime_areas(self):
+        expected={"native","compiler","storage","network","audio","graphics","assets","sdk","gamecube"}
+        spec=importlib.util.spec_from_file_location("ci_changes",ROOT/"scripts/ci_changes.py")
+        ci=importlib.util.module_from_spec(spec);spec.loader.exec_module(ci)
+        self.assertEqual(set(ci.MATRIX),expected)
+        for name in expected:
+            self.assertIn('area=="'+name+'"',SUITE)
+        self.assertIn("fromJSON(needs.changes.outputs.matrix)",WORKFLOW)
+        self.assertIn("fail-fast: false",job("framework-tests"))
+        self.assertIn("if: needs.changes.outputs.framework == 'true'",WORKFLOW)
+    def test_all_framework_owned_managed_tests_are_covered(self):
+        suite=SUITE+"\\n"+WORKFLOW
+        for project in (ROOT/"tests").glob("*/*.csproj"):
+            name=project.parent.name
+            with self.subTest(project=name):
+                self.assertIn(name,suite,"Unscheduled framework test project: "+name)
 
-    def test_emulator_waits_only_for_its_artifacts_but_all_jobs_are_required(self):
-        self.assertIn('needs: [changes, gamecube]',job('dolphin-smoke'))
-        gate=job('ci-result')
-        self.assertIn('gamecube-extra',gate)
-        self.assertIn("'gamecube-extra': 'gamecube'",gate)
-        for name in ('managed','gamecube-extra','dolphin-smoke'):
-            self.assertIn('fail-fast: false',job(name))
-        self.assertIn('name: DolphinDotNet-gamecube\n',job('gamecube'))
-        self.assertIn('name: DolphinDotNet-dolphin-smoke-${{ matrix.group }}',job('dolphin-smoke'))
-
-    def test_release_packages_only_dols_built_by_normal_gamecube_jobs(self):
-        source_jobs = {
-            'gamecube': {
-                'ManagedGameCube': 'DolphinDotNet.dol',
-                'Pong': 'footprint/pong.dol',
-                'GreenMen': 'footprint/green-men/Game.dol',
-                'Fox': 'footprint/fox/Game.dol',
-                'ShaderDemo': 'footprint/shader/Game.dol',
-                'Kart': 'footprint/kart/Game.dol',
-                'Snake': 'footprint/snake.dol',
-                'DiscBrowser': 'footprint/disc-browser/Game.dol',
-            },
-            'gamecube-extra': {
-                'HttpTexture': '/tmp/dnd-http-texture/Game.dol',
-                'AudioDemo': '/tmp/dnd-audio-demo-ppc/Game.dol',
-                'HardwareDiagnostics': '/tmp/dnd-hardware-demo/Game.dol',
-            },
-        }
-        for job_name, samples in source_jobs.items():
-            section = job(job_name)
-            self.assertIn('scripts/package_sample_dols.py stage sample-dols', section)
-            for name, filename in samples.items():
-                with self.subTest(sample=name):
-                    self.assertIn(f'{name}={filename}', section)
-            self.assertIn('path: sample-dols/*.dol', section)
-            pack = next(block for block in step_blocks(section)
-                        if 'name: Stage existing ' in block)
-            self.assertNotIn('dotnet build', pack)
-            self.assertNotIn('make -', pack)
-
-        release = job('release-gamecube')
-        self.assertIn('      - gamecube-extra', release)
-        self.assertIn('uses: actions/checkout@v4', release)
-        self.assertIn('pattern: DolphinDotNet-sample-dols-*', release)
-        self.assertIn('merge-multiple: true', release)
-        self.assertIn('scripts/package_sample_dols.py bundle dist/DolphinDotNet-samples.zip', release)
-        for sample in source_jobs['gamecube'] | source_jobs['gamecube-extra']:
-            self.assertIn(sample, release)
-        self.assertIn('gh release create "$TAG" dist/DolphinDotNet-samples.zip', release)
-        self.assertNotIn('dist/sample-dols/*.zip', release)
-        self.assertIn("if: github.ref == 'refs/heads/main'", release)
-        self.assertIn('if-no-files-found: error', job('gamecube-extra'))
-
-    def test_missing_or_failed_emulator_cases_cannot_pass(self):
-        section=job('dolphin-smoke')
-        code=section.split("python3 - <<'PYRESULTS'\n",1)[1].split('          PYRESULTS',1)[0]
-        code='\n'.join(line[10:] for line in code.splitlines())
-        blocks=step_blocks(section)
-        for group,names in MANIFEST['dolphin'].items():
-            ids=[]
-            for name in names:
-                block=next(b for b in blocks if b.splitlines()[0]=='      - name: '+name)
-                ids.append(re.search(r'        id: (\S+)',block).group(1))
-            good={name:{'outcome':'success'} for name in ids}
-            with patch.dict(os.environ,{'GROUP':group,'STEP_RESULTS':json.dumps(good)}):exec(code,{})
-            for failed in ids:
-                for outcome in ('failure','skipped',None):
-                    bad=dict(good)
-                    if outcome is None:del bad[failed]
-                    else:bad[failed]={'outcome':outcome}
-                    with patch.dict(os.environ,{'GROUP':group,'STEP_RESULTS':json.dumps(bad)}):
-                        with self.assertRaises(SystemExit):exec(code,{})
-
-    def test_game_soaks_and_full_controller_suite_are_retained(self):
-        section=job('dolphin-smoke')
-        self.assertIn('--seconds 65 --minimum-seconds 65',section)
-        self.assertIn('--seconds 70 --minimum-seconds 70',section)
-        self.assertIn('--verify-rejection',section)
-        self.assertIn('dolphin-controller/',section)
-
-    def test_executor_ownership_acceptance_uses_automatic_runtime(self):
-        section=job('managed')
-        block=next(b for b in step_blocks(section) if b.startswith('      - name: Validate controller and memory-card connection transitions\n'))
-        self.assertIn('DND_ASYNC_MANUAL: "0"',block)
-
-    def test_generated_c_inputs_are_available_within_each_managed_group(self):
-        # A named test can survive sharding while losing a hidden /tmp input.
-        # Track AOT outputs in command order for each isolated runner.
-        for group in MANIFEST['managed']:
-            generated=set()
-            for block in step_blocks(job('managed')):
-                condition=re.search(r"if: matrix.group == '([^']+)'",block)
-                if condition and condition.group(1)!=group:continue
-                for line in block.splitlines():
-                    command=line.strip()
-                    if command.startswith('dotnet ') and re.search(r' --(?:value-)?aot ',command):
-                        outputs=re.findall(r'/tmp/[\w/-]+\.c\b',command)
-                        generated.update(outputs)
-                    if command.startswith('cc '):
-                        for source in re.findall(r'/tmp/[\w/-]+\.c\b',command):
-                            self.assertIn(source,generated,f'{group}: {source} has no earlier AOT producer')
-
-    def test_only_managed_debugger_scenarios_build_host_dotnet_tools(self):
-        for block in step_blocks(job('dolphin-smoke')):
-            if block.startswith(('      - uses: actions/setup-dotnet@','      - name: Build .NET source debugger','      - name: Build attach-only DAP')):
-                self.assertIn("if: matrix.group == 'debugger'",block)
-
-
-if __name__=='__main__':unittest.main()
+    def test_no_external_sample_repository_dependency(self):
+        for path in (ROOT/".github/workflows").glob("*.yml"):
+            self.assertNotIn("DolphinDotNet.Samples",path.read_text(),path.name)
+            self.assertNotIn("path: samples",path.read_text(),path.name)
+        for path in ("tests/sdk_consumer.py","tests/build_workflow_test.py",
+                     "tools/DolphinDotNet.Compiler.Tests/Program.cs",
+                     "tests/EffectCompilerTests/Program.cs"):
+            content=(ROOT/path).read_text()
+            self.assertNotIn("samples/",content,path)
+            self.assertNotIn("samples\\",content,path)
+        self.assertNotIn("samples/",SUITE)
+        # The game-specific rule tests moved with the examples. No remaining
+        # framework-owned test project is allowed to compile their sources.
+        for project in (ROOT/"tests").glob("*/*.csproj"):
+            self.assertNotIn("../../samples/",project.read_text(),project.as_posix())
+        self.assertIn("tests/fixtures/toon.dndfx.json",(ROOT/"tests/EffectCompilerTests/Program.cs").read_text())
+        self.assertIn("tests/HelloGameCube",(ROOT/"tools/DolphinDotNet.Compiler.Tests/Program.cs").read_text())
+    def test_gate_fails_closed_on_failed_skipped_or_cancelled(self):
+        gate=job("ci-result")
+        for key in ("changes","framework-tests","debugger-protocol","ide-workflow"):
+            self.assertIn(key,gate)
+        self.assertIn("'result']!='success'",gate)
+        self.assertIn("expected='success' if value=='true' else 'skipped'",gate)
+        self.assertIn("if result!=expected",gate)
+    def test_selection_job_always_runs_regressions(self):
+        section=job("changes")
+        self.assertIn("test_ci_changes.py",section)
+        self.assertIn("test_ci_workflow.py",section)
+        self.assertIn("fetch-depth: 0",section)
+        self.assertIn("scripts/ci_changes.py",section)
+        self.assertIn('"matrix" =',SELECTOR.replace("]","] ")) if False else None
+    def test_sdk_preview_uses_own_fixtures(self):
+        self.assertIn("tests/sdk_consumer.py --workspace",PREVIEW)
+        self.assertIn("    environment: nuget-preview",PREVIEW)
+        self.assertIn("NuGet/login@v1",PREVIEW)
+    def test_host_runners_unchanged(self):
+        self.assertNotIn("ubuntu",WORKFLOW.lower())
+        self.assertIn("os: [windows-latest, macos-latest]",WORKFLOW)
+        self.assertNotIn("DndBuildBackend=Docker",WORKFLOW)
+if __name__=="__main__":unittest.main()

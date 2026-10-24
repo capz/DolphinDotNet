@@ -194,7 +194,7 @@ static void name(Reader *r, char out[64]) {
 }
 static bool validate(DndModel *m, unsigned char *package, bool restoring) {
   if (m->length < 160 || dnd_model_u32(package) != 0x444e444d ||
-      dnd_model_u32(package + 4) != 1 ||
+      (dnd_model_u32(package + 4) != 1 && dnd_model_u32(package + 4) != 2) ||
       dnd_model_u32(package + 8) != m->length ||
       dnd_model_u32(package + 12) != 6)
     return false;
@@ -278,6 +278,11 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
     mat->mode = (int)number(&r[2]);
     mat->cutoff = scalar(&r[2]);
     mat->two = (int)number(&r[2]);
+    mat->secondary = -1;mat->combiner=0;
+    if(dnd_model_u32(package+4)==2){mat->secondary=(int)number(&r[2]);mat->combiner=(int)number(&r[2]);}
+    if(mat->secondary < -1 || mat->secondary >= (int)m->textures ||
+       mat->combiner<0 || mat->combiner>2 ||
+       ((mat->combiner==0)!=(mat->secondary==-1)))return false;
     if (mat->texture < -1 || mat->texture >= (int)m->textures ||
         mat->mode < 0 || (mat->mode & ~0x7ff) ||
         ((mat->mode & 0x7e0) && !(mat->mode & 16)) ||

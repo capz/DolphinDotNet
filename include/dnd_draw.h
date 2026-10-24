@@ -23,12 +23,19 @@ int dnd_device_scissor(int x,int y,int width,int height);
 int dnd_device_width(void);
 int dnd_device_height(void);
 int dnd_device_wait(void);
+/* Conservative frame fence: a frame completes after GX_DrawDone on present. */
+int dnd_device_fence_insert(void);
+int dnd_device_fence_completed(int fence);
+
 void dnd_device_shutdown(void);
 void dnd_immediate_begin(float r,float g,float b,float a);
 void dnd_immediate_end(void);
 bool dnd_draw_backend_immediate_ready(void);
 
 int dnd_buffer_create(int bytes,int alignment);
+int dnd_buffer_hold(int token);
+int dnd_buffer_unhold(int token);
+uint64_t dnd_buffer_held_address(int token,int offset,int count);
 uint64_t dnd_buffer_address(int token,int offset);
 int dnd_buffer_copy(int token,int offset,DndArray *array,int index,int count,int write);
 int dnd_buffer_write(int token,int offset,DndArray *a,int index,int count);
@@ -43,6 +50,17 @@ void dnd_draw_shutdown(void);
 int dnd_texture_create(int width,int height,DndArray *rgba,int linear);
 int dnd_texture_png(DndArray *png,int linear);
 int dnd_texture_package(DndArray *package,int linear);
+int dnd_texture_allocate_native(int width,int height,int format,int linear);
+int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int count);
+int dnd_texture_update_buffer(int texture_token,int buffer_token,int source_offset,int count);
+/* CPU-only staging to a texture allocation that is NOT referenced by in-flight GX
+ * commands. No GX call, no GPU wait, safe for the background executor. */
+int dnd_texture_stage_array(int texture_token,DndArray *payload,int offset,int count);
+int dnd_texture_stage_buffer(int texture_token,int buffer_token,int offset,int count);
+/* Application-executor publication: GPU-cache invalidate, no GX_DrawDone. */
+int dnd_texture_publish_staged(int texture_token);
+
+
 int dnd_texture_dimension(int token,int axis);
 int dnd_mesh_create(DndArray *vertices,DndArray *indices,int format,int dynamic);
 int dnd_mesh_update(int token,DndArray *vertices,int offset,int count,int format);
@@ -54,6 +72,7 @@ int dnd_effect_resolve(int token,const DndDrawEffect **result);
 int dnd_canvas_effect(int token,int effect);
 int dnd_texture_resolve(int token,DndDrawTexture *out);
 int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
+int dnd_mesh_draw_batch(DndArray *mesh_tokens,int count,int tex,int secondary,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
 int dnd_model_draw_material(int token,DndArray *world,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect);
 int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
 int dnd_mesh_draw(int mesh,int texture,DndArray *world,uint32_t color,int flags,float cutoff);
@@ -81,6 +100,9 @@ void dnd_draw_backend_wait(void);
 void dnd_draw_backend_external(void);
 void dnd_draw_backend_abort(void);
 void dnd_draw_backend_flush(void *data,int bytes,int invalidate);
+void dnd_draw_backend_publish_texture(void);
+/* Forget GX state after an external/raw/2D pass changes the hardware registers. */
+void dnd_draw_backend_invalidate_cache(void);
 /* Raw command guard: no executor handoff while a primitive/display list is open. */
 int dnd_raw_enter(int kind);
 int dnd_raw_leave(int kind);

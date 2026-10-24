@@ -1,6 +1,8 @@
 <Project>
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
   <PropertyGroup>
+    <_DndPackageRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../'))</_DndPackageRoot>
+    <_DndPackaged Condition="Exists('$(_DndPackageRoot)tools/compiler/DolphinDotNet.Compiler.dll')">true</_DndPackaged>
     <_DndRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../../'))</_DndRoot>
     <TargetFramework Condition="'$(TargetFramework)' == ''">net8.0</TargetFramework>
     <OutputType>Exe</OutputType>
@@ -9,6 +11,7 @@
     <Nullable>enable</Nullable>
     <!-- Visual Studio must invoke MSBuild for every real Build/Run. -->
     <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <DndBuildNative Condition="'$(DndBuildNative)' == ''">true</DndBuildNative>
     <DndBuildBackend Condition="'$(DndBuildBackend)' == ''">Auto</DndBuildBackend>
     <DndBuildJobs Condition="'$(DndBuildJobs)' == ''">2</DndBuildJobs>

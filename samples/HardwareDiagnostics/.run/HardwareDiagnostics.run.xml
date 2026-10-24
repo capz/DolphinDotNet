@@ -1,8 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="HardwareDiagnostics in Dolphin" type="LaunchSettings" factoryName=".NET Launch Settings Profile">
-    <option name="LAUNCH_PROFILE_PROJECT_FILE_PATH" value="$PROJECT_DIR$/HardwareDiagnostics.csproj" />
-    <option name="LAUNCH_PROFILE_TFM" value="net8.0" />
-    <option name="LAUNCH_PROFILE_NAME" value="Dolphin Debug" />
-    <method v="2"><option name="Build" /></method>
-  </configuration>
-</component>

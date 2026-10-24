@@ -1,0 +1,80 @@
+name: NuGet preview
+on:
+  pull_request:
+    paths:
+      - 'sdk/**'
+      - 'src/**'
+      - 'tools/**'
+      - 'source/**'
+      - 'include/**'
+      - 'scripts/**'
+      - 'vendor/**'
+      - 'templates/**'
+      - 'eng/**'
+      - 'tests/sdk_consumer.py'
+      - '.github/workflows/nuget-preview.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish tested preview packages to NuGet (requires protected environment approval)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - id: version
+        run: echo "version=0.1.0-preview.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - run: python3 eng/pack.py --include-tools --version '${{ steps.version.outputs.version }}'
+      - run: python3 tests/sdk_consumer.py --workspace "$RUNNER_TEMP/external consumer"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuget-preview
+          path: out/packages/*.nupkg
+          if-no-files-found: error
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: macos-latest
+    environment: nuget-preview
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget-preview
+          path: packages
+      - name: Validate trusted-publishing configuration
+        env:
+          NUGET_USER: ${{ vars.NUGET_USER }}
+        run: |
+          if [ -z "$NUGET_USER" ]; then
+            echo "::error::Set the NUGET_USER variable in the nuget-preview environment to your NuGet profile username."
+            exit 1
+          fi
+      - name: Authenticate to NuGet with GitHub OIDC
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+      - name: Publish verified preview packages
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          test -n "$NUGET_API_KEY"
+          for package in packages/*.nupkg; do
+            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
+          done

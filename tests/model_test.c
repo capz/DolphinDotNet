@@ -549,13 +549,56 @@ int main(int argc, char **argv) {
     assert(dnd_model_vertex(fi,0,0,v)==0);near(v[0],.5f);
     assert(dnd_model_instance_dispose(fi)==0&&dnd_model_dispose(fbx)==0);
   }
+  int studio=load("sd:/studio.dndmodel");DndModel *studio_model=dnd_model_find(studio,false);
+  assert(studio_model&&studio_model->clips==0&&studio_model->textures==1);
+  assert(studio_model->material[studio_model->mesh[0].material].mode==6);
+  assert(dnd_model_dispose(studio)==0);
+  int imported_gx=load("sd:/gx-material.dndmodel");DndModel *gx_model=dnd_model_find(imported_gx,false);
+  assert(gx_model&&gx_model->materials==2&&gx_model->material[1].secondary>=0&&gx_model->material[1].combiner==2);
+  unsigned char *bad_gx=malloc(gx_model->length);assert(bad_gx);
+  for(int invalid=0;invalid<3;invalid++){
+    memcpy(bad_gx,gx_model->package,gx_model->length);
+    unsigned off=dnd_model_u32(bad_gx+52),size=dnd_model_u32(bad_gx+56);
+    unsigned at=off+4+40;
+    if(invalid==0)put(bad_gx+at+32,9999); // out-of-range second texture
+    if(invalid==1)put(bad_gx+at+36,3);    // unknown combiner
+    if(invalid==2)put(bad_gx+at+36,0);    // secondary without a combiner
+    put(bad_gx+60,dnd_model_hash(bad_gx+off,size));
+    assert(!dnd_model_begin_data(bad_gx,gx_model->length,8*1024*1024));
+  }
+  free(bad_gx);
+  int imported_instance=dnd_model_instance(imported_gx,4*1024*1024);assert(imported_instance);
+  assert(dnd_model_instance_dispose(imported_instance)==0&&dnd_model_dispose(imported_gx)==0);
   int obj = dnd_model_begin_obj(dnd_string_from_utf8(&heap,"sd:/concave.obj"),8*1024*1024);assert(obj);
   DndModel *om = dnd_model_find(obj, false);
   assert(om->textures == 1 && om->clips == 0 && om->mesh[0].indices == 9);
   assert(dnd_model_dispose(obj) == 0);
+  int translucent_obj=dnd_model_begin_obj(
+      dnd_string_from_utf8(&heap,"sd:/translucent.obj"),8*1024*1024);
+  assert(translucent_obj);
+  DndModel *tom=dnd_model_find(translucent_obj,false);
+  fprintf(stderr,"OBJ MTL opacity: mode=%d alpha=%g\\n",
+          tom->material[tom->mesh[0].material].mode,
+          tom->material[tom->mesh[0].material].color[3]);
+  assert((tom->material[tom->mesh[0].material].mode&4)!=0);
+  near(tom->material[tom->mesh[0].material].color[3],.35f);
+  assert(dnd_model_dispose(translucent_obj)==0);
   int textured_fbx=dnd_model_begin_scene(dnd_string_from_utf8(&heap,"sd:/textured.fbx"),1,60,8*1024*1024,0);assert(textured_fbx);
   assert(dnd_model_find(textured_fbx,false)->textures==1);
   assert(dnd_model_dispose(textured_fbx)==0);
+  int translucent_fbx=dnd_model_begin_scene(
+      dnd_string_from_utf8(&heap,"sd:/translucent.fbx"),1,60,8*1024*1024,0);
+  assert(translucent_fbx);
+  DndModel *tm=dnd_model_find(translucent_fbx,false);
+  assert(tm->materials>=2);
+  assert((tm->material[tm->mesh[0].material].mode&4)!=0);
+  near(tm->material[tm->mesh[0].material].color[3],.45f);
+  assert(dnd_model_dispose(translucent_fbx)==0);
+  int classic_fbx=dnd_model_begin_scene(dnd_string_from_utf8(&heap,"sd:/translucent-classic.fbx"),1,60,8*1024*1024,0);
+  assert(classic_fbx);DndModel *classic_model=dnd_model_find(classic_fbx,false);
+  assert((classic_model->material[classic_model->mesh[0].material].mode&4)!=0);
+  near(classic_model->material[classic_model->mesh[0].material].color[3],.8f);
+  assert(dnd_model_dispose(classic_fbx)==0);
   int binary_fbx=dnd_model_begin_scene(dnd_string_from_utf8(&heap,"sd:/embedded-binary.fbx"),1,60,8*1024*1024,0);assert(binary_fbx);
   assert(dnd_model_find(binary_fbx,false)->textures==1&&dnd_model_find(binary_fbx,false)->clips==0);
   assert(dnd_model_dispose(binary_fbx)==0);
@@ -632,6 +675,18 @@ int main(int argc, char **argv) {
   assert(dnd_model_play(gi,0,0,0)==0&&dnd_model_control(gi,0,.5f)==0);
   assert(dnd_model_vertex(gi,0,0,v)==0);near(v[0],.5f);
   assert(dnd_model_instance_dispose(gi)==0&&dnd_model_dispose(glb)==0);
+  int blended_glb=dnd_model_begin_glb(dnd_string_from_utf8(&heap,"sd:/blended.glb"),
+                                       8*1024*1024,0);
+  assert(blended_glb);
+  DndModel *bm=dnd_model_find(blended_glb,false);
+  assert(bm->materials>=2);
+  assert((bm->material[bm->mesh[0].material].mode&4)!=0);
+  near(bm->material[bm->mesh[0].material].color[3],.35f);
+  int blended_instance=dnd_model_instance(blended_glb,4*1024*1024);
+  assert(blended_instance);
+  assert(dnd_instance_find(blended_instance)->draw_order!=NULL);
+  assert(dnd_model_instance_dispose(blended_instance)==0&&
+         dnd_model_dispose(blended_glb)==0);
   assert(dnd_model_begin_glb(glb_path,1024,0)==0);
   const char *bad_glb[]={"sd:/invalid-order.glb","sd:/external.glb","sd:/sparse.glb"};
   for(unsigned j=0;j<3;j++) {

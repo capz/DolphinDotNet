@@ -308,7 +308,7 @@ batch.DrawText(font, "READY", new Vector2(20, 20), Color32.White);
 
 Convenience layer for a camera's 3D pass, meshes, primitives and model instances; can own a whole frame or attach to an existing one.
 
-**API:** `Renderer([device])`, `Begin3D(camera)`, `End3D()`, `DrawMesh(mesh,material,transform)`, `DrawPrimitives(vertices,offset,count,primitive,transform)`, `BeginFrame(camera/matrices)`, `Draw(gameObject[,effectOverride])`, `DrawModel(instance,transform/matrix[,effectOverride])`, `EndFrame()`.
+**API:** `Renderer([device])`, `Begin3D(camera)`, `End3D()`, `DrawMesh(mesh,material,transform)`, `DrawPrimitives(vertices,offset,count,primitive,transform)`, `BeginFrame(camera/matrices)`, `Draw(gameObject[,effectOverride])`, `DrawModel(instance,transform/matrix[,effectOverride])`, `DrawModels(objects,instanceScratch,worldScratch)`, `EndFrame()`.
 
 ~~~csharp
 var renderer = new Renderer(device);
@@ -1328,3 +1328,5 @@ Managed TEV RGB programs: `ColorRamp(dark,bright)`,
 per-draw `Renderer.DrawModel(instance,transform,effectOverride)` /
 `Renderer.Draw(gameObject,effectOverride)`.
 Uniform updates run between frames. See [effects and graph compilation](effects.md).
+
+For consuming these APIs through NuGet, dependency AOT constraints and diagnostics, see the [SDK guide](nuget-sdk.md).

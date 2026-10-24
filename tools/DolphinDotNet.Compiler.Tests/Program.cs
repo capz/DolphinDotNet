@@ -4,13 +4,13 @@ using System.IO;
 using System.Linq;
 
 var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-var sample = Path.Combine(root, "samples/HelloGameCube/HelloGameCube.csproj");
+var sample = Path.Combine(root, "tests/HelloGameCube/HelloGameCube.csproj");
 var compiler = Path.Combine(root, "tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj");
 var tempDirectory = Path.Combine(Path.GetTempPath(), $"dnd-{Guid.NewGuid():N}");
 var temp = Path.Combine(tempDirectory, "hello.c");
 
 Run("dotnet", $"build \"{sample}\" -c Release -p:DndBuildNative=false");
-var dll = Path.Combine(root, "samples/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll");
+var dll = Path.Combine(root, "tests/HelloGameCube/bin/Release/net8.0/HelloGameCube.dll");
 Run("dotnet", $"run --project \"{compiler}\" -- \"{dll}\" \"{temp}\"");
 
 var generated = File.ReadAllText(temp);
@@ -23,7 +23,7 @@ if (File.ReadAllText(temp) != generated)
     throw new Exception("Default compilation and --aot produced different native programs.");
 
 var helloHost = Path.Combine(tempDirectory, "hello-host");
-Run("cc", $"-pthread -std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" \"{temp}\" \"{Path.Combine(root, "tests/hello_gamecube_host.c")}\" \"{Path.Combine(root, "source/managed_runtime.c")}\" \"{Path.Combine(root, "source/async_runtime.c")}\" \"{Path.Combine(root, "source/numeric.c")}\" \"{Path.Combine(root, "source/text.c")}\" -lm -o \"{helloHost}\"");
+Run("cc", $"-pthread -std=c11 -Wall -Wextra -Werror -Wno-unused-function -I\"{Path.Combine(root, "include")}\" \"{temp}\" \"{Path.Combine(root, "tests/hello_gamecube_host.c")}\" \"{Path.Combine(root, "source/managed_runtime.c")}\" \"{Path.Combine(root, "source/async_runtime.c")}\" \"{Path.Combine(root, "source/numeric.c")}\" \"{Path.Combine(root, "source/text.c")}\" -lm -o \"{helloHost}\"");
 Run(helloHost, "");
 // Normal Release output must not link libdb or install a trap.
 // Debugger acceptance uses a separate managed Debug build.
@@ -46,7 +46,7 @@ if (!File.ReadAllText(Path.Combine(sampleBundle, "Makefile")).Contains("-DDND_SA
     throw new Exception("Sample controls did not reach the native build.");
 
 Run("dotnet", $"build \"{sample}\" -c Debug -p:DndBuildNative=false -p:DndDebugSymbols=true");
-var debugDll = Path.Combine(root, "samples/HelloGameCube/bin/Debug/net8.0/HelloGameCube.dll");
+var debugDll = Path.Combine(root, "tests/HelloGameCube/bin/Debug/net8.0/HelloGameCube.dll");
 
 var symbolsBundle = Path.Combine(tempDirectory, "symbols-only");
 Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{debugDll}\" \"{symbolsBundle}\" --debug-symbols");
@@ -206,7 +206,7 @@ var genericOutput = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid
 Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{genericDll}\" \"{genericOutput}\"");
 var genericGenerated = File.ReadAllText(genericOutput);
 var genericObject = Path.Combine(Path.GetTempPath(), $"dnd-generic-{Guid.NewGuid():N}.o");
-Run("cc", $"-std=c11 -Wall -Wextra -Werror -I\"{Path.Combine(root, "include")}\" -c \"{genericOutput}\" -o \"{genericObject}\"");
+Run("cc", $"-std=c11 -Wall -Wextra -Werror -Wno-unused-function -I\"{Path.Combine(root, "include")}\" -c \"{genericOutput}\" -o \"{genericObject}\"");
 if (!genericGenerated.Contains("setjmp(dnd_eh_frame.environment)", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_exception_matches", StringComparison.Ordinal) ||
     !genericGenerated.Contains("dnd_caught_", StringComparison.Ordinal) ||

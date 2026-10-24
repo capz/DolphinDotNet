@@ -39,6 +39,21 @@ internal sealed class PortablePdbSourceMap
                      .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             var assembly = compilation.Model.Assemblies[group.Key];
+            // NuGet libraries commonly ship without symbols. They remain in
+            // the native graph but have no source/locals mapping. The entry
+            // assembly and any supplied PDB must still pass identity checks.
+            if (group.Key != compilation.Entry.AssemblyName &&
+                !File.Exists(Path.ChangeExtension(assembly.Path, ".pdb")) &&
+                !assembly.PE.ReadDebugDirectory().Any(e => e.Type == System.Reflection.PortableExecutable.DebugDirectoryEntryType.EmbeddedPortablePdb))
+            {
+                assemblies.Add(new DebugAssemblyIdentity(group.Key,
+                    assembly.Metadata.GetGuid(assembly.Metadata.GetModuleDefinition().Mvid).ToString("D"), ""));
+                foreach (var method in group) {
+                    mapped.Add(method.Key, new Dictionary<int, ManagedSourceLocation>());
+                    variables.Add(method.Key, Array.Empty<ManagedDebugVariable>());
+                }
+                continue;
+            }
             // This API validates the CodeView ID against the PDB (including
             // embedded PDBs). A stale same-named PDB must never be accepted.
             if (!assembly.PE.TryOpenAssociatedPortablePdb(assembly.Path,

@@ -56,6 +56,8 @@ int dnd_model_draw(int token, DndArray *transform);
  * 0=success, -1=invalid model/instance/frame/transform, -2=invalid/stale/pending
  * effect, -3=texture-required effect on a referenced untextured mesh. */
 int dnd_model_draw_effect(int token,DndArray *transform,int effect);
+/* All opaque, then global depth-sorted translucent submeshes. Max 128 objects / 4096 meshes. */
+int dnd_model_draw_models(DndArray *tokens,DndArray *matrices,int count);
 int dnd_model_draw_material(int token,DndArray *transform,int texture,int secondary,uint32_t color,int flags,float cutoff,int effect);
 int dnd_model_frame_begin(DndArray *view, DndArray *projection);
 int dnd_model_frame_end(void);

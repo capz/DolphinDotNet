@@ -8,8 +8,8 @@ runtime. We do not assume an earlier commit's checks validated the current tree.
 | Changed area | Selected jobs |
 |---|---|
 | `docs/`, README, security policy, license only | Selection tests and final CI result |
-| `tests/DebuggerTests/` only | Host GDB protocol |
-| Debugger library or acceptance probe | Host GDB protocol, GameCube DOL, Dolphin boot |
+| `eng/check_debugger.py` or debugger pin | Debugger compatibility and SDK IDE workflows |
+| Debugger dependency pin or source/native metadata interface | Debugger compatibility, SDK IDE workflows |
 | Dolphin smoke/protocol scripts or their unit tests | GameCube DOL, Dolphin boot |
 | IDE launch probe or build-workflow test only | IDE workflow on all three platforms |
 | Compiler, SDK, managed libraries, samples, assets/build tools | Managed compiler, IDE workflow, GameCube DOL, Dolphin boot |
@@ -36,7 +36,7 @@ settings.
 
 For successful `main` pushes and manual runs, the release job gathers
 sample DOL artifacts **already built** by `gamecube` and `gamecube-extra`.
-It publishes **one** `DolphinDotNet-samples.zip` release asset containing
+It publishes `DolphinDotNet-samples.zip` containing
 `<Sample>.dol` for each normally built sample. Build-only and emulator
 acceptance fixtures are excluded. Staging and packaging do not compile any
 additional samples. When a new sample starts producing a native DOL in the
@@ -51,3 +51,12 @@ python3 -m unittest discover -s tests -p test_ci_changes.py
 
 Extend filters conservatively when adding components. Include all consumers,
 shared compiler/runtime dependencies, and producer jobs needed for artifacts.
+
+## Debugger repository
+
+IDE package builds and releases moved to
+[DolphinDotNet.Debuggers](https://github.com/capz/DolphinDotNet.Debuggers).
+This repository selects only SDK IDE-workflow checks and debugger compatibility.
+The latter fetches `eng/debugger-source.json`'s pinned debugger revision and runs
+its protocol/metadata-boundary tests against this runtime. See
+[debugger components](debugger-components.md) for local commands and pin updates.

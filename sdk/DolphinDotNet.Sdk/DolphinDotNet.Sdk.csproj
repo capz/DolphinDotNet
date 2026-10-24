@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../eng/Package.props" />
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <PackageType>MSBuildSdk</PackageType>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <_DndDebuggerProject>$(MSBuildProjectDirectory)/../../out/debuggers/tools/DolphinDotNet.DebugAdapter/DolphinDotNet.DebugAdapter.csproj</_DndDebuggerProject>
+    <_Payload>$(MSBuildProjectDirectory)/obj/payload/</_Payload>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);CollectSdkPayload</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+  <ItemGroup><None Include="Sdk/**/*" Pack="true" PackagePath="Sdk/" /></ItemGroup>
+  <Target Name="CollectSdkPayload">
+    <Error Condition="!Exists('$(_DndDebuggerProject)')" Text="Debugger dependency is missing. Run python eng/prepare_debugger.py (or python eng/pack.py) before packing the SDK." />
+    <RemoveDir Directories="$(_Payload)" />
+    <MSBuild Projects="../../tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PublishDir=$(_Payload)compiler/" />
+    <MSBuild Projects="../../tools/DolphinDotNet.Build/DolphinDotNet.Build.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PublishDir=$(_Payload)build/" />
+    <MSBuild Projects="../../tools/DolphinDotNet.Effects/DolphinDotNet.Effects.csproj" Targets="Publish" Properties="Configuration=$(Configuration);PublishDir=$(_Payload)effects/" />
+    <MSBuild Projects="$(_DndDebuggerProject)" Targets="Publish" Properties="Configuration=$(Configuration);PublishDir=$(_Payload)debugger/" />
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(_Payload)**/*"><PackagePath>tools/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
+</Project>
