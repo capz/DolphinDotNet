@@ -240,10 +240,10 @@ internal sealed class StrategyScene : IDisposable
         t[13] = Switches; t[14] = Reversals; t[15] = MaxBytes / 1024;
         t[16] = RequestedBytes / 1024; t[17] = UploadedBytes / 1024;
         t[18] = maxLatency; t[19] = budgetWaits; t[20] = Fallbacks + Detailed;
-        t[21] = device.NativeBytes / 1024; t[22] = pendingFrames;
+        t[21] = device.NativeBytes / 1024; t[22] = TextureSource.Row;
         t[23] = Draws; t[24] = uploadUs; t[25] = Percentile(95); t[26] = Percentile(99);
         t[27] = maxUploadUs;
-        t[28] = frameUs / 100; t[29] = (Frame / 96) % 4;
+        t[28] = frameUs / 100; t[29] = TextureSource.Phase;
         t[30] = modeDisposals; t[31] = coarse.NativeBytes / 1024;
         telemetry.Present();
         device.EndFrame(); frameUs = (int)(Clock.Timestamp - frameStart); Frame++;
