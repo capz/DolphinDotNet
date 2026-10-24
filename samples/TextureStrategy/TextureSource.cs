@@ -59,4 +59,22 @@ internal static class TextureSource
         }
         return true;
     }
+    internal static int Signature(int id, bool atlas)
+    {
+        int width = atlas ? 128 : 32;
+        int ox = atlas ? (id % (WorldWidth / Group)) * Group : id % WorldWidth;
+        int oy = atlas ? (id / (WorldWidth / Group)) * Group : id / WorldWidth;
+        int hash = unchecked((int)2166136261u);
+        for (int iy = 0; iy < 4; iy++) for (int ix = 0; ix < 4; ix++)
+        {
+            int x = ((2 * ix + 1) * width) / 8, y = ((2 * iy + 1) * width) / 8;
+            int cx = ox + x / CellPixels, cy = oy + y / CellPixels;
+            bool bright = (((x % CellPixels / 8) ^ (y % CellPixels / 8) ^ (cx * 3 + cy)) & 1) != 0;
+            hash = unchecked((hash ^ Red(cx, bright)) * 16777619);
+            hash = unchecked((hash ^ Green(cy, bright)) * 16777619);
+            hash = unchecked((hash ^ ((x % CellPixels == 0 || y % CellPixels == 0) ? 245 : bright ? 184 : 84)) * 16777619);
+            hash = unchecked((hash ^ 255) * 16777619);
+        }
+        return hash;
+    }
 }

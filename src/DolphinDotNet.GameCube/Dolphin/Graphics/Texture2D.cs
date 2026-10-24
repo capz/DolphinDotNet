@@ -10,6 +10,10 @@ public sealed class Texture2D : IDisposable
     public int Width {get;}
     public int Height {get;}
     public int NativeBytes {get{Check();return NativeGraphics.DrawBytes(Token);}}
+    /// <summary>Diagnostic signature of the original RGBA upload; zero for other creation paths.</summary>
+    public int CreationSignature {get{Check();return NativeGraphics.TextureDimension(Token,3);}}
+    /// <summary>Diagnostic signature of the last texture resolved by native drawing.</summary>
+    public int LastResolvedSignature {get{Check();return NativeGraphics.TextureDimension(Token,4);}}
     private Texture2D(int token){Token=token;Width=NativeGraphics.TextureDimension(token,0);Height=NativeGraphics.TextureDimension(token,1);}
     public static Texture2D Create(int width,int height,byte[] rgba,bool linear=false)
     {

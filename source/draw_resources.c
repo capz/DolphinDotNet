@@ -30,6 +30,7 @@ typedef struct {
 } Resource;
 static Resource slots[SLOTS];
 static int total_bytes,active_canvas;
+static uint32_t last_texture_signature;
 static float identity[16]={1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};
 static DndDrawVertex staging[768];
 static Resource *find(int token,int kind) {
@@ -272,7 +273,7 @@ int dnd_texture_png(DndArray *png,int linear) {
     stbi_image_free(rgba);
     return token;
 }
-int dnd_texture_dimension(int token,int axis) { Resource *r=find(token,TEXTURE);return !r?-1:axis==0?r->width:axis==1?r->height:r->format; }
+int dnd_texture_dimension(int token,int axis) { Resource *r=find(token,TEXTURE);return !r?-1:axis==0?r->width:axis==1?r->height:axis==3?(int)r->immutable_hash:axis==4?(int)last_texture_signature:r->format; }
 static bool matrix(DndArray *a,float *out) {
     if(!a || a->element_size!=4 || a->elements_are_references || a->length!=16) return false;
     memcpy(out,a->data,64);for(int i=0;i<16;i++)if(!isfinite(out[i]))return false;return true;
@@ -317,6 +318,7 @@ static bool texture(int token,DndDrawTexture *out) {
     Resource *r=find(token,TEXTURE);if(!r)return false;
     if(r->audit_rgba && rgba_ram_hash(r)!=r->immutable_hash)
         dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Resident RGBA8 RAM was overwritten.");
+    last_texture_signature=r->immutable_hash;
     *out=(DndDrawTexture){r->data,(uint32_t)r->bytes,r->width,r->height,r->format,r->linear!=0};return true;
 }
 int dnd_texture_resolve(int token,DndDrawTexture *out){return texture(token,out)?0:-1;}

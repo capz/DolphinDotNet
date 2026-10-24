@@ -167,6 +167,8 @@ internal sealed class StrategyScene : IDisposable
                 requestAtlas ? atlasPixels : pagePixels, false);
             if (texture.NativeBytes != resident.SlotBytes)
                 throw new InvalidOperationException("Unexpected native texture allocation size.");
+            if (texture.CreationSignature != TextureSource.Signature(requestId, requestAtlas))
+                throw new InvalidOperationException("Native upload signature has the wrong world ID.");
             uploadUs = (int)(Clock.Timestamp - started);
             if (uploadUs > maxUploadUs) maxUploadUs = uploadUs;
             detail[victim] = texture;
@@ -242,7 +244,11 @@ internal sealed class StrategyScene : IDisposable
                 transforms[slot].CopyWorldMatrix(bindingMatrix);
                 if (bindingMatrix[12] != x || bindingMatrix[13] != y || materials[slot].Texture != detail[slot])
                     throw new InvalidOperationException("Resident content has a stale spatial/material binding.");
+                if (detail[slot]!.CreationSignature != TextureSource.Signature(id, atlas))
+                    throw new InvalidOperationException("Resident native texture has the wrong world ID.");
                 renderer.DrawMesh(atlas ? atlasQuad : unitQuad, materials[slot], transforms[slot]);
+                if (detail[slot]!.LastResolvedSignature != TextureSource.Signature(id, atlas))
+                    throw new InvalidOperationException("Native drawing resolved the wrong texture.");
                 Detailed += weights[i]; Draws++;
             }
         }
