@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: root-solution-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Solution and texture filter / ${{ matrix.os }} / ${{ matrix.configuration }}
@@ -30,4 +34,8 @@ jobs:
       - name: Build the texture solution filter
         run: dotnet build TextureStrategy.slnf -c ${{ matrix.configuration }} -p:DndBuildNative=false -m:1
       - name: Compile the texture PoC to a GameCube C bundle
-        run: dotnet tools/DolphinDotNet.Compiler/bin/${{ matrix.configuration }}/net8.0/DolphinDotNet.Compiler.dll --bundle samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dll out/TextureStrategy --platform gamecube
+        run: >-
+          dotnet tools/DolphinDotNet.Compiler/bin/${{ matrix.configuration }}/net8.0/DolphinDotNet.Compiler.dll
+          --bundle samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dll
+          out/TextureStrategy --platform gamecube
+          ${{ matrix.configuration == 'Debug' && '--debug-symbols' || '' }}

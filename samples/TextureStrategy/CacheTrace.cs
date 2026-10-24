@@ -2,6 +2,8 @@
 // not move assets to ARAM or fetch storage. Provides comparable miss/byte counts.
 internal static class CacheTrace
 {
+    // Keep the result in the compiled assembly: the AOT compiler cannot currently
+    // resolve the desktop framework's generic ValueTuple fields.
     internal readonly struct Totals
     {
         internal readonly int Pages;
