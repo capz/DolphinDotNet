@@ -14,6 +14,7 @@ on:
       - 'tools/DolphinDotNet.Build/**'
       - 'scripts/**'
       - 'tests/*dolphin*'
+      - 'tests/TextureStreamingTests/**'
       - '.github/workflows/texture-dolphin.yml'
   workflow_dispatch:
 
@@ -84,7 +85,7 @@ jobs:
             out/dolphin-texture/mismatch.png
             out/dolphin-texture/mismatch.json
             out/dolphin-texture/emulator.log
-            samples/TextureStrategy/obj/${{ matrix.configuration }}/net8.0/native/source/generated_program.c
+            samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
             samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.elf
       - name: Preserve DOL, ELF, emulator logs, capture and pixel proof
         if: always()

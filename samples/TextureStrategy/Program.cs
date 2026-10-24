@@ -42,7 +42,6 @@ internal static class Program
 #endif
             scene.Move(automatic, pad.Stick.X * .15f, pad.Stick.Y * .15f);
             scene.Present();
-            if (scene.Frame % 120 == 0) scene.Report();
             // Bounded frame pacing hands off the execution gate. The source
             // task itself is only observed once complete, never waited upon.
             Task.Delay(1).GetAwaiter().GetResult();

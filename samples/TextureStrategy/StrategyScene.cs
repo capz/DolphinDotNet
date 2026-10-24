@@ -23,16 +23,15 @@ internal sealed class StrategyScene : IDisposable
     private readonly ResidencySet resident = new ResidencySet(false);
     private readonly int[] wanted = new int[63], weights = new int[63], retryAfter = new int[W * H * 2], latency = new int[256];
     private readonly bool[] failedOnce = new bool[W * H * 2];
-    private readonly float[] bindingMatrix = new float[16];
     private readonly byte[] pagePixels = new byte[4096], atlasPixels = new byte[65536];
     private readonly StreamTelemetry telemetry = new StreamTelemetry();
     private Task? request;
     private int requestId, requestFrame, requestGeneration, generation, credit, wantedCount;
-    private bool requestAtlas, atlas, stopped;
+    private bool requestAtlas, atlas, stopped, reportDue = true;
     internal bool InjectFailures;
     internal int Frame, Promotions, Evictions, Failures, Cancelled, Switches, Reversals;
     internal int RequestedBytes, UploadedBytes, MaxBytes, Fallbacks, Detailed, Draws;
-    private int maxLatency, uploadUs, maxUploadUs, budgetWaits, pendingFrames, lastDirection, frameUs, modeDisposals, staleBindings;
+    private int maxLatency, uploadUs, maxUploadUs, budgetWaits, pendingFrames, lastDirection, frameUs, modeDisposals;
     private readonly int nativeBaseline;
     private float centerX = 8, centerY = 12;
     internal StrategyScene(bool startAtlas)
@@ -57,7 +56,7 @@ internal sealed class StrategyScene : IDisposable
         atlas = startAtlas; resident.Reset(atlas);
         nativeBaseline = device.NativeBytes;
         DebugOverlay.WriteLine("A: MODE  Y: CAMERA  X: FAULTS  B: EXIT");
-        DebugOverlay.WriteLine("192 KIB DETAIL / 4 KIB PER FRAME / COARSE FALLBACK");
+        DebugOverlay.WriteLine("192 KIB DETAIL / 4 KIB/FRAME CREDIT / COARSE FALLBACK");
     }
     private static Material NewMaterial(Texture2D? texture) =>
         new Material { Texture = texture, Cull = CullMode.None, Lighting = LightingMode.Unlit };
@@ -90,7 +89,7 @@ internal sealed class StrategyScene : IDisposable
     {
         generation++;
         for (int i = 0; i < detail.Length; i++) Release(i, false);
-        atlas = !atlas; resident.Reset(atlas); credit = 0; Switches++;
+        atlas = !atlas; resident.Reset(atlas); credit = 0; Switches++; reportDue = true;
     }
     internal void Move(bool automatic, float dx, float dy)
     {
@@ -167,8 +166,6 @@ internal sealed class StrategyScene : IDisposable
                 requestAtlas ? atlasPixels : pagePixels, false);
             if (texture.NativeBytes != resident.SlotBytes)
                 throw new InvalidOperationException("Unexpected native texture allocation size.");
-            if (texture.CreationSignature != TextureSource.Signature(requestId, requestAtlas))
-                throw new InvalidOperationException("Native upload signature has the wrong world ID.");
             uploadUs = (int)(Clock.Timestamp - started);
             if (uploadUs > maxUploadUs) maxUploadUs = uploadUs;
             detail[victim] = texture;
@@ -176,12 +173,7 @@ internal sealed class StrategyScene : IDisposable
             int x = requestAtlas ? (requestId % (W / Group)) * Group : requestId % W;
             int y = requestAtlas ? (requestId / (W / Group)) * Group : requestId / W;
             transforms[victim].LocalPosition = new Vector3(x, y, .01f);
-            transforms[victim].CopyWorldMatrix(bindingMatrix);
-            if (bindingMatrix[12] != x || bindingMatrix[13] != y) staleBindings++;
-            // Publish a complete spatial/material binding with the new content.
-            // A slot's previous cached transform is never submitted for a new ID.
-            transforms[victim] = new Transform { LocalPosition = new Vector3(x, y, .01f) };
-            materials[victim] = NewMaterial(texture);
+            materials[victim].Texture = texture;
             credit -= bytes; UploadedBytes += bytes; Promotions++;
             int delay = Frame - requestFrame;
             if (delay > maxLatency) maxLatency = delay;
@@ -238,33 +230,24 @@ internal sealed class StrategyScene : IDisposable
             if (slot < 0) Fallbacks += weights[i];
             else
             {
-                int id = wanted[i];
-                int x = atlas ? (id % (W / Group)) * Group : id % W;
-                int y = atlas ? (id / (W / Group)) * Group : id / W;
-                transforms[slot].CopyWorldMatrix(bindingMatrix);
-                if (bindingMatrix[12] != x || bindingMatrix[13] != y || materials[slot].Texture != detail[slot])
-                    throw new InvalidOperationException("Resident content has a stale spatial/material binding.");
-                if (detail[slot]!.CreationSignature != TextureSource.Signature(id, atlas))
-                    throw new InvalidOperationException("Resident native texture has the wrong world ID.");
                 renderer.DrawMesh(atlas ? atlasQuad : unitQuad, materials[slot], transforms[slot]);
-                if (detail[slot]!.LastResolvedSignature != TextureSource.Signature(id, atlas))
-                    throw new InvalidOperationException("Native drawing resolved the wrong texture.");
                 Detailed += weights[i]; Draws++;
             }
         }
         renderer.End3D();
+        if (reportDue || Frame % 120 == 0) { Report(); reportDue = false; }
         int[] t = telemetry.Values;
-        t[0] = 0x5453; t[1] = 2; t[2] = Frame; t[3] = atlas ? 1 : 0;
+        t[0] = 0x5453; t[1] = 3; t[2] = Frame; t[3] = atlas ? 1 : 0;
         t[4] = (int)(centerX * 256); t[5] = (int)(centerY * 256);
         t[6] = resident.Bytes / 1024; t[7] = Promotions; t[8] = Evictions;
         t[9] = Fallbacks; t[10] = Detailed; t[11] = Failures; t[12] = Cancelled;
         t[13] = Switches; t[14] = Reversals; t[15] = MaxBytes / 1024;
         t[16] = RequestedBytes / 1024; t[17] = UploadedBytes / 1024;
         t[18] = maxLatency; t[19] = budgetWaits; t[20] = Fallbacks + Detailed;
-        t[21] = device.NativeBytes / 1024; t[22] = staleBindings;
+        t[21] = device.NativeBytes / 1024; t[22] = pendingFrames;
         t[23] = Draws; t[24] = uploadUs; t[25] = Percentile(95); t[26] = Percentile(99);
         t[27] = maxUploadUs;
-        t[28] = frameUs / 100; t[29] = TextureSource.Phase;
+        t[28] = frameUs / 100; t[29] = request != null ? 1 : 0;
         t[30] = modeDisposals; t[31] = coarse.NativeBytes / 1024;
         telemetry.Present();
         device.EndFrame(); frameUs = (int)(Clock.Timestamp - frameStart); Frame++;

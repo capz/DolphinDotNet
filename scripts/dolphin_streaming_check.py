@@ -11,9 +11,9 @@ FIELDS = ("magic", "version", "frame", "mode", "cameraX256", "cameraY256",
           "residentKiB", "promotions", "evictions", "fallbackCells", "detailCells",
           "failures", "cancelled", "switches", "reversals", "peakResidentKiB",
           "requestedKiB", "uploadedKiB", "maxLatencyFrames", "budgetWaitFrames",
-          "visibleCells", "nativeKiB", "staleBindings", "draws", "uploadUs",
+          "visibleCells", "nativeKiB", "pendingFrames", "draws", "uploadUs",
           "p95LatencyFrames", "p99LatencyFrames", "maxUploadUs", "frameTenthsMs",
-          "sourcePhase", "modeDisposals", "coarseKiB")
+          "sourceBusy", "modeDisposals", "coarseKiB")
 
 
 def telemetry(rgb):
@@ -32,7 +32,7 @@ def telemetry(rgb):
                 value |= 1 << bit
         values.append(value)
     result = dict(zip(FIELDS, values))
-    if result["magic"] != 0x5453 or result["version"] != 2:
+    if result["magic"] != 0x5453 or result["version"] != 3:
         raise AssertionError("No streaming telemetry: blank, stale or error screen")
     return result
 

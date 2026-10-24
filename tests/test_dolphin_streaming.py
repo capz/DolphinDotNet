@@ -13,7 +13,7 @@ def frame(number, *, mode=None, hole=False, budget=192):
     cx = 8 + step * .25 if step < 96 else 32 - (step - 96) * .25
     cy = 12 + ((number // 192) % 2) * 8
     state = dict.fromkeys(FIELDS, 0)
-    state.update(magic=0x5453, version=2, frame=number, mode=mode,
+    state.update(magic=0x5453, version=3, frame=number, mode=mode,
                  cameraX256=int(cx * 256), cameraY256=int(cy * 256),
                  residentKiB=budget, peakResidentKiB=budget, promotions=number // 4,
                  evictions=max(0, number // 4 - 48), fallbackCells=20, detailCells=43,
@@ -58,6 +58,17 @@ class StreamingOracleTests(unittest.TestCase):
         rgb = frame(400, hole=True)
         with self.assertRaises(AssertionError):
             rendered_world(rgb, telemetry(rgb))
+
+    def test_stale_rgba8_green_plane_fails(self):
+        # The route has identical X after 192 frames, but a different world Y.
+        # Preserve correct R/B, coarse pixels and current telemetry while making
+        # only detail green come from the preceding row of the camera route.
+        rgb, stale = bytearray(frame(592)), frame(400)
+        for at in range(2, FRAME_BYTES, 3):
+            if rgb[at] in (84, 184):
+                rgb[at - 1] = stale[at - 1]
+        with self.assertRaises(AssertionError):
+            rendered_world(bytes(rgb), telemetry(rgb))
 
     def test_sweeps_reversals_evictions_recovery_and_switch(self):
         proof = validate_stream(b"".join(frame(i) for i in range(0, 401, 16)), "pages")
