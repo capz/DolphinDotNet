@@ -135,7 +135,7 @@ def run(args):
                 "-frames:v", "1", "-y", str(root / "frame.png")],
                root / "encode.log", input=selected)
     if args.streaming:
-        from dolphin_streaming_check import validate_stream, telemetry
+        from dolphin_streaming_check import validate_stream, telemetry, RenderMismatch
         states = []
         for offset in range(0, len(raw), FRAME_BYTES):
             try:
@@ -143,7 +143,14 @@ def run(args):
             except AssertionError:
                 continue
         (root / "diagnostics.json").write_text(json.dumps(states, indent=2) + "\n")
-        proof = validate_stream(raw, args.mode)
+        try:
+            proof = validate_stream(raw, args.mode)
+        except RenderMismatch as error:
+            run_ffmpeg(["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "640x480", "-i", "pipe:0",
+                        "-frames:v", "1", "-y", str(root / "mismatch.png")],
+                       root / "mismatch-encode.log", input=error.rgb)
+            (root / "mismatch.json").write_text(json.dumps(error.state, indent=2) + "\n")
+            raise
     else:
         proof = validate_capture(raw)
     proof.update(mode=args.mode, soakSeconds=args.seconds,
