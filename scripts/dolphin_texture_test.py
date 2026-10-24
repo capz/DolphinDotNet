@@ -72,11 +72,11 @@ def run(args):
     config = root / "user" / "Config"
     config.mkdir(parents=True)
     (config / "Dolphin.ini").write_text(
-        f"[Core]\nGFXBackend = {args.backend}\nCPUCore = 1\nCPUThread = False\n"
+        f"[Core]\nGFXBackend = {'Software Renderer' if args.backend == 'Software' else args.backend}\nCPUCore = 1\nCPUThread = False\n"
         "[DSP]\nBackend = No Audio Output\n"
         "[Movie]\nDumpFrames = True\nDumpFramesSilent = True\n")
     (config / "GFX.ini").write_text(
-        "[Settings]\nDumpFormat = avi\nDumpCodec = ffv1\nDumpEncoder = ffv1\nDumpPixelFormat = bgr0\n")
+        "[Settings]\nSafeTextureCacheColorSamples = 0\nDumpFormat = avi\nDumpCodec = ffv1\nDumpEncoder = ffv1\nDumpPixelFormat = bgr0\n")
     (config / "Logger.ini").write_text(
         "[Options]\nWriteToFile = True\nWriteToConsole = True\nVerbosity = 3\n"
         "[Logs]\nBOOT = True\nCORE = True\nPOWERPC = True\n")
