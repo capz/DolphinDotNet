@@ -80,6 +80,7 @@ jobs:
           path: |
             out/dolphin-texture/frame.png
             out/dolphin-texture/results.json
+            out/dolphin-texture/diagnostics.json
             out/dolphin-texture/emulator.log
       - name: Preserve DOL, ELF, emulator logs, capture and pixel proof
         if: always()
