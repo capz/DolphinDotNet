@@ -86,18 +86,25 @@ def run(args):
         environment[key] = str(path)
     stdout = root / "stdout.log"
     before_stop = ""
+    midpoint_bytes = None
+    final_bytes = 0
+    frames_path = root / "user" / "Dump" / "Frames"
     with stdout.open("w") as log:
         process = subprocess.Popen(
             ["xvfb-run", "-a", args.binary, "--user", str(root / "user"), "--exec", str(args.dol.resolve())],
             env=environment, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
-            deadline = time.monotonic() + args.seconds
+            started = time.monotonic()
+            deadline = started + args.seconds
             while time.monotonic() < deadline:
                 if process.poll() is not None:
                     raise RuntimeError(f"Dolphin exited early: {process.returncode}")
                 before_stop = collect_logs(stdout, root / "user")
                 if check(before_stop) or re.search(r"Stop.*Shutting down|Shutdown complete", before_stop, re.I):
                     raise RuntimeError("Guest fault or emulation stopped before the capture deadline")
+                final_bytes = sum(p.stat().st_size for p in frames_path.glob("*.avi"))
+                if midpoint_bytes is None and time.monotonic() - started >= args.seconds / 2:
+                    midpoint_bytes = final_bytes
                 time.sleep(.2)
         finally:
             if process.poll() is None:
@@ -112,6 +119,8 @@ def run(args):
                 pass
             process.wait()
             (root / "emulator.log").write_text(collect_logs(stdout, root / "user"))
+    if midpoint_bytes is None or final_bytes <= midpoint_bytes:
+        raise RuntimeError("Capture stopped growing during the second half of the soak")
     if not re.search(r"Booting from executable:.*\.dol", before_stop, re.I):
         raise RuntimeError("No executable boot evidence")
     captures = sorted((root / "user" / "Dump" / "Frames").glob("*.avi"))
@@ -123,7 +132,8 @@ def run(args):
     run_ffmpeg(["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "640x480", "-i", "pipe:0",
                 "-frames:v", "1", "-y", str(root / "frame.png")],
                root / "encode.log", input=selected)
-    proof.update(mode=args.mode, soakSeconds=args.seconds)
+    proof.update(mode=args.mode, soakSeconds=args.seconds,
+                 secondHalfCaptureBytes=final_bytes - midpoint_bytes)
     (root / "results.json").write_text(json.dumps(proof, indent=2) + "\n")
     print(json.dumps(proof))
 
