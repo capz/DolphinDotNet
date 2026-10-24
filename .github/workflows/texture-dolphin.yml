@@ -1,0 +1,76 @@
+name: TextureStrategy in Dolphin
+
+on:
+  push:
+    branches: [main, experiment/virtual-texture-vs-atlas, codex/texture-strategy-startup-diagnostics]
+  pull_request:
+    paths:
+      - 'samples/TextureStrategy/**'
+      - 'source/**'
+      - 'include/**'
+      - 'src/**'
+      - 'sdk/**'
+      - 'tools/DolphinDotNet.Compiler/**'
+      - 'tools/DolphinDotNet.Build/**'
+      - 'scripts/**'
+      - 'tests/*dolphin*'
+      - '.github/workflows/texture-dolphin.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: texture-dolphin-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator:
+    name: Dolphin / ${{ matrix.configuration }} / ${{ matrix.mode }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+        mode: [pages, atlas]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Dolphin and capture dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dolphin-emu xvfb xauth ffmpeg
+          /usr/games/dolphin-emu-nogui --version
+      - name: Test the acceptance oracle and native failure diagnostics
+        run: |
+          python -m unittest discover -s tests -p test_dolphin_texture.py
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/native_main_failure_test.c -o /tmp/dnd-main-test
+          /tmp/dnd-main-test
+      - name: Build the actual GameCube DOL with the Docker backend
+        run: >-
+          dotnet build samples/TextureStrategy/TextureStrategy.csproj
+          -c ${{ matrix.configuration }} -m:1
+          -p:DndBuildBackend=Docker
+          -p:DndTextureAtlasStart=${{ matrix.mode == 'atlas' && 'true' || 'false' }}
+      - name: Boot Dolphin and require sustained textured frames
+        run: >-
+          python scripts/dolphin_texture_test.py
+          samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
+          --mode ${{ matrix.mode }} --seconds 45
+          --logs out/dolphin-texture
+      - name: Preserve DOL, ELF, emulator logs, capture and pixel proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: texture-dolphin-${{ matrix.configuration }}-${{ matrix.mode }}
+          if-no-files-found: warn
+          path: |
+            out/dolphin-texture/
+            samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/*.dol
+            samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/*.elf
