@@ -21,10 +21,12 @@ var atlasPixels = new byte[65536];
 for (int tileY = 0; tileY < 8; tileY++) for (int tileX = 0; tileX < 12; tileX++)
 {
     TextureSource.Fill(atlasPixels, tileY * 12 + tileX, true, false);
+    Check(TextureSource.Matches(atlasPixels, tileY * 12 + tileX, true), "Atlas identity validation");
     for (int dy = 0; dy < 4; dy++) for (int dx = 0; dx < 4; dx++)
     {
         int id = (tileY * 4 + dy) * 48 + tileX * 4 + dx;
         TextureSource.Fill(page, id, false, false);
+        Check(TextureSource.Matches(page, id, false), "Page identity validation");
         for (int y = 0; y < 32; y++) for (int x = 0; x < 32; x++)
             for (int c = 0; c < 4; c++)
                 Check(page[(y * 32 + x) * 4 + c] == atlasPixels[((dy * 32 + y) * 128 + dx * 32 + x) * 4 + c],

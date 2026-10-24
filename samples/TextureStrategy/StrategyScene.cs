@@ -156,6 +156,8 @@ internal sealed class StrategyScene : IDisposable
                 Failures++; request = null; return;
             }
             request = null;
+            if (!TextureSource.Matches(requestAtlas ? atlasPixels : pagePixels, requestId, requestAtlas))
+                throw new InvalidOperationException("Source pixels do not match their requested world ID.");
             int victim = resident.Victim(wanted, wantedCount);
             if (victim < 0) { Cancelled++; return; }
             Release(victim, true);

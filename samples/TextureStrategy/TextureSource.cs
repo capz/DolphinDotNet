@@ -45,4 +45,18 @@ internal static class TextureSource
         }
         return pixels;
     }
+    internal static bool Matches(byte[] pixels, int id, bool atlas)
+    {
+        int cells = atlas ? Group : 1, width = cells * CellPixels;
+        int ox = atlas ? (id % (WorldWidth / Group)) * Group : id % WorldWidth;
+        int oy = atlas ? (id / (WorldWidth / Group)) * Group : id / WorldWidth;
+        for (int y = 0; y < cells; y++) for (int x = 0; x < cells; x++)
+        {
+            int at = (((y * CellPixels + 12) * width) + x * CellPixels + 12) * 4;
+            bool bright = (((ox + x) * 3 + oy + y) & 1) != 0;
+            if (pixels[at] != Red(ox + x, bright) || pixels[at + 1] != Green(oy + y, bright) ||
+                pixels[at + 2] != (bright ? 184 : 84) || pixels[at + 3] != 255) return false;
+        }
+        return true;
+    }
 }
