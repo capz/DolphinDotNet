@@ -154,6 +154,9 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
         GXTexObj tex;GX_InitTexObj(&tex,(void*)texture->data,(u16)texture->width,(u16)texture->height,(u8)texture->format,world_reflection&&!secondary?GX_REPEAT:GX_CLAMP,GX_CLAMP,GX_FALSE);
         GX_InitTexObjLOD(&tex,texture->linear?GX_LINEAR:GX_NEAR,texture->linear?GX_LINEAR:GX_NEAR,0,0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
         GX_LoadTexObj(&tex,GX_TEXMAP0);
+        /* Different images can remap the RGBA8 cache banks. Invalidate after
+         * the new descriptor is installed, including allocator-address reuse. */
+        GX_InvalidateTexAll();
     }
     if(texture||secondary)GX_SetTexCoordGen(GX_TEXCOORD0,GX_TG_MTX2x4,GX_TG_TEX0,GX_IDENTITY);
     if(secondary){
