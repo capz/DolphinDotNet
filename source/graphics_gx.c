@@ -154,9 +154,6 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
         GXTexObj tex;GX_InitTexObj(&tex,(void*)texture->data,(u16)texture->width,(u16)texture->height,(u8)texture->format,world_reflection&&!secondary?GX_REPEAT:GX_CLAMP,GX_CLAMP,GX_FALSE);
         GX_InitTexObjLOD(&tex,texture->linear?GX_LINEAR:GX_NEAR,texture->linear?GX_LINEAR:GX_NEAR,0,0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
         GX_LoadTexObj(&tex,GX_TEXMAP0);
-        /* Different images can remap the RGBA8 cache banks. Invalidate after
-         * the new descriptor is installed, including allocator-address reuse. */
-        GX_InvalidateTexAll();
     }
     if(texture||secondary)GX_SetTexCoordGen(GX_TEXCOORD0,GX_TG_MTX2x4,GX_TG_TEX0,GX_IDENTITY);
     if(secondary){
@@ -211,9 +208,6 @@ void dnd_graphics_begin_frame(float r,float g,float b,float a) {
     GX_SetPixelFmt(mode->aa?GX_PF_RGB565_Z16:GX_PF_RGB8_Z24,GX_ZC_LINEAR);
     GX_SetCopyClear(color(rgba(r,g,b,a)),0x00ffffff);GX_SetColorUpdate(GX_TRUE);GX_SetAlphaUpdate(GX_TRUE);
     GX_SetZMode(GX_TRUE,GX_LEQUAL,GX_TRUE);GX_CopyDisp(xfb[fb],GX_TRUE);GX_DrawDone();
-    /* Streamed allocations may reuse last frame's texture addresses. Invalidate
-     * after the copy/clear fence, before binding this frame's resident pages. */
-    GX_InvalidateTexAll();
     dnd_draw_backend_viewport(0,0,mode->fbWidth,mode->efbHeight);dnd_draw_backend_scissor(0,0,mode->fbWidth,mode->efbHeight);
     projection_ortho=false;identity(view_matrix);identity(projection_matrix);identity(immediate_world);
 }

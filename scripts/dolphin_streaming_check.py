@@ -11,7 +11,7 @@ FIELDS = ("magic", "version", "frame", "mode", "cameraX256", "cameraY256",
           "residentKiB", "promotions", "evictions", "fallbackCells", "detailCells",
           "failures", "cancelled", "switches", "reversals", "peakResidentKiB",
           "requestedKiB", "uploadedKiB", "maxLatencyFrames", "budgetWaitFrames",
-          "visibleCells", "nativeKiB", "sourceRow", "draws", "uploadUs",
+          "visibleCells", "nativeKiB", "staleBindings", "draws", "uploadUs",
           "p95LatencyFrames", "p99LatencyFrames", "maxUploadUs", "frameTenthsMs",
           "sourcePhase", "modeDisposals", "coarseKiB")
 
