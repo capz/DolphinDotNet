@@ -89,6 +89,12 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
     <RunArguments Condition="'$(Configuration)' == 'Debug' and '$(DndDebugSymbols)' == 'true'">$(RunArguments) --gdb-port 2166</RunArguments>
     <RunWorkingDirectory>$(TargetDir)</RunWorkingDirectory>
   </PropertyGroup>
+  <!-- Build host tools through the project graph. Rebuilding them inside BuildDol
+       can delete outputs already scheduled by a parallel solution build. -->
+  <ItemGroup Condition="'$(_DndPackaged)' != 'true' and '$(DndBuildNative)' == 'true' and '$(OutputType)' != 'Library'">
+    <ProjectReference Include="$(_DndBuildProject);$(_DndCompilerProject)"
+                      ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
   <ItemGroup Condition="'@(DndEffect)' != ''">
     <Compile Remove="@(DndEffect->'%(GeneratedSource)')" />
     <Compile Include="@(DndEffect->'%(GeneratedSource)')" />
@@ -106,9 +112,6 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
   <Target Name="BuildDol" AfterTargets="Build"
           Condition="'$(DndBuildNative)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingProject)' != 'false' and '$(IsCrossTargetingBuild)' != 'true' and '$(OutputType)' != 'Library'">
     <Delete Files="$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)$(AssemblyName).dnd-debug.json;$(TargetDir)$(AssemblyName).dnd-addresses.json;$(TargetDir)dolphin-run.json" />
-    <MSBuild Condition="'$(_DndPackaged)' != 'true'" Projects="$(_DndBuildProject);$(_DndCompilerProject)" Targets="Restore;Rebuild"
-             Properties="Configuration=$(Configuration)"
-             RemoveProperties="OutputPath;BaseOutputPath;BaseIntermediateOutputPath;IntermediateOutputPath;TargetFramework;RuntimeIdentifier;SelfContained;DndBuildNative" />
     <PropertyGroup>
       <_DndNative>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)native'))</_DndNative>
     </PropertyGroup>

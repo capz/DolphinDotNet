@@ -29,10 +29,15 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check IDE metadata and fresh parallel native build dependencies
+        run: python tests/root_solution_build_test.py --configuration ${{ matrix.configuration }}
       - name: Build the repository solution without a console toolchain
-        run: dotnet build DolphinDotNet.sln -c ${{ matrix.configuration }} -p:DndBuildNative=false -m:1
+        run: dotnet build DolphinDotNet.sln -c ${{ matrix.configuration }} -p:DndBuildNative=false -m:10
       - name: Build the texture solution filter
-        run: dotnet build TextureStrategy.slnf -c ${{ matrix.configuration }} -p:DndBuildNative=false -m:1
+        run: dotnet build TextureStrategy.slnf -c ${{ matrix.configuration }} -p:DndBuildNative=false -m:10
       - name: Compile the texture PoC to a GameCube C bundle
         run: >-
           dotnet tools/DolphinDotNet.Compiler/bin/${{ matrix.configuration }}/net8.0/DolphinDotNet.Compiler.dll

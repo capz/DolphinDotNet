@@ -2,101 +2,101 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{66A26720-8FB5-11D2-AA7E-00C04F688DDE}") = "samples", "samples", "{A5EF269A-DE87-5B16-A714-F42071413B56}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{A5EF269A-DE87-5B16-A714-F42071413B56}"
 EndProject
-Project("{66A26720-8FB5-11D2-AA7E-00C04F688DDE}") = "src", "src", "{7028B82A-0A94-51BB-975F-912BA0C8908A}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{7028B82A-0A94-51BB-975F-912BA0C8908A}"
 EndProject
-Project("{66A26720-8FB5-11D2-AA7E-00C04F688DDE}") = "tests", "tests", "{2A5AF77D-86C4-5503-B309-0BE0275126F3}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{2A5AF77D-86C4-5503-B309-0BE0275126F3}"
 EndProject
-Project("{66A26720-8FB5-11D2-AA7E-00C04F688DDE}") = "tools", "tools", "{03643E71-DE61-55E2-8F2C-2F523F8A6F40}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{03643E71-DE61-55E2-8F2C-2F523F8A6F40}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TextureStrategy", "samples\TextureStrategy\TextureStrategy.csproj", "{CC8DF2C5-A06E-5DAB-A39B-BAB5DD20FC50}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TextureStrategy", "samples\TextureStrategy\TextureStrategy.csproj", "{CC8DF2C5-A06E-5DAB-A39B-BAB5DD20FC50}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinDotNet.Core", "src\DolphinDotNet.Core\DolphinDotNet.Core.csproj", "{758AF264-025C-5783-A8D7-CF2DA14ADD2B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinDotNet.Core", "src\DolphinDotNet.Core\DolphinDotNet.Core.csproj", "{758AF264-025C-5783-A8D7-CF2DA14ADD2B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinDotNet.GameCube", "src\DolphinDotNet.GameCube\DolphinDotNet.GameCube.csproj", "{38DA472F-B370-5CCF-8B07-8109225FBF62}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinDotNet.GameCube", "src\DolphinDotNet.GameCube\DolphinDotNet.GameCube.csproj", "{38DA472F-B370-5CCF-8B07-8109225FBF62}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AotSmoke", "tests\AotSmoke\AotSmoke.csproj", "{31B93F11-542A-54AD-9888-018CBB7B23AB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AotSmoke", "tests\AotSmoke\AotSmoke.csproj", "{31B93F11-542A-54AD-9888-018CBB7B23AB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AramSmoke", "tests\AramSmoke\AramSmoke.csproj", "{95ADCDCB-49A2-5A53-8824-AC0C8CF4BDDE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AramSmoke", "tests\AramSmoke\AramSmoke.csproj", "{95ADCDCB-49A2-5A53-8824-AC0C8CF4BDDE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AsyncSmoke", "tests\AsyncSmoke\AsyncSmoke.csproj", "{00716F1D-7DCC-5BD8-89E4-0FE1B1BF729E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AsyncSmoke", "tests\AsyncSmoke\AsyncSmoke.csproj", "{00716F1D-7DCC-5BD8-89E4-0FE1B1BF729E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioAssetTests", "tests\AudioAssetTests\AudioAssetTests.csproj", "{A491FFC2-BD56-5DB1-AB0E-C305EF8249CE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AudioAssetTests", "tests\AudioAssetTests\AudioAssetTests.csproj", "{A491FFC2-BD56-5DB1-AB0E-C305EF8249CE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioFormatsSmoke", "tests\AudioFormatsSmoke\AudioFormatsSmoke.csproj", "{29AD146A-5E0C-5B37-A17B-C745B1B64CCA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AudioFormatsSmoke", "tests\AudioFormatsSmoke\AudioFormatsSmoke.csproj", "{29AD146A-5E0C-5B37-A17B-C745B1B64CCA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AutomaticAsyncSmoke", "tests\AutomaticAsyncSmoke\AutomaticAsyncSmoke.csproj", "{23049E2D-713F-52F6-829D-B4D901A0BA0B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AutomaticAsyncSmoke", "tests\AutomaticAsyncSmoke\AutomaticAsyncSmoke.csproj", "{23049E2D-713F-52F6-829D-B4D901A0BA0B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AutomaticTaskSmoke", "tests\AutomaticTaskSmoke\AutomaticTaskSmoke.csproj", "{82C55780-7C36-56F0-A43C-FDD2298717A2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AutomaticTaskSmoke", "tests\AutomaticTaskSmoke\AutomaticTaskSmoke.csproj", "{82C55780-7C36-56F0-A43C-FDD2298717A2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConnectionSmoke", "tests\ConnectionSmoke\ConnectionSmoke.csproj", "{76515110-260F-5BF7-B63A-B38A3C9F2765}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConnectionSmoke", "tests\ConnectionSmoke\ConnectionSmoke.csproj", "{76515110-260F-5BF7-B63A-B38A3C9F2765}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControlFlowSmoke", "tests\ControlFlowSmoke\ControlFlowSmoke.csproj", "{D781C1D9-160F-52C4-B70B-A619A49C5125}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ControlFlowSmoke", "tests\ControlFlowSmoke\ControlFlowSmoke.csproj", "{D781C1D9-160F-52C4-B70B-A619A49C5125}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControllerDolphinSmoke", "tests\ControllerDolphinSmoke\ControllerDolphinSmoke.csproj", "{CAF88E5D-2B0B-50F4-8F0D-C44DE66F856E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ControllerDolphinSmoke", "tests\ControllerDolphinSmoke\ControllerDolphinSmoke.csproj", "{CAF88E5D-2B0B-50F4-8F0D-C44DE66F856E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DebuggerInspectionSmoke", "tests\DebuggerInspectionSmoke\DebuggerInspectionSmoke.csproj", "{51E7B544-C19D-5EEC-BFCB-A1CD5885634F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DebuggerInspectionSmoke", "tests\DebuggerInspectionSmoke\DebuggerInspectionSmoke.csproj", "{51E7B544-C19D-5EEC-BFCB-A1CD5885634F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DebuggerStackSmoke", "tests\DebuggerStackSmoke\DebuggerStackSmoke.csproj", "{00005387-A017-5D34-89FC-7B2F9B1138F5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DebuggerStackSmoke", "tests\DebuggerStackSmoke\DebuggerStackSmoke.csproj", "{00005387-A017-5D34-89FC-7B2F9B1138F5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DiscIdentityTests", "tests\DiscIdentityTests\DiscIdentityTests.csproj", "{F4451EA4-3ABE-56E3-9B4D-03E1B954C574}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DiscIdentityTests", "tests\DiscIdentityTests\DiscIdentityTests.csproj", "{F4451EA4-3ABE-56E3-9B4D-03E1B954C574}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolLauncherSmoke", "tests\DolLauncherSmoke\DolLauncherSmoke.csproj", "{E8693F00-CC7A-53EC-A385-3806A2FE7E59}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolLauncherSmoke", "tests\DolLauncherSmoke\DolLauncherSmoke.csproj", "{E8693F00-CC7A-53EC-A385-3806A2FE7E59}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinLaunchProbe", "tests\DolphinLaunchProbe\DolphinLaunchProbe.csproj", "{883C32FE-D984-5FCD-A418-EB075D03CB41}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinLaunchProbe", "tests\DolphinLaunchProbe\DolphinLaunchProbe.csproj", "{883C32FE-D984-5FCD-A418-EB075D03CB41}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EffectCompilerTests", "tests\EffectCompilerTests\EffectCompilerTests.csproj", "{27E1DA4A-D354-5C9F-A555-3A461ACBAD18}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EffectCompilerTests", "tests\EffectCompilerTests\EffectCompilerTests.csproj", "{27E1DA4A-D354-5C9F-A555-3A461ACBAD18}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExactNumberSmoke", "tests\ExactNumberSmoke\ExactNumberSmoke.csproj", "{0ECE0BE6-4E56-5173-A8F4-7E799DF28BA2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExactNumberSmoke", "tests\ExactNumberSmoke\ExactNumberSmoke.csproj", "{0ECE0BE6-4E56-5173-A8F4-7E799DF28BA2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GenericSharingSmoke", "tests\GenericSharingSmoke\GenericSharingSmoke.csproj", "{A5E2179A-8368-5947-8A29-CFD1F45A565A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GenericSharingSmoke", "tests\GenericSharingSmoke\GenericSharingSmoke.csproj", "{A5E2179A-8368-5947-8A29-CFD1F45A565A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GraphicsSmoke", "tests\GraphicsSmoke\GraphicsSmoke.csproj", "{A05B16A7-FB4D-5CD7-BA97-797AA3002162}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GraphicsSmoke", "tests\GraphicsSmoke\GraphicsSmoke.csproj", "{A05B16A7-FB4D-5CD7-BA97-797AA3002162}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputContextSmoke", "tests\InputContextSmoke\InputContextSmoke.csproj", "{E7F981A1-85CE-5675-ADA2-DC8F9795F295}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "InputContextSmoke", "tests\InputContextSmoke\InputContextSmoke.csproj", "{E7F981A1-85CE-5675-ADA2-DC8F9795F295}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputSmoke", "tests\InputSmoke\InputSmoke.csproj", "{849ED2BE-AF28-5E30-A3A0-A922D1A8A7BE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "InputSmoke", "tests\InputSmoke\InputSmoke.csproj", "{849ED2BE-AF28-5E30-A3A0-A922D1A8A7BE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LibrarySmoke", "tests\LibrarySmoke\LibrarySmoke.csproj", "{1F9E7854-68C3-560B-8621-D9987A4038C4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LibrarySmoke", "tests\LibrarySmoke\LibrarySmoke.csproj", "{1F9E7854-68C3-560B-8621-D9987A4038C4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModelAssetTests", "tests\ModelAssetTests\ModelAssetTests.csproj", "{2C09DB52-F4F1-5711-AC28-85578454E018}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ModelAssetTests", "tests\ModelAssetTests\ModelAssetTests.csproj", "{2C09DB52-F4F1-5711-AC28-85578454E018}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModelAsyncSmoke", "tests\ModelAsyncSmoke\ModelAsyncSmoke.csproj", "{B6764C4C-B909-5C5E-872A-AAA3CC6B8D01}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ModelAsyncSmoke", "tests\ModelAsyncSmoke\ModelAsyncSmoke.csproj", "{B6764C4C-B909-5C5E-872A-AAA3CC6B8D01}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModelSmoke", "tests\ModelSmoke\ModelSmoke.csproj", "{722B8E44-8948-5FA0-89CD-1B23A2A00A5C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ModelSmoke", "tests\ModelSmoke\ModelSmoke.csproj", "{722B8E44-8948-5FA0-89CD-1B23A2A00A5C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetworkSmoke", "tests\NetworkSmoke\NetworkSmoke.csproj", "{E895E015-9068-53AD-BBD9-C899F47425C5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NetworkSmoke", "tests\NetworkSmoke\NetworkSmoke.csproj", "{E895E015-9068-53AD-BBD9-C899F47425C5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NumericSmoke", "tests\NumericSmoke\NumericSmoke.csproj", "{5A240E77-0031-5C0A-A685-18EC33C901B5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NumericSmoke", "tests\NumericSmoke\NumericSmoke.csproj", "{5A240E77-0031-5C0A-A685-18EC33C901B5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SaveImageTests", "tests\SaveImageTests\SaveImageTests.csproj", "{3BC5D680-5B04-5D5D-897B-96ADFDA375F6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SaveImageTests", "tests\SaveImageTests\SaveImageTests.csproj", "{3BC5D680-5B04-5D5D-897B-96ADFDA375F6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StorageSmoke", "tests\StorageSmoke\StorageSmoke.csproj", "{9EC65ABC-D705-5862-97A2-4BE3F73E348D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "StorageSmoke", "tests\StorageSmoke\StorageSmoke.csproj", "{9EC65ABC-D705-5862-97A2-4BE3F73E348D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StringSmoke", "tests\StringSmoke\StringSmoke.csproj", "{AFA4DB81-25D2-5ED9-9382-B04E07FA355B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "StringSmoke", "tests\StringSmoke\StringSmoke.csproj", "{AFA4DB81-25D2-5ED9-9382-B04E07FA355B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TevMaterialTests", "tests\TevMaterialTests\TevMaterialTests.csproj", "{6337CEF5-11DB-50D2-9037-5C7B04F5FA93}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TevMaterialTests", "tests\TevMaterialTests\TevMaterialTests.csproj", "{6337CEF5-11DB-50D2-9037-5C7B04F5FA93}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TimingSmoke", "tests\TimingSmoke\TimingSmoke.csproj", "{999286DC-3E9C-5504-9A3E-01ED39B029DA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TimingSmoke", "tests\TimingSmoke\TimingSmoke.csproj", "{999286DC-3E9C-5504-9A3E-01ED39B029DA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WishlistSmoke", "tests\WishlistSmoke\WishlistSmoke.csproj", "{33EB09A6-622E-509E-9F55-BBBB2E022D68}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WishlistSmoke", "tests\WishlistSmoke\WishlistSmoke.csproj", "{33EB09A6-622E-509E-9F55-BBBB2E022D68}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinDotNet.ApiCompat", "tools\DolphinDotNet.ApiCompat\DolphinDotNet.ApiCompat.csproj", "{5FBB2B84-F6EF-5A74-ACDE-D1B160F1CADF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinDotNet.ApiCompat", "tools\DolphinDotNet.ApiCompat\DolphinDotNet.ApiCompat.csproj", "{5FBB2B84-F6EF-5A74-ACDE-D1B160F1CADF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinDotNet.Assets", "tools\DolphinDotNet.Assets\DolphinDotNet.Assets.csproj", "{91325D49-435C-5408-94C0-733A4FC5F48F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinDotNet.Assets", "tools\DolphinDotNet.Assets\DolphinDotNet.Assets.csproj", "{91325D49-435C-5408-94C0-733A4FC5F48F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinDotNet.Build", "tools\DolphinDotNet.Build\DolphinDotNet.Build.csproj", "{6F779AE1-AB21-5F6A-80AD-F1A37E06CEC4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinDotNet.Build", "tools\DolphinDotNet.Build\DolphinDotNet.Build.csproj", "{6F779AE1-AB21-5F6A-80AD-F1A37E06CEC4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinDotNet.Compiler.Tests", "tools\DolphinDotNet.Compiler.Tests\DolphinDotNet.Compiler.Tests.csproj", "{DEE93993-E125-52A3-9541-55DE091EBFC6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinDotNet.Compiler.Tests", "tools\DolphinDotNet.Compiler.Tests\DolphinDotNet.Compiler.Tests.csproj", "{DEE93993-E125-52A3-9541-55DE091EBFC6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinDotNet.Compiler", "tools\DolphinDotNet.Compiler\DolphinDotNet.Compiler.csproj", "{986AA9B9-D370-576B-9B9C-6E56175779F9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinDotNet.Compiler", "tools\DolphinDotNet.Compiler\DolphinDotNet.Compiler.csproj", "{986AA9B9-D370-576B-9B9C-6E56175779F9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinDotNet.Effects", "tools\DolphinDotNet.Effects\DolphinDotNet.Effects.csproj", "{53869B47-BFCF-5A49-A491-CED50D7E2A36}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinDotNet.Effects", "tools\DolphinDotNet.Effects\DolphinDotNet.Effects.csproj", "{53869B47-BFCF-5A49-A491-CED50D7E2A36}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinDotNet.Imaging", "tools\DolphinDotNet.Imaging\DolphinDotNet.Imaging.csproj", "{FAD72D94-DD2A-59B8-AB7B-96E5507BC2CE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinDotNet.Imaging", "tools\DolphinDotNet.Imaging\DolphinDotNet.Imaging.csproj", "{FAD72D94-DD2A-59B8-AB7B-96E5507BC2CE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DolphinDotNet.SaveImage", "tools\DolphinDotNet.SaveImage\DolphinDotNet.SaveImage.csproj", "{33CE6FB6-43EB-5CFA-9F67-2DA2F6914D5E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DolphinDotNet.SaveImage", "tools\DolphinDotNet.SaveImage\DolphinDotNet.SaveImage.csproj", "{33CE6FB6-43EB-5CFA-9F67-2DA2F6914D5E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
