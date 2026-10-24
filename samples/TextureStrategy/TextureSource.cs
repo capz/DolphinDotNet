@@ -50,12 +50,14 @@ internal static class TextureSource
         int cells = atlas ? Group : 1, width = cells * CellPixels;
         int ox = atlas ? (id % (WorldWidth / Group)) * Group : id % WorldWidth;
         int oy = atlas ? (id / (WorldWidth / Group)) * Group : id / WorldWidth;
-        for (int y = 0; y < cells; y++) for (int x = 0; x < cells; x++)
+        for (int pixel = 0; pixel < width * width; pixel++)
         {
-            int at = (((y * CellPixels + 12) * width) + x * CellPixels + 12) * 4;
-            bool bright = (((ox + x) * 3 + oy + y) & 1) != 0;
-            if (pixels[at] != Red(ox + x, bright) || pixels[at + 1] != Green(oy + y, bright) ||
-                pixels[at + 2] != (bright ? 184 : 84) || pixels[at + 3] != 255) return false;
+            int x = pixel % width, y = pixel / width, at = pixel * 4;
+            int cx = ox + x / CellPixels, cy = oy + y / CellPixels;
+            bool bright = (((x % CellPixels / 8) ^ (y % CellPixels / 8) ^ (cx * 3 + cy)) & 1) != 0;
+            int blue = x % CellPixels == 0 || y % CellPixels == 0 ? 245 : bright ? 184 : 84;
+            if (pixels[at] != Red(cx, bright) || pixels[at + 1] != Green(cy, bright) ||
+                pixels[at + 2] != blue || pixels[at + 3] != 255) return false;
         }
         return true;
     }

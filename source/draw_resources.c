@@ -255,6 +255,16 @@ static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
     dnd_draw_backend_flush(r->data,bytes,2);
     if(rgba_ram_hash(r)!=r->immutable_hash)
         dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"RGBA8 upload RAM does not match its source.");
+    const volatile unsigned char *ram=r->data;
+#ifdef DND_GAMECUBE_STORAGE
+    ram=(const volatile unsigned char*)MEM_K0_TO_K1(r->data);
+#endif
+    for(int y=0;y<h;y++)for(int x=0;x<w;x++){
+        int block=((y/4)*blocks+x/4)*64,at=((y&3)*4+(x&3))*2,s=(y*w+x)*4;
+        if(ram[block+at]!=src[s+3] || ram[block+at+1]!=src[s] ||
+           ram[block+32+at]!=src[s+1] || ram[block+33+at]!=src[s+2])
+            dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"RGBA8 full upload audit failed.");
+    }
     return token;
 }
 int dnd_texture_create(int w,int h,DndArray *rgba,int linear) {
