@@ -18,7 +18,7 @@ def check_solution():
         (ROOT / "DolphinDotNet.sln").read_text(), re.MULTILINE)
     assert entries, "Solution has no projects"
     projects = set()
-    for kind, path, identity in entries:
+    for kind, path, _ in entries:
         if path.endswith(".csproj"):
             assert kind == SDK_CSHARP, (path, kind)
             assert ROOT.joinpath(*path.split("\\")).is_file(), path
@@ -51,8 +51,12 @@ def check_builds(configuration):
             expected = "DndBuildBackend must be Auto, Native or Docker."
             if result.returncode == 0 or "DND001" not in result.stdout or expected not in result.stdout:
                 raise AssertionError(f"{entry}: host tools did not run correctly:\n{result.stdout}")
+            errors = [line for line in result.stdout.splitlines()
+                      if re.search(r"\berror(?:\s+\w+)?\s*:", line, re.IGNORECASE)]
+            assert errors and all("DND001" in line and expected in line for line in errors), result.stdout
             for name in ("DolphinDotNet.Build", "DolphinDotNet.Compiler"):
-                assert (checkout / "tools" / name / "bin" / configuration / "net8.0" / (name + ".dll")).is_file(), name
+                assembly = checkout / "tools" / name / "bin" / configuration / "net8.0" / (name + ".dll")
+                assert assembly.is_file(), assembly
             print(f"{entry}: fresh parallel {configuration} build reached the native driver", flush=True)
 
 

@@ -93,7 +93,8 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
        can delete outputs already scheduled by a parallel solution build. -->
   <ItemGroup Condition="'$(_DndPackaged)' != 'true' and '$(DndBuildNative)' == 'true' and '$(OutputType)' != 'Library'">
     <ProjectReference Include="$(_DndBuildProject);$(_DndCompilerProject)"
-                      ReferenceOutputAssembly="false" Private="false" />
+                      ReferenceOutputAssembly="false" Private="false"
+                      GlobalPropertiesToRemove="OutputPath;BaseOutputPath;BaseIntermediateOutputPath;IntermediateOutputPath;TargetFramework;RuntimeIdentifier;SelfContained;DndBuildNative" />
   </ItemGroup>
   <ItemGroup Condition="'@(DndEffect)' != ''">
     <Compile Remove="@(DndEffect->'%(GeneratedSource)')" />
