@@ -1,0 +1,10 @@
+{
+  "solution": {
+    "path": "DolphinDotNet.sln",
+    "projects": [
+      "samples\\TextureStrategy\\TextureStrategy.csproj",
+      "src\\DolphinDotNet.Core\\DolphinDotNet.Core.csproj",
+      "src\\DolphinDotNet.GameCube\\DolphinDotNet.GameCube.csproj"
+    ]
+  }
+}
