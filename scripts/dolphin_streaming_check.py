@@ -6,9 +6,9 @@ FIELDS = ("magic", "version", "frame", "mode", "cameraX256", "cameraY256",
           "residentKiB", "promotions", "evictions", "fallbackCells", "detailCells",
           "failures", "cancelled", "switches", "reversals", "peakResidentKiB",
           "requestedKiB", "uploadedKiB", "maxLatencyFrames", "budgetWaitFrames",
-          "visibleCells", "nativeKiB", "pendingFrames", "draws", "uploadUs",
+          "visibleCells", "nativeKiB", "sourceRow", "draws", "uploadUs",
           "p95LatencyFrames", "p99LatencyFrames", "maxUploadUs", "frameTenthsMs",
-          "routePhase", "modeDisposals", "coarseKiB")
+          "sourcePhase", "modeDisposals", "coarseKiB")
 
 
 def telemetry(rgb):
