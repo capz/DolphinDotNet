@@ -1,5 +1,6 @@
 using System;
 using Dolphin.Graphics;
+using Dolphin.Diagnostics;
 
 // Identical procedural texels in two layouts. No new UI: use standard debug overlay.
 // Pages: 144 distinct RGBA8 GX textures, one draw each.
@@ -20,23 +21,30 @@ internal sealed class StrategyScene : IDisposable
     private readonly Transform[] atlasTransforms=new Transform[9];
     internal StrategyScene()
     {
+        DebugOverlay.WriteLine("TEXTURE STRATEGY: MESHES");
         camera.LookAt(new Vector3(6,6,23),new Vector3(6,6,0),new Vector3(0,1,0));
         unitQuad=Mesh.Create(Quad(1,1));
         atlasQuad=Mesh.Create(Quad(Group,Group));
+        // Texture2D.Create copies pixels into native storage synchronously.
+        // Reuse scratch arrays rather than fragmenting the 256 KiB managed heap.
+        DebugOverlay.WriteLine("TEXTURE STRATEGY: PAGES");
+        var pagePixels=new byte[CellPixels*CellPixels*4];
+        var atlasPixels=new byte[Group*CellPixels*Group*CellPixels*4];
         for(int y=0;y<Count;y++)for(int x=0;x<Count;x++)
         {
             int id=y*Count+x;
-            var pixels=new byte[CellPixels*CellPixels*4];
+            var pixels=pagePixels;
             for(int py=0;py<CellPixels;py++)for(int px=0;px<CellPixels;px++)
                 Pixel(pixels,CellPixels,px,py,x,y);
             pages[id]=Texture2D.Create(CellPixels,CellPixels,pixels,true);
             pageMaterials[id]=new Material { Texture=pages[id],Cull=CullMode.None,Lighting=LightingMode.Unlit };
             pageTransforms[id]=new Transform { LocalPosition=new Vector3(x,y,0) };
         }
+        DebugOverlay.WriteLine("TEXTURE STRATEGY: ATLASES");
         for(int gy=0;gy<3;gy++)for(int gx=0;gx<3;gx++)
         {
             int id=gy*3+gx;
-            var pixels=new byte[Group*CellPixels*Group*CellPixels*4];
+            var pixels=atlasPixels;
             for(int y=0;y<Group;y++)for(int x=0;x<Group;x++)
                 for(int py=0;py<CellPixels;py++)for(int px=0;px<CellPixels;px++)
                     Pixel(pixels,Group*CellPixels,x*CellPixels+px,y*CellPixels+py,gx*Group+x,gy*Group+y);
@@ -44,6 +52,7 @@ internal sealed class StrategyScene : IDisposable
             atlasMaterials[id]=new Material { Texture=atlases[id],Cull=CullMode.None,Lighting=LightingMode.Unlit };
             atlasTransforms[id]=new Transform { LocalPosition=new Vector3(gx*Group,gy*Group,0) };
         }
+        DebugOverlay.WriteLine("TEXTURE STRATEGY: SCENE READY");
     }
     private static VertexPositionColorTexture V(float x,float y,float u,float v)
         =>new VertexPositionColorTexture(new Vector3(x,y,0),Color32.White,new Vector2(u,v));
