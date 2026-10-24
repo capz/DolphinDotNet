@@ -6,6 +6,7 @@ internal static class NativeStorageBindings
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
         ["ModelDrawEffect"]=("dnd_model_draw_effect","iai",false),
+        ["ModelDrawModels"]=("dnd_model_draw_models","aai",false),
         ["ModelDrawMaterial"]=("dnd_model_draw_material","iaiiiifi",false),
         ["DolPrepare"]=("dnd_dol_prepare","a",false),
         ["DolBegin"]=("dnd_dol_begin","s",false),
@@ -44,20 +45,36 @@ internal static class NativeStorageBindings
         ["DeviceViewport"]=("dnd_device_viewport","iiii",false),
         ["DeviceScissor"]=("dnd_device_scissor","iiii",false),
         ["DeviceWait"]=("dnd_device_wait","",false),
+        ["DeviceFenceInsert"]=("dnd_device_fence_insert","",false),
+        ["DeviceFenceCompleted"]=("dnd_device_fence_completed","i",false),
         ["BufferCreate"]=("dnd_buffer_create","ii",false),
         ["BufferAddress"]=("dnd_buffer_address","ii",false),
         ["BufferUncached"]=("dnd_buffer_uncached","i",false),
         ["NativeObjectSize"]=("dnd_native_object_size","i",false),
         ["BufferFlush"]=("dnd_buffer_flush","iiii",false),
+        ["BufferHold"]=("dnd_buffer_hold","i",false),
+        ["BufferUnhold"]=("dnd_buffer_unhold","i",false),
+        ["AramTransferHold"]=("dnd_aram_retain","i",false),
+        ["AramTransferRelease"]=("dnd_aram_release","i",false),
+        ["AramNativeBegin"]=("dnd_aram_begin_native","iiiiii",false),
+        ["AramNativePoll"]=("dnd_aram_poll_native","",false),
         ["DrawRelease"]=("dnd_draw_release","i",false),
         ["DrawBytes"]=("dnd_draw_bytes","i",false),
         ["DrawTotalBytes"]=("dnd_draw_total_bytes","",false),
+        ["PerformanceRenderStat"]=("dnd_performance_render_stat","i",false),
         ["TextureCreate"]=("dnd_texture_create","iiai",false),
         ["TexturePng"]=("dnd_texture_png","ai",false),
         ["TexturePackage"]=("dnd_texture_package","ai",false),
         ["TextureDimension"]=("dnd_texture_dimension","ii",false),
+        ["TextureAllocateNative"]=("dnd_texture_allocate_native","iiii",false),
+        ["TextureUpdateNative"]=("dnd_texture_update_native","iaii",false),
+        ["TextureUpdateFromBuffer"]=("dnd_texture_update_buffer","iiii",false),
+        ["TextureStageArray"]=("dnd_texture_stage_array","iaii",false),
+        ["TextureStageBuffer"]=("dnd_texture_stage_buffer","iiii",false),
+        ["TexturePublishStaged"]=("dnd_texture_publish_staged","i",false),
         ["MeshDraw"]=("dnd_mesh_draw_effect","iiaiifi",false),
         ["MeshDrawMaterial"]=("dnd_mesh_draw_material","iiiaiifi",false),
+        ["MeshDrawBatch"]=("dnd_mesh_draw_batch","aiiiaiifi",false),
         ["MeshPrimitives"]=("dnd_mesh_primitives","aiiiiaii",false),
         ["CanvasCreate"]=("dnd_canvas_create","i",false),
         ["CanvasBegin"]=("dnd_canvas_begin","iii",false),
@@ -173,7 +190,11 @@ internal static class NativeStorageBindings
         if(!Bindings.TryGetValue(call.Operation,out var binding)||binding.Types.Length!=call.Arguments.Count)throw new NotSupportedException($"Invalid native storage binding {call.Operation}.");
         var args=call.Arguments.Select((arg,index)=>$"({(binding.Types[index] switch {'s'=>"DndString*",'a'=>"DndArray*",'o'=>"DndObject*",'l'=>"int64_t",'f'=>"float",'d'=>"double",'p'=>"intptr_t",_=>"int"})})v{arg.Id}").ToList();
         if(binding.Heap)args.Insert(0,"dnd_value_heap");
-        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||call.Operation.StartsWith("Texture",StringComparison.Ordinal)||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation is "ModelDraw" or "ModelDrawEffect" or "ModelDrawMaterial" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
+        // Only CPU-side staging copies are safe on the service executor.
+        // Publication, allocation and every other texture/GX operation require
+        // the application executor. Keep this list deliberately restrictive.
+        bool detachedTextureCopy = call.Operation is "TextureStageArray" or "TextureStageBuffer";
+        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||(!detachedTextureCopy && call.Operation.StartsWith("Texture",StringComparison.Ordinal))||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation is "ModelDrawModels" or "ModelDraw" or "ModelDrawEffect" or "ModelDrawMaterial" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");
         if(call.Operation=="DolRequest")b.AppendLine("  dnd_async_require_application_thread();");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";

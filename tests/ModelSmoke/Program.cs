@@ -131,6 +131,20 @@ class Program
             if(pso.NodeCount!=1||pso.Animations.Count!=0)return 41;
         }
         using(var canceled=new CancellationTokenSource()){canceled.Cancel();try{Model.LoadAsync("sd:/animated.dndmodel",canceled.Token).Wait();return 3;}catch(OperationCanceledException){}}
+        using(var imported=Model.LoadAsync("sd:/gx-material.dndmodel").Result)
+        using(var placement=new GameObject(imported.CreateInstance()))
+        {
+            imported.UnloadToAramAsync().Wait();imported.PrepareAsync().Wait();
+            var batch=new Renderer();batch.BeginFrame(new Camera());
+            batch.DrawModels(new[]{placement},new int[1],new float[16]);batch.EndFrame();
+        }
+        using(var studio=Model.LoadAsync("sd:/studio.dndmodel").Result)
+        using(var placement=new GameObject(studio.CreateInstance()))
+        {
+            studio.UnloadToAramAsync().Wait();studio.PrepareAsync().Wait();
+            var studioRenderer=new Renderer();studioRenderer.BeginFrame(new Camera());
+            studioRenderer.DrawModels(new[]{placement},new int[1],new float[16]);studioRenderer.EndFrame();
+        }
         AwaitModel().GetAwaiter().GetResult();
         var task=Model.LoadAsync("sd:/cache.dndmodel");if(task.IsCompleted)return 4;var model=task.Result;
         if(model.Animations.Count!=5||!model.TryGetAnimation("Walk",out var clip)||clip.DurationSeconds!=1||model.TryGetAnimation("walk",out _))return 5;
@@ -150,6 +164,16 @@ class Program
         var renderer=new Renderer();renderer.BeginFrame(camera);renderer.Draw(entity);
         try{entity.Dispose();return 32;}catch(InvalidOperationException){}
         renderer.Draw(entity);renderer.EndFrame();entity.Update(0);
+        using(var secondObject=new GameObject(model.CreateInstance()))
+        using(var emptyObject=new GameObject())
+        {
+            secondObject.Transform.LocalPosition=new Vector3(0,0,-3);
+            var objects=new[]{entity,secondObject,emptyObject};var tokens=new int[3];var transforms=new float[48];
+            renderer.BeginFrame(camera);renderer.DrawModels(objects,tokens,transforms);
+            if(tokens[0]==0||tokens[1]==0||tokens[2]!=0||transforms[16+14]!=-3)return 51;
+            try{renderer.DrawModels(objects,new int[2],transforms);return 52;}catch(ArgumentException){}
+            renderer.EndFrame();
+        }
         renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(a,Identity());try{a.Update(0);return 10;}catch(InvalidOperationException){}renderer.EndFrame();
         int instanceMemory=a.NativeBytes;int memory=model.NativeBytes;a.Animator.SetSpeed(1);a.Animator.Play("Walk");a.Update(0.5f);model.UnloadToAramAsync().Wait();Dolphin.IO.File.Delete("sd:/cache.dndmodel");if(model.IsResident||model.NativeBytes>=memory||a.NativeBytes>=instanceMemory||model.AramBytes==0)return 11;
         try{a.Update(0);return 12;}catch(InvalidOperationException){}

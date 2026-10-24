@@ -94,6 +94,26 @@ byte[] bytes=File.ReadAllBytes(package);if(BinaryPrimitives.ReadUInt32BigEndian(
 int textureOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16+3*16+4)));var texture=bytes.AsSpan(textureOffset+4+28,64);if(texture[0]!=255||texture[1]!=0||texture[3]!=30||texture[32]!=0||texture[33]!=50||texture[40]!=40)throw new Exception("GX RGBA8 tile fixture.");
 ModelConverter.Convert(gltf,package+".second");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".second")))throw new Exception("Nondeterministic package.");
 {
+    // glTF BLEND maps to DNMD mode bit 2, consumed by the existing depth-sorted
+    // GX alpha-blend render path without approximation.
+    var blended=root.DeepClone().AsObject();
+    blended["materials"]![0]!["alphaMode"]="BLEND";
+    blended["materials"]![0]!["pbrMetallicRoughness"]!["baseColorFactor"]=new JsonArray(1,1,1,0.4);
+    File.WriteAllText(gltf,blended.ToJsonString());
+    ModelConverter.Convert(gltf,package+".blend");
+    var blendPackage=File.ReadAllBytes(package+".blend");
+    int materialsOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(blendPackage.AsSpan(52,4)));
+    int modeOffset=materialsOffset+4+32+16+4;
+    if(BinaryPrimitives.ReadUInt32BigEndian(blendPackage.AsSpan(modeOffset,4))!=6)
+        throw new Exception("BLEND/unlit bits not retained in material.");
+    blended["materials"]![0]!["alphaMode"]="UNKNOWN";
+    File.WriteAllText(gltf,blended.ToJsonString());
+    try{ModelConverter.Convert(gltf,package+".invalid-blend");throw new Exception("Unrecognized alpha mode accepted.");}
+    catch(InvalidDataException){}
+    File.WriteAllText(gltf,root.ToJsonString());
+}
+
+{
     // UV1 and KHR_texture_transform must survive as baked target UV0 without
     // changing the runtime DNMD package layout.
     var transformed=root.DeepClone().AsObject();
@@ -130,6 +150,44 @@ ModelConverter.Convert(gltf,package+".second");if(!bytes.SequenceEqual(File.Read
     File.WriteAllText(gltf,root.ToJsonString());
 }
 
+
+{
+    // Explicit material approximation composites multiple compatible source
+    // maps instead of discarding emissive and occlusion textures.
+    var layered=root.DeepClone().AsObject();
+    layered["materials"]![0]!["emissiveTexture"]=new JsonObject{["index"]=0};
+    layered["materials"]![0]!["emissiveFactor"]=new JsonArray(0.25,0,0);
+    layered["materials"]![0]!["occlusionTexture"]=new JsonObject{["index"]=0,["strength"]=0.5};
+    File.WriteAllText(gltf,layered.ToJsonString());
+    try{ModelConverter.Convert(gltf,package+".layers-strict");throw new Exception("Multi-texture layers silently accepted in strict mode.");}
+    catch(InvalidDataException){}
+    ModelConverter.Convert(gltf,package+".layers",new(){ApproximateMaterials=true});
+    var layerBytes=File.ReadAllBytes(package+".layers");
+    int layersTextureOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(layerBytes.AsSpan(68,4)));
+    int layersTextureCount=checked((int)BinaryPrimitives.ReadUInt32BigEndian(layerBytes.AsSpan(layersTextureOffset,4)));
+    if(layersTextureCount!=2)throw new Exception("Layered material did not bake a distinct GX texture.");
+    if(bytes.SequenceEqual(layerBytes))throw new Exception("Layered material package unchanged.");
+    // Constant emissive color is a material contribution even without a map.
+    // It must never be silently dropped by the strict converter.
+    var emissionOnly=root.DeepClone().AsObject();
+    emissionOnly["materials"]![0]!["emissiveFactor"]=new JsonArray(0.2,0.1,0);
+    File.WriteAllText(gltf,emissionOnly.ToJsonString());
+    try{ModelConverter.Convert(gltf,package+".emissive-strict");throw new Exception("Constant emission silently dropped.");}
+    catch(InvalidDataException){}
+    ModelConverter.Convert(gltf,package+".emissive-baked",new(){ApproximateMaterials=true});
+    if(bytes.SequenceEqual(File.ReadAllBytes(package+".emissive-baked")))
+        throw new Exception("Constant emission baking produced no change.");
+    File.WriteAllText(gltf,layered.ToJsonString());
+    layered["materials"]![0]!["emissiveTexture"]!["texCoord"]=1;
+    File.WriteAllText(gltf,layered.ToJsonString());
+    try{ModelConverter.Convert(gltf,package+".layers-bad-uv",new(){ApproximateMaterials=true});
+        throw new Exception("Mismatched multi-map UVs accepted.");}
+    catch(InvalidDataException){}
+    File.WriteAllText(gltf,root.ToJsonString());
+}
+MaterialBakingTests.Run(root,output);
+GxMaterialTests.Run(root,output);
+StudioBakeTests.Run(root,output);
 // External buffers and images, plus GLB binary geometry.
 root["buffers"]![0]!["uri"]="geometry.bin";root["images"]![0]!["uri"]="texture.png";File.WriteAllBytes(Path.Combine(output,"geometry.bin"),binary.ToArray());File.WriteAllBytes(Path.Combine(output,"texture.png"),png.ToArray());File.WriteAllText(gltf,root.ToJsonString());ModelConverter.Convert(gltf,package+".external");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".external")))throw new Exception("External dependencies differ.");
 root["buffers"]![0]!.AsObject().Remove("uri");var json=Encoding.UTF8.GetBytes(root.ToJsonString());int jsonLength=(json.Length+3)&~3,binLength=((int)binary.Length+3)&~3;using(var file=File.Create(Path.Combine(output,"animated.glb"))){using var w=new BinaryWriter(file);w.Write(0x46546c67);w.Write(2);w.Write(12+8+jsonLength+8+binLength);w.Write(jsonLength);w.Write(0x4e4f534a);w.Write(json);w.Write(Enumerable.Repeat((byte)32,jsonLength-json.Length).ToArray());w.Write(binLength);w.Write(0x004e4942);w.Write(binary.ToArray());w.Write(new byte[binLength-(int)binary.Length]);}ModelConverter.Convert(Path.Combine(output,"animated.glb"),package+".glb");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".glb")))throw new Exception("GLB differs.");

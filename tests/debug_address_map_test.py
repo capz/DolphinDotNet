@@ -111,6 +111,7 @@ class VariableLocations(unittest.TestCase):
         module.attach_variables(mapped, source, '')
         value = mapped['methods'][0]['variables'][0]
         self.assertEqual([], value['visibleAddresses'])
+        self.assertEqual([], value['visibleRanges'])
         self.assertEqual('unavailable', value['location']['kind'])
 
     def test_location_lists_split_views_and_missing_or_ambiguous_ranges(self):
@@ -155,6 +156,87 @@ class VariableLocations(unittest.TestCase):
             values = module.parse_variable_locations(dump)[SYMBOL]
             self.assertEqual('unavailable', values['a0']['kind'])  # x86-64 register annotations are not PPC register locations
             self.assertEqual('cfaOffset', values['l0']['kind'])
+
+    def test_visibility_ranges_end_at_hidden_rows_and_method_boundary(self):
+        source = json.loads(json.dumps(MAP))
+        source['methods'][0]['variables'] = [dict(nativeName='l0', name='local', type='System.Int32',
+            group='Locals', storageBytes=4, scopeStart=0, scopeEnd=100)]
+        lines = '''C:/project/Program.cs:
+Program.cs 7 0x80001000 x
+generated_program.c 1 0x8000100c x
+Program.cs 8 0x80001018 x
+Program.cs - 0x80001080
+'''
+        mapped = module.resolve(source, lines, SYMBOLS)
+        module.attach_variables(mapped, source, '')
+        value = mapped['methods'][0]['variables'][0]
+        self.assertEqual([dict(start='0x80001000', end='0x8000100c'),
+                          dict(start='0x80001018', end='0x80001040')], value['visibleRanges'])
+        self.assertEqual(['0x80001000', '0x80001018'], value['visibleAddresses'])
+
+    def test_location_changes_inside_a_source_row_are_split(self):
+        source = json.loads(json.dumps(MAP))
+        source['methods'][0]['variables'] = [dict(nativeName='l0', name='local', type='System.Int32',
+            group='Locals', storageBytes=4, scopeStart=0, scopeEnd=100)]
+        lines = 'C:/project/Program.cs:\nProgram.cs 7 0x80001000 x\nProgram.cs - 0x80001020\n'
+        info = f''' <1><10>: Abbrev Number: 3 (DW_TAG_subprogram)
+    <11> DW_AT_name : {SYMBOL}
+    <12> DW_AT_low_pc : 0x80001000
+    <13> DW_AT_frame_base : 1 byte block: 9c (DW_OP_call_frame_cfa)
+ <2><20>: Abbrev Number: 5 (DW_TAG_variable)
+    <21> DW_AT_name : l0
+    <22> DW_AT_location : 0x10 (location list)
+'''
+        locs = '''00000010 80001000 80001008 (DW_OP_fbreg: -4)
+00000018 8000100c 80001018 (DW_OP_reg3 (r3))
+00000020 80001014 80001018 (DW_OP_reg4 (r4))
+00000028 <End of list>
+'''
+        mapped = module.resolve(source, lines, SYMBOLS)
+        module.attach_variables(mapped, source, info, locs)
+        def at(pc):
+            values = [v['location'] for v in mapped['methods'][0]['variables']
+                      for r in v['visibleRanges'] if int(r['start'], 16) <= pc < int(r['end'], 16)]
+            self.assertEqual(1, len(values))
+            return values[0]
+        self.assertEqual(dict(kind='cfaOffset', offset=-4), at(0x80001004))
+        self.assertEqual('unavailable', at(0x80001008)['kind'])
+        self.assertEqual(dict(kind='register', register=3), at(0x80001010))
+        self.assertEqual('unavailable', at(0x80001014)['kind'])
+        self.assertEqual('unavailable', at(0x8000101c)['kind'])
+
+    def test_equal_pc_hidden_view_and_unterminated_row_have_no_visibility(self):
+        self.assertEqual([('c:/project/program.cs', 7, 0x80001008, 0x80001010)],
+            module.parse_line_ranges('''C:/project/Program.cs:
+Program.cs 7 0x80001000 x
+generated_program.c 1 0x80001000 1 x
+Program.cs 7 0x80001008 x
+Program.cs - 0x80001010
+Program.cs 7 0x80001020 x
+''')[1:])
+
+    def test_overlapping_source_sequences_do_not_guess_variable_scope(self):
+        source = json.loads(json.dumps(MAP))
+        source['methods'][0]['variables'] = [dict(nativeName='l0', name='local', type='System.Int32',
+            group='Locals', storageBytes=4, scopeStart=0, scopeEnd=5)]
+        mapped = module.resolve(source, '''C:/project/Program.cs:
+Program.cs 7 0x80001000 x
+Program.cs - 0x80001010
+Program.cs 8 0x80001008 x
+Program.cs - 0x80001018
+''', SYMBOLS)
+        module.attach_variables(mapped, source, '')
+        self.assertEqual([dict(start='0x80001000', end='0x80001008')],
+                         mapped['methods'][0]['variables'][0]['visibleRanges'])
+
+    def test_unaligned_host_row_end_preserves_exact_breakpoint(self):
+        # Host GCC fixtures can have byte-aligned instruction boundaries. Keep
+        # the existing exact breakpoint, but never emit an unaligned PPC range.
+        lines = 'C:/project/Program.cs:\nProgram.cs 7 0x80001000 x\nProgram.cs - 0x80001007\n'
+        self.assertEqual([('c:/project/program.cs', 7, 0x80001000)], module.parse_lines(lines))
+        point = module.resolve(MAP, lines, SYMBOLS)['methods'][0]['breakpoints'][0]
+        self.assertEqual(['0x80001000'], point['addresses'])
+        self.assertEqual([], point['ranges'])
 
 
 class AddressResolution(unittest.TestCase):

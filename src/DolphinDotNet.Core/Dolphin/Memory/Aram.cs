@@ -44,6 +44,7 @@ public sealed class AramBuffer : IDisposable
     private bool disposed;
     public int Length {get;}
     internal AramBuffer(int token,int length){this.token=token;Length=length;}
+    internal int NativeTransferToken { get { if(disposed)throw new ObjectDisposedException("AramBuffer");return token; } }
     public Task WriteAsync(byte[] source,int sourceOffset,int destinationOffset,int count,CancellationToken cancellationToken=default)=>Transfer(source,sourceOffset,destinationOffset,count,true,cancellationToken);
     public Task ReadAsync(int sourceOffset,byte[] destination,int destinationOffset,int count,CancellationToken cancellationToken=default)=>Transfer(destination,destinationOffset,sourceOffset,count,false,cancellationToken);
     private Task Transfer(byte[] array,int arrayOffset,int offset,int count,bool write,CancellationToken cancellation)
@@ -81,7 +82,9 @@ internal sealed class TransferWork
             cancellation.ThrowIfCancellationRequested();
             if(position==count){NativeAram.AramRelease(token);Completion.SetResult(position);return true;}
             chunk=count-position;if(chunk>4096)chunk=4096;
-            if(NativeAram.AramBegin(token,offset+position,array,arrayOffset+position,chunk,write?1:0)<0)throw new System.IO.IOException("ARAM transfer could not start.");
+            int status=NativeAram.AramBegin(token,offset+position,array,arrayOffset+position,chunk,write?1:0);
+            if(status==-16)return false; // ARQ is busy with another native or managed transfer.
+            if(status<0)throw new System.IO.IOException("ARAM transfer could not start.");
             pending=true;return false;
         }
         catch(Exception error){NativeAram.AramRelease(token);Completion.SetException(error);return true;}

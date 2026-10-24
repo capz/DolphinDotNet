@@ -28,6 +28,61 @@ public sealed class Texture2D : IDisposable
         if(token==0)throw new ArgumentException("Invalid or unsupported PNG, dimensions, decoding budget or active frame.");
         return new Texture2D(token);
     }
+    /// <summary>Create a GX-tiled, uncompressed-or-CMPR texture ready for repeated
+    /// full-image replacement. Input bytes must use native GX tile order.</summary>
+    public static Texture2D CreateNative(int width,int height,NativeTextureFormat format,bool linear=true)
+    {
+        if(format!=NativeTextureFormat.I4 && format!=NativeTextureFormat.I8 &&
+           format!=NativeTextureFormat.Ia4 && format!=NativeTextureFormat.Ia8 &&
+           format!=NativeTextureFormat.Rgb565 && format!=NativeTextureFormat.Rgb5A3 &&
+           format!=NativeTextureFormat.Rgba8 && format!=NativeTextureFormat.Cmpr)
+            throw new ArgumentOutOfRangeException("format");
+        int token=NativeGraphics.TextureAllocateNative(width,height,(int)format,linear?1:0);
+        if(token==0)throw new ArgumentException("Invalid native texture dimensions, format or memory budget.");
+        return new Texture2D(token);
+    }
+    /// <summary>Replace the entire GX-native payload between frames. Synchronous;
+    /// waits for prior GPU reads before writing and invalidates GX's texture cache.</summary>
+    public void ReplaceNative(byte[] pixels,int sourceOffset=0)
+    {
+        Check();
+        if(pixels==null)throw new ArgumentNullException("pixels");
+        int bytes=NativeBytes;
+        if(sourceOffset<0 || sourceOffset>pixels.Length || bytes>pixels.Length-sourceOffset)throw new ArgumentOutOfRangeException("sourceOffset");
+        GraphicsDevice.Check(NativeGraphics.TextureUpdateNative(Token,pixels,sourceOffset,bytes),
+            "Texture replacement requires a complete GX-native payload outside a frame.");
+    }
+    /// <summary>Replace the complete native texture payload from an aligned native
+    /// staging buffer, without an intermediate managed array. Between frames only.</summary>
+    public void ReplaceNative(NativeBuffer source,int sourceOffset=0)
+    {
+        Check();
+        if(source==null)throw new ArgumentNullException("source");
+        source.GetAddress(0);
+        int bytes=NativeBytes;
+        if(sourceOffset<0 || sourceOffset>source.Length || bytes>source.Length-sourceOffset)
+            throw new ArgumentOutOfRangeException("sourceOffset");
+        GraphicsDevice.Check(NativeGraphics.TextureUpdateFromBuffer(Token,source.Token,sourceOffset,bytes),
+            "Native texture replacement requires a valid source and no active frame.");
+    }
+    // Background CPU-only copy into a *detached* texture. The caller must prove
+    // that this token cannot be referenced by an in-flight GX submission.
+    internal void StageDetached(byte[] pixels,int offset)
+    {
+        Check();
+        int bytes=NativeBytes;
+        GraphicsDevice.Check(NativeGraphics.TextureStageArray(Token,pixels,offset,bytes),
+            "Invalid detached GX texture upload.");
+    }
+    internal void StageDetached(NativeBuffer pixels,int offset)
+    {
+        Check();
+        int bytes=NativeBytes;
+        GraphicsDevice.Check(NativeGraphics.TextureStageBuffer(Token,pixels.Token,offset,bytes),
+            "Invalid detached GX texture upload.");
+    }
+    internal void PublishDetached()
+        => GraphicsDevice.Check(NativeGraphics.TexturePublishStaged(Token),"Cannot publish staged GX texture inside raw commands.");
     public static Texture2D FromPackage(byte[] package,bool linear=false)
     {
         if(package==null)throw new ArgumentNullException("package");int token=NativeGraphics.TexturePackage(package,linear?1:0);

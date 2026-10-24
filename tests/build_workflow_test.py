@@ -24,59 +24,29 @@ probe_output = root / "tests/DolphinLaunchProbe/bin/Debug/net8.0"
 dotnet = shutil.which("dotnet")
 assert dotnet and driver.exists()
 
-# Every sample must keep the shared fixes and point its IDE launch profile at
-# its own project. Evaluate actual MSBuild settings rather than inspecting text.
+# Framework-owned fixture exercises native build MSBuild contracts and run
+# argument handling; no sample repository, run configuration or source checkout.
+fixture = root / 'tests/HelloGameCube/HelloGameCube.csproj'
+assert fixture.is_file()
 primary_launches = []
 play_launches = []
-for project in sorted((root / 'samples').glob('*/*.csproj')):
-    sample = project.stem
-    tree = ET.parse(project).getroot()
-    imports = [(project.parent / node.attrib['Project']).resolve() for node in tree.findall('Import')]
-    sdk = root / 'sdk/DolphinDotNet.Sdk/Sdk'
-    assert imports == [sdk / 'Sdk.props', sdk / 'Sdk.targets'], project
-    assert (project.parent / f'{sample}.sln').is_file(), project
-    launch = json.loads((project.parent / 'Properties/launchSettings.json').read_text())['profiles']
-    assert launch['CLI']['commandName'] == 'Project', project
-    assert launch['Dolphin']['executablePath'] == 'dotnet', project
-    assert 'DolphinDotNet.Build.dll' in launch['Dolphin']['commandLineArgs'], project
-    assert launch['Dolphin']['workingDirectory'] == '$(TargetDir)', project
-    run = ET.parse(project.parent / f'.run/{sample}.run.xml')
-    options = {node.attrib['name']: node.attrib.get('value') for node in run.findall('.//configuration/option')}
-    assert options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
-    assert options['LAUNCH_PROFILE_NAME'] == 'Dolphin Debug', project
-    primary_launches.append((sample, launch[options['LAUNCH_PROFILE_NAME']]['commandLineArgs']))
-    assert run.find('.//method/option[@name="Build"]') is not None, project
-    play_run = ET.parse(project.parent / f'.run/{sample}.play.run.xml')
-    play_options = {node.attrib['name']: node.attrib.get('value') for node in play_run.findall('.//configuration/option')}
-    assert play_options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
-    assert play_options['LAUNCH_PROFILE_NAME'] == 'Dolphin Play', project
-    play_launches.append((sample, launch[play_options['LAUNCH_PROFILE_NAME']]['commandLineArgs']))
-    assert play_run.find('.//method/option[@name="Build"]') is not None, project
-    debug_launch = launch['Dolphin Debug']
-    assert debug_launch['executablePath'] == 'dotnet', project
-    assert debug_launch['commandLineArgs'] == launch['Dolphin']['commandLineArgs'], project
-    assert debug_launch['commandLineArgs'] == launch['Dolphin Play']['commandLineArgs'] + ' --gdb-port 2166', project
-    primary_launches.append((sample + ' Dolphin profile', launch['Dolphin']['commandLineArgs']))
-    debug_run = ET.parse(project.parent / f'.run/{sample}.debug.run.xml')
-    debug_options = {node.attrib['name']: node.attrib.get('value') for node in debug_run.findall('.//configuration/option')}
-    assert debug_options['LAUNCH_PROFILE_PROJECT_FILE_PATH'] == f'$PROJECT_DIR$/{sample}.csproj', project
-    assert debug_options['LAUNCH_PROFILE_NAME'] == 'Dolphin Debug', project
-    assert debug_run.find('.//method/option[@name="Build"]') is not None, project
-    for configuration in ('Debug', 'Release'):
-        result = subprocess.run([dotnet, 'msbuild', str(project), '-p:Configuration=' + configuration,
-                                 '-getProperty:DndDebugSymbols,Optimize,DebugType,RunArguments,TargetDir'],
-                                capture_output=True, text=True, timeout=30)
-        assert result.returncode == 0, result.stdout + result.stderr
-        properties = json.loads(result.stdout)['Properties']
-        assert properties['DndDebugSymbols'] == str(configuration == 'Debug').lower(), (project, properties)
-        assert properties['Optimize'] == str(configuration == 'Release').lower(), (project, properties)
-        if configuration == 'Debug':
-            assert properties['DebugType'] == 'portable', (project, properties)
-            assert '--gdb-port 2166' in properties['RunArguments'], (project, properties)
-            primary_launches.append((sample + ' CLI', properties['RunArguments'].replace(properties['TargetDir'], '$(TargetDir)')))
-        else:
-            assert '--gdb-port' not in properties['RunArguments'], (project, properties)
-
+for configuration in ('Debug', 'Release'):
+    result = subprocess.run([dotnet, 'msbuild', str(fixture),
+                             '-p:Configuration=' + configuration,
+                             '-getProperty:DndDebugSymbols,Optimize,DebugType,RunArguments,TargetDir'],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    properties = json.loads(result.stdout)['Properties']
+    assert properties['DndDebugSymbols'] == str(configuration == 'Debug').lower(), properties
+    assert properties['Optimize'] == str(configuration == 'Release').lower(), properties
+    launch = properties['RunArguments'].replace(properties['TargetDir'], '$(TargetDir)')
+    if configuration == 'Debug':
+        assert properties['DebugType'] == 'portable', properties
+        assert '--gdb-port 2166' in launch, properties
+        primary_launches.append(('framework Debug fixture', launch))
+    else:
+        assert '--gdb-port' not in launch, properties
+        play_launches.append(('framework Release fixture', launch))
 
 def call(*args, env=None, expected=0):
     result = subprocess.run([dotnet, str(driver), *map(str, args)], env=env,

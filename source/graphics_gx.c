@@ -17,6 +17,21 @@ static GXRModeObj *mode;
 static void *xfb[2],*fifo;
 static unsigned fb;
 static bool first_frame=true;
+static bool material_cache_valid;
+static DndDrawMaterial cached_material;
+static DndDrawTexture cached_primary,cached_secondary;
+static bool cached_has_primary,cached_has_secondary;
+static bool texture_same(const DndDrawTexture *a,const DndDrawTexture *b) {
+    return a->data==b->data && a->bytes==b->bytes &&
+           a->width==b->width && a->height==b->height &&
+           a->format==b->format && a->linear==b->linear;
+}
+void dnd_draw_backend_invalidate_cache(void){material_cache_valid=false;}
+void dnd_draw_backend_publish_texture(void){
+    if(mode)GX_InvalidateTexAll();
+    material_cache_valid=false;
+}
+
 static float view_matrix[16], projection_matrix[16];
 static float immediate_world[16];
 static DndDrawVertex immediate_vertices[1536];
@@ -59,20 +74,28 @@ void dnd_graphics_init(void) {
 }
 int dnd_graphics_width(void){return mode?mode->fbWidth:640;}
 int dnd_graphics_height(void){return mode?mode->efbHeight:480;}
-void dnd_draw_backend_external(void){external_gpu=true;}
+void dnd_draw_backend_external(void){external_gpu=true;dnd_draw_backend_invalidate_cache();}
 void dnd_draw_backend_wait(void){if(mode||external_gpu)GX_DrawDone();}
-void dnd_draw_backend_abort(void){if(mode||external_gpu)GX_AbortFrame();immediate_batch=false;immediate_count=0;glyph_vertices=0;}
-void dnd_draw_backend_flush(void *data,int bytes,int invalidate){if(invalidate==1)DCInvalidateRange(data,(u32)bytes);else {DCFlushRange(data,(u32)bytes);if(invalidate==2&&mode)GX_InvalidateTexAll();}}
+void dnd_draw_backend_abort(void){dnd_draw_backend_invalidate_cache();if(mode||external_gpu)GX_AbortFrame();immediate_batch=false;immediate_count=0;glyph_vertices=0;}
+void dnd_draw_backend_flush(void *data,int bytes,int invalidate){
+    if(invalidate==1)DCInvalidateRange(data,(u32)bytes);
+    else {
+        DCFlushRange(data,(u32)bytes);
+        if(invalidate==2){if(mode)GX_InvalidateTexAll();dnd_draw_backend_invalidate_cache();}
+    }
+}
 void dnd_draw_backend_viewport(int x,int y,int w,int h){GX_SetViewport((float)x,(float)y,(float)w,(float)h,0,1);}
 void dnd_draw_backend_scissor(int x,int y,int w,int h){GX_SetScissorBoxOffset(0,0);GX_SetScissor((u32)x,(u32)y,(u32)w,(u32)h);}
-void dnd_draw_backend_camera(const float *view,const float *projection){memcpy(view_matrix,view,64);memcpy(projection_matrix,projection,64);projection_ortho=false;}
+void dnd_draw_backend_camera(const float *view,const float *projection){dnd_draw_backend_invalidate_cache();memcpy(view_matrix,view,64);memcpy(projection_matrix,projection,64);projection_ortho=false;}
 void dnd_draw_backend_2d(int w,int h) {
+    dnd_draw_backend_invalidate_cache();
     projection_ortho=true;Mtx44 p;guOrtho(p,0,(float)h,0,(float)w,-1,1);identity(view_matrix);
     for(int r=0;r<4;r++)for(int c=0;c<4;c++)projection_matrix[c*4+r]=p[r][c];
     dnd_draw_backend_viewport(0,0,dnd_graphics_width(),dnd_graphics_height());
     dnd_draw_backend_scissor(0,0,dnd_graphics_width(),dnd_graphics_height());
 }
 void dnd_draw_backend_restore(void) {
+    dnd_draw_backend_invalidate_cache();
     GX_SetPixelFmt(mode&&mode->aa?GX_PF_RGB565_Z16:GX_PF_RGB8_Z24,GX_ZC_LINEAR);
     GX_SetDither(GX_FALSE);GX_SetDstAlpha(GX_FALSE,0);GX_SetColorUpdate(GX_TRUE);GX_SetAlphaUpdate(GX_TRUE);GX_SetZCompLoc(GX_FALSE);
     GX_SetNumIndStages(0);GX_SetTevDirect(GX_TEVSTAGE0);GX_SetTevSwapMode(GX_TEVSTAGE0,GX_TEV_SWAP0,GX_TEV_SWAP0);
@@ -83,13 +106,23 @@ void dnd_draw_backend_restore(void) {
 #include "dnd_tev_backend.inc"
 #include "dnd_material_channels.inc"
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world) {
-    dnd_draw_backend_restore();
+    const DndDrawTexture *secondary=material->secondary;
+    bool same=material_cache_valid &&
+        cached_material.color==material->color &&
+        cached_material.flags==material->flags &&
+        cached_material.cutoff==material->cutoff &&
+        cached_material.effect==material->effect &&
+        cached_has_primary==(texture!=NULL) &&
+        cached_has_secondary==(secondary!=NULL) &&
+        (!texture || texture_same(texture,&cached_primary)) &&
+        (!secondary || texture_same(secondary,&cached_secondary));
+    if(!same)dnd_draw_backend_restore();
+    dnd_performance_add_draw(same?0:(texture?1u:0u)+(secondary?1u:0u));
     float mv[16];multiply(mv,view_matrix,world);Mtx m;Mtx44 p;
     for(int r=0;r<3;r++)for(int c=0;c<4;c++)m[r][c]=mv[c*4+r];
     for(int r=0;r<4;r++)for(int c=0;c<4;c++)p[r][c]=projection_matrix[c*4+r];
     GX_LoadProjectionMtx(p,projection_ortho?GX_ORTHOGRAPHIC:GX_PERSPECTIVE);GX_LoadPosMtxImm(m,GX_PNMTX0);GX_SetCurrentMtx(GX_PNMTX0);
     bool lit=(material->flags&32)!=0,environment=(material->flags&192)!=0,world_reflection=(material->flags&128)!=0;
-    const DndDrawTexture *secondary=material->secondary;
     Mtx inverse_view;
     if(world_reflection){Mtx view;for(int r=0;r<3;r++)for(int c=0;c<4;c++)view[r][c]=view_matrix[c*4+r];if(!guMtxInverse(view,inverse_view))return;}
     Mtx normal;
@@ -98,6 +131,8 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
         if(!guMtxInverse(m,inverse))return;
         guMtxTranspose(inverse,normal);GX_LoadNrmMtxImm(normal,GX_PNMTX0);
     }
+    float determinant=world[0]*(world[5]*world[10]-world[9]*world[6])-world[4]*(world[1]*world[10]-world[9]*world[2])+world[8]*(world[1]*world[6]-world[5]*world[2]);
+    if(!same) {
     if(lit) {
         GXLightObj light={0};GX_InitLightPos(&light,0,0,1000000);GX_InitLightColor(&light,(GXColor){192,192,192,255});GX_LoadLightObj(&light,GX_LIGHT0);
         GX_SetChanAmbColor(GX_COLOR0A0,(GXColor){64,64,64,255});
@@ -109,8 +144,7 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
     dnd_material_channels(lit);
     GX_SetZMode((material->flags&16)?GX_FALSE:GX_TRUE,GX_LEQUAL,(material->flags&8)?GX_FALSE:GX_TRUE);
     GX_SetZCompLoc(GX_FALSE);GX_SetColorUpdate(GX_TRUE);GX_SetAlphaUpdate(GX_TRUE);
-    float determinant=world[0]*(world[5]*world[10]-world[9]*world[6])-world[4]*(world[1]*world[10]-world[9]*world[2])+world[8]*(world[1]*world[6]-world[5]*world[2]);
-    GX_SetCullMode((material->flags&4)?(determinant<0?GX_CULL_FRONT:GX_CULL_BACK):GX_CULL_NONE);
+
     GX_SetAlphaCompare(material->cutoff>0?GX_GEQUAL:GX_ALWAYS,(u8)(material->cutoff*255),GX_AOP_AND,GX_ALWAYS,0);
     int blend=material->flags&3;
     GX_SetBlendMode(blend?GX_BM_BLEND:GX_BM_NONE,blend==2?GX_BL_ONE:GX_BL_SRCALPHA,blend==2?GX_BL_ONE:blend==3?GX_BL_INVSRCALPHA:GX_BL_INVSRCALPHA,GX_LO_CLEAR);
@@ -134,6 +168,13 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
     if(lit){GX_SetVtxDesc(GX_VA_NRM,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);}
     if(texture||secondary){GX_SetVtxDesc(GX_VA_TEX0,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_TEX0,GX_TEX_ST,GX_F32,0);}
     if(secondary){GX_SetVtxDesc(GX_VA_TEX1,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_TEX1,GX_TEX_ST,GX_F32,0);}
+    cached_material=*material;
+    cached_has_primary=texture!=NULL;cached_has_secondary=secondary!=NULL;
+    if(texture)cached_primary=*texture;
+    if(secondary)cached_secondary=*secondary;
+    material_cache_valid=true;
+    }
+    GX_SetCullMode((material->flags&4)?(determinant<0?GX_CULL_FRONT:GX_CULL_BACK):GX_CULL_NONE);
     GX_Begin((u8)primitive,GX_VTXFMT0,(u16)count);
     for(int i=0;i<count;i++) {
         GX_Position3f32(v[i].x,v[i].y,v[i].z);
@@ -154,10 +195,12 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
     GX_End();
 }
 void dnd_draw_backend_copy(const DndDrawTexture *texture,int x,int y,int w,int h) {
+    dnd_draw_backend_invalidate_cache();
     GX_SetTexCopySrc((u16)x,(u16)y,(u16)w,(u16)h);GX_SetTexCopyDst((u16)w,(u16)h,GX_TF_RGBA8,GX_FALSE);
     GX_CopyTex((void*)texture->data,GX_FALSE);GX_PixModeSync();GX_DrawDone();GX_InvalidateTexAll();
 }
 void dnd_graphics_begin_frame(float r,float g,float b,float a) {
+    dnd_draw_backend_invalidate_cache();
     dnd_graphics_init();if(!mode)return;
     GX_SetDispCopyYScale(GX_GetYScaleFactor(mode->efbHeight,mode->xfbHeight));
     GX_SetDispCopySrc(0,0,mode->fbWidth,mode->efbHeight);GX_SetDispCopyDst(mode->fbWidth,mode->xfbHeight);
@@ -237,6 +280,8 @@ void dnd_graphics_model_end(void){dnd_graphics_present();}
 #ifndef DND_GRAPHICS_TEST
 bool dnd_draw_backend_immediate_ready(void){return true;}
 void dnd_draw_backend_external(void){}
+void dnd_draw_backend_invalidate_cache(void){}
+void dnd_draw_backend_publish_texture(void){}
 void dnd_draw_backend_wait(void){}
 void dnd_draw_backend_abort(void){}
 void dnd_draw_backend_flush(void *data,int bytes,int invalidate){(void)data;(void)bytes;(void)invalidate;}

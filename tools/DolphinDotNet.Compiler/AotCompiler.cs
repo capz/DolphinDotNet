@@ -15,7 +15,7 @@ internal static class AotCompiler
         try
         {
             var root=LoadAssembly(model,Path.GetFullPath(path));
-            LoadDolphinDependencies(model,root);
+            LoadDependencies(model,root);
             var corePath=Path.Combine(Path.GetDirectoryName(root.Path)!,"DolphinDotNet.Core.dll");
             if(File.Exists(corePath)&&!model.Assemblies.ContainsKey("DolphinDotNet.Core"))LoadAssembly(model,corePath);
             MetadataLoader.RefreshLayouts(model);
@@ -373,7 +373,14 @@ internal static class AotCompiler
         var md=pe.GetMetadataReader();
         var name=md.IsAssembly?md.GetString(md.GetAssemblyDefinition().Name):Path.GetFileNameWithoutExtension(path);
         var assembly=new AssemblyModel{Name=name,Path=path,Stream=stream,PE=pe,Metadata=md};
-        model.Assemblies[name]=assembly;MetadataLoader.LoadInto(model,md,name);return assembly;
+        try {
+            foreach(var handle in md.TypeDefinitions) {
+                var typeName=MetadataLoader.ResolveTypeName(md,handle);
+                if(typeName is not null && typeName!="<Module>" && model.Types.ContainsKey(typeName))
+                    throw new NotSupportedException($"DND1002: Duplicate type '{typeName}' in '{name}'. Assembly-qualified duplicate types are not supported by the closed-world compiler; rename the type or remove the conflicting dependency.");
+            }
+            model.Assemblies[name]=assembly;MetadataLoader.LoadInto(model,md,name);return assembly;
+        } catch { if(!model.Assemblies.ContainsKey(name))assembly.Dispose();throw; }
     }
 
     private static void EnsureEnumerationContracts(CompilationModel model)
@@ -415,7 +422,14 @@ internal static class AotCompiler
         return field.Size==8?CilStackKind.I8:CilStackKind.I4;
     }
 
-    private static void LoadDolphinDependencies(CompilationModel model,AssemblyModel root)
+    // Framework references are resolved by Dolphin intrinsics/facades, never by
+    // importing the host CLR implementation into the console's closed world.
+    private static readonly HashSet<string> FrameworkAssemblies = new(
+        Directory.EnumerateFiles(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "*.dll")
+            .Select(Path.GetFileNameWithoutExtension).OfType<string>()
+            .Append("netstandard").Append("mscorlib"), StringComparer.OrdinalIgnoreCase);
+
+    private static void LoadDependencies(CompilationModel model,AssemblyModel root)
     {
         var queue=new Queue<AssemblyModel>();queue.Enqueue(root);
         while(queue.Count>0)
@@ -424,9 +438,9 @@ internal static class AotCompiler
             foreach(var rh in current.Metadata.AssemblyReferences)
             {
                 var r=current.Metadata.GetAssemblyReference(rh);var name=current.Metadata.GetString(r.Name);
-                if(model.Assemblies.ContainsKey(name)||!name.StartsWith("DolphinDotNet",StringComparison.Ordinal))continue;
+                if(model.Assemblies.ContainsKey(name)||FrameworkAssemblies.Contains(name))continue;
                 var candidate=Path.Combine(dir,name+".dll");
-                if(!File.Exists(candidate))throw new FileNotFoundException($"Referenced DolphinDotNet assembly '{name}' was not found beside {current.Path}.",candidate);
+                if(!File.Exists(candidate))throw new FileNotFoundException($"DND1001: Referenced assembly '{name}' was not found beside {current.Path}. Restore the project and enable CopyLocalLockFileAssemblies; AOT requires implementation DLLs for every transitive library.",candidate);
                 queue.Enqueue(LoadAssembly(model,candidate));
             }
         }
