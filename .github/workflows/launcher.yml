@@ -28,6 +28,7 @@ jobs:
         working-directory: tools/DolphinDotNet.Launcher
         run: python3 tests/wire_test.py
   resident-powerpc:
+    needs: receiver-core
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
