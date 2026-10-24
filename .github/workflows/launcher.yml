@@ -4,11 +4,15 @@ on:
     paths:
       - 'tools/DolphinDotNet.Launcher/**'
       - '.github/workflows/launcher.yml'
+      - 'scripts/dol_sections.py'
+      - 'scripts/verify_dol_elf.py'
   push:
     branches: [main]
     paths:
       - 'tools/DolphinDotNet.Launcher/**'
       - '.github/workflows/launcher.yml'
+      - 'scripts/dol_sections.py'
+      - 'scripts/verify_dol_elf.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,6 +28,7 @@ jobs:
         working-directory: tools/DolphinDotNet.Launcher
         run: python3 tests/wire_test.py
   resident-powerpc:
+    needs: receiver-core
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,3 +46,14 @@ jobs:
       - name: Execute linked bootstrap and repeated return paths
         working-directory: tools/DolphinDotNet.Launcher
         run: python tests/resident_cpu_test.py
+      - name: Verify bootable DOL matches the linked launcher
+        run: >-
+          python scripts/verify_dol_elf.py
+          tools/DolphinDotNet.Launcher/build/DolphinDotNet.Launcher.elf
+          tools/DolphinDotNet.Launcher/build/DolphinDotNet.Launcher.dol
+      - name: Upload bootable launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: DolphinDotNet-ELF-launcher
+          path: tools/DolphinDotNet.Launcher/build/DolphinDotNet.Launcher.dol
+          if-no-files-found: error
