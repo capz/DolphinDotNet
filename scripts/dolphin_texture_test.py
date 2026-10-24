@@ -135,7 +135,14 @@ def run(args):
                 "-frames:v", "1", "-y", str(root / "frame.png")],
                root / "encode.log", input=selected)
     if args.streaming:
-        from dolphin_streaming_check import validate_stream
+        from dolphin_streaming_check import validate_stream, telemetry
+        states = []
+        for offset in range(0, len(raw), FRAME_BYTES):
+            try:
+                states.append(telemetry(raw[offset:offset + FRAME_BYTES]))
+            except AssertionError:
+                continue
+        (root / "diagnostics.json").write_text(json.dumps(states, indent=2) + "\n")
         proof = validate_stream(raw, args.mode)
     else:
         proof = validate_capture(raw)
