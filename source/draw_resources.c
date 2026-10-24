@@ -21,6 +21,8 @@ typedef struct {
     void *allocation;
     unsigned char *data;
     int kind,bytes,generation;
+    uint32_t immutable_hash;
+    bool audit_rgba;
     bool pending;
     int holds;
     int effect;
@@ -166,6 +168,7 @@ int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int 
        (uint32_t)count>payload->length-(uint32_t)source_offset)return -1;
     /* Conservative synchronization: prevent stale queued GX reads before replacement. */
     dnd_draw_backend_wait();
+    r->audit_rgba=false;
     memcpy(r->data,(unsigned char*)payload->data+source_offset,(size_t)count);
     dnd_draw_backend_flush(r->data,count,2);
     return 0;
@@ -178,6 +181,7 @@ int dnd_texture_update_buffer(int texture_token,int buffer_token,int source_offs
        source_offset<0 || count!=texture->bytes || source_offset>source->bytes ||
        count>source->bytes-source_offset)return -1;
     dnd_draw_backend_wait();
+    texture->audit_rgba=false;
     memcpy(texture->data,source->data+source_offset,(size_t)count);
     dnd_draw_backend_flush(texture->data,count,2);
     return 0;
@@ -189,6 +193,7 @@ int dnd_texture_stage_array(int token,DndArray *payload,int offset,int count) {
     if(!r || !payload || payload->elements_are_references || payload->element_size!=1 ||
        offset<0 || count!=r->bytes || (uint32_t)offset>payload->length ||
        (uint32_t)count>payload->length-(uint32_t)offset)return -1;
+    r->audit_rgba=false;
     memcpy(r->data,(unsigned char*)payload->data+offset,(size_t)count);
     dnd_draw_backend_flush(r->data,count,0);return 0;
 }
@@ -199,6 +204,7 @@ int dnd_texture_stage_buffer(int token,int buffer_token,int offset,int count) {
      * after the asynchronous transfer was queued. */
     uint64_t address=dnd_buffer_held_address(buffer_token,offset,count);
     if(!address)return -1;
+    r->audit_rgba=false;
     memcpy(r->data,(const void*)(uintptr_t)address,(size_t)count);
     dnd_draw_backend_flush(r->data,count,0);return 0;
 }
@@ -209,18 +215,46 @@ int dnd_texture_publish_staged(int token) {
     dnd_draw_backend_publish_texture();
     return 0;
 }
+static uint32_t rgba_source_hash(const unsigned char *src,int w,int h) {
+    uint32_t hash=2166136261u;
+    for(int iy=0;iy<4;iy++)for(int ix=0;ix<4;ix++){
+        int x=((2*ix+1)*w)/8,y=((2*iy+1)*h)/8;
+        const unsigned char *p=src+(y*w+x)*4;
+        for(int c=0;c<4;c++)hash=(hash^p[c])*16777619u;
+    }
+    return hash;
+}
+static uint32_t rgba_ram_hash(const Resource *r) {
+    const volatile unsigned char *p=r->data;
+#ifdef DND_GAMECUBE_STORAGE
+    p=(const volatile unsigned char*)MEM_K0_TO_K1(r->data);
+#endif
+    uint32_t hash=2166136261u;
+    int blocks=(r->width+3)/4;
+    for(int iy=0;iy<4;iy++)for(int ix=0;ix<4;ix++){
+        int x=((2*ix+1)*r->width)/8,y=((2*iy+1)*r->height)/8;
+        int block=((y/4)*blocks+x/4)*64,at=((y&3)*4+(x&3))*2;
+        unsigned char rgba[4]={p[block+at+1],p[block+32+at],p[block+33+at],p[block+at]};
+        for(int c=0;c<4;c++)hash=(hash^rgba[c])*16777619u;
+    }
+    return hash;
+}
 static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
     int bytes=texture_size(w,h,6);
     if(dnd_device_active() || bytes<0 || !src)return 0;
     int token=create(TEXTURE,bytes,32);Resource *r=find(token,TEXTURE);if(!r)return 0;
     r->width=w;r->height=h;r->format=6;r->linear=linear!=0;
+    r->immutable_hash=rgba_source_hash(src,w,h);r->audit_rgba=true;
     int blocks=(w+3)/4;
     for(int y=0;y<h;y++)for(int x=0;x<w;x++) {
         int block=((y/4)*blocks+x/4)*64,at=((y&3)*4+(x&3))*2,source=(y*w+x)*4;
         r->data[block+at]=src[source+3];r->data[block+at+1]=src[source];
         r->data[block+32+at]=src[source+1];r->data[block+33+at]=src[source+2];
     }
-    dnd_draw_backend_flush(r->data,bytes,2);return token;
+    dnd_draw_backend_flush(r->data,bytes,2);
+    if(rgba_ram_hash(r)!=r->immutable_hash)
+        dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"RGBA8 upload RAM does not match its source.");
+    return token;
 }
 int dnd_texture_create(int w,int h,DndArray *rgba,int linear) {
     if(texture_size(w,h,6)<0 || !rgba || rgba->element_size!=1 || rgba->elements_are_references || rgba->length!=(uint32_t)(w*h*4))return 0;
@@ -281,6 +315,8 @@ int dnd_mesh_update(int token,DndArray *a,int offset,int count,int format) {
 static bool texture(int token,DndDrawTexture *out) {
     memset(out,0,sizeof(*out));if(!token)return true;
     Resource *r=find(token,TEXTURE);if(!r)return false;
+    if(r->audit_rgba && rgba_ram_hash(r)!=r->immutable_hash)
+        dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Resident RGBA8 RAM was overwritten.");
     *out=(DndDrawTexture){r->data,(uint32_t)r->bytes,r->width,r->height,r->format,r->linear!=0};return true;
 }
 int dnd_texture_resolve(int token,DndDrawTexture *out){return texture(token,out)?0:-1;}
@@ -415,6 +451,7 @@ int dnd_canvas_stats(int token,int kind) { Resource *r=find(token,CANVAS);return
 int dnd_draw_copy_texture(int token,int x,int y,int w,int h) {
     Resource *r=find(token,TEXTURE);DndDrawTexture tx;
     if(!r||!dnd_device_active()||dnd_device_pass()||!texture(token,&tx)||r->format!=6||w!=r->width||h!=r->height||x<0||y<0||x>dnd_device_width()-w||y>dnd_device_height()-h)return -1;
+    r->audit_rgba=false;
     dnd_draw_backend_copy(&tx,x,y,w,h);return 0;
 }
 
