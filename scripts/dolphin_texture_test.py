@@ -53,7 +53,10 @@ def validate_capture(raw):
                 minimumMatchingCells=min(scores))
 
 
-def decode_texture_capture(capture, log):
+def decode_texture_capture(capture, log, streaming=False):
+    if streaming:
+        return run_ffmpeg(["-i", str(capture), "-vf", "fps=3,scale=640:480:flags=neighbor",
+                           "-frames:v", "360", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)
     # Read the actual tail, so a later exception/error screen cannot hide behind
     # a successful initial burst. Bound decoded memory to two seconds.
     return run_ffmpeg(["-sseof", "-2", "-i", str(capture), "-vf", "scale=640:480:flags=neighbor",
@@ -126,12 +129,30 @@ def run(args):
     captures = sorted((root / "user" / "Dump" / "Frames").glob("*.avi"))
     if len(captures) != 1:
         raise RuntimeError(f"Expected one AVI capture, found {len(captures)}")
-    raw = decode_texture_capture(captures[0], root / "decode.log")
-    proof = validate_capture(raw)
+    raw = decode_texture_capture(captures[0], root / "decode.log", args.streaming)
     selected = raw[-FRAME_BYTES:]
     run_ffmpeg(["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "640x480", "-i", "pipe:0",
                 "-frames:v", "1", "-y", str(root / "frame.png")],
                root / "encode.log", input=selected)
+    if args.streaming:
+        from dolphin_streaming_check import validate_stream, telemetry, RenderMismatch
+        states = []
+        for offset in range(0, len(raw), FRAME_BYTES):
+            try:
+                states.append(telemetry(raw[offset:offset + FRAME_BYTES]))
+            except AssertionError:
+                continue
+        (root / "diagnostics.json").write_text(json.dumps(states, indent=2) + "\n")
+        try:
+            proof = validate_stream(raw, args.mode)
+        except RenderMismatch as error:
+            run_ffmpeg(["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "640x480", "-i", "pipe:0",
+                        "-frames:v", "1", "-y", str(root / "mismatch.png")],
+                       root / "mismatch-encode.log", input=error.rgb)
+            (root / "mismatch.json").write_text(json.dumps(error.state, indent=2) + "\n")
+            raise
+    else:
+        proof = validate_capture(raw)
     proof.update(mode=args.mode, soakSeconds=args.seconds,
                  secondHalfCaptureBytes=final_bytes - midpoint_bytes)
     (root / "results.json").write_text(json.dumps(proof, indent=2) + "\n")
@@ -141,6 +162,7 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dol", type=Path)
+    parser.add_argument("--streaming", action="store_true")
     parser.add_argument("--mode", choices=["pages", "atlas"], required=True)
     parser.add_argument("--binary", default="/usr/games/dolphin-emu-nogui")
     parser.add_argument("--logs", type=Path, default=Path("dolphin-texture"))

@@ -1,49 +1,51 @@
-using System;
 using Dolphin.Diagnostics;
-using Dolphin.Graphics;
 using Dolphin.Input;
-using Dolphin.Timing;
+using System.Threading.Tasks;
 
 internal static class Program
 {
-    private static int Main()
+    private static async Task<int> Main()
     {
-        DebugOverlay.PerformanceVisible=true;
-        using var scene=new StrategyScene();
-        var clock=new FrameClock { MaximumDeltaSeconds=.1f };
 #if DND_TEXTURE_ATLAS_START
-        bool atlas=true;
+        const bool startAtlas = true;
 #else
-        bool atlas=false;
+        const bool startAtlas = false;
 #endif
-        int frames=0;
-        float seconds=0;
-        while(true)
+#if DND_TEXTURE_STREAM_CI
+        DebugOverlay.PerformanceVisible = false;
+#else
+        DebugOverlay.PerformanceVisible = true;
+#endif
+        using var scene = new StrategyScene(startAtlas);
+#if DND_TEXTURE_STREAM_CI
+        scene.InjectFailures = true;
+#endif
+        bool automatic = true, exiting = false;
+        while (true)
         {
             Controller.Update();
-            var pad=Controller.GetState(0);
-            if(pad.B.WasPressed) return 0;
-            if(pad.A.WasPressed)
+            var pad = Controller.GetState(0);
+            if (pad.B.WasPressed) exiting = true;
+            if (exiting)
             {
-                atlas=!atlas;
-                DebugOverlay.WriteLine(atlas?"ATLAS 9 DRAWS":"PAGES 144 DRAWS");
+                if (scene.Stop()) return 0;
+                // Poll without blocking the application executor or starting new work.
+                scene.Present();
+                await Task.Yield();
+                continue;
             }
-            float dt=clock.Tick();
-            seconds+=dt;
-            scene.Present(atlas);
-            frames++;
-            if(frames==120)
-            {
-                var totals=CacheTrace.Run();
-                DebugOverlay.WriteLine("FRAMES 120");
-                DebugOverlay.WriteLine(atlas?"ATLAS: 9 DRAW SUBMITS":"PAGES: 144 DRAW SUBMITS");
-                DebugOverlay.WriteLine("PAGE CACHE MISSES "+totals.Pages);
-                DebugOverlay.WriteLine("ATLAS CACHE MISSES "+totals.Atlases);
-                DebugOverlay.WriteLine("PAGES REQUESTED BYTES "+(totals.Pages*4096));
-                DebugOverlay.WriteLine("ATLAS REQUESTED BYTES "+(totals.Atlases*65536));
-                DebugOverlay.WriteLine("ELAPSED MS "+(int)(seconds*1000));
-                frames=0;seconds=0;
-            }
+            if (pad.A.WasPressed) scene.ToggleMode();
+            if (pad.Y.WasPressed) automatic = !automatic;
+            if (pad.X.WasPressed) scene.InjectFailures = !scene.InjectFailures;
+#if DND_TEXTURE_STREAM_CI
+            if (scene.Frame > 0 && scene.Frame % 240 == 0) scene.ToggleMode();
+#endif
+            scene.Move(automatic, pad.Stick.X * .15f, pad.Stick.Y * .15f);
+            scene.Present();
+            if (scene.Frame % 120 == 0) scene.Report();
+            // End the application turn after GX presentation. This never waits
+            // on the source task, and gives the service executor a fair turn.
+            await Task.Yield();
         }
     }
 }
