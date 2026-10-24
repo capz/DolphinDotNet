@@ -64,7 +64,7 @@ jobs:
           -p:DndTextureAtlasStart=${{ matrix.mode == 'atlas' && 'true' || 'false' }}
       - name: Boot Dolphin and require sustained textured frames
         run: >-
-          docker run --rm --mount "type=bind,source=${{ github.workspace }},target=/src"
+          docker run --rm --shm-size=512m --mount "type=bind,source=${{ github.workspace }},target=/src"
           -w /src dnd-dolphin python3 scripts/dolphin_texture_test.py
           samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
           --mode ${{ matrix.mode }} --seconds 45
