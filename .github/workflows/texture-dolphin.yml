@@ -2,7 +2,7 @@ name: TextureStrategy in Dolphin
 
 on:
   push:
-    branches: [main, experiment/virtual-texture-vs-atlas, codex/texture-strategy-startup-diagnostics]
+    branches: [main, experiment/virtual-texture-vs-atlas, codex/texture-strategy-startup-diagnostics, codex/texture-residency-streaming]
   pull_request:
     paths:
       - 'samples/TextureStrategy/**'
@@ -54,21 +54,33 @@ jobs:
       - name: Test the acceptance oracle and native failure diagnostics
         run: |
           python -m unittest discover -s tests -p test_dolphin_texture.py
+          python -m unittest discover -s tests -p test_dolphin_streaming.py
+          dotnet run --project tests/TextureStreamingTests -c Release
           cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/native_main_failure_test.c -o /tmp/dnd-main-test
           /tmp/dnd-main-test
       - name: Build the actual GameCube DOL with the Docker backend
         run: >-
           dotnet build samples/TextureStrategy/TextureStrategy.csproj
           -c ${{ matrix.configuration }} -m:1
-          -p:DndBuildBackend=Docker
+          -p:DndBuildBackend=Docker -p:DndTextureStreamingCI=true
           -p:DndTextureAtlasStart=${{ matrix.mode == 'atlas' && 'true' || 'false' }}
       - name: Boot Dolphin and require sustained textured frames
         run: >-
           docker run --rm --shm-size=512m --mount "type=bind,source=${{ github.workspace }},target=/src"
           -w /src dnd-dolphin python3 scripts/dolphin_texture_test.py
           samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
-          --mode ${{ matrix.mode }} --seconds 45
+          --mode ${{ matrix.mode }} --streaming --seconds 90
           --logs out/dolphin-texture
+      - name: Preserve compact frame and telemetry evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: texture-proof-${{ matrix.configuration }}-${{ matrix.mode }}
+          if-no-files-found: warn
+          path: |
+            out/dolphin-texture/frame.png
+            out/dolphin-texture/results.json
+            out/dolphin-texture/emulator.log
       - name: Preserve DOL, ELF, emulator logs, capture and pixel proof
         if: always()
         uses: actions/upload-artifact@v4
