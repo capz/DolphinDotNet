@@ -30,6 +30,9 @@ build/boot.o: boot.S resident.h build/resident.bin
 	$(CC) $(MACHDEP) -c $< -o $@
 $(TARGET).elf: build/boot.o boot.ld Makefile
 	$(DEVKITPPC)/bin/powerpc-eabi-ld -T boot.ld -Map $(TARGET).map build/boot.o -o $@
+$(TARGET).dol: $(TARGET).elf ../../scripts/dol_sections.py
+	elf2dol "$<" "$@"
+	$(PYTHON) ../../scripts/dol_sections.py --pad "$@"
 test:
 	$(MAKE) -f tests/Makefile test
 clean:

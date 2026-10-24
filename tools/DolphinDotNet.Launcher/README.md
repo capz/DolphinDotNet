@@ -22,6 +22,13 @@ owns its network/GDB settings after handoff; the launcher does not rewrite them.
 
 ## Build and boot
 
+To download a prebuilt DOL, open a successful **GameCube ELF launcher** run in
+[GitHub Actions](https://github.com/capz/DolphinDotNet/actions/workflows/launcher.yml)
+and download **DolphinDotNet-ELF-launcher** from its **Artifacts** section (GitHub
+sign-in required). Extract `DolphinDotNet.Launcher.dol` from the archive and boot
+it using your existing homebrew boot method. These builds use the default DHCP
+and port settings below. You can also start a build with **Run workflow**.
+
 With devkitPPC and libogc2 configured:
 
 ```sh
