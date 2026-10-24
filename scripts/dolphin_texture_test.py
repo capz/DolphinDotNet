@@ -72,7 +72,7 @@ def run(args):
     config = root / "user" / "Config"
     config.mkdir(parents=True)
     (config / "Dolphin.ini").write_text(
-        "[Core]\nGFXBackend = Software\nCPUCore = 1\nCPUThread = False\n"
+        f"[Core]\nGFXBackend = {args.backend}\nCPUCore = 1\nCPUThread = False\n"
         "[DSP]\nBackend = No Audio Output\n"
         "[Movie]\nDumpFrames = True\nDumpFramesSilent = True\n")
     (config / "GFX.ini").write_text(
@@ -82,7 +82,7 @@ def run(args):
         "[Logs]\nBOOT = True\nCORE = True\nPOWERPC = True\n")
     environment = dict(os.environ)
     environment.update(DOLPHIN_EMU_USERPATH=str(root / "user"),
-                       SDL_AUDIODRIVER="dummy", LP_NUM_THREADS="2")
+                       SDL_AUDIODRIVER="dummy", LP_NUM_THREADS="2", LIBGL_ALWAYS_SOFTWARE="1")
     for key, name in (("XDG_CONFIG_HOME", "config"), ("XDG_CACHE_HOME", "cache"), ("XDG_DATA_HOME", "data")):
         path = root / name
         path.mkdir(exist_ok=True)
@@ -153,7 +153,7 @@ def run(args):
             raise
     else:
         proof = validate_capture(raw)
-    proof.update(mode=args.mode, soakSeconds=args.seconds,
+    proof.update(mode=args.mode, backend=args.backend, soakSeconds=args.seconds,
                  secondHalfCaptureBytes=final_bytes - midpoint_bytes)
     (root / "results.json").write_text(json.dumps(proof, indent=2) + "\n")
     print(json.dumps(proof))
@@ -163,6 +163,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dol", type=Path)
     parser.add_argument("--streaming", action="store_true")
+    parser.add_argument("--backend", choices=["Software", "OGL"], default="Software")
     parser.add_argument("--mode", choices=["pages", "atlas"], required=True)
     parser.add_argument("--binary", default="/usr/games/dolphin-emu-nogui")
     parser.add_argument("--logs", type=Path, default=Path("dolphin-texture"))

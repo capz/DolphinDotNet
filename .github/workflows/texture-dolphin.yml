@@ -48,7 +48,7 @@ jobs:
           sudo apt-get install -y ffmpeg
           docker build -t dnd-dolphin - <<'EOF'
           FROM debian:bookworm-slim
-          RUN apt-get update && apt-get install -y --no-install-recommends dolphin-emu xvfb xauth ffmpeg python3 && rm -rf /var/lib/apt/lists/*
+          RUN apt-get update && apt-get install -y --no-install-recommends dolphin-emu xvfb xauth ffmpeg python3 libgl1-mesa-dri libglx-mesa0 && rm -rf /var/lib/apt/lists/*
           EOF
           docker run --rm dnd-dolphin /usr/games/dolphin-emu-nogui --version
       - name: Test the acceptance oracle and native failure diagnostics
@@ -69,7 +69,7 @@ jobs:
           docker run --rm --shm-size=512m --mount "type=bind,source=${{ github.workspace }},target=/src"
           -w /src dnd-dolphin python3 scripts/dolphin_texture_test.py
           samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
-          --mode ${{ matrix.mode }} --streaming --seconds 90
+          --mode ${{ matrix.mode }} --streaming --backend OGL --seconds 90
           --logs out/dolphin-texture
       - name: Preserve compact frame and telemetry evidence
         if: always()
