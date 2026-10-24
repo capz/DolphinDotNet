@@ -6,16 +6,21 @@ using System.IO;
 internal static class TextureSource
 {
     internal const int WorldWidth = 48, WorldHeight = 32, CellPixels = 32, Group = 4;
+    internal static int Phase, Row;
     internal static int Red(int x, bool bright) => bright ? 45 + (x % 12) * 12 : 18 + (x % 12) * 8;
     internal static int Green(int y, bool bright) => bright ? 65 + (y % 12) * 11 : 26 + (y % 12) * 8;
     internal static void Fill(byte[] pixels, int id, bool atlas, bool fail)
     {
-        if (fail) throw new IOException("Injected procedural-source failure.");
+        Phase = 1; Row = 0;
+        if (fail) { Phase = 3; throw new IOException("Injected procedural-source failure."); }
         int cells = atlas ? Group : 1, width = cells * CellPixels;
         int originX = atlas ? (id % (WorldWidth / Group)) * Group : id % WorldWidth;
         int originY = atlas ? (id / (WorldWidth / Group)) * Group : id / WorldWidth;
-        for (int y = 0; y < width; y++) for (int x = 0; x < width; x++)
+        for (int y = 0; y < width; y++)
         {
+            Row = y;
+            for (int x = 0; x < width; x++)
+            {
             int cx = originX + x / CellPixels, cy = originY + y / CellPixels;
             int localX = x % CellPixels, localY = y % CellPixels;
             bool bright = (((localX / 8) ^ (localY / 8) ^ (cx * 3 + cy)) & 1) != 0;
@@ -24,7 +29,9 @@ internal static class TextureSource
             pixels[at + 1] = (byte)Green(cy, bright);
             pixels[at + 2] = (byte)(localX == 0 || localY == 0 ? 245 : bright ? 184 : 84);
             pixels[at + 3] = 255;
+            }
         }
+        Phase = 2;
     }
     internal static byte[] Coarse()
     {
