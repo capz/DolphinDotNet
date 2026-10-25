@@ -79,7 +79,7 @@ jobs:
           samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
           --mode ${{ matrix.mode == 'atlas' && 'atlas' || 'pages' }} --streaming
           ${{ matrix.mode == 'benchmark' && '--benchmark' || '' }} --backend OGL
-          --seconds ${{ matrix.mode == 'benchmark' && '120' || '90' }}
+          --seconds ${{ matrix.mode == 'benchmark' && '240' || '90' }}
           --logs out/dolphin-texture
       - name: Preserve compact frame and telemetry evidence
         if: always()
@@ -89,6 +89,7 @@ jobs:
           if-no-files-found: warn
           path: |
             out/dolphin-texture/frame.png
+            out/dolphin-texture/benchmark-summary.png
             out/dolphin-texture/results.json
             out/dolphin-texture/diagnostics.json
             out/dolphin-texture/mismatch.png

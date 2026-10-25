@@ -53,7 +53,10 @@ def validate_capture(raw):
                 minimumMatchingCells=min(scores))
 
 
-def decode_texture_capture(capture, log, streaming=False):
+def decode_texture_capture(capture, log, streaming=False, benchmark=False):
+    if benchmark:
+        return run_ffmpeg(["-i", str(capture), "-vf", "fps=2,scale=640:480:flags=neighbor",
+                           "-frames:v", "540", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)
     if streaming:
         return run_ffmpeg(["-i", str(capture), "-vf", "fps=3,scale=640:480:flags=neighbor",
                            "-frames:v", "360", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)
@@ -129,7 +132,7 @@ def run(args):
     captures = sorted((root / "user" / "Dump" / "Frames").glob("*.avi"))
     if len(captures) != 1:
         raise RuntimeError(f"Expected one AVI capture, found {len(captures)}")
-    raw = decode_texture_capture(captures[0], root / "decode.log", args.streaming)
+    raw = decode_texture_capture(captures[0], root / "decode.log", args.streaming, args.benchmark)
     selected = raw[-FRAME_BYTES:]
     run_ffmpeg(["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "640x480", "-i", "pipe:0",
                 "-frames:v", "1", "-y", str(root / "frame.png")],
@@ -150,6 +153,19 @@ def run(args):
             if args.benchmark:
                 from dolphin_benchmark_check import validate_benchmark
                 proof = validate_benchmark(raw)
+                from dolphin_benchmark_check import benchmark_telemetry
+                summary = None
+                for offset in range(0, len(raw), FRAME_BYTES):
+                    rgb = raw[offset:offset + FRAME_BYTES]
+                    try:
+                        if benchmark_telemetry(rgb)["completedMask"] == 511:
+                            summary = rgb
+                    except AssertionError:
+                        continue
+                if summary is not None:
+                    run_ffmpeg(["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "640x480", "-i", "pipe:0",
+                                "-frames:v", "1", "-y", str(root / "benchmark-summary.png")],
+                               root / "summary-encode.log", input=summary)
             else:
                 proof = validate_stream(raw, args.mode)
         except RenderMismatch as error:
@@ -179,6 +195,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.benchmark:
         args.streaming = True
-    if not 5 <= args.seconds <= 120:
-        parser.error("--seconds must be between 5 and 120")
+    maximum_seconds = 240 if args.benchmark else 120
+    if not 5 <= args.seconds <= maximum_seconds:
+        parser.error("--seconds must be between 5 and " + str(maximum_seconds))
     run(args)

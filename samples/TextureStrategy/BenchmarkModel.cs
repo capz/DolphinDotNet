@@ -146,7 +146,11 @@ internal sealed class BenchmarkResult
         { sum += histogram[i]; if (sum >= target) return (i + 1) * units; }
         return histogram.Length * units;
     }
-    internal int FramePercentile(int percent) => Percentile(frames, Samples, percent, 250);
+    internal int FramePercentile(int percent)
+    {
+        int value = Percentile(frames, Samples, percent, 250);
+        return value < MaxFrameUs ? value : MaxFrameUs;
+    }
     internal int LatencyP95Ms => Percentile(latency, Promotions, 95, 1);
     internal int MeanCoverage => DurationUs == 0 ? 0 : (int)(CoverageTime / DurationUs);
     internal int MotionCoverage => MotionUs == 0 ? 0 : (int)(MotionCoverageTime / MotionUs);
