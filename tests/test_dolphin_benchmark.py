@@ -71,6 +71,15 @@ class BenchmarkOracleTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             validate_benchmark(raw)
 
+    def test_completion_mask_does_not_replace_a_terminal_case_sample(self):
+        # The failed Debug capture saw case 1 at 7993 ms, then case 2.
+        # Later masks reached 511, but case 1's final measurements were absent.
+        raw = b"".join([frame(i) for i in range(5)] +
+                       [benchmark_frame(i, complete=(i != 1)) for i in range(9)] +
+                       [frame(i) for i in range(5)])
+        with self.assertRaisesRegex(AssertionError, r"Missing completed benchmark cases: \[1\]"):
+            validate_benchmark(raw)
+
     def test_over_budget_and_overstated_static_coverage_fail(self):
         for override in ({2: dict(over_budget=True)}, {2: dict(static=10000)}):
             raw = b"".join([frame(i) for i in range(5)] +

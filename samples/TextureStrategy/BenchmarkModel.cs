@@ -118,6 +118,10 @@ internal sealed class BenchmarkResult
     internal long DurationUs, MotionUs, CoverageTime, MotionCoverageTime;
     private long below95Us;
     internal bool Complete;
+    private long completedAt;
+    // The capture oracle samples at 2 Hz. Hold from actual completion, not
+    // case start: a slow final measured frame can overshoot the nominal end.
+    internal bool CanAdvance(long now) => Complete && now - completedAt >= 1500000;
     internal void Reset()
     {
         Timing.Reset();
@@ -125,14 +129,14 @@ internal sealed class BenchmarkResult
         Samples = Promotions = Evictions = Cancelled = RequestedKiB = UploadedKiB = 0;
         PeakKiB = StaticCoverage = MaxFrameUs = MaxUploadUs = MaxSubmitUs = LongestBelow95Ms = 0;
         DurationUs = MotionUs = CoverageTime = MotionCoverageTime = below95Us = 0;
-        TimeTo95Ms = -1; Complete = false;
+        TimeTo95Ms = -1; Complete = false; completedAt = 0;
     }
     internal void Begin(BenchmarkHistogram histogram)
     { Reset(); histogram.Clear(); active = histogram; }
-    internal void Finish()
+    internal void Finish(long now)
     {
         finalFrame95 = FramePercentile(95); finalFrame99 = FramePercentile(99);
-        finalLatency95 = LatencyP95Ms; active = null; Complete = true;
+        finalLatency95 = LatencyP95Ms; active = null; completedAt = now; Complete = true;
     }
     internal void Record(int elapsedMs, int frameUs, int coverage)
     {

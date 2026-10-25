@@ -146,7 +146,8 @@ def validate_benchmark(raw):
     if prefix < 5 or suffix < 5:
         raise AssertionError("The same DOL must run original stress mode before AND after comparison")
     if set(cases) != set(range(9)) or previous_mask != 511 or groups_with_detail != {1, 2, 4}:
-        raise AssertionError("Missing a completed benchmark case or rendered layout")
+        raise AssertionError(f"Missing completed benchmark cases: {sorted(set(range(9)) - set(cases))}; "
+                             f"completed mask={previous_mask}, rendered groups={sorted(groups_with_detail)}")
     for case, state in cases.items():
         if state["timingSamples"] < 3 or state["worstFrameDraws"] == 0 or state["promotions"] < 3 or state["measuredMs"] < 6000 or state["frameP99TenthsMs"] == 0:
             raise AssertionError("Insufficient real measurements for case " + str(case))

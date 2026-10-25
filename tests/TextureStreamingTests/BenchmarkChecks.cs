@@ -48,10 +48,13 @@ internal static class BenchmarkChecks
         Check(result.TimeTo95Ms == 0 && result.StaticCoverage == 10000 && result.LongestBelow95Ms == 30, "Cold and motion measurements remain distinct");
         Check(result.FramePercentile(99) >= 30000 && result.FramePercentile(99) <= 30250, "Frame percentile units");
         result.Promoted(1234, 500); Check(result.LatencyP95Ms == 2 && result.MaxUploadUs == 500, "Request latency and upload cost are distinct");
-        result.Finish();
+        Check(!result.CanAdvance(10000000), "An active case cannot advance");
+        result.Finish(8400000);
+        Check(!result.CanAdvance(8500000) && !result.CanAdvance(9899999) && result.CanAdvance(9900000),
+            "Late completion must still retain terminal telemetry for three capture intervals");
         var other = new BenchmarkResult(); other.Begin(histogram); other.Record(0, 50000, 1000);
         Check(result.FramePercentile(99) == 30000 && result.LatencyP95Ms == 2 && result.Complete, "Completed results survive histogram reuse");
-        result.Reset(); Check(result.Samples == 0 && result.MeanCoverage == 0 && result.TimeTo95Ms == -1 && result.Promotions == 0, "Per-case reset");
+        result.Reset(); Check(!result.CanAdvance(20000000), "Reset clears completed dwell state"); Check(result.Samples == 0 && result.MeanCoverage == 0 && result.TimeTo95Ms == -1 && result.Promotions == 0, "Per-case reset");
         Check(BenchmarkTiming.Overlap(100,200,120,180)==60 && BenchmarkTiming.Overlap(200,300,120,180)==0,
             "Preparation belongs to its execution interval, not its later publication frame");
         Check(BenchmarkTiming.Overlap(100,200,80,120)==20 && BenchmarkTiming.Overlap(100,200,180,220)==20,

@@ -173,7 +173,7 @@ internal sealed class BenchmarkScene : IDisposable
         bool active = !stopped && nextCase < 0 && !Current.Complete;
         if (active && elapsed >= 8000)
         {
-            Current.Finish(); completedMask |= 1 << currentCase;
+            Current.Finish(now); completedMask |= 1 << currentCase;
             active = false; reportSecond = -1;
             if (currentCase == 8 || !autoAdvance) summary = true;
         }
@@ -189,7 +189,7 @@ internal sealed class BenchmarkScene : IDisposable
             model.Build(centerX, centerY); Pump(); coverage = model.Coverage();
         }
         else if (request != null && request.IsCompleted) ObserveDiscard();
-        if (!stopped && Current.Complete && autoAdvance && currentCase < 8 && elapsed >= 8500 && nextCase < 0)
+        if (!stopped && Current.CanAdvance(now) && autoAdvance && currentCase < 8 && nextCase < 0)
             nextCase = currentCase + 1;
         if (Completed) FramesAfterDone++;
         recordPrevious = active; previousCoverage = coverage; previousElapsed = elapsed;
