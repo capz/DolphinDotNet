@@ -1,6 +1,6 @@
 # TextureStrategy frame-stage measurements
 
-Run the same DOL as before; START switches stress/comparison modes. A reruns all nine cases. L switches between coverage and stage timings. R shows the nine-case table; LEFT/RIGHT selects a case and opens its detail view. Existing tests, coverage metrics and budgets are retained.
+Use the `texture-hardware-Release` artifact from the TextureStrategy in Dolphin workflow. This interactive build keeps results on screen; the automated proof build returns to stress mode after completion. Run the same DOL as before; START switches stress/comparison modes. A reruns all nine cases. L switches between coverage and stage timings. R shows the nine-case table; LEFT/RIGHT selects a case and opens its detail view. Existing tests, coverage metrics and budgets are retained.
 
 The timing table shows each case's **worst measured frame** with stage costs from that same frame. The detail view reports per-stage mean, mean among frames over 33.333 ms, independent maximum, and the correlated worst-frame sample. The worst frame is not the P99 sample. Repeating the suite helps distinguish recurring costs from one-off events. Compare 2x2 at 256 and 384 KiB first.
 

@@ -65,6 +65,9 @@ jobs:
           dotnet run --project tests/TextureStreamingTests -c Release
           cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/native_main_failure_test.c -o /tmp/dnd-main-test
           /tmp/dnd-main-test
+          make -C tests overlay_test overlay_debug_test
+          ./tests/overlay_test
+          ./tests/overlay_debug_test
       - name: Build the actual GameCube DOL with the Docker backend
         run: >-
           dotnet build samples/TextureStrategy/TextureStrategy.csproj
@@ -107,3 +110,20 @@ jobs:
             out/dolphin-texture/
             samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/*.dol
             samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/*.elf
+
+      - name: Build the interactive hardware DOL
+        if: success() && matrix.mode == 'benchmark' && matrix.configuration == 'Release'
+        run: >-
+          dotnet build samples/TextureStrategy/TextureStrategy.csproj
+          -c Release -m:1 -p:DndBuildBackend=Docker
+          -p:DndTextureStreamingCI=false -p:DndTextureBenchmarkCI=false
+      - name: Preserve interactive hardware DOL and timing instructions
+        if: success() && matrix.mode == 'benchmark' && matrix.configuration == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: texture-hardware-Release
+          if-no-files-found: error
+          path: |
+            samples/TextureStrategy/bin/Release/net8.0/TextureStrategy.dol
+            samples/TextureStrategy/bin/Release/net8.0/TextureStrategy.elf
+            docs/texture-stage-timings.md
