@@ -111,6 +111,7 @@ internal sealed class BenchmarkResult
 {
     private BenchmarkHistogram? active;
     private int finalFrame95, finalFrame99, finalLatency95;
+    internal readonly BenchmarkTiming Timing = new BenchmarkTiming();
     internal int Samples, Promotions, Evictions, Cancelled, RequestedKiB, UploadedKiB;
     internal int PeakKiB, StaticCoverage, TimeTo95Ms = -1, MaxFrameUs, MaxUploadUs, MaxSubmitUs;
     internal int LongestBelow95Ms;
@@ -119,6 +120,7 @@ internal sealed class BenchmarkResult
     internal bool Complete;
     internal void Reset()
     {
+        Timing.Reset();
         active = null; finalFrame95 = finalFrame99 = finalLatency95 = 0;
         Samples = Promotions = Evictions = Cancelled = RequestedKiB = UploadedKiB = 0;
         PeakKiB = StaticCoverage = MaxFrameUs = MaxUploadUs = MaxSubmitUs = LongestBelow95Ms = 0;

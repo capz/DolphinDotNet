@@ -37,6 +37,7 @@ void dnd_performance_set_visible(int enabled) {
 }
 int dnd_performance_visible(void) { return visible; }
 void dnd_performance_begin_frame(void) {
+  stats.gpu_wait_us = stats.retrace_wait_us = 0;
   stats.triangles = 0;
   stats.draw_submissions = 0;
   stats.texture_binds = 0;
@@ -46,11 +47,16 @@ void dnd_performance_add_draw(uint32_t binds) {
   stats.texture_binds = binds > UINT32_MAX - stats.texture_binds
     ? UINT32_MAX : stats.texture_binds + binds;
 }
+void dnd_performance_frame_waits(uint32_t gpu_us,uint32_t retrace_us) {
+  stats.gpu_wait_us=gpu_us;stats.retrace_wait_us=retrace_us;
+}
 int dnd_performance_render_stat(int kind) {
   switch(kind) {
     case 0:return (int)stats.draw_submissions;
     case 1:return (int)stats.texture_binds;
     case 2:return (int)stats.triangles;
+    case 3:return stats.gpu_wait_us>INT32_MAX?INT32_MAX:(int)stats.gpu_wait_us;
+    case 4:return stats.retrace_wait_us>INT32_MAX?INT32_MAX:(int)stats.retrace_wait_us;
     default:return -1;
   }
 }

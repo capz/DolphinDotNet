@@ -29,7 +29,11 @@ internal sealed class BenchmarkScene : IDisposable
     private bool stopped, autoAdvance = true, resetSuite, summary;
     private int completedMask, coverage, draws, sceneUs;
     private int previousCoverage, previousElapsed;
-    private bool recordPrevious;
+    private bool recordPrevious, timingView;
+    private readonly int[] stages = new int[BenchmarkTiming.Stages];
+    private long previousEnd;
+    private int preparationUs, previousDraws;
+    private static int Us(long at) => (int)(Clock.Timestamp-at);
     private float centerX = 8, centerY = 12;
     internal int Frame, FramesAfterDone;
     internal bool Completed => completedMask == 511;
@@ -40,6 +44,7 @@ internal sealed class BenchmarkScene : IDisposable
     internal BenchmarkScene()
     {
         DebugOverlay.PerformanceVisible = false;
+        telemetry.TimingEnabled = true;
         for (int i = 0; i < 9; i++) results[i] = new BenchmarkResult();
         coarse = Texture2D.Create(48, 32, TextureSource.Coarse(), false);
         coarseMaterial = MaterialFor(coarse);
@@ -90,7 +95,8 @@ internal sealed class BenchmarkScene : IDisposable
         model.Configure(GroupFor(index), BudgetFor(index));
         nextCase = -1; summary = false; reportSecond = -1; FramesAfterDone = 0;
         centerX = 8; centerY = 12; caseAt = previousFrame = Clock.Timestamp;
-        recordPrevious = false;
+        recordPrevious = false; previousEnd = 0;
+        for(int i=0;i<stages.Length;i++)stages[i]=0;
     }
     internal void Input(ControllerState pad)
     {
@@ -99,6 +105,7 @@ internal sealed class BenchmarkScene : IDisposable
         if (pad.Y.WasPressed) { autoAdvance = false; nextCase = ((currentCase / 3 + 1) % 3) * 3 + currentCase % 3; }
         if (pad.DPadLeft.WasPressed) { selected = (selected + 8) % 9; summary = false; reportSecond = -1; }
         if (pad.DPadRight.WasPressed) { selected = (selected + 1) % 9; summary = false; reportSecond = -1; }
+        if (pad.L.WasPressed) { timingView=!timingView; reportSecond=-1; }
         if (pad.R.WasPressed) { summary = true; reportSecond = -1; }
     }
     private void ObserveDiscard()
@@ -115,8 +122,8 @@ internal sealed class BenchmarkScene : IDisposable
             request.GetAwaiter().GetResult(); request = null;
             int slot = model.Victim();
             if (!model.Desired(requestId) || slot < 0) { Current.Cancelled++; return; }
-            Release(slot, true);
             long at = Clock.Timestamp;
+            Release(slot, true);
             int layout = currentCase % 3, size = requestGroup * 32;
             var texture = Texture2D.Create(size, size, scratch[layout], false);
             if (texture.NativeBytes != model.SlotBytes) throw new InvalidOperationException("Benchmark texture size mismatch.");
@@ -128,6 +135,8 @@ internal sealed class BenchmarkScene : IDisposable
             transforms[slot].LocalPosition = new Vector3(x, y, .01f);
             Current.UploadedKiB += model.SlotBytes / 1024;
             Current.Promoted((int)(Clock.Timestamp - requestAt), uploadUs);
+            stages[BenchmarkTiming.Upload] = Us(at);
+            stages[BenchmarkTiming.Prep] = preparationUs;
             if (model.Bytes / 1024 > Current.PeakKiB) Current.PeakKiB = model.Bytes / 1024;
         }
         if (model.Victim() < 0) return;
@@ -137,7 +146,9 @@ internal sealed class BenchmarkScene : IDisposable
             int group = model.Group; byte[] pixels = scratch[currentCase % 3];
             requestId = id; requestGroup = group; requestAt = Clock.Timestamp;
             Current.RequestedKiB += model.SlotBytes / 1024;
-            request = Task.Run(() => BenchmarkSource.Fill(pixels, id, group));
+            request = Task.Run(() => {
+                long at=Clock.Timestamp;BenchmarkSource.Fill(pixels,id,group);preparationUs=Us(at);
+            });
             return;
         }
     }
@@ -150,7 +161,13 @@ internal sealed class BenchmarkScene : IDisposable
         previousFrame = now;
         // Weight the image that was actually displayed during this interval.
         if (recordPrevious && !stopped && nextCase < 0 && !Current.Complete)
+        {
+            stages[BenchmarkTiming.Gap]=previousEnd==0?0:(int)(now-previousEnd);
             Current.Record(previousElapsed, frameUs, previousCoverage);
+            Current.Timing.Record(frameUs,stages,previousDraws);
+        }
+        for(int i=0;i<stages.Length;i++)stages[i]=0;
+        long policyAt=Clock.Timestamp;
         bool active = !stopped && nextCase < 0 && !Current.Complete;
         if (active && elapsed >= 8000)
         {
@@ -177,6 +194,7 @@ internal sealed class BenchmarkScene : IDisposable
         if (device.NativeBytes != nativeBaseline + model.Bytes || model.Bytes > model.BudgetKiB * 1024)
             throw new InvalidOperationException("Benchmark native ownership or budget mismatch.");
         camera.LookAt(new Vector3(centerX, centerY, 5.5f), new Vector3(centerX, centerY, 0), new Vector3(0, 1, 0));
+        stages[BenchmarkTiming.Policy]=Us(policyAt)-stages[BenchmarkTiming.Upload];
         long drawAt = Clock.Timestamp;
         device.BeginFrame(new Color32(8, 10, 19)); renderer.Begin3D(camera); draws = 0;
         for (int y = 0; y < 8; y++) for (int x = 0; x < 12; x++)
@@ -190,6 +208,7 @@ internal sealed class BenchmarkScene : IDisposable
         for (int i = 0; i < model.Capacity; i++) if (textures[i] != null && model.Area(model.Ids[i]) > 0)
         { renderer.DrawMesh(quads[currentCase % 3], materials[i], transforms[i]); draws++; }
         renderer.End3D(); int submitUs = (int)(Clock.Timestamp - drawAt);
+        stages[BenchmarkTiming.Submit]=submitUs; previousDraws=draws;
         if (active && submitUs > Current.MaxSubmitUs) Current.MaxSubmitUs = submitUs;
         if (elapsed / 1000 != reportSecond)
         { Report(); reportSecond = elapsed / 1000; }
@@ -206,7 +225,16 @@ internal sealed class BenchmarkScene : IDisposable
         t[26] = Current.FramePercentile(99) / 100; t[27] = Current.MaxFrameUs / 100;
         t[28] = sceneUs / 100; t[29] = Current.MotionCoverage;
         t[30] = Current.TimeTo95Ms < 0 ? 65535 : Current.TimeTo95Ms; t[31] = Current.PeakKiB;
-        telemetry.Present(); device.EndFrame(); sceneUs = (int)(Clock.Timestamp - drawAt); Frame++;
+        var timing=Current.Timing;var pt=telemetry.TimingValues;
+        pt[0]=0x4254;pt[1]=1;pt[2]=currentCase;pt[3]=timing.Samples;pt[4]=timing.TailSamples;
+        pt[5]=timing.WorstUs/100;
+        for(int i=0;i<BenchmarkTiming.Stages;i++)pt[6+i]=timing.Worst[i]/100;
+        pt[15]=timing.WorstDraws;
+        telemetry.Present();long endAt=Clock.Timestamp;device.EndFrame();
+        stages[BenchmarkTiming.End]=Us(endAt);
+        stages[BenchmarkTiming.Gpu]=GpuProfiler.GpuWaitMicroseconds;
+        stages[BenchmarkTiming.Vi]=GpuProfiler.RetraceWaitMicroseconds;
+        sceneUs = (int)(Clock.Timestamp - drawAt);previousEnd=Clock.Timestamp;Frame++;
     }
     private static string Pct(int basisPoints) => (basisPoints / 100) + "." + ((basisPoints % 100) / 10);
     private static string Ms(int us) => (us / 1000) + "." + ((us % 1000) / 100);
@@ -216,8 +244,33 @@ internal sealed class BenchmarkScene : IDisposable
     }
     private static string Pad(string s, int width)
     { while (s.Length < width) s = " " + s; return s; }
+    private static string StageName(int i) => i==0?"POLICY":i==1?"UPLOAD":i==2?"DRAW":i==3?"END":i==4?"GPU":i==5?"VI":i==6?"GAP":i==7?"OTHER":"PREP";
     private void Report()
     {
+        if(timingView)
+        {
+            if(summary)
+            {
+                DebugOverlay.WriteLine("WORST FRAME MS - SAME FRAME STAGES");
+                DebugOverlay.WriteLine("TYPE KIB FRAME UP DRAW GPU VI GAP OTHER");
+                for(int i=0;i<9;i++)
+                {
+                    var r=results[i].Timing;
+                    DebugOverlay.WriteLine(Label(i)+" "+BudgetFor(i)+" "+Ms(r.WorstUs)+" "+Ms(r.Worst[1])+" "+Ms(r.Worst[2])+" "+Ms(r.Worst[4])+" "+Ms(r.Worst[5])+" "+Ms(r.Worst[6])+" "+Ms(r.Worst[7]));
+                }
+            }
+            else
+            {
+                var r=results[selected].Timing;
+                DebugOverlay.WriteLine("STAGES "+Label(selected)+" "+BudgetFor(selected)+" KIB MS");
+                DebugOverlay.WriteLine("STAGE MEAN TAIL>33.3 MAX WORST-FRAME");
+                for(int i=0;i<BenchmarkTiming.Stages;i++)
+                    DebugOverlay.WriteLine(StageName(i)+" "+Ms(r.Mean(i))+" "+Ms(r.TailMean(i))+" "+Ms(r.Max[i])+" "+Ms(r.Worst[i]));
+                DebugOverlay.WriteLine("FRAMES "+r.Samples+" TAIL "+r.TailSamples+" WORST "+Ms(r.WorstUs)+" DRAWS "+r.WorstDraws);
+                DebugOverlay.WriteLine("GPU/VI INSIDE END; PREP MAY OVERLAP GAP");
+            }
+            DebugOverlay.WriteLine("L:COVERAGE R:TABLE LEFT/RIGHT:CASE");return;
+        }
         if (summary)
         {
             DebugOverlay.WriteLine("TYPE KIB STATIC MOVE F99MS UPKIB - COVERAGE PCT");
@@ -242,7 +295,7 @@ internal sealed class BenchmarkScene : IDisposable
         DebugOverlay.WriteLine("REQUEST " + result.RequestedKiB + " UPLOAD " + result.UploadedKiB + " KIB EVICT " + result.Evictions);
         DebugOverlay.WriteLine("FILL95 MS " + result.TimeTo95Ms + " LOAD95 " + result.LatencyP95Ms + " MAX UP US " + result.MaxUploadUs);
         DebugOverlay.WriteLine("SUBMIT MAX US " + result.MaxSubmitUs + " BELOW95 MAX MS " + result.LongestBelow95Ms);
-        DebugOverlay.WriteLine("A:SUITE X:LAYOUT Y:BUDGET LEFT/RIGHT:RESULT R:TABLE");
+        DebugOverlay.WriteLine("L:TIMINGS A:SUITE X:LAYOUT Y:BUDGET LEFT/RIGHT:RESULT R:TABLE");
         DebugOverlay.WriteLine("START:STRESS B:EXIT - COUNTERS RESET FOR EACH CASE");
     }
     internal bool Stop()

@@ -5,6 +5,11 @@ namespace Dolphin.Diagnostics;
 /// and attempted texture bindings, including native model draws.</summary>
 public static class GpuProfiler
 {
+    /// <summary>Last completed frame's blocking GX_DrawDone duration, in microseconds.
+    /// Read after EndFrame and before the next BeginFrame. Includes outstanding work, not total GPU time.</summary>
+    public static int GpuWaitMicroseconds => Dolphin.Graphics.NativeGraphics.PerformanceRenderStat(3);
+    /// <summary>Last completed frame's VIDEO_WaitVSync duration in microseconds.</summary>
+    public static int RetraceWaitMicroseconds => Dolphin.Graphics.NativeGraphics.PerformanceRenderStat(4);
     public static GpuSubmissionStatistics Snapshot()
         =>new GpuSubmissionStatistics(
             Dolphin.Graphics.NativeGraphics.PerformanceRenderStat(0),

@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from dolphin_benchmark_check import FIELDS, coverage_ceiling, validate_benchmark
+from dolphin_benchmark_check import TIMING_FIELDS, timing_telemetry, FIELDS, coverage_ceiling, validate_benchmark
 from test_dolphin_streaming import frame
 
 
@@ -27,6 +27,16 @@ def benchmark_frame(case, complete=True, *, over_budget=False, holes=False, stat
             shade = 240 if values[name] & (1 << bit) else 16
             at = ((450 + index // 64 * 4) * 640 + index % 64 * 10 + 5) * 3
             rgb[at:at + 3] = bytes((shade,) * 3)
+    timing = dict.fromkeys(TIMING_FIELDS, 0)
+    timing.update(timingMagic=0x4254, timingVersion=1, timingCase=case, timingSamples=60,
+                  tailSamples=10, worstFrameTenthsMs=500, policyTenthsMs=10, uploadTenthsMs=50,
+                  submitTenthsMs=30, endTenthsMs=200, gpuWaitTenthsMs=40, retraceWaitTenthsMs=150,
+                  gapTenthsMs=190, otherTenthsMs=20, preparationTenthsMs=80, worstFrameDraws=24)
+    for field, name in enumerate(TIMING_FIELDS):
+        for bit in range(16):
+            index = field * 16 + bit
+            at = ((434 + index // 64 * 4) * 640 + index % 64 * 10 + 5) * 3
+            rgb[at:at + 3] = bytes((240 if timing[name] & (1 << bit) else 16,) * 3)
     return bytes(rgb)
 
 
@@ -41,6 +51,15 @@ class BenchmarkOracleTests(unittest.TestCase):
         result = validate_benchmark(capture())
         self.assertEqual(9, len(result["completedCases"]))
         self.assertEqual([1, 2, 4], result["renderedGroups"])
+
+    def test_stage_timings_are_required_and_exported(self):
+        result = validate_benchmark(capture())
+        self.assertEqual(190, result["completedCases"][0]["gapTenthsMs"])
+        raw = bytearray(capture())
+        start = 5 * 640 * 480 * 3 + 432 * 640 * 3
+        raw[start:start + 16 * 640 * 3] = bytes(16 * 640 * 3)
+        with self.assertRaises(AssertionError):
+            validate_benchmark(bytes(raw))
 
     def test_independent_capacity_ceiling(self):
         self.assertEqual(7500, coverage_ceiling(dict(cameraX256=2048, cameraY256=3072, group=4, budgetKiB=192)))

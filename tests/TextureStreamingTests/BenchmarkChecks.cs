@@ -52,6 +52,17 @@ internal static class BenchmarkChecks
         var other = new BenchmarkResult(); other.Begin(histogram); other.Record(0, 50000, 1000);
         Check(result.FramePercentile(99) == 30000 && result.LatencyP95Ms == 2 && result.Complete, "Completed results survive histogram reuse");
         result.Reset(); Check(result.Samples == 0 && result.MeanCoverage == 0 && result.TimeTo95Ms == -1 && result.Promotions == 0, "Per-case reset");
+        var timing = new BenchmarkTiming();var stages = new int[BenchmarkTiming.Stages];
+        stages[BenchmarkTiming.Upload]=5000;stages[BenchmarkTiming.End]=12000;
+        stages[BenchmarkTiming.Gpu]=2000;stages[BenchmarkTiming.Vi]=9000;
+        stages[BenchmarkTiming.Gap]=1000;stages[BenchmarkTiming.Prep]=7000;
+        timing.Record(20000,stages,12);
+        Check(stages[BenchmarkTiming.Other]==2000,"Nested GPU/VI and background preparation must not be double counted");
+        stages[BenchmarkTiming.Upload]=2000;stages[BenchmarkTiming.Gap]=30000;
+        timing.Record(50000,stages,18);
+        Check(timing.TailSamples==1 && timing.TailMean(BenchmarkTiming.Gap)==30000,"Tail timings include only over-budget frames");
+        Check(timing.Max[BenchmarkTiming.Upload]==5000 && timing.Worst[BenchmarkTiming.Upload]==2000 && timing.WorstDraws==18,"Worst frame is a correlated snapshot, not independent maxima");
+        timing.Reset();Check(timing.Samples==0 && timing.WorstUs==0 && timing.Sum[0]==0 && timing.Max[1]==0,"Timing reset");
         Console.WriteLine("Comparison policy, viewport, source and measurement tests: PASS");
     }
 }

@@ -13,6 +13,7 @@ extern volatile uint32_t dnd_debugger_telemetry[2]; /* magic, last adapter repor
 typedef struct {
   uint32_t triangles, fps_tenths, frame_centimilliseconds;
   uint32_t draw_submissions, texture_binds;
+  uint32_t gpu_wait_us, retrace_wait_us;
   uint32_t main_used, main_total, aram_used, aram_total;
   bool timing_valid, memory_valid, aram_available;
   int network_state; /* -1 absent, 0 configuring, 1 ready, -2 failed, 2 debugger TCP config */
@@ -28,6 +29,7 @@ void dnd_performance_begin_frame(void);
 void dnd_performance_add_triangles(uint32_t triangles);
 void dnd_performance_add_draw(uint32_t texture_binds);
 int dnd_performance_render_stat(int kind);
+void dnd_performance_frame_waits(uint32_t gpu_us,uint32_t retrace_us);
 void dnd_performance_presented(uint64_t microseconds);
 bool dnd_performance_memory_due(uint64_t microseconds);
 bool dnd_performance_connectivity_due(uint64_t microseconds);

@@ -83,3 +83,5 @@ Do not retire a texture still referenced by a material submitted on a subsequent
 ## Validation
 
 The new APIs must compile through both the AOT intrinsic mappings and native GameCube backend. Hardware runtime behavior and throughput are **not established** by source-only review. See the existing `tests/GraphicsSmoke`, `tests/AramSmoke`, and `samples/TextureStrategy` work for validation patterns.
+
+TextureStrategy also supports [frame-stage timing diagnostics](texture-stage-timings.md) on hardware and in Dolphin. Press L in comparison mode to inspect preparation, upload, submission and frame waits.

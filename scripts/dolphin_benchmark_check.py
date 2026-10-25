@@ -15,6 +15,31 @@ def benchmark_telemetry(rgb):
     return dict(zip(FIELDS, telemetry(rgb, 0x424d, 1).values()))
 
 
+TIMING_FIELDS = ("timingMagic", "timingVersion", "timingCase", "timingSamples", "tailSamples",
+                 "worstFrameTenthsMs", "policyTenthsMs", "uploadTenthsMs", "submitTenthsMs",
+                 "endTenthsMs", "gpuWaitTenthsMs", "retraceWaitTenthsMs", "gapTenthsMs",
+                 "otherTenthsMs", "preparationTenthsMs", "worstFrameDraws")
+
+
+def timing_telemetry(rgb):
+    values = []
+    for field in range(16):
+        value = 0
+        for bit in range(16):
+            index = field * 16 + bit
+            at = ((434 + index // 64 * 4) * 640 + index % 64 * 10 + 5) * 3
+            pixel = rgb[at:at + 3]
+            if max(pixel) - min(pixel) > 12:
+                raise AssertionError("Corrupt timing strip")
+            if sum(pixel) > 384:
+                value |= 1 << bit
+        values.append(value)
+    state = dict(zip(TIMING_FIELDS, values))
+    if state["timingMagic"] != 0x4254 or state["timingVersion"] != 1:
+        raise AssertionError("Missing stage timings")
+    return state
+
+
 def coverage_ceiling(state):
     """Independent geometric ceiling: largest visible intersections that fit."""
     cx, cy = state["cameraX256"] / 256, state["cameraY256"] / 256
@@ -81,7 +106,16 @@ def validate_benchmark(raw):
         if phase == 2:
             raise AssertionError("Unexpected benchmark restart")
         phase = 1
+        state.update(timing_telemetry(rgb))
         case = state["case"]
+        if state["timingCase"] != case or state["tailSamples"] > state["timingSamples"]:
+            raise AssertionError("Invalid timing case/sample counts")
+        # Quantization truncates each stage independently; allow <= 0.5 ms total.
+        accounted = sum(state[k] for k in ("policyTenthsMs", "uploadTenthsMs", "submitTenthsMs", "endTenthsMs", "gapTenthsMs", "otherTenthsMs"))
+        if not 0 <= state["worstFrameTenthsMs"] - accounted <= 6:
+            raise AssertionError("Worst-frame stages do not account for the frame interval")
+        if state["gpuWaitTenthsMs"] + state["retraceWaitTenthsMs"] > state["endTenthsMs"] + 1:
+            raise AssertionError("GPU/retrace waits must be subsets of EndFrame")
         if not 0 <= case < 9 or state["group"] != (1, 2, 4)[case % 3] or state["budgetKiB"] != (192, 256, 384)[case // 3]:
             raise AssertionError("Wrong comparison layout/budget")
         if state["residentKiB"] > state["budgetKiB"] or state["peakResidentKiB"] > state["budgetKiB"]:
@@ -114,7 +148,7 @@ def validate_benchmark(raw):
     if set(cases) != set(range(9)) or previous_mask != 511 or groups_with_detail != {1, 2, 4}:
         raise AssertionError("Missing a completed benchmark case or rendered layout")
     for case, state in cases.items():
-        if state["promotions"] < 3 or state["measuredMs"] < 6000 or state["frameP99TenthsMs"] == 0:
+        if state["timingSamples"] < 3 or state["worstFrameDraws"] == 0 or state["promotions"] < 3 or state["measuredMs"] < 6000 or state["frameP99TenthsMs"] == 0:
             raise AssertionError("Insufficient real measurements for case " + str(case))
     # Three quarter-screen atlases cannot exceed 75% at the initial aligned pose.
     if cases[2]["staticCoverageBasisPoints"] > 7510:

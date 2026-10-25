@@ -272,8 +272,9 @@ void dnd_graphics_end_frame(void) {
     GX_SetCopyFilter(mode->aa,mode->sample_pattern,GX_TRUE,mode->vfilter);
     GX_SetZMode(GX_TRUE,GX_LEQUAL,GX_TRUE);GX_SetColorUpdate(GX_TRUE);GX_CopyDisp(xfb[fb],GX_TRUE);
     int wait_context=dnd_async_app_wait_begin();
-    GX_DrawDone();
-    VIDEO_SetNextFramebuffer(xfb[fb]);if(first_frame){first_frame=false;VIDEO_SetBlack(FALSE);}VIDEO_Flush();VIDEO_WaitVSync();
+    uint64_t gpu_at=gettime();GX_DrawDone();uint64_t gpu_us=ticks_to_microsecs(gettime()-gpu_at);
+    VIDEO_SetNextFramebuffer(xfb[fb]);if(first_frame){first_frame=false;VIDEO_SetBlack(FALSE);}VIDEO_Flush();uint64_t vi_at=gettime();VIDEO_WaitVSync();
+    dnd_performance_frame_waits((uint32_t)gpu_us,(uint32_t)ticks_to_microsecs(gettime()-vi_at));
     dnd_async_app_wait_end(wait_context);fb^=1;
     if(dnd_performance_visible())dnd_performance_presented(ticks_to_microsecs(gettime()));
 }

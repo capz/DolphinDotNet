@@ -3,6 +3,7 @@
   <ItemGroup>
     <Compile Include="../../samples/TextureStrategy/ResidencySet.cs" Link="ResidencySet.cs" />
     <Compile Include="../../samples/TextureStrategy/TextureSource.cs" Link="TextureSource.cs" />
+    <Compile Include="../../samples/TextureStrategy/BenchmarkTiming.cs" Link="BenchmarkTiming.cs" />
     <Compile Include="../../samples/TextureStrategy/BenchmarkModel.cs" Link="BenchmarkModel.cs" />
     <Compile Include="../../samples/TextureStrategy/BenchmarkSource.cs" Link="BenchmarkSource.cs" />
   </ItemGroup>

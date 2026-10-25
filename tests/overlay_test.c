@@ -50,7 +50,12 @@ int main(void) {
   dnd_console_render();
   assert(rectangles == 0);
   dnd_performance_set_visible(1);
+  dnd_performance_frame_waits(1200, 16000);
+  assert(dnd_performance_render_stat(3)==1200);
+  assert(dnd_performance_render_stat(4)==16000);
   dnd_performance_begin_frame();
+  assert(dnd_performance_render_stat(3)==0 && dnd_performance_render_stat(4)==0);
+
   dnd_performance_add_triangles(10);
   dnd_performance_add_triangles(12);
   assert(dnd_performance_stats()->triangles == 22);
