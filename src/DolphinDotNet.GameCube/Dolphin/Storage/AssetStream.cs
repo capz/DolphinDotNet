@@ -14,6 +14,8 @@ namespace Dolphin.Storage;
 public sealed class AssetStream : IDisposable
 {
     private readonly FileStream stream;
+    // One read is active per stream; reserve its reusable workspace once.
+    private readonly byte[] staging=new byte[8192];
     private bool disposed;
     private bool busy;
     public long Length {get;}
@@ -51,7 +53,7 @@ public sealed class AssetStream : IDisposable
         private readonly AssetStream owner;
         private readonly NativeBuffer destination;
         private readonly CancellationToken cancellation;
-        private readonly byte[] staging=new byte[8192];
+
         private readonly int destinationOffset,count;
         private long offset;
         private int done,pending;
@@ -65,8 +67,8 @@ public sealed class AssetStream : IDisposable
                 cancellation.ThrowIfCancellationRequested();
                 if(owner.disposed)throw new ObjectDisposedException("AssetStream");
                 owner.stream.Seek(offset+done,SeekOrigin.Begin);
-                int needed=count-done;if(needed>staging.Length)needed=staging.Length;
-                pending=owner.stream.Read(staging,0,needed);
+                int needed=count-done;if(needed>owner.staging.Length)needed=owner.staging.Length;
+                pending=owner.stream.Read(owner.staging,0,needed);
                 Scheduler.Post(Publish,0);
             }
             catch(Exception ex){Fail(ex);}
@@ -77,7 +79,7 @@ public sealed class AssetStream : IDisposable
             {
                 cancellation.ThrowIfCancellationRequested();
                 if(owner.disposed)throw new ObjectDisposedException("AssetStream");
-                if(pending>0){destination.Write(staging,0,destinationOffset+done,pending);done+=pending;}
+                if(pending>0){destination.Write(owner.staging,0,destinationOffset+done,pending);done+=pending;}
                 if(done==count || pending==0)
                 {
                     int result=done;

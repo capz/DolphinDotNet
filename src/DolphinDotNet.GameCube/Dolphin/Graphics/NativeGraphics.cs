@@ -82,5 +82,6 @@ internal static class NativeGraphics
     internal static int MeshCreateTexture(VertexPositionColorTexture[] vertices,ushort[]? indices,int format,int dynamic) => throw Unsupported();
     internal static int MeshUpdateTexture(int token,VertexPositionColorTexture[] vertices,int offset,int count,int format) => throw Unsupported();
     internal static int MeshCreateNormal(VertexPositionNormalColorTexture[] vertices,ushort[]? indices,int format,int dynamic) => throw Unsupported();
+    internal static int MeshCreateNormalRange(VertexPositionNormalColorTexture[] vertices,int vertexCount,ushort[]? indices,int indexCount,int format,int dynamic) => throw Unsupported();
     internal static int MeshUpdateNormal(int token,VertexPositionNormalColorTexture[] vertices,int offset,int count,int format) => throw Unsupported();
 }

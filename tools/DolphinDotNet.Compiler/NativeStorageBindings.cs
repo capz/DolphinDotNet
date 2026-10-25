@@ -98,6 +98,7 @@ internal static class NativeStorageBindings
         ["MeshCreateTexture"]=("dnd_mesh_create","aaii",false),
         ["MeshUpdateTexture"]=("dnd_mesh_update","iaiii",false),
         ["MeshCreateNormal"]=("dnd_mesh_create","aaii",false),
+        ["MeshCreateNormalRange"]=("dnd_mesh_create_range","aiaiii",false),
         ["MeshUpdateNormal"]=("dnd_mesh_update","iaiii",false),
         ["AudioInit"]=("dnd_audio_init","",false),
         ["AudioBegin"]=("dnd_audio_begin","s",false),

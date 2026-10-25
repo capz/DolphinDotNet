@@ -259,9 +259,8 @@ static bool vertices(DndArray *a,int first,int count,int format,DndDrawVertex *o
     }
     return true;
 }
-int dnd_mesh_create(DndArray *a,DndArray *indices,int format,int dynamic) {
-    if(dnd_device_active() || !a || a->length<1 || a->length>65535 || !vertex_size(format)) return 0;
-    int n=(int)a->length,m=indices?(int)indices->length:0;
+int dnd_mesh_create_range(DndArray *a,int n,DndArray *indices,int m,int format,int dynamic) {
+    if(dnd_device_active() || !a || n<1 || n>65535 || !array_range(a,0,n) || m<0 || (!indices && m) || !vertex_size(format)) return 0;
     if((m?m:n)%3 || m>3*65535 || (indices && (!array_range(indices,0,m)||indices->element_size!=2))) return 0;
     int token=create(MESH,n*(int)sizeof(DndDrawVertex)+m*2,32);Resource *r=find(token,MESH);if(!r)return 0;
     r->vertices=n;r->indices=m;r->dynamic=dynamic!=0;r->format=format;
@@ -270,6 +269,10 @@ int dnd_mesh_create(DndArray *a,DndArray *indices,int format,int dynamic) {
     if(m){memcpy(index,indices->data,(size_t)m*2);for(int i=0;i<m;i++)if(index[i]>=n){release(r);return 0;}}
     dnd_draw_backend_flush(r->data,r->bytes,0);return token;
 }
+int dnd_mesh_create(DndArray *a,DndArray *indices,int format,int dynamic) {
+    return dnd_mesh_create_range(a,a?(int)a->length:0,indices,indices?(int)indices->length:0,format,dynamic);
+}
+
 int dnd_mesh_update(int token,DndArray *a,int offset,int count,int format) {
     Resource *r=find(token,MESH);
     if(dnd_device_active()||!r||!r->dynamic||r->format!=format||offset<0||count<0||offset>r->vertices||count>r->vertices-offset||!array_range(a,0,count))return -1;

@@ -63,6 +63,7 @@ int dnd_texture_publish_staged(int texture_token);
 
 
 int dnd_texture_dimension(int token,int axis);
+int dnd_mesh_create_range(DndArray *vertices,int vertex_count,DndArray *indices,int index_count,int format,int dynamic);
 int dnd_mesh_create(DndArray *vertices,DndArray *indices,int format,int dynamic);
 int dnd_mesh_update(int token,DndArray *vertices,int offset,int count,int format);
 int dnd_effect_create(DndArray *package);
