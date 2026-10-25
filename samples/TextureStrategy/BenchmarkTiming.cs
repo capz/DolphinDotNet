@@ -6,6 +6,13 @@ internal sealed class BenchmarkTiming
     internal readonly long[] Sum=new long[Stages], TailSum=new long[Stages];
     internal readonly int[] Max=new int[Stages], Worst=new int[Stages];
     internal int Samples, TailSamples, WorstUs, WorstDraws;
+    internal static int Overlap(long frameStart,long frameEnd,long workStart,long workEnd)
+    {
+        if(workEnd<=workStart)return 0;
+        long start=frameStart>workStart?frameStart:workStart;
+        long end=frameEnd<workEnd?frameEnd:workEnd;
+        return end>start?(int)(end-start):0;
+    }
     internal void Reset()
     {
         Samples=TailSamples=WorstUs=WorstDraws=0;

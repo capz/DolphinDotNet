@@ -32,7 +32,8 @@ internal sealed class BenchmarkScene : IDisposable
     private bool recordPrevious, timingView;
     private readonly int[] stages = new int[BenchmarkTiming.Stages];
     private long previousEnd;
-    private int preparationUs, previousDraws;
+    private long preparationStart, preparationEnd;
+    private int previousDraws;
     private static int Us(long at) => (int)(Clock.Timestamp-at);
     private float centerX = 8, centerY = 12;
     internal int Frame, FramesAfterDone;
@@ -95,7 +96,7 @@ internal sealed class BenchmarkScene : IDisposable
         model.Configure(GroupFor(index), BudgetFor(index));
         nextCase = -1; summary = false; reportSecond = -1; FramesAfterDone = 0;
         centerX = 8; centerY = 12; caseAt = previousFrame = Clock.Timestamp;
-        recordPrevious = false; previousEnd = 0;
+        recordPrevious = false; previousEnd = preparationStart = preparationEnd = 0;
         for(int i=0;i<stages.Length;i++)stages[i]=0;
     }
     internal void Input(ControllerState pad)
@@ -136,7 +137,6 @@ internal sealed class BenchmarkScene : IDisposable
             Current.UploadedKiB += model.SlotBytes / 1024;
             Current.Promoted((int)(Clock.Timestamp - requestAt), uploadUs);
             stages[BenchmarkTiming.Upload] = Us(at);
-            stages[BenchmarkTiming.Prep] = preparationUs;
             if (model.Bytes / 1024 > Current.PeakKiB) Current.PeakKiB = model.Bytes / 1024;
         }
         if (model.Victim() < 0) return;
@@ -147,7 +147,8 @@ internal sealed class BenchmarkScene : IDisposable
             requestId = id; requestGroup = group; requestAt = Clock.Timestamp;
             Current.RequestedKiB += model.SlotBytes / 1024;
             request = Task.Run(() => {
-                long at=Clock.Timestamp;BenchmarkSource.Fill(pixels,id,group);preparationUs=Us(at);
+                preparationEnd=0;preparationStart=Clock.Timestamp;
+                BenchmarkSource.Fill(pixels,id,group);preparationEnd=Clock.Timestamp;
             });
             return;
         }
@@ -158,12 +159,13 @@ internal sealed class BenchmarkScene : IDisposable
         if (!stopped && nextCase >= 0 && (request == null || request.IsCompleted))
         { ObserveDiscard(); BeginCase(nextCase); now = Clock.Timestamp; }
         int elapsed = (int)((now - caseAt) / 1000), frameUs = (int)(now - previousFrame);
-        previousFrame = now;
+        long intervalStart=previousFrame; previousFrame = now;
         // Weight the image that was actually displayed during this interval.
         if (recordPrevious && !stopped && nextCase < 0 && !Current.Complete)
         {
             stages[BenchmarkTiming.Gap]=previousEnd==0?0:(int)(now-previousEnd);
             Current.Record(previousElapsed, frameUs, previousCoverage);
+            stages[BenchmarkTiming.Prep]=BenchmarkTiming.Overlap(intervalStart,now,preparationStart,preparationEnd);
             Current.Timing.Record(frameUs,stages,previousDraws);
         }
         for(int i=0;i<stages.Length;i++)stages[i]=0;

@@ -14,9 +14,9 @@ The timing table shows each case's **worst measured frame** with stage costs fro
 | VI | VIDEO_WaitVSync blocking time |
 | GAP | End of the previous Present to start of the next; includes Task.Delay, controller/input, scheduling and background executor work |
 | OTHER | Residual frame time: measurement/reporting, telemetry submission and remaining unscoped work |
-| PREP | Background procedural Fill CPU time for the request published during this frame; zero if no publication |
+| PREP | Overlap of the most recent completed background Fill with this measured frame interval; independent of publication |
 
-POLICY + UPLOAD + DRAW + END + GAP + OTHER account for a frame. GPU and VI are **subsets** of END. PREP can overlap GAP and is not additive; queue delay and source time for discarded/incomplete requests are not separately counted. These are wall times, so scheduler interruption can appear in any scope. This is still a procedural source benchmark, not a storage latency test.
+POLICY + UPLOAD + DRAW + END + GAP + OTHER account for a frame. GPU and VI are **subsets** of END. PREP can overlap GAP and is not additive; queue delay is not separately counted. Preparation is attributed by execution timestamps, including completed requests later discarded; it is not shifted to the publication frame. These are wall times, so scheduler interruption can appear in any scope. This is still a procedural source benchmark, not a storage latency test.
 
 Capture the L/R timing table and the selected-case detail view on hardware. A higher UPLOAD tail points at publication cost; DRAW at submission work; GPU at outstanding graphics work; VI at pacing; GAP/PREP at preparation/scheduling. These are diagnostic correlations, not causal proof. The measurement overlay itself adds work, mostly OTHER/submission and GPU time; use the same instrumented binary for comparisons.
 

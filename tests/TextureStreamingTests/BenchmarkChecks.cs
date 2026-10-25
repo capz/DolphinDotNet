@@ -52,6 +52,10 @@ internal static class BenchmarkChecks
         var other = new BenchmarkResult(); other.Begin(histogram); other.Record(0, 50000, 1000);
         Check(result.FramePercentile(99) == 30000 && result.LatencyP95Ms == 2 && result.Complete, "Completed results survive histogram reuse");
         result.Reset(); Check(result.Samples == 0 && result.MeanCoverage == 0 && result.TimeTo95Ms == -1 && result.Promotions == 0, "Per-case reset");
+        Check(BenchmarkTiming.Overlap(100,200,120,180)==60 && BenchmarkTiming.Overlap(200,300,120,180)==0,
+            "Preparation belongs to its execution interval, not its later publication frame");
+        Check(BenchmarkTiming.Overlap(100,200,80,120)==20 && BenchmarkTiming.Overlap(100,200,180,220)==20,
+            "Preparation spanning a boundary must be clipped to the measured frame");
         var timing = new BenchmarkTiming();var stages = new int[BenchmarkTiming.Stages];
         stages[BenchmarkTiming.Upload]=5000;stages[BenchmarkTiming.End]=12000;
         stages[BenchmarkTiming.Gpu]=2000;stages[BenchmarkTiming.Vi]=9000;
