@@ -100,9 +100,17 @@ internal sealed class BenchmarkModel
     }
 }
 
+internal sealed class BenchmarkHistogram
+{
+    internal readonly int[] Frames = new int[2001], Latency = new int[2001];
+    internal void Clear()
+    { for (int i = 0; i < Frames.Length; i++) { Frames[i] = 0; Latency[i] = 0; } }
+}
+
 internal sealed class BenchmarkResult
 {
-    private readonly int[] frames = new int[2001], latency = new int[2001];
+    private BenchmarkHistogram? active;
+    private int finalFrame95, finalFrame99, finalLatency95;
     internal int Samples, Promotions, Evictions, Cancelled, RequestedKiB, UploadedKiB;
     internal int PeakKiB, StaticCoverage, TimeTo95Ms = -1, MaxFrameUs, MaxUploadUs, MaxSubmitUs;
     internal int LongestBelow95Ms;
@@ -111,11 +119,18 @@ internal sealed class BenchmarkResult
     internal bool Complete;
     internal void Reset()
     {
-        for (int i = 0; i < frames.Length; i++) { frames[i] = 0; latency[i] = 0; }
+        active = null; finalFrame95 = finalFrame99 = finalLatency95 = 0;
         Samples = Promotions = Evictions = Cancelled = RequestedKiB = UploadedKiB = 0;
         PeakKiB = StaticCoverage = MaxFrameUs = MaxUploadUs = MaxSubmitUs = LongestBelow95Ms = 0;
         DurationUs = MotionUs = CoverageTime = MotionCoverageTime = below95Us = 0;
         TimeTo95Ms = -1; Complete = false;
+    }
+    internal void Begin(BenchmarkHistogram histogram)
+    { Reset(); histogram.Clear(); active = histogram; }
+    internal void Finish()
+    {
+        finalFrame95 = FramePercentile(95); finalFrame99 = FramePercentile(99);
+        finalLatency95 = LatencyP95Ms; active = null; Complete = true;
     }
     internal void Record(int elapsedMs, int frameUs, int coverage)
     {
@@ -127,7 +142,7 @@ internal sealed class BenchmarkResult
             if (coverage >= 9500 && TimeTo95Ms < 0) TimeTo95Ms = elapsedMs;
         }
         else { MotionUs += frameUs; MotionCoverageTime += (long)coverage * frameUs; }
-        int bin = frameUs / 250; if (bin > 2000) bin = 2000; frames[bin]++;
+        int bin = frameUs / 250; if (bin > 2000) bin = 2000; active!.Frames[bin]++;
         if (frameUs > MaxFrameUs) MaxFrameUs = frameUs;
         if (coverage < 9500) below95Us += frameUs; else below95Us = 0;
         if (below95Us / 1000 > LongestBelow95Ms) LongestBelow95Ms = (int)(below95Us / 1000);
@@ -135,7 +150,7 @@ internal sealed class BenchmarkResult
     internal void Promoted(int latencyUs, int uploadUs)
     {
         Promotions++;
-        int bin = latencyUs / 1000; if (bin > 2000) bin = 2000; latency[bin]++;
+        int bin = latencyUs / 1000; if (bin > 2000) bin = 2000; active!.Latency[bin]++;
         if (uploadUs > MaxUploadUs) MaxUploadUs = uploadUs;
     }
     private static int Percentile(int[] histogram, int count, int percent, int units)
@@ -148,10 +163,11 @@ internal sealed class BenchmarkResult
     }
     internal int FramePercentile(int percent)
     {
-        int value = Percentile(frames, Samples, percent, 250);
+        if (active == null) return percent <= 95 ? finalFrame95 : finalFrame99;
+        int value = Percentile(active.Frames, Samples, percent, 250);
         return value < MaxFrameUs ? value : MaxFrameUs;
     }
-    internal int LatencyP95Ms => Percentile(latency, Promotions, 95, 1);
+    internal int LatencyP95Ms => active == null ? finalLatency95 : Percentile(active.Latency, Promotions, 95, 1);
     internal int MeanCoverage => DurationUs == 0 ? 0 : (int)(CoverageTime / DurationUs);
     internal int MotionCoverage => MotionUs == 0 ? 0 : (int)(MotionCoverageTime / MotionUs);
 }

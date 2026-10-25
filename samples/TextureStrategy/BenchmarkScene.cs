@@ -13,12 +13,14 @@ internal sealed class BenchmarkScene : IDisposable
     private readonly Texture2D coarse;
     private readonly Material coarseMaterial;
     private readonly Mesh[] coarseMeshes = new Mesh[96], quads = new Mesh[3];
-    private readonly Transform[] coarseTransforms = new Transform[96], transforms = new Transform[96];
+    private readonly Transform coarseTransform = new Transform();
+    private readonly Transform[] transforms = new Transform[96];
     private readonly Material[] materials = new Material[96];
     private readonly Texture2D?[] textures = new Texture2D?[96];
     private readonly byte[][] scratch = { new byte[4096], new byte[16384], new byte[65536] };
     private readonly BenchmarkModel model = new BenchmarkModel();
     private readonly BenchmarkResult[] results = new BenchmarkResult[9];
+    private readonly BenchmarkHistogram histogram = new BenchmarkHistogram();
     private readonly StreamTelemetry telemetry = new StreamTelemetry();
     private readonly int nativeBaseline;
     private Task? request;
@@ -46,7 +48,6 @@ internal sealed class BenchmarkScene : IDisposable
         {
             int id = y * 12 + x;
             coarseMeshes[id] = Mesh.Create(Quad(4, x / 12f, y / 8f, 1 / 12f, 1 / 8f));
-            coarseTransforms[id] = new Transform { LocalPosition = new Vector3(x * 4, y * 4, 0) };
         }
         for (int i = 0; i < 96; i++) { materials[i] = MaterialFor(null); transforms[i] = new Transform(); }
         nativeBaseline = device.NativeBytes;
@@ -85,7 +86,7 @@ internal sealed class BenchmarkScene : IDisposable
             for (int i = 0; i < 9; i++) results[i].Reset();
             completedMask = 0; resetSuite = false;
         }
-        currentCase = selected = index; Current.Reset(); completedMask &= ~(1 << index);
+        currentCase = selected = index; Current.Begin(histogram); completedMask &= ~(1 << index);
         model.Configure(GroupFor(index), BudgetFor(index));
         nextCase = -1; summary = false; reportSecond = -1; FramesAfterDone = 0;
         centerX = 8; centerY = 12; caseAt = previousFrame = Clock.Timestamp;
@@ -153,7 +154,7 @@ internal sealed class BenchmarkScene : IDisposable
         bool active = !stopped && nextCase < 0 && !Current.Complete;
         if (active && elapsed >= 8000)
         {
-            Current.Complete = true; completedMask |= 1 << currentCase;
+            Current.Finish(); completedMask |= 1 << currentCase;
             active = false; reportSecond = -1;
             if (currentCase == 8 || !autoAdvance) summary = true;
         }
@@ -182,7 +183,9 @@ internal sealed class BenchmarkScene : IDisposable
         {
             if (x * 4 + 4 <= centerX - BenchmarkModel.HalfWidth || x * 4 >= centerX + BenchmarkModel.HalfWidth ||
                 y * 4 + 4 <= centerY - BenchmarkModel.HalfHeight || y * 4 >= centerY + BenchmarkModel.HalfHeight) continue;
-            int id = y * 12 + x; renderer.DrawMesh(coarseMeshes[id], coarseMaterial, coarseTransforms[id]); draws++;
+            int id = y * 12 + x;
+            coarseTransform.LocalPosition = new Vector3(x * 4, y * 4, 0);
+            renderer.DrawMesh(coarseMeshes[id], coarseMaterial, coarseTransform); draws++;
         }
         for (int i = 0; i < model.Capacity; i++) if (textures[i] != null && model.Area(model.Ids[i]) > 0)
         { renderer.DrawMesh(quads[currentCase % 3], materials[i], transforms[i]); draws++; }
@@ -209,19 +212,21 @@ internal sealed class BenchmarkScene : IDisposable
     private static string Ms(int us) => (us / 1000) + "." + ((us % 1000) / 100);
     private static string N(int value, int width)
     {
-        string s = value.ToString(); while (s.Length < width) s = " " + s; return s;
+        return Pad(value.ToString(), width);
     }
+    private static string Pad(string s, int width)
+    { while (s.Length < width) s = " " + s; return s; }
     private void Report()
     {
         if (summary)
         {
-            DebugOverlay.WriteLine("LAYOUT KIB STATIC MOVE PCT F99MS UPKIB A:RERUN START:STRESS");
+            DebugOverlay.WriteLine("TYPE KIB STATIC MOVE F99MS UPKIB - COVERAGE PCT");
             for (int i = 0; i < 9; i++)
             {
                 var r = results[i];
                 DebugOverlay.WriteLine(Label(i) + " " + BudgetFor(i) + (r.Complete ?
-                    " " + N(r.StaticCoverage / 100, 3) + " " + N(r.MotionCoverage / 100, 3) +
-                    " " + Ms(r.FramePercentile(99)) + " " + r.UploadedKiB : " PENDING"));
+                    " " + N(r.StaticCoverage / 100, 6) + " " + N(r.MotionCoverage / 100, 4) +
+                    " " + Pad(Ms(r.FramePercentile(99)), 5) + " " + r.UploadedKiB : " PENDING"));
             }
             return;
         }

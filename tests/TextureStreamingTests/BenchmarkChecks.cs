@@ -42,11 +42,15 @@ internal static class BenchmarkChecks
             }
         }
         var result = new BenchmarkResult();
+        var histogram = new BenchmarkHistogram(); result.Begin(histogram);
         result.Record(0, 10000, 10000); result.Record(3000, 30000, 5000);
         Check(result.MeanCoverage == 6250 && result.MotionCoverage == 5000, "Coverage must be weighted by elapsed time");
         Check(result.TimeTo95Ms == 0 && result.StaticCoverage == 10000 && result.LongestBelow95Ms == 30, "Cold and motion measurements remain distinct");
         Check(result.FramePercentile(99) >= 30000 && result.FramePercentile(99) <= 30250, "Frame percentile units");
         result.Promoted(1234, 500); Check(result.LatencyP95Ms == 2 && result.MaxUploadUs == 500, "Request latency and upload cost are distinct");
+        result.Finish();
+        var other = new BenchmarkResult(); other.Begin(histogram); other.Record(0, 50000, 1000);
+        Check(result.FramePercentile(99) == 30000 && result.LatencyP95Ms == 2 && result.Complete, "Completed results survive histogram reuse");
         result.Reset(); Check(result.Samples == 0 && result.MeanCoverage == 0 && result.TimeTo95Ms == -1 && result.Promotions == 0, "Per-case reset");
         Console.WriteLine("Comparison policy, viewport, source and measurement tests: PASS");
     }
