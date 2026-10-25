@@ -181,7 +181,7 @@ internal static class ValueIrImporter
                     case 0x71:
                     {
                         var address=Pop(stack,cil);var type=resolveType(cil);var rep=resolveGenericTypeParameter(cil);var layout=type is null?(rep?.Size??4,null):valueLayout(type);
-                        if(rep?.IsAggregate==true||layout.Item1>0){var value=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrConvert(value,address));stack.Add(value);}
+                        if(rep?.IsAggregate==true||rep is null&&layout.Item1>0){var value=New(CilStackKind.ManagedPointer);instructions.Add(new ValueIrConvert(value,address));stack.Add(value);}
                         else {var value=New(rep?.StackKind??CilStackKind.I4);instructions.Add(new ValueIrLoadIndirect(value,address,rep?.Size??4,rep?.IsReference==true));stack.Add(value);}
                         break;
                     }
