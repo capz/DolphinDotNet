@@ -38,3 +38,4 @@ catch (IOException) { }
 TextureSource.Fill(page, 0, false, false);
 Check(page[3] == 255 && TextureSource.Coarse().Length == 48 * 32 * 4, "Retry and permanent coarse representation");
 Console.WriteLine("Texture streaming residency and source tests: PASS");
+BenchmarkChecks.Run();

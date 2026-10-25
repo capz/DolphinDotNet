@@ -142,9 +142,16 @@ def run(args):
                 states.append(telemetry(raw[offset:offset + FRAME_BYTES]))
             except AssertionError:
                 continue
+        if args.benchmark:
+            from dolphin_benchmark_check import capture_states
+            states = capture_states(raw)
         (root / "diagnostics.json").write_text(json.dumps(states, indent=2) + "\n")
         try:
-            proof = validate_stream(raw, args.mode)
+            if args.benchmark:
+                from dolphin_benchmark_check import validate_benchmark
+                proof = validate_benchmark(raw)
+            else:
+                proof = validate_stream(raw, args.mode)
         except RenderMismatch as error:
             run_ffmpeg(["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "640x480", "-i", "pipe:0",
                         "-frames:v", "1", "-y", str(root / "mismatch.png")],
@@ -163,12 +170,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dol", type=Path)
     parser.add_argument("--streaming", action="store_true")
+    parser.add_argument("--benchmark", action="store_true", help="Validate a stress/comparison/stress round trip")
     parser.add_argument("--backend", choices=["Software", "OGL"], default="Software")
     parser.add_argument("--mode", choices=["pages", "atlas"], required=True)
     parser.add_argument("--binary", default="/usr/games/dolphin-emu-nogui")
     parser.add_argument("--logs", type=Path, default=Path("dolphin-texture"))
     parser.add_argument("--seconds", type=float, default=45)
     args = parser.parse_args()
+    if args.benchmark:
+        args.streaming = True
     if not 5 <= args.seconds <= 120:
         parser.error("--seconds must be between 5 and 120")
     run(args)

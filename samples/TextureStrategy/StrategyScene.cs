@@ -55,7 +55,7 @@ internal sealed class StrategyScene : IDisposable
         }
         atlas = startAtlas; resident.Reset(atlas);
         nativeBaseline = device.NativeBytes;
-        DebugOverlay.WriteLine("A: MODE  Y: CAMERA  X: FAULTS  B: EXIT");
+        DebugOverlay.WriteLine("A:MODE Y:CAMERA X:FAULTS START:COMPARE B:EXIT");
         DebugOverlay.WriteLine("192 KIB DETAIL / 4 KIB/FRAME CREDIT / COARSE FALLBACK");
     }
     private static Material NewMaterial(Texture2D? texture) =>
@@ -210,6 +210,7 @@ internal sealed class StrategyScene : IDisposable
         DebugOverlay.WriteLine("REQUEST KIB " + (RequestedBytes / 1024) + " UPLOAD KIB " + (UploadedBytes / 1024));
         DebugOverlay.WriteLine("FAILURES " + Failures + " CANCELLED " + Cancelled + " SWITCHES " + Switches);
         DebugOverlay.WriteLine("LATENCY P95 " + Percentile(95) + " P99 " + Percentile(99) + " FRAMES");
+        DebugOverlay.WriteLine("START:COMPARE A:MODE Y:CAMERA X:FAULTS B:EXIT");
     }
     internal void Present()
     {

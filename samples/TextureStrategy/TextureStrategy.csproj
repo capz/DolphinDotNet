@@ -8,6 +8,9 @@
   <PropertyGroup Condition="'$(DndTextureStreamingCI)' == 'true'">
     <DefineConstants>$(DefineConstants);DND_TEXTURE_STREAM_CI</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureBenchmarkCI)' == 'true'">
+    <DefineConstants>$(DefineConstants);DND_TEXTURE_BENCH_CI</DefineConstants>
+  </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" /></ItemGroup>
   <Import Project="../../sdk/DolphinDotNet.Sdk/Sdk/Sdk.targets" />
 </Project>

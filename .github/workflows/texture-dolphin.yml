@@ -2,7 +2,7 @@ name: TextureStrategy in Dolphin
 
 on:
   push:
-    branches: [main, experiment/virtual-texture-vs-atlas, codex/texture-strategy-startup-diagnostics, codex/texture-residency-streaming]
+    branches: [main, experiment/virtual-texture-vs-atlas, codex/texture-strategy-startup-diagnostics, codex/texture-residency-streaming, codex/texture-comparison-mode]
   pull_request:
     paths:
       - 'samples/TextureStrategy/**'
@@ -35,6 +35,11 @@ jobs:
       matrix:
         configuration: [Debug, Release]
         mode: [pages, atlas]
+        include:
+          - configuration: Release
+            mode: benchmark
+          - configuration: Debug
+            mode: benchmark
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -56,6 +61,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -p test_dolphin_texture.py
           python -m unittest discover -s tests -p test_dolphin_streaming.py
+          python -m unittest discover -s tests -p test_dolphin_benchmark.py
           dotnet run --project tests/TextureStreamingTests -c Release
           cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/native_main_failure_test.c -o /tmp/dnd-main-test
           /tmp/dnd-main-test
@@ -65,12 +71,15 @@ jobs:
           -c ${{ matrix.configuration }} -m:1
           -p:DndBuildBackend=Docker -p:DndTextureStreamingCI=true
           -p:DndTextureAtlasStart=${{ matrix.mode == 'atlas' && 'true' || 'false' }}
+          -p:DndTextureBenchmarkCI=${{ matrix.mode == 'benchmark' && 'true' || 'false' }}
       - name: Boot Dolphin and require sustained textured frames
         run: >-
           docker run --rm --shm-size=512m --mount "type=bind,source=${{ github.workspace }},target=/src"
           -w /src dnd-dolphin python3 scripts/dolphin_texture_test.py
           samples/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
-          --mode ${{ matrix.mode }} --streaming --backend OGL --seconds 90
+          --mode ${{ matrix.mode == 'atlas' && 'atlas' || 'pages' }} --streaming
+          ${{ matrix.mode == 'benchmark' && '--benchmark' || '' }} --backend OGL
+          --seconds ${{ matrix.mode == 'benchmark' && '120' || '90' }}
           --logs out/dolphin-texture
       - name: Preserve compact frame and telemetry evidence
         if: always()

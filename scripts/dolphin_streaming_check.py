@@ -16,7 +16,7 @@ FIELDS = ("magic", "version", "frame", "mode", "cameraX256", "cameraY256",
           "sourceBusy", "modeDisposals", "coarseKiB")
 
 
-def telemetry(rgb):
+def telemetry(rgb, magic=0x5453, version=3):
     if len(rgb) != FRAME_BYTES:
         raise ValueError("Incomplete streaming RGB frame")
     values = []
@@ -32,7 +32,7 @@ def telemetry(rgb):
                 value |= 1 << bit
         values.append(value)
     result = dict(zip(FIELDS, values))
-    if result["magic"] != 0x5453 or result["version"] != 3:
+    if result["magic"] != magic or result["version"] != version:
         raise AssertionError("No streaming telemetry: blank, stale or error screen")
     return result
 
