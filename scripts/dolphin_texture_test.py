@@ -56,7 +56,7 @@ def validate_capture(raw):
 def decode_texture_capture(capture, log, streaming=False, benchmark=False):
     if benchmark:
         return run_ffmpeg(["-i", str(capture), "-vf", "fps=2,scale=640:480:flags=neighbor",
-                           "-frames:v", "540", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)
+                           "-frames:v", "780", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)
     if streaming:
         return run_ffmpeg(["-i", str(capture), "-vf", "fps=3,scale=640:480:flags=neighbor",
                            "-frames:v", "360", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)
@@ -195,7 +195,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.benchmark:
         args.streaming = True
-    maximum_seconds = 240 if args.benchmark else 120
+    maximum_seconds = 360 if args.benchmark else 120
     if not 5 <= args.seconds <= maximum_seconds:
         parser.error("--seconds must be between 5 and " + str(maximum_seconds))
     run(args)
