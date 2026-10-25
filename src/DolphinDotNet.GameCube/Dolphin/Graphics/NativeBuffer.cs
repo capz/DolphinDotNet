@@ -32,6 +32,15 @@ public sealed class NativeBuffer : IDisposable
     {Check();if(source==null)throw new ArgumentNullException("source");if(count<0)count=source.Length-sourceOffset;GraphicsDevice.Check(NativeGraphics.BufferWriteIndices(Token,destinationOffset,source,sourceOffset,count),"Invalid buffer write or active frame.");}
     public void Read(byte[] destination,int sourceOffset=0,int destinationOffset=0,int count=-1)
     {Check();if(destination==null)throw new ArgumentNullException("destination");if(count<0)count=destination.Length-destinationOffset;GraphicsDevice.Check(NativeGraphics.BufferReadBytes(Token,sourceOffset,destination,destinationOffset,count),"Invalid buffer read or active frame.");}
+    /// <summary>Compute an incremental IEEE CRC32 directly over native staging
+    /// bytes between frames. No managed payload copy or temporary allocation.
+    /// Pass the preceding result as initial to checksum consecutive chunks.</summary>
+    public uint ComputeCrc32(int offset=0,int count=-1,uint initial=0)
+    {
+        Check();if(count<0)count=Length-offset;
+        if(offset<0||count<0||offset>Length||count>Length-offset)throw new ArgumentOutOfRangeException("count");
+        return NativeGraphics.BufferCrc32(Token,offset,count,initial);
+    }
     public void Flush(int offset=0,int count=-1){Check();if(count<0)count=Length-offset;GraphicsDevice.Check(NativeGraphics.BufferFlush(Token,offset,count,0),"Invalid cache range.");}
     public void Invalidate(int offset=0,int count=-1){Check();if(count<0)count=Length-offset;GraphicsDevice.Check(NativeGraphics.BufferFlush(Token,offset,count,1),"Invalid cache range.");}
     private void Check(){if(disposed)throw new ObjectDisposedException("NativeBuffer");}

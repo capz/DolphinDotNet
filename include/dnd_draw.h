@@ -40,6 +40,7 @@ uint64_t dnd_buffer_address(int token,int offset);
 int dnd_buffer_copy(int token,int offset,DndArray *array,int index,int count,int write);
 int dnd_buffer_write(int token,int offset,DndArray *a,int index,int count);
 int dnd_buffer_read(int token,int offset,DndArray *a,int index,int count);
+uint32_t dnd_buffer_crc32(int token,int offset,int count,uint32_t initial);
 int dnd_buffer_flush(int token,int offset,int count,int invalidate);
 int dnd_draw_release(int token);
 int dnd_draw_bytes(int token);

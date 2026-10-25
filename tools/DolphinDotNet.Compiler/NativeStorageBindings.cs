@@ -92,6 +92,7 @@ internal static class NativeStorageBindings
         ["BufferWriteFloats"]=("dnd_buffer_write","iiaii",false),
         ["BufferWriteIndices"]=("dnd_buffer_write","iiaii",false),
         ["BufferReadBytes"]=("dnd_buffer_read","iiaii",false),
+        ["BufferCrc32"]=("dnd_buffer_crc32","iiii",false),
         ["MeshCreateColor"]=("dnd_mesh_create","aaii",false),
         ["MeshUpdateColor"]=("dnd_mesh_update","iaiii",false),
         ["MeshCreateTexture"]=("dnd_mesh_create","aaii",false),

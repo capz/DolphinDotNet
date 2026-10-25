@@ -444,6 +444,19 @@ int dnd_native_object_size(int kind) {
 
 int dnd_buffer_write(int token,int offset,DndArray *array,int index,int count){return dnd_buffer_copy(token,offset,array,index,count,1);}
 int dnd_buffer_read(int token,int offset,DndArray *array,int index,int count){return dnd_buffer_copy(token,offset,array,index,count,0);}
+uint32_t dnd_buffer_crc32(int token,int offset,int count,uint32_t initial) {
+    Resource *r=find(token,BUFFER);
+    if(dnd_device_active()||dnd_raw_depth()||!r||offset<0||count<0||offset>r->bytes||count>r->bytes-offset){
+        dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Invalid native checksum range or active frame.");return 0;
+    }
+    uint32_t crc=~initial;
+    const unsigned char *p=r->data+offset;
+    for(int i=0;i<count;i++){
+        crc^=p[i];
+        for(int bit=0;bit<8;bit++)crc=(crc>>1)^((crc&1)?0xedb88320u:0u);
+    }
+    return ~crc;
+}
 
 /* Programs are immutable. Uniform writes are forbidden while a frame is active. */
 int dnd_effect_create(DndArray *a) {

@@ -3,7 +3,8 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
 
-test: file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
+test: native_buffer_crc_test file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
+	./native_buffer_crc_test
 	./file_optimize_test
 	./file_extents_test
 	./contiguous_write_test
@@ -81,6 +82,14 @@ network_link_test: network_link_test.c ../source/network_link_gamecube.c
 debug_heartbeat_test: debug_heartbeat_test.c ../source/debug_heartbeat.c ../source/performance.c
 	$(CC) $(CFLAGS) -DDND_DEBUG_TELEMETRY $^ -o $@
 
+ifeq ($(shell uname -s),Darwin)
+CRC_DEAD_STRIP = -Wl,-dead_strip
+else
+CRC_DEAD_STRIP = -Wl,--gc-sections
+endif
+native_buffer_crc_test: native_buffer_crc_test.c ../source/draw_resources.c
+	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $^ $(CRC_DEAD_STRIP) -lm -o $@
 clean:
+	rm -f native_buffer_crc_test
 	rm -f file_optimize_test file_extents_test contiguous_write_test dol_test
 	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test

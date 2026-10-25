@@ -22,6 +22,14 @@ internal static class Program
         using var batch=new Draw2D(device,new Draw2DOptions{VertexCapacity=12});
         using var buffer=NativeBuffer.Allocate(64);
         buffer.Write(new byte[]{1,2,3,4});buffer.Flush();
+        {
+            using var crcBuffer=NativeBuffer.Allocate(9);
+            crcBuffer.Write(new byte[]{49,50,51,52,53,54,55,56,57});
+            if(crcBuffer.ComputeCrc32()!=0xcbf43926u)return 90;
+            var seed=crcBuffer.ComputeCrc32(0,4);
+            if(crcBuffer.ComputeCrc32(4,5,seed)!=0xcbf43926u||crcBuffer.ComputeCrc32(9,0,seed)!=seed)return 91;
+            try{crcBuffer.ComputeCrc32(8,2);return 92;}catch(ArgumentOutOfRangeException){}
+        }
         using var texturedMesh=Mesh.Create(new[]{new VertexPositionColorTexture(new Vector3(0,1,0),Color32.White,new Vector2(0,0)),new VertexPositionColorTexture(new Vector3(-1,-1,0),Color32.White,new Vector2(0,1)),new VertexPositionColorTexture(new Vector3(1,-1,0),Color32.White,new Vector2(1,1))});
         using var normalMesh=Mesh.Create(new[]{new VertexPositionNormalColorTexture(new Vector3(0,1,0),new Vector3(0,0,1),Color32.White,new Vector2(0,0)),new VertexPositionNormalColorTexture(new Vector3(-1,-1,0),new Vector3(0,0,1),Color32.White,new Vector2(0,1)),new VertexPositionNormalColorTexture(new Vector3(1,-1,0),new Vector3(0,0,1),Color32.White,new Vector2(1,1))});
         var textureProgram=new byte[184];textureProgram[0]=68;textureProgram[1]=78;textureProgram[2]=69;textureProgram[3]=70;
