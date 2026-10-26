@@ -5,6 +5,10 @@ acceptance probe, protocol tests and IDE packaging workflows are maintained in
 [DolphinDotNet.Debuggers](https://github.com/capz/DolphinDotNet.Debuggers).
 Install its ZIP/VSIX from that repository's releases or successful Actions runs.
 The main SDK repository no longer builds or publishes IDE extensions.
+The resident GameCube ELF receiver and its native build/tests also live there.
+Both IDE packages include the bootable DOL, instructions and checksum manifest;
+debugger releases provide the same DOL as a separate download. The SDK retains
+its game DOL conversion helpers and native GDB support.
 
 This repository owns compiler-produced debug/source/address metadata, native
 GDB/heartbeat support and emulator/native acceptance fixtures. Their schemas,
