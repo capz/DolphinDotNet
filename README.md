@@ -173,9 +173,11 @@ Remaining emulator, hardware, IDE and release qualification is tracked in the
 
 IDE plugins, the shared debug adapter and their releases now live in [DolphinDotNet.Debuggers](https://github.com/capz/DolphinDotNet.Debuggers). See the [repository boundary and pinned SDK dependency](docs/debugger-components.md).
 
-For on-device launch, [DolphinDotNet.Launcher](tools/DolphinDotNet.Launcher/README.md)
+For on-device launch, [DolphinDotNet.Launcher](https://github.com/capz/DolphinDotNet.Debuggers/tree/main/tools/DolphinDotNet.Launcher)
 is a standalone GameCube ELF receiver over BBA or USB Gecko, with an IDE readiness
 handshake and a validated execution handoff. Its companion debugger mode uploads
 an existing Debug ELF, then attaches to the application's waiting GDB stub.
 The resident receiver returns to readiness after a normal application exit,
 allowing repeated uploads without rebooting the launcher.
+Its source, tests and native build now live in DolphinDotNet.Debuggers. Both IDE
+plugins bundle the bootable DOL, also available from that repository's releases.
