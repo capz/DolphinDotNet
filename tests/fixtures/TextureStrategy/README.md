@@ -84,3 +84,7 @@ CI retains the four original stress runs and adds Debug/Release round-trip runs 
 This implements real bounded MEM1/GX texture residency and asynchronous procedural pixel preparation. It does not implement disk reads, ARAM promotion, compressed pages, texture gutters, mip selection, world collision/gameplay or a storage-backed virtual texture system. Filtering is nearest-neighbor in both layouts; there is one always-available coarse level.
 
 Use the results to compare granularity, working-set pressure and fallback behavior. Do not use emulator timings or the paced procedural source to choose a hardware streaming architecture. Next replace the source with actual storage/ARAM transfers and profile representative geometry, audio and gameplay on an original GameCube. The older `CacheTrace.cs` logical trace remains historical and is no longer used by this sample.
+
+## SDK throughput validation
+
+The original controls remain build mode 0. [Texture pipeline throughput](../../../docs/texture-pipeline-throughput.md) documents the SDK-only mode 32, combined mode 34 and isolated scheduling/font/native-rectangle matrices. They preserve texels, view, managed heap and native budgets. A fixed 84 KiB scratch pool bounds concurrency; completed telemetry rotates four pages with a four-second elapsed dwell. Use `--pipeline` to require request-lifetime, allocation, clear-copy and correlated P99 evidence in addition to the original world-pixel/ownership checks. Preparation elapsed time is not exclusive CPU time, and this generated source has no storage traffic.

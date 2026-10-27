@@ -18,6 +18,15 @@ public sealed class Texture2D : IDisposable
         if(token==0)throw new ArgumentException("Invalid RGBA pixels, dimensions, memory budget or active frame.");
         return new Texture2D(token);
     }
+    /// <summary>Create from a checked row-major RGBA range in a shared scratch
+    /// array. The range is copied before return; call between frames.</summary>
+    public static Texture2D Create(int width,int height,byte[] rgba,int sourceOffset,bool linear=false)
+    {
+        if(rgba==null)throw new ArgumentNullException("rgba");
+        int token=NativeGraphics.TextureCreateRange(width,height,rgba,sourceOffset,linear?1:0);
+        if(token==0)throw new ArgumentException("Invalid RGBA range, dimensions, memory budget or active frame.");
+        return new Texture2D(token);
+    }
     /// <summary>Decode a PNG in memory into a native tiled RGBA8 texture, preserving alpha.
     /// Call between frames. Encoded input is limited to 1 MiB, dimensions to 1024x1024,
     /// and decoder scratch allocations to 8 MiB. No file or asset converter is required.</summary>
@@ -64,6 +73,13 @@ public sealed class Texture2D : IDisposable
             throw new ArgumentOutOfRangeException("sourceOffset");
         GraphicsDevice.Check(NativeGraphics.TextureUpdateFromBuffer(Token,source.Token,sourceOffset,bytes),
             "Native texture replacement requires a valid source and no active frame.");
+    }
+    /// <summary>Replace row-major RGBA8 pixels in an existing RGBA8 allocation.
+    /// Between frames only; preserves prior GPU readers and texture-cache coherence.</summary>
+    public void ReplaceRgba(byte[] pixels,int sourceOffset=0)
+    {
+        Check();if(pixels==null)throw new ArgumentNullException("pixels");
+        GraphicsDevice.Check(NativeGraphics.TextureReplaceRgba(Token,pixels,sourceOffset),"RGBA replacement requires a complete RGBA8 image outside a frame.");
     }
     // Background CPU-only copy into a *detached* texture. The caller must prove
     // that this token cannot be referenced by an in-flight GX submission.

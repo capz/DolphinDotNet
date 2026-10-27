@@ -32,3 +32,6 @@ tests/dol_test
 plugins/rider/build/
 
 **/__pycache__/
+
+tests/texture_reuse_test
+tests/canvas_rectangle_test

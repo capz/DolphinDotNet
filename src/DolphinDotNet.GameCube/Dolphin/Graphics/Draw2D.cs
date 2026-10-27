@@ -11,6 +11,10 @@ public sealed class Draw2DOptions
 /// <summary>Ordered, preallocated batch for textures, shapes and prebuilt bitmap fonts.</summary>
 public sealed class Draw2D : IDisposable
 {
+    // TODO(throughput-validation): Retire this legacy A/B switch only after
+    // repeated Dolphin/hardware validation establishes the performant path.
+    // Preserve historical benchmark results when removing the old Quad path.
+    internal static bool DirectRectanglePath=true;
     private readonly int token,width,height;
     private readonly GraphicsDevice device;
     private readonly float[] scratch=new float[24];
@@ -59,7 +63,14 @@ public sealed class Draw2D : IDisposable
         Vertex(0,x0,y0,source.X,source.Y);Vertex(1,x1,y1,source.X+source.Width,source.Y);Vertex(2,x2,y2,source.X+source.Width,source.Y+source.Height);
         Vertex(3,x0,y0,source.X,source.Y);Vertex(4,x2,y2,source.X+source.Width,source.Y+source.Height);Vertex(5,x3,y3,source.X,source.Y+source.Height);Submit(texture,6,color);
     }
-    public void FillRectangle(RectF destination,Color32 color)=>Quad(0,default,destination,color,0,default);
+    public void FillRectangle(RectF destination,Color32 color)
+    {
+        if(!DirectRectanglePath){Quad(0,default,destination,color,0,default);return;}
+        Require();Rectangle(destination);if(destination.Width==0||destination.Height==0)return;
+        if(effect!=null)effect.Check();
+        GraphicsDevice.Check(NativeGraphics.CanvasRectangle(token,destination.X,destination.Y,destination.Width,destination.Height,color.Packed),
+            "Invalid drawing coordinates, effect or exhausted batch capacity.");
+    }
     public void DrawTexture(Texture2D texture,RectF destination,Color32 color)
     {
         if(texture==null)throw new ArgumentNullException("texture");texture.Check();Quad(texture.Token,new RectF(0,0,1,1),destination,color,0,default);

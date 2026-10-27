@@ -7,6 +7,7 @@ internal static class Program
     private static bool benchmarkTestComplete;
     private static int Main()
     {
+        BenchmarkOptions.Configure();
         bool benchmark = false;
         while (true)
         {
@@ -71,7 +72,7 @@ internal static class Program
             if (pad.B.WasPressed) exiting = true;
             if (pad.Start.WasPressed) switching = true;
 #if DND_TEXTURE_BENCH_CI
-            if (scene.Completed && scene.FramesAfterDone >= 60)
+            if (scene.ResultsReady)
             { benchmarkTestComplete = true; switching = true; }
 #endif
             if (exiting || switching)

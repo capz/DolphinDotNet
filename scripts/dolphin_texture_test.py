@@ -153,7 +153,7 @@ def run(args):
         try:
             if args.benchmark:
                 from dolphin_benchmark_check import validate_benchmark
-                proof = validate_benchmark(raw)
+                proof = validate_benchmark(raw, args.pipeline, args.matrix_budget, args.matrix_glyphs, args.matrix_rectangles)
                 from dolphin_benchmark_check import benchmark_telemetry
                 summary = None
                 for offset in range(0, len(raw), FRAME_BYTES):
@@ -187,6 +187,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dol", type=Path)
     parser.add_argument("--streaming", action="store_true")
+    parser.add_argument("--matrix-rectangles", action="store_true", help="Validate native rectangle throughput matrix")
+    parser.add_argument("--matrix-glyphs", action="store_true", help="Validate SDK glyph-compression matrix")
+    parser.add_argument("--matrix-budget", type=int, choices=[0,256,384], default=0, help="Validate fixed 2x2 pipeline comparison matrix")
+    parser.add_argument("--pipeline", action="store_true", help="Require completed pipeline diagnostics")
     parser.add_argument("--benchmark", action="store_true", help="Validate a stress/comparison/stress round trip")
     parser.add_argument("--backend", choices=["Software", "OGL"], default="Software")
     parser.add_argument("--mode", choices=["pages", "atlas"], required=True)

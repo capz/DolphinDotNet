@@ -116,15 +116,18 @@ internal sealed class BenchmarkResult
     internal int PeakKiB, StaticCoverage, TimeTo95Ms = -1, MaxFrameUs, MaxUploadUs, MaxSubmitUs;
     internal int LongestBelow95Ms;
     internal long DurationUs, MotionUs, CoverageTime, MotionCoverageTime;
+    internal long PreparationUs,ReadyUs,QueueUs,BeginCopyUs,GateUs;
+    internal int PreparationMaxUs,Reuses,Allocations,MaxPublications,Started,BeginCopies,PendingPeak,ReadyPeak;
     private long below95Us;
     internal bool Complete;
     private long completedAt;
     // The capture oracle samples at 2 Hz. Hold from actual completion, not
     // case start: a slow final measured frame can overshoot the nominal end.
-    internal bool CanAdvance(long now) => Complete && now - completedAt >= 1500000;
+    internal bool CanAdvance(long now,int dwellUs=1500000) => Complete && now - completedAt >= dwellUs;
     internal void Reset()
     {
-        Timing.Reset();
+        BeginCopies=PendingPeak=ReadyPeak=0;Timing.Reset();PreparationUs=ReadyUs=QueueUs=BeginCopyUs=GateUs=0;
+        PreparationMaxUs=Reuses=Allocations=MaxPublications=Started=0;
         active = null; finalFrame95 = finalFrame99 = finalLatency95 = 0;
         Samples = Promotions = Evictions = Cancelled = RequestedKiB = UploadedKiB = 0;
         PeakKiB = StaticCoverage = MaxFrameUs = MaxUploadUs = MaxSubmitUs = LongestBelow95Ms = 0;

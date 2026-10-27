@@ -91,19 +91,31 @@ void dnd_console_write(const char *s) {
 }
 void dnd_console_set_visible(int v) { visible = !!v; }
 int dnd_console_visible(void) { return visible; }
+typedef struct { unsigned char x,y,w,h; } GlyphRect;
+/* Exact, non-overlapping rectangle cover of the existing 5x7 bitmap. */
+static int glyph_rectangles(const unsigned char *g,GlyphRect *out) {
+  unsigned char rows[7]={0};int count=0;
+  for(int y=0;y<7;y++)for(int x=0;x<5;x++)if(g[x]&(1u<<y))rows[y]|=1u<<x;
+  for(int y=0;y<7;y++)for(int x=0;x<5;x++)if(rows[y]&(1u<<x)) {
+    int w=1,h=1;while(x+w<5&&(rows[y]&(1u<<(x+w))))w++;
+    unsigned mask=((1u<<w)-1)<<x;
+    while(y+h<7&&(rows[y+h]&mask)==mask)h++;
+    for(int i=0;i<h;i++)rows[y+i]&=~mask;
+    if(out)out[count]=(GlyphRect){x,y,w,h};
+    count++;
+  }
+  return count;
+}
 static void render_text(const char *const *text, int rows, float left, float top,
                         unsigned char shade) {
   const float scale = 1.35f, cw = 6 * scale, ch = 9 * scale;
+  int compact=dnd_performance_glyph_runs();
   unsigned quads = 0;
-  for (int row = 0; row < rows; row++) {
-    for (int col = 0; text[row][col]; col++) {
-      const unsigned char *g = glyph(text[row][col]);
-      if (g)
-        for (int x = 0; x < 5; x++)
-          for (int y = 0; y < 7; y++)
-            if (g[x] & (1u << y))
-              quads++;
-    }
+  for(int row=0;row<rows;row++)for(int col=0;text[row][col];col++) {
+    const unsigned char *g=glyph(text[row][col]);if(!g)continue;
+    if(compact==2){quads+=(unsigned)glyph_rectangles(g,NULL);continue;}
+    for(int y=0;y<7;y++)for(int x=0;x<5;x++)
+      if((g[x]&(1u<<y))&&(!compact||x==0||!(g[x-1]&(1u<<y))))quads++;
   }
   if (!quads) return;
   dnd_graphics_overlay_glyph_begin(quads, shade);
@@ -113,12 +125,21 @@ static void render_text(const char *const *text, int rows, float left, float top
       if (!g)
         continue;
       float ox = left + col * cw, oy = top + row * ch;
-      for (int x = 0; x < 5; x++)
-        for (int y = 0; y < 7; y++)
-          if (g[x] & (1u << y)) {
-            float px = ox + x * scale, py = oy + y * scale;
-            dnd_graphics_overlay_glyph_quad(px, py, scale);
-          }
+      if(compact==2) {
+        GlyphRect rects[35];int n=glyph_rectangles(g,rects);
+        for(int i=0;i<n;i++){
+          GlyphRect r=rects[i];float px=ox+r.x*scale,py=oy+r.y*scale;
+          dnd_graphics_overlay_glyph_rect(px,py,(ox+(r.x+r.w-1)*scale+scale)-px,(oy+(r.y+r.h-1)*scale+scale)-py);
+        }
+        continue;
+      }
+      for(int y=0;y<7;y++)for(int x=0;x<5;) {
+        if(!(g[x]&(1u<<y))){x++;continue;}
+        int first=x++;if(compact)while(x<5&&(g[x]&(1u<<y)))x++;
+        float px=ox+first*scale,py=oy+y*scale;
+        if(compact)dnd_graphics_overlay_glyph_rect(px,py,(ox+(x-1)*scale+scale)-px,scale);
+        else dnd_graphics_overlay_glyph_quad(px,py,scale);
+      }
     }
   }
   dnd_graphics_overlay_glyph_end();
