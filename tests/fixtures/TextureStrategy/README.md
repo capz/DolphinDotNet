@@ -4,13 +4,13 @@ A runnable GameCube experiment for Hypercube's page-versus-atlas decision. The c
 
 ## Run
 
-Install the .NET 8 SDK and the existing DolphinDotNet Docker or native build prerequisites described in [the IDE guide](../../docs/ide-workflow.md).
+Install the .NET 8 SDK and the existing DolphinDotNet Docker or native build prerequisites described in [the IDE guide](../../../docs/ide-workflow.md).
 
 ```sh
-dotnet build samples/TextureStrategy/TextureStrategy.csproj -c Release -m:1
+dotnet build tests/fixtures/TextureStrategy/TextureStrategy.csproj -c Release -m:1
 ```
 
-Open `samples/TextureStrategy/bin/Release/net8.0/TextureStrategy.dol` in Dolphin or on GameCube. The root `TextureStrategy.slnf` remains an IDE entry point.
+Open `tests/fixtures/TextureStrategy/bin/Release/net8.0/TextureStrategy.dol` in Dolphin or on GameCube. The project can be opened directly in an IDE.
 
 In Dolphin, set **Graphics → Hacks → Texture Cache → Accuracy** to **Safe** (the configuration value is `[Settings] SafeTextureCacheColorSamples = 0` in `GFX.ini`). Atlas streaming reuses native addresses with content that can differ only in RGBA8's green plane; sampled texture hashing can reuse an earlier image. CI sets full hashing explicitly.
 

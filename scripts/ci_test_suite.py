@@ -59,6 +59,7 @@ def main(area):
         test("tests/AudioAssetTests")
         build("tests/AudioFormatsSmoke/AudioFormatsSmoke.csproj")
     elif area=="graphics":
+        test("tests/TextureStreamingTests")
         test("tests/EffectCompilerTests")
         with tempfile.TemporaryDirectory() as tmp:
             run("dotnet","run","--project","tests/ModelAssetTests","-c","Release","--",tmp)
