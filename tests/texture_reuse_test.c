@@ -18,14 +18,20 @@ static void check_texture(int w,int h){
  assert(dnd_texture_replace_rgba(t,b,7)==0);assert(waits==before+1);assert(dnd_draw_total_bytes()==bytes&&dnd_draw_live()==live);
  DndDrawTexture out;assert(dnd_texture_resolve(t,&out)==0);
  /* Independent GX RGBA8 tile oracle, including zero-filled edge padding. */
- for(int by=0;by<(h+3)/4;by++)for(int bx=0;bx<(w+3)/4;bx++)
-  for(int y=0;y<4;y++)for(int x=0;x<4;x++){
+ for(int by=0;by<(h+3)/4;by++) {
+  for(int bx=0;bx<(w+3)/4;bx++) {
+   for(int y=0;y<4;y++) {
+    for(int x=0;x<4;x++) {
    int block=(by*((w+3)/4)+bx)*64,at=(y*4+x)*2,px=bx*4+x,py=by*4+y;
    const unsigned char *src=px<w&&py<h?b->data+7+(py*w+px)*4:NULL;
    const unsigned char *dst=out.data;
    assert(dst[block+at]==(src?src[3]:0)&&dst[block+at+1]==(src?src[0]:0));
    assert(dst[block+32+at]==(src?src[1]:0)&&dst[block+33+at]==(src?src[2]:0));
-  }unsigned char *copy=malloc(out.bytes);assert(copy);memcpy(copy,out.data,out.bytes);
+    }
+   }
+  }
+ }
+ unsigned char *copy=malloc(out.bytes);assert(copy);memcpy(copy,out.data,out.bytes);
  memcpy(a->data,b->data+7,n);int expected=dnd_texture_create_range(w,h,b,7,0);assert(expected);
  assert(!dnd_texture_create_range(w,h,b,8,0));assert(!dnd_texture_create_range(w,h,b,-1,0));
  assert(dnd_texture_create(w,h,b,0)==0);
