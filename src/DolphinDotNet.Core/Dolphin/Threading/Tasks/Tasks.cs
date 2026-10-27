@@ -18,10 +18,9 @@ namespace Dolphin.Threading.Tasks
         }
         private static readonly WorkQueue applicationQueue=new WorkQueue();
         private static readonly WorkQueue backgroundQueue=new WorkQueue();
-        /// <summary>Cooperative block budget; 1 retains the legacy clock-poll cadence.</summary>
-        /// <summary>Recheck completion after service before parking. False is a validation control.</summary>
         /// <summary>Poll timers on the application executor while native I/O owns the service executor.</summary>
         public static bool ApplicationTimers {get;set;}=true;
+        /// <summary>Recheck completion after service before parking. False is a validation control.</summary>
         public static bool CompletionAwareWaits {get;set;}=true;
         public static bool DeadlineWaits {set=>NativeAsync.AsyncDeadlineWaits(value?1:0);}
         /// <summary>Cumulative runtime diagnostics; index definitions are in docs/throughput.md.</summary>
@@ -29,6 +28,7 @@ namespace Dolphin.Threading.Tasks
         public static void ResetWaitStats()=>NativeAsync.AsyncWaitReset();
         public static long WaitStat(int kind)=>NativeAsync.AsyncWaitStat(kind);
         public static bool ProductiveWaits {set=>NativeAsync.AsyncProductiveWaits(value?1:0);}
+        /// <summary>Cooperative block budget; 1 retains the legacy clock-poll cadence.</summary>
         public static int PollStride {set=>NativeAsync.AsyncPollStride(value);}
         public static long PollCalls=>NativeAsync.AsyncPollStat(0);
         public static long SlowPollCalls=>NativeAsync.AsyncPollStat(1);
