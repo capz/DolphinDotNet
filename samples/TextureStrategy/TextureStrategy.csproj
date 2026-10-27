@@ -1,0 +1,16 @@
+<Project>
+  <Import Project="../../sdk/DolphinDotNet.Sdk/Sdk/Sdk.props" />
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup>
+  <!-- CI exercises both representations without synthetic controller input. -->
+  <PropertyGroup Condition="'$(DndTextureAtlasStart)' == 'true'">
+    <DefineConstants>$(DefineConstants);DND_TEXTURE_ATLAS_START</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureStreamingCI)' == 'true'">
+    <DefineConstants>$(DefineConstants);DND_TEXTURE_STREAM_CI</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureBenchmarkCI)' == 'true'">
+    <DefineConstants>$(DefineConstants);DND_TEXTURE_BENCH_CI</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" /></ItemGroup>
+  <Import Project="../../sdk/DolphinDotNet.Sdk/Sdk/Sdk.targets" />
+</Project>
