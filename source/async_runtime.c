@@ -77,10 +77,14 @@ static uint64_t next_poll[2];
 static bool productive_waits;
 static bool deadline_waits=true;
 static int64_t timer_deadline=-1;
+static int64_t yielded_deadline[2]={INT64_MIN,INT64_MIN};
 /* Mutated with the managed gate held, including after a timed wait reacquires it. */
 static uint64_t wait_stats[2][9];
-void dnd_async_deadline_waits(int enabled){deadline_waits=enabled!=0;}
-void dnd_async_deadline(int64_t due){timer_deadline=due;}
+void dnd_async_deadline_waits(int enabled){deadline_waits=enabled!=0;yielded_deadline[0]=yielded_deadline[1]=INT64_MIN;}
+void dnd_async_deadline(int64_t due){
+    if(due!=timer_deadline)yielded_deadline[0]=yielded_deadline[1]=INT64_MIN;
+    timer_deadline=due;
+}
 void dnd_async_timer_late(int64_t late){if(late>0&&(uint64_t)late>wait_stats[0][8])wait_stats[0][8]=(uint64_t)late;}
 void dnd_async_wait_reset(void){memset(wait_stats[0],0,sizeof(wait_stats[0]));}
 void dnd_async_wait_skipped(void){wait_stats[owner][7]++;}
@@ -93,7 +97,12 @@ static uint64_t wait_timeout(void) {
     uint64_t timeout=1000;
     if(deadline_waits&&timer_deadline>=0){
         int64_t left=timer_deadline-(int64_t)now_us();
-        if(left<=0)return 0;
+        if(left<=0){
+            // Yield once per due hint. If service cannot advance (for example
+            // while its executor is in native I/O), keep the timed backstop.
+            if(yielded_deadline[owner]!=timer_deadline){yielded_deadline[owner]=timer_deadline;return 0;}
+            return timeout;
+        }
         if(left<1000){timeout=(uint64_t)left;wait_stats[owner][6]++;}
     }
     return timeout;
@@ -185,7 +194,7 @@ bool dnd_async_start(DndAsyncDispatch callback) {
     memset(dispatch_depth, 0, sizeof(dispatch_depth));
     memset(critical_depth, 0, sizeof(critical_depth));
     memset(next_poll, 0, sizeof(next_poll));
-    timer_deadline=-1;memset(wait_stats,0,sizeof(wait_stats));
+    timer_deadline=-1;yielded_deadline[0]=yielded_deadline[1]=INT64_MIN;memset(wait_stats,0,sizeof(wait_stats));
     dispatch = callback; owner = 0; stopping = false; failed = false;
     lock(&gate);
     if (thread_start(&thread, background) != 0) {

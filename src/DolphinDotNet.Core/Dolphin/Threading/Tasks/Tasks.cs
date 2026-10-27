@@ -20,6 +20,8 @@ namespace Dolphin.Threading.Tasks
         private static readonly WorkQueue backgroundQueue=new WorkQueue();
         /// <summary>Cooperative block budget; 1 retains the legacy clock-poll cadence.</summary>
         /// <summary>Recheck completion after service before parking. False is a validation control.</summary>
+        /// <summary>Poll timers on the application executor while native I/O owns the service executor.</summary>
+        public static bool ApplicationTimers {get;set;}=true;
         public static bool CompletionAwareWaits {get;set;}=true;
         public static bool DeadlineWaits {set=>NativeAsync.AsyncDeadlineWaits(value?1:0);}
         /// <summary>Cumulative runtime diagnostics; index definitions are in docs/throughput.md.</summary>

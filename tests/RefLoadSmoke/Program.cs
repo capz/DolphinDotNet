@@ -43,8 +43,10 @@ internal static class Program
         if(Dolphin.Threading.Tasks.Scheduler.WaitStat(7)==0)return 9;
         var waitSnapshot=new long[9];Dolphin.Threading.Tasks.Scheduler.CopyWaitStats(waitSnapshot);
         if(waitSnapshot[7]==0)return 13;
+        foreach(bool applicationTimers in new[]{false,true})
         foreach(bool deadline in new[]{false,true})
         {
+            Dolphin.Threading.Tasks.Scheduler.ApplicationTimers=applicationTimers;
             Dolphin.Threading.Tasks.Scheduler.DeadlineWaits=deadline;
             Dolphin.Timing.Time.DelayAsync(1).GetAwaiter().GetResult();
             using(var cancellation=new System.Threading.CancellationTokenSource())

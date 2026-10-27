@@ -28,6 +28,7 @@ int main(void) {
  dnd_async_progress();assert(dnd_async_wait_stat(1)>before);service_wake=0;
  dnd_async_deadline_waits(1);dnd_async_deadline(0);before=dnd_async_wait_stat(1);
  dnd_async_wait();assert(dnd_async_wait_stat(1)==before); // Due deadlines yield to service.
+ dnd_async_wait();assert(dnd_async_wait_stat(1)>before); // Unchanged due hints cannot spin.
  dnd_async_deadline(-1);dnd_async_wait();assert(dnd_async_wait_stat(1)>before);
  assert(dnd_async_wait_stat(2)>0&&dnd_async_wait_stat(4)>0);
  dnd_async_timer_late(27);assert(dnd_async_wait_stat(8)==27);

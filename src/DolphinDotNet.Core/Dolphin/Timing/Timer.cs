@@ -86,8 +86,9 @@ internal static class TimingRuntime
         timers.Add(timer); Dolphin.Threading.Tasks.NativeAsync.AsyncWake();
     }
     internal static void Remove(Timer timer) { timers.Remove(timer); Dolphin.Threading.Tasks.NativeAsync.AsyncDeadline(-1); }
-    internal static void Pump()
+    internal static void Pump(int context)
     {
+        if(context==0&&!Scheduler.ApplicationTimers)return;
         long now=Clock.Timestamp;
         for (int i=timers.Count-1;i>=0;i--) timers[i].Poll(now);
         long next=-1;
