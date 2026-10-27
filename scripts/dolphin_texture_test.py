@@ -56,7 +56,8 @@ def validate_capture(raw):
 def decode_texture_capture(capture, log, streaming=False, benchmark=False):
     if benchmark:
         return run_ffmpeg(["-i", str(capture), "-vf", "fps=2,scale=640:480:flags=neighbor",
-                           "-frames:v", "780", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)
+                           "-frames:v", "780", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log,
+                          timeout=120)
     if streaming:
         return run_ffmpeg(["-i", str(capture), "-vf", "fps=3,scale=640:480:flags=neighbor",
                            "-frames:v", "360", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)

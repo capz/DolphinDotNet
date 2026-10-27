@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import unittest
 import shutil
+from unittest.mock import Mock, patch
 from tempfile import TemporaryDirectory
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from dolphin_texture_test import FRAME_BYTES, validate_board, validate_capture, decode_texture_capture
@@ -48,6 +49,15 @@ class TextureAcceptanceTests(unittest.TestCase):
     def test_truncated_frame_fails(self):
         with self.assertRaises(ValueError):
             validate_capture(board() * 60 + b"x")
+
+    def test_long_benchmark_decode_has_a_separate_bounded_deadline(self):
+        with TemporaryDirectory() as folder:
+            log = Path(folder) / "decode.log"
+            with patch("dolphin_shader_test.subprocess.run", return_value=Mock(stdout=b"", stderr=b"")) as run:
+                decode_texture_capture(Path("six-minute.avi"), log, benchmark=True)
+                self.assertEqual(120, run.call_args.kwargs["timeout"])
+                decode_texture_capture(Path("short.avi"), log, streaming=True)
+                self.assertEqual(30, run.call_args.kwargs["timeout"])
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg not installed")
     def test_ffv1_capture_tail_rejects_late_error_screen(self):
