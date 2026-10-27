@@ -153,7 +153,7 @@ def run(args):
         try:
             if args.benchmark:
                 from dolphin_benchmark_check import validate_benchmark
-                proof = validate_benchmark(raw, args.pipeline, args.matrix_budget, args.matrix_glyphs, args.matrix_rectangles)
+                proof = validate_benchmark(raw, args.pipeline, args.matrix_budget, args.matrix_glyphs, args.matrix_rectangles, args.matrix_policy, args.matrix_group)
                 from dolphin_benchmark_check import benchmark_telemetry
                 summary = None
                 for offset in range(0, len(raw), FRAME_BYTES):
@@ -187,6 +187,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dol", type=Path)
     parser.add_argument("--streaming", action="store_true")
+    parser.add_argument("--matrix-policy", action="store_true", help="Validate indexed residency-policy matrix")
+    parser.add_argument("--matrix-group", type=int, choices=[1,2,4], default=2, help="Fixed group size for a comparison matrix")
     parser.add_argument("--matrix-rectangles", action="store_true", help="Validate native rectangle throughput matrix")
     parser.add_argument("--matrix-glyphs", action="store_true", help="Validate SDK glyph-compression matrix")
     parser.add_argument("--matrix-budget", type=int, choices=[0,256,384], default=0, help="Validate fixed 2x2 pipeline comparison matrix")

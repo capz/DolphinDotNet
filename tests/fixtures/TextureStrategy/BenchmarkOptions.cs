@@ -3,9 +3,14 @@ using Dolphin.Threading.Tasks;
 
 internal static class BenchmarkOptions
 {
-#if DND_TEXTURE_OPT_12 || DND_TEXTURE_OPT_13 || DND_TEXTURE_OPT_14 || DND_TEXTURE_OPT_15
+#if DND_TEXTURE_OPT_16
+    internal const int MatrixGroup=1;
+#else
+    internal const int MatrixGroup=2;
+#endif
+#if DND_TEXTURE_OPT_12 || DND_TEXTURE_OPT_13 || DND_TEXTURE_OPT_14 || DND_TEXTURE_OPT_15 || DND_TEXTURE_OPT_16
     internal const bool Matrix=true;
-#if DND_TEXTURE_OPT_13 || DND_TEXTURE_OPT_14 || DND_TEXTURE_OPT_15
+#if DND_TEXTURE_OPT_13 || DND_TEXTURE_OPT_14 || DND_TEXTURE_OPT_15 || DND_TEXTURE_OPT_16
     internal const int MatrixBudget=384;
 #else
     internal const int MatrixBudget=256;
@@ -64,14 +69,24 @@ internal static class BenchmarkOptions
     internal const int Mode=36;
 #elif DND_TEXTURE_OPT_37
     internal const int Mode=37;
+#elif DND_TEXTURE_OPT_38
+    internal const int Mode=38;
+#elif DND_TEXTURE_OPT_39
+    internal const int Mode=39;
+#elif DND_TEXTURE_OPT_40
+    internal const int Mode=40;
+#elif DND_TEXTURE_OPT_41
+    internal const int Mode=41;
 #else
     internal const int Mode=0;
 #endif
 #endif
     internal static void SelectCase(int index)
     {
-#if DND_TEXTURE_OPT_12 || DND_TEXTURE_OPT_13 || DND_TEXTURE_OPT_14 || DND_TEXTURE_OPT_15
-#if DND_TEXTURE_OPT_15
+#if DND_TEXTURE_OPT_12 || DND_TEXTURE_OPT_13 || DND_TEXTURE_OPT_14 || DND_TEXTURE_OPT_15 || DND_TEXTURE_OPT_16
+#if DND_TEXTURE_OPT_16
+        Mode=index==0?0:index==1?32:index==2?34:index==3?38:index==4?39:index==5?40:index==6?41:index==7?38:34;
+#elif DND_TEXTURE_OPT_15
         Mode=index==0?0:index==1?31:index==2?32:index==3?33:index==4?34:index==5?35:index==6?36:index==7?37:34;
 #elif DND_TEXTURE_OPT_14
         Mode=index==0?0:index==1?19:index==2?25:index==3?18:index==4?26:index==5?27:index==6?28:index==7?29:26;
@@ -81,12 +96,13 @@ internal static class BenchmarkOptions
         Configure();
 #endif
     }
-    internal static bool FastRows=>Mode==9||Mode==11||Mode==18||Mode==26||Mode==27||Mode==28||Mode==29||Mode==33||Mode==34||Mode==35||Mode==36;
-    internal static int Depth=>Mode==29||Mode==35?5:Mode==5||Mode==8||Mode==11||Mode==18||Mode==26||Mode==28||Mode==34||Mode==36||Mode==37?4:Mode==3||Mode==4||Mode==6||Mode==7||Mode==9||Mode==10||Mode==16||Mode==17||Mode==27||Mode==33?2:1;
-    internal static int Publications=>Mode==8||Mode==11||Mode==18||Mode==26||Mode==28||Mode==29||Mode==34||Mode==35||Mode==36||Mode==37?4:Mode==4||Mode==5||Mode==6||Mode==7||Mode==9||Mode==10||Mode==17||Mode==27||Mode==33?2:1;
+    internal static bool IndexedPolicy=>Mode>=38;
+    internal static bool FastRows=>Mode>=38||Mode==9||Mode==11||Mode==18||Mode==26||Mode==27||Mode==28||Mode==29||Mode==33||Mode==34||Mode==35||Mode==36;
+    internal static int Depth=>Mode==29||Mode==35||Mode==40?5:Mode==5||Mode==8||Mode==11||Mode==18||Mode==26||Mode==28||Mode==34||Mode==36||Mode==37||Mode==38||Mode==41?4:Mode==3||Mode==4||Mode==6||Mode==7||Mode==9||Mode==10||Mode==16||Mode==17||Mode==27||Mode==33||Mode==39?2:1;
+    internal static int Publications=>Mode==8||Mode==11||Mode==18||Mode==26||Mode==28||Mode==29||Mode==34||Mode==35||Mode==36||Mode==37||Mode==38||Mode==40||Mode==41?4:Mode==4||Mode==5||Mode==6||Mode==7||Mode==9||Mode==10||Mode==17||Mode==27||Mode==33||Mode==39?2:1;
     internal static bool Reuse=>Mode>=33||Mode==6||Mode==7||Mode==8||Mode==9||Mode==10||Mode==11||Mode==18||Mode==26||Mode==27||Mode==28||Mode==29;
     internal static bool ReuseClear=>Mode>=33||Mode==2||Mode==7||Mode==8||Mode==9||Mode==10||Mode==11||Mode==15||Mode==16||Mode==17||Mode==18||Mode==26||Mode==27||Mode==28||Mode==29;
-    internal static int PublishBudgetUs=>Mode==10||Mode==28||Mode==36?750:1500;
+    internal static int PublishBudgetUs=>Mode==10||Mode==28||Mode==36||Mode==41?750:1500;
     internal static void Configure()
     {
         GpuProfiler.UseNative2DRectangles=Mode>=31;

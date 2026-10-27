@@ -40,8 +40,30 @@ Build `tests/fixtures/TextureStrategy/TextureStrategy.csproj` in Release with `D
 | 14 | Font geometry matrix, 2×2 at 384 KiB | `--benchmark --pipeline --matrix-budget 384 --matrix-glyphs` |
 | 15 | Native rectangle / queue / budget matrix, 2×2 at 384 KiB | `--benchmark --pipeline --matrix-budget 384 --matrix-rectangles` |
 | 32 | SDK-only geometry improvements, original source and depth/publication limits; all nine cases | `--benchmark --pipeline` |
-| 34 | SDK geometry plus bounded batching/reuse and row preparation; all nine cases | `--benchmark --pipeline` |
+| 34 | SDK geometry plus bounded batching/reuse and row preparation; scanned-policy control | `--benchmark --pipeline` |
 
 Run `scripts/dolphin_texture_test.py PATH.dol --mode pages --streaming --backend OGL --seconds 180 --logs FRESH_DIRECTORY` plus the table's checker arguments. CI allows 360 seconds for slower hosts. Local comparisons use the same Debian trixie software-OpenGL image, CPUThread=false and full texture-cache hashing. They are emulator results, not measured GameCube hardware speedups.
 
 Do not retire validation switches or the legacy read mode until repeated performance and hardware validation establish the preferred path. Keep historical protocol/results intact. More background threads were not added: on the single CPU they would not parallelize managed work, would consume stack/queue memory, and are not supported by evidence from this procedural workload.
+
+## Remaining policy cost and measured plateau
+
+The full nine-case regression exposed a workload bottleneck that the 2×2 focus matrix did not: with 96 small pages, repeated linear residency/membership scans consume the budget freed by the SDK. Mode 34 at pages/384 KiB measured 32.54 ms mean, 33.5 ms P99 and 51.96% moving detail in the paired policy matrix. Mode 38 adds direct slot/desired indices without changing priority, evictions or publication limits: 16.71 ms mean, 17.0 ms P99 and 98.24% moving detail; its repeat measured 16.78 ms, 17.2 ms and 98.24%.
+
+The indices use 3 KiB of managed payload plus two array headers; all policy-matrix controls allocate the same indices. The managed heap and 84 KiB staging pool are unchanged. Host route/reversal tests compare the indexed and scanned policies at every layout/budget, including request ordering, selected victims, identities, visible coverage and useful/native bytes. This is a workload policy optimization, not part of the SDK-only claim.
+
+A fifth job measured 16.82 ms / 17.2 ms / 98.18%; a tighter 750 µs budget measured 16.82 ms / 17.2 ms / 97.42%. Two jobs reduce throughput to 96.22% detail. Four jobs/publications are retained. Within this tested path the mean has reached roughly the 60 Hz interval, and these adjacent variants add no repeatable gain. This does not establish a global limit on future SDK optimizations or constitute a hardware speedup measurement.
+
+Additional build modes: `16` is the pages/384 KiB policy matrix (`--matrix-budget 384 --matrix-group 1 --matrix-policy`); `38` is the combined SDK, row, queue and indexed-policy nine-case run. Original mode `34` remains the scanned-policy control.
+
+## Final nine-case validation
+
+The final mode-38 DOL passes all nine cases plus the stress-mode return. Frame means span 16.68–16.78 ms and P99 spans 16.7–17.2 ms at the same native budgets, heap limit, scratch pool and video mode. Moving coverage is:
+
+| Budget KiB | Pages | 2×2 | 4×4 |
+| --- | ---: | ---: | ---: |
+| 192 | 96.62% | 82.11% | 70.27% |
+| 256 | 97.96% | 95.65% | 88.42% |
+| 384 | 98.25% | 99.39% | 99.29% |
+
+The low-budget large-atlas rows remain capacity/granularity constrained; their unchanged independent static ceiling is still checked. These coverage values should not be merged with Hypercube's selected-LOD readiness metric.

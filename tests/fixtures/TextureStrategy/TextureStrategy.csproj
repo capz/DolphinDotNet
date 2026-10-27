@@ -42,4 +42,9 @@
   <PropertyGroup Condition="'$(DndTextureOptimization)' == '35'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_35</DefineConstants></PropertyGroup>
   <PropertyGroup Condition="'$(DndTextureOptimization)' == '36'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_36</DefineConstants></PropertyGroup>
   <PropertyGroup Condition="'$(DndTextureOptimization)' == '37'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_37</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '38'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_38</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '39'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_39</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '40'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_40</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '41'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_41</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '16'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_16</DefineConstants></PropertyGroup>
 </Project>

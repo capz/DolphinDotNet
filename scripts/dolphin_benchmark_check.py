@@ -86,7 +86,7 @@ def capture_states(raw):
     return states
 
 
-def validate_benchmark(raw, pipeline=False, matrix_budget=0, glyph_matrix=False, rectangle_matrix=False):
+def validate_benchmark(raw, pipeline=False, matrix_budget=0, glyph_matrix=False, rectangle_matrix=False, policy_matrix=False, matrix_group=2):
     if len(raw) % FRAME_BYTES:
         raise ValueError("Incomplete benchmark RGB frame")
     phase, stress_base, bench_base = 0, None, None
@@ -150,7 +150,7 @@ def validate_benchmark(raw, pipeline=False, matrix_budget=0, glyph_matrix=False,
                 raise AssertionError("GPU/retrace waits must be subsets of EndFrame")
             if complete:
                 timing_cases[case] = strip
-        if not 0 <= case < 9 or state["group"] != (2 if matrix_budget else (1, 2, 4)[case % 3]) or state["budgetKiB"] != (matrix_budget or (192, 256, 384)[case // 3]):
+        if not 0 <= case < 9 or state["group"] != (matrix_group if matrix_budget else (1, 2, 4)[case % 3]) or state["budgetKiB"] != (matrix_budget or (192, 256, 384)[case // 3]):
             raise AssertionError("Wrong comparison layout/budget")
         if state["residentKiB"] > state["budgetKiB"] or state["peakResidentKiB"] > state["budgetKiB"]:
             raise AssertionError("Comparison cache exceeded native byte budget")
@@ -179,7 +179,7 @@ def validate_benchmark(raw, pipeline=False, matrix_budget=0, glyph_matrix=False,
         samples.append(state)
     if prefix < 5 or suffix < 5:
         raise AssertionError("The same DOL must run original stress mode before AND after comparison")
-    if set(cases) != set(range(9)) or previous_mask != 511 or groups_with_detail != ({2} if matrix_budget else {1, 2, 4}):
+    if set(cases) != set(range(9)) or previous_mask != 511 or groups_with_detail != ({matrix_group} if matrix_budget else {1, 2, 4}):
         raise AssertionError(f"Missing completed benchmark cases: {sorted(set(range(9)) - set(cases))}; "
                              f"completed mask={previous_mask}, rendered groups={sorted(groups_with_detail)}")
     if pipeline and set(pipeline_cases) != set(range(9)):
@@ -190,7 +190,7 @@ def validate_benchmark(raw, pipeline=False, matrix_budget=0, glyph_matrix=False,
         state.update(timing_cases[case])
         if case in pipeline_cases:
             state.update(pipeline_cases[case])
-            if matrix_budget and state["optimizationMode"] != ((0,31,32,33,34,35,36,37,34) if rectangle_matrix else (0,19,25,18,26,27,28,29,26) if glyph_matrix else (0,14,2,15,16,17,7,9,11))[case]:
+            if matrix_budget and state["optimizationMode"] != ((0,32,34,38,39,40,41,38,34) if policy_matrix else (0,31,32,33,34,35,36,37,34) if rectangle_matrix else (0,19,25,18,26,27,28,29,26) if glyph_matrix else (0,14,2,15,16,17,7,9,11))[case]:
                 raise AssertionError("Wrong pipeline matrix mode")
             if state["published"] != state["promotions"] or not 1 <= state["maxPublications"] <= state["publicationCap"]:
                 raise AssertionError("Invalid publication accounting")
@@ -201,7 +201,7 @@ def validate_benchmark(raw, pipeline=False, matrix_budget=0, glyph_matrix=False,
             state.update(mean_cases[case])
             if state["pendingPeak"]>state["preparationDepth"] or state["readyPeak"]>state["preparationDepth"]:
                 raise AssertionError("Unbounded pipeline queue")
-            clear=state["optimizationMode"] in (2,7,8,9,10,11,15,16,17,18,26,27,28,29,33,34,35,36,37)
+            clear=state["optimizationMode"] in (2,7,8,9,10,11,15,16,17,18,26,27,28,29,33,34,35,36,37,38,39,40,41)
             if clear and state["beginCopies"]>1:
                 raise AssertionError("Same-color completed clear reuse was not exercised")
             if not clear and state["beginCopies"]<state["timingSamples"]-1:

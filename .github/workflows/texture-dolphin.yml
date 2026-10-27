@@ -50,7 +50,7 @@ jobs:
             budget: 384
           - configuration: Release
             mode: optimized
-            optimization: 34
+            optimization: 38
           - configuration: Release
             mode: glyphs
             optimization: 14
@@ -58,6 +58,10 @@ jobs:
           - configuration: Release
             mode: rectangles
             optimization: 15
+            budget: 384
+          - configuration: Release
+            mode: policy
+            optimization: 16
             budget: 384
     steps:
       - uses: actions/checkout@v4
@@ -106,7 +110,7 @@ jobs:
           tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
           --mode ${{ matrix.mode == 'atlas' && 'atlas' || 'pages' }} --streaming
           ${{ (matrix.mode == 'benchmark' || matrix.optimization) && '--benchmark --pipeline' || '' }}
-          ${{ matrix.mode == 'glyphs' && '--matrix-glyphs' || matrix.mode == 'rectangles' && '--matrix-rectangles' || '' }}
+          ${{ matrix.mode == 'glyphs' && '--matrix-glyphs' || matrix.mode == 'rectangles' && '--matrix-rectangles' || matrix.mode == 'policy' && '--matrix-policy --matrix-group 1' || '' }}
           --matrix-budget ${{ matrix.budget || '0' }} --backend OGL
           --seconds ${{ (matrix.mode == 'benchmark' || matrix.optimization) && '360' || '90' }}
           --logs out/dolphin-texture
@@ -133,7 +137,11 @@ jobs:
           name: texture-dolphin-${{ matrix.configuration }}-${{ matrix.mode }}
           if-no-files-found: warn
           path: |
-            out/dolphin-texture/
+            out/dolphin-texture/*.png
+            out/dolphin-texture/*.json
+            out/dolphin-texture/*.log
+            out/dolphin-texture/user/Logs/
+            out/dolphin-texture/user/Dump/Frames/*.avi
             tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/*.dol
             tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/*.elf
 

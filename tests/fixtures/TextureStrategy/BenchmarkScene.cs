@@ -44,7 +44,7 @@ internal sealed class BenchmarkScene : IDisposable
     internal bool Completed => completedMask == 511;
     internal bool ResultsReady=>Completed&&Current.CanAdvance(Clock.Timestamp,4000000);
     private BenchmarkResult Current => results[currentCase];
-    internal static int GroupFor(int index) => BenchmarkOptions.Matrix?2:index % 3 == 0 ? 1 : index % 3 == 1 ? 2 : 4;
+    internal static int GroupFor(int index) => BenchmarkOptions.Matrix?BenchmarkOptions.MatrixGroup:index % 3 == 0 ? 1 : index % 3 == 1 ? 2 : 4;
     internal static int BudgetFor(int index) => BenchmarkOptions.Matrix?BenchmarkOptions.MatrixBudget:index / 3 == 0 ? 192 : index / 3 == 1 ? 256 : 384;
     private static string Label(int index) => BenchmarkOptions.Matrix?"M"+index:index % 3 == 0 ? "PAGE" : index % 3 == 1 ? "A2X2" : "A4X4";
     internal BenchmarkScene()
@@ -100,6 +100,7 @@ internal sealed class BenchmarkScene : IDisposable
         }
         BenchmarkOptions.SelectCase(index);
         currentCase = selected = index; Current.Begin(histogram); completedMask &= ~(1 << index);
+        model.IndexedPolicy=BenchmarkOptions.IndexedPolicy;
         model.Configure(GroupFor(index), BudgetFor(index));
         // Fixed original 84 KiB scratch: large images cannot pipeline without
         // stealing residency memory or increasing the 256 KiB managed heap.
