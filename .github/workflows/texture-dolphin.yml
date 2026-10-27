@@ -2,7 +2,7 @@ name: TextureStrategy in Dolphin
 
 on:
   push:
-    branches: [main, experiment/virtual-texture-vs-atlas, codex/texture-strategy-startup-diagnostics, codex/texture-residency-streaming, codex/texture-comparison-mode, codex/texture-stage-timings]
+    branches: [main, experiment/virtual-texture-vs-atlas, codex/texture-strategy-startup-diagnostics, codex/texture-residency-streaming, codex/texture-comparison-mode]
   pull_request:
     paths:
       - 'samples/TextureStrategy/**'
