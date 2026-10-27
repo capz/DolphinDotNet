@@ -18,6 +18,20 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <stdatomic.h>
+#include "dnd_async.h"
+/* Optional when linking storage-only bootstrap/host fixtures. */
+extern void dnd_async_wait_external(void) __attribute__((weak));
+extern int dnd_async_native_begin(void) __attribute__((weak));
+extern void dnd_async_native_end(int) __attribute__((weak));
+extern uint64_t dnd_buffer_io_begin(int,int,int) __attribute__((weak));
+extern void dnd_buffer_io_end(int) __attribute__((weak));
+static atomic_uint asset_io_busy;
+static void storage_barrier(void) {
+    while(atomic_load_explicit(&asset_io_busy,memory_order_acquire)) {
+        if(dnd_async_wait_external)dnd_async_wait_external();
+    }
+}
 
 #define PATH_CAP 1024
 #define HANDLE_CAP 32
@@ -32,17 +46,23 @@ static int auto_defrag_min_bytes = 64 * 1024;
 static int64_t auto_stats[8];
 static int auto_last_result=-1; /* -1=none; 0..3=optimizer; 4=reserved; 5=error */
 int64_t dnd_storage_auto_defrag_stat(int kind) {
+  storage_barrier();
   if(kind==8)return auto_last_result;
   return kind>=0 && kind<8?auto_stats[kind]:0;
 }
 void dnd_storage_auto_defrag_reset_stats(void) {
+  storage_barrier();
   memset(auto_stats,0,sizeof(auto_stats));
   auto_last_result=-1;
 }
-bool dnd_storage_auto_defrag_enabled(void) { return auto_defrag_enabled; }
-void dnd_storage_auto_defrag_set(bool enabled) { auto_defrag_enabled = enabled; }
-int dnd_storage_auto_defrag_min_size(void) { return auto_defrag_min_bytes; }
+bool dnd_storage_auto_defrag_enabled(void) {
+  storage_barrier(); return auto_defrag_enabled; }
+void dnd_storage_auto_defrag_set(bool enabled) {
+  storage_barrier(); auto_defrag_enabled = enabled; }
+int dnd_storage_auto_defrag_min_size(void) {
+  storage_barrier(); return auto_defrag_min_bytes; }
 void dnd_storage_auto_defrag_set_min_size(int minimum) {
+  storage_barrier();
   if(minimum<0) { dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Invalid minimum file size.");return; }
   auto_defrag_min_bytes=minimum;
 }
@@ -271,8 +291,10 @@ static bool valid_device(int d) {
   }
   return true;
 }
-bool dnd_storage_is_mounted(int d) { return valid_device(d) && mounted[d]; }
+bool dnd_storage_is_mounted(int d) {
+  storage_barrier(); return valid_device(d) && mounted[d]; }
 bool dnd_storage_mount(int d) {
+  storage_barrier();
   if (!valid_device(d))
     return false;
   if (d == 4 || d == 5) {
@@ -311,6 +333,7 @@ bool dnd_storage_mount(int d) {
   return mounted[d];
 }
 bool dnd_storage_mount_disc(int format) {
+  storage_barrier();
   if(format!=1&&format!=2){fail(EINVAL,"Invalid disc format.");return false;}
   if(mounted[3]){fail(EBUSY,"Unmount the disc before selecting a format.");return false;}
 #ifdef DND_GAMECUBE_STORAGE
@@ -321,6 +344,7 @@ bool dnd_storage_mount_disc(int format) {
 #endif
 }
 bool dnd_storage_mount_disc_image(DndString *path) {
+  storage_barrier();
   char canonical[PATH_CAP], native[PATH_CAP];
   if (!path) {
     fail(EINVAL, "ISO image path is null.");
@@ -356,6 +380,7 @@ bool dnd_storage_mount_disc_image(DndString *path) {
 /* Same immutable 0x440 boot header for a native disc or an ISO backed dvd:/.
  * The FST parser snapshots these bytes when mounting the volume. */
 DndArray *dnd_storage_disc_header(DndManagedHeap *heap) {
+  storage_barrier();
   if (!mounted[3]) {
     fail(ENODEV, "Mount a GameCube disc at dvd:/ first.");
     return NULL;
@@ -378,6 +403,7 @@ DndArray *dnd_storage_disc_header(DndManagedHeap *heap) {
 #endif
 }
 int dnd_fs_open_handles(void) {
+  storage_barrier();
   int n = 0;
   for (int i = 0; i < HANDLE_CAP; i++) {
     n += files[i].token != 0;
@@ -392,6 +418,7 @@ static bool busy(const char *path) {
   return false;
 }
 void dnd_storage_unmount(int d) {
+  storage_barrier();
   if (!valid_device(d) || !mounted[d])
     return;
   if(contiguous_tokens[d]) {
@@ -423,6 +450,7 @@ void dnd_storage_unmount(int d) {
   if (d == 3) iso_source_device = -1;
 }
 void dnd_storage_shutdown(void) {
+  storage_barrier();
   for(int d=0;d<7;d++) {
     if(contiguous_tokens[d]) {
       dnd_contiguous_abort(&contiguous_writers[d]);
@@ -439,12 +467,14 @@ void dnd_storage_shutdown(void) {
   for (int d = 0; d < 7; d++) dnd_storage_unmount(d);
 }
 DndString *dnd_fs_full_path(DndManagedHeap *heap, DndString *path) {
+  storage_barrier();
   char raw[PATH_CAP], out[PATH_CAP];
   if (!utf8(path, raw) || normalize(raw, out) < 0)
     return NULL;
   return dnd_string_from_utf8(heap, out);
 }
 bool dnd_fs_path_utf8_native(DndString *path, char *output, unsigned capacity) {
+  storage_barrier();
   char raw[PATH_CAP], canonical[PATH_CAP];
   if (!output || !utf8(path, raw) || normalize(raw, canonical) < 0)
     return false;
@@ -457,6 +487,7 @@ bool dnd_fs_path_utf8_native(DndString *path, char *output, unsigned capacity) {
   return true;
 }
 int dnd_fs_open_utf8_native(const char *path, int mode, int access, int share) {
+  storage_barrier();
   if (!path) {
     fail(EINVAL, "Null native asset path.");
     return 0;
@@ -508,6 +539,7 @@ invalid:
   return 0;
 }
 DndString *dnd_storage_path(DndManagedHeap *heap, int d, DndString *path) {
+  storage_barrier();
   if (!valid_device(d))
     return NULL;
   if (d == 4 || d == 5) {
@@ -531,6 +563,7 @@ DndString *dnd_storage_path(DndManagedHeap *heap, int d, DndString *path) {
   return dnd_string_from_utf8(heap, out);
 }
 bool dnd_fs_exists(DndString *path, bool directory) {
+  storage_barrier();
   // Exists never raises, including invalid UTF-16, missing volumes and invalid
   // paths.
   DndEhFrame frame;
@@ -589,6 +622,7 @@ static ssize_t aligned_write(int fd, const void *data, size_t count) {
   return write(fd, buffer, count);
 }
 int dnd_fs_open(DndString *path, int mode, int access, int share) {
+  storage_barrier();
   char canonical[PATH_CAP], native[PATH_CAP];
   int d = resolve(path, canonical, native);
   if (d < 0)
@@ -682,6 +716,7 @@ static bool range(DndArray *a, int offset, int count) {
   return true;
 }
 int dnd_fs_read(int token, DndArray *data, int offset, int count) {
+  storage_barrier();
   FileHandle *h = handle(token);
   if (!h || !range(data, offset, count))
     return 0;
@@ -701,12 +736,14 @@ int dnd_fs_read(int token, DndArray *data, int offset, int count) {
 }
 /* Native asset streaming uses the same mounted paths, sharing and aligned I/O. */
 int64_t dnd_fs_length_native(int token) {
+  storage_barrier();
   for (int i=0;i<HANDLE_CAP;i++) if(files[i].token==token && token>0) {
     struct stat st;return fstat(files[i].fd,&st)==0?(int64_t)st.st_size:-1;
   }
   return -1;
 }
 int dnd_fs_read_native(int token, void *data, int count) {
+  storage_barrier();
   FileHandle *h = handle(token);
   if (!h) return -1;
   if (!data || count < 0 || !(h->access & 1)) { fail(EINVAL, "Invalid native read."); return -1; }
@@ -716,6 +753,7 @@ int dnd_fs_read_native(int token, void *data, int count) {
   return (int)n;
 }
 void dnd_fs_write(int token, DndArray *data, int offset, int count) {
+  storage_barrier();
   FileHandle *h = handle(token);
   if (!h || !range(data, offset, count))
     return;
@@ -738,6 +776,7 @@ void dnd_fs_write(int token, DndArray *data, int offset, int count) {
   }
 }
 int64_t dnd_fs_seek(int token, int64_t offset, int origin) {
+  storage_barrier();
   FileHandle *h = handle(token);
   if (!h)
     return 0;
@@ -774,6 +813,7 @@ int64_t dnd_fs_seek(int token, int64_t offset, int origin) {
   return (int64_t)position;
 }
 int64_t dnd_fs_length(int token) {
+  storage_barrier();
   FileHandle *h = handle(token);
   if (!h)
     return 0;
@@ -785,6 +825,7 @@ int64_t dnd_fs_length(int token) {
   return (int64_t)st.st_size;
 }
 void dnd_fs_set_length(int token, int64_t length) {
+  storage_barrier();
   FileHandle *h = handle(token);
   if (!h)
     return;
@@ -813,6 +854,7 @@ void dnd_fs_set_length(int token, int64_t length) {
     fail(errno, "Position update failed.");
 }
 void dnd_fs_flush(int token) {
+  storage_barrier();
   FileHandle *h = handle(token);
   if (h && (h->access & 2) && fsync(h->fd))
     fail(errno, "Flush failed.");
@@ -877,6 +919,7 @@ static void auto_clean_file(const char *canonical,int device) {
  * They must not run while another managed handle still references the file:
  * a rename would leave that handle bound to the old allocation. */
 int dnd_fs_defrag_analyze(DndString *path) {
+  storage_barrier();
   char canonical[PATH_CAP],native[PATH_CAP];
   int d=resolve(path,canonical,native);
   if(d<0)return -1;
@@ -894,6 +937,7 @@ int dnd_fs_defrag_analyze(DndString *path) {
 #endif
 }
 int dnd_fs_defrag_optimize(DndString *path) {
+  storage_barrier();
   char canonical[PATH_CAP],native[PATH_CAP],root[PATH_CAP];
   int d=resolve(path,canonical,native);
   if(d<0)return -1;
@@ -960,6 +1004,7 @@ static int auto_contiguous_write(DndString *path,DndArray *data) {
 }
 
 void dnd_fs_close(int token) {
+  storage_barrier();
   FileHandle *h = handle(token);
   if (!h)
     return;
@@ -975,6 +1020,7 @@ void dnd_fs_close(int token) {
   if(dirty && !dnd_exception_pending())auto_clean_file(canonical,device);
 }
 DndArray *dnd_fs_read_all(DndManagedHeap *heap, DndString *path) {
+  storage_barrier();
   char canonical[PATH_CAP], native[PATH_CAP];
   if (resolve(path, canonical, native) < 0)
     return NULL;
@@ -1039,6 +1085,7 @@ DndArray *dnd_fs_read_all(DndManagedHeap *heap, DndString *path) {
   return result;
 }
 void dnd_fs_write_all(DndString *path, DndArray *data) {
+  storage_barrier();
   if (!data) {
     dnd_exception_throw(DND_EXCEPTION_ARGUMENT_NULL, "Data is null.");
     return;
@@ -1072,6 +1119,7 @@ void dnd_fs_write_all(DndString *path, DndArray *data) {
   else auto_clean_file(canonical,device);
 }
 void dnd_fs_delete(DndString *path, bool directory) {
+  storage_barrier();
   char canonical[PATH_CAP], native[PATH_CAP];
   int d = resolve(path, canonical, native);
   if (d < 0)
@@ -1093,6 +1141,7 @@ void dnd_fs_delete(DndString *path, bool directory) {
     fail(errno, "Delete failed.");
 }
 void dnd_fs_move(DndString *source, DndString *destination) {
+  storage_barrier();
   char a[PATH_CAP], an[PATH_CAP], b[PATH_CAP], bn[PATH_CAP];
   int ad = resolve(source, a, an), bd = resolve(destination, b, bn);
   if (ad < 0 || bd < 0)
@@ -1136,6 +1185,7 @@ static int contiguous_find(int token) {
   return -1;
 }
 int dnd_fs_contiguous_begin(DndString *path,int64_t length) {
+  storage_barrier();
   char canonical[PATH_CAP],native[PATH_CAP],root[PATH_CAP];
   int d=resolve(path,canonical,native);
   if(d<0)return 0;
@@ -1166,12 +1216,14 @@ int dnd_fs_contiguous_begin(DndString *path,int64_t length) {
   return token;
 }
 void dnd_fs_contiguous_write(int token,DndArray *data,int offset,int count) {
+  storage_barrier();
   int d=contiguous_find(token);
   if(d<0 || !range(data,offset,count))return;
   int rc=dnd_contiguous_write(&contiguous_writers[d],data->data+offset,(size_t)count);
   if(rc<0)fail(-rc,"Contiguous file write failed.");
 }
 void dnd_fs_contiguous_complete(int token) {
+  storage_barrier();
   int d=contiguous_find(token);
   if(d<0)return;
   int rc=dnd_contiguous_complete(&contiguous_writers[d]);
@@ -1179,6 +1231,7 @@ void dnd_fs_contiguous_complete(int token) {
   if(rc<0)fail(-rc,"Contiguous file publication failed.");
 }
 void dnd_fs_contiguous_abort(int token) {
+  storage_barrier();
   for(int d=0;d<7;d++)if(token>0 && contiguous_tokens[d]==token) {
     int rc=dnd_contiguous_abort(&contiguous_writers[d]);
     contiguous_tokens[d]=0;
@@ -1188,6 +1241,7 @@ void dnd_fs_contiguous_abort(int token) {
 }
 
 void dnd_fs_mkdir(DndString *path) {
+  storage_barrier();
   char canonical[PATH_CAP], native[PATH_CAP];
   int d = resolve(path, canonical, native);
   if (d < 0)
@@ -1221,6 +1275,7 @@ void dnd_fs_mkdir(DndString *path) {
     }
 }
 int dnd_fs_dir_open(DndString *path) {
+  storage_barrier();
   char canonical[PATH_CAP], native[PATH_CAP];
   if (resolve(path, canonical, native) < 0)
     return 0;
@@ -1253,6 +1308,7 @@ static DirectoryHandle *dir_handle(int token) {
   return NULL;
 }
 DndString *dnd_fs_dir_next(DndManagedHeap *heap, int token, int kind) {
+  storage_barrier();
   DirectoryHandle *h = dir_handle(token);
   if (!h)
     return NULL;
@@ -1304,6 +1360,7 @@ DndString *dnd_fs_dir_next(DndManagedHeap *heap, int token, int kind) {
   }
 }
 void dnd_fs_dir_close(int token) {
+  storage_barrier();
   DirectoryHandle *h = dir_handle(token);
   if (!h)
     return;
@@ -1313,9 +1370,11 @@ void dnd_fs_dir_close(int token) {
     fail(errno, "Directory close failed.");
 }
 DndString *dnd_fs_getcwd(DndManagedHeap *heap) {
+  storage_barrier();
   return dnd_string_from_utf8(heap, cwd);
 }
 void dnd_fs_setcwd(DndString *path) {
+  storage_barrier();
   char canonical[PATH_CAP], native[PATH_CAP];
   if (resolve(path, canonical, native) < 0)
     return;
@@ -1359,6 +1418,7 @@ static bool card_arguments(int d, DndString *name, char out[PATH_CAP]) {
   return true;
 }
 bool dnd_card_mount(int d, DndString *game, DndString *company) {
+  storage_barrier();
   if (!valid_device(d))
     return false;
   if (d != 4 && d != 5) {
@@ -1517,6 +1577,7 @@ static bool save_header(int d, const char *n, uint32_t *length,
   return true;
 }
 int dnd_card_length(int d, DndString *name) {
+  storage_barrier();
   char n[PATH_CAP];
   uint32_t length, offset;
   if (!card_arguments(d, name, n) || !save_header(d, n, &length, &offset))
@@ -1524,6 +1585,7 @@ int dnd_card_length(int d, DndString *name) {
   return (int)length;
 }
 DndArray *dnd_card_read(DndManagedHeap *heap, int d, DndString *name) {
+  storage_barrier();
   char n[PATH_CAP];
   uint32_t length, offset;
   if (!card_arguments(d, name, n) || !save_header(d, n, &length, &offset))
@@ -1601,14 +1663,17 @@ static void write_save(int d, DndString *name, DndArray *data, DndString *title,
     fail(-rc, "Memory card write failed.");
 }
 void dnd_card_write(int d, DndString *name, DndArray *data) {
+  storage_barrier();
   write_save(d, name, data, NULL, NULL, NULL, NULL, false);
 }
 void dnd_card_write_save(int d, DndString *name, DndArray *data,
                          DndString *title, DndString *comment, DndArray *banner,
                          DndArray *icon) {
+  storage_barrier();
   write_save(d, name, data, title, comment, banner, icon, true);
 }
 void dnd_card_delete(int d, DndString *name) {
+  storage_barrier();
   char n[PATH_CAP];
   if (!card_arguments(d, name, n))
     return;
@@ -1625,6 +1690,7 @@ void dnd_card_delete(int d, DndString *name) {
 #endif
 }
 DndArray *dnd_card_entries(DndManagedHeap *heap, int d) {
+  storage_barrier();
   if (!valid_device(d) || (d != 4 && d != 5) || !mounted[d]) {
     fail(ENODEV, "Memory card is not mounted.");
     return NULL;
@@ -1691,4 +1757,33 @@ DndArray *dnd_card_entries(DndManagedHeap *heap, int d) {
   }
   dnd_gc_frame_pop(&roots_frame);
   return result;
+}
+
+/* One bounded logical read; only OS/backend I/O and native memory while detached.
+ * All other storage entry points wait before touching shared backend state.
+ * The managed AssetStream owns the file until completion; close/unmount wait too. */
+int dnd_asset_open(DndString *path) { return dnd_fs_open(path,3,1,1); }
+int dnd_asset_read(int token,int64_t offset,int buffer,int destination,int count) {
+  storage_barrier();
+  FileHandle *h=handle(token);
+  if(!h)return -1;
+  if(offset<0||count<0||!(h->access&1)||(int64_t)(off_t)offset!=offset||
+     !dnd_buffer_io_begin||!dnd_buffer_io_end) {fail(EINVAL,"Invalid asset read.");return -1;}
+  uint64_t address=dnd_buffer_io_begin(buffer,destination,count);
+  if(!address){fail(EBUSY,"Asset destination is busy or invalid.");return -1;}
+  int fd=h->fd,done=0,error=0;
+  atomic_store_explicit(&asset_io_busy,1,memory_order_release);
+  int context=dnd_async_native_begin?dnd_async_native_begin():-1;
+  if(lseek(fd,(off_t)offset,SEEK_SET)<0)error=errno;
+  while(!error&&done<count) {
+    ssize_t n=aligned_read(fd,(unsigned char*)(uintptr_t)address+done,(size_t)(count-done));
+    if(n<0){if(errno==EINTR)continue;error=errno;break;}
+    if(!n)break;
+    done+=(int)n;
+  }
+  atomic_store_explicit(&asset_io_busy,0,memory_order_release);
+  if(dnd_async_native_end)dnd_async_native_end(context);
+  dnd_buffer_io_end(buffer);
+  if(error){fail(error,"Native asset read failed.");return -1;}
+  return done;
 }

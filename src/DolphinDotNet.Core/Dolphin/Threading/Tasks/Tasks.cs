@@ -5,8 +5,24 @@ namespace Dolphin.Threading.Tasks
     /// <summary>Runtime-owned dispatch. Normal application awaits need no pumps.</summary>
     public static class Scheduler
     {
-        private static readonly List<Action> applicationQueue=new List<Action>();
-        private static readonly List<Action> backgroundQueue=new List<Action>();
+        private sealed class WorkQueue
+        {
+            private Action?[] items=new Action?[16];private int head,count;
+            internal int Count=>count;
+            internal void Add(Action action)
+            {
+                if(count==items.Length){var next=new Action?[items.Length*2];for(int i=0;i<count;i++)next[i]=items[(head+i)%items.Length];items=next;head=0;}
+                items[(head+count)%items.Length]=action;count++;
+            }
+            internal Action Take(){var action=items[head]!;items[head]=null;head=(head+1)%items.Length;count--;return action;}
+        }
+        private static readonly WorkQueue applicationQueue=new WorkQueue();
+        private static readonly WorkQueue backgroundQueue=new WorkQueue();
+        /// <summary>Cooperative block budget; 1 retains the legacy clock-poll cadence.</summary>
+        public static bool ProductiveWaits {set=>NativeAsync.AsyncProductiveWaits(value?1:0);}
+        public static int PollStride {set=>NativeAsync.AsyncPollStride(value);}
+        public static long PollCalls=>NativeAsync.AsyncPollStat(0);
+        public static long SlowPollCalls=>NativeAsync.AsyncPollStat(1);
         public static bool IsApplicationThread=>NativeAsync.AsyncContext()==0;
         internal static int Context=>NativeAsync.AsyncContext();
         public static void Post(Action action)=>Post(action,Context);
@@ -29,7 +45,7 @@ namespace Dolphin.Threading.Tasks
             int available=queue.Count,count=0;
             while(count<maximumActions&&count<available&&queue.Count!=0)
             {
-                var action=queue[0];queue.RemoveAt(0);count++;action();
+                var action=queue.Take();count++;action();
             }
             return count;
         }

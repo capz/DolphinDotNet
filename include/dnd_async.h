@@ -10,7 +10,13 @@ void dnd_async_stop(void);
 bool dnd_async_running(void);
 int dnd_async_context(void); /* 0=application, 1=background */
 void dnd_async_wake(void);
+void dnd_async_wait_external(void); /* Release gate while external native work is pending. */
 void dnd_async_progress(void); /* Standard Task.Wait/GetResult integration. */
+void dnd_async_productive_waits(int enabled);
+int dnd_async_app_wait_begin(void);
+void dnd_async_app_wait_end(int context);
+void dnd_async_poll_stride(int stride);
+int64_t dnd_async_poll_stat(int kind);
 void dnd_async_safepoint(void); /* Application AOT blocks, never runtime internals. */
 void dnd_async_require_application_thread(void);
 void dnd_async_enter_critical(void); /* Atomic class initialization. */

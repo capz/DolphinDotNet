@@ -28,6 +28,13 @@ public sealed class Renderer
     /// stream, splitting only at the backend's 768-vertex hardware staging
     /// limit. All meshes must share the given material AND world transform.
     /// Native validates every source before submitting any draw.</summary>
+    public void DrawMeshBatch(Mesh[] meshes,int count,int[] scratch,Material material,Transform transform)
+    {
+        if(meshes==null||scratch==null)throw new ArgumentNullException();
+        if(count<1||count>128||count>meshes.Length||count>scratch.Length)throw new ArgumentOutOfRangeException("count");
+        for(int i=0;i<count;i++){if(meshes[i]==null)throw new ArgumentException("Null mesh.");meshes[i].Check();scratch[i]=meshes[i].Token;}
+        DrawMeshBatch(scratch,count,material,transform);
+    }
     internal void DrawMeshBatch(int[] meshTokens,int count,Material material,Transform transform)
     {
         if(meshTokens==null||material==null||transform==null)throw new ArgumentNullException();

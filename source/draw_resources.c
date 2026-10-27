@@ -21,7 +21,7 @@ typedef struct {
     void *allocation;
     unsigned char *data;
     int kind,bytes,generation;
-    bool pending;
+    bool pending,io_busy;
     int holds;
     int effect;
     int width,height,format,linear,vertices,indices,dynamic,capacity,count,texture,blend,draws,flushes;
@@ -75,7 +75,7 @@ void dnd_draw_collect(void) { for(int i=0;i<SLOTS;i++) if(slots[i].pending && !s
 /* DMA pins survive managed Dispose, but do not permit new GPU submissions. */
 int dnd_buffer_hold(int token) {
     Resource *r=find(token,BUFFER);
-    if(!r || r->holds==INT_MAX)return -1;
+    if(!r || r->io_busy || r->holds==INT_MAX)return -1;
     ++r->holds;return 0;
 }
 int dnd_buffer_unhold(int token) {
@@ -92,7 +92,7 @@ uint64_t dnd_buffer_held_address(int token,int offset,int count) {
     int index=(token&1023)-1;
     if(index<0 || index>=SLOTS || token<=0 || offset<0 || count<0)return 0;
     Resource *r=&slots[index];
-    if(r->kind!=BUFFER || r->generation!=(token>>10) || r->holds<=0 ||
+    if(r->kind!=BUFFER || r->generation!=(token>>10) || r->holds<=0 || r->io_busy ||
        offset>r->bytes || count>r->bytes-offset)return 0;
     return (uint64_t)(uintptr_t)(r->data+offset);
 }
@@ -100,10 +100,24 @@ void dnd_draw_shutdown(void) { active_canvas=0;for(int i=0;i<SLOTS;i++) if(slots
 int dnd_draw_live(void) { int n=0;for(int i=0;i<SLOTS;i++) if(slots[i].kind)n++;return n; }
 int dnd_draw_total_bytes(void) { return total_bytes; }
 int dnd_draw_bytes(int token) { Resource *r=find(token,0);return r?r->bytes:-1; }
+uint64_t dnd_buffer_io_begin(int token,int offset,int count) {
+    Resource *r=find(token,BUFFER);
+    if(!r || r->holds || r->io_busy || offset<0 || count<0 || offset>r->bytes || count>r->bytes-offset)return 0;
+    r->holds++;r->io_busy=true;return (uint64_t)(uintptr_t)(r->data+offset);
+}
+void dnd_buffer_io_end(int token) {
+    int index=(token&1023)-1;
+    if(index<0||index>=SLOTS)return;
+    Resource *r=&slots[index];
+    if(r->kind!=BUFFER||r->generation!=(token>>10)||!r->io_busy)return;
+    r->io_busy=false;--r->holds;
+    /* This exclusive BUFFER lease never permits GPU/DMA use while owned. */
+    if(!r->holds&&r->pending&&!dnd_device_active())release(r);
+}
 int dnd_buffer_create(int bytes,int alignment) { return create(BUFFER,bytes,alignment); }
 uint64_t dnd_buffer_address(int token,int offset) {
     Resource *r=find(token,BUFFER);
-    if(!r || offset<0 || offset>r->bytes) { dnd_exception_throw(DND_EXCEPTION_OBJECT_DISPOSED,"Invalid native buffer address.");return 0; }
+    if(!r || r->io_busy || offset<0 || offset>r->bytes) { dnd_exception_throw(DND_EXCEPTION_OBJECT_DISPOSED,"Invalid native buffer address.");return 0; }
     return (uint64_t)(uintptr_t)(r->data+offset);
 }
 static bool array_range(DndArray *a,int index,int count) {
@@ -111,7 +125,7 @@ static bool array_range(DndArray *a,int index,int count) {
 }
 int dnd_buffer_copy(int token,int offset,DndArray *array,int index,int count,int write) {
     Resource *r=find(token,BUFFER);
-    if(dnd_raw_depth() || dnd_device_active() || !r || !array_range(array,index,count) || offset<0 || offset>r->bytes || (size_t)count*array->element_size>(size_t)(r->bytes-offset)) return -1;
+    if(dnd_raw_depth() || dnd_device_active() || !r || r->io_busy || !array_range(array,index,count) || offset<0 || offset>r->bytes || (size_t)count*array->element_size>(size_t)(r->bytes-offset)) return -1;
     void *p=(unsigned char*)array->data+(size_t)index*array->element_size;
     if(write) memcpy(r->data+offset,p,(size_t)count*array->element_size);
     else memcpy(p,r->data+offset,(size_t)count*array->element_size);
@@ -119,7 +133,7 @@ int dnd_buffer_copy(int token,int offset,DndArray *array,int index,int count,int
 }
 int dnd_buffer_flush(int token,int offset,int count,int invalidate) {
     Resource *r=find(token,BUFFER);
-    if(dnd_raw_depth() || !r || offset<0 || count<0 || offset>r->bytes || count>r->bytes-offset) return -1;
+    if(dnd_raw_depth() || !r || r->io_busy || offset<0 || count<0 || offset>r->bytes || count>r->bytes-offset) return -1;
     dnd_draw_backend_flush(r->data+offset,count,invalidate);return 0;
 }
 static int texture_size(int w,int h,int format) {
@@ -174,7 +188,7 @@ int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int 
  * managed byte-array roundtrip. Source must remain valid for this call. */
 int dnd_texture_update_buffer(int texture_token,int buffer_token,int source_offset,int count) {
     Resource *texture=find(texture_token,TEXTURE),*source=find(buffer_token,BUFFER);
-    if(dnd_device_active() || dnd_raw_depth() || !texture || !source ||
+    if(dnd_device_active() || dnd_raw_depth() || !texture || !source || source->io_busy ||
        source_offset<0 || count!=texture->bytes || source_offset>source->bytes ||
        count>source->bytes-source_offset)return -1;
     dnd_draw_backend_wait();
@@ -259,9 +273,8 @@ static bool vertices(DndArray *a,int first,int count,int format,DndDrawVertex *o
     }
     return true;
 }
-int dnd_mesh_create(DndArray *a,DndArray *indices,int format,int dynamic) {
-    if(dnd_device_active() || !a || a->length<1 || a->length>65535 || !vertex_size(format)) return 0;
-    int n=(int)a->length,m=indices?(int)indices->length:0;
+int dnd_mesh_create_range(DndArray *a,int n,DndArray *indices,int m,int format,int dynamic) {
+    if(dnd_device_active() || !a || n<1 || n>65535 || !array_range(a,0,n) || m<0 || (!indices && m) || !vertex_size(format)) return 0;
     if((m?m:n)%3 || m>3*65535 || (indices && (!array_range(indices,0,m)||indices->element_size!=2))) return 0;
     int token=create(MESH,n*(int)sizeof(DndDrawVertex)+m*2,32);Resource *r=find(token,MESH);if(!r)return 0;
     r->vertices=n;r->indices=m;r->dynamic=dynamic!=0;r->format=format;
@@ -270,6 +283,10 @@ int dnd_mesh_create(DndArray *a,DndArray *indices,int format,int dynamic) {
     if(m){memcpy(index,indices->data,(size_t)m*2);for(int i=0;i<m;i++)if(index[i]>=n){release(r);return 0;}}
     dnd_draw_backend_flush(r->data,r->bytes,0);return token;
 }
+int dnd_mesh_create(DndArray *a,DndArray *indices,int format,int dynamic) {
+    return dnd_mesh_create_range(a,a?(int)a->length:0,indices,indices?(int)indices->length:0,format,dynamic);
+}
+
 int dnd_mesh_update(int token,DndArray *a,int offset,int count,int format) {
     Resource *r=find(token,MESH);
     if(dnd_device_active()||!r||!r->dynamic||r->format!=format||offset<0||count<0||offset>r->vertices||count>r->vertices-offset||!array_range(a,0,count))return -1;
@@ -444,6 +461,19 @@ int dnd_native_object_size(int kind) {
 
 int dnd_buffer_write(int token,int offset,DndArray *array,int index,int count){return dnd_buffer_copy(token,offset,array,index,count,1);}
 int dnd_buffer_read(int token,int offset,DndArray *array,int index,int count){return dnd_buffer_copy(token,offset,array,index,count,0);}
+uint32_t dnd_buffer_crc32(int token,int offset,int count,uint32_t initial) {
+    Resource *r=find(token,BUFFER);
+    if(dnd_device_active()||dnd_raw_depth()||!r||r->io_busy||offset<0||count<0||offset>r->bytes||count>r->bytes-offset){
+        dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Invalid native checksum range or active frame.");return 0;
+    }
+    uint32_t crc=~initial;
+    const unsigned char *p=r->data+offset;
+    for(int i=0;i<count;i++){
+        crc^=p[i];
+        for(int bit=0;bit<8;bit++)crc=(crc>>1)^((crc&1)?0xedb88320u:0u);
+    }
+    return ~crc;
+}
 
 /* Programs are immutable. Uniform writes are forbidden while a frame is active. */
 int dnd_effect_create(DndArray *a) {

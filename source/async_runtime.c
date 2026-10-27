@@ -73,6 +73,24 @@ static DndAsyncDispatch dispatch;
 static bool running, stopping, failed;
 static int owner, dispatch_depth[2], critical_depth[2];
 static uint64_t next_poll[2];
+static bool productive_waits;
+void dnd_async_productive_waits(int enabled){productive_waits=enabled!=0;}
+int dnd_async_app_wait_begin(void) {
+    if(!running||!productive_waits)return -1;
+    if(owner!=0){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Application wait requires app executor.");return -1;}
+    dnd_context_suspend(&contexts[0]);unlock(&gate);return 0;
+}
+void dnd_async_app_wait_end(int context) {
+    if(context<0)return;
+    lock(&gate);dnd_context_resume(&contexts[0]);owner=0;
+}
+static unsigned poll_stride=64,poll_budget[2];
+static uint64_t poll_calls,poll_slow;
+void dnd_async_poll_stride(int stride) {
+    if(stride<1||stride>1024){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Invalid async poll stride.");return;}
+    poll_stride=(unsigned)stride;poll_budget[0]=poll_budget[1]=0;
+}
+int64_t dnd_async_poll_stat(int kind) {return (int64_t)(kind==0?poll_calls:poll_slow);}
 
 /* Called only with the managed execution gate held. This also isolates native
  * EH frames: a longjmp can never target the other executor's C stack. */
@@ -150,6 +168,8 @@ bool dnd_async_running(void) { return running; }
 int dnd_async_context(void) { return owner; }
 void dnd_async_wake(void) { if (running) signal_all(&changed); }
 
+void dnd_async_wait_external(void) { if(running) park(true); }
+
 void dnd_async_progress(void) {
     if (!running) return;
     if (critical_depth[owner] != 0) { dnd_exception_throw(DND_EXCEPTION_NOT_SUPPORTED, "Pending task waits inside class initialization are unsupported."); return; }
@@ -167,6 +187,9 @@ void dnd_async_safepoint(void) {
     if (!running) return;
     if (critical_depth[owner] != 0) return;
     if (stopping && owner == 1 && !dnd_exception_pending()) { dnd_exception_throw(DND_EXCEPTION_OPERATION_CANCELED, "Runtime shutdown."); return; }
+    poll_calls++;
+    if(poll_budget[owner]>1){poll_budget[owner]--;return;}
+    poll_budget[owner]=poll_stride;poll_slow++;
     uint64_t now = now_us();
     if (now < next_poll[owner]) return;
     next_poll[owner] = now + 1000;
