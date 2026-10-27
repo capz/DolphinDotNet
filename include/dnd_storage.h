@@ -59,6 +59,9 @@ void dnd_card_write_save(int device, DndString *name, DndArray *data,
                          DndArray *icon);
 void dnd_card_delete(int device, DndString *name);
 DndArray *dnd_card_entries(DndManagedHeap *, int device);
+void dnd_asset_read_quantum(int bytes);
+void dnd_asset_reset_stats(void);
+int64_t dnd_asset_stat(int kind);
 int dnd_asset_open(DndString *path);
 int dnd_asset_read(int token,int64_t offset,int buffer,int destination,int count);
 // Native diagnostics used by leak/cleanup regression tests.

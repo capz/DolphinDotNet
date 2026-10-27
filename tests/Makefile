@@ -107,7 +107,7 @@ clean:
 	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test
 
 asset_native_test: asset_native_test.c ../source/storage.c ../source/draw_resources.c ../source/managed_runtime.c ../source/stw.c ../source/gc_stw.c ../source/file_optimize.c ../source/file_extents.c ../source/contiguous_write.c
-	$(CC) $(CFLAGS) -pthread -ffunction-sections -fdata-sections $^ $(GC_LDFLAGS) -lm -o $@
+	$(CC) $(CFLAGS) -Dread=dnd_asset_test_read -pthread -ffunction-sections -fdata-sections $^ $(GC_LDFLAGS) -lm -o $@
 
 throughput_runtime_test: throughput_runtime_test.c ../source/async_runtime.c ../source/managed_runtime.c ../source/stw.c ../source/gc_stw.c
 	$(CC) $(CFLAGS) -pthread -ffunction-sections -fdata-sections $^ $(GC_LDFLAGS) -lm -o $@

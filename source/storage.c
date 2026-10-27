@@ -19,6 +19,10 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <stdatomic.h>
+#include <time.h>
+#ifdef DND_GAMECUBE_STORAGE
+#include <ogc/lwp_watchdog.h>
+#endif
 #include "dnd_async.h"
 /* Optional when linking storage-only bootstrap/host fixtures. */
 #ifdef __APPLE__
@@ -1767,6 +1771,22 @@ DndArray *dnd_card_entries(DndManagedHeap *heap, int d) {
 /* One bounded logical read; only OS/backend I/O and native memory while detached.
  * All other storage entry points wait before touching shared backend state.
  * The managed AssetStream owns the file until completion; close/unmount wait too. */
+static int asset_read_quantum=32768;
+static uint64_t asset_stats[7];
+static uint64_t asset_now_us(void) {
+#ifdef DND_GAMECUBE_STORAGE
+    return ticks_to_microsecs(gettime());
+#else
+    struct timespec now;clock_gettime(CLOCK_MONOTONIC,&now);
+    return (uint64_t)now.tv_sec*1000000+(uint64_t)now.tv_nsec/1000;
+#endif
+}
+void dnd_asset_read_quantum(int bytes) {
+    if(bytes!=0&&bytes!=16384&&bytes!=32768&&bytes!=65536){fail(EINVAL,"Invalid asset read quantum.");return;}
+    asset_read_quantum=bytes;
+}
+void dnd_asset_reset_stats(void){memset(asset_stats,0,sizeof(asset_stats));}
+int64_t dnd_asset_stat(int kind){return kind>=0&&kind<7?(int64_t)asset_stats[kind]:0;}
 int dnd_asset_open(DndString *path) { return dnd_fs_open(path,3,1,1); }
 int dnd_asset_read(int token,int64_t offset,int buffer,int destination,int count) {
   storage_barrier();
@@ -1776,19 +1796,31 @@ int dnd_asset_read(int token,int64_t offset,int buffer,int destination,int count
      !dnd_buffer_io_begin||!dnd_buffer_io_end) {fail(EINVAL,"Invalid asset read.");return -1;}
   uint64_t address=dnd_buffer_io_begin(buffer,destination,count);
   if(!address){fail(EBUSY,"Asset destination is busy or invalid.");return -1;}
-  int fd=h->fd,done=0,error=0;
+  int fd=h->fd,done=0,error=0,quantum=asset_read_quantum;
+  uint64_t calls=0,bounced=0,direct=0,before=asset_now_us();
   atomic_store_explicit(&asset_io_busy,1,memory_order_release);
   int context=dnd_async_native_begin?dnd_async_native_begin():-1;
   if(lseek(fd,(off_t)offset,SEEK_SET)<0)error=errno;
   while(!error&&done<count) {
-    ssize_t n=aligned_read(fd,(unsigned char*)(uintptr_t)address+done,(size_t)(count-done));
+    unsigned char *target=(unsigned char*)(uintptr_t)address+done;
+    size_t remaining=(size_t)(count-done),amount=remaining;
+    bool aligned=quantum&&((uintptr_t)target&31)==0&&remaining>=32;
+    if(aligned){amount&=~(size_t)31;if(amount>(size_t)quantum)amount=(size_t)quantum;}
+    else if(quantum&&((uintptr_t)target&31)&&amount>32-((uintptr_t)target&31))amount=32-((uintptr_t)target&31);
+    calls++;
+    ssize_t n=aligned?read(fd,target,amount):aligned_read(fd,target,amount);
     if(n<0){if(errno==EINTR)continue;error=errno;break;}
     if(!n)break;
+    if(aligned)direct+=(uint64_t)n;else bounced+=(uint64_t)n;
     done+=(int)n;
   }
+  uint64_t elapsed=asset_now_us()-before;
   atomic_store_explicit(&asset_io_busy,0,memory_order_release);
   if(dnd_async_native_end)dnd_async_native_end(context);
   dnd_buffer_io_end(buffer);
+  asset_stats[0]+=calls;asset_stats[1]+=(uint64_t)done;asset_stats[2]+=bounced;
+  asset_stats[3]+=direct;asset_stats[4]++;asset_stats[5]+=elapsed;
+  if(elapsed>asset_stats[6])asset_stats[6]=elapsed;
   if(error){fail(error,"Native asset read failed.");return -1;}
   return done;
 }
