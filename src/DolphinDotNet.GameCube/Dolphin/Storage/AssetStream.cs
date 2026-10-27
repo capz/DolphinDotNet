@@ -15,6 +15,12 @@ public sealed class AssetStream : IDisposable
 {
     private readonly FileStream stream;
     private readonly int nativeFile;
+    /// <summary>Temporary performance-validation switch. False selects the legacy
+    /// managed staging path; native reads are the intended production path.</summary>
+    // TODO(throughput-validation): Remove this switch and the legacy FileStream,
+    // 8 KiB staging buffer and Step/Publish branch once repeated Dolphin and
+    // hardware comparisons establish native reads as the performant way forward,
+    // with preserved detail/progress and cancellation/disposal correctness.
     public static bool UseNativeReads {get;set;}=true;
     // One read is active per stream; reserve its reusable workspace once.
     private readonly byte[] staging=new byte[8192];

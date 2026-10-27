@@ -13,3 +13,11 @@ Draw2D skips native trigonometric calls for zero rotation. Renderer exposes a ca
 Tests: asset_native_test verifies positional bytes, short reads/EOF, exclusive access and Dispose during an active lease. throughput_runtime_test verifies background progress during app waits, context restoration and stride behavior. Existing native tests remain part of make test. Cross-project acceptance must additionally exercise managed Tasks, frame ownership, audio, collisions and rendering under native I/O.
 
 Deliberately deferred: asynchronous GPU fences/frame queues, removing begin-frame clear/copy synchronization, CFG-based GC-poll relocation, and a two-buffer SDK read pipeline. They change ownership/memory contracts and require separate measurements. The first two can no longer be justified merely by labeling all present time recoverable idle time.
+
+## Legacy mode retirement
+
+`AssetStream.UseNativeReads=false` is a temporary A/B validation fallback scheduled for removal once performance validation is complete and native reads are established as the performant way forward. Retain it while repeated Dolphin and hardware comparisons are still needed; the current emulator improvement alone does not close that validation.
+
+The removal gate is repeatable throughput/frame-time improvement under representative budgets and storage backends, with preserved selected-detail readiness, actor/streaming progress, audio and memory bounds, and passing short-read, error, cancellation and disposal/lifetime checks. Record the decision and supporting measurements before deleting the fallback.
+
+Once that gate is met, remove the selector, legacy FileStream handle, 8 KiB managed staging allocation and chunked Step/Publish path together. Update Hypercube's legacy comparison cases and telemetry/report expectations, retain the recorded before/after measurements, and keep native-path correctness and performance regression coverage. No fallback is removed by this tracking change.
