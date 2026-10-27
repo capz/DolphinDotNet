@@ -52,7 +52,8 @@ public sealed class Draw2D : IDisposable
     private void Quad(int texture,RectF source,RectF destination,Color32 color,float rotation,Vector2 origin)
     {
         Require();Rectangle(destination);if(destination.Width==0||destination.Height==0)return;
-        float radians=rotation*0.01745329252f,c=NativeGraphics.DrawCos(radians),s=NativeGraphics.DrawSin(radians);
+        float c=1,s=0;
+        if(rotation!=0){float radians=rotation*0.01745329252f;c=NativeGraphics.DrawCos(radians);s=NativeGraphics.DrawSin(radians);}
         float x=destination.X+origin.X,y=destination.Y+origin.Y,l=-origin.X,t=-origin.Y,r=l+destination.Width,b=t+destination.Height;
         float x0=x+l*c-t*s,y0=y+l*s+t*c,x1=x+r*c-t*s,y1=y+r*s+t*c,x2=x+r*c-b*s,y2=y+r*s+b*c,x3=x+l*c-b*s,y3=y+l*s+b*c;
         Vertex(0,x0,y0,source.X,source.Y);Vertex(1,x1,y1,source.X+source.Width,source.Y);Vertex(2,x2,y2,source.X+source.Width,source.Y+source.Height);

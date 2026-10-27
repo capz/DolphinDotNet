@@ -2,6 +2,9 @@ using System;
 namespace Dolphin.Threading.Tasks;
 internal static class NativeAsync
 {
+    internal static void AsyncProductiveWaits(int enabled)=>throw Unsupported();
+    internal static void AsyncPollStride(int stride)=>throw Unsupported();
+    internal static long AsyncPollStat(int kind)=>throw Unsupported();
     private static Exception Unsupported()=>new PlatformNotSupportedException("Requires DolphinDotNet AOT.");
     internal static bool AsyncRunning()=>throw Unsupported();
     internal static int AsyncContext()=>throw Unsupported();

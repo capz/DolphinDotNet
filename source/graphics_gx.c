@@ -1,4 +1,5 @@
 #include "dnd_draw.h"
+#include "dnd_async.h"
 #include "dnd_graphics.h"
 #include "dnd_console.h"
 #include "dnd_performance.h"
@@ -269,8 +270,11 @@ void dnd_graphics_overlay_glyph_end(void){glyph_flush();}
 void dnd_graphics_end_frame(void) {
     GX_SetDispCopyYScale(GX_GetYScaleFactor(mode->efbHeight,mode->xfbHeight));GX_SetDispCopySrc(0,0,mode->fbWidth,mode->efbHeight);GX_SetDispCopyDst(mode->fbWidth,mode->xfbHeight);
     GX_SetCopyFilter(mode->aa,mode->sample_pattern,GX_TRUE,mode->vfilter);
-    GX_SetZMode(GX_TRUE,GX_LEQUAL,GX_TRUE);GX_SetColorUpdate(GX_TRUE);GX_CopyDisp(xfb[fb],GX_TRUE);GX_DrawDone();
-    VIDEO_SetNextFramebuffer(xfb[fb]);if(first_frame){first_frame=false;VIDEO_SetBlack(FALSE);}VIDEO_Flush();VIDEO_WaitVSync();fb^=1;
+    GX_SetZMode(GX_TRUE,GX_LEQUAL,GX_TRUE);GX_SetColorUpdate(GX_TRUE);GX_CopyDisp(xfb[fb],GX_TRUE);
+    int wait_context=dnd_async_app_wait_begin();
+    GX_DrawDone();
+    VIDEO_SetNextFramebuffer(xfb[fb]);if(first_frame){first_frame=false;VIDEO_SetBlack(FALSE);}VIDEO_Flush();VIDEO_WaitVSync();
+    dnd_async_app_wait_end(wait_context);fb^=1;
     if(dnd_performance_visible())dnd_performance_presented(ticks_to_microsecs(gettime()));
 }
 void dnd_graphics_present(void){dnd_graphics_begin_overlay();dnd_console_render();dnd_graphics_end_frame();}

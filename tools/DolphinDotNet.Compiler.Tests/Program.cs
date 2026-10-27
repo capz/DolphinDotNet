@@ -281,6 +281,25 @@ if (!genericGenerated.Split('\n').Any(line => line.Contains("Program_Identity", 
     throw new Exception("Wide generic specialization did not emit a 64-bit ABI.");
 File.Delete(genericObject);
 File.Delete(genericOutput);
+// ldobj !!T must dereference reference/scalar slots; only aggregate values
+// stay represented by an address. Debug async state machines exercise this
+// through AsyncTaskMethodBuilder's interface continuation storage.
+var refProject = Path.Combine(root, "tests/RefLoadSmoke/RefLoadSmoke.csproj");
+var refTemp = Path.Combine(Path.GetTempPath(), $"dnd-ref-load-{Guid.NewGuid():N}");
+Directory.CreateDirectory(refTemp);
+try
+{
+    foreach(var configuration in new[]{"Debug","Release"})
+    {
+        Run("dotnet", $"build \"{refProject}\" -c {configuration} -p:DndBuildNative=false");
+        var refDll=Path.Combine(root,$"tests/RefLoadSmoke/bin/{configuration}/net8.0/RefLoadSmoke.dll");
+        var refC=Path.Combine(refTemp,configuration+".c");var refHost=Path.Combine(refTemp,configuration);
+        Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{refDll}\" \"{refC}\"");
+        Run("cc", $"-pthread -O1 -std=c11 -I\"{Path.Combine(root,"include")}\" \"{refC}\" \"{Path.Combine(root,"tests/generic_sharing_value_host.c")}\" \"{Path.Combine(root,"source/managed_runtime.c")}\" \"{Path.Combine(root,"source/async_runtime.c")}\" \"{Path.Combine(root,"source/numeric.c")}\" \"{Path.Combine(root,"source/text.c")}\" \"{Path.Combine(root,"source/timing.c")}\" -lm -o \"{refHost}\"");
+        Run(refHost, "");Run(refHost, "gc-stress");
+    }
+}
+finally {Directory.Delete(refTemp,true);}
 Console.WriteLine("DolphinDotNet compiler integration test passed.");
 
 static void Run(string file, string args)

@@ -3,11 +3,11 @@
 #include "dnd_input.h"
 #include "dnd_audio.h"
 #include "dnd_graphics.h"
+#include "dnd_draw.h"
 #include "dnd_console.h"
 #include "dnd_network.h"
 #include "dnd_storage.h"
 #include "dnd_dol.h"
-#include <gccore.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -42,7 +42,32 @@ int main(void) {
         dnd_storage_shutdown();
     }
     dnd_dol_finish(managed_result==0 && !dnd_exception_pending());
-    dnd_console_write_line(managed_result==0?"MANAGED MAIN: OK":"MANAGED MAIN: FAILED");
+    bool failed=managed_result!=0 || dnd_exception_pending();
+    dnd_console_write_line(failed?"MANAGED MAIN: FAILED":"MANAGED MAIN: OK");
+    if (failed) {
+        /* Preserve diagnostics without allocating from a possibly exhausted heap. */
+        if (dnd_exception_pending()) {
+            dnd_console_write_line(dnd_exception_message());
+            DndObject *error=dnd_exception_object();
+            if (error && dnd_type_is_assignable_from(&DND_TYPE_EXCEPTION,error->type)) {
+                DndString *message=dnd_exception_get_message((DndException *)error);
+                if (message) {
+                    char text[79];
+                    size_t length=message->length<78?message->length:78;
+                    for(size_t i=0;i<length;i++)
+                        text[i]=message->chars[i]>=32 && message->chars[i]<127?(char)message->chars[i]:'?';
+                    text[length]=0;
+                    dnd_console_write_line(text);
+                }
+            }
+        }
+        /* An exception can leave a partially submitted frame or raw pass. */
+        dnd_device_shutdown();
+        dnd_console_set_visible(1);
+        dnd_console_write_line("START: EXIT");
+        dnd_platform_wait_forever();
+        return 1;
+    }
 #ifdef DND_SAMPLE_CONTROLS
     dnd_console_write_line("Z: STATISTICS   START: EXIT");
     dnd_platform_wait_forever();

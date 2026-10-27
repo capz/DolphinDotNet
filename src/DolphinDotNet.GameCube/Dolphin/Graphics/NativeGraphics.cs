@@ -4,6 +4,10 @@ namespace Dolphin.Graphics;
 
 internal static class NativeGraphics
 {
+    internal static int AssetOpen(string path)=>throw Unsupported();
+    internal static long AssetLength(int token)=>throw Unsupported();
+    internal static void AssetClose(int token)=>throw Unsupported();
+    internal static int AssetRead(int token,long offset,int buffer,int destination,int count)=>throw Unsupported();
     internal static float DrawSin(float x)=>throw Unsupported();
     internal static float DrawCos(float x)=>throw Unsupported();
     internal static float DrawSqrt(float x)=>throw Unsupported();
@@ -76,10 +80,12 @@ internal static class NativeGraphics
     internal static int BufferWriteFloats(int token,int offset,float[] array,int index,int count) => throw Unsupported();
     internal static int BufferWriteIndices(int token,int offset,ushort[] array,int index,int count) => throw Unsupported();
     internal static int BufferReadBytes(int token,int offset,byte[] array,int index,int count) => throw Unsupported();
+    internal static uint BufferCrc32(int token,int offset,int count,uint initial) => throw Unsupported();
     internal static int MeshCreateColor(VertexPositionColor[] vertices,ushort[]? indices,int format,int dynamic) => throw Unsupported();
     internal static int MeshUpdateColor(int token,VertexPositionColor[] vertices,int offset,int count,int format) => throw Unsupported();
     internal static int MeshCreateTexture(VertexPositionColorTexture[] vertices,ushort[]? indices,int format,int dynamic) => throw Unsupported();
     internal static int MeshUpdateTexture(int token,VertexPositionColorTexture[] vertices,int offset,int count,int format) => throw Unsupported();
     internal static int MeshCreateNormal(VertexPositionNormalColorTexture[] vertices,ushort[]? indices,int format,int dynamic) => throw Unsupported();
+    internal static int MeshCreateNormalRange(VertexPositionNormalColorTexture[] vertices,int vertexCount,ushort[]? indices,int indexCount,int format,int dynamic) => throw Unsupported();
     internal static int MeshUpdateNormal(int token,VertexPositionNormalColorTexture[] vertices,int offset,int count,int format) => throw Unsupported();
 }
