@@ -48,10 +48,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Prepare the Debian Dolphin runtime and host capture tests
+      - name: Prepare the Debian Dolphin runtime
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
           docker build -t dnd-dolphin - <<'EOF'
           FROM debian:bookworm-slim
           RUN apt-get update && apt-get install -y --no-install-recommends dolphin-emu xvfb xauth ffmpeg python3 libgl1-mesa-dri libglx-mesa0 && rm -rf /var/lib/apt/lists/*
@@ -59,9 +57,13 @@ jobs:
           docker run --rm dnd-dolphin /usr/games/dolphin-emu-nogui --version
       - name: Test the acceptance oracle and native failure diagnostics
         run: |
-          python -m unittest discover -s tests -p test_dolphin_texture.py
-          python -m unittest discover -s tests -p test_dolphin_streaming.py
-          python -m unittest discover -s tests -p test_dolphin_benchmark.py
+          docker run --rm --mount "type=bind,source=${{ github.workspace }},target=/src" \
+            -w /src dnd-dolphin sh -ec '
+              command -v ffmpeg
+              python3 -m unittest discover -s tests -p test_dolphin_texture.py
+              python3 -m unittest discover -s tests -p test_dolphin_streaming.py
+              python3 -m unittest discover -s tests -p test_dolphin_benchmark.py
+            '
           dotnet run --project tests/TextureStreamingTests -c Release
           cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/native_main_failure_test.c -o /tmp/dnd-main-test
           /tmp/dnd-main-test
