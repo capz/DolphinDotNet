@@ -10,6 +10,10 @@ public class Mesh : IDisposable
     public static Mesh Create(VertexPositionColor[] vertices,ushort[]? indices=null) => new Mesh(NativeGraphics.MeshCreateColor(vertices,indices,0,0));
     public static Mesh Create(VertexPositionColorTexture[] vertices,ushort[]? indices=null) => new Mesh(NativeGraphics.MeshCreateTexture(vertices,indices,1,0));
     public static Mesh Create(VertexPositionNormalColorTexture[] vertices,ushort[]? indices=null) => new Mesh(NativeGraphics.MeshCreateNormal(vertices,indices,2,0));
+    /// <summary>Copy the used prefix of reusable decode arrays into native geometry.
+    /// The mesh retains neither array; unused capacity is not allocated or drawn.</summary>
+    public static Mesh Create(VertexPositionNormalColorTexture[] vertices,int vertexCount,ushort[]? indices,int indexCount)
+        => new Mesh(NativeGraphics.MeshCreateNormalRange(vertices,vertexCount,indices,indexCount,2,0));
     internal void Check(){if(disposed)throw new ObjectDisposedException("Mesh");}
     public void Dispose(){if(disposed)return;GraphicsDevice.Check(NativeGraphics.DrawRelease(Token),"Cannot dispose mesh during a raw stream.");disposed=true;}
 }
