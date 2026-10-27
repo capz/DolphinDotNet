@@ -587,7 +587,13 @@ internal static class ValueIrImporter
         }
         return kinds.Select((kind,index)=>new ValueIrLocal(index,kind,storage[index],declaredStorage[index].ReferenceOffsets,declaredStorage[index].ScalarSize,declaredStorage[index].Unsigned)).ToArray();
     }
-    private static bool IsReferenceType(string type)=>type is "System.String" or "System.Object" || !type.StartsWith("System.",StringComparison.Ordinal);
+    // Namespace does not determine representation: Action, Task and other
+    // System classes are references too. Aggregate layouts are checked by callers.
+    private static bool IsReferenceType(string type)=>type is not (
+        "System.Boolean" or "System.Byte" or "System.SByte" or "System.Char" or
+        "System.Int16" or "System.UInt16" or "System.Int32" or "System.UInt32" or
+        "System.Int64" or "System.UInt64" or "System.Single" or "System.Double" or
+        "System.IntPtr" or "System.UIntPtr" or "System.Void");
     private static uint ElementSize(string type)=>type switch{"System.Boolean" or "System.Byte" or "System.SByte"=>1u,"System.Char" or "System.Int16" or "System.UInt16"=>2u,"System.Int64" or "System.UInt64" or "System.Double"=>8u,_=>4u};
 
     private static IrValueKind MergeLocal(IrValueKind current,IrValueKind next)=>current==IrValueKind.Unknown?next:next==IrValueKind.Unknown||current==next?current:IrValueKind.Unknown;

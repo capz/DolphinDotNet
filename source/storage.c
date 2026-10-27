@@ -21,11 +21,16 @@
 #include <stdatomic.h>
 #include "dnd_async.h"
 /* Optional when linking storage-only bootstrap/host fixtures. */
-extern void dnd_async_wait_external(void) __attribute__((weak));
-extern int dnd_async_native_begin(void) __attribute__((weak));
-extern void dnd_async_native_end(int) __attribute__((weak));
-extern uint64_t dnd_buffer_io_begin(int,int,int) __attribute__((weak));
-extern void dnd_buffer_io_end(int) __attribute__((weak));
+#ifdef __APPLE__
+#define DND_OPTIONAL __attribute__((weak_import))
+#else
+#define DND_OPTIONAL __attribute__((weak))
+#endif
+extern void dnd_async_wait_external(void) DND_OPTIONAL;
+extern int dnd_async_native_begin(void) DND_OPTIONAL;
+extern void dnd_async_native_end(int) DND_OPTIONAL;
+extern uint64_t dnd_buffer_io_begin(int,int,int) DND_OPTIONAL;
+extern void dnd_buffer_io_end(int) DND_OPTIONAL;
 static atomic_uint asset_io_busy;
 static void storage_barrier(void) {
     while(atomic_load_explicit(&asset_io_busy,memory_order_acquire)) {
