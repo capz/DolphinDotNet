@@ -84,6 +84,10 @@ void dnd_async_deadline(int64_t due){timer_deadline=due;}
 void dnd_async_timer_late(int64_t late){if(late>0&&(uint64_t)late>wait_stats[0][8])wait_stats[0][8]=(uint64_t)late;}
 void dnd_async_wait_reset(void){memset(wait_stats[0],0,sizeof(wait_stats[0]));}
 void dnd_async_wait_skipped(void){wait_stats[owner][7]++;}
+void dnd_async_wait_snapshot(DndArray *data) {
+    if(!data||data->length<9||data->element_size!=8||data->elements_are_references){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Wait statistics require nine Int64 slots.");return;}
+    memcpy(data->data,wait_stats[owner],sizeof(wait_stats[owner]));
+}
 int64_t dnd_async_wait_stat(int kind){return kind>=0&&kind<9?(int64_t)wait_stats[owner][kind]:0;}
 static uint64_t wait_timeout(void) {
     uint64_t timeout=1000;

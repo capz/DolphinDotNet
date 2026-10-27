@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 static atomic_int ran;
 static int service_wake;
@@ -29,6 +31,10 @@ int main(void) {
  dnd_async_deadline(-1);dnd_async_wait();assert(dnd_async_wait_stat(1)>before);
  assert(dnd_async_wait_stat(2)>0&&dnd_async_wait_stat(4)>0);
  dnd_async_timer_late(27);assert(dnd_async_wait_stat(8)==27);
+ DndArray *snapshot=calloc(1,sizeof(DndArray)+9*8);assert(snapshot);
+ snapshot->length=9;snapshot->element_size=8;dnd_async_wait_snapshot(snapshot);
+ for(int i=0;i<9;i++){int64_t value;memcpy(&value,snapshot->data+i*8,8);assert(value==dnd_async_wait_stat(i));}
+ snapshot->length=1;dnd_async_wait_snapshot(snapshot);assert(dnd_exception_pending());dnd_exception_clear();free(snapshot);
  dnd_async_wait_reset();assert(dnd_async_wait_stat(1)==0&&dnd_async_wait_stat(8)==0);
  dnd_async_stop();assert(!dnd_async_running());assert(!dnd_exception_pending());
  puts("Productive app wait restores context; bounded polling retains legacy mode: PASS");

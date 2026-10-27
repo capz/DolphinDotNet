@@ -41,6 +41,8 @@ internal static class Program
         Dolphin.Threading.Tasks.Scheduler.Post(()=>settled.SetResult(42));
         if(settled.Task.GetAwaiter().GetResult()!=42)return 8;
         if(Dolphin.Threading.Tasks.Scheduler.WaitStat(7)==0)return 9;
+        var waitSnapshot=new long[9];Dolphin.Threading.Tasks.Scheduler.CopyWaitStats(waitSnapshot);
+        if(waitSnapshot[7]==0)return 13;
         foreach(bool deadline in new[]{false,true})
         {
             Dolphin.Threading.Tasks.Scheduler.DeadlineWaits=deadline;

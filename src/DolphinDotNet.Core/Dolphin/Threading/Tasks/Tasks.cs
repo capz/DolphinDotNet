@@ -23,6 +23,7 @@ namespace Dolphin.Threading.Tasks
         public static bool CompletionAwareWaits {get;set;}=true;
         public static bool DeadlineWaits {set=>NativeAsync.AsyncDeadlineWaits(value?1:0);}
         /// <summary>Cumulative runtime diagnostics; index definitions are in docs/throughput.md.</summary>
+        public static void CopyWaitStats(long[] destination)=>NativeAsync.AsyncWaitSnapshot(destination);
         public static void ResetWaitStats()=>NativeAsync.AsyncWaitReset();
         public static long WaitStat(int kind)=>NativeAsync.AsyncWaitStat(kind);
         public static bool ProductiveWaits {set=>NativeAsync.AsyncProductiveWaits(value?1:0);}

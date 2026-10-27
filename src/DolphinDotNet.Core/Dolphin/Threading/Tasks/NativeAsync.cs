@@ -16,6 +16,7 @@ internal static class NativeAsync
     internal static void AsyncDeadline(long due)=>throw Unsupported();
     internal static void AsyncDeadlineWaits(int enabled)=>throw Unsupported();
     internal static void AsyncTimerLate(long late)=>throw Unsupported();
+    internal static void AsyncWaitSnapshot(long[] destination)=>throw Unsupported();
     internal static long AsyncWaitStat(int kind)=>throw Unsupported();
     internal static void AsyncProgress()=>throw Unsupported();
 }

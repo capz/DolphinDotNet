@@ -1786,6 +1786,10 @@ void dnd_asset_read_quantum(int bytes) {
     asset_read_quantum=bytes;
 }
 void dnd_asset_reset_stats(void){memset(asset_stats,0,sizeof(asset_stats));}
+void dnd_asset_snapshot(DndArray *data) {
+    if(!data||data->length<7||data->element_size!=8||data->elements_are_references){fail(EINVAL,"Read statistics require seven Int64 slots.");return;}
+    memcpy(data->data,asset_stats,sizeof(asset_stats));
+}
 int64_t dnd_asset_stat(int kind){return kind>=0&&kind<7?(int64_t)asset_stats[kind]:0;}
 int dnd_asset_open(DndString *path) { return dnd_fs_open(path,3,1,1); }
 int dnd_asset_read(int token,int64_t offset,int buffer,int destination,int count) {

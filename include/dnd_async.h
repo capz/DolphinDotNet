@@ -18,6 +18,7 @@ void dnd_async_wait_skipped(void);
 void dnd_async_deadline(int64_t due); /* Absolute monotonic microseconds, -1 if none. */
 void dnd_async_deadline_waits(int enabled);
 void dnd_async_timer_late(int64_t late);
+void dnd_async_wait_snapshot(DndArray *data);
 int64_t dnd_async_wait_stat(int kind);
 void dnd_async_progress(void); /* Standard Task.Wait/GetResult integration. */
 void dnd_async_productive_waits(int enabled);

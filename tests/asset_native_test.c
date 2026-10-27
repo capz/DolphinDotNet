@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 int dnd_raw_depth(void){return 0;}
@@ -65,6 +66,10 @@ int main(void) {
  dnd_asset_read_quantum(4096);assert(dnd_exception_pending());dnd_exception_clear();
  assert(dnd_asset_read(file,-1,destination,0,1)==-1);assert(dnd_exception_pending());dnd_exception_clear();
  assert(dnd_asset_read(file,0,destination,131136,1)==-1);assert(dnd_exception_pending());dnd_exception_clear();
+ DndArray *snapshot=calloc(1,sizeof(DndArray)+7*8);assert(snapshot);
+ snapshot->length=7;snapshot->element_size=8;dnd_asset_snapshot(snapshot);
+ for(int i=0;i<7;i++){int64_t value;memcpy(&value,snapshot->data+i*8,8);assert(value==dnd_asset_stat(i));}
+ snapshot->length=1;dnd_asset_snapshot(snapshot);assert(dnd_exception_pending());dnd_exception_clear();free(snapshot);
  dispose_during_read=1;assert(dnd_asset_read(file,0,destination,0,65536)==65536);
  assert(dnd_draw_live()==0);dnd_fs_close(file);assert(dnd_fs_open_handles()==0);
  unlink(path);snprintf(path,sizeof(path),"%s/sd",root);rmdir(path);rmdir(root);
