@@ -17,6 +17,7 @@ int dnd_async_native_begin(void) {
     return -1;
 }
 void dnd_async_native_end(int context){assert(context==-1);}
+void dnd_async_wait_external(void){assert(!"Unexpected contention in single-thread storage fixture.");}
 void dnd_console_write_line(const char *s){(void)s;}
 int main(void) {
  char root[]="/tmp/dnd-asset-XXXXXX",path[256];assert(mkdtemp(root));setenv("DND_STORAGE_ROOT",root,1);
