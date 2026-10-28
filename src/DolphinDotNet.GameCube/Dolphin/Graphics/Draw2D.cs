@@ -4,12 +4,14 @@ namespace Dolphin.Graphics;
 public sealed class Draw2DOptions
 {
     public int VertexCapacity {get;set;}=4096;
+    /// <summary>0 disables bulk sprite staging; 1–128 reserves capacity during construction.</summary>
+    public int SpriteCapacity {get;set;}
     /// <summary>Zero selects the physical framebuffer dimensions. Nonzero dimensions stretch to the viewport.</summary>
     public int Width {get;set;}
     public int Height {get;set;}
 }
 /// <summary>Ordered, preallocated batch for textures, shapes and prebuilt bitmap fonts.</summary>
-public sealed class Draw2D : IDisposable
+public sealed partial class Draw2D : IDisposable
 {
     // TODO(throughput-validation): Retire this legacy A/B switch only after
     // repeated Dolphin/hardware validation establishes the performant path.
@@ -25,6 +27,8 @@ public sealed class Draw2D : IDisposable
         if(device==null)throw new ArgumentNullException("device");this.device=device;
         options=options ?? new Draw2DOptions();
         if(options.Width<0||options.Height<0||(options.Width==0)!=(options.Height==0))throw new ArgumentException("Set both logical dimensions or neither.");
+        if(options.SpriteCapacity<0||options.SpriteCapacity>128)throw new ArgumentOutOfRangeException("SpriteCapacity");
+        spriteTextures=new int[options.SpriteCapacity];spriteColors=new int[options.SpriteCapacity];spriteVertices=new float[options.SpriteCapacity*24];
         token=NativeGraphics.CanvasCreate(options.VertexCapacity);
         if(token==0)throw new ArgumentException("Invalid batch capacity or native memory budget.");
         width=options.Width;height=options.Height;
@@ -34,7 +38,7 @@ public sealed class Draw2D : IDisposable
     public void Begin()
     {
         Check();if(active)throw new InvalidOperationException("Batch already active.");
-        GraphicsDevice.Check(NativeGraphics.CanvasBegin(token,width==0?device.Width:width,height==0?device.Height:height),"Begin a device frame and end other drawing passes first.");active=true;effect=null;
+        GraphicsDevice.Check(NativeGraphics.CanvasBegin(token,width==0?device.Width:width,height==0?device.Height:height),"Begin a device frame and end other drawing passes first.");active=true;GraphicsDevice.Check(NativeGraphics.RenderScene(null),"Cannot reset render state.");effect=null;cameraActive=false;clipDepth=0;clipX=clipY=0;clipW=width==0?device.Width:width;clipH=height==0?device.Height:height;
     }
     /// <summary>Flush queued vertices before changing effects. Null restores the default pipeline.</summary>
     public void SetEffect(GxEffect? value)
@@ -44,13 +48,13 @@ public sealed class Draw2D : IDisposable
     }
     public void End(){Require();GraphicsDevice.Check(NativeGraphics.CanvasEnd(token),"Batch could not finish.");active=false;}
     public void Flush(){Require();GraphicsDevice.Check(NativeGraphics.CanvasFlush(token),"Batch could not flush.");}
-    public void SetClip(int x,int y,int width,int height){Require();GraphicsDevice.Check(NativeGraphics.CanvasClip(token,x,y,width,height),"Invalid clipping rectangle.");}
+    public void SetClip(int x,int y,int width,int height){Require();GraphicsDevice.Check(NativeGraphics.CanvasClip(token,x,y,width,height),"Invalid clipping rectangle.");clipX=x;clipY=y;clipW=width;clipH=height;}
     public void ResetClip(){SetClip(0,0,width==0?device.Width:width,height==0?device.Height:height);}
     public void SetBlend(BlendMode blend){Require();GraphicsDevice.Check(NativeGraphics.CanvasBlend(token,(int)blend),"Invalid blend mode.");}
     private static float Min(float a,float b)=>a<b?a:b;
     private void Check(){if(disposed)throw new ObjectDisposedException("Draw2D");}
     private void Require(){Check();if(!active)throw new InvalidOperationException("Begin the batch first.");}
-    private void Vertex(int index,float x,float y,float u,float v){int at=index*4;scratch[at]=x;scratch[at+1]=y;scratch[at+2]=u;scratch[at+3]=v;}
+    private void Vertex(int index,float x,float y,float u,float v){if(cameraActive){float px=x; x=cameraMatrix[0]*px+cameraMatrix[2]*y+cameraMatrix[4];y=cameraMatrix[1]*px+cameraMatrix[3]*y+cameraMatrix[5];}int at=index*4;scratch[at]=x;scratch[at+1]=y;scratch[at+2]=u;scratch[at+3]=v;}
     private void Submit(int texture,int count,Color32 color){if(effect!=null)effect.Check();GraphicsDevice.Check(NativeGraphics.CanvasVertices(token,texture,scratch,count,color.Packed),"Invalid drawing coordinates, texture or exhausted batch capacity.");}
     private static void Rectangle(RectF rectangle){if(!(rectangle.Width>=0&&rectangle.Height>=0))throw new ArgumentException("Invalid rectangle.");}
     private void Quad(int texture,RectF source,RectF destination,Color32 color,float rotation,Vector2 origin)
@@ -65,7 +69,7 @@ public sealed class Draw2D : IDisposable
     }
     public void FillRectangle(RectF destination,Color32 color)
     {
-        if(!DirectRectanglePath){Quad(0,default,destination,color,0,default);return;}
+        if(!DirectRectanglePath||cameraActive){Quad(0,default,destination,color,0,default);return;}
         Require();Rectangle(destination);if(destination.Width==0||destination.Height==0)return;
         if(effect!=null)effect.Check();
         GraphicsDevice.Check(NativeGraphics.CanvasRectangle(token,destination.X,destination.Y,destination.Width,destination.Height,color.Packed),

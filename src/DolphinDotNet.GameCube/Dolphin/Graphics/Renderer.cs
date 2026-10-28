@@ -3,25 +3,27 @@ using System;
 namespace Dolphin.Graphics;
 
 /// <summary>GameCube graphics entry points.</summary>
-public sealed class Renderer
+public sealed partial class Renderer
 {
     private readonly GraphicsDevice device;
     private bool ownsFrame, active;
     public Renderer() : this(GraphicsDevice.Default) { }
-    public Renderer(GraphicsDevice device){this.device=device ?? throw new ArgumentNullException("device");}
+    public Renderer(GraphicsDevice device):this(device,0){}
+    /// <summary>Reserve 1–128 distinct-transform meshes for DrawMeshes; zero omits bulk staging.</summary>
+    public Renderer(GraphicsDevice device,int meshBatchCapacity){if(meshBatchCapacity<0||meshBatchCapacity>128)throw new ArgumentOutOfRangeException("meshBatchCapacity");this.device=device ?? throw new ArgumentNullException("device");meshTokens=new int[meshBatchCapacity];meshWorlds=new float[meshBatchCapacity][];}
     public void Begin3D(Camera camera)
     {
         if(active)throw new InvalidOperationException("Renderer already active.");
         if(camera==null)throw new ArgumentNullException("camera");
         if(!device.IsFrameActive)throw new InvalidOperationException("Begin a device frame first.");
         GraphicsDevice.Check(NativeModel.ModelFrameBegin(camera.View,camera.Projection),"Another render pass is active.");
-        ownsFrame=false;active=true;
+        NativeGraphics.RenderScene(null);optionsActive=false;ownsFrame=false;active=true;
     }
     public void End3D(){if(!active||ownsFrame)throw new InvalidOperationException("No externally owned 3D pass.");GraphicsDevice.Check(NativeModel.ModelFrameEnd(),"No active 3D pass.");active=false;}
     public void DrawMesh(Mesh mesh,Material material,Transform transform)
     {
         if(mesh==null)throw new ArgumentNullException("mesh");if(material==null)throw new ArgumentNullException("material");if(transform==null)throw new ArgumentNullException("transform");
-        mesh.Check();material.Check();
+        mesh.Check();material.Check();ApplyMaterial(material);
         GraphicsDevice.Check(NativeGraphics.MeshDrawMaterial(mesh.Token,material.TextureToken,material.SecondaryTextureToken,transform.WorldMatrix,material.Color.Packed,material.Flags,material.AlphaCutoff,material.EffectToken),"Invalid mesh, material, transform or 3D pass.");
     }
     /// <summary>Merge 2–128 compatible native meshes into a single GX vertex
@@ -38,7 +40,7 @@ public sealed class Renderer
     internal void DrawMeshBatch(int[] meshTokens,int count,Material material,Transform transform)
     {
         if(meshTokens==null||material==null||transform==null)throw new ArgumentNullException();
-        material.Check();
+        material.Check();ApplyMaterial(material);
         GraphicsDevice.Check(NativeGraphics.MeshDrawBatch(meshTokens,count,material.TextureToken,
             material.SecondaryTextureToken,transform.WorldMatrix,material.Color.Packed,
             material.Flags,material.AlphaCutoff,material.EffectToken),
@@ -54,7 +56,7 @@ public sealed class Renderer
     {
         if(instance==null)throw new ArgumentNullException("instance");
         if(material==null)throw new ArgumentNullException("material");
-        instance.Check();material.Check();
+        instance.Check();material.Check();ApplyMaterial(material);
         GraphicsDevice.Check(NativeModel.ModelDrawMaterial(instance.Token,world,material.TextureToken,material.SecondaryTextureToken,material.Color.Packed,material.Flags,material.AlphaCutoff,material.EffectToken),"Invalid model material, cold model, transform or 3D pass.");
     }
     public void DrawWithMaterial(GameObject gameObject,Material material)
@@ -99,7 +101,7 @@ public sealed class Renderer
         if (device.IsFrameActive) throw new InvalidOperationException("Frame already active; use Begin3D inside a device frame.");
         if (NativeModel.ModelFrameBegin(viewMatrix, projectionMatrix) < 0)
             throw new InvalidOperationException("Frame already active or invalid camera matrices.");
-        ownsFrame=true;active=true;
+        NativeGraphics.RenderScene(null);optionsActive=false;ownsFrame=true;active=true;
     }
 
     public void DrawModel(ModelInstance instance, float[] transform)

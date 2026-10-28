@@ -154,3 +154,8 @@ Imported models accept the same `GxEffect` through
 `Renderer.Draw(gameObject, effectOverride)`. The per-draw override replaces RGB
 on every mesh while preserving imported alpha, textures, samplers and geometry.
 See [the imported-model effect contract](effects.md#imported-models-per-draw-overrides).
+
+The additive [phase 1 graphics APIs](graphics-phase-one.md) provide Camera2D,
+viewport-aware batches, bulk sprites, sampler/UV state, camera projection queries,
+scene lights/fog and distinct-transform mesh batches. See the
+[two-phase roadmap](graphics-roadmap.md) for the separate follow-up scope.

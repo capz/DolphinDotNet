@@ -54,6 +54,11 @@ void GX_SetNumIndStages(int count);
 #define GX_NEAR 0
 #define GX_NEAR_MIP_NEAR 2
 #define GX_PERSPECTIVE 0
+#define GX_ORTHOGRAPHIC 1
+#define GX_VA_NRM 10
+#define GX_NRM_XYZ 0
+void GX_LoadNrmMtxImm(Mtx m,u32 id);
+void GX_Normal3f32(float x,float y,float z);
 #define GX_PNMTX0 0
 #define GX_POS_XYZ 1
 #define GX_RGBA8 5

@@ -65,7 +65,7 @@ def main(fixtures):
     # code; every runtime and host source still compiles with strict warnings.
     generated_object = work / "model-smoke-generated.o"
     run(cc, *flags, "-Wno-unused-function", "-c", generated, "-o", generated_object)
-    run(cc, *flags, generated_object, "tests/model_host.c", "source/text.c", "source/aram.c",
+    run(cc, *flags, generated_object, "tests/model_host.c", "source/text.c", "source/numeric.c", "source/aram.c",
         *runtime, "-lm", "-o", smoke)
     run(smoke, fixtures)
     # Smoke mutates cache/stream fixtures; regenerate before the GC-stress run.

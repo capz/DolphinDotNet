@@ -32,3 +32,6 @@ int main(void){
  assert(dnd_draw_release(t)==0&&dnd_draw_total_bytes()==0);free(a);
  puts("Direct rectangles: exact legacy vertices/color, capacity flush, stable accounting, zero size, finite coordinates, overflow and pass ownership passed.");
 }
+
+int dnd_device_width(void){return 640;}
+int dnd_device_height(void){return 480;}

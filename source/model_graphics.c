@@ -7,6 +7,8 @@
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
 #include <gccore.h>
 #endif
+__attribute__((weak)) bool dnd_draw_backend_scene_active(void){return false;}
+__attribute__((weak)) void dnd_draw_backend_scene(int lit,const float *view){(void)lit;(void)view;}
 static float frame_view[16], frame_projection[16];
 static bool owns_frame;
 static bool matrix_array(DndArray *a, float out[16]) {
@@ -34,7 +36,7 @@ int dnd_model_frame_begin(DndArray *view, DndArray *projection) {
   for (int r = 0; r < 4; r++)
     for (int c = 0; c < 4; c++)
       p[r][c] = frame_projection[c * 4 + r];
-  GX_LoadProjectionMtx(p, GX_PERSPECTIVE);
+  GX_LoadProjectionMtx(p, frame_projection[15]==1&&frame_projection[11]==0?GX_ORTHOGRAPHIC:GX_PERSPECTIVE);
 #endif
   dnd_model_frame_active = true;
   return 0;
@@ -268,6 +270,11 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     }
     dnd_draw_backend_tev(selected, mat->texture >= 0);
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
+    bool custom_scene=dnd_draw_backend_scene_active();
+    if(custom_scene){
+      if(!(mat->mode&2)){Mtx n;for(int r=0;r<3;r++)for(int c=0;c<4;c++)n[r][c]=c<3?normal[r*4+c]:0;GX_LoadNrmMtxImm(n,GX_PNMTX0);GX_SetVtxDesc(GX_VA_NRM,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);}
+      dnd_draw_backend_scene(!(mat->mode&2),frame_view);
+    }
     for (unsigned first = 0; first < mesh->indices;) {
       unsigned count = mesh->indices - first;
       if (count > 65535)
@@ -283,7 +290,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
           for (int c = 0; c < 6; c++)
             v[c] = dnd_model_f32(src + c * 4);
         float shade = 1;
-        if (!(mat->mode & 2)) {
+        if (!(mat->mode & 2)&&!custom_scene) {
           float n[3];
           for (int r = 0; r < 3; r++)
             n[r] = normal[r * 4] * v[3] + normal[r * 4 + 1] * v[4] +
@@ -298,6 +305,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
           color[c] = (u8)(fminf(1, fmaxf(0, value)) * 255);
         }
         GX_Position3f32(v[0], v[1], v[2]);
+        if(custom_scene&&!(mat->mode&2))GX_Normal3f32(v[3],v[4],v[5]);
         GX_Color4u8(color[0], color[1], color[2], color[3]);
         GX_TexCoord2f32(dnd_model_f32(src + 24), dnd_model_f32(src + 28));
       }

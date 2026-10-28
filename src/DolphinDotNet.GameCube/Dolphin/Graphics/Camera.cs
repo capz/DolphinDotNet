@@ -2,8 +2,8 @@ using System;
 
 namespace Dolphin.Graphics;
 
-/// <summary>Perspective camera with explicit look-at view. Coordinates use right-handed, Y-up model space.</summary>
-public sealed class Camera
+/// <summary>Perspective/orthographic camera with explicit look-at view. Coordinates use right-handed, Y-up model space.</summary>
+public sealed partial class Camera
 {
     internal readonly float[] View = new float[16];
     internal readonly float[] Projection = new float[16];
@@ -38,5 +38,7 @@ public sealed class Camera
     {
         if (NativeModel.ModelCamera(settings, View, Projection) < 0)
             throw new ArgumentException("Invalid camera frustum or look-at vectors.");
+        if(orthographic)SetOrthographicMatrix();
+        matrixDirty=inverseDirty=true;
     }
 }

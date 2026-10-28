@@ -7,7 +7,7 @@ namespace Dolphin.Graphics;
 public enum TextureCoordinateMode { Uv0, ViewNormal, WorldReflection }
 
 /// <summary>Fixed-function material. Diffuse lighting uses a camera-space headlight.</summary>
-public sealed class Material
+public sealed partial class Material
 {
     public GxEffect? Effect {get;set;}
     internal int EffectToken => Effect==null?0:Effect.Token;

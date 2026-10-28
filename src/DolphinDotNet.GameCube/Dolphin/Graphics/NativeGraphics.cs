@@ -75,6 +75,11 @@ internal static class NativeGraphics
     internal static int MeshDrawMaterial(int mesh,int texture,int secondary,float[] world,uint color,int flags,float cutoff,int effect) => throw Unsupported();
     internal static int MeshDrawBatch(int[] meshes,int count,int texture,int secondary,float[] world,uint color,int flags,float cutoff,int effect) => throw Unsupported();
     internal static int MeshPrimitives(VertexPositionColor[] vertices,int offset,int count,int format,int primitive,float[] world,uint color,int flags) => throw Unsupported();
+    internal static int RenderScene(float[]? settings)=>throw Unsupported();
+    internal static int RenderMaterial(float[]? settings)=>throw Unsupported();
+    internal static int MeshDrawMany(int[] meshes,float[][] worlds,int count,int texture,int secondary,uint color,int flags,float cutoff,int effect)=>throw Unsupported();
+    internal static int CanvasViewport(int token,int x,int y,int width,int height)=>throw Unsupported();
+    internal static int CanvasSprites(int token,int[] textures,float[] vertices,int[] colors,int count)=>throw Unsupported();
     internal static int CanvasCreate(int capacity) => throw Unsupported();
     internal static int CanvasBegin(int token,int width,int height) => throw Unsupported();
     internal static int CanvasEnd(int token) => throw Unsupported();

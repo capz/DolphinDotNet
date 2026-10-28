@@ -173,6 +173,9 @@ class Program
             if(tokens[0]==0||tokens[1]==0||tokens[2]!=0||transforms[16+14]!=-3)return 51;
             try{renderer.DrawModels(objects,new int[2],transforms);return 52;}catch(ArgumentException){}
             renderer.EndFrame();
+            var queue=new RenderQueue(8,2);queue.Submit(entity.Model!,entity.Transform);queue.Submit(secondObject.Model!,secondObject.Transform);
+            renderer.BeginFrame(camera,new RenderSettings{Ambient=Color32.White});var queued=queue.Execute(renderer);renderer.EndFrame();
+            if(queued.Draws!=1||queued.LogicalMeshes!=2||queue.Count!=0)return 53;
         }
         renderer.BeginFrame(Identity(),Identity());renderer.DrawModel(a,Identity());try{a.Update(0);return 10;}catch(InvalidOperationException){}renderer.EndFrame();
         int instanceMemory=a.NativeBytes;int memory=model.NativeBytes;a.Animator.SetSpeed(1);a.Animator.Play("Walk");a.Update(0.5f);model.UnloadToAramAsync().Wait();Dolphin.IO.File.Delete("sd:/cache.dndmodel");if(model.IsResident||model.NativeBytes>=memory||a.NativeBytes>=instanceMemory||model.AramBytes==0)return 11;

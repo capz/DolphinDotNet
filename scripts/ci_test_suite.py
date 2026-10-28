@@ -60,6 +60,8 @@ def main(area):
         test("tests/AudioAssetTests")
         build("tests/AudioFormatsSmoke/AudioFormatsSmoke.csproj")
     elif area=="graphics":
+        run("python3","scripts/ci_graphics_phase_one.py")
+        build("tests/GraphicsPhaseOneSmoke/GraphicsPhaseOneSmoke.csproj")
         test("tests/TextureStreamingTests")
         test("tests/EffectCompilerTests")
         with tempfile.TemporaryDirectory() as tmp:

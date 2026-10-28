@@ -97,7 +97,7 @@ void dnd_draw_backend_flush(void *data,int bytes,int invalidate){
 }
 void dnd_draw_backend_viewport(int x,int y,int w,int h){GX_SetViewport((float)x,(float)y,(float)w,(float)h,0,1);}
 void dnd_draw_backend_scissor(int x,int y,int w,int h){GX_SetScissorBoxOffset(0,0);GX_SetScissor((u32)x,(u32)y,(u32)w,(u32)h);}
-void dnd_draw_backend_camera(const float *view,const float *projection){dnd_draw_backend_invalidate_cache();memcpy(view_matrix,view,64);memcpy(projection_matrix,projection,64);projection_ortho=false;}
+void dnd_draw_backend_camera(const float *view,const float *projection){dnd_draw_backend_invalidate_cache();memcpy(view_matrix,view,64);memcpy(projection_matrix,projection,64);projection_ortho=projection[15]==1&&projection[11]==0;}
 void dnd_draw_backend_2d(int w,int h) {
     dnd_draw_backend_invalidate_cache();
     projection_ortho=true;Mtx44 p;guOrtho(p,0,(float)h,0,(float)w,-1,1);identity(view_matrix);
@@ -114,6 +114,7 @@ void dnd_draw_backend_restore(void) {
     GX_SetTexCoordScaleManually(GX_TEXCOORD0,GX_FALSE,1,1);GX_SetTexCoordBias(GX_TEXCOORD0,GX_FALSE,GX_FALSE);
     GX_SetClipMode(GX_CLIP_ENABLE);GX_SetCoPlanar(GX_FALSE);GX_SetFog(GX_FOG_NONE,0,1,0,1,(GXColor){0,0,0,0});
 }
+#include "dnd_render_gx.inc"
 #include "dnd_tev_backend.inc"
 #include "dnd_material_channels.inc"
 typedef struct { Mtx modelview,normal,inverse_view; } DndVertexState;
@@ -165,12 +166,14 @@ static bool draw_state(const DndDrawTexture *texture,const DndDrawMaterial *mate
     if(texture) {
         GXTexObj tex;GX_InitTexObj(&tex,(void*)texture->data,(u16)texture->width,(u16)texture->height,(u8)texture->format,world_reflection&&!secondary?GX_REPEAT:GX_CLAMP,GX_CLAMP,GX_FALSE);
         GX_InitTexObjLOD(&tex,texture->linear?GX_LINEAR:GX_NEAR,texture->linear?GX_LINEAR:GX_NEAR,0,0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
-        GX_LoadTexObj(&tex,GX_TEXMAP0);
+        managed_sampler(&tex,0,texture->linear,world_reflection&&!secondary?GX_REPEAT:GX_CLAMP,GX_CLAMP);
+    GX_LoadTexObj(&tex,GX_TEXMAP0);
     }
     if(texture||secondary)GX_SetTexCoordGen(GX_TEXCOORD0,GX_TG_MTX2x4,GX_TG_TEX0,GX_IDENTITY);
     if(secondary){
         GXTexObj tex;GX_InitTexObj(&tex,(void*)secondary->data,(u16)secondary->width,(u16)secondary->height,(u8)secondary->format,world_reflection?GX_REPEAT:GX_CLAMP,GX_CLAMP,GX_FALSE);
         GX_InitTexObjLOD(&tex,secondary->linear?GX_LINEAR:GX_NEAR,secondary->linear?GX_LINEAR:GX_NEAR,0,0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
+        managed_sampler(&tex,1,secondary->linear,world_reflection?GX_REPEAT:GX_CLAMP,GX_CLAMP);
         GX_LoadTexObj(&tex,GX_TEXMAP1);GX_SetTexCoordGen(GX_TEXCOORD1,GX_TG_MTX2x4,GX_TG_TEX1,GX_IDENTITY);
         GX_SetTexCoordScaleManually(GX_TEXCOORD1,GX_FALSE,1,1);GX_SetTexCoordBias(GX_TEXCOORD1,GX_FALSE,GX_FALSE);
     }
@@ -180,6 +183,8 @@ static bool draw_state(const DndDrawTexture *texture,const DndDrawMaterial *mate
     if(lit){GX_SetVtxDesc(GX_VA_NRM,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);}
     if(texture||secondary){GX_SetVtxDesc(GX_VA_TEX0,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_TEX0,GX_TEX_ST,GX_F32,0);}
     if(secondary){GX_SetVtxDesc(GX_VA_TEX1,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_TEX1,GX_TEX_ST,GX_F32,0);}
+    managed_uv(0);managed_uv(1);
+    if(dnd_device_pass()==1)dnd_draw_backend_scene(lit,view_matrix);
     cached_material=*material;
     cached_has_primary=texture!=NULL;cached_has_secondary=secondary!=NULL;
     if(texture)cached_primary=*texture;
