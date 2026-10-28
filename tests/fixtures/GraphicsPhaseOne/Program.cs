@@ -28,6 +28,7 @@ internal static class Program
         var identity=new Camera2D();var camera2D=new Camera2D{Position=new Vector2(10,0),Zoom=2};
         var sprites=new[]{new SpriteDraw(new TextureRegion(texture,new RectF(0,0,4,4)),new RectF(160,360,80,40),Color32.White){Flip=SpriteFlip.Horizontal}};
         var benchmark=new SubmissionBenchmark(quad,texture);
+        var phaseTwo=new PhaseTwoAcceptance(device);
         while(true){
             device.BeginFrame(Color32.Black);benchmark.Render(camera);device.SetViewport(0,128,640,320);device.SetScissor(0,128,640,320);
             renderer.Begin3D(camera,lighting);renderer.DrawMesh(quad,red,transforms[0]);renderer.DrawMesh(quad,diffuse,transforms[1]);renderer.DrawMesh(quad,repeat,transforms[2]);renderer.DrawMesh(quad,emission.Material,emissionTransform);renderer.End3D();
@@ -35,6 +36,7 @@ internal static class Program
             draw.Begin(camera2D);draw.PushClip(20,360,20,40);draw.FillRectangle(new RectF(15,180,20,20),new Color32(200,40,200));draw.PopClip();draw.End();
             draw.Begin();draw.DrawSprites(sprites,0,1);draw.End();
             logical.Begin(identity,new Viewport(400,360,200,80));logical.FillRectangle(new RectF(0,0,50,40),new Color32(20,40,220));logical.End();
+            phaseTwo.Render(device);
             device.EndFrame();Task.Delay(1).GetAwaiter().GetResult();
         }
     }

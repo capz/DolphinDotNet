@@ -26,7 +26,7 @@ static bool cached_has_primary,cached_has_secondary;
 static bool texture_same(const DndDrawTexture *a,const DndDrawTexture *b) {
     return a->data==b->data && a->bytes==b->bytes &&
            a->width==b->width && a->height==b->height &&
-           a->format==b->format && a->linear==b->linear;
+           a->format==b->format && a->linear==b->linear && a->levels==b->levels;
 }
 void dnd_draw_backend_invalidate_cache(void){material_cache_valid=false;}
 void dnd_draw_backend_publish_texture(void){
@@ -44,7 +44,7 @@ static unsigned glyph_quads;
 static int glyph_vertices;
 static bool glyph_atlas_active,glyph_atlas_ready;
 static unsigned char glyph_atlas[4096] __attribute__((aligned(32)));
-static const DndDrawTexture glyph_texture={glyph_atlas,sizeof(glyph_atlas),128,64,GX_TF_I4,false};
+static const DndDrawTexture glyph_texture={glyph_atlas,sizeof(glyph_atlas),128,64,GX_TF_I4,false,1};
 static DndOverlayList overlay_lists[2];
 static unsigned char glyph_supported[128];
 static bool glyph_list_ready,indexed_layout;
@@ -164,16 +164,16 @@ static bool draw_state(const DndDrawTexture *texture,const DndDrawMaterial *mate
     if(blend==3)GX_SetBlendMode(GX_BM_BLEND,GX_BL_ONE,GX_BL_INVSRCALPHA,GX_LO_CLEAR);
     GX_SetClipMode(GX_CLIP_ENABLE);GX_SetCoPlanar(GX_FALSE);GX_SetFog(GX_FOG_NONE,0,1,0,1,(GXColor){0,0,0,0});
     if(texture) {
-        GXTexObj tex;GX_InitTexObj(&tex,(void*)texture->data,(u16)texture->width,(u16)texture->height,(u8)texture->format,world_reflection&&!secondary?GX_REPEAT:GX_CLAMP,GX_CLAMP,GX_FALSE);
-        GX_InitTexObjLOD(&tex,texture->linear?GX_LINEAR:GX_NEAR,texture->linear?GX_LINEAR:GX_NEAR,0,0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
-        managed_sampler(&tex,0,texture->linear,world_reflection&&!secondary?GX_REPEAT:GX_CLAMP,GX_CLAMP);
+        GXTexObj tex;GX_InitTexObj(&tex,(void*)texture->data,(u16)texture->width,(u16)texture->height,(u8)texture->format,world_reflection&&!secondary?GX_REPEAT:GX_CLAMP,GX_CLAMP,texture->levels>1);
+        GX_InitTexObjLOD(&tex,texture->levels>1?(texture->linear?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):(texture->linear?GX_LINEAR:GX_NEAR),texture->linear?GX_LINEAR:GX_NEAR,0,(f32)(texture->levels>1?texture->levels-1:0),0,GX_FALSE,GX_FALSE,GX_ANISO_1);
+        managed_sampler(&tex,0,texture->levels,texture->linear,world_reflection&&!secondary?GX_REPEAT:GX_CLAMP,GX_CLAMP);
     GX_LoadTexObj(&tex,GX_TEXMAP0);
     }
     if(texture||secondary)GX_SetTexCoordGen(GX_TEXCOORD0,GX_TG_MTX2x4,GX_TG_TEX0,GX_IDENTITY);
     if(secondary){
-        GXTexObj tex;GX_InitTexObj(&tex,(void*)secondary->data,(u16)secondary->width,(u16)secondary->height,(u8)secondary->format,world_reflection?GX_REPEAT:GX_CLAMP,GX_CLAMP,GX_FALSE);
-        GX_InitTexObjLOD(&tex,secondary->linear?GX_LINEAR:GX_NEAR,secondary->linear?GX_LINEAR:GX_NEAR,0,0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
-        managed_sampler(&tex,1,secondary->linear,world_reflection?GX_REPEAT:GX_CLAMP,GX_CLAMP);
+        GXTexObj tex;GX_InitTexObj(&tex,(void*)secondary->data,(u16)secondary->width,(u16)secondary->height,(u8)secondary->format,world_reflection?GX_REPEAT:GX_CLAMP,GX_CLAMP,secondary->levels>1);
+        GX_InitTexObjLOD(&tex,secondary->levels>1?(secondary->linear?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):(secondary->linear?GX_LINEAR:GX_NEAR),secondary->linear?GX_LINEAR:GX_NEAR,0,(f32)(secondary->levels>1?secondary->levels-1:0),0,GX_FALSE,GX_FALSE,GX_ANISO_1);
+        managed_sampler(&tex,1,secondary->levels,secondary->linear,world_reflection?GX_REPEAT:GX_CLAMP,GX_CLAMP);
         GX_LoadTexObj(&tex,GX_TEXMAP1);GX_SetTexCoordGen(GX_TEXCOORD1,GX_TG_MTX2x4,GX_TG_TEX1,GX_IDENTITY);
         GX_SetTexCoordScaleManually(GX_TEXCOORD1,GX_FALSE,1,1);GX_SetTexCoordBias(GX_TEXCOORD1,GX_FALSE,GX_FALSE);
     }
@@ -228,7 +228,7 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
 #include "dnd_indexed_mesh.inc"
 void dnd_draw_backend_copy(const DndDrawTexture *texture,int x,int y,int w,int h) {
     dnd_draw_backend_invalidate_cache();
-    GX_SetTexCopySrc((u16)x,(u16)y,(u16)w,(u16)h);GX_SetTexCopyDst((u16)w,(u16)h,GX_TF_RGBA8,GX_FALSE);
+    GX_SetTexCopySrc((u16)x,(u16)y,(u16)w,(u16)h);GX_SetTexCopyDst((u16)texture->width,(u16)texture->height,GX_TF_RGBA8,w!=texture->width);
     GX_CopyTex((void*)texture->data,GX_FALSE);GX_PixModeSync();GX_DrawDone();GX_InvalidateTexAll();
 }
 void dnd_graphics_begin_frame(float r,float g,float b,float a) {

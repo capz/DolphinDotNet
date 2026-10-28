@@ -230,3 +230,22 @@ using(var drawingImage=new RasterImage(5,3,new Rgba32(10,20,30,40)))
     if(font.Length!=192||font[0]!='D'||font[1]!='N'||font[2]!='F'||font[3]!='T'||BinaryPrimitives.ReadInt32LittleEndian(font.AsSpan(24,4))!=packed.Length)throw new Exception("Drawing font header.");
     try{DrawingPackages.Font(drawingImage,2,2);throw new Exception("Invalid font accepted.");}catch(ArgumentException){}
 }
+
+using(var mipImage=new RasterImage(8,4,new Rgba32(10,20,30,40)))
+{
+    var packed=DrawingPackages.Texture(mipImage,true);
+    if(BinaryPrimitives.ReadInt32LittleEndian(packed.AsSpan(4,4))!=2||
+       BinaryPrimitives.ReadInt32LittleEndian(packed.AsSpan(24,4))!=4||packed.Length!=352)
+        throw new Exception("v2 rectangular mip chain header/size.");
+    // Four separately padded GX levels: 8x4 (128), 4x2, 2x1, 1x1 (64 each).
+    foreach(int offset in new[]{32,160,224,288})
+        if(packed[offset]!=40||packed[offset+1]!=10||packed[offset+32]!=20||packed[offset+33]!=30)
+            throw new Exception("Mip level RGBA packing or color changed.");
+    using var bad=new RasterImage(5,4);
+    try{DrawingPackages.Texture(bad,true);throw new Exception("NPOT mips accepted.");}catch(ArgumentException){}
+    using var transparent=new RasterImage(2,2,new Rgba32(255,0,0,0));
+    transparent[0,0]=new Rgba32(0,0,200,255);
+    var filtered=DrawingPackages.Texture(transparent,true);
+    if(filtered[96]!=64||filtered[97]!=0||filtered[128]!=0||filtered[129]!=200)
+        throw new Exception("Premultiplied mip filtering introduced a transparent fringe.");
+}

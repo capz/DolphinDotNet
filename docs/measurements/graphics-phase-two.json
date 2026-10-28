@@ -1,0 +1,32 @@
+{
+  "phaseTwoGraphics": true,
+  "cachedTextBenchmark": {
+    "samples": 240,
+    "glyphs": 4,
+    "immediateUs": 35,
+    "cachedUs": 9
+  },
+  "phaseOneGraphics": true,
+  "renderedFrames": 120,
+  "validatedTailFrames": 30,
+  "patches": 22,
+  "submissionBenchmark": {
+    "samples": 240,
+    "items": 64,
+    "meshIndividualUs": 282,
+    "meshBulkUs": 222,
+    "spriteIndividualUs": 369,
+    "spriteBulkUs": 329
+  },
+  "mode": "pages",
+  "backend": "OGL",
+  "soakSeconds": 20,
+  "secondHalfCaptureBytes": 7077888,
+  "baseCommit": "8e8e9f268578fbbdf297d49875c54f648795f43f",
+  "dolSha256": "3fd30fabd71a8ada5158230c0d6dea3071d339ed8b41562732bcbe6fe49c32c9",
+  "environment": "Dolphin OGL with software Mesa, CPUThread=False",
+  "workload": "64 offscreen mesh/sprite items and 4 offscreen glyphs; 60 warmup frames; 240 alternating-order paired samples",
+  "limitations": "CPU submission windows only; excludes setup, capture synchronization and presentation; hardware unverified",
+  "cachedGlyphGeometryNativeBytes": 864,
+  "captureTextureNativeBytes": 4096
+}

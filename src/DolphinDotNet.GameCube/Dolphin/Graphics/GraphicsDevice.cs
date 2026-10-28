@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace Dolphin.Graphics;
 
 /// <summary>The application's shared graphics owner. Submission is synchronous on the application executor.</summary>
-public sealed class GraphicsDevice
+public sealed partial class GraphicsDevice
 {
     public static GraphicsDevice Default {get;}=new GraphicsDevice();
     private readonly List<RetiredResource> retired=new List<RetiredResource>();

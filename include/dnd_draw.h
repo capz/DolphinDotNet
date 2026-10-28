@@ -7,7 +7,7 @@
 #include <stdbool.h>
 
 typedef struct { float x,y,z,nx,ny,nz,u,v; uint32_t color; } DndDrawVertex;
-typedef struct { const void *data; uint32_t bytes; int width,height,format; bool linear; } DndDrawTexture;
+typedef struct { const void *data; uint32_t bytes; int width,height,format; bool linear; int levels; } DndDrawTexture;
 typedef struct { uint32_t color; int flags; float cutoff; const DndDrawEffect *effect; const DndDrawTexture *secondary; } DndDrawMaterial;
 bool dnd_draw_backend_mesh(const DndDrawVertex *vertices,const uint16_t *indices,int count,uint32_t uniform_color,
                            const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world);
@@ -93,6 +93,7 @@ int dnd_model_draw_material(int token,DndArray *world,int tex,int secondary,uint
 int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
 int dnd_mesh_draw(int mesh,int texture,DndArray *world,uint32_t color,int flags,float cutoff);
 int dnd_mesh_primitives(DndArray *vertices,int offset,int count,int format,int primitive,DndArray *world,uint32_t color,int flags);
+int dnd_canvas_geometry(int token,int mesh,int texture,DndArray *world,uint32_t color);
 int dnd_canvas_create(int capacity);
 int dnd_canvas_viewport(int token,int x,int y,int width,int height);
 int dnd_canvas_sprites(int token,DndArray *textures,DndArray *vertices,DndArray *colors,int count);

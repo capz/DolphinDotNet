@@ -1,4 +1,4 @@
-name: High-level graphics in Dolphin
+name: High-level graphics phases 1 and 2 in Dolphin
 on:
   push:
     branches: [main]
@@ -30,7 +30,7 @@ jobs:
           python-version: '3.12'
       - name: Test the visual oracle
         run: python3 -m unittest discover -s tests -p test_dolphin_graphics_phase_one.py
-      - name: Build GameCube graphics acceptance
+      - name: Build GameCube graphics and throughput acceptance
         run: dotnet build tests/fixtures/GraphicsPhaseOne -c Release -m:1 -p:DndBuildBackend=Docker
       - name: Prepare Dolphin
         run: |

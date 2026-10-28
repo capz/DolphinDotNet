@@ -13,7 +13,7 @@ public sealed class BitmapFont : IDisposable
     public int CharacterCount {get;}
     private readonly bool ownsTexture;
     private bool disposed;
-    private void Check(){if(disposed)throw new ObjectDisposedException("BitmapFont");Texture.Check();}
+    internal void Check(){if(disposed)throw new ObjectDisposedException("BitmapFont");Texture.Check();}
     public BitmapFont(Texture2D texture,int cellWidth,int cellHeight,int firstCharacter=32,int characterCount=96)
         : this(texture,cellWidth,cellHeight,firstCharacter,characterCount,false) { }
     private BitmapFont(Texture2D texture,int w,int h,int first,int count,bool owns)

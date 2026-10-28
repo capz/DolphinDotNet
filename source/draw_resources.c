@@ -29,6 +29,7 @@ typedef struct {
     uint32_t mesh_color;
     int holds;
     int effect;
+    int levels;
     int width,height,format,linear,vertices,indices,dynamic,capacity,count,texture,blend,draws,flushes;
 } Resource;
 static Resource slots[SLOTS];
@@ -58,7 +59,7 @@ static int create(int kind,int bytes,int alignment) {
         void *base=malloc(padded+(unsigned)alignment-1);
         if(!base) return 0;
         int generation=r->generation+1;
-        memset(r,0,sizeof(*r)); r->generation=generation; r->kind=kind; r->bytes=bytes; r->allocation=base;
+        memset(r,0,sizeof(*r)); r->generation=generation; r->kind=kind; r->levels=1; r->bytes=bytes; r->allocation=base;
         r->data=(unsigned char*)(((uintptr_t)base+(unsigned)alignment-1)&~((uintptr_t)alignment-1));
         memset(r->data,0,padded); total_bytes+=bytes;
         return (generation<<10)|(i+1);
@@ -157,12 +158,24 @@ static uint32_t le32(const unsigned char *p) { return (uint32_t)p[0]|(uint32_t)p
 int dnd_texture_package(DndArray *a,int linear) {
     if(dnd_device_active() || !a || a->element_size!=1 || a->elements_are_references || a->length<32) return 0;
     const unsigned char *p=a->data;
-    if(memcmp(p,"DNTX",4) || le32(p+4)!=1 || le32(p+24)!=0 || le32(p+28)!=0) return 0;
+    unsigned version=le32(p+4),levels=version==1?1:le32(p+24);
+    if(memcmp(p,"DNTX",4) || (version!=1&&version!=2) || le32(p+28)!=0 ||
+       (version==1&&le32(p+24)!=0) || levels<1 || levels>11)return 0;
     int format=(int)le32(p+8),w=(int)le32(p+12),h=(int)le32(p+16);
     int bytes=texture_size(w,h,format);
-    if(bytes<0 || le32(p+20)!=(uint32_t)bytes || a->length-32!=(unsigned)bytes) return 0;
+    if(bytes<0)return 0;
+    if(version==2){
+        if((w&(w-1))||(h&(h-1)))return 0;
+        int mw=w,mh=h;
+        for(unsigned level=1;level<levels;level++){
+            if(mw==1&&mh==1)return 0;
+            mw=mw>1?mw/2:1;mh=mh>1?mh/2:1;
+            bytes+=texture_size(mw,mh,format);
+        }
+    }
+    if(le32(p+20)!=(uint32_t)bytes || a->length-32!=(unsigned)bytes)return 0;
     int token=create(TEXTURE,bytes,32);Resource *r=find(token,TEXTURE);if(!r)return 0;
-    r->width=w;r->height=h;r->format=format;r->linear=linear!=0;memcpy(r->data,p+32,(size_t)bytes);
+    r->levels=(int)levels;r->width=w;r->height=h;r->format=format;r->linear=linear!=0;memcpy(r->data,p+32,(size_t)bytes);
     dnd_draw_backend_flush(r->data,bytes,2);return token;
 }
 /* Allocates GX-native tiled texture storage; upload only between frames. */
@@ -240,7 +253,7 @@ static void texture_convert_rgba(Resource *r,const unsigned char *src) {
  }
 int dnd_texture_replace_rgba(int token,DndArray *rgba,int offset) {
     Resource *r=find(token,TEXTURE);
-    if(dnd_device_active()||dnd_raw_depth()||!r||r->format!=6||!rgba||rgba->elements_are_references||rgba->element_size!=1||offset<0||(uint32_t)offset>rgba->length||(uint32_t)(r->width*r->height*4)>rgba->length-(uint32_t)offset)return -1;
+    if(dnd_device_active()||dnd_raw_depth()||!r||r->format!=6||r->levels!=1||!rgba||rgba->elements_are_references||rgba->element_size!=1||offset<0||(uint32_t)offset>rgba->length||(uint32_t)(r->width*r->height*4)>rgba->length-(uint32_t)offset)return -1;
     dnd_draw_backend_wait();texture_convert_rgba(r,rgba->data+offset);
     dnd_draw_backend_flush(r->data,r->bytes,2);return 0;
 }
@@ -272,7 +285,7 @@ int dnd_texture_png(DndArray *png,int linear) {
     stbi_image_free(rgba);
     return token;
 }
-int dnd_texture_dimension(int token,int axis) { Resource *r=find(token,TEXTURE);return !r?-1:axis==0?r->width:axis==1?r->height:r->format; }
+int dnd_texture_dimension(int token,int axis) { Resource *r=find(token,TEXTURE);return !r?-1:axis==0?r->width:axis==1?r->height:axis==3?r->levels:r->format; }
 static bool matrix(DndArray *a,float *out) {
     if(!a || a->element_size!=4 || a->elements_are_references || a->length!=16) return false;
     memcpy(out,a->data,64);for(int i=0;i<16;i++)if(!isfinite(out[i]))return false;return true;
@@ -323,7 +336,7 @@ int dnd_mesh_update(int token,DndArray *a,int offset,int count,int format) {
 static bool texture(int token,DndDrawTexture *out) {
     memset(out,0,sizeof(*out));if(!token)return true;
     Resource *r=find(token,TEXTURE);if(!r)return false;
-    *out=(DndDrawTexture){r->data,(uint32_t)r->bytes,r->width,r->height,r->format,r->linear!=0};return true;
+    *out=(DndDrawTexture){r->data,(uint32_t)r->bytes,r->width,r->height,r->format,r->linear!=0,r->levels};return true;
 }
 int dnd_texture_resolve(int token,DndDrawTexture *out){return texture(token,out)?0:-1;}
 static int mesh_submit(Resource *r,int tex,DndDrawTexture tx,DndDrawTexture extra,int secondary,const float *transform,uint32_t color,int flags,float cutoff,const DndDrawEffect *effect) {
@@ -425,7 +438,7 @@ int dnd_canvas_flush(int token) {
         Resource *retired=NULL;
         int ti=(r->texture&1023)-1;
         if(r->texture>0&&ti>=0&&ti<SLOTS&&slots[ti].generation==(r->texture>>10)&&slots[ti].kind==TEXTURE)retired=&slots[ti];
-        if(retired)tx=(DndDrawTexture){retired->data,(uint32_t)retired->bytes,retired->width,retired->height,retired->format,retired->linear!=0};
+        if(retired)tx=(DndDrawTexture){retired->data,(uint32_t)retired->bytes,retired->width,retired->height,retired->format,retired->linear!=0,retired->levels};
         else if(!texture(r->texture,&tx))return -1;
         Resource *fx=NULL;
         if(r->effect){int index=(r->effect&1023)-1;
@@ -469,6 +482,10 @@ int dnd_canvas_clip(int token,int x,int y,int w,int h) {
     int screen_w=canvas_viewport[2],screen_h=canvas_viewport[3];
     int left=x*screen_w/r->width,top=y*screen_h/r->height;
     int right=(x+w)*screen_w/r->width,bottom=(y+h)*screen_h/r->height;
+    /* Positive logical clips may disappear under viewport scaling. GX uses
+     * inclusive endpoints and must never receive zero scissor extents. */
+    canvas_empty_clip=right<=left||bottom<=top;
+    if(canvas_empty_clip)return 0;
     dnd_draw_backend_scissor(left+canvas_viewport[0],top+canvas_viewport[1],right-left,bottom-top);return 0;
 }
 int dnd_canvas_blend(int token,int blend) {
@@ -477,7 +494,7 @@ int dnd_canvas_blend(int token,int blend) {
 int dnd_canvas_stats(int token,int kind) { Resource *r=find(token,CANVAS);return !r?-1:kind==0?r->draws:kind==1?r->flushes:r->count; }
 int dnd_draw_copy_texture(int token,int x,int y,int w,int h) {
     Resource *r=find(token,TEXTURE);DndDrawTexture tx;
-    if(!r||!dnd_device_active()||dnd_device_pass()||!texture(token,&tx)||r->format!=6||w!=r->width||h!=r->height||x<0||y<0||x>dnd_device_width()-w||y>dnd_device_height()-h)return -1;
+    if(!r||!dnd_device_active()||dnd_device_pass()||!texture(token,&tx)||r->format!=6||r->levels!=1||!((w==r->width&&h==r->height)||(w==r->width*2&&h==r->height*2))||x<0||y<0||x>dnd_device_width()-w||y>dnd_device_height()-h)return -1;
     dnd_draw_backend_copy(&tx,x,y,w,h);return 0;
 }
 
@@ -619,4 +636,24 @@ int dnd_mesh_draw_many(DndArray *a,DndArray *w,int count,int tex,int secondary,u
     }
     for(int i=0;i<count;i++)mesh_submit(find(ids[i],MESH),tex,tx,extra,secondary,(const float*)world[i]->data,color,flags,cutoff,fx?(DndDrawEffect*)fx->data:NULL);
     return 0;
+}
+
+/* Retained 2D triangles reside in an immutable mesh resource. Flush painter
+ * order, then consume native geometry directly without managed vertex staging. */
+int dnd_canvas_geometry(int token,int mesh,int tex,DndArray *world,uint32_t color){
+    Resource *canvas=find(token,CANVAS),*geometry=find(mesh,MESH);
+    DndDrawTexture tx;float transform[16];
+    if(!canvas||token!=active_canvas||dnd_device_pass()!=2||!geometry||geometry->indices||
+       !texture(tex,&tx)||!matrix(world,transform))return -1;
+    Resource *fx=canvas->effect?find(canvas->effect,EFFECT):NULL;
+    if(canvas->effect&&(!fx||(((DndDrawEffect*)fx->data)->texture&&!tex)))return -1;
+    if(canvas_empty_clip)return 0;
+    if(dnd_canvas_flush(token)<0)return -1;
+    DndDrawMaterial material={color,canvas->blend|8|16,0,fx?(DndDrawEffect*)fx->data:NULL,NULL};
+    const DndDrawVertex *vertices=(const DndDrawVertex*)geometry->data;
+    if(!geometry->uniform_color||!dnd_draw_backend_mesh(vertices,NULL,geometry->vertices,
+            geometry->mesh_color,tex?&tx:NULL,&material,transform))
+        dnd_draw_backend_vertices(vertices,geometry->vertices,0x90,tex?&tx:NULL,&material,transform);
+    dnd_performance_add_triangles((uint32_t)geometry->vertices/3);
+    canvas->draws++;return 0;
 }

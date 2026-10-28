@@ -9,6 +9,7 @@ public sealed class Texture2D : IDisposable
     private bool disposed;
     public int Width {get;}
     public int Height {get;}
+    public int MipLevels {get{Check();return NativeGraphics.TextureDimension(Token,3);}}
     public int NativeBytes {get{Check();return NativeGraphics.DrawBytes(Token);}}
     private Texture2D(int token){Token=token;Width=NativeGraphics.TextureDimension(token,0);Height=NativeGraphics.TextureDimension(token,1);}
     public static Texture2D Create(int width,int height,byte[] rgba,bool linear=false)

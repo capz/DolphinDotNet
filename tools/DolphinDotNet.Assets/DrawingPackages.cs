@@ -24,6 +24,38 @@ public static class DrawingPackages
         }
         return data;
     }
+    /// <summary>v2 adds a complete power-of-two RGBA8 mip chain through 1x1.
+    /// Filtering averages premultiplied RGBA to avoid transparent color fringes;
+    /// RGB averaging is in byte/sRGB space, without gamma correction.</summary>
+    public static byte[] Texture(RasterImage image,bool mipmaps)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+        if(!mipmaps)return Texture(image);
+        if(image.Width>1024||image.Height>1024||(image.Width&(image.Width-1))!=0||(image.Height&(image.Height-1))!=0)
+            throw new ArgumentException("Mipmapped dimensions must be powers of two, at most 1024.");
+        using var payload=new MemoryStream();
+        RasterImage current=image;int levels=0;
+        try {
+            while(true){
+                var packed=Texture(current);payload.Write(packed,32,packed.Length-32);levels++;
+                if(current.Width==1&&current.Height==1)break;
+                var next=new RasterImage(Math.Max(1,current.Width/2),Math.Max(1,current.Height/2));
+                for(int y=0;y<next.Height;y++)for(int x=0;x<next.Width;x++){
+                    int a=0,r=0,g=0,b=0;
+                    for(int dy=0;dy<2;dy++)for(int dx=0;dx<2;dx++){
+                        var c=current[Math.Min(current.Width-1,x*2+dx),Math.Min(current.Height-1,y*2+dy)];
+                        a+=c.A;r+=c.R*c.A;g+=c.G*c.A;b+=c.B*c.A;
+                    }
+                    next[x,y]=new Rgba32((byte)(a==0?0:(r+a/2)/a),(byte)(a==0?0:(g+a/2)/a),
+                        (byte)(a==0?0:(b+a/2)/a),(byte)((a+2)/4));
+                }
+                if(current!=image)current.Dispose();current=next;
+            }
+        }finally{if(current!=image)current.Dispose();}
+        byte[] data=new byte[32+payload.Length];
+        Put(data,0,0x58544e44);Put(data,4,2);Put(data,8,6);Put(data,12,image.Width);Put(data,16,image.Height);
+        Put(data,20,data.Length-32);Put(data,24,levels);payload.ToArray().CopyTo(data,32);return data;
+    }
     public static byte[] Font(RasterImage atlas,int cellWidth,int cellHeight,int firstCharacter=32,int characters=96)
     {
         ArgumentNullException.ThrowIfNull(atlas);
