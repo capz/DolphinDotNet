@@ -4,6 +4,10 @@ namespace Dolphin.Graphics;
 
 internal static class NativeGraphics
 {
+    internal static void AssetReadQuantum(int bytes)=>throw Unsupported();
+    internal static void AssetResetStats()=>throw Unsupported();
+    internal static void AssetSnapshot(long[] destination)=>throw Unsupported();
+    internal static long AssetStat(int kind)=>throw Unsupported();
     internal static int AssetOpen(string path)=>throw Unsupported();
     internal static long AssetLength(int token)=>throw Unsupported();
     internal static void AssetClose(int token)=>throw Unsupported();
@@ -48,7 +52,11 @@ internal static class NativeGraphics
     internal static int DrawRelease(int token) => throw Unsupported();
     internal static int DrawBytes(int token) => throw Unsupported();
     internal static int DrawTotalBytes() => throw Unsupported();
+    internal static void PerformanceCompactGlyphs(int enabled)=>throw Unsupported();
+    internal static void PerformanceFrameReuse(int enabled)=>throw Unsupported();
+    internal static int TextureReplaceRgba(int token,byte[] pixels,int offset)=>throw Unsupported();
     internal static int PerformanceRenderStat(int kind) => throw Unsupported();
+    internal static int TextureCreateRange(int width,int height,byte[] rgba,int offset,int linear)=>throw Unsupported();
     internal static int TextureCreate(int width,int height,byte[] rgba,int linear) => throw Unsupported();
     internal static int TexturePng(byte[] png,int linear) => throw Unsupported();
     internal static int TexturePackage(byte[] package,int linear) => throw Unsupported();
@@ -71,6 +79,7 @@ internal static class NativeGraphics
     internal static int CanvasBegin(int token,int width,int height) => throw Unsupported();
     internal static int CanvasEnd(int token) => throw Unsupported();
     internal static int CanvasFlush(int token) => throw Unsupported();
+    internal static int CanvasRectangle(int token,float x,float y,float w,float h,uint color)=>throw Unsupported();
     internal static int CanvasVertices(int token,int texture,float[] vertices,int count,uint color) => throw Unsupported();
     internal static int CanvasClip(int token,int x,int y,int width,int height) => throw Unsupported();
     internal static int CanvasBlend(int token,int blend) => throw Unsupported();

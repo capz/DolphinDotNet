@@ -407,13 +407,15 @@ int main(void) {
     /* Managed basic block hook defaults to no-op; an installed native
        rendezvous callback runs only when explicitly enabled at startup. */
     dnd_gc_safepoint();
+    dnd_gc_poll();
     assert(safepoint_calls == 0);
     dnd_gc_set_safepoint_hook(count_safepoint, &safepoint_calls);
-    dnd_gc_safepoint();
+    dnd_gc_poll();
     dnd_gc_safepoint();
     assert(safepoint_calls == 2);
     dnd_gc_set_safepoint_hook(NULL, NULL);
     dnd_gc_safepoint();
+    dnd_gc_poll();
     assert(safepoint_calls == 2);
     /* The collector may run only while every registered mutator is stopped.
        A one-thread rendezvous is also useful for validating API ownership. */

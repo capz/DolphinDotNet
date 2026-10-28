@@ -1,6 +1,7 @@
 #include "dnd_draw.h"
 #include "dnd_async.h"
 #include "dnd_performance.h"
+#include "dnd_crc32.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -12,6 +13,8 @@
 /* Isolated host fixtures can link texture/resource plumbing without GX. */
 #if !defined(DND_GAMECUBE_STORAGE)
 __attribute__((weak)) void dnd_draw_backend_publish_texture(void){}
+__attribute__((weak)) void dnd_draw_backend_mesh_changed(void){}
+__attribute__((weak)) bool dnd_draw_backend_mesh(const DndDrawVertex *v,const uint16_t *i,int n,uint32_t c,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)i;(void)n;(void)c;(void)t;(void)m;(void)w;return false;}
 #endif
 
 #define SLOTS 512
@@ -22,6 +25,8 @@ typedef struct {
     unsigned char *data;
     int kind,bytes,generation;
     bool pending,io_busy;
+    bool uniform_color;
+    uint32_t mesh_color;
     int holds;
     int effect;
     int width,height,format,linear,vertices,indices,dynamic,capacity,count,texture,blend,draws,flushes;
@@ -223,18 +228,33 @@ int dnd_texture_publish_staged(int token) {
     dnd_draw_backend_publish_texture();
     return 0;
 }
-static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
-    int bytes=texture_size(w,h,6);
-    if(dnd_device_active() || bytes<0 || !src)return 0;
-    int token=create(TEXTURE,bytes,32);Resource *r=find(token,TEXTURE);if(!r)return 0;
-    r->width=w;r->height=h;r->format=6;r->linear=linear!=0;
+static void texture_convert_rgba(Resource *r,const unsigned char *src) {
+    int w=r->width,h=r->height;
+    memset(r->data,0,(size_t)r->bytes);
     int blocks=(w+3)/4;
     for(int y=0;y<h;y++)for(int x=0;x<w;x++) {
         int block=((y/4)*blocks+x/4)*64,at=((y&3)*4+(x&3))*2,source=(y*w+x)*4;
         r->data[block+at]=src[source+3];r->data[block+at+1]=src[source];
         r->data[block+32+at]=src[source+1];r->data[block+33+at]=src[source+2];
     }
+ }
+int dnd_texture_replace_rgba(int token,DndArray *rgba,int offset) {
+    Resource *r=find(token,TEXTURE);
+    if(dnd_device_active()||dnd_raw_depth()||!r||r->format!=6||!rgba||rgba->elements_are_references||rgba->element_size!=1||offset<0||(uint32_t)offset>rgba->length||(uint32_t)(r->width*r->height*4)>rgba->length-(uint32_t)offset)return -1;
+    dnd_draw_backend_wait();texture_convert_rgba(r,rgba->data+offset);
+    dnd_draw_backend_flush(r->data,r->bytes,2);return 0;
+}
+static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
+    int bytes=texture_size(w,h,6);
+    if(dnd_device_active() || bytes<0 || !src)return 0;
+    int token=create(TEXTURE,bytes,32);Resource *r=find(token,TEXTURE);if(!r)return 0;
+    r->width=w;r->height=h;r->format=6;r->linear=linear!=0;
+    texture_convert_rgba(r,src);
     dnd_draw_backend_flush(r->data,bytes,2);return token;
+}
+int dnd_texture_create_range(int w,int h,DndArray *rgba,int offset,int linear) {
+    if(texture_size(w,h,6)<0||!rgba||rgba->element_size!=1||rgba->elements_are_references||offset<0||(uint32_t)offset>rgba->length||(uint32_t)(w*h*4)>rgba->length-(uint32_t)offset)return 0;
+    return texture_rgba(w,h,rgba->data+offset,linear);
 }
 int dnd_texture_create(int w,int h,DndArray *rgba,int linear) {
     if(texture_size(w,h,6)<0 || !rgba || rgba->element_size!=1 || rgba->elements_are_references || rgba->length!=(uint32_t)(w*h*4))return 0;
@@ -273,6 +293,11 @@ static bool vertices(DndArray *a,int first,int count,int format,DndDrawVertex *o
     }
     return true;
 }
+static void mesh_color(Resource *r) {
+    const DndDrawVertex *v=(const DndDrawVertex*)r->data;
+    r->mesh_color=v[0].color;r->uniform_color=true;
+    for(int i=1;i<r->vertices;i++)if(v[i].color!=r->mesh_color){r->uniform_color=false;break;}
+}
 int dnd_mesh_create_range(DndArray *a,int n,DndArray *indices,int m,int format,int dynamic) {
     if(dnd_device_active() || !a || n<1 || n>65535 || !array_range(a,0,n) || m<0 || (!indices && m) || !vertex_size(format)) return 0;
     if((m?m:n)%3 || m>3*65535 || (indices && (!array_range(indices,0,m)||indices->element_size!=2))) return 0;
@@ -281,7 +306,7 @@ int dnd_mesh_create_range(DndArray *a,int n,DndArray *indices,int m,int format,i
     if(!vertices(a,0,n,format,(DndDrawVertex*)r->data)){release(r);return 0;}
     uint16_t *index=(uint16_t*)(r->data+n*sizeof(DndDrawVertex));
     if(m){memcpy(index,indices->data,(size_t)m*2);for(int i=0;i<m;i++)if(index[i]>=n){release(r);return 0;}}
-    dnd_draw_backend_flush(r->data,r->bytes,0);return token;
+    mesh_color(r);dnd_draw_backend_flush(r->data,r->bytes,0);dnd_draw_backend_mesh_changed();return token;
 }
 int dnd_mesh_create(DndArray *a,DndArray *indices,int format,int dynamic) {
     return dnd_mesh_create_range(a,a?(int)a->length:0,indices,indices?(int)indices->length:0,format,dynamic);
@@ -293,7 +318,7 @@ int dnd_mesh_update(int token,DndArray *a,int offset,int count,int format) {
     // Validate the entire update before committing any part of it.
     for(int start=0;start<count;start+=768) { int n=count-start;if(n>768)n=768;if(!vertices(a,start,n,format,staging))return -1; }
     for(int start=0;start<count;start+=768) { int n=count-start;if(n>768)n=768;(void)vertices(a,start,n,format,staging);memcpy(r->data+(size_t)(offset+start)*sizeof(DndDrawVertex),staging,(size_t)n*sizeof(DndDrawVertex)); }
-    dnd_draw_backend_flush(r->data,r->bytes,0);return 0;
+    mesh_color(r);dnd_draw_backend_flush(r->data,r->bytes,0);dnd_draw_backend_mesh_changed();return 0;
 }
 static bool texture(int token,DndDrawTexture *out) {
     memset(out,0,sizeof(*out));if(!token)return true;
@@ -315,6 +340,8 @@ int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint3
     DndDrawMaterial material={color,flags,cutoff,fx?(DndDrawEffect*)fx->data:NULL,secondary?&extra:NULL};
     DndDrawVertex *v=(DndDrawVertex*)r->data;uint16_t *idx=(uint16_t*)(r->data+r->vertices*sizeof(DndDrawVertex));
     int count=r->indices?r->indices:r->vertices;
+    if(r->uniform_color&&dnd_draw_backend_mesh(v,r->indices?idx:NULL,count,r->mesh_color,tex?&tx:NULL,&material,transform))
+    {dnd_performance_add_triangles((uint32_t)count/3);return 0;}
     for(int start=0;start<count;) {
         int n=count-start;if(n>768)n=768;
         for(int j=0;j<n;j++)staging[j]=v[r->indices?idx[start+j]:start+j];
@@ -416,6 +443,17 @@ int dnd_canvas_vertices(int token,int tex,DndArray *a,int count,uint32_t color) 
     for(int i=0;i<count;i++)v[i]=(DndDrawVertex){p[i*4],p[i*4+1],0,0,0,1,p[i*4+2],p[i*4+3],color};
     r->count+=count;return 0;
 }
+int dnd_canvas_rectangle(int token,float x,float y,float w,float h,uint32_t color) {
+    Resource *r=find(token,CANVAS);
+    if(!r||token!=active_canvas||dnd_device_pass()!=2||!isfinite(x)||!isfinite(y)||!isfinite(w)||!isfinite(h)||w<0||h<0||!isfinite(x+w)||!isfinite(y+h))return -1;
+    if(w==0||h==0)return 0;
+    Resource *fx=r->effect?find(r->effect,EFFECT):NULL;
+    if(r->effect&&(!fx||((DndDrawEffect*)fx->data)->texture))return -1;
+    if(r->count&&(r->texture||r->count+6>r->capacity))if(dnd_canvas_flush(token)<0)return -1;
+    r->texture=0;DndDrawVertex *v=(DndDrawVertex*)r->data+r->count;
+    v[0]=(DndDrawVertex){x,y,0,0,0,1,0,0,color};v[1]=v[0];v[1].x=x+w;v[2]=v[1];v[2].y=y+h;
+    v[3]=v[0];v[4]=v[2];v[5]=v[0];v[5].y=y+h;r->count+=6;return 0;
+}
 int dnd_canvas_end(int token) { if(dnd_canvas_flush(token)<0)return -1;int result=dnd_device_pass_end(2);if(result==0)active_canvas=0;return result; }
 int dnd_canvas_clip(int token,int x,int y,int w,int h) {
     Resource *r=find(token,CANVAS);
@@ -466,13 +504,7 @@ uint32_t dnd_buffer_crc32(int token,int offset,int count,uint32_t initial) {
     if(dnd_device_active()||dnd_raw_depth()||!r||r->io_busy||offset<0||count<0||offset>r->bytes||count>r->bytes-offset){
         dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Invalid native checksum range or active frame.");return 0;
     }
-    uint32_t crc=~initial;
-    const unsigned char *p=r->data+offset;
-    for(int i=0;i<count;i++){
-        crc^=p[i];
-        for(int bit=0;bit<8;bit++)crc=(crc>>1)^((crc&1)?0xedb88320u:0u);
-    }
-    return ~crc;
+    return dnd_crc32(r->data+offset,(size_t)count,initial);
 }
 
 /* Programs are immutable. Uniform writes are forbidden while a frame is active. */

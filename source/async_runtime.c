@@ -19,8 +19,8 @@ static void mutex_destroy(AsyncMutex *m) { LWP_MutexDestroy(*m); }
 static int cond_init(AsyncCond *c) { return LWP_CondInit(c); }
 static void signal_all(AsyncCond *c) { LWP_CondBroadcast(*c); }
 static void cond_destroy(AsyncCond *c) { LWP_CondDestroy(*c); }
-static void wait_cond(AsyncCond *c, AsyncMutex *m, bool timed) {
-    if (timed) { struct timespec delay = {0, 1000000}; LWP_CondTimedWait(*c, *m, &delay); }
+static void wait_cond(AsyncCond *c, AsyncMutex *m, uint64_t timeout_us) {
+    if (timeout_us) { struct timespec delay = {(time_t)(timeout_us/1000000), (long)(timeout_us%1000000)*1000}; LWP_CondTimedWait(*c, *m, &delay); }
     else LWP_CondWait(*c, *m);
 }
 static uint64_t now_us(void) { return ticks_to_microsecs(gettime()); }
@@ -48,10 +48,11 @@ static void mutex_destroy(AsyncMutex *m) { pthread_mutex_destroy(m); }
 static int cond_init(AsyncCond *c) { return pthread_cond_init(c, NULL); }
 static void signal_all(AsyncCond *c) { pthread_cond_broadcast(c); }
 static void cond_destroy(AsyncCond *c) { pthread_cond_destroy(c); }
-static void wait_cond(AsyncCond *c, AsyncMutex *m, bool timed) {
-    if (timed) {
+static void wait_cond(AsyncCond *c, AsyncMutex *m, uint64_t timeout_us) {
+    if (timeout_us) {
         struct timespec deadline; clock_gettime(CLOCK_REALTIME, &deadline);
-        deadline.tv_nsec += 1000000;
+        deadline.tv_sec += (time_t)(timeout_us/1000000);
+        deadline.tv_nsec += (long)(timeout_us%1000000)*1000;
         if (deadline.tv_nsec >= 1000000000) { deadline.tv_sec++; deadline.tv_nsec -= 1000000000; }
         pthread_cond_timedwait(c, m, &deadline);
     } else pthread_cond_wait(c, m);
@@ -70,10 +71,49 @@ static AsyncCond changed;
 static AsyncThread thread;
 static DndExecutionContext contexts[2];
 static DndAsyncDispatch dispatch;
-static bool running, stopping, failed;
-static int owner, dispatch_depth[2], critical_depth[2];
+bool dnd_async_active;
+bool dnd_async_stopping;
+int dnd_async_owner, dnd_async_critical_depth[2];
+#define running dnd_async_active
+#define owner dnd_async_owner
+#define critical_depth dnd_async_critical_depth
+#define stopping dnd_async_stopping
+static bool failed;
+static int dispatch_depth[2];
 static uint64_t next_poll[2];
 static bool productive_waits;
+static bool deadline_waits=true;
+static int64_t timer_deadline=-1;
+static int64_t yielded_deadline[2]={INT64_MIN,INT64_MIN};
+/* Mutated with the managed gate held, including after a timed wait reacquires it. */
+static uint64_t wait_stats[2][9];
+void dnd_async_deadline_waits(int enabled){deadline_waits=enabled!=0;yielded_deadline[0]=yielded_deadline[1]=INT64_MIN;}
+void dnd_async_deadline(int64_t due){
+    if(due!=timer_deadline)yielded_deadline[0]=yielded_deadline[1]=INT64_MIN;
+    timer_deadline=due;
+}
+void dnd_async_timer_late(int64_t late){if(late>0&&(uint64_t)late>wait_stats[0][8])wait_stats[0][8]=(uint64_t)late;}
+void dnd_async_wait_reset(void){memset(wait_stats[0],0,sizeof(wait_stats[0]));}
+void dnd_async_wait_skipped(void){wait_stats[owner][7]++;}
+void dnd_async_wait_snapshot(DndArray *data) {
+    if(!data||data->length<9||data->element_size!=8||data->elements_are_references){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Wait statistics require nine Int64 slots.");return;}
+    memcpy(data->data,wait_stats[owner],sizeof(wait_stats[owner]));
+}
+int64_t dnd_async_wait_stat(int kind){return kind>=0&&kind<9?(int64_t)wait_stats[owner][kind]:0;}
+static uint64_t wait_timeout(void) {
+    uint64_t timeout=1000;
+    if(deadline_waits&&timer_deadline>=0){
+        int64_t left=timer_deadline-(int64_t)now_us();
+        if(left<=0){
+            // Yield once per due hint. If service cannot advance (for example
+            // while its executor is in native I/O), keep the timed backstop.
+            if(yielded_deadline[owner]!=timer_deadline){yielded_deadline[owner]=timer_deadline;return 0;}
+            return timeout;
+        }
+        if(left<1000){timeout=(uint64_t)left;wait_stats[owner][6]++;}
+    }
+    return timeout;
+}
 void dnd_async_productive_waits(int enabled){productive_waits=enabled!=0;}
 int dnd_async_app_wait_begin(void) {
     if(!running||!productive_waits)return -1;
@@ -84,8 +124,12 @@ void dnd_async_app_wait_end(int context) {
     if(context<0)return;
     lock(&gate);dnd_context_resume(&contexts[0]);owner=0;
 }
-static unsigned poll_stride=64,poll_budget[2];
-static uint64_t poll_calls,poll_slow;
+static unsigned poll_stride=64;
+unsigned dnd_async_poll_budget[2];
+uint64_t dnd_async_poll_calls;
+#define poll_budget dnd_async_poll_budget
+#define poll_calls dnd_async_poll_calls
+static uint64_t poll_slow;
 void dnd_async_poll_stride(int stride) {
     if(stride<1||stride>1024){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Invalid async poll stride.");return;}
     poll_stride=(unsigned)stride;poll_budget[0]=poll_budget[1]=0;
@@ -105,12 +149,19 @@ static int service(void) {
     return result;
 }
 
+static void yield_gate(void);
 static void park(bool timed) {
+    uint64_t timeout=timed?wait_timeout():0;
+    // A due timer needs the service executor, not another timeout interval.
+    if(timed&&!timeout){yield_gate();return;}
+    uint64_t before=now_us();wait_stats[owner][1]++;
     int current = owner;
     dnd_context_suspend(&contexts[current]);
-    wait_cond(&changed, &gate, timed); /* atomically releases/reacquires gate */
+    wait_cond(&changed, &gate, timeout); /* atomically releases/reacquires gate */
     dnd_context_resume(&contexts[current]);
     owner = current;
+    uint64_t elapsed=now_us()-before;wait_stats[owner][2]+=elapsed;
+    if(elapsed>wait_stats[owner][3])wait_stats[owner][3]=elapsed;
 }
 
 static void yield_gate(void) {
@@ -154,6 +205,7 @@ bool dnd_async_start(DndAsyncDispatch callback) {
     memset(dispatch_depth, 0, sizeof(dispatch_depth));
     memset(critical_depth, 0, sizeof(critical_depth));
     memset(next_poll, 0, sizeof(next_poll));
+    timer_deadline=-1;yielded_deadline[0]=yielded_deadline[1]=INT64_MIN;memset(wait_stats,0,sizeof(wait_stats));
     dispatch = callback; owner = 0; stopping = false; failed = false;
     lock(&gate);
     if (thread_start(&thread, background) != 0) {
@@ -164,23 +216,36 @@ bool dnd_async_start(DndAsyncDispatch callback) {
     return true;
 }
 
+void dnd_async_dispatch_enter(void){dispatch_depth[owner]++;}
+void dnd_async_dispatch_leave(void){if(dispatch_depth[owner]>0)dispatch_depth[owner]--;}
+
 bool dnd_async_running(void) { return running; }
 int dnd_async_context(void) { return owner; }
 void dnd_async_wake(void) { if (running) signal_all(&changed); }
 
 void dnd_async_wait_external(void) { if(running) park(true); }
 
-void dnd_async_progress(void) {
+void dnd_async_service(void) {
     if (!running) return;
     if (critical_depth[owner] != 0) { dnd_exception_throw(DND_EXCEPTION_NOT_SUPPORTED, "Pending task waits inside class initialization are unsupported."); return; }
     if (stopping && owner == 1 && !dnd_exception_pending()) { dnd_exception_throw(DND_EXCEPTION_OPERATION_CANCELED, "Runtime shutdown."); return; }
     if (failed) { dnd_exception_throw_object(contexts[1].exception_object); return; }
-    (void)service();
+    uint64_t before=now_us();wait_stats[owner][4]++;
+    (void)service();wait_stats[owner][5]+=now_us()-before;
     if (dnd_exception_pending()) { dnd_exception_rethrow(); return; }
-    /* Timed waits cover nonblocking sockets/DMA, spurious wakes and wakeups
-       occurring just before the wait. No task wait spins on the CPU. */
+}
+
+void dnd_async_wait(void) {
+    if(!running||dnd_exception_pending())return;
     park(true);
     if (failed) dnd_exception_throw_object(contexts[1].exception_object);
+}
+
+void dnd_async_progress(void) {
+    wait_stats[owner][0]++;
+    dnd_async_service();
+    /* Compatibility path retained for controlled before/after measurements. */
+    dnd_async_wait();
 }
 
 void dnd_async_safepoint(void) {

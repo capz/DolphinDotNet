@@ -8,6 +8,7 @@
  * Their device passes have no persistent GX state to invalidate. */
 #if !defined(DND_GAMECUBE_STORAGE)
 __attribute__((weak)) void dnd_draw_backend_invalidate_cache(void){}
+__attribute__((weak)) void dnd_draw_backend_overlay_shutdown(void){}
 #endif
 static bool active,external;
 /* GX presentation synchronizes the GPU; never signal an in-flight frame. */
@@ -123,7 +124,7 @@ int dnd_raw_depth(void) { return raw_depth; }
 void dnd_device_shutdown(void) {
     /* Native shutdown never executes user callbacks and retains pending errors. */
     if(raw_depth) { dnd_draw_backend_abort();raw_depth=0; dnd_async_leave_critical(); }
-    dnd_draw_backend_wait(); if(active)dnd_async_leave_critical(); active=false; pass=0; dnd_draw_shutdown(); external=false;
+    dnd_draw_backend_wait();dnd_draw_backend_overlay_shutdown(); if(active)dnd_async_leave_critical(); active=false; pass=0; dnd_draw_shutdown(); external=false;
 }
 void dnd_immediate_begin(float r,float g,float b,float a) {
     if(dnd_device_begin(r,g,b,a)<0 || dnd_device_pass_begin(4)<0)

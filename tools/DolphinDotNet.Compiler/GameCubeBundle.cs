@@ -327,6 +327,13 @@ internal static class GameCubeBundle
         // Keep the reporting slot even when the app has not enabled/drawn the overlay yet.
         builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") +
             (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry -Wl,--undefined=dnd_debugger_heartbeat" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
+        // Keep symbol/debug targets readable and other platforms unchanged until
+        // independently validated. DND_LTO=0 retains the release A/B control.
+        builder.AppendLine("DND_LTO ?= " + (!debugSymbols && platform == "gamecube" ? "1" : "0"));
+        builder.AppendLine("ifeq ($(DND_LTO),1)");
+        builder.AppendLine("CFLAGS += -O3 -flto -fno-strict-aliasing");
+        builder.AppendLine("LDFLAGS += -flto");
+        builder.AppendLine("endif");
         builder.AppendLine("ifneq ($(BUILD),$(notdir $(CURDIR)))");
         builder.AppendLine(".DEFAULT_GOAL := all");
         builder.AppendLine("export OUTPUT := $(CURDIR)/$(TARGET)");
@@ -354,6 +361,13 @@ internal static class GameCubeBundle
         builder.AppendLine("else");
         builder.AppendLine(".DEFAULT_GOAL := $(OUTPUT)." + suffix);
         builder.AppendLine("DEPENDS := $(OFILES:.o=.d)");
+        // Flags are prerequisites, not a filename convention. A warm native
+        // directory must rebuild when switching the optimization control.
+        builder.AppendLine(".PHONY: dnd-force-flags");
+        builder.AppendLine(".dnd-native-flags: dnd-force-flags");
+        builder.AppendLine("\t@printf '%s\\n' \"$(CC)\" \"$(CFLAGS)\" \"$(LDFLAGS)\" \"$(LIBPATHS)\" \"$(LIBS)\" > $@.tmp");
+        builder.AppendLine("\t@cmp -s $@.tmp $@ || cp $@.tmp $@");
+        builder.AppendLine("$(OFILES): .dnd-native-flags");
         if (isWiiU)
         {
             builder.AppendLine("$(OUTPUT).rpx: $(OUTPUT).elf");
@@ -367,8 +381,8 @@ internal static class GameCubeBundle
             if (debugSymbols)
                 builder.AppendLine("\tpython3 \"$(dir $(OUTPUT))scripts/dnd_debug_addresses.py\" --elf $(OUTPUT).elf --source-map \"$(dir $(OUTPUT))dnd-il-debug.json\" --output $(OUTPUT).dnd-addresses.json --readelf \"$(DEVKITPPC)/bin/powerpc-eabi-readelf\"");
         }
-        builder.AppendLine("$(OUTPUT).elf: $(OFILES)");
-        builder.AppendLine("\t$(CC) $^ $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@");
+        builder.AppendLine("$(OUTPUT).elf: $(OFILES) .dnd-native-flags");
+        builder.AppendLine("\t$(CC) $(OFILES) $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@");
         builder.AppendLine("-include $(DEPENDS)");
         builder.AppendLine("endif");
         return builder.ToString();

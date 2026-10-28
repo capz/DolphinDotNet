@@ -29,7 +29,7 @@ def wait_for_capture(process,frames,seconds):
     raise TimeoutError(f'No rendered shader frames within {seconds}s; capture files: {sizes}')
 
 
-def run_ffmpeg(arguments,log_path,**kwargs):
+def run_ffmpeg(arguments,log_path,*,timeout=FFMPEG_TIMEOUT_SECONDS,**kwargs):
     # Bound decoder, filter and encoder pools separately. Auto-sizing against
     # host CPU count oversubscribes constrained CI runners (CI 1363).
     command=['ffmpeg','-hide_banner','-loglevel','error','-nostdin',
@@ -37,7 +37,7 @@ def run_ffmpeg(arguments,log_path,**kwargs):
              *arguments[:-1],'-threads','1',arguments[-1]]
     try:
         result=subprocess.run(command,check=True,stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE,timeout=FFMPEG_TIMEOUT_SECONDS,**kwargs)
+                              stderr=subprocess.PIPE,timeout=timeout,**kwargs)
     except (subprocess.TimeoutExpired,subprocess.CalledProcessError) as error:
         diagnostics=(error.stderr or b'').decode(errors='replace')
         log_path.write_text(diagnostics)

@@ -18,8 +18,17 @@ namespace Dolphin.Threading.Tasks
         }
         private static readonly WorkQueue applicationQueue=new WorkQueue();
         private static readonly WorkQueue backgroundQueue=new WorkQueue();
-        /// <summary>Cooperative block budget; 1 retains the legacy clock-poll cadence.</summary>
+        /// <summary>Poll timers on the application executor while native I/O owns the service executor.</summary>
+        public static bool ApplicationTimers {get;set;}=true;
+        /// <summary>Recheck completion after service before parking. False is a validation control.</summary>
+        public static bool CompletionAwareWaits {get;set;}=true;
+        public static bool DeadlineWaits {set=>NativeAsync.AsyncDeadlineWaits(value?1:0);}
+        /// <summary>Cumulative runtime diagnostics; index definitions are in docs/throughput.md.</summary>
+        public static void CopyWaitStats(long[] destination)=>NativeAsync.AsyncWaitSnapshot(destination);
+        public static void ResetWaitStats()=>NativeAsync.AsyncWaitReset();
+        public static long WaitStat(int kind)=>NativeAsync.AsyncWaitStat(kind);
         public static bool ProductiveWaits {set=>NativeAsync.AsyncProductiveWaits(value?1:0);}
+        /// <summary>Cooperative block budget; 1 retains the legacy clock-poll cadence.</summary>
         public static int PollStride {set=>NativeAsync.AsyncPollStride(value);}
         public static long PollCalls=>NativeAsync.AsyncPollStat(0);
         public static long SlowPollCalls=>NativeAsync.AsyncPollStat(1);
@@ -35,8 +44,16 @@ namespace Dolphin.Threading.Tasks
             NativeAsync.AsyncWake();
         }
         // Kept for deterministic runtime tests and existing integrations.
-        public static bool Pump()=>PumpContext(Context,1)!=0;
-        public static int Pump(int maximumActions)=>PumpContext(Context,maximumActions);
+        public static bool Pump()=>Pump(1)!=0;
+        public static int Pump(int maximumActions)
+        {
+            // Match native service dispatch: safepoints may yield the gate,
+            // but cannot recursively dispatch application callbacks. An explicit
+            // task wait can still service work needed to settle that task.
+            NativeAsync.AsyncDispatchEnter();
+            try{return PumpContext(Context,maximumActions);}
+            finally{NativeAsync.AsyncDispatchLeave();}
+        }
         public static void RunUntilIdle(){while(Pump()){} }
         internal static int PumpContext(int context,int maximumActions)
         {
@@ -80,7 +97,18 @@ namespace Dolphin.Threading.Tasks
         {
             while(!IsCompleted)
             {
-                if(NativeAsync.AsyncRunning())NativeAsync.AsyncProgress();
+                if(NativeAsync.AsyncRunning())
+                {
+                    if(!Scheduler.CompletionAwareWaits)NativeAsync.AsyncProgress();
+                    else
+                    {
+                        NativeAsync.AsyncService();
+                        // Core methods do not yield the managed gate between this
+                        // check and park. A service callback may have settled us.
+                        if(!IsCompleted)NativeAsync.AsyncWait();
+                        else NativeAsync.AsyncWaitSkipped();
+                    }
+                }
                 else if(!Scheduler.Pump())throw new InvalidOperationException("No queued work can complete this task.");
             }
             if(error!=null)throw error;

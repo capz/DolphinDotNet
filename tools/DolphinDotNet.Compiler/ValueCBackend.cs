@@ -71,9 +71,10 @@ internal static class ValueCBackend
         foreach(var m in methods)b.AppendLine($"{ReturnCType(m,model)} {Symbol(m.Key)}({Parameters(m,model)});");
         b.AppendLine(ComparisonBindings.EmitHelpers(methods,model,graph));
         b.AppendLine(StringBindings.EmitHelpers(methods,model,graph));
+        var boundedLeaves=BoundedLeafAnalysis.Analyze(methods,model);
         foreach(var m in methods)
             b.AppendLine(Emit(m,model,Symbol(m.Key),false,stringIds,automaticAsync,
-                sourceLocations is not null ? sourceLocations[m.Key] : null));
+                sourceLocations is not null ? sourceLocations[m.Key] : null,boundedLeaves.Contains(m.Key)));
         foreach(var type in initializedTypes)
         {
             var cctor=TypeInitializer(type,model)!;
@@ -114,7 +115,7 @@ internal static class ValueCBackend
             {
                 var timingPending=methods.Single(m=>m.Key.TypeName=="Dolphin.Timing.TimingRuntime"&&m.Key.Name=="get_Pending");
                 if(TypeInitializer("Dolphin.Timing.TimingRuntime",model) is not null)b.AppendLine($"  {EnsureSymbol("Dolphin.Timing.TimingRuntime")}();");
-                b.AppendLine($"  if(context==1) (void){Symbol(timingPump.Key)}();");
+                b.AppendLine($"  (void){Symbol(timingPump.Key)}(context);");
                 servicePending.Add($"(int){Symbol(timingPending.Key)}()");
             }
             b.AppendLine($"  (void){Symbol(schedulerPump!.Key)}(context,16);");
@@ -143,10 +144,11 @@ internal static class ValueCBackend
     }
 
     public static string Emit(ValueIrMethod method,CompilationModel model,string functionName="dnd_value_ir_test",bool includeHeader=true,IReadOnlyDictionary<string,int>? stringIds=null,bool automaticAsync=false,
-        IReadOnlyDictionary<int, ManagedSourceLocation>? sourceLocations=null)
+        IReadOnlyDictionary<int, ManagedSourceLocation>? sourceLocations=null,bool? omitSafepoints=null)
     {
         var b=new StringBuilder();
         var values=Collect(method).GroupBy(v=>v.Id).Select(g=>g.First()).OrderBy(v=>v.Id).ToArray();
+        var boundedLeaf=sourceLocations is null&&(omitSafepoints??BoundedLeafAnalysis.CanOmitSafepoints(method,model));
         if(includeHeader)b.AppendLine("#include <stdint.h>\n#include <math.h>\n#include <string.h>");
         b.Append($"{ReturnCType(method,model)} {functionName}(");
         b.Append(Parameters(method,model,sourceLocations is not null));
@@ -217,6 +219,7 @@ internal static class ValueCBackend
             for(var pi=0;pi<argumentStorage.Count;pi++)
                 foreach(var offset in argumentStorage[pi].ReferenceOffsets??Array.Empty<int>())
                     roots.Add($"(DndObject**)(arg_{pi+(method.HasThis?1:0)}+{offset})");
+        if(boundedLeaf)roots.Clear();
         if(roots.Count>0)
         {
             b.AppendLine($"  DndObject **gc_slots[{roots.Count}] = {{ {string.Join(", ",roots)} }};");
@@ -251,11 +254,13 @@ internal static class ValueCBackend
         {
             if (sourceLocations is not null) b.AppendLine("#line 1 \"generated_program.c\"");
             b.AppendLine($"block_{block.Id}:");
-            // Every AOT block entry is a cooperative safepoint, including loop backedges.
-            // The hook is a no-op until the native runtime installs a coordinator.
-            b.AppendLine("  dnd_gc_safepoint();");
-            if(automaticAsync&&method.Key.AssemblyName!="DolphinDotNet.Core"&&method.Key.AssemblyName!="DolphinDotNet.GameCube")
-                b.AppendLine("  dnd_async_safepoint();");
+            // Keep every loop and potentially allocating/dispatching method
+            // cooperative. Bounded primitive leaves cannot collect or yield.
+            if(!boundedLeaf) {
+                b.AppendLine("  dnd_gc_poll();");
+                if(automaticAsync&&method.Key.AssemblyName!="DolphinDotNet.Core"&&method.Key.AssemblyName!="DolphinDotNet.GameCube")
+                    b.AppendLine("  dnd_async_poll();");
+            }
             if(method.ExceptionRegions.Count>0)
             {
                 var protectedHere=method.ExceptionRegions.Any(r=>block.CilOffset>=r.TryOffset&&block.CilOffset<r.TryOffset+r.TryLength);
@@ -275,7 +280,7 @@ internal static class ValueCBackend
                     case ValueIrStoreLocalStruct x:b.AppendLine($"  memcpy(l{x.Index}, (void*)v{x.SourceAddress.Id}, {x.Size}u);");break;
                     case ValueIrAddressOfLocal x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)&l{x.Index};");break;
                     case ValueIrDataToken x:b.AppendLine($"  static const struct {{uint32_t size;uint8_t data[{x.Data.Length}];}} data_{x.Result.Id}={{ {x.Data.Length}u,{{ {string.Join(",",x.Data.Select(v=>v.ToString()))} }} }};v{x.Result.Id}=(intptr_t)&data_{x.Result.Id};");break;
-                    case ValueIrInitializeArray x:b.AppendLine($"  {{ DndArray *a=(DndArray*)v{x.Array.Id};const uint32_t *size=(const uint32_t*)v{x.Data.Id};const uint8_t *data=(const uint8_t*)(size+1);if(dnd_require_object((DndObject*)a)){{if(a->elements_are_references||a->element_size>8u||(size_t)a->element_size*a->length>*size)dnd_exception_throw(DND_EXCEPTION_ARGUMENT,\"Invalid array initializer.\");else for(uint32_t i=0;i<a->length;i++){{uint64_t scalar=0;for(uint32_t j=0;j<a->element_size;j++)scalar|=(uint64_t)data[(size_t)i*a->element_size+j]<<(8*j);(void)dnd_array_store_scalar(a,i,scalar,a->element_size);}} }} }}");break;
+                    case ValueIrInitializeArray x:b.AppendLine($"  {{ DndArray *a=(DndArray*)v{x.Array.Id};const uint32_t *size=(const uint32_t*)v{x.Data.Id};const uint8_t *data=(const uint8_t*)(size+1);if(dnd_require_object_fast((DndObject*)a)){{if(a->elements_are_references||a->element_size>8u||(size_t)a->element_size*a->length>*size)dnd_exception_throw(DND_EXCEPTION_ARGUMENT,\"Invalid array initializer.\");else for(uint32_t i=0;i<a->length;i++){{uint64_t scalar=0;for(uint32_t j=0;j<a->element_size;j++)scalar|=(uint64_t)data[(size_t)i*a->element_size+j]<<(8*j);(void)dnd_array_store_scalar(a,i,scalar,a->element_size);}} }} }}");break;
                     case ValueIrNativeStorage x: NativeStorageBindings.Emit(b,x);break;
                     case ValueIrDefaultComparison x: b.AppendLine($"  v{x.Result.Id} = {ComparisonBindings.Expression(x,model)};");break;
                     case ValueIrNullableInit x:
@@ -343,8 +348,8 @@ internal static class ValueCBackend
                         break;
                     }
                     case ValueIrObjectText x:b.AppendLine($"  v{x.Result.Id}=(intptr_t)dnd_generated_to_string((DndObject*)v{x.Object.Id},{(x.BaseCall?"true":"false")});");break;
-                    case ValueIrObjectHash x:b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.Object.Id}))v{x.Result.Id}={(x.Identity?$"(int32_t)((uintptr_t)v{x.Object.Id}>>3)":$"dnd_comparison_object_hash((DndObject*)v{x.Object.Id})")};");break;
-                    case ValueIrObjectEquals x:b.AppendLine($"  {(x.Instance?$"if(dnd_require_object((DndObject*)v{x.Left.Id}))":"")}v{x.Result.Id}={(x.Identity?$"v{x.Left.Id}==v{x.Right.Id}":$"dnd_comparison_object_equal((DndObject*)v{x.Left.Id},(DndObject*)v{x.Right.Id},false)")};");break;
+                    case ValueIrObjectHash x:b.AppendLine($"  if(dnd_require_object_fast((DndObject*)v{x.Object.Id}))v{x.Result.Id}={(x.Identity?$"(int32_t)((uintptr_t)v{x.Object.Id}>>3)":$"dnd_comparison_object_hash((DndObject*)v{x.Object.Id})")};");break;
+                    case ValueIrObjectEquals x:b.AppendLine($"  {(x.Instance?$"if(dnd_require_object_fast((DndObject*)v{x.Left.Id}))":"")}v{x.Result.Id}={(x.Identity?$"v{x.Left.Id}==v{x.Right.Id}":$"dnd_comparison_object_equal((DndObject*)v{x.Left.Id},(DndObject*)v{x.Right.Id},false)")};");break;
                     case ValueIrLoadFunction x:
                         if(x.Virtual&&x.Object is { } functionObject){var slot=VirtualSlot(x.Target,model);b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_virtual_resolve((DndObject*)v{functionObject.Id}, {slot}u);");}
                         else b.AppendLine($"  v{x.Result.Id} = (intptr_t){WrapperSymbol(x.Target)};");
@@ -387,19 +392,19 @@ internal static class ValueCBackend
                     {
                         var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);
                         var isValue=model.Types[x.TypeName].IsValueType;var address=$"((uint8_t*)v{x.Object.Id}+{(isValue?"0":"sizeof(DndObject)")}+{BasePayloadSize(x.TypeName,model)}+{field.Offset})";
-                        var allowed=isValue?"true":$"dnd_require_object((DndObject*)v{x.Object.Id})";
+                        var allowed=isValue?"true":$"dnd_require_object_fast((DndObject*)v{x.Object.Id})";
                         b.AppendLine(x.Address||field.StorageSize>0?$"  if({allowed})v{x.Result.Id}=(intptr_t){address};":$"  if({allowed}) {{ {ct} value;memcpy(&value,{address},sizeof(value));v{x.Result.Id}=value; }}");break;
                     }
                     case ValueIrStoreField x:
                     {
                         var field=model.Fields[(x.TypeName,x.FieldName)];var ct=field.IsReference?"intptr_t":FieldCType(field);
                         var isValue=model.Types[x.TypeName].IsValueType;var address=$"((uint8_t*)v{x.Object.Id}+{(isValue?"0":"sizeof(DndObject)")}+{BasePayloadSize(x.TypeName,model)}+{field.Offset})";
-                        b.AppendLine(field.StorageSize>0?$"  if({(isValue?"true":$"dnd_require_object((DndObject*)v{x.Object.Id})")}) memcpy({address},(void*)v{x.Value.Id},{field.StorageSize}u);":$"  if({(isValue?"true":$"dnd_require_object((DndObject*)v{x.Object.Id})")}) {{ {ct} value=({ct})v{x.Value.Id};memcpy({address},&value,sizeof(value)); }}");break;
+                        b.AppendLine(field.StorageSize>0?$"  if({(isValue?"true":$"dnd_require_object_fast((DndObject*)v{x.Object.Id})")}) memcpy({address},(void*)v{x.Value.Id},{field.StorageSize}u);":$"  if({(isValue?"true":$"dnd_require_object_fast((DndObject*)v{x.Object.Id})")}) {{ {ct} value=({ct})v{x.Value.Id};memcpy({address},&value,sizeof(value)); }}");break;
                     }
                     case ValueIrLoadStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = {(x.Address||field.StorageSize>0?"(intptr_t)":"")}{(x.Address&&field.StorageSize==0?"&":"")}{StaticSymbol(field)};");break;}
                     case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine(field.StorageSize>0?$"  memcpy({StaticSymbol(field)},(void*)v{x.Value.Id},{field.StorageSize}u);":$"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
                     case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
-                    case ValueIrStringLength x:b.AppendLine($"  if(dnd_require_object((DndObject*)v{x.String.Id})) v{x.Result.Id} = ((DndString*)v{x.String.Id})->length;");break;
+                    case ValueIrStringLength x:b.AppendLine($"  if(dnd_require_object_fast((DndObject*)v{x.String.Id})) v{x.Result.Id} = ((DndString*)v{x.String.Id})->length;");break;
                     case ValueIrPrimitiveToString x:
                     {
                         if(x.Provider is {} provider)b.AppendLine($"  if(!dnd_format_provider((DndObject*)v{provider.Id})) {{ dnd_exception_rethrow(); }}");
@@ -429,7 +434,7 @@ internal static class ValueCBackend
                         {
                             "charAt"=>$"dnd_string_char_at((DndString*)v{a[0].Id}, (int32_t)v{a[1].Id})",
                             "StringNotEquals"=>$"!dnd_string_equals((DndString*)v{a[0].Id}, (DndString*)v{a[1].Id})",
-                            "StringInstanceEquals"=>$"(dnd_require_object((DndObject*)v{a[0].Id})&&dnd_string_equals((DndString*)v{a[0].Id},(DndString*)v{a[1].Id}))",
+                            "StringInstanceEquals"=>$"(dnd_require_object_fast((DndObject*)v{a[0].Id})&&dnd_string_equals((DndString*)v{a[0].Id},(DndString*)v{a[1].Id}))",
                             "StringEquals"=>$"dnd_string_equals((DndString*)v{a[0].Id}, (DndString*)v{a[1].Id})",
                             "StringStartsWith"=>$"dnd_string_starts_with((DndString*)v{a[0].Id}, (DndString*)v{a[1].Id})",
                             "StringEndsWith"=>$"dnd_string_ends_with((DndString*)v{a[0].Id}, (DndString*)v{a[1].Id})",
@@ -461,10 +466,10 @@ internal static class ValueCBackend
                     case ValueIrNewStruct x:{b.AppendLine($"  _Alignas(8) uint8_t struct_{x.Result.Id}[{x.Size}]={{0}}; v{x.Result.Id}=(intptr_t)struct_{x.Result.Id};");foreach(var f in x.Fields){var ct=f.Reference?"intptr_t":f.Size==8?"int64_t":f.Size==2?"int16_t":f.Size==1?"int8_t":"int32_t";b.AppendLine($"  {{ {ct} value=({ct})v{f.Value.Id}; memcpy(struct_{x.Result.Id}+{f.Offset},&value,sizeof(value)); }}");}break;}
                     case ValueIrStructStore x:{var ct=x.Reference?"intptr_t":x.Size==8?"int64_t":x.Size==2?"int16_t":x.Size==1?"int8_t":"int32_t";b.AppendLine($"  *({ct}*)((uint8_t*)v{x.Address.Id}+{x.Offset})=({ct})v{x.Value.Id};");break;}
                     case ValueIrStructLoad x:{var ct=x.Reference?"intptr_t":x.Size==8?"int64_t":x.Size==2?"int16_t":x.Size==1?"int8_t":"int32_t";b.AppendLine($"  v{x.Result.Id}=*({ct}*)((uint8_t*)v{x.Address.Id}+{x.Offset});");break;}
-                    case ValueIrArraySegmentItem x:{var ct=x.Reference?"intptr_t":x.ElementSize==8?"int64_t":x.ElementSize==2?"int16_t":x.ElementSize==1?"int8_t":"int32_t";b.AppendLine($"  {{ DndArray *a=*(DndArray**)v{x.Address.Id}; int32_t base=*(int32_t*)((uint8_t*)v{x.Address.Id}+8); v{x.Result.Id}=*({ct}*)dnd_managed_array_at(a,(uint32_t)(base+(int32_t)v{x.Index.Id})); }}");break;}
+                    case ValueIrArraySegmentItem x:{var ct=x.Reference?"intptr_t":x.ElementSize==8?"int64_t":x.ElementSize==2?"int16_t":x.ElementSize==1?"int8_t":"int32_t";b.AppendLine($"  {{ DndArray *a=*(DndArray**)v{x.Address.Id}; int32_t base=*(int32_t*)((uint8_t*)v{x.Address.Id}+8); v{x.Result.Id}=*({ct}*)dnd_array_element_address(a,(uint32_t)(base+(int32_t)v{x.Index.Id})); }}");break;}
                     case ValueIrArraySegmentGetEnumerator x:b.AppendLine($"  _Alignas(8) uint8_t enum_{x.Result.Id}[24]={{0}}; DndArray *a=*(DndArray**)v{x.Segment.Id}; int32_t start=*(int32_t*)((uint8_t*)v{x.Segment.Id}+8); int32_t count=*(int32_t*)((uint8_t*)v{x.Segment.Id}+12); *(DndArray**)enum_{x.Result.Id}=a; *(int32_t*)(enum_{x.Result.Id}+8)=start; *(int32_t*)(enum_{x.Result.Id}+12)=start+count; *(int32_t*)(enum_{x.Result.Id}+16)=start-1; v{x.Result.Id}=(intptr_t)enum_{x.Result.Id};");break;
                     case ValueIrEnumeratorMoveNext x:b.AppendLine($"  {{ int32_t *cur=(int32_t*)((uint8_t*)v{x.Address.Id}+16); int32_t end=*(int32_t*)((uint8_t*)v{x.Address.Id}+12); if(*cur < end) (*cur)++; v{x.Result.Id}=*cur < end; }}");break;
-                    case ValueIrEnumeratorCurrent x:{var ct=x.Reference?"intptr_t":x.ElementSize==8?"int64_t":x.ElementSize==2?"int16_t":x.ElementSize==1?"int8_t":"int32_t";b.AppendLine($"  {{ DndArray *a=*(DndArray**)v{x.Address.Id}; int32_t cur=*(int32_t*)((uint8_t*)v{x.Address.Id}+16); v{x.Result.Id}=*({ct}*)dnd_managed_array_at(a,(uint32_t)cur); }}");break;}
+                    case ValueIrEnumeratorCurrent x:{var ct=x.Reference?"intptr_t":x.ElementSize==8?"int64_t":x.ElementSize==2?"int16_t":x.ElementSize==1?"int8_t":"int32_t";b.AppendLine($"  {{ DndArray *a=*(DndArray**)v{x.Address.Id}; int32_t cur=*(int32_t*)((uint8_t*)v{x.Address.Id}+16); v{x.Result.Id}=*({ct}*)dnd_array_element_address(a,(uint32_t)cur); }}");break;}
                     case ValueIrBoxNullable x:
                     {
                         var type=x.ValueSize==8?"&DND_TYPE_INT64":"&DND_TYPE_BOXED_INT32";
@@ -490,7 +495,7 @@ internal static class ValueCBackend
                     case ValueIrShapedArrayAddress x:b.AppendLine($"  {{ int32_t indices[{x.Indices.Count}]={{{string.Join(",",x.Indices.Select(a=>$"(int32_t)v{a.Id}"))}}}; v{x.Result.Id}=(intptr_t){(x.ExactElementType is null?"dnd_array_shaped_at":"dnd_array_shaped_reference_address")}((DndArray*)v{x.Array.Id},{x.Indices.Count}u,indices{(x.ExactElementType is {} elementType?","+TypeExpr(elementType):"")}); }}");break;
                     case ValueIrNewArray x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_managed_array_new_typed(dnd_value_heap, (uint32_t)v{x.Length.Id}, {(x.ElementsAreReferences?"sizeof(DndObject*)":$"{x.ElementSize}u")}, {(x.ElementType=="$generic"?(x.ElementsAreReferences?"&DND_TYPE_OBJECT":"NULL"):TypeExpr(x.ElementType))}, {(x.ElementsAreReferences?"true":"false")});");break;
                     case ValueIrArrayElementAddress x:b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_array_element_address((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id});");break;
-                    case ValueIrArrayLength x:b.AppendLine($"  v{x.Result.Id} = dnd_array_length((DndArray*)v{x.Array.Id});");break;
+                    case ValueIrArrayLength x:b.AppendLine($"  v{x.Result.Id} = dnd_array_length_fast((DndArray*)v{x.Array.Id});");break;
                     case ValueIrArrayOperation x:
                     {
                         var a=x.Arguments;
@@ -498,7 +503,7 @@ internal static class ValueCBackend
                             b.AppendLine($"  if(v{a[0].Id} && ((DndObject*)v{a[0].Id})->type==&DND_TYPE_ARRAY) {{");
                         switch(x.Operation)
                         {
-                            case "ArrayLength": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_length((DndArray*)v{a[0].Id});"); break;
+                            case "ArrayLength": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_length_fast((DndArray*)v{a[0].Id});"); break;
                             case "ArrayLongLength": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_long_length((DndArray*)v{a[0].Id});"); break;
                             case "ArrayRank": b.AppendLine($"  v{x.Result.Value.Id}=dnd_array_rank((DndArray*)v{a[0].Id});"); break;
                             case "ArrayGetLength": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_get_length((DndArray*)v{a[0].Id}, (int32_t)v{a[1].Id});"); break;
@@ -509,20 +514,20 @@ internal static class ValueCBackend
                                 if(a.Count==3)b.AppendLine($"  (void)dnd_array_copy((DndArray*)v{a[0].Id}, 0, (DndArray*)v{a[1].Id}, 0, (int32_t)v{a[2].Id});");
                                 else b.AppendLine($"  (void)dnd_array_copy((DndArray*)v{a[0].Id}, (int32_t)v{a[1].Id}, (DndArray*)v{a[2].Id}, (int32_t)v{a[3].Id}, (int32_t)v{a[4].Id});");
                                 break;
-                            case "ArrayInterfaceCount": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_length((DndArray*)v{a[0].Id});"); break;
+                            case "ArrayInterfaceCount": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_length_fast((DndArray*)v{a[0].Id});"); break;
                             case "ArrayInterfaceIsReadOnly": b.AppendLine($"  v{x.Result.Value.Id} = 1;"); break;
                             case "ArrayInterfaceItemGet":
                                 b.AppendLine(x.Reference?$"  v{x.Result.Value.Id} = (intptr_t)dnd_array_load_ref((DndArray*)v{a[0].Id}, (uint32_t)v{a[1].Id});":$"  v{x.Result.Value.Id} = ({CType(x.Result.Value.Kind)})dnd_array_load_scalar((DndArray*)v{a[0].Id}, (uint32_t)v{a[1].Id}, {x.ElementSize}u, false);"); break;
                             case "ArrayInterfaceItemSet":
                                 b.AppendLine(x.Reference?$"  (void)dnd_array_store_ref((DndArray*)v{a[0].Id}, (uint32_t)v{a[1].Id}, (DndObject*)v{a[2].Id});":$"  (void)dnd_array_store_scalar((DndArray*)v{a[0].Id}, (uint32_t)v{a[1].Id}, (uint64_t)v{a[2].Id}, {x.ElementSize}u);"); break;
                             case "ArrayInterfaceContains":
-                                b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_index_of((DndArray*)v{a[0].Id}, (uint64_t)v{a[1].Id}, {x.ElementSize}u, {(x.Reference?"true":"false")}, 0, (int32_t)dnd_array_length((DndArray*)v{a[0].Id})) >= 0;"); break;
+                                b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_index_of((DndArray*)v{a[0].Id}, (uint64_t)v{a[1].Id}, {x.ElementSize}u, {(x.Reference?"true":"false")}, 0, (int32_t)dnd_array_length_fast((DndArray*)v{a[0].Id})) >= 0;"); break;
                             case "ArrayInterfaceIndexOf":
-                                b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_index_of((DndArray*)v{a[0].Id}, (uint64_t)v{a[1].Id}, {x.ElementSize}u, {(x.Reference?"true":"false")}, 0, (int32_t)dnd_array_length((DndArray*)v{a[0].Id}));"); break;
+                                b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_index_of((DndArray*)v{a[0].Id}, (uint64_t)v{a[1].Id}, {x.ElementSize}u, {(x.Reference?"true":"false")}, 0, (int32_t)dnd_array_length_fast((DndArray*)v{a[0].Id}));"); break;
                             case "ArrayIndexOf":
                             {
                                 var start=a.Count>2?$"(int32_t)v{a[2].Id}":"0";
-                                var count=a.Count>3?$"(int32_t)v{a[3].Id}":$"(int32_t)dnd_array_length((DndArray*)v{a[0].Id}) - ({start})";
+                                var count=a.Count>3?$"(int32_t)v{a[3].Id}":$"(int32_t)dnd_array_length_fast((DndArray*)v{a[0].Id}) - ({start})";
                                 b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_index_of((DndArray*)v{a[0].Id}, (uint64_t)v{a[1].Id}, {x.ElementSize}u, {(x.Reference?"true":"false")}, {start}, {count});");
                                 break;
                             }
@@ -536,8 +541,8 @@ internal static class ValueCBackend
                         break;
                     }
 
-                    case ValueIrLoadElement x:b.AppendLine(x.Result.Kind is IrValueKind.R4 or IrValueKind.R8?$"  v{x.Result.Id}=dnd_float_value(dnd_array_load_scalar((DndArray*)v{x.Array.Id},(uint32_t)v{x.Index.Id},{x.Size}u,false),{(x.Size==4?"true":"false")});":x.Reference?$"  v{x.Result.Id} = (intptr_t)dnd_array_load_ref((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id});":$"  v{x.Result.Id} = ({CType(x.Result.Kind)})dnd_array_load_scalar((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id}, {x.Size}u, {(x.Signed?"true":"false")});");break;
-                    case ValueIrStoreElement x:b.AppendLine(x.Value.Kind is IrValueKind.R4 or IrValueKind.R8?$"  (void)dnd_array_store_scalar((DndArray*)v{x.Array.Id},(uint32_t)v{x.Index.Id},dnd_float_bits(v{x.Value.Id},{(x.Size==4?"true":"false")}),{x.Size}u);":x.Reference?$"  (void)dnd_array_store_ref((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id}, (DndObject*)v{x.Value.Id});":$"  (void)dnd_array_store_scalar((DndArray*)v{x.Array.Id}, (uint32_t)v{x.Index.Id}, (uint64_t)v{x.Value.Id}, {x.Size}u);");break;
+                    case ValueIrLoadElement x:b.AppendLine(ArrayLoad(x));break;
+                    case ValueIrStoreElement x:b.AppendLine(ArrayStore(x));break;
                     case ValueIrConsoleWriteLine x:b.AppendLine($"  {{ DndString *s=(DndString*)v{x.String.Id}; char text[256]; size_t n=s?(s->length<255?s->length:255):0; for(size_t i=0;i<n;i++) text[i]=(char)(s->chars[i]&0x7f); text[n]=0; dnd_console_write_line(text); }}");break;
                     case ValueIrReadButtonsDown x:b.AppendLine($"  dnd_async_require_application_thread(); dnd_input_poll(); {{ const DndGamePad *pad=dnd_input_gamepad((unsigned)v{x.Port.Id}); v{x.Result.Id}=pad?(intptr_t)pad->down:0; }}");break;
                     case ValueIrPhi: break; // Assigned on predecessor edges.
@@ -545,11 +550,31 @@ internal static class ValueCBackend
             }
             if (sourceLocations is not null)
                 EmitLineDirective(b, sourceLocations, block.Terminator?.CilOffset ?? -1);
-            EmitTerminator(b,method,block,model,leavePaths.Select(x=>(x.Block.Id,x.Leave,x.Id)).ToArray());
+            EmitTerminator(b,method,block,model,leavePaths.Select(x=>(x.Block.Id,x.Leave,x.Id)).ToArray(),roots.Count>0);
         }
         if (sourceLocations is not null) b.AppendLine("#line 1 \"generated_program.c\"");
         b.AppendLine("}");
         return b.ToString();
+    }
+
+    private static string ArrayLoad(ValueIrLoadElement x)
+    {
+        var a=$"(DndArray*)v{x.Array.Id},(uint32_t)v{x.Index.Id}";
+        if(x.Reference)return $"  v{x.Result.Id}=(intptr_t)dnd_array_load_ref_fast({a});";
+        if(x.Result.Kind is IrValueKind.R4 or IrValueKind.R8)
+            return $"  v{x.Result.Id}=dnd_array_load_r{(x.Size==4?4:8)}_fast({a});";
+        if(x.Size is 1 or 2 or 4)
+            return $"  v{x.Result.Id}=({CType(x.Result.Kind)}){(x.Signed?$"(int{x.Size*8}_t)":"")}dnd_array_load_u{x.Size}_fast({a});";
+        return $"  v{x.Result.Id}=({CType(x.Result.Kind)})dnd_array_load_scalar({a},{x.Size}u,{(x.Signed?"true":"false")});";
+    }
+    private static string ArrayStore(ValueIrStoreElement x)
+    {
+        var a=$"(DndArray*)v{x.Array.Id},(uint32_t)v{x.Index.Id}";
+        if(x.Reference)return $"  (void)dnd_array_store_ref({a},(DndObject*)v{x.Value.Id});";
+        if(x.Value.Kind is IrValueKind.R4 or IrValueKind.R8)
+            return $"  (void)dnd_array_store_r{(x.Size==4?4:8)}_fast({a},v{x.Value.Id});";
+        if(x.Size is 1 or 2 or 4)return $"  (void)dnd_array_store_u{x.Size}_fast({a},(uint{x.Size*8}_t)v{x.Value.Id});";
+        return $"  (void)dnd_array_store_scalar({a},(uint64_t)v{x.Value.Id},{x.Size}u);";
     }
 
     // #line directives preserve managed source filenames and statement lines
@@ -600,7 +625,7 @@ internal static class ValueCBackend
         b.AppendLine("  }");
     }
 
-    private static void EmitTerminator(StringBuilder b,ValueIrMethod method,ValueIrBlock block,CompilationModel model,IReadOnlyList<(int BlockId,ValueIrLeave Leave,int Id)> leavePaths)
+    private static void EmitTerminator(StringBuilder b,ValueIrMethod method,ValueIrBlock block,CompilationModel model,IReadOnlyList<(int BlockId,ValueIrLeave Leave,int Id)> leavePaths,bool hasRoots)
     {
         switch(block.Terminator)
         {
@@ -626,8 +651,8 @@ internal static class ValueCBackend
             case ValueIrSwitch x:
                 b.AppendLine($"  switch ((int32_t)v{x.Value.Id}) {{");for(var i=0;i<x.Targets.Count;i++){b.AppendLine($"    case {i}:");Edge(b,method,block.Id,x.Targets[i],"      ");b.AppendLine($"      goto block_{x.Targets[i]};");}b.AppendLine("    default:");Edge(b,method,block.Id,x.DefaultBlock,"      ");b.AppendLine($"      goto block_{x.DefaultBlock};");b.AppendLine("  }");break;
             case ValueIrReturn r:
-                if(r.Value is { } v){if(ReturnSize(method.Key,model)>0)b.AppendLine($"  memcpy((void*)dnd_ret,(void*)v{v.Id},{ReturnSize(method.Key,model)}u);");b.AppendLine($"  {{ {ReturnCType(method,model)} return_value = {(ReturnSize(method.Key,model)>0?"dnd_ret":model.Methods[method.Key].Abi?.ReturnStorage is {Kind:CilStackKind.Float,ScalarSize:4}?$"(float)v{v.Id}":$"v{v.Id}")};");if(method.ExceptionRegions.Count>0)b.AppendLine("    if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
-                else {if(method.ExceptionRegions.Count>0)b.AppendLine("  if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(HasRoots(method,model))b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
+                if(r.Value is { } v){if(ReturnSize(method.Key,model)>0)b.AppendLine($"  memcpy((void*)dnd_ret,(void*)v{v.Id},{ReturnSize(method.Key,model)}u);");b.AppendLine($"  {{ {ReturnCType(method,model)} return_value = {(ReturnSize(method.Key,model)>0?"dnd_ret":model.Methods[method.Key].Abi?.ReturnStorage is {Kind:CilStackKind.Float,ScalarSize:4}?$"(float)v{v.Id}":$"v{v.Id}")};");if(method.ExceptionRegions.Count>0)b.AppendLine("    if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(hasRoots)b.AppendLine("    dnd_gc_frame_pop(&gc_frame);");b.AppendLine("    return return_value; }");}
+                else {if(method.ExceptionRegions.Count>0)b.AppendLine("  if (dnd_eh_active) dnd_eh_pop(&dnd_eh_frame);");if(hasRoots)b.AppendLine("  dnd_gc_frame_pop(&gc_frame);");b.AppendLine("  return 0;");}
                 break;
             case ValueIrLeave leave:
             {
@@ -766,7 +791,6 @@ internal static class ValueCBackend
     private static string AbiCType(CilStackKind kind)=>kind switch{CilStackKind.I8=>"int64_t",CilStackKind.Float=>"double",_=>"intptr_t"};
     private static string Id(string s)=>new(s.Select(ch=>char.IsLetterOrDigit(ch)?ch:'_').ToArray());
     private static string Escape(string s)=>s.Replace("\\","\\\\").Replace("\"","\\\"").Replace("\n","\\n").Replace("\r","\\r").Replace("\t","\\t");
-    private static bool HasRoots(ValueIrMethod m,CompilationModel model)=>m.ExceptionRegions.Any(r=>r.Kind==ValueIrExceptionRegionKind.Catch)||Collect(m).Any(v=>v.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>l.Kind==IrValueKind.ObjectReference)||m.Locals.Any(l=>(l.ReferenceOffsets?.Count??0)>0)||m.HasThis||(model.Methods.TryGetValue(m.Key,out var mm)&&mm.Abi is { } abi&&(abi.Parameters.Any(k=>k==CilStackKind.ObjectReference)||abi.ParameterStorage?.Any(s=>(s.ReferenceOffsets?.Count??0)>0)==true))||m.Blocks.SelectMany(b=>b.Instructions).Any(i=>i is ValueIrValueConstructor v&&(v.References?.Count??0)>0||i is ValueIrCall c&&model.Methods.TryGetValue(c.Target,out var cm)&&(cm.Abi?.ReturnStorage?.ReferenceOffsets?.Count??0)>0);
     private static string ValueStorageCType(IrValueKind kind)=>kind is IrValueKind.R4 or IrValueKind.R8?"double":kind==IrValueKind.I8?"int64_t":"intptr_t";
     private static bool IsFloating(IrValue value) => value.Kind is IrValueKind.R4 or IrValueKind.R8;
 

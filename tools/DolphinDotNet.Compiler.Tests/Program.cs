@@ -30,6 +30,9 @@ Run(helloHost, "");
 var normalBundle = Path.Combine(tempDirectory, "normal-bundle");
 Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{normalBundle}\"");
 var normalMake = File.ReadAllText(Path.Combine(normalBundle, "Makefile"));
+if(!normalMake.Contains("DND_LTO ?= 1",StringComparison.Ordinal))
+    throw new Exception("GameCube release optimization is not enabled.");
+Run("python3",$"\"{Path.Combine(root,"tests/native_optimization_build.py")}\" \"{Path.Combine(normalBundle,"Makefile")}\"");
 foreach (var dependency in new[] { "s2d.c", "d2fixed.c", "LICENSE-Boost" })
     if (!File.Exists(Path.Combine(normalBundle, "include", "ryu", dependency)))
         throw new Exception("Standalone bundle is missing numeric dependency: " + dependency);
@@ -52,6 +55,8 @@ var symbolsBundle = Path.Combine(tempDirectory, "symbols-only");
 Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{debugDll}\" \"{symbolsBundle}\" --debug-symbols");
 var symbolsMake = File.ReadAllText(Path.Combine(symbolsBundle, "Makefile"));
 var symbolsC = File.ReadAllText(Path.Combine(symbolsBundle, "source/generated_program.c"));
+if(!symbolsMake.Contains("DND_LTO ?= 0",StringComparison.Ordinal))
+    throw new Exception("Symbol builds unexpectedly enable LTO.");
 if (symbolsMake.Contains("-ldb ", StringComparison.Ordinal) ||
     symbolsMake.Contains("DND_GDB_ENABLED", StringComparison.Ordinal) ||
     File.Exists(Path.Combine(symbolsBundle, "source/debug_gamecube.c")) ||
@@ -238,7 +243,7 @@ if (!genericGenerated.Contains("dnd_array_load_scalar", StringComparison.Ordinal
 if (!genericGenerated.Contains("Nullable object must have a value.", StringComparison.Ordinal)) throw new Exception("Nullable Value guard missing.");
 if (!genericGenerated.Contains("DND_EXCEPTION_INVALID_OPERATION", StringComparison.Ordinal)) throw new Exception("Nullable exception category missing.");
 if (!genericGenerated.Contains("DND_TYPE_INT64", StringComparison.Ordinal)) throw new Exception("Wide nullable boxing missing.");
-if (!genericGenerated.Contains("dnd_managed_array_at", StringComparison.Ordinal)) throw new Exception("ArraySegment indexer lowering missing.");
+if (!genericGenerated.Contains("dnd_array_element_address", StringComparison.Ordinal)) throw new Exception("ArraySegment indexer lowering missing.");
 if (!genericGenerated.Contains("(DndObject**)(l", StringComparison.Ordinal)) throw new Exception("Embedded generic value GC roots missing.");
 if (!genericGenerated.Contains("uint8_t enum_", StringComparison.Ordinal) ||
     !genericGenerated.Contains("int32_t *cur=", StringComparison.Ordinal))
@@ -284,17 +289,34 @@ File.Delete(genericOutput);
 // ldobj !!T must dereference reference/scalar slots; only aggregate values
 // stay represented by an address. Debug async state machines exercise this
 // through AsyncTaskMethodBuilder's interface continuation storage.
-var refProject = Path.Combine(root, "tests/RefLoadSmoke/RefLoadSmoke.csproj");
 var refTemp = Path.Combine(Path.GetTempPath(), $"dnd-ref-load-{Guid.NewGuid():N}");
 Directory.CreateDirectory(refTemp);
 try
 {
+    foreach(var fixture in new[]{"RefLoadSmoke","TimingSmoke","LeafSafepointSmoke"})
     foreach(var configuration in new[]{"Debug","Release"})
     {
+        var refProject=Path.Combine(root,$"tests/{fixture}/{fixture}.csproj");
         Run("dotnet", $"build \"{refProject}\" -c {configuration} -p:DndBuildNative=false");
-        var refDll=Path.Combine(root,$"tests/RefLoadSmoke/bin/{configuration}/net8.0/RefLoadSmoke.dll");
+        var refDll=Path.Combine(root,$"tests/{fixture}/bin/{configuration}/net8.0/{fixture}.dll");
         var refC=Path.Combine(refTemp,configuration+".c");var refHost=Path.Combine(refTemp,configuration);
         Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{refDll}\" \"{refC}\"");
+        if(fixture=="LeafSafepointSmoke"&&configuration=="Release")
+        {
+            var leafC=File.ReadAllText(refC);
+            foreach(var name in new[]{"LeafRead","LeafBranch","LeafReference","LeafCalls","Loop","Recursive","StaticRead","Allocating","Reassigned","Addressed"})
+            {
+                var match=System.Text.RegularExpressions.Regex.Match(leafC,
+                    @"^intptr_t dnd_value_LeafSafepointSmoke_Program_"+name+@"_[0-9a-f]+\([^;\n]*\) \{\n(?<body>.*?)^\}",
+                    System.Text.RegularExpressions.RegexOptions.Multiline|System.Text.RegularExpressions.RegexOptions.Singleline);
+                if(!match.Success)throw new Exception("Missing leaf fixture: "+name);
+                var body=match.Groups["body"].Value;
+                bool leaf=name.StartsWith("Leaf",StringComparison.Ordinal);
+                if(body.Contains("dnd_gc_poll();",StringComparison.Ordinal)==leaf||
+                   body.Contains("dnd_gc_frame_push",StringComparison.Ordinal)==leaf)
+                    throw new Exception("Unsafe or missing bounded leaf classification: "+name);
+            }
+        }
         Run("cc", $"-pthread -O1 -std=c11 -I\"{Path.Combine(root,"include")}\" \"{refC}\" \"{Path.Combine(root,"tests/generic_sharing_value_host.c")}\" \"{Path.Combine(root,"source/managed_runtime.c")}\" \"{Path.Combine(root,"source/async_runtime.c")}\" \"{Path.Combine(root,"source/numeric.c")}\" \"{Path.Combine(root,"source/text.c")}\" \"{Path.Combine(root,"source/timing.c")}\" -lm -o \"{refHost}\"");
         Run(refHost, "");Run(refHost, "gc-stress");
     }

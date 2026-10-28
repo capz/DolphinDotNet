@@ -28,6 +28,7 @@ def main(area):
         # integration fixtures below need the compiler itself built first.
         build("tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj")
         build("tests/RefLoadSmoke/RefLoadSmoke.csproj")
+        build("tests/LeafSafepointSmoke/LeafSafepointSmoke.csproj")
         test("tools/DolphinDotNet.Compiler.Tests")
         # Numeric and string facade contracts must execute against the
         # GameCube AOT runtime, not locale-sensitive desktop CLR behavior.
@@ -59,6 +60,7 @@ def main(area):
         test("tests/AudioAssetTests")
         build("tests/AudioFormatsSmoke/AudioFormatsSmoke.csproj")
     elif area=="graphics":
+        test("tests/TextureStreamingTests")
         test("tests/EffectCompilerTests")
         with tempfile.TemporaryDirectory() as tmp:
             run("dotnet","run","--project","tests/ModelAssetTests","-c","Release","--",tmp)

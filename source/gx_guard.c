@@ -1,8 +1,12 @@
 #include "dnd_gx_raw.h"
 #include "dnd_async.h"
+#if !defined(DND_GAMECUBE_STORAGE)
+__attribute__((weak)) void dnd_draw_backend_invalidate_efb(void){}
+#endif
 void dnd_raw_command(int operation,const uint64_t *args,int count) {
     (void)args;(void)count;dnd_async_require_application_thread();
     if(dnd_device_active() && dnd_device_pass()!=3) {dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Raw GX requires an exclusive raw pass.");return;}
+    dnd_draw_backend_invalidate_efb();
     if(dnd_device_active()){switch(operation){case DND_RAW_GX_INITFIFOBASE: case DND_RAW_GX_SETCPUFIFO: case DND_RAW_GX_SETDRAWDONECALLBACK: case DND_RAW_GX_SETDRAWSYNCCALLBACK: case DND_RAW_GX_SETGPFIFO: case DND_RAW_VIDEO_CONFIGURE: case DND_RAW_VIDEO_INIT: case DND_RAW_VIDEO_SETBLACK: case DND_RAW_VIDEO_SETNEXTFRAMEBUFFER: case DND_RAW_VIDEO_SETPOSTRETRACECALLBACK: case DND_RAW_VIDEO_SETPRERETRACECALLBACK: dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Raw command would replace managed device ownership.");return;default:break;}}
     if(dnd_raw_depth()&1) {
         switch(operation) {

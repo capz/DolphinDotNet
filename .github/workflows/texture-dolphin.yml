@@ -1,0 +1,164 @@
+name: TextureStrategy in Dolphin
+
+on:
+  push:
+    branches: [main, experiment/virtual-texture-vs-atlas, codex/texture-strategy-startup-diagnostics, codex/texture-residency-streaming, codex/texture-comparison-mode]
+  pull_request:
+    paths:
+      - 'tests/fixtures/TextureStrategy/**'
+      - 'source/**'
+      - 'include/**'
+      - 'src/**'
+      - 'sdk/**'
+      - 'tools/DolphinDotNet.Compiler/**'
+      - 'tools/DolphinDotNet.Build/**'
+      - 'scripts/**'
+      - 'tests/*dolphin*'
+      - 'tests/TextureStreamingTests/**'
+      - '.github/workflows/texture-dolphin.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: texture-dolphin-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator:
+    name: Dolphin / ${{ matrix.configuration }} / ${{ matrix.mode }}
+    runs-on: ubuntu-24.04
+    # Allow the six-minute capture, bounded twelve-minute decode, builds and uploads.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+        mode: [pages, atlas]
+        include:
+          - configuration: Release
+            mode: benchmark
+          - configuration: Debug
+            mode: benchmark
+          - configuration: Release
+            mode: pipeline256
+            optimization: 12
+            budget: 256
+          - configuration: Release
+            mode: pipeline384
+            optimization: 13
+            budget: 384
+          - configuration: Release
+            mode: optimized
+            optimization: 38
+          - configuration: Release
+            mode: glyphs
+            optimization: 14
+            budget: 384
+          - configuration: Release
+            mode: rectangles
+            optimization: 15
+            budget: 384
+          - configuration: Release
+            mode: policy
+            optimization: 16
+            budget: 384
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare the Debian Dolphin runtime
+        run: |
+          docker build -t dnd-dolphin - <<'EOF'
+          FROM debian:trixie-slim
+          RUN apt-get update && apt-get install -y --no-install-recommends dolphin-emu xvfb xauth ffmpeg python3 libgl1-mesa-dri libglx-mesa0 && rm -rf /var/lib/apt/lists/*
+          EOF
+          docker run --rm dnd-dolphin /usr/games/dolphin-emu-nogui --version
+      - name: Test the acceptance oracle and native failure diagnostics
+        run: |
+          docker run --rm --mount "type=bind,source=${{ github.workspace }},target=/src" \
+            -w /src dnd-dolphin sh -ec '
+              command -v ffmpeg
+              python3 -m unittest discover -s tests -p test_dolphin_texture.py
+              python3 -m unittest discover -s tests -p test_dolphin_streaming.py
+              python3 -m unittest discover -s tests -p test_dolphin_benchmark.py
+            '
+          dotnet run --project tests/TextureStreamingTests -c Release
+          cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/native_main_failure_test.c -o /tmp/dnd-main-test
+          /tmp/dnd-main-test
+          make -C tests overlay_test overlay_debug_test texture_reuse_test canvas_rectangle_test
+          ./tests/texture_reuse_test
+          ./tests/canvas_rectangle_test
+          ./tests/overlay_test
+          ./tests/overlay_debug_test
+      - name: Build the actual GameCube DOL with the Docker backend
+        run: >-
+          dotnet build tests/fixtures/TextureStrategy/TextureStrategy.csproj
+          -c ${{ matrix.configuration }} -m:1
+          -p:DndBuildBackend=Docker -p:DndTextureStreamingCI=true
+          -p:DndTextureOptimization=${{ matrix.optimization || '0' }}
+          -p:DndTextureAtlasStart=${{ matrix.mode == 'atlas' && 'true' || 'false' }}
+          -p:DndTextureBenchmarkCI=${{ (matrix.mode == 'benchmark' || matrix.optimization) && 'true' || 'false' }}
+      - name: Boot Dolphin and require sustained textured frames
+        run: >-
+          docker run --rm --shm-size=512m --mount "type=bind,source=${{ github.workspace }},target=/src"
+          -w /src dnd-dolphin python3 scripts/dolphin_texture_test.py
+          tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
+          --mode ${{ matrix.mode == 'atlas' && 'atlas' || 'pages' }} --streaming
+          ${{ (matrix.mode == 'benchmark' || matrix.optimization) && '--benchmark --pipeline' || '' }}
+          ${{ matrix.mode == 'glyphs' && '--matrix-glyphs' || matrix.mode == 'rectangles' && '--matrix-rectangles' || matrix.mode == 'policy' && '--matrix-policy --matrix-group 1' || '' }}
+          --matrix-budget ${{ matrix.budget || '0' }} --backend OGL
+          --seconds ${{ (matrix.mode == 'benchmark' || matrix.optimization) && '360' || '90' }}
+          --logs out/dolphin-texture
+      - name: Preserve compact frame and telemetry evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: texture-proof-${{ matrix.configuration }}-${{ matrix.mode }}
+          if-no-files-found: warn
+          path: |
+            out/dolphin-texture/frame.png
+            out/dolphin-texture/benchmark-summary.png
+            out/dolphin-texture/results.json
+            out/dolphin-texture/diagnostics.json
+            out/dolphin-texture/mismatch.png
+            out/dolphin-texture/mismatch.json
+            out/dolphin-texture/emulator.log
+            tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
+            tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.elf
+      - name: Preserve DOL, ELF, emulator logs, capture and pixel proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: texture-dolphin-${{ matrix.configuration }}-${{ matrix.mode }}
+          if-no-files-found: warn
+          path: |
+            out/dolphin-texture/*.png
+            out/dolphin-texture/*.json
+            out/dolphin-texture/*.log
+            out/dolphin-texture/user/Logs/
+            out/dolphin-texture/user/Dump/Frames/*.avi
+            tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/*.dol
+            tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/*.elf
+
+      - name: Build the interactive hardware DOL
+        if: success() && matrix.mode == 'benchmark' && matrix.configuration == 'Release'
+        run: >-
+          dotnet build tests/fixtures/TextureStrategy/TextureStrategy.csproj
+          -c Release -m:1 -p:DndBuildBackend=Docker
+          -p:DndTextureStreamingCI=false -p:DndTextureBenchmarkCI=false
+      - name: Preserve interactive hardware DOL and timing instructions
+        if: success() && matrix.mode == 'benchmark' && matrix.configuration == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: texture-hardware-Release
+          if-no-files-found: error
+          path: |
+            tests/fixtures/TextureStrategy/bin/Release/net8.0/TextureStrategy.dol
+            tests/fixtures/TextureStrategy/bin/Release/net8.0/TextureStrategy.elf
+            docs/texture-stage-timings.md

@@ -39,12 +39,14 @@ public sealed class Timer : IDisposable
         if (disposed) return;
         if (cancellation.IsCancellationRequested) { Cancel(); return; }
         if (due<0 || now<due) return;
+        Dolphin.Threading.Tasks.NativeAsync.AsyncTimerLate(now-due);
         if (callback==null) { Close(); completion.SetResult(0); return; }
         if (period>0) due+=((now-due)/period+1)*period; // Coalesce missed intervals.
         if (queued || executing) return;
         queued=true;
         Scheduler.Post(dispatch,context);
     }
+    internal long NextDue=>disposed||queued||executing||due<0?-1:due;
     private void Dispatch()
     {
         if (disposed) return;
@@ -83,11 +85,15 @@ internal static class TimingRuntime
         if (timers.Count>=64) throw new InvalidOperationException("Timing operation limit reached.");
         timers.Add(timer); Dolphin.Threading.Tasks.NativeAsync.AsyncWake();
     }
-    internal static void Remove(Timer timer) { timers.Remove(timer); }
-    internal static void Pump()
+    internal static void Remove(Timer timer) { timers.Remove(timer); Dolphin.Threading.Tasks.NativeAsync.AsyncDeadline(-1); }
+    internal static void Pump(int context)
     {
+        if(context==0&&!Scheduler.ApplicationTimers)return;
         long now=Clock.Timestamp;
         for (int i=timers.Count-1;i>=0;i--) timers[i].Poll(now);
+        long next=-1;
+        for(int i=0;i<timers.Count;i++){long due=timers[i].NextDue;if(due>=0&&(next<0||due<next))next=due;}
+        Dolphin.Threading.Tasks.NativeAsync.AsyncDeadline(next);
     }
     internal static void Stop() { while (timers.Count>0) timers[timers.Count-1].Cancel(); }
 }

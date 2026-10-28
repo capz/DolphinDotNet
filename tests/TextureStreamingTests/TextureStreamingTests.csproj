@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../fixtures/TextureStrategy/ResidencySet.cs" Link="ResidencySet.cs" />
+    <Compile Include="../fixtures/TextureStrategy/TextureSource.cs" Link="TextureSource.cs" />
+    <Compile Include="../fixtures/TextureStrategy/BenchmarkTiming.cs" Link="BenchmarkTiming.cs" />
+    <Compile Include="../fixtures/TextureStrategy/BenchmarkModel.cs" Link="BenchmarkModel.cs" />
+    <Compile Include="../fixtures/TextureStrategy/BenchmarkSource.cs" Link="BenchmarkSource.cs" />
+  </ItemGroup>
+</Project>
