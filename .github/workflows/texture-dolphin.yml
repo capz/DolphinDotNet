@@ -29,7 +29,8 @@ jobs:
   emulator:
     name: Dolphin / ${{ matrix.configuration }} / ${{ matrix.mode }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Allow the six-minute capture, bounded twelve-minute decode, builds and uploads.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

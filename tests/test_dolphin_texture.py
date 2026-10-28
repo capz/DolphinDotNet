@@ -50,14 +50,33 @@ class TextureAcceptanceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_capture(board() * 60 + b"x")
 
-    def test_long_benchmark_decode_has_a_separate_bounded_deadline(self):
+    def test_benchmark_decode_deadline_scales_with_capture_and_stays_bounded(self):
         with TemporaryDirectory() as folder:
             log = Path(folder) / "decode.log"
             with patch("dolphin_shader_test.subprocess.run", return_value=Mock(stdout=b"", stderr=b"")) as run:
-                decode_texture_capture(Path("six-minute.avi"), log, benchmark=True)
-                self.assertEqual(120, run.call_args.kwargs["timeout"])
+                for seconds, expected in ((30, 120), (180, 360), (360, 720), (10000, 720), (1e308, 720)):
+                    with self.subTest(seconds=seconds):
+                        decode_texture_capture(Path("benchmark.avi"), log, benchmark=True,
+                                               capture_seconds=seconds)
+                        self.assertEqual(expected, run.call_args.kwargs["timeout"])
+                        # Keep sampling, output memory limits, and full-video validation.
+                        command = run.call_args.args[0]
+                        self.assertIn("fps=2,scale=640:480:flags=neighbor", command)
+                        self.assertEqual("780", command[command.index("-frames:v") + 1])
+                        self.assertNotIn("-sseof", command)
+                decode_texture_capture(Path("default.avi"), log, benchmark=True)
+                self.assertEqual(720, run.call_args.kwargs["timeout"])
                 decode_texture_capture(Path("short.avi"), log, streaming=True)
                 self.assertEqual(30, run.call_args.kwargs["timeout"])
+
+    def test_invalid_benchmark_duration_does_not_start_decoder(self):
+        with TemporaryDirectory() as folder:
+            with patch("dolphin_texture_test.run_ffmpeg") as run:
+                for seconds in (0, -1, float("inf"), float("nan")):
+                    with self.subTest(seconds=seconds), self.assertRaises(ValueError):
+                        decode_texture_capture(Path("invalid.avi"), Path(folder)/"decode.log",
+                                               benchmark=True, capture_seconds=seconds)
+                run.assert_not_called()
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg not installed")
     def test_ffv1_capture_tail_rejects_late_error_screen(self):

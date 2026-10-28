@@ -53,11 +53,17 @@ def validate_capture(raw):
                 minimumMatchingCells=min(scores))
 
 
-def decode_texture_capture(capture, log, streaming=False, benchmark=False):
+def decode_texture_capture(capture, log, streaming=False, benchmark=False, capture_seconds=360):
     if benchmark:
+        # FFV1 must decode every recorded frame before the fps filter samples it.
+        # Faster guests produce more source frames; CI's six-minute optimized
+        # recording exceeded the old fixed 120-second post-processing limit.
+        if not math.isfinite(capture_seconds) or capture_seconds <= 0:
+            raise ValueError("Capture duration must be finite and positive")
+        timeout = max(120, math.ceil(min(capture_seconds, 360) * 2))
         return run_ffmpeg(["-i", str(capture), "-vf", "fps=2,scale=640:480:flags=neighbor",
                            "-frames:v", "780", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log,
-                          timeout=120)
+                          timeout=timeout)
     if streaming:
         return run_ffmpeg(["-i", str(capture), "-vf", "fps=3,scale=640:480:flags=neighbor",
                            "-frames:v", "360", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)
@@ -133,7 +139,8 @@ def run(args):
     captures = sorted((root / "user" / "Dump" / "Frames").glob("*.avi"))
     if len(captures) != 1:
         raise RuntimeError(f"Expected one AVI capture, found {len(captures)}")
-    raw = decode_texture_capture(captures[0], root / "decode.log", args.streaming, args.benchmark)
+    raw = decode_texture_capture(captures[0], root / "decode.log", args.streaming, args.benchmark,
+                                 capture_seconds=args.seconds)
     selected = raw[-FRAME_BYTES:]
     run_ffmpeg(["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "640x480", "-i", "pipe:0",
                 "-frames:v", "1", "-y", str(root / "frame.png")],
