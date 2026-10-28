@@ -53,6 +53,14 @@ static const unsigned char *glyph(char c) {
     return font[42];
   return 0;
 }
+void dnd_console_build_font_i4(unsigned char *tiles) {
+  memset(tiles,0,4096);
+  for(int c=0;c<128;c++) {
+    const unsigned char *g=glyph((char)c);if(!g)continue;
+    for(int y=0;y<7;y++)for(int x=0;x<5;x++)
+      if(g[x]&(1u<<y))tiles[c*32+y*4+x/2]|=(unsigned char)(x&1?15:240);
+  }
+}
 static void newline(const char *s) {
   head = (head + 1) % ROWS;
   size_t length = 0;
@@ -110,21 +118,28 @@ static void render_text(const char *const *text, int rows, float left, float top
                         unsigned char shade) {
   const float scale = 1.35f, cw = 6 * scale, ch = 9 * scale;
   int compact=dnd_performance_glyph_runs();
+  if(compact==3&&dnd_graphics_overlay_cached_text(text,rows,left,top,shade))return;
   unsigned quads = 0;
   for(int row=0;row<rows;row++)for(int col=0;text[row][col];col++) {
     const unsigned char *g=glyph(text[row][col]);if(!g)continue;
+    if(compact==3){quads++;continue;}
     if(compact==2){quads+=(unsigned)glyph_rectangles(g,NULL);continue;}
     for(int y=0;y<7;y++)for(int x=0;x<5;x++)
       if((g[x]&(1u<<y))&&(!compact||x==0||!(g[x-1]&(1u<<y))))quads++;
   }
   if (!quads) return;
-  dnd_graphics_overlay_glyph_begin(quads, shade);
+  if(compact==3)dnd_graphics_overlay_atlas_begin(quads,shade);
+  else dnd_graphics_overlay_glyph_begin(quads, shade);
   for (int row = 0; row < rows; row++) {
     for (int col = 0; text[row][col]; col++) {
       const unsigned char *g = glyph(text[row][col]);
       if (!g)
         continue;
       float ox = left + col * cw, oy = top + row * ch;
+      if(compact==3) {
+        dnd_graphics_overlay_atlas_glyph((unsigned char)text[row][col],ox,oy,scale);
+        continue;
+      }
       if(compact==2) {
         GlyphRect rects[35];int n=glyph_rectangles(g,rects);
         for(int i=0;i<n;i++){

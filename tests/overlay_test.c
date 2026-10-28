@@ -48,6 +48,32 @@ void dnd_graphics_overlay_glyph_quad(float x,float y,float size) {
   dnd_graphics_overlay_glyph_rect(x,y,size,size);
 }
 void dnd_graphics_overlay_glyph_end(void) { assert(emitted_quads == expected_quads); }
+static unsigned char atlas[4096],atlas_boundary[640*576];
+bool dnd_graphics_overlay_cached_text(const char *const *text,int rows,float left,float top,unsigned char shade){(void)text;(void)rows;(void)left;(void)top;(void)shade;return false;}
+void dnd_graphics_overlay_atlas_begin(unsigned quads,unsigned char shade) {
+  dnd_console_build_font_i4(atlas);
+  dnd_graphics_overlay_glyph_begin(quads,shade);
+}
+void dnd_graphics_overlay_atlas_glyph(unsigned char c,float x,float y,float scale) {
+  assert(c<128);
+  /* At fractional scale a legacy union of pixel rectangles can cover both
+     sides of a boundary after float rounding. A nearest atlas chooses one.
+     Any host-raster disagreement must be confined to those exact boundaries. */
+  for(int py=(int)floorf(y-1);py<(int)ceilf(y+7*scale+1);py++)
+    for(int px=(int)floorf(x-1);px<(int)ceilf(x+5*scale+1);px++) {
+      float sx=(px+.5f-x)/scale,sy=(py+.5f-y)/scale;
+      if(px>=0&&px<640&&py>=0&&py<576&&sx>=-.001f&&sx<=5.001f&&sy>=-.001f&&sy<=7.001f&&
+         (fabsf(sx-roundf(sx))<.001f||fabsf(sy-roundf(sy))<.001f))atlas_boundary[py*640+px]=1;
+    }
+  for(int py=(int)ceilf(y-.5f);py<(int)ceilf(y+7*scale-.5f);py++)
+    for(int px=(int)ceilf(x-.5f);px<(int)ceilf(x+5*scale-.5f);px++) {
+      int tx=(int)floorf((px+.5f-x)/scale),ty=(int)floorf((py+.5f-y)/scale);
+      unsigned nibble=(atlas[c*32+ty*4+tx/2]>>(tx&1?0:4))&15;
+      assert(nibble==0||nibble==15);
+      if(nibble&&px>=0&&px<640&&py>=0&&py<576)raster[py*640+px]=1;
+    }
+  emitted_quads++;
+}
 
 int main(void) {
   dnd_performance_compact_glyphs(0);
@@ -179,6 +205,12 @@ int main(void) {
   dnd_performance_compact_glyphs(2);memset(raster,0,sizeof raster);total_glyph_quads=0;dnd_console_render();
   assert(!memcmp(reference_raster,raster,sizeof raster));assert(total_glyph_quads<old_quads/2);
   printf("Glyph rectangles preserve rasterized text pixels: %u -> %u quads.\n",old_quads,total_glyph_quads);
+  dnd_performance_compact_glyphs(3);memset(raster,0,sizeof raster);total_glyph_quads=0;dnd_console_render();
+  for(int i=0;i<640*576;i++)if(reference_raster[i]!=raster[i])assert(atlas_boundary[i]);
+  assert(total_glyph_quads<old_quads/10);
+  printf("Nearest I4 atlas preserves text away from fractional boundaries: %u -> %u quads.\n",old_quads,total_glyph_quads);
+  for(int c=0;c<128;c++)for(int y=0;y<8;y++)for(int x=0;x<8;x++)
+    if(x>=5||y>=7)assert(((atlas[c*32+y*4+x/2]>>(x&1?0:4))&15)==0);
   puts("Performance timing, counters, BBA/debugger status, toggle, color and layout passed.");
   return 0;
 }

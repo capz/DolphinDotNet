@@ -7,9 +7,10 @@ public static class GpuProfiler
 {
     /// <summary>Native rectangle construction; keep the legacy path only for throughput validation.</summary>
     public static bool UseNative2DRectangles {set=>Dolphin.Graphics.Draw2D.DirectRectanglePath=value;}
-    /// <summary>Choose a lossless geometry cover for the SDK bitmap console font. Rectangles are the default.</summary>
+    /// <summary>Choose the SDK bitmap console pipeline. Atlas is the default;
+    /// the geometry modes remain available for controlled comparisons.</summary>
     public static OverlayGlyphMode OverlayGlyphs {
-        set {if(value<OverlayGlyphMode.Pixels||value>OverlayGlyphMode.Rectangles)throw new System.ArgumentOutOfRangeException("value");
+        set {if(value<OverlayGlyphMode.Pixels||value>OverlayGlyphMode.Atlas)throw new System.ArgumentOutOfRangeException("value");
             Dolphin.Graphics.NativeGraphics.PerformanceCompactGlyphs((int)value);}
     }
     /// <summary>Opt-in reuse of a completed same-color EFB clear. Raw GX invalidates the proof.</summary>
@@ -37,5 +38,6 @@ public readonly struct GpuSubmissionStatistics
     {DrawSubmissions=drawSubmissions;TextureBindings=textureBindings;Triangles=triangles;}
 }
 
-/// <summary>Lossless geometry compression for the SDK bitmap console font.</summary>
-public enum OverlayGlyphMode { Pixels, HorizontalRuns, Rectangles }
+/// <summary>SDK bitmap console pipelines. Atlas samples the same 5x7 font
+/// from a 4 KiB nearest-filtered I4 texture using one quad per character.</summary>
+public enum OverlayGlyphMode { Pixels, HorizontalRuns, Rectangles, Atlas }

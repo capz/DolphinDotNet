@@ -10,16 +10,21 @@ static atomic_int ran;
 static int service_wake;
 static int dispatch(int context){if(context==1)atomic_store(&ran,1);else if(service_wake)dnd_async_wake();return 0;}
 int main(void) {
+ dnd_async_poll();assert(dnd_async_poll_stat(0)==0);
  assert(dnd_async_start(dispatch));dnd_async_enter_critical();
+ dnd_async_enter_critical();
+ for(int i=0;i<64;i++)dnd_async_poll();
+ assert(dnd_async_poll_stat(0)==0);
+ dnd_async_leave_critical();dnd_async_poll();assert(dnd_async_poll_stat(0)==0);
  dnd_async_productive_waits(1);int context=dnd_async_app_wait_begin();assert(context==0);
  struct timespec pause={0,1000000};for(int i=0;i<1000&&!atomic_load(&ran);i++)nanosleep(&pause,0);
  dnd_async_app_wait_end(context);assert(dnd_async_context()==0);assert(atomic_load(&ran));
  dnd_async_leave_critical();dnd_async_poll_stride(64);
  int64_t before=dnd_async_poll_stat(1);
- for(int i=0;i<64;i++)dnd_async_safepoint();
+ for(int i=0;i<64;i++)dnd_async_poll();
  assert(dnd_async_poll_stat(1)-before==1);
  dnd_async_poll_stride(1);before=dnd_async_poll_stat(1);
- for(int i=0;i<64;i++)dnd_async_safepoint();
+ for(int i=0;i<64;i++)dnd_async_poll();
  assert(dnd_async_poll_stat(1)-before==64);
  // Split service lets Task.Wait recheck without parking after completion.
  service_wake=1;before=dnd_async_wait_stat(1);dnd_async_service();
@@ -38,5 +43,6 @@ int main(void) {
  snapshot->length=1;dnd_async_wait_snapshot(snapshot);assert(dnd_exception_pending());dnd_exception_clear();free(snapshot);
  dnd_async_wait_reset();assert(dnd_async_wait_stat(1)==0&&dnd_async_wait_stat(8)==0);
  dnd_async_stop();assert(!dnd_async_running());assert(!dnd_exception_pending());
+ before=dnd_async_poll_stat(0);dnd_async_poll();assert(dnd_async_poll_stat(0)==before);
  puts("Productive app wait restores context; bounded polling retains legacy mode: PASS");
 }

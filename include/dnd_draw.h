@@ -9,6 +9,10 @@
 typedef struct { float x,y,z,nx,ny,nz,u,v; uint32_t color; } DndDrawVertex;
 typedef struct { const void *data; uint32_t bytes; int width,height,format; bool linear; } DndDrawTexture;
 typedef struct { uint32_t color; int flags; float cutoff; const DndDrawEffect *effect; const DndDrawTexture *secondary; } DndDrawMaterial;
+bool dnd_draw_backend_mesh(const DndDrawVertex *vertices,const uint16_t *indices,int count,uint32_t uniform_color,
+                           const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world);
+void dnd_draw_backend_mesh_changed(void);
+void dnd_draw_backend_overlay_shutdown(void);
 /* One graphics owner and one active pass: 1=3D, 2=2D, 3=raw, 4=compatibility immediate. */
 int dnd_device_begin(float r,float g,float b,float a);
 int dnd_device_end(void);

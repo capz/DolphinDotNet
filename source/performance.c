@@ -10,7 +10,7 @@ static DndPerformanceStats stats = {.network_state = -1, .network_link = -1};
 volatile uint32_t dnd_debugger_telemetry[2] = {DND_DEBUGGER_TELEMETRY_MAGIC, 0};
 #endif
 static int visible;
-static int compact_glyphs=2; /* lossless rectangle cover; profiler retains A/B controls */
+static int compact_glyphs=3; /* one atlas quad per glyph; retain geometry A/B controls */
 void dnd_performance_compact_glyphs(int enabled){compact_glyphs=enabled;}
 int dnd_performance_glyph_runs(void){return compact_glyphs;}
 static bool reuse_clear;

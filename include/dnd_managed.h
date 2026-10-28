@@ -3,6 +3,17 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
+#if defined(__GNUC__)
+#define DND_COLD __attribute__((cold,noinline))
+#else
+#define DND_COLD
+#endif
+#if defined(__GNUC__) && defined(__OPTIMIZE__) && !defined(__NO_INLINE__)
+#define DND_FAST_INLINE static inline __attribute__((always_inline))
+#else
+#define DND_FAST_INLINE static inline
+#endif
 
 /* Managed execution uses IEEE subnormals. libogc's native default sets NI. */
 static inline uint64_t dnd_managed_fp_enter(void) {
@@ -254,6 +265,12 @@ void dnd_gc_set_stress(bool enabled);
 typedef void (*DndGcSafepointHook)(void *context);
 void dnd_gc_set_safepoint_hook(DndGcSafepointHook hook, void *context);
 void dnd_gc_safepoint(void);
+/* AOT block fast path. The execution gate protects hook publication; retain
+ * the out-of-line entry point for native callers and coordinator semantics. */
+extern DndGcSafepointHook dnd_gc_safepoint_hook;
+DND_FAST_INLINE void dnd_gc_poll(void) {
+    if (dnd_gc_safepoint_hook) dnd_gc_safepoint();
+}
 
 
 /* Explicit root registrations for future managed thread contexts. The runtime
@@ -313,12 +330,61 @@ DndException *dnd_exception_new(DndManagedHeap *heap, const DndType *type, DndSt
 DndString *dnd_exception_get_message(DndException *exception);
 bool dnd_exception_matches(const DndType *type);
 void dnd_exception_begin_catch(void);
-void dnd_exception_rethrow(void);
+DND_COLD void dnd_exception_rethrow(void);
 void dnd_exception_rethrow_current(void);
 
 void dnd_exception_clear(void);
-void dnd_exception_throw(DndExceptionKind kind, const char *message);
-void dnd_exception_throw_object(DndObject *exception);
+DND_COLD void dnd_exception_throw(DndExceptionKind kind, const char *message);
+DND_COLD void dnd_exception_throw_object(DndObject *exception);
 DndExceptionKind dnd_exception_kind(void);
 const char *dnd_exception_message(void);
+
+DND_FAST_INLINE bool dnd_require_object_fast(const DndObject *object) {
+    if(object)return true;
+    (void)dnd_require_object(object);return false;
+}
+DND_FAST_INLINE uint32_t dnd_array_length_fast(DndArray *array) {
+    return array?array->length:dnd_array_length(array);
+}
+
+
+/* Typed AOT array access. Keep checks and native stride semantics, but expose
+ * the common load/store to C optimization and avoid an integer ABI round trip
+ * for floating-point values. Cold cases retain the original exception order. */
+DND_FAST_INLINE bool dnd_array_scalar_fast(DndArray *array,uint32_t index,uint32_t size) {
+    return array&&!array->elements_are_references&&index<array->length&&size<=array->element_size;
+}
+#define DND_ARRAY_INTEGER_ACCESS(SUFFIX,TYPE) \
+DND_FAST_INLINE TYPE dnd_array_load_##SUFFIX##_fast(DndArray *array,uint32_t index) { \
+    if(dnd_array_scalar_fast(array,index,sizeof(TYPE))){TYPE value;memcpy(&value,array->data+(size_t)index*array->element_size,sizeof(value));return value;} \
+    return (TYPE)dnd_array_load_scalar(array,index,sizeof(TYPE),false); \
+} \
+DND_FAST_INLINE bool dnd_array_store_##SUFFIX##_fast(DndArray *array,uint32_t index,TYPE value) { \
+    if(dnd_array_scalar_fast(array,index,sizeof(TYPE))){memcpy(array->data+(size_t)index*array->element_size,&value,sizeof(value));return true;} \
+    return dnd_array_store_scalar(array,index,value,sizeof(TYPE)); \
+}
+DND_ARRAY_INTEGER_ACCESS(u1,uint8_t)
+DND_ARRAY_INTEGER_ACCESS(u2,uint16_t)
+DND_ARRAY_INTEGER_ACCESS(u4,uint32_t)
+#undef DND_ARRAY_INTEGER_ACCESS
+DND_FAST_INLINE float dnd_array_load_r4_fast(DndArray *array,uint32_t index) {
+    if(dnd_array_scalar_fast(array,index,4)){float value;memcpy(&value,array->data+(size_t)index*array->element_size,4);return value;}
+    uint32_t bits=(uint32_t)dnd_array_load_scalar(array,index,4,false);float value;memcpy(&value,&bits,4);return value;
+}
+DND_FAST_INLINE double dnd_array_load_r8_fast(DndArray *array,uint32_t index) {
+    if(dnd_array_scalar_fast(array,index,8)){double value;memcpy(&value,array->data+(size_t)index*array->element_size,8);return value;}
+    uint64_t bits=dnd_array_load_scalar(array,index,8,false);double value;memcpy(&value,&bits,8);return value;
+}
+DND_FAST_INLINE bool dnd_array_store_r4_fast(DndArray *array,uint32_t index,float value) {
+    if(dnd_array_scalar_fast(array,index,4)){memcpy(array->data+(size_t)index*array->element_size,&value,4);return true;}
+    uint32_t bits;memcpy(&bits,&value,4);return dnd_array_store_scalar(array,index,bits,4);
+}
+DND_FAST_INLINE bool dnd_array_store_r8_fast(DndArray *array,uint32_t index,double value) {
+    if(dnd_array_scalar_fast(array,index,8)){memcpy(array->data+(size_t)index*array->element_size,&value,8);return true;}
+    uint64_t bits;memcpy(&bits,&value,8);return dnd_array_store_scalar(array,index,bits,8);
+}
+DND_FAST_INLINE DndObject *dnd_array_load_ref_fast(DndArray *array,uint32_t index) {
+    if(array&&array->elements_are_references&&index<array->length){DndObject *value;memcpy(&value,array->data+(size_t)index*array->element_size,sizeof(value));return value;}
+    return dnd_array_load_ref(array,index);
+}
 #endif

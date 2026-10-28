@@ -9,7 +9,10 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
 
-test: canvas_rectangle_test texture_reuse_test throughput_runtime_test asset_native_test mesh_range_test native_buffer_crc_test file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
+test: overlay_list_test array_fast_test indexed_mesh_gx_test canvas_rectangle_test texture_reuse_test throughput_runtime_test asset_native_test mesh_range_test native_buffer_crc_test file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
+	./overlay_list_test
+	./array_fast_test
+	./indexed_mesh_gx_test
 	./canvas_rectangle_test
 	./texture_reuse_test
 	./throughput_runtime_test
@@ -109,7 +112,7 @@ texture_reuse_test: texture_reuse_test.c ../source/draw_resources.c
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $^ $(CRC_DEAD_STRIP) -lm -o $@
 
 clean:
-	rm -f canvas_rectangle_test
+	rm -f canvas_rectangle_test indexed_mesh_gx_test array_fast_test overlay_list_test
 	rm -f texture_reuse_test
 	rm -f asset_native_test throughput_runtime_test
 	rm -f mesh_range_test native_buffer_crc_test
@@ -121,3 +124,12 @@ asset_native_test: asset_native_test.c ../source/storage.c ../source/draw_resour
 
 throughput_runtime_test: throughput_runtime_test.c ../source/async_runtime.c ../source/managed_runtime.c ../source/stw.c ../source/gc_stw.c
 	$(CC) $(CFLAGS) -pthread -ffunction-sections -fdata-sections $^ $(GC_LDFLAGS) -lm -o $@
+
+indexed_mesh_gx_test: indexed_mesh_gx_test.c ../include/dnd_indexed_mesh.inc
+	$(CC) $(CFLAGS) indexed_mesh_gx_test.c -o $@
+
+array_fast_test: array_fast_test.c ../source/managed_runtime.c ../source/stw.c ../source/gc_stw.c
+	$(CC) $(CFLAGS) -pthread $^ -o $@
+
+overlay_list_test: overlay_list_test.c ../include/dnd_overlay_list.h
+	$(CC) $(CFLAGS) overlay_list_test.c -o $@

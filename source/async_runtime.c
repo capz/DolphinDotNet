@@ -71,8 +71,15 @@ static AsyncCond changed;
 static AsyncThread thread;
 static DndExecutionContext contexts[2];
 static DndAsyncDispatch dispatch;
-static bool running, stopping, failed;
-static int owner, dispatch_depth[2], critical_depth[2];
+bool dnd_async_active;
+bool dnd_async_stopping;
+int dnd_async_owner, dnd_async_critical_depth[2];
+#define running dnd_async_active
+#define owner dnd_async_owner
+#define critical_depth dnd_async_critical_depth
+#define stopping dnd_async_stopping
+static bool failed;
+static int dispatch_depth[2];
 static uint64_t next_poll[2];
 static bool productive_waits;
 static bool deadline_waits=true;
@@ -117,8 +124,12 @@ void dnd_async_app_wait_end(int context) {
     if(context<0)return;
     lock(&gate);dnd_context_resume(&contexts[0]);owner=0;
 }
-static unsigned poll_stride=64,poll_budget[2];
-static uint64_t poll_calls,poll_slow;
+static unsigned poll_stride=64;
+unsigned dnd_async_poll_budget[2];
+uint64_t dnd_async_poll_calls;
+#define poll_budget dnd_async_poll_budget
+#define poll_calls dnd_async_poll_calls
+static uint64_t poll_slow;
 void dnd_async_poll_stride(int stride) {
     if(stride<1||stride>1024){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Invalid async poll stride.");return;}
     poll_stride=(unsigned)stride;poll_budget[0]=poll_budget[1]=0;
