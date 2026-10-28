@@ -13,6 +13,11 @@ namespace Dolphin.Storage;
 /// Callers must not concurrently use the target buffer for rendering/DMA.</summary>
 public sealed class AssetStream : IDisposable
 {
+    /// <summary>Aligned direct-read quantum: 16/32/64 KiB; 0 retains the bounce-only validation path.</summary>
+    public static int NativeReadQuantum {set=>NativeGraphics.AssetReadQuantum(value);}
+    public static void ResetReadStats()=>NativeGraphics.AssetResetStats();
+    public static void CopyReadStats(long[] destination)=>NativeGraphics.AssetSnapshot(destination);
+    public static long ReadStat(int kind)=>NativeGraphics.AssetStat(kind);
     private readonly FileStream stream;
     private readonly int nativeFile;
     /// <summary>Temporary performance-validation switch. False selects the legacy

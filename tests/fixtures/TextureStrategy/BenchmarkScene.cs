@@ -17,15 +17,19 @@ internal sealed class BenchmarkScene : IDisposable
     private readonly Transform[] transforms = new Transform[96];
     private readonly Material[] materials = new Material[96];
     private readonly Texture2D?[] textures = new Texture2D?[96];
-    private readonly byte[][] scratch = { new byte[4096], new byte[16384], new byte[65536] };
+    private readonly byte[] smallScratch=new byte[4096], mediumScratch=new byte[16384], largeScratch=new byte[65536];
+    private readonly BenchmarkWork[] pool=new BenchmarkWork[5];
+    private BenchmarkWork[] work=new BenchmarkWork[0];
+    private int scratchBytes;
+    private bool HasPending {get {for(int i=0;i<work.Length;i++)if(work[i].Task!=null&&!work[i].Task!.IsCompleted)return true;return false;}}
     private readonly BenchmarkModel model = new BenchmarkModel();
     private readonly BenchmarkResult[] results = new BenchmarkResult[9];
     private readonly BenchmarkHistogram histogram = new BenchmarkHistogram();
     private readonly StreamTelemetry telemetry = new StreamTelemetry();
     private readonly int nativeBaseline;
-    private Task? request;
-    private int requestId, requestGroup, nextCase = -1, currentCase, selected, reportSecond = -1;
-    private long requestAt, caseAt, previousFrame;
+
+    private int nextCase = -1, currentCase, selected, reportSecond = -1;
+    private long caseAt, previousFrame;
     private bool stopped, autoAdvance = true, resetSuite, summary;
     private int completedMask, coverage, draws, sceneUs;
     private int previousCoverage, previousElapsed;
@@ -38,10 +42,11 @@ internal sealed class BenchmarkScene : IDisposable
     private float centerX = 8, centerY = 12;
     internal int Frame, FramesAfterDone;
     internal bool Completed => completedMask == 511;
+    internal bool ResultsReady=>Completed&&Current.CanAdvance(Clock.Timestamp,4000000);
     private BenchmarkResult Current => results[currentCase];
-    internal static int GroupFor(int index) => index % 3 == 0 ? 1 : index % 3 == 1 ? 2 : 4;
-    internal static int BudgetFor(int index) => index / 3 == 0 ? 192 : index / 3 == 1 ? 256 : 384;
-    private static string Label(int index) => index % 3 == 0 ? "PAGE" : index % 3 == 1 ? "A2X2" : "A4X4";
+    internal static int GroupFor(int index) => BenchmarkOptions.Matrix?BenchmarkOptions.MatrixGroup:index % 3 == 0 ? 1 : index % 3 == 1 ? 2 : 4;
+    internal static int BudgetFor(int index) => BenchmarkOptions.Matrix?BenchmarkOptions.MatrixBudget:index / 3 == 0 ? 192 : index / 3 == 1 ? 256 : 384;
+    private static string Label(int index) => BenchmarkOptions.Matrix?"M"+index:index % 3 == 0 ? "PAGE" : index % 3 == 1 ? "A2X2" : "A4X4";
     internal BenchmarkScene()
     {
         DebugOverlay.PerformanceVisible = false;
@@ -57,6 +62,7 @@ internal sealed class BenchmarkScene : IDisposable
         }
         for (int i = 0; i < 96; i++) { materials[i] = MaterialFor(null); transforms[i] = new Transform(); }
         nativeBaseline = device.NativeBytes;
+        for(int i=0;i<pool.Length;i++)pool[i]=new BenchmarkWork(largeScratch);
         BeginCase(0);
     }
     private static Material MaterialFor(Texture2D? texture) =>
@@ -92,8 +98,20 @@ internal sealed class BenchmarkScene : IDisposable
             for (int i = 0; i < 9; i++) results[i].Reset();
             completedMask = 0; resetSuite = false;
         }
+        BenchmarkOptions.SelectCase(index);
         currentCase = selected = index; Current.Begin(histogram); completedMask &= ~(1 << index);
+        model.IndexedPolicy=BenchmarkOptions.IndexedPolicy;
         model.Configure(GroupFor(index), BudgetFor(index));
+        // Fixed original 84 KiB scratch: large images cannot pipeline without
+        // stealing residency memory or increasing the 256 KiB managed heap.
+        int depth=GroupFor(index)==4?1:BenchmarkOptions.Depth;
+        work=new BenchmarkWork[depth];scratchBytes=smallScratch.Length+mediumScratch.Length+largeScratch.Length;
+        for(int i=0;i<depth;i++)
+        {
+            work[i]=pool[i];
+            work[i].Pixels=GroupFor(index)==4?largeScratch:i==0?mediumScratch:largeScratch;
+            work[i].Offset=i==0?0:(i-1)*model.SlotBytes;
+        }
         nextCase = -1; summary = false; reportSecond = -1; FramesAfterDone = 0;
         centerX = 8; centerY = 12; caseAt = previousFrame = Clock.Timestamp;
         recordPrevious = false; previousEnd = preparationStart = preparationEnd = 0;
@@ -111,52 +129,56 @@ internal sealed class BenchmarkScene : IDisposable
     }
     private void ObserveDiscard()
     {
-        if (request == null) return;
-        // No fault injection in this mode: an unexpected source error must surface.
-        request.GetAwaiter().GetResult(); request = null; Current.Cancelled++;
+        for(int i=0;i<work.Length;i++)if(work[i].Task!=null&&work[i].Task!.IsCompleted){work[i].Retire();Current.Cancelled++;}
     }
+    private bool PendingId(int id){for(int i=0;i<work.Length;i++)if(work[i].Task!=null&&work[i].Id==id)return true;return false;}
     private void Pump()
     {
-        if (request != null)
+        int published=0;long begin=Clock.Timestamp;int uploaded=0,ready=0;
+        for(int i=0;i<work.Length;i++)if(work[i].Task!=null&&work[i].Task!.IsCompleted)ready++;
+        if(ready>Current.ReadyPeak)Current.ReadyPeak=ready;
+        for(int i=0;i<work.Length;i++)
         {
-            if (!request.IsCompleted) return;
-            request.GetAwaiter().GetResult(); request = null;
-            int slot = model.Victim();
-            if (!model.Desired(requestId) || slot < 0) { Current.Cancelled++; return; }
-            long at = Clock.Timestamp;
-            Release(slot, true);
-            int layout = currentCase % 3, size = requestGroup * 32;
-            var texture = Texture2D.Create(size, size, scratch[layout], false);
-            if (texture.NativeBytes != model.SlotBytes) throw new InvalidOperationException("Benchmark texture size mismatch.");
-            int uploadUs = (int)(Clock.Timestamp - at);
-            textures[slot] = texture; model.Commit(slot, requestId);
-            materials[slot].Texture = texture;
-            int x = (requestId % (48 / requestGroup)) * requestGroup;
-            int y = (requestId / (48 / requestGroup)) * requestGroup;
-            transforms[slot].LocalPosition = new Vector3(x, y, .01f);
-            Current.UploadedKiB += model.SlotBytes / 1024;
-            Current.Promoted((int)(Clock.Timestamp - requestAt), uploadUs);
-            stages[BenchmarkTiming.Upload] = Us(at);
-            if (model.Bytes / 1024 > Current.PeakKiB) Current.PeakKiB = model.Bytes / 1024;
+            var job=work[i];if(job.Task==null||!job.Task.IsCompleted)continue;
+            if(published>=BenchmarkOptions.Publications||uploaded>=65536||(published>0&&Clock.Timestamp-begin>=BenchmarkOptions.PublishBudgetUs))break;
+            job.Task.GetAwaiter().GetResult();
+            int slot=model.Victim();
+            if(!model.Desired(job.Id)||model.Find(job.Id)>=0||slot<0){job.Retire();Current.Cancelled++;continue;}
+            long at=Clock.Timestamp;
+            var texture=textures[slot];
+            if(BenchmarkOptions.Reuse&&texture!=null){model.Remove(slot);Current.Evictions++;texture.ReplaceRgba(job.Pixels,job.Offset);Current.Reuses++;}
+            else {Release(slot,true);texture=Texture2D.Create(job.Group*32,job.Group*32,job.Pixels,job.Offset,false);Current.Allocations++;}
+            if(texture.NativeBytes!=model.SlotBytes)throw new InvalidOperationException("Benchmark texture size mismatch.");
+            int uploadUs=(int)(Clock.Timestamp-at);
+            textures[slot]=texture;model.Commit(slot,job.Id);materials[slot].Texture=texture;
+            transforms[slot].LocalPosition=new Vector3((job.Id%(48/job.Group))*job.Group,(job.Id/(48/job.Group))*job.Group,.01f);
+            Current.UploadedKiB+=model.SlotBytes/1024;
+            Current.Promoted((int)(Clock.Timestamp-job.Queued),uploadUs);
+            Current.QueueUs+=job.Start-job.Queued;Current.PreparationUs+=job.End-job.Start;Current.ReadyUs+=at-job.End;
+            if(job.End-job.Start>Current.PreparationMaxUs)Current.PreparationMaxUs=(int)(job.End-job.Start);
+            preparationStart=job.Start;preparationEnd=job.End;
+            job.Retire();published++;uploaded+=model.SlotBytes;
+            if(model.Bytes/1024>Current.PeakKiB)Current.PeakKiB=model.Bytes/1024;
         }
-        if (model.Victim() < 0) return;
-        for (int i = 0; i < model.DesiredCount; i++)
+        stages[BenchmarkTiming.Upload]=(int)(Clock.Timestamp-begin);
+        if(published>Current.MaxPublications)Current.MaxPublications=published;
+        if(model.Victim()<0)return;
+        for(int slot=0;slot<work.Length;slot++)if(work[slot].Task==null)
         {
-            int id = model.Wanted[i]; if (model.Find(id) >= 0) continue;
-            int group = model.Group; byte[] pixels = scratch[currentCase % 3];
-            requestId = id; requestGroup = group; requestAt = Clock.Timestamp;
-            Current.RequestedKiB += model.SlotBytes / 1024;
-            request = Task.Run(() => {
-                preparationEnd=0;preparationStart=Clock.Timestamp;
-                BenchmarkSource.Fill(pixels,id,group);preparationEnd=Clock.Timestamp;
-            });
-            return;
+            for(int i=0;i<model.DesiredCount;i++)
+            {
+                int id=model.Wanted[i];if(model.Find(id)>=0||PendingId(id))continue;
+                Current.RequestedKiB+=model.SlotBytes/1024;Current.Started++;
+                work[slot].Begin(id,model.Group);break;
+            }
         }
+        int pending=0;for(int i=0;i<work.Length;i++)if(work[i].Task!=null)pending++;
+        if(pending>Current.PendingPeak)Current.PendingPeak=pending;
     }
     internal void Present()
     {
         long now = Clock.Timestamp;
-        if (!stopped && nextCase >= 0 && (request == null || request.IsCompleted))
+        if (!stopped && nextCase >= 0 && !HasPending)
         { ObserveDiscard(); BeginCase(nextCase); now = Clock.Timestamp; }
         int elapsed = (int)((now - caseAt) / 1000), frameUs = (int)(now - previousFrame);
         long intervalStart=previousFrame; previousFrame = now;
@@ -188,8 +210,8 @@ internal sealed class BenchmarkScene : IDisposable
             }
             model.Build(centerX, centerY); Pump(); coverage = model.Coverage();
         }
-        else if (request != null && request.IsCompleted) ObserveDiscard();
-        if (!stopped && Current.CanAdvance(now) && autoAdvance && currentCase < 8 && nextCase < 0)
+        else ObserveDiscard();
+        if (!stopped && Current.CanAdvance(now,4000000) && autoAdvance && currentCase < 8 && nextCase < 0)
             nextCase = currentCase + 1;
         if (Completed) FramesAfterDone++;
         recordPrevious = active; previousCoverage = coverage; previousElapsed = elapsed;
@@ -208,7 +230,7 @@ internal sealed class BenchmarkScene : IDisposable
             renderer.DrawMesh(coarseMeshes[id], coarseMaterial, coarseTransform); draws++;
         }
         for (int i = 0; i < model.Capacity; i++) if (textures[i] != null && model.Area(model.Ids[i]) > 0)
-        { renderer.DrawMesh(quads[currentCase % 3], materials[i], transforms[i]); draws++; }
+        { renderer.DrawMesh(quads[model.Group==1?0:model.Group==2?1:2], materials[i], transforms[i]); draws++; }
         renderer.End3D(); int submitUs = (int)(Clock.Timestamp - drawAt);
         stages[BenchmarkTiming.Submit]=submitUs; previousDraws=draws;
         if (active && submitUs > Current.MaxSubmitUs) Current.MaxSubmitUs = submitUs;
@@ -232,8 +254,35 @@ internal sealed class BenchmarkScene : IDisposable
         pt[5]=timing.WorstUs/100;
         for(int i=0;i<BenchmarkTiming.Stages;i++)pt[6+i]=timing.Worst[i]/100;
         pt[15]=timing.WorstDraws;
+        if(Current.Complete&&(elapsed/350)%4==1)
+        {
+            pt[0]=0x4250;pt[1]=3;pt[2]=currentCase;pt[3]=BenchmarkOptions.Mode;
+            pt[4]=work.Length;pt[5]=BenchmarkOptions.Publications;pt[6]=Current.Started;pt[7]=Current.Promotions;
+            pt[8]=Current.Reuses;pt[9]=Current.MaxPublications;
+            pt[10]=Current.Promotions==0?0:(int)(Current.PreparationUs/Current.Promotions/100);
+            pt[11]=Current.PreparationMaxUs/100;pt[12]=Current.Promotions==0?0:(int)(Current.ReadyUs/Current.Promotions/100);
+            pt[13]=scratchBytes/1024;pt[14]=Current.Samples==0?0:(int)(Current.BeginCopyUs/Current.Samples/100);
+            pt[15]=Current.Samples==0?0:(int)(Current.GateUs/Current.Samples/100);
+        }
+        if(Current.Complete&&(elapsed/350)%4==2)
+        {
+            pt[0]=0x4251;pt[1]=1;pt[2]=currentCase;
+            for(int i=0;i<BenchmarkTiming.Stages;i++)pt[3+i]=timing.Mean(i)/100;
+            pt[11]=Current.Promotions==0?0:(int)(Current.QueueUs/Current.Promotions/100);
+            pt[12]=Current.BeginCopies;pt[13]=Current.Allocations;pt[14]=Current.PendingPeak;pt[15]=Current.ReadyPeak;
+        }
+        if(Current.Complete&&(elapsed/350)%4==3)
+        {
+            int at=timing.P99Index*(BenchmarkTiming.Stages+2);
+            if(at>=timing.Slow.Length)throw new InvalidOperationException("P99 snapshot capacity exceeded.");
+            pt[0]=0x4252;pt[1]=1;pt[2]=currentCase;pt[3]=timing.Samples;pt[4]=timing.P99Index;
+            pt[5]=timing.Slow[at]/100;
+            for(int i=0;i<BenchmarkTiming.Stages;i++)pt[6+i]=timing.Slow[at+2+i]/100;
+            pt[15]=timing.Slow[at+1];
+        }
         telemetry.Present();long endAt=Clock.Timestamp;device.EndFrame();
         stages[BenchmarkTiming.End]=Us(endAt);
+        if(active){if(GpuProfiler.BeginFrameCopied)Current.BeginCopies++;Current.BeginCopyUs+=GpuProfiler.BeginFrameCopyMicroseconds;Current.GateUs+=GpuProfiler.GateReacquireMicroseconds;}
         stages[BenchmarkTiming.Gpu]=GpuProfiler.GpuWaitMicroseconds;
         stages[BenchmarkTiming.Vi]=GpuProfiler.RetraceWaitMicroseconds;
         sceneUs = (int)(Clock.Timestamp - drawAt);previousEnd=Clock.Timestamp;Frame++;
@@ -303,7 +352,7 @@ internal sealed class BenchmarkScene : IDisposable
     internal bool Stop()
     {
         stopped = true;
-        if (request != null) { if (!request.IsCompleted) return false; ObserveDiscard(); }
+        if(HasPending)return false;ObserveDiscard();
         return true;
     }
     public void Dispose()

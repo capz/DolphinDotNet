@@ -9,6 +9,10 @@ internal sealed class BenchmarkModel
     private readonly int[] seen = new int[1536];
     private readonly float[] areas = new float[1536], distances = new float[1536];
     internal int Group, BudgetKiB, Capacity, Count, WantedCount, DesiredCount;
+    // Optional direct indices: 3 KiB of managed payload, no extra staging/native memory.
+    private readonly byte[] slotById=new byte[1536];
+    private readonly bool[] desiredById=new bool[1536];
+    internal bool IndexedPolicy;
     private int stamp;
     internal int SlotBytes => Group * Group * 4096;
     internal int Bytes => Count * SlotBytes;
@@ -18,6 +22,7 @@ internal sealed class BenchmarkModel
         if ((group != 1 && group != 2 && group != 4) ||
             (budgetKiB != 192 && budgetKiB != 256 && budgetKiB != 384))
             throw new ArgumentException("Invalid comparison configuration.");
+        for(int id=0;id<1536;id++){slotById[id]=0;desiredById[id]=false;}
         Group = group; BudgetKiB = budgetKiB; Capacity = budgetKiB * 1024 / SlotBytes;
         Count = WantedCount = DesiredCount = 0;
         for (int i = 0; i < MaxSlots; i++) Ids[i] = -1;
@@ -27,6 +32,7 @@ internal sealed class BenchmarkModel
     private static float Max(float a, float b) => a > b ? a : b;
     internal void Build(float cx, float cy)
     {
+        if(IndexedPolicy)for(int i=0;i<DesiredCount;i++)desiredById[Wanted[i]]=false;
         stamp++; WantedCount = 0;
         float left = cx - HalfWidth, right = cx + HalfWidth;
         float bottom = cy - HalfHeight, top = cy + HalfHeight;
@@ -58,14 +64,18 @@ internal sealed class BenchmarkModel
             Wanted[j] = id;
         }
         DesiredCount = WantedCount < Capacity ? WantedCount : Capacity;
+        if(IndexedPolicy)for(int i=0;i<DesiredCount;i++)desiredById[Wanted[i]]=true;
     }
     internal int Find(int id)
     {
+        if(id<0||id>=1536)return -1;
+        if(IndexedPolicy)return slotById[id]-1;
         for (int i = 0; i < Capacity; i++) if (Ids[i] == id) return i;
         return -1;
     }
     internal bool Desired(int id)
     {
+        if(IndexedPolicy)return id>=0&&id<1536&&desiredById[id];
         for (int i = 0; i < DesiredCount; i++) if (Wanted[i] == id) return true;
         return false;
     }
@@ -78,12 +88,12 @@ internal sealed class BenchmarkModel
         return victim;
     }
     internal float Area(int id) => id >= 0 && seen[id] == stamp ? areas[id] : 0;
-    internal void Remove(int slot) { if (Ids[slot] >= 0) { Ids[slot] = -1; Count--; } }
+    internal void Remove(int slot) { if (Ids[slot] >= 0) { if(IndexedPolicy)slotById[Ids[slot]]=0;Ids[slot] = -1; Count--; } }
     internal void Commit(int slot, int id)
     {
-        if (slot < 0 || slot >= Capacity || Ids[slot] >= 0 || Find(id) >= 0)
+        if (slot < 0 || slot >= Capacity || id<0 || id>=(48/Group)*(32/Group) || Ids[slot] >= 0 || Find(id) >= 0)
             throw new InvalidOperationException("Invalid benchmark cache transition.");
-        Ids[slot] = id; Count++;
+        Ids[slot] = id;if(IndexedPolicy)slotById[id]=(byte)(slot+1); Count++;
     }
     internal int Coverage()
     {
@@ -116,15 +126,18 @@ internal sealed class BenchmarkResult
     internal int PeakKiB, StaticCoverage, TimeTo95Ms = -1, MaxFrameUs, MaxUploadUs, MaxSubmitUs;
     internal int LongestBelow95Ms;
     internal long DurationUs, MotionUs, CoverageTime, MotionCoverageTime;
+    internal long PreparationUs,ReadyUs,QueueUs,BeginCopyUs,GateUs;
+    internal int PreparationMaxUs,Reuses,Allocations,MaxPublications,Started,BeginCopies,PendingPeak,ReadyPeak;
     private long below95Us;
     internal bool Complete;
     private long completedAt;
     // The capture oracle samples at 2 Hz. Hold from actual completion, not
     // case start: a slow final measured frame can overshoot the nominal end.
-    internal bool CanAdvance(long now) => Complete && now - completedAt >= 1500000;
+    internal bool CanAdvance(long now,int dwellUs=1500000) => Complete && now - completedAt >= dwellUs;
     internal void Reset()
     {
-        Timing.Reset();
+        BeginCopies=PendingPeak=ReadyPeak=0;Timing.Reset();PreparationUs=ReadyUs=QueueUs=BeginCopyUs=GateUs=0;
+        PreparationMaxUs=Reuses=Allocations=MaxPublications=Started=0;
         active = null; finalFrame95 = finalFrame99 = finalLatency95 = 0;
         Samples = Promotions = Evictions = Cancelled = RequestedKiB = UploadedKiB = 0;
         PeakKiB = StaticCoverage = MaxFrameUs = MaxUploadUs = MaxSubmitUs = LongestBelow95Ms = 0;

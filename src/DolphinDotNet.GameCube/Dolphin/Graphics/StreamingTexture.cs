@@ -19,6 +19,8 @@ public sealed class StreamingTexture : IDisposable
     public Texture2D Texture {get{Check();return buffers[front];}}
     public bool IsResident {get{Check();return resident;}}
     public int ContentGeneration {get{Check();return generation;}}
+    /// <summary>Total physical bytes in both texture allocations.</summary>
+    public int AllocatedBytes {get{Check();return buffers[0].NativeBytes+buffers[1].NativeBytes;}}
     public int NativeBytes {get{Check();return buffers[front].NativeBytes;}}
     public bool HasPendingUpload {get{Check();return staging!=null;}}
     public StreamingTexture(int width,int height,NativeTextureFormat format=NativeTextureFormat.Cmpr,bool linear=true)

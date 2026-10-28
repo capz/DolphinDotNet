@@ -75,9 +75,10 @@ void dnd_graphics_init(void) {
 }
 int dnd_graphics_width(void){return mode?mode->fbWidth:640;}
 int dnd_graphics_height(void){return mode?mode->efbHeight:480;}
-void dnd_draw_backend_external(void){external_gpu=true;dnd_draw_backend_invalidate_cache();}
+void dnd_draw_backend_invalidate_efb(void){dnd_performance_clear_invalidated();}
+void dnd_draw_backend_external(void){dnd_performance_clear_invalidated();external_gpu=true;dnd_draw_backend_invalidate_cache();}
 void dnd_draw_backend_wait(void){if(mode||external_gpu)GX_DrawDone();}
-void dnd_draw_backend_abort(void){dnd_draw_backend_invalidate_cache();if(mode||external_gpu)GX_AbortFrame();immediate_batch=false;immediate_count=0;glyph_vertices=0;}
+void dnd_draw_backend_abort(void){dnd_performance_clear_invalidated();dnd_draw_backend_invalidate_cache();if(mode||external_gpu)GX_AbortFrame();immediate_batch=false;immediate_count=0;glyph_vertices=0;}
 void dnd_draw_backend_flush(void *data,int bytes,int invalidate){
     if(invalidate==1)DCInvalidateRange(data,(u32)bytes);
     else {
@@ -207,8 +208,11 @@ void dnd_graphics_begin_frame(float r,float g,float b,float a) {
     GX_SetDispCopySrc(0,0,mode->fbWidth,mode->efbHeight);GX_SetDispCopyDst(mode->fbWidth,mode->xfbHeight);
     GX_SetCopyFilter(mode->aa,mode->sample_pattern,GX_TRUE,mode->vfilter);
     GX_SetPixelFmt(mode->aa?GX_PF_RGB565_Z16:GX_PF_RGB8_Z24,GX_ZC_LINEAR);
-    GX_SetCopyClear(color(rgba(r,g,b,a)),0x00ffffff);GX_SetColorUpdate(GX_TRUE);GX_SetAlphaUpdate(GX_TRUE);
-    GX_SetZMode(GX_TRUE,GX_LEQUAL,GX_TRUE);GX_CopyDisp(xfb[fb],GX_TRUE);GX_DrawDone();
+    uint32_t clear=rgba(r,g,b,a);GX_SetCopyClear(color(clear),0x00ffffff);GX_SetColorUpdate(GX_TRUE);GX_SetAlphaUpdate(GX_TRUE);
+    GX_SetZMode(GX_TRUE,GX_LEQUAL,GX_TRUE);
+    bool copy=dnd_performance_begin_clear(clear);uint64_t begin_at=gettime();
+    if(copy){GX_CopyDisp(xfb[fb],GX_TRUE);GX_DrawDone();}
+    dnd_performance_begin_copy((uint32_t)ticks_to_microsecs(gettime()-begin_at),copy);
     dnd_draw_backend_viewport(0,0,mode->fbWidth,mode->efbHeight);dnd_draw_backend_scissor(0,0,mode->fbWidth,mode->efbHeight);
     projection_ortho=false;identity(view_matrix);identity(projection_matrix);identity(immediate_world);
 }
@@ -260,12 +264,13 @@ static void glyph_flush(void) {
     dnd_draw_backend_vertices(immediate_vertices,glyph_vertices,GX_TRIANGLES,NULL,&mat,world);glyph_vertices=0;
 }
 void dnd_graphics_overlay_glyph_begin(unsigned quads,unsigned char shade){glyph_quads=quads;glyph_vertices=0;immediate_color=(uint32_t)shade<<24|(uint32_t)shade<<16|(uint32_t)shade<<8|255;}
-void dnd_graphics_overlay_glyph_quad(float x,float y,float size) {
+void dnd_graphics_overlay_glyph_rect(float x,float y,float width,float height) {
     if(glyph_vertices+6>1536)glyph_flush();
     DndDrawVertex *v=immediate_vertices+glyph_vertices;
-    v[0]=(DndDrawVertex){x,y,0,0,0,1,0,0,immediate_color};v[1]=v[0];v[1].x+=size;v[2]=v[1];v[2].y+=size;
-    v[3]=v[0];v[4]=v[2];v[5]=v[0];v[5].y+=size;glyph_vertices+=6;if(glyph_quads)glyph_quads--;
+    v[0]=(DndDrawVertex){x,y,0,0,0,1,0,0,immediate_color};v[1]=v[0];v[1].x+=width;v[2]=v[1];v[2].y+=height;
+    v[3]=v[0];v[4]=v[2];v[5]=v[0];v[5].y+=height;glyph_vertices+=6;if(glyph_quads)glyph_quads--;
 }
+void dnd_graphics_overlay_glyph_quad(float x,float y,float size){dnd_graphics_overlay_glyph_rect(x,y,size,size);}
 void dnd_graphics_overlay_glyph_end(void){glyph_flush();}
 void dnd_graphics_end_frame(void) {
     GX_SetDispCopyYScale(GX_GetYScaleFactor(mode->efbHeight,mode->xfbHeight));GX_SetDispCopySrc(0,0,mode->fbWidth,mode->efbHeight);GX_SetDispCopyDst(mode->fbWidth,mode->xfbHeight);
@@ -275,7 +280,9 @@ void dnd_graphics_end_frame(void) {
     uint64_t gpu_at=gettime();GX_DrawDone();uint64_t gpu_us=ticks_to_microsecs(gettime()-gpu_at);
     VIDEO_SetNextFramebuffer(xfb[fb]);if(first_frame){first_frame=false;VIDEO_SetBlack(FALSE);}VIDEO_Flush();uint64_t vi_at=gettime();VIDEO_WaitVSync();
     dnd_performance_frame_waits((uint32_t)gpu_us,(uint32_t)ticks_to_microsecs(gettime()-vi_at));
-    dnd_async_app_wait_end(wait_context);fb^=1;
+    uint64_t gate_at=gettime();dnd_async_app_wait_end(wait_context);
+    dnd_performance_gate_wait((uint32_t)ticks_to_microsecs(gettime()-gate_at));
+    dnd_performance_clear_completed();fb^=1;
     if(dnd_performance_visible())dnd_performance_presented(ticks_to_microsecs(gettime()));
 }
 void dnd_graphics_present(void){dnd_graphics_begin_overlay();dnd_console_render();dnd_graphics_end_frame();}
@@ -284,6 +291,7 @@ void dnd_graphics_model_end(void){dnd_graphics_present();}
 #else
 #ifndef DND_GRAPHICS_TEST
 bool dnd_draw_backend_immediate_ready(void){return true;}
+void dnd_draw_backend_invalidate_efb(void){}
 void dnd_draw_backend_external(void){}
 void dnd_draw_backend_invalidate_cache(void){}
 void dnd_draw_backend_publish_texture(void){}

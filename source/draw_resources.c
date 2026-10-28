@@ -223,18 +223,33 @@ int dnd_texture_publish_staged(int token) {
     dnd_draw_backend_publish_texture();
     return 0;
 }
-static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
-    int bytes=texture_size(w,h,6);
-    if(dnd_device_active() || bytes<0 || !src)return 0;
-    int token=create(TEXTURE,bytes,32);Resource *r=find(token,TEXTURE);if(!r)return 0;
-    r->width=w;r->height=h;r->format=6;r->linear=linear!=0;
+static void texture_convert_rgba(Resource *r,const unsigned char *src) {
+    int w=r->width,h=r->height;
+    memset(r->data,0,(size_t)r->bytes);
     int blocks=(w+3)/4;
     for(int y=0;y<h;y++)for(int x=0;x<w;x++) {
         int block=((y/4)*blocks+x/4)*64,at=((y&3)*4+(x&3))*2,source=(y*w+x)*4;
         r->data[block+at]=src[source+3];r->data[block+at+1]=src[source];
         r->data[block+32+at]=src[source+1];r->data[block+33+at]=src[source+2];
     }
+ }
+int dnd_texture_replace_rgba(int token,DndArray *rgba,int offset) {
+    Resource *r=find(token,TEXTURE);
+    if(dnd_device_active()||dnd_raw_depth()||!r||r->format!=6||!rgba||rgba->elements_are_references||rgba->element_size!=1||offset<0||(uint32_t)offset>rgba->length||(uint32_t)(r->width*r->height*4)>rgba->length-(uint32_t)offset)return -1;
+    dnd_draw_backend_wait();texture_convert_rgba(r,rgba->data+offset);
+    dnd_draw_backend_flush(r->data,r->bytes,2);return 0;
+}
+static int texture_rgba(int w,int h,const unsigned char *src,int linear) {
+    int bytes=texture_size(w,h,6);
+    if(dnd_device_active() || bytes<0 || !src)return 0;
+    int token=create(TEXTURE,bytes,32);Resource *r=find(token,TEXTURE);if(!r)return 0;
+    r->width=w;r->height=h;r->format=6;r->linear=linear!=0;
+    texture_convert_rgba(r,src);
     dnd_draw_backend_flush(r->data,bytes,2);return token;
+}
+int dnd_texture_create_range(int w,int h,DndArray *rgba,int offset,int linear) {
+    if(texture_size(w,h,6)<0||!rgba||rgba->element_size!=1||rgba->elements_are_references||offset<0||(uint32_t)offset>rgba->length||(uint32_t)(w*h*4)>rgba->length-(uint32_t)offset)return 0;
+    return texture_rgba(w,h,rgba->data+offset,linear);
 }
 int dnd_texture_create(int w,int h,DndArray *rgba,int linear) {
     if(texture_size(w,h,6)<0 || !rgba || rgba->element_size!=1 || rgba->elements_are_references || rgba->length!=(uint32_t)(w*h*4))return 0;
@@ -415,6 +430,17 @@ int dnd_canvas_vertices(int token,int tex,DndArray *a,int count,uint32_t color) 
     r->texture=tex;DndDrawVertex *v=(DndDrawVertex*)r->data+r->count;
     for(int i=0;i<count;i++)v[i]=(DndDrawVertex){p[i*4],p[i*4+1],0,0,0,1,p[i*4+2],p[i*4+3],color};
     r->count+=count;return 0;
+}
+int dnd_canvas_rectangle(int token,float x,float y,float w,float h,uint32_t color) {
+    Resource *r=find(token,CANVAS);
+    if(!r||token!=active_canvas||dnd_device_pass()!=2||!isfinite(x)||!isfinite(y)||!isfinite(w)||!isfinite(h)||w<0||h<0||!isfinite(x+w)||!isfinite(y+h))return -1;
+    if(w==0||h==0)return 0;
+    Resource *fx=r->effect?find(r->effect,EFFECT):NULL;
+    if(r->effect&&(!fx||((DndDrawEffect*)fx->data)->texture))return -1;
+    if(r->count&&(r->texture||r->count+6>r->capacity))if(dnd_canvas_flush(token)<0)return -1;
+    r->texture=0;DndDrawVertex *v=(DndDrawVertex*)r->data+r->count;
+    v[0]=(DndDrawVertex){x,y,0,0,0,1,0,0,color};v[1]=v[0];v[1].x=x+w;v[2]=v[1];v[2].y=y+h;
+    v[3]=v[0];v[4]=v[2];v[5]=v[0];v[5].y=y+h;r->count+=6;return 0;
 }
 int dnd_canvas_end(int token) { if(dnd_canvas_flush(token)<0)return -1;int result=dnd_device_pass_end(2);if(result==0)active_canvas=0;return result; }
 int dnd_canvas_clip(int token,int x,int y,int w,int h) {

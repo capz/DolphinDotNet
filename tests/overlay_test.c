@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 
+static unsigned char raster[640*576],reference_raster[640*576];
+static unsigned total_glyph_quads;
 static unsigned rectangles, expected_quads, emitted_quads;
 static float panel_left, panel_top, panel_width, panel_height;
 static int screen_height = 480;
@@ -30,18 +32,25 @@ void dnd_graphics_overlay_rect(float x, float y, float w, float h,
   rectangles++;
 }
 void dnd_graphics_overlay_glyph_begin(unsigned quads, unsigned char shade) {
+  total_glyph_quads+=quads;
   assert(shade == (performance_panel ? 208 : 255) && quads > 0);
   expected_quads = quads;
   emitted_quads = 0;
 }
-void dnd_graphics_overlay_glyph_quad(float x, float y, float size) {
-  assert(x >= panel_left && y >= panel_top);
-  assert(x + size <= panel_left + panel_width && y + size <= panel_top + panel_height);
+void dnd_graphics_overlay_glyph_rect(float x,float y,float width,float height) {
+  for(int py=(int)ceilf(y-.5f);py<(int)ceilf(y+height-.5f);py++)
+    for(int px=(int)ceilf(x-.5f);px<(int)ceilf(x+width-.5f);px++)
+      if(px>=0&&px<640&&py>=0&&py<576)raster[py*640+px]=1;
   emitted_quads++;
+}
+void dnd_graphics_overlay_glyph_quad(float x,float y,float size) {
+  assert(x>=0&&y>=0&&fabsf(size-1.35f)<.001f);
+  dnd_graphics_overlay_glyph_rect(x,y,size,size);
 }
 void dnd_graphics_overlay_glyph_end(void) { assert(emitted_quads == expected_quads); }
 
 int main(void) {
+  dnd_performance_compact_glyphs(0);
   char lines[DND_PERFORMANCE_ROWS][DND_PERFORMANCE_COLUMNS];
   assert(!dnd_performance_visible());
   assert(!dnd_performance_connectivity_due(0));
@@ -159,6 +168,17 @@ int main(void) {
   dnd_console_write_line("LOG STILL VISIBLE");
   dnd_console_render();
   assert(rectangles == 3);
+  dnd_console_write_line("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
+  dnd_console_write_line("abcdefghijklmnopqrstuvwxyz -+/*.:!?%()[]=_<>#");
+  memset(raster,0,sizeof raster);total_glyph_quads=0;dnd_console_render();
+  memcpy(reference_raster,raster,sizeof raster);unsigned old_quads=total_glyph_quads;
+  dnd_performance_compact_glyphs(1);memset(raster,0,sizeof raster);total_glyph_quads=0;dnd_console_render();
+  assert(!memcmp(reference_raster,raster,sizeof raster));
+  assert(total_glyph_quads<old_quads);
+  printf("Glyph runs preserve rasterized text pixels: %u -> %u quads.\n",old_quads,total_glyph_quads);
+  dnd_performance_compact_glyphs(2);memset(raster,0,sizeof raster);total_glyph_quads=0;dnd_console_render();
+  assert(!memcmp(reference_raster,raster,sizeof raster));assert(total_glyph_quads<old_quads/2);
+  printf("Glyph rectangles preserve rasterized text pixels: %u -> %u quads.\n",old_quads,total_glyph_quads);
   puts("Performance timing, counters, BBA/debugger status, toggle, color and layout passed.");
   return 0;
 }

@@ -70,6 +70,36 @@ internal static class BenchmarkChecks
         Check(timing.TailSamples==1 && timing.TailMean(BenchmarkTiming.Gap)==30000,"Tail timings include only over-budget frames");
         Check(timing.Max[BenchmarkTiming.Upload]==5000 && timing.Worst[BenchmarkTiming.Upload]==2000 && timing.WorstDraws==18,"Worst frame is a correlated snapshot, not independent maxima");
         timing.Reset();Check(timing.Samples==0 && timing.WorstUs==0 && timing.Sum[0]==0 && timing.Max[1]==0,"Timing reset");
+        for(int i=0;i<100;i++)
+        {
+            Array.Clear(stages);stages[BenchmarkTiming.Upload]=i*10;
+            stages[BenchmarkTiming.End]=2000;stages[BenchmarkTiming.Gap]=5000;
+            timing.Record(10000+i*400,stages,i);
+        }
+        int p99=timing.P99Index*(BenchmarkTiming.Stages+2);
+        Check(timing.P99Index==1&&timing.Slow[p99]==49200&&timing.Slow[p99+1]==98&&timing.Slow[p99+2+BenchmarkTiming.Upload]==980,
+            "P99 must retain the correlated percentile frame, not independent stage maxima");
+        foreach(int group in new[]{1,2,4})foreach(int budget in new[]{192,256,384})
+        {
+            var scan=new BenchmarkModel();var indexed=new BenchmarkModel{IndexedPolicy=true};
+            scan.Configure(group,budget);indexed.Configure(group,budget);
+            for(int step=0;step<120;step++)
+            {
+                float x=step<60?8+step*.4f:32-(step-60)*.4f,y=step<60?12:20;
+                scan.Build(x,y);indexed.Build(x,y);
+                Check(scan.DesiredCount==indexed.DesiredCount,"Indexed demand count");
+                for(int i=0;i<scan.WantedCount;i++)Check(scan.Wanted[i]==indexed.Wanted[i],"Indexed priority preserves ordering");
+                for(int request=0;request<4;request++)for(int i=0;i<scan.DesiredCount;i++)
+                {
+                    int id=scan.Wanted[i];Check(scan.Find(id)==indexed.Find(id),"Indexed residency identity");
+                    if(scan.Find(id)>=0)continue;
+                    int victim=scan.Victim();Check(victim==indexed.Victim(),"Indexed eviction equivalence");
+                    if(victim<0)break;
+                    scan.Remove(victim);indexed.Remove(victim);scan.Commit(victim,id);indexed.Commit(victim,id);break;
+                }
+                Check(scan.Bytes==indexed.Bytes&&scan.Coverage()==indexed.Coverage()&&scan.UsefulKiB()==indexed.UsefulKiB(),"Indexed policy preserves content/accounting");
+            }
+        }
         Console.WriteLine("Comparison policy, viewport, source and measurement tests: PASS");
     }
 }

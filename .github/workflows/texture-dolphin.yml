@@ -29,7 +29,8 @@ jobs:
   emulator:
     name: Dolphin / ${{ matrix.configuration }} / ${{ matrix.mode }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Allow the six-minute capture, bounded twelve-minute decode, builds and uploads.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -40,6 +41,29 @@ jobs:
             mode: benchmark
           - configuration: Debug
             mode: benchmark
+          - configuration: Release
+            mode: pipeline256
+            optimization: 12
+            budget: 256
+          - configuration: Release
+            mode: pipeline384
+            optimization: 13
+            budget: 384
+          - configuration: Release
+            mode: optimized
+            optimization: 38
+          - configuration: Release
+            mode: glyphs
+            optimization: 14
+            budget: 384
+          - configuration: Release
+            mode: rectangles
+            optimization: 15
+            budget: 384
+          - configuration: Release
+            mode: policy
+            optimization: 16
+            budget: 384
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -51,7 +75,7 @@ jobs:
       - name: Prepare the Debian Dolphin runtime
         run: |
           docker build -t dnd-dolphin - <<'EOF'
-          FROM debian:bookworm-slim
+          FROM debian:trixie-slim
           RUN apt-get update && apt-get install -y --no-install-recommends dolphin-emu xvfb xauth ffmpeg python3 libgl1-mesa-dri libglx-mesa0 && rm -rf /var/lib/apt/lists/*
           EOF
           docker run --rm dnd-dolphin /usr/games/dolphin-emu-nogui --version
@@ -67,7 +91,9 @@ jobs:
           dotnet run --project tests/TextureStreamingTests -c Release
           cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/native_main_failure_test.c -o /tmp/dnd-main-test
           /tmp/dnd-main-test
-          make -C tests overlay_test overlay_debug_test
+          make -C tests overlay_test overlay_debug_test texture_reuse_test canvas_rectangle_test
+          ./tests/texture_reuse_test
+          ./tests/canvas_rectangle_test
           ./tests/overlay_test
           ./tests/overlay_debug_test
       - name: Build the actual GameCube DOL with the Docker backend
@@ -75,16 +101,19 @@ jobs:
           dotnet build tests/fixtures/TextureStrategy/TextureStrategy.csproj
           -c ${{ matrix.configuration }} -m:1
           -p:DndBuildBackend=Docker -p:DndTextureStreamingCI=true
+          -p:DndTextureOptimization=${{ matrix.optimization || '0' }}
           -p:DndTextureAtlasStart=${{ matrix.mode == 'atlas' && 'true' || 'false' }}
-          -p:DndTextureBenchmarkCI=${{ matrix.mode == 'benchmark' && 'true' || 'false' }}
+          -p:DndTextureBenchmarkCI=${{ (matrix.mode == 'benchmark' || matrix.optimization) && 'true' || 'false' }}
       - name: Boot Dolphin and require sustained textured frames
         run: >-
           docker run --rm --shm-size=512m --mount "type=bind,source=${{ github.workspace }},target=/src"
           -w /src dnd-dolphin python3 scripts/dolphin_texture_test.py
           tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/TextureStrategy.dol
           --mode ${{ matrix.mode == 'atlas' && 'atlas' || 'pages' }} --streaming
-          ${{ matrix.mode == 'benchmark' && '--benchmark' || '' }} --backend OGL
-          --seconds ${{ matrix.mode == 'benchmark' && '360' || '90' }}
+          ${{ (matrix.mode == 'benchmark' || matrix.optimization) && '--benchmark --pipeline' || '' }}
+          ${{ matrix.mode == 'glyphs' && '--matrix-glyphs' || matrix.mode == 'rectangles' && '--matrix-rectangles' || matrix.mode == 'policy' && '--matrix-policy --matrix-group 1' || '' }}
+          --matrix-budget ${{ matrix.budget || '0' }} --backend OGL
+          --seconds ${{ (matrix.mode == 'benchmark' || matrix.optimization) && '360' || '90' }}
           --logs out/dolphin-texture
       - name: Preserve compact frame and telemetry evidence
         if: always()
@@ -109,7 +138,11 @@ jobs:
           name: texture-dolphin-${{ matrix.configuration }}-${{ matrix.mode }}
           if-no-files-found: warn
           path: |
-            out/dolphin-texture/
+            out/dolphin-texture/*.png
+            out/dolphin-texture/*.json
+            out/dolphin-texture/*.log
+            out/dolphin-texture/user/Logs/
+            out/dolphin-texture/user/Dump/Frames/*.avi
             tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/*.dol
             tests/fixtures/TextureStrategy/bin/${{ matrix.configuration }}/net8.0/*.elf
 

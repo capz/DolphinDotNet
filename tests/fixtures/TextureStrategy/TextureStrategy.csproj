@@ -11,6 +11,40 @@
   <PropertyGroup Condition="'$(DndTextureBenchmarkCI)' == 'true'">
     <DefineConstants>$(DefineConstants);DND_TEXTURE_BENCH_CI</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '1'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_1</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '2'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_2</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '3'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_3</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '4'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_4</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '5'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_5</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '6'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_6</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '7'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_7</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '8'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_8</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '9'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_9</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '10'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_10</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '11'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_11</DefineConstants></PropertyGroup>
   <ItemGroup><ProjectReference Include="../../../src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" /></ItemGroup>
   <Import Project="../../../sdk/DolphinDotNet.Sdk/Sdk/Sdk.targets" />
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '12'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_12</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '13'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_13</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '14'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_14</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '18'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_18</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '19'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_19</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '25'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_25</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '26'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_26</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '27'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_27</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '28'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_28</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '29'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_29</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '15'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_15</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '31'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_31</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '32'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_32</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '33'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_33</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '34'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_34</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '35'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_35</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '36'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_36</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '37'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_37</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '38'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_38</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '39'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_39</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '40'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_40</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '41'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_41</DefineConstants></PropertyGroup>
+  <PropertyGroup Condition="'$(DndTextureOptimization)' == '16'"><DefineConstants>$(DefineConstants);DND_TEXTURE_OPT_16</DefineConstants></PropertyGroup>
 </Project>

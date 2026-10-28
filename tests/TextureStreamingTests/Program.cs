@@ -39,3 +39,23 @@ TextureSource.Fill(page, 0, false, false);
 Check(page[3] == 255 && TextureSource.Coarse().Length == 48 * 32 * 4, "Retry and permanent coarse representation");
 Console.WriteLine("Texture streaming residency and source tests: PASS");
 BenchmarkChecks.Run();
+
+foreach(int group in new[]{1,2,4})
+{
+    var expected=new byte[group*group*4096];var actual=new byte[expected.Length];
+    for(int id=0;id<(48/group)*(32/group);id++)
+    {
+        BenchmarkSource.Fill(expected,id,group);BenchmarkSource.FillRows(actual,id,group);
+        Check(expected.AsSpan().SequenceEqual(actual),"Bulk row preparation must preserve every texel");
+    }
+}
+Console.WriteLine("Bulk row preparation: all world IDs and all group sizes are byte-identical: PASS");
+
+foreach(int group in new[]{1,2,4})
+{
+    var expected=new byte[group*group*4096];var scratch=Enumerable.Repeat((byte)17,expected.Length+13).ToArray();
+    BenchmarkSource.Fill(expected,19,group);BenchmarkSource.FillRows(scratch,19,group,7);
+    Check(expected.AsSpan().SequenceEqual(scratch.AsSpan(7,expected.Length)),"Shared scratch range pixels");
+    Check(scratch.Take(7).Concat(scratch.Skip(7+expected.Length)).All(b=>b==17),"Scratch ownership guards");
+}
+Console.WriteLine("Shared scratch slices preserve prefix/suffix guards: PASS");

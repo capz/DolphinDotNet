@@ -284,15 +284,16 @@ File.Delete(genericOutput);
 // ldobj !!T must dereference reference/scalar slots; only aggregate values
 // stay represented by an address. Debug async state machines exercise this
 // through AsyncTaskMethodBuilder's interface continuation storage.
-var refProject = Path.Combine(root, "tests/RefLoadSmoke/RefLoadSmoke.csproj");
 var refTemp = Path.Combine(Path.GetTempPath(), $"dnd-ref-load-{Guid.NewGuid():N}");
 Directory.CreateDirectory(refTemp);
 try
 {
+    foreach(var fixture in new[]{"RefLoadSmoke","TimingSmoke"})
     foreach(var configuration in new[]{"Debug","Release"})
     {
+        var refProject=Path.Combine(root,$"tests/{fixture}/{fixture}.csproj");
         Run("dotnet", $"build \"{refProject}\" -c {configuration} -p:DndBuildNative=false");
-        var refDll=Path.Combine(root,$"tests/RefLoadSmoke/bin/{configuration}/net8.0/RefLoadSmoke.dll");
+        var refDll=Path.Combine(root,$"tests/{fixture}/bin/{configuration}/net8.0/{fixture}.dll");
         var refC=Path.Combine(refTemp,configuration+".c");var refHost=Path.Combine(refTemp,configuration);
         Run("dotnet", $"run --project \"{compiler}\" -- --aot \"{refDll}\" \"{refC}\"");
         Run("cc", $"-pthread -O1 -std=c11 -I\"{Path.Combine(root,"include")}\" \"{refC}\" \"{Path.Combine(root,"tests/generic_sharing_value_host.c")}\" \"{Path.Combine(root,"source/managed_runtime.c")}\" \"{Path.Combine(root,"source/async_runtime.c")}\" \"{Path.Combine(root,"source/numeric.c")}\" \"{Path.Combine(root,"source/text.c")}\" \"{Path.Combine(root,"source/timing.c")}\" -lm -o \"{refHost}\"");

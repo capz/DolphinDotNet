@@ -1,4 +1,5 @@
 #include "dnd_performance.h"
+#include "dnd_frame_clear.h"
 #include "dnd_debug_heartbeat.h"
 #include <stdio.h>
 #include <string.h>
@@ -9,6 +10,18 @@ static DndPerformanceStats stats = {.network_state = -1, .network_link = -1};
 volatile uint32_t dnd_debugger_telemetry[2] = {DND_DEBUGGER_TELEMETRY_MAGIC, 0};
 #endif
 static int visible;
+static int compact_glyphs=2; /* lossless rectangle cover; profiler retains A/B controls */
+void dnd_performance_compact_glyphs(int enabled){compact_glyphs=enabled;}
+int dnd_performance_glyph_runs(void){return compact_glyphs;}
+static bool reuse_clear;
+static DndFrameClear frame_clear;
+void dnd_performance_frame_reuse(int enabled){reuse_clear=enabled!=0;dnd_frame_clear_invalidate(&frame_clear);}
+bool dnd_performance_begin_clear(uint32_t c){return dnd_frame_clear_begin(&frame_clear,reuse_clear,c);}
+void dnd_performance_clear_completed(void){dnd_frame_clear_end(&frame_clear);}
+void dnd_performance_clear_invalidated(void){dnd_frame_clear_invalidate(&frame_clear);}
+void dnd_performance_begin_copy(uint32_t us,bool issued){stats.begin_copy_us=us;stats.begin_copy_issued=issued?1:0;}
+void dnd_performance_gate_wait(uint32_t us){stats.gate_reacquire_us=us;}
+
 static uint64_t intervals[FRAME_WINDOW], interval_sum, previous_present, memory_time;
 static unsigned interval_count, interval_head;
 static bool have_present;
@@ -57,6 +70,9 @@ int dnd_performance_render_stat(int kind) {
     case 2:return (int)stats.triangles;
     case 3:return stats.gpu_wait_us>INT32_MAX?INT32_MAX:(int)stats.gpu_wait_us;
     case 4:return stats.retrace_wait_us>INT32_MAX?INT32_MAX:(int)stats.retrace_wait_us;
+    case 5:return stats.begin_copy_us>INT32_MAX?INT32_MAX:(int)stats.begin_copy_us;
+    case 6:return stats.gate_reacquire_us>INT32_MAX?INT32_MAX:(int)stats.gate_reacquire_us;
+    case 7:return (int)stats.begin_copy_issued;
     default:return -1;
   }
 }
