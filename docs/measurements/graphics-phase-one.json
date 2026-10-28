@@ -1,0 +1,23 @@
+{
+  "phaseOneGraphics": true,
+  "renderedFrames": 120,
+  "validatedTailFrames": 30,
+  "patches": 11,
+  "submissionBenchmark": {
+    "samples": 240,
+    "items": 64,
+    "meshIndividualUs": 272,
+    "meshBulkUs": 214,
+    "spriteIndividualUs": 369,
+    "spriteBulkUs": 329
+  },
+  "mode": "pages",
+  "backend": "OGL",
+  "soakSeconds": 20,
+  "secondHalfCaptureBytes": 2621440,
+  "baseCommit": "8062b4f0bbbddd855ce798ac0908028fcbf24d71",
+  "dolSha256": "ac293175bc8941d8d358aeaf49eb58363f2bc6f3a12bd2b8876437ad265b3295",
+  "workload": "64 offscreen items; 60 warmup frames; 240 measured frames; alternating individual/bulk order",
+  "environment": "Dolphin OGL with software Mesa, CPUThread=False",
+  "limitations": "CPU submission windows, excluding presentation and yield; not a full-frame/GPU benchmark; hardware unverified"
+}

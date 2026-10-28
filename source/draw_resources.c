@@ -326,18 +326,8 @@ static bool texture(int token,DndDrawTexture *out) {
     *out=(DndDrawTexture){r->data,(uint32_t)r->bytes,r->width,r->height,r->format,r->linear!=0};return true;
 }
 int dnd_texture_resolve(int token,DndDrawTexture *out){return texture(token,out)?0:-1;}
-int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect) {
-    return dnd_mesh_draw_material(token,tex,0,world,color,flags,cutoff,effect);
-}
-int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint32_t color,int flags,float cutoff,int effect) {
-    Resource *r=find(token,MESH);DndDrawTexture tx,extra;float transform[16];
-    if(dnd_device_pass()!=1||!r||!texture(tex,&tx)||!matrix(world,transform)||flags<0||flags>255||(flags&192)==192||!texture(secondary,&extra)||!isfinite(cutoff)||cutoff<0||cutoff>1)return -1;
-    /* Reflection coordinates require authored normals, not the fallback +Z used
-     * by color-only meshes. Reject before any submission or triangle counters. */
-    if((flags&192)&&((!tex&&!secondary)||r->format!=2))return -1;
-    Resource *fx=effect?find(effect,EFFECT):NULL;
-    if(effect&&(!fx||((((DndDrawEffect*)fx->data)->texture&1)&&!tex)||((((DndDrawEffect*)fx->data)->texture&2)&&!secondary)))return -1;
-    DndDrawMaterial material={color,flags,cutoff,fx?(DndDrawEffect*)fx->data:NULL,secondary?&extra:NULL};
+static int mesh_submit(Resource *r,int tex,DndDrawTexture tx,DndDrawTexture extra,int secondary,const float *transform,uint32_t color,int flags,float cutoff,const DndDrawEffect *effect) {
+    DndDrawMaterial material={color,flags,cutoff,effect,secondary?&extra:NULL};
     DndDrawVertex *v=(DndDrawVertex*)r->data;uint16_t *idx=(uint16_t*)(r->data+r->vertices*sizeof(DndDrawVertex));
     int count=r->indices?r->indices:r->vertices;
     if(r->uniform_color&&dnd_draw_backend_mesh(v,r->indices?idx:NULL,count,r->mesh_color,tex?&tx:NULL,&material,transform))
@@ -349,6 +339,20 @@ int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint3
     }
     dnd_performance_add_triangles((uint32_t)count/3);return 0;
 }
+int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect) {
+    return dnd_mesh_draw_material(token,tex,0,world,color,flags,cutoff,effect);
+}
+int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint32_t color,int flags,float cutoff,int effect) {
+    Resource *r=find(token,MESH);DndDrawTexture tx,extra;float transform[16];
+    if(dnd_device_pass()!=1||!r||!texture(tex,&tx)||!matrix(world,transform)||flags<0||flags>255||(flags&192)==192||!texture(secondary,&extra)||!isfinite(cutoff)||cutoff<0||cutoff>1)return -1;
+    /* Reflection coordinates require authored normals, not the fallback +Z used
+     * by color-only meshes. Reject before any submission or triangle counters. */
+    if((flags&192)&&((!tex&&!secondary)||r->format!=2))return -1;
+    Resource *fx=effect?find(effect,EFFECT):NULL;
+    if(effect&&(!fx||((((DndDrawEffect*)fx->data)->texture&1)&&!tex)||((((DndDrawEffect*)fx->data)->texture&2)&&!secondary)))return -1;
+    return mesh_submit(r,tex,tx,extra,secondary,transform,color,flags,cutoff,fx?(DndDrawEffect*)fx->data:NULL);
+}
+
 /* A merged GX stream for meshes with one material and the SAME world matrix.
  * Validates every source before submitting any draw. 768 vertices per GX_Begin
  * preserves the existing staging limit, and keeps triangle boundaries intact. */
@@ -407,10 +411,12 @@ int dnd_canvas_create(int capacity) {
     if(capacity<6||capacity>65532)return 0;
     int token=create(CANVAS,capacity*(int)sizeof(DndDrawVertex),32);Resource *r=find(token,CANVAS);if(r)r->capacity=capacity;return token;
 }
+static int canvas_viewport[4];
+static bool canvas_empty_clip;
 int dnd_canvas_begin(int token,int w,int h) {
     Resource *r=find(token,CANVAS);if(!r||w<1||h<1||w>16384||h>16384||dnd_device_pass_begin(2)<0)return -1;
     active_canvas=token;r->count=0;r->texture=0;r->effect=0;r->blend=1;r->draws=0;r->flushes=0;r->width=w;r->height=h;
-    dnd_draw_backend_2d(w,h);return 0;
+    dnd_draw_backend_2d(w,h);canvas_empty_clip=false;canvas_viewport[0]=canvas_viewport[1]=0;canvas_viewport[2]=dnd_device_width();canvas_viewport[3]=dnd_device_height();return 0;
 }
 int dnd_canvas_flush(int token) {
     Resource *r=find(token,CANVAS);if(!r||token!=active_canvas||dnd_device_pass()!=2)return -1;
@@ -438,6 +444,7 @@ int dnd_canvas_vertices(int token,int tex,DndArray *a,int count,uint32_t color) 
     Resource *fx=r->effect?find(r->effect,EFFECT):NULL;
     if(r->effect&&(!fx||(((DndDrawEffect*)fx->data)->texture&&!tex)))return -1;
     const float *p=(const float*)a->data;for(int i=0;i<count*4;i++)if(!isfinite(p[i]))return -1;
+    if(canvas_empty_clip)return 0;
     if(r->count && (r->texture!=tex || r->count+count>r->capacity))if(dnd_canvas_flush(token)<0)return -1;
     r->texture=tex;DndDrawVertex *v=(DndDrawVertex*)r->data+r->count;
     for(int i=0;i<count;i++)v[i]=(DndDrawVertex){p[i*4],p[i*4+1],0,0,0,1,p[i*4+2],p[i*4+3],color};
@@ -446,7 +453,7 @@ int dnd_canvas_vertices(int token,int tex,DndArray *a,int count,uint32_t color) 
 int dnd_canvas_rectangle(int token,float x,float y,float w,float h,uint32_t color) {
     Resource *r=find(token,CANVAS);
     if(!r||token!=active_canvas||dnd_device_pass()!=2||!isfinite(x)||!isfinite(y)||!isfinite(w)||!isfinite(h)||w<0||h<0||!isfinite(x+w)||!isfinite(y+h))return -1;
-    if(w==0||h==0)return 0;
+    if(w==0||h==0||canvas_empty_clip)return 0;
     Resource *fx=r->effect?find(r->effect,EFFECT):NULL;
     if(r->effect&&(!fx||((DndDrawEffect*)fx->data)->texture))return -1;
     if(r->count&&(r->texture||r->count+6>r->capacity))if(dnd_canvas_flush(token)<0)return -1;
@@ -458,10 +465,11 @@ int dnd_canvas_end(int token) { if(dnd_canvas_flush(token)<0)return -1;int resul
 int dnd_canvas_clip(int token,int x,int y,int w,int h) {
     Resource *r=find(token,CANVAS);
     if(!r||x<0||y<0||w<0||h<0||x>r->width-w||y>r->height-h||dnd_canvas_flush(token)<0)return -1;
-    int screen_w=dnd_device_width(),screen_h=dnd_device_height();
+    canvas_empty_clip=w==0||h==0;if(canvas_empty_clip)return 0;
+    int screen_w=canvas_viewport[2],screen_h=canvas_viewport[3];
     int left=x*screen_w/r->width,top=y*screen_h/r->height;
     int right=(x+w)*screen_w/r->width,bottom=(y+h)*screen_h/r->height;
-    dnd_draw_backend_scissor(left,top,right-left,bottom-top);return 0;
+    dnd_draw_backend_scissor(left+canvas_viewport[0],top+canvas_viewport[1],right-left,bottom-top);return 0;
 }
 int dnd_canvas_blend(int token,int blend) {
     Resource *r=find(token,CANVAS);if(!r||blend<0||blend>3||dnd_canvas_flush(token)<0)return -1;r->blend=blend;return 0;
@@ -558,4 +566,57 @@ int dnd_canvas_effect(int token,int effect) {
     if(r->effect==effect)return 0;
     if(dnd_canvas_flush(token)<0)return -1;
     r->effect=effect;return 0;
+}
+
+int dnd_canvas_viewport(int token,int x,int y,int w,int h) {
+    Resource *r=find(token,CANVAS);
+    if(!r||token!=active_canvas||x<0||y<0||w<=0||h<=0||x>dnd_device_width()-w||y>dnd_device_height()-h||dnd_canvas_flush(token)<0)return -1;
+    canvas_empty_clip=false;canvas_viewport[0]=x;canvas_viewport[1]=y;canvas_viewport[2]=w;canvas_viewport[3]=h;
+    dnd_draw_backend_viewport(x,y,w,h);dnd_draw_backend_scissor(x,y,w,h);return 0;
+}
+int dnd_canvas_sprites(int token,DndArray *textures,DndArray *a,DndArray *colors,int count) {
+    Resource *r=find(token,CANVAS);DndDrawTexture tx;
+    if(!r||token!=active_canvas||dnd_device_pass()!=2||count<0||count>128||
+       !textures||!colors||!a||textures->element_size!=4||colors->element_size!=4||a->element_size!=4||
+       textures->elements_are_references||colors->elements_are_references||a->elements_are_references||
+       textures->length<(unsigned)count||colors->length<(unsigned)count||a->length<(unsigned)count*24)return -1;
+    const int *ids=(const int*)textures->data;const uint32_t *tints=(const uint32_t*)colors->data;const float *p=(const float*)a->data;
+    Resource *fx=r->effect?find(r->effect,EFFECT):NULL;
+    if(r->effect&&!fx)return -1;
+    for(int i=0;i<count;i++)if(!ids[i]||!texture(ids[i],&tx))return -1;
+    for(int i=0;i<count*24;i++)if(!isfinite(p[i]))return -1;
+    if(canvas_empty_clip)return 0;
+    for(int i=0;i<count;i++){
+        if(r->count&&(r->texture!=ids[i]||r->count+6>r->capacity))if(dnd_canvas_flush(token)<0)return -1;
+        r->texture=ids[i];DndDrawVertex *v=(DndDrawVertex*)r->data+r->count;
+        for(int j=0;j<6;j++){const float *q=p+i*24+j*4;v[j]=(DndDrawVertex){q[0],q[1],0,0,0,1,q[2],q[3],tints[i]};}r->count+=6;
+    }return 0;
+}
+
+#include "dnd_render_state.h"
+__attribute__((weak)) void dnd_draw_backend_options(const float *p,int scene){(void)p;(void)scene;}
+static int render_options(DndArray *a,int scene) {
+    if(dnd_device_pass()!=1&&dnd_device_pass()!=2)return -1;
+    const float *p=NULL;
+    if(a){if(a->element_size!=4||a->elements_are_references||a->length!=(scene?136u:20u))return -1;
+        p=(const float*)a->data;if(scene?!dnd_render_scene_valid(p):!dnd_render_style_valid(p))return -1;}
+    dnd_draw_backend_options(p,scene);return 0;
+}
+int dnd_render_scene(DndArray *a){return render_options(a,1);}
+int dnd_render_material(DndArray *a){return render_options(a,0);}
+int dnd_mesh_draw_many(DndArray *a,DndArray *w,int count,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect){
+    DndDrawTexture tx,extra;
+    if(dnd_device_pass()!=1||!a||!w||a->element_size!=4||w->element_size!=sizeof(DndArray*)||a->elements_are_references||!w->elements_are_references||count<0||count>128||a->length<(unsigned)count||w->length<(unsigned)count||flags<0||flags>255||(flags&192)==192||!isfinite(cutoff)||cutoff<0||cutoff>1||!texture(tex,&tx)||!texture(secondary,&extra))return -1;
+    Resource *fx=effect?find(effect,EFFECT):NULL;
+    if(effect&&(!fx||((((DndDrawEffect*)fx->data)->texture&1)&&!tex)||((((DndDrawEffect*)fx->data)->texture&2)&&!secondary)))return -1;
+    const int *ids=(const int*)a->data;DndArray *const *world=(DndArray*const*)w->data;
+    for(int i=0;i<count;i++){
+        Resource *r=find(ids[i],MESH);if(!r||((flags&192)&&((!tex&&!secondary)||r->format!=2)))return -1;
+        if(!world[i]||world[i]->element_size!=4||world[i]->elements_are_references||world[i]->length!=16)return -1;
+        const float *m=(const float*)world[i]->data;for(int j=0;j<16;j++)if(!isfinite(m[j]))return -1;
+        float determinant=m[0]*(m[5]*m[10]-m[9]*m[6])-m[4]*(m[1]*m[10]-m[9]*m[2])+m[8]*(m[1]*m[6]-m[5]*m[2]);
+        if((flags&224)&&(!isfinite(determinant)||determinant==0))return -1;
+    }
+    for(int i=0;i<count;i++)mesh_submit(find(ids[i],MESH),tex,tx,extra,secondary,(const float*)world[i]->data,color,flags,cutoff,fx?(DndDrawEffect*)fx->data:NULL);
+    return 0;
 }

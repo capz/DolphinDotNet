@@ -73,7 +73,7 @@ def decode_texture_capture(capture, log, streaming=False, benchmark=False, captu
                        "-frames:v", "120", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)
 
 
-def run(args):
+def run(args, capture_validator=None):
     root = args.logs.resolve()
     if root.exists() and any(root.iterdir()):
         raise ValueError("Use a fresh capture directory")
@@ -176,7 +176,7 @@ def run(args):
             (root / "mismatch.json").write_text(json.dumps(error.state, indent=2) + "\n")
             raise
     else:
-        proof = validate_capture(raw)
+        proof = (capture_validator or validate_capture)(raw)
     proof.update(mode=args.mode, backend=args.backend, soakSeconds=args.seconds,
                  secondHalfCaptureBytes=final_bytes - midpoint_bytes)
     (root / "results.json").write_text(json.dumps(proof, indent=2) + "\n")

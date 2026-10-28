@@ -1,0 +1,56 @@
+name: High-level graphics in Dolphin
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'source/**'
+      - 'include/**'
+      - 'sdk/**'
+      - 'tools/DolphinDotNet.Compiler/**'
+      - 'tests/fixtures/GraphicsPhaseOne/**'
+      - 'tests/test_dolphin_graphics_phase_one.py'
+      - 'scripts/dolphin_*'
+      - '.github/workflows/graphics-phase-one.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  graphics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test the visual oracle
+        run: python3 -m unittest discover -s tests -p test_dolphin_graphics_phase_one.py
+      - name: Build GameCube graphics acceptance
+        run: dotnet build tests/fixtures/GraphicsPhaseOne -c Release -m:1 -p:DndBuildBackend=Docker
+      - name: Prepare Dolphin
+        run: |
+          docker build -t dnd-graphics-dolphin - <<'DOCKER'
+          FROM debian:trixie-slim
+          RUN apt-get update && apt-get install -y --no-install-recommends dolphin-emu xvfb xauth ffmpeg python3 libgl1-mesa-dri libglx-mesa0 && rm -rf /var/lib/apt/lists/*
+          DOCKER
+      - name: Validate rendered graphics
+        run: >-
+          docker run --rm --init --shm-size=512m
+          --mount "type=bind,source=${{ github.workspace }},target=/src" -w /src
+          dnd-graphics-dolphin python3 scripts/dolphin_graphics_phase_one.py
+          tests/fixtures/GraphicsPhaseOne/bin/Release/net8.0/GraphicsPhaseOne.dol
+          --logs out/graphics-dolphin
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: high-level-graphics-proof
+          path: |
+            out/graphics-dolphin/*.png
+            out/graphics-dolphin/*.json
+            out/graphics-dolphin/*.log
+            tests/fixtures/GraphicsPhaseOne/bin/Release/net8.0/*.dol

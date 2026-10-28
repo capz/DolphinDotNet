@@ -12,6 +12,9 @@
 #include "dnd_material_math.h"
 #include "dnd_material_channels.inc"
 static int channel_test,channel_calls;
+static bool custom_scene_active;static int scene_lights,scene_normals;
+bool dnd_draw_backend_scene_active(void){return custom_scene_active;}
+void dnd_draw_backend_scene(int lit,const float *view){assert(view);if(lit)scene_lights++;}
 static int indirect_resets,full_draws,full_skin;
 void GX_SetNumIndStages(int count){assert(count==0);indirect_resets++;}
 /* Wrappers catch transient allocations that stable budgets would miss. The
@@ -264,6 +267,7 @@ int main(void) {
  wm[0]=0;assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==3);wm[0]=-1;
  assert(dnd_draw_release(override_texture)==0);
  assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==3);
+ custom_scene_active=true;int previous_normals=scene_normals;assert(dnd_model_draw(123,world)==0&&scene_normals>previous_normals&&scene_lights>0);custom_scene_active=false;
  assert(dnd_model_frame_end()==0);
  assert(dnd_draw_release(short_effect)==0&&dnd_draw_release(textured)==0&&dnd_draw_release(replacement)==0&&dnd_draw_release(wrong)==0);
  assert(dnd_draw_total_bytes()==0&&dnd_draw_live()==0);
@@ -271,3 +275,6 @@ int main(void) {
  dnd_instances[0]=dnd_instances[1]=NULL;free(world);free(camera);
  puts("Model GX effect selection, alpha, geometry, preflight and lifetime passed.");return 0;
 }
+
+void GX_LoadNrmMtxImm(Mtx m,u32 id){(void)m;(void)id;}
+void GX_Normal3f32(float x,float y,float z){assert(isfinite(x)&&isfinite(y)&&isfinite(z));scene_normals++;}
