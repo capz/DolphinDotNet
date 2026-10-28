@@ -4,11 +4,81 @@ from pathlib import Path
 import sys
 import unittest
 import shutil
+import os
+import signal
+import subprocess
+import time
 from unittest.mock import Mock, patch
 from tempfile import TemporaryDirectory
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from dolphin_texture_test import FRAME_BYTES, validate_board, validate_capture, decode_texture_capture
 from dolphin_shader_test import run_ffmpeg
+from dolphin_process import xvfb_command, stop_dolphin
+
+
+class CaptureShutdownTests(unittest.TestCase):
+    def test_graceful_stop_signals_dolphin_before_waiting_for_xvfb(self):
+        with TemporaryDirectory() as folder:
+            pid_file=Path(folder)/'dolphin.pid';pid_file.write_text('1235')
+            process=Mock(pid=1234);process.poll.return_value=None
+            events=[]
+            with patch('dolphin_process.os.getpgid',return_value=1234), \
+                 patch('dolphin_process.os.kill',side_effect=lambda *a:events.append(('signal',a))) as kill, \
+                 patch('dolphin_process.os.killpg') as kill_group:
+                process.wait.side_effect=lambda **kw:events.append(('wait',kw))
+                stop_dolphin(process,pid_file)
+                kill.assert_called_once_with(1235,signal.SIGTERM)
+                kill_group.assert_not_called()
+                self.assertEqual(['signal','wait'],[e[0] for e in events])
+
+    def test_forced_shutdown_fails_capture_instead_of_accepting_its_tail(self):
+        with TemporaryDirectory() as folder:
+            pid_file=Path(folder)/'dolphin.pid';pid_file.write_text('1235')
+            process=Mock(pid=1234);process.poll.return_value=None
+            process.wait.side_effect=[subprocess.TimeoutExpired('dolphin',30),0]
+            with patch('dolphin_process.os.getpgid',return_value=1234), \
+                 patch('dolphin_process.os.kill'),patch('dolphin_process.os.killpg') as kill_group:
+                with self.assertRaisesRegex(RuntimeError,'graceful capture shutdown'):
+                    stop_dolphin(process,pid_file)
+                kill_group.assert_called_once_with(1234,signal.SIGKILL)
+
+    def test_foreign_pid_is_never_signalled(self):
+        with TemporaryDirectory() as folder:
+            pid_file=Path(folder)/'dolphin.pid';pid_file.write_text('1235')
+            process=Mock(pid=1234);process.poll.return_value=None
+            with patch('dolphin_process.os.getpgid',return_value=9999), \
+                 patch('dolphin_process.os.kill') as kill,patch('dolphin_process.os.killpg'):
+                with self.assertRaises(RuntimeError):stop_dolphin(process,pid_file)
+                kill.assert_not_called()
+
+    @unittest.skipUnless(shutil.which('xvfb-run'),'Xvfb not installed')
+    def test_display_survives_emulator_cleanup_with_literal_paths(self):
+        with TemporaryDirectory(prefix="capture $ ' ") as folder:
+            root=Path(folder);ready=root/'ready';result=root/'result';pid_file=root/'pid'
+            guest=root/'guest.py'
+            guest.write_text('''import os,signal,socket,sys,time
+from pathlib import Path
+def stop(*args):
+    time.sleep(.2)
+    display=os.environ['DISPLAY'].rsplit(':',1)[1].split('.',1)[0]
+    with socket.socket(socket.AF_UNIX) as s:s.connect('/tmp/.X11-unix/X'+display)
+    Path(sys.argv[2]).write_text('display alive during final readback')
+    sys.exit(0)
+signal.signal(signal.SIGTERM,stop)
+Path(sys.argv[1]).write_text('ready')
+while True:time.sleep(.01)
+''')
+            process=subprocess.Popen(xvfb_command(sys.executable,[guest,ready,result],pid_file),
+                                     start_new_session=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            try:
+                deadline=time.monotonic()+5
+                while not ready.exists() and process.poll() is None and time.monotonic()<deadline:time.sleep(.01)
+                self.assertTrue(ready.exists(),'Emulator wrapper did not start')
+                stop_dolphin(process,pid_file)
+                self.assertEqual(0,process.returncode)
+                self.assertEqual('display alive during final readback',result.read_text())
+            finally:
+                if process.poll() is None:os.killpg(process.pid,signal.SIGKILL);process.wait()
 
 
 def board():

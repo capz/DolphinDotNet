@@ -6,11 +6,11 @@ import math
 import os
 from pathlib import Path
 import re
-import signal
 import subprocess
 import time
 from dolphin_shader_test import run_ffmpeg
 from dolphin_smoke import check, collect_logs
+from dolphin_process import xvfb_command, stop_dolphin
 
 WIDTH, HEIGHT = 640, 480
 FRAME_BYTES = WIDTH * HEIGHT * 3
@@ -102,9 +102,10 @@ def run(args):
     midpoint_bytes = None
     final_bytes = 0
     frames_path = root / "user" / "Dump" / "Frames"
+    pid_file = root / "dolphin.pid"
     with stdout.open("w") as log:
         process = subprocess.Popen(
-            ["xvfb-run", "-a", args.binary, "--user", str(root / "user"), "--exec", str(args.dol.resolve())],
+            xvfb_command(args.binary, ["--user", root / "user", "--exec", args.dol.resolve()], pid_file),
             env=environment, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             started = time.monotonic()
@@ -120,18 +121,10 @@ def run(args):
                     midpoint_bytes = final_bytes
                 time.sleep(.2)
         finally:
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    pass
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait()
-            (root / "emulator.log").write_text(collect_logs(stdout, root / "user"))
+                stop_dolphin(process, pid_file)
+            finally:
+                (root / "emulator.log").write_text(collect_logs(stdout, root / "user"))
     if midpoint_bytes is None or final_bytes <= midpoint_bytes:
         raise RuntimeError("Capture stopped growing during the second half of the soak")
     if not re.search(r"Booting from executable:.*\.dol", before_stop, re.I):
