@@ -28,6 +28,7 @@ def main(area):
         # integration fixtures below need the compiler itself built first.
         build("tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj")
         build("tests/RefLoadSmoke/RefLoadSmoke.csproj")
+        build("tests/LeafSafepointSmoke/LeafSafepointSmoke.csproj")
         test("tools/DolphinDotNet.Compiler.Tests")
         # Numeric and string facade contracts must execute against the
         # GameCube AOT runtime, not locale-sensitive desktop CLR behavior.
