@@ -1,5 +1,8 @@
 # DolphinDotNet
 
+<img width="314" height="314" alt="ddnlogo25" src="https://github.com/user-attachments/assets/09395670-0415-4efd-bb5d-2b9d1ad6e82f" />
+
+
 An experimental C# AOT toolchain and managed runtime for Nintendo GameCube.
 DolphinDotNet compiles .NET assemblies to native C, then builds a GameCube DOL
 with devkitPPC and libogc2. Games run without a desktop CLR.
