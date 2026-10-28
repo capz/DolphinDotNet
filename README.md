@@ -1,6 +1,6 @@
 # DolphinDotNet
 
-<img width="314" height="314" alt="ddnlogo25" src="https://github.com/user-attachments/assets/09395670-0415-4efd-bb5d-2b9d1ad6e82f" />
+<img width="384" height="256" alt="ddntext25" src="https://github.com/user-attachments/assets/5de1effc-b9f5-4567-a900-226ce102fd04" />
 
 
 An experimental C# AOT toolchain and managed runtime for Nintendo GameCube.
