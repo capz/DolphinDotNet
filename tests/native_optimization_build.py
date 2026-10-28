@@ -18,7 +18,10 @@ def verify(makefile):
         wrapper=root/'cc-wrapper'
         wrapper.write_text('#!'+sys.executable+'\nimport json,subprocess,sys\n'
             f'with open({str(commands)!r},"a") as f:f.write(json.dumps(sys.argv[1:])+"\\n")\n'
-            f'sys.exit(subprocess.call([{compiler!r}]+sys.argv[1:]))\n')
+            # The production graph emits GNU ld's map-file option. Apple ld
+            # spells this differently; map contents are outside this test.
+            'args=[a for a in sys.argv[1:] if not a.startswith("-Wl,-Map,")]\n'
+            f'sys.exit(subprocess.call([{compiler!r}]+args))\n')
         wrapper.chmod(0o755)
         # Reuse the complete emitted graph; substitute only platform tools.
         (devkit/'libogc2/gamecube_rules').write_text(f'CC := {wrapper}\n%.o: %.c\n\t$(CC) $(CFLAGS) -MMD -MP -c $< -o $@\n')
