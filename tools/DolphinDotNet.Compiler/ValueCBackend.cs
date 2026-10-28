@@ -114,7 +114,7 @@ internal static class ValueCBackend
             {
                 var timingPending=methods.Single(m=>m.Key.TypeName=="Dolphin.Timing.TimingRuntime"&&m.Key.Name=="get_Pending");
                 if(TypeInitializer("Dolphin.Timing.TimingRuntime",model) is not null)b.AppendLine($"  {EnsureSymbol("Dolphin.Timing.TimingRuntime")}();");
-                b.AppendLine($"  if(context==1) (void){Symbol(timingPump.Key)}();");
+                b.AppendLine($"  (void){Symbol(timingPump.Key)}(context);");
                 servicePending.Add($"(int){Symbol(timingPending.Key)}()");
             }
             b.AppendLine($"  (void){Symbol(schedulerPump!.Key)}(context,16);");

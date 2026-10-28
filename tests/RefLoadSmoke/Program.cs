@@ -33,6 +33,37 @@ internal static class Program
             Dolphin.Threading.Tasks.Scheduler.RunUntilIdle();
         }
         if(observed!=120)return 7;
+        // Completion during application dispatch must return to Wait's predicate
+        // without an unconditional park; exercise both modes under GC stress.
+        Dolphin.Threading.Tasks.Scheduler.CompletionAwareWaits=true;
+        Dolphin.Threading.Tasks.Scheduler.ResetWaitStats();
+        var settled=new TaskCompletionSource<int>();
+        Dolphin.Threading.Tasks.Scheduler.Post(()=>settled.SetResult(42));
+        if(settled.Task.GetAwaiter().GetResult()!=42)return 8;
+        if(Dolphin.Threading.Tasks.Scheduler.WaitStat(7)==0)return 9;
+        var waitSnapshot=new long[9];Dolphin.Threading.Tasks.Scheduler.CopyWaitStats(waitSnapshot);
+        if(waitSnapshot[7]==0)return 13;
+        foreach(bool applicationTimers in new[]{false,true})
+        foreach(bool deadline in new[]{false,true})
+        {
+            Dolphin.Threading.Tasks.Scheduler.ApplicationTimers=applicationTimers;
+            Dolphin.Threading.Tasks.Scheduler.DeadlineWaits=deadline;
+            Dolphin.Timing.Time.DelayAsync(1).GetAwaiter().GetResult();
+            using(var cancellation=new System.Threading.CancellationTokenSource())
+            {
+                var delay=Dolphin.Timing.Time.DelayAsync(-1,cancellation.Token);
+                Dolphin.Threading.Tasks.Scheduler.Post(()=>cancellation.Cancel());
+                try{delay.GetAwaiter().GetResult();return 10;}catch(OperationCanceledException){}
+            }
+            var failed=new TaskCompletionSource<int>();
+            Dolphin.Threading.Tasks.Scheduler.Post(()=>failed.SetException(new InvalidOperationException("expected")));
+            try{failed.Task.GetAwaiter().GetResult();return 11;}catch(InvalidOperationException){}
+        }
+        Dolphin.Threading.Tasks.Scheduler.CompletionAwareWaits=false;
+        var legacy=new TaskCompletionSource<int>();
+        Dolphin.Threading.Tasks.Scheduler.Post(()=>legacy.SetResult(7));
+        if(legacy.Task.GetAwaiter().GetResult()!=7)return 12;
+        Dolphin.Threading.Tasks.Scheduler.CompletionAwareWaits=true;
         var reader=new Reader(41);
         if(!object.ReferenceEquals(Load(ref reader),reader))return 1;
         if(Interface(ref reader).Read()!=41)return 2;

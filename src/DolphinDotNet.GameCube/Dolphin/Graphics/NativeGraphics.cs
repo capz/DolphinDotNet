@@ -4,6 +4,10 @@ namespace Dolphin.Graphics;
 
 internal static class NativeGraphics
 {
+    internal static void AssetReadQuantum(int bytes)=>throw Unsupported();
+    internal static void AssetResetStats()=>throw Unsupported();
+    internal static void AssetSnapshot(long[] destination)=>throw Unsupported();
+    internal static long AssetStat(int kind)=>throw Unsupported();
     internal static int AssetOpen(string path)=>throw Unsupported();
     internal static long AssetLength(int token)=>throw Unsupported();
     internal static void AssetClose(int token)=>throw Unsupported();
