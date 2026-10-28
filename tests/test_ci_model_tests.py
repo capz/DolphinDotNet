@@ -19,6 +19,8 @@ class ModelAcceptanceSchedulingTests(unittest.TestCase):
         with patch.object(suite, "run") as run:
             suite.main("graphics")
         commands = [list(map(str, call.args)) for call in run.call_args_list]
+        self.assertIn(["python3","scripts/ci_graphics_phase_one.py"],commands)
+        self.assertIn(["python3","scripts/ci_graphics_phase_two.py"],commands)
         generated = next(i for i, c in enumerate(commands) if "tests/ModelAssetTests" in c)
         acceptance = next(i for i, c in enumerate(commands) if "scripts/ci_model_tests.py" in c)
         self.assertLess(generated, acceptance)

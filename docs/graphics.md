@@ -159,3 +159,5 @@ The additive [phase 1 graphics APIs](graphics-phase-one.md) provide Camera2D,
 viewport-aware batches, bulk sprites, sampler/UV state, camera projection queries,
 scene lights/fog and distinct-transform mesh batches. See the
 [two-phase roadmap](graphics-roadmap.md) for the separate follow-up scope.
+
+Phase 2 adds [cached text, retained geometry, primitive meshes, mips and scene capture](graphics-phase-two.md).

@@ -1,6 +1,6 @@
 # High-level graphics: phase 1
 
-The [roadmap](graphics-roadmap.md) records approved phase 1 and proposed phase 2.
+The [roadmap](graphics-roadmap.md) records implemented phases 1 and 2.
 These APIs extend the existing single-device, application-executor graphics model.
 Create resources and staging buffers during setup. Complete passes and frames
 synchronously, and keep every borrowed texture, mesh, model and effect alive.

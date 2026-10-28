@@ -39,12 +39,12 @@ void dnd_draw_backend_scene(int lit,const float *view){
 }
 static bool managed_style_active(void){return style_options_active&&(dnd_device_pass()==1||dnd_device_pass()==2);}
 static int managed_wrap(int fallback,int slot,int axis){int mode=(int)style_options[slot*10+axis+1];return !managed_style_active()||mode==0?fallback:mode-1;}
-static void managed_sampler(GXTexObj *tex,int slot,bool linear,int wrap_s,int wrap_t){
+static void managed_sampler(GXTexObj *tex,int slot,int levels,bool linear,int wrap_s,int wrap_t){
     if(!managed_style_active())return;
     int filter=(int)style_options[slot*10];
     GX_InitTexObjWrapMode(tex,managed_wrap(wrap_s,slot,0),managed_wrap(wrap_t,slot,1));
     int kind=(filter?filter==2:linear)?GX_LINEAR:GX_NEAR;
-    GX_InitTexObjLOD(tex,kind,kind,0,0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
+    GX_InitTexObjLOD(tex,levels>1?(kind==GX_LINEAR?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):kind,kind,0,levels>1?levels-1:0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
 }
 static void managed_uv(int slot){
     if(!managed_style_active())return;

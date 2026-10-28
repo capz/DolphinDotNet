@@ -10,7 +10,7 @@ int dnd_device_width(void){return 640;}int dnd_device_height(void){return 480;}i
 void dnd_draw_backend_wait(void){}void dnd_draw_backend_flush(void *p,int n,int i){(void)p;(void)n;(void)i;}
 void dnd_draw_backend_2d(int w,int h){assert(w==640&&h==480);}
 void dnd_draw_backend_viewport(int x,int y,int w,int h){assert(x>=0&&y>=0&&w>0&&h>0);}
-void dnd_draw_backend_scissor(int x,int y,int w,int h){scissor[0]=x;scissor[1]=y;scissor[2]=w;scissor[3]=h;}
+void dnd_draw_backend_scissor(int x,int y,int w,int h){assert(w>0&&h>0);scissor[0]=x;scissor[1]=y;scissor[2]=w;scissor[3]=h;}
 void dnd_draw_backend_options(const float *p,int scene){(void)p;(void)scene;options++;}
 void dnd_performance_add_triangles(uint32_t n){assert(n>0);}
 void dnd_exception_throw(DndExceptionKind k,const char *m){(void)k;(void)m;abort();}
@@ -29,6 +29,12 @@ int main(void){
  assert(dnd_render_material(style)==0&&options==1);pass=0;assert(dnd_render_material(style)<0&&options==1);
  int canvas=dnd_canvas_create(6);assert(canvas);assert(dnd_canvas_begin(canvas,640,480)==0);draws=0;
  assert(dnd_canvas_viewport(canvas,100,50,320,240)==0);assert(dnd_canvas_clip(canvas,20,40,100,80)==0);assert(scissor[0]==110&&scissor[1]==70&&scissor[2]==50&&scissor[3]==40);
+ tokens[0]=tokens[1]=tex;
+ assert(dnd_canvas_clip(canvas,0,0,1,2)==0);
+ assert(dnd_canvas_sprites(canvas,ids,vertices,colors,2)==0&&dnd_canvas_stats(canvas,2)==0);
+ assert(dnd_canvas_clip(canvas,0,0,2,1)==0);
+ assert(dnd_canvas_sprites(canvas,ids,vertices,colors,2)==0&&dnd_canvas_stats(canvas,2)==0);
+ assert(dnd_canvas_clip(canvas,20,40,100,80)==0);
  tokens[0]=tex;tokens[1]=-1;assert(dnd_canvas_sprites(canvas,ids,vertices,colors,2)<0&&draws==0&&dnd_canvas_stats(canvas,2)==0);tokens[1]=tex;
  ((float*)vertices->data)[47]=NAN;assert(dnd_canvas_sprites(canvas,ids,vertices,colors,2)<0&&draws==0);((float*)vertices->data)[47]=0;
  assert(dnd_canvas_clip(canvas,0,0,0,1)==0);assert(dnd_canvas_sprites(canvas,ids,vertices,colors,2)==0&&dnd_canvas_stats(canvas,2)==0);

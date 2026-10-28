@@ -3,7 +3,7 @@ try
 {
     if (args.Length == 0 || args[0] == "--help")
     {
-        Console.WriteLine("dnd-assets model INPUT.{glb,gltf,fbx,obj,dae,3ds,stl,ply,gj,xj} OUTPUT.dndmodel [--texture-limit N] [--assimp PATH] [--allow-material-approximation] [--compile-gx-materials] [--bake-neutral-studio]\ndnd-assets audio INPUT.mp3 OUTPUT.adx [--loops PATH] [--loop NAME] [--sample-rate HZ] [--ffmpeg PATH]\ndnd-assets texture INPUT.png OUTPUT.dndtex\ndnd-assets font ATLAS.png OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]\nFBX/OBJ/DAE/3DS/STL/PLY require Assimp CLI 5.3.x. PSO GJ/XJ geometry uses built-in .NET parsers; textured PSO materials currently require --allow-material-approximation. Outputs include a dependency manifest.");
+        Console.WriteLine("dnd-assets model INPUT.{glb,gltf,fbx,obj,dae,3ds,stl,ply,gj,xj} OUTPUT.dndmodel [--texture-limit N] [--assimp PATH] [--allow-material-approximation] [--compile-gx-materials] [--bake-neutral-studio]\ndnd-assets audio INPUT.mp3 OUTPUT.adx [--loops PATH] [--loop NAME] [--sample-rate HZ] [--ffmpeg PATH]\ndnd-assets texture INPUT.png OUTPUT.dndtex [--mipmaps]\ndnd-assets font ATLAS.png OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]\nFBX/OBJ/DAE/3DS/STL/PLY require Assimp CLI 5.3.x. PSO GJ/XJ geometry uses built-in .NET parsers; textured PSO materials currently require --allow-material-approximation. Outputs include a dependency manifest.");
         return 0;
     }
     if (args.Length >= 3 && args[0] == "audio")
@@ -30,7 +30,7 @@ try
     {
         using var image=DolphinDotNet.Imaging.RasterImage.Load(File.ReadAllBytes(args[1]));
         byte[] package;
-        if(args[0]=="texture") {if(args.Length!=3)throw new ArgumentException("texture INPUT OUTPUT.dndtex");package=DrawingPackages.Texture(image);}
+        if(args[0]=="texture") {if(args.Length!=3&&(args.Length!=4||args[3]!="--mipmaps"))throw new ArgumentException("texture INPUT OUTPUT.dndtex [--mipmaps]");package=DrawingPackages.Texture(image,args.Length==4);}
         else {if(args.Length<5||args.Length>7)throw new ArgumentException("font ATLAS OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]");package=DrawingPackages.Font(image,int.Parse(args[3]),int.Parse(args[4]),args.Length>5?int.Parse(args[5]):32,args.Length>6?int.Parse(args[6]):96);}
         File.WriteAllBytes(args[2],package);return 0;
     }

@@ -1,8 +1,7 @@
 # High-level graphics expansion
 
 Phase 1 is implemented; see [API usage and validation](graphics-phase-one.md).
-Phase 2 is a follow-up proposal and is
-not part of this implementation. Existing signatures, defaults, frame ownership,
+Phase 2 is implemented; see [API usage and costs](graphics-phase-two.md). Existing signatures, defaults, frame ownership,
 asset formats and application-executor requirements remain supported.
 
 ## Phase 1
@@ -32,7 +31,7 @@ GX draw/texture-bind counts and execution separately from VI/display pacing.
 Hardware appearance and throughput remain unverified until measured physically.
 No performance improvement is claimed from a source-only change.
 
-## Phase 2 (proposed)
+## Phase 2
 
 * Reusable bitmap text layouts with wrapping/alignment and cached glyph placement;
   recorded 2D geometry for static HUDs, menus and tile layers. Keep ownership and
@@ -43,6 +42,6 @@ No performance improvement is claimed from a source-only change.
   minimaps and simple TEV post-processing. Preserve v1 loading and expose copy,
   synchronization and memory costs; GX uses the shared EFB.
 
-These items need separate API review, implementation approval and workload-based
-memory/bandwidth measurements. They do not promise PBR, programmable shaders,
+These additions were approved for implementation. Workload-based memory/bandwidth
+measurements and physical hardware validation remain required. They do not promise PBR, programmable shaders,
 GPU instancing or an additional rendering/background thread.
