@@ -3,6 +3,7 @@
 #include "dnd_performance.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #define ROWS 10
 #define COLS 78
 static char lines[ROWS][COLS + 1];
@@ -114,6 +115,12 @@ static int glyph_rectangles(const unsigned char *g,GlyphRect *out) {
   }
   return count;
 }
+/* Use the same explicitly rounded coordinate operation for individual pixels
+ * and merged glyphs. Compiler-dependent FMA contraction otherwise moves edges
+ * across pixel centers when O3/LTO inlines the two submission paths. */
+static float glyph_coordinate(float origin,int cell,float scale) {
+  return fmaf((float)cell,scale,origin);
+}
 static void render_text(const char *const *text, int rows, float left, float top,
                         unsigned char shade) {
   const float scale = 1.35f, cw = 6 * scale, ch = 9 * scale;
@@ -135,7 +142,7 @@ static void render_text(const char *const *text, int rows, float left, float top
       const unsigned char *g = glyph(text[row][col]);
       if (!g)
         continue;
-      float ox = left + col * cw, oy = top + row * ch;
+      float ox = glyph_coordinate(left,col,cw), oy = glyph_coordinate(top,row,ch);
       if(compact==3) {
         dnd_graphics_overlay_atlas_glyph((unsigned char)text[row][col],ox,oy,scale);
         continue;
@@ -143,16 +150,16 @@ static void render_text(const char *const *text, int rows, float left, float top
       if(compact==2) {
         GlyphRect rects[35];int n=glyph_rectangles(g,rects);
         for(int i=0;i<n;i++){
-          GlyphRect r=rects[i];float px=ox+r.x*scale,py=oy+r.y*scale;
-          dnd_graphics_overlay_glyph_rect(px,py,(ox+(r.x+r.w-1)*scale+scale)-px,(oy+(r.y+r.h-1)*scale+scale)-py);
+          GlyphRect r=rects[i];float px=glyph_coordinate(ox,r.x,scale),py=glyph_coordinate(oy,r.y,scale);
+          dnd_graphics_overlay_glyph_rect(px,py,(glyph_coordinate(ox,r.x+r.w-1,scale)+scale)-px,(glyph_coordinate(oy,r.y+r.h-1,scale)+scale)-py);
         }
         continue;
       }
       for(int y=0;y<7;y++)for(int x=0;x<5;) {
         if(!(g[x]&(1u<<y))){x++;continue;}
         int first=x++;if(compact)while(x<5&&(g[x]&(1u<<y)))x++;
-        float px=ox+first*scale,py=oy+y*scale;
-        if(compact)dnd_graphics_overlay_glyph_rect(px,py,(ox+(x-1)*scale+scale)-px,scale);
+        float px=glyph_coordinate(ox,first,scale),py=glyph_coordinate(oy,y,scale);
+        if(compact)dnd_graphics_overlay_glyph_rect(px,py,(glyph_coordinate(ox,x-1,scale)+scale)-px,scale);
         else dnd_graphics_overlay_glyph_quad(px,py,scale);
       }
     }

@@ -13,6 +13,7 @@ audit, not a statement of exhaustive branch coverage or physical compatibility.
 | Mip packages | Existing native test primarily exercised square RGBA8 full chains | Check every prefix of rectangular 16x8 chains in all eight supported GX formats, exact payload preservation, truncated/overlong chains and no allocation on rejection |
 | Retained geometry | Existing tests did not verify immediate → retained → immediate painter order | Record backend submissions and require 6 → 3 → 6 vertices; invalid matrices/disposed borrowed textures cannot flush queued draws |
 | AOT array fast paths | Existing test concentrated on u4 stores and a few floating patterns | Differential checks against checked runtime loads/stores for u1/u2/u4/r4/r8; eight strides including unaligned elements; all valid indices and invalid indices; scalar/reference mismatch and null precedence; zero, signed zero, infinities, quiet NaNs, subnormals and integer extrema |
+| Overlay coordinates | Optimized FMA contraction made compact glyph runs differ from individual-pixel rendering on macOS | Use explicit fused coordinate calculations for both paths; the existing exact raster comparison reproduces the old failure under O3/LTO/FMA and passes with contraction enabled or disabled |
 | Native CI optimization | Native unit tests ran with default compiler flags, unlike shipped release O3/LTO | Run all native tests in both default and `-O3 -flto -fno-strict-aliasing` modes, cleaning between builds and retaining assertions; test cleanup and failure propagation |
 
 The capture regression fails against the original runtime. The validation fix
@@ -28,6 +29,9 @@ remain accepted. The new native binary is part of `make -C tests test`.
   environment's tracing; it was disabled for these runs. Resource tests separately
   require zero live native resources and zero accounted bytes at completion.
 - CI-runner tests and the existing change-selection tests passed.
+- Follow-up CI exposed the overlay FMA issue above. Normal and debug-reporting
+  overlay tests pass with explicit FMA enabled and with contraction disabled; the
+  original source fails the unchanged pixel-equality assertion with FMA enabled.
 - The local environment has no .NET SDK or reachable shell network proxy. Managed
   compiler/AOT, asset-converter and PowerPC/Dolphin checks require repository CI;
   they were not rerun locally for this audit.
