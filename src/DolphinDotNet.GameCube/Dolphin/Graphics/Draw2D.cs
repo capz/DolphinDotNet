@@ -3,10 +3,13 @@ namespace Dolphin.Graphics;
 
 public sealed class Draw2DOptions
 {
+    private CanvasScaleMode scaleMode=CanvasScaleMode.Display;
+    internal bool ScaleModeSpecified;
+    public CanvasScaleMode ScaleMode {get=>scaleMode;set{scaleMode=value;ScaleModeSpecified=true;}}
     public int VertexCapacity {get;set;}=4096;
     /// <summary>0 disables bulk sprite staging; 1–128 reserves capacity during construction.</summary>
     public int SpriteCapacity {get;set;}
-    /// <summary>Zero selects the physical framebuffer dimensions. Nonzero dimensions stretch to the viewport.</summary>
+    /// <summary>Zero derives a display-correct logical size. Nonzero dimensions default to stretching unless Fit is selected.</summary>
     public int Width {get;set;}
     public int Height {get;set;}
 }
@@ -19,6 +22,8 @@ public sealed partial class Draw2D : IDisposable
     internal static bool DirectRectanglePath=true;
     private readonly int token,width,height;
     private readonly GraphicsDevice device;
+    private readonly CanvasScaleMode scaleMode;
+    private Vector2 logicalSize;
     private readonly float[] scratch=new float[24];
     private bool active,disposed;
     private GxEffect? effect;
@@ -27,6 +32,8 @@ public sealed partial class Draw2D : IDisposable
         if(device==null)throw new ArgumentNullException("device");this.device=device;
         options=options ?? new Draw2DOptions();
         if(options.Width<0||options.Height<0||(options.Width==0)!=(options.Height==0))throw new ArgumentException("Set both logical dimensions or neither.");
+        scaleMode=options.ScaleModeSpecified?options.ScaleMode:options.Width==0?CanvasScaleMode.Display:CanvasScaleMode.Stretch;
+        if((int)scaleMode<0||(int)scaleMode>2||scaleMode==CanvasScaleMode.Fit&&options.Width==0||scaleMode==CanvasScaleMode.Display&&options.Width!=0)throw new ArgumentException("Display scaling derives its dimensions; Fit requires a fixed logical size.");
         if(options.SpriteCapacity<0||options.SpriteCapacity>128)throw new ArgumentOutOfRangeException("SpriteCapacity");
         spriteTextures=new int[options.SpriteCapacity];spriteColors=new int[options.SpriteCapacity];spriteVertices=new float[options.SpriteCapacity*24];
         token=NativeGraphics.CanvasCreate(options.VertexCapacity);
@@ -35,10 +42,37 @@ public sealed partial class Draw2D : IDisposable
     }
     public int DrawCalls {get{Check();return NativeGraphics.CanvasStats(token,0);}}
     public int Flushes {get{Check();return NativeGraphics.CanvasStats(token,1);}}
-    public void Begin()
+    public Vector2 LogicalSize {get{Check();if(active)return logicalSize;Viewport ignored;return Layout(new Viewport(0,0,device.Width,device.Height),out ignored);}}
+    private Vector2 Layout(Viewport requested,out Viewport actual)
+    {
+        actual=requested;
+        float pixelAspect=device.Display.AspectRatio*device.Height/device.Width;
+        if(scaleMode==CanvasScaleMode.Display)return new Vector2(requested.Width*pixelAspect,requested.Height);
+        int w=width==0?device.Width:width,h=height==0?device.Height:height;
+        if(scaleMode==CanvasScaleMode.Fit){
+            float aspect=(float)w/h;
+            int vw=requested.Width,vh=requested.Height;
+            if(vw*pixelAspect/vh>aspect)vw=Math.Max(1,Math.Min(vw,(int)(vh*aspect/pixelAspect)));
+            else vh=Math.Max(1,Math.Min(vh,(int)(vw*pixelAspect/aspect)));
+            actual=new Viewport(requested.X+(requested.Width-vw)/2,requested.Y+(requested.Height-vh)/2,vw,vh);
+        }
+        return new Vector2(w,h);
+    }
+    public void Begin()=>BeginCore(null,new Viewport(0,0,device.Width,device.Height));
+    private void BeginCore(Camera2D? camera,Viewport viewport)
     {
         Check();if(active)throw new InvalidOperationException("Batch already active.");
-        GraphicsDevice.Check(NativeGraphics.CanvasBegin(token,width==0?device.Width:width,height==0?device.Height:height),"Begin a device frame and end other drawing passes first.");active=true;GraphicsDevice.Check(NativeGraphics.RenderScene(null),"Cannot reset render state.");effect=null;cameraActive=false;clipDepth=0;clipX=clipY=0;clipW=width==0?device.Width:width;clipH=height==0?device.Height:height;
+        if(viewport.Width<=0||viewport.Height<=0||viewport.X>device.Width-viewport.Width||viewport.Y>device.Height-viewport.Height)throw new ArgumentException("Viewport outside framebuffer.");
+        Viewport target;var size=Layout(viewport,out target);
+        if(!(size.X>=1&&size.Y>=1&&size.X<=16384&&size.Y<=16384))throw new ArgumentException("Logical canvas is outside native limits.");
+        if(camera!=null)camera.Matrix(cameraMatrix);
+        GraphicsDevice.Check(NativeGraphics.CanvasBegin(token,(int)Math.Ceiling(size.X),(int)Math.Ceiling(size.Y)),"Begin a device frame and end other drawing passes first.");active=true;
+        try {
+            GraphicsDevice.Check(NativeGraphics.CanvasLayout(token,size.X,size.Y),"Invalid logical canvas.");
+            GraphicsDevice.Check(NativeGraphics.CanvasViewport(token,target.X,target.Y,target.Width,target.Height),"Invalid viewport.");
+            GraphicsDevice.Check(NativeGraphics.RenderScene(null),"Cannot reset render state.");
+            logicalSize=size;effect=null;cameraActive=camera!=null&&(cameraMatrix[0]!=1||cameraMatrix[1]!=0||cameraMatrix[2]!=0||cameraMatrix[3]!=1||cameraMatrix[4]!=0||cameraMatrix[5]!=0);clipDepth=0;clipX=clipY=0;clipW=(int)Math.Ceiling(size.X);clipH=(int)Math.Ceiling(size.Y);
+        }catch{NativeGraphics.CanvasEnd(token);active=false;throw;}
     }
     /// <summary>Flush queued vertices before changing effects. Null restores the default pipeline.</summary>
     public void SetEffect(GxEffect? value)
@@ -49,7 +83,7 @@ public sealed partial class Draw2D : IDisposable
     public void End(){Require();GraphicsDevice.Check(NativeGraphics.CanvasEnd(token),"Batch could not finish.");active=false;}
     public void Flush(){Require();GraphicsDevice.Check(NativeGraphics.CanvasFlush(token),"Batch could not flush.");}
     public void SetClip(int x,int y,int width,int height){Require();GraphicsDevice.Check(NativeGraphics.CanvasClip(token,x,y,width,height),"Invalid clipping rectangle.");clipX=x;clipY=y;clipW=width;clipH=height;}
-    public void ResetClip(){SetClip(0,0,width==0?device.Width:width,height==0?device.Height:height);}
+    public void ResetClip(){Require();SetClip(0,0,(int)Math.Ceiling(logicalSize.X),(int)Math.Ceiling(logicalSize.Y));}
     public void SetBlend(BlendMode blend){Require();GraphicsDevice.Check(NativeGraphics.CanvasBlend(token,(int)blend),"Invalid blend mode.");}
     private static float Min(float a,float b)=>a<b?a:b;
     private void Check(){if(disposed)throw new ObjectDisposedException("Draw2D");}

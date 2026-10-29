@@ -4,6 +4,9 @@ namespace Dolphin.Graphics;
 
 internal static class NativeGraphics
 {
+    internal static int DeviceConfigureDisplay(int resolution,int scan,int widescreen)=>throw new PlatformNotSupportedException("Requires AOT.");
+    internal static int DeviceDisplayStat(int kind)=>throw new PlatformNotSupportedException("Requires AOT.");
+    internal static int CanvasLayout(int token,float width,float height)=>throw new PlatformNotSupportedException("Requires AOT.");
     internal static void AssetReadQuantum(int bytes)=>throw Unsupported();
     internal static void AssetResetStats()=>throw Unsupported();
     internal static void AssetSnapshot(long[] destination)=>throw Unsupported();

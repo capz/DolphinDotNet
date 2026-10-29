@@ -7,16 +7,24 @@ static int frames;
 const unsigned char *graphics_expected_rgba;
 int graphics_expected_width,graphics_expected_height;
 void dnd_graphics_init(void){}
+#ifndef DND_DISPLAY_TEST
 int dnd_graphics_width(void){return 640;}
+#endif
+#ifndef DND_DISPLAY_TEST
 int dnd_graphics_height(void){return 480;}
+#endif
 void dnd_graphics_begin_frame(float r,float g,float b,float a){(void)r;(void)g;(void)b;(void)a;assert(!frames);frames++;}
 void dnd_graphics_present(void){assert(frames);frames--;}
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const DndDrawTexture *t,const DndDrawMaterial *m,const float *world){assert(v&&n&&m&&world);assert(primitive==0x90);if(m->effect){assert(m->effect->count>=1&&m->effect->count<=16);if(m->effect->texture)assert(t);graphics_effect_draws++;}if(t){assert(t->data&&t->width==4&&t->height==4);const unsigned char *p=t->data;assert(p[0]==0&&p[1]==0);}graphics_draws++;graphics_vertices+=n;}
 void dnd_draw_backend_camera(const float *v,const float *p){assert(v&&p);}
 void dnd_draw_set_camera(const float *v,const float *p){dnd_draw_backend_camera(v,p);}
 void dnd_draw_backend_2d(int w,int h){assert(w>0&&h>0);}
+#ifndef DND_DISPLAY_TEST
 void dnd_draw_backend_viewport(int x,int y,int w,int h){assert(x>=0&&y>=0&&w>0&&h>0);}
+#endif
+#ifndef DND_DISPLAY_TEST
 void dnd_draw_backend_scissor(int x,int y,int w,int h){assert(x>=0&&y>=0&&w>0&&h>0);}
+#endif
 void dnd_draw_backend_copy(const DndDrawTexture *t,int x,int y,int w,int h){(void)x;(void)y;(void)w;(void)h;
     if(graphics_expected_rgba) {
         assert(t&&t->format==6&&t->linear&&t->width==graphics_expected_width&&t->height==graphics_expected_height);

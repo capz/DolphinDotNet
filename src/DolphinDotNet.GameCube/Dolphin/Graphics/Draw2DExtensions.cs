@@ -12,12 +12,7 @@ public sealed partial class Draw2D
     private int clipDepth,clipX,clipY,clipW,clipH;
     /// <summary>Snapshots the camera at Begin. Clipping uses logical screen coordinates after camera transformation.</summary>
     public void Begin(Camera2D camera,Viewport viewport)
-    {
-        Check();if(active)throw new InvalidOperationException("Batch already active.");
-        if(camera==null)throw new ArgumentNullException("camera");camera.Matrix(cameraMatrix);
-        if(viewport.Width<=0||viewport.Height<=0||viewport.X>device.Width-viewport.Width||viewport.Y>device.Height-viewport.Height)throw new ArgumentException("Viewport outside framebuffer.");
-        Begin();GraphicsDevice.Check(NativeGraphics.CanvasViewport(token,viewport.X,viewport.Y,viewport.Width,viewport.Height),"Invalid viewport.");cameraActive=cameraMatrix[0]!=1||cameraMatrix[1]!=0||cameraMatrix[2]!=0||cameraMatrix[3]!=1||cameraMatrix[4]!=0||cameraMatrix[5]!=0;
-    }
+    {if(camera==null)throw new ArgumentNullException("camera");BeginCore(camera,viewport);}
     public void Begin(Camera2D camera)=>Begin(camera,new Viewport(0,0,device.Width,device.Height));
     public void PushClip(int x,int y,int width,int height)
     {

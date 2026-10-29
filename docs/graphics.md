@@ -5,6 +5,9 @@ preserves C function names, constants and explicit state. `Dolphin.Graphics`
 provides owned resources and ordered drawing passes. Both use one device and
 presentation path; OpenGX is no longer required.
 
+See [display configuration](display-configuration.md) for standard resolutions,
+interlaced/progressive modes, and automatic 4:3/16:9 rendering.
+
 ## Frame and pass ownership
 
 ```csharp

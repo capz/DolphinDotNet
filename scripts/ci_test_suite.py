@@ -68,6 +68,7 @@ def main(area):
         test("tests/AudioAssetTests")
         build("tests/AudioFormatsSmoke/AudioFormatsSmoke.csproj")
     elif area=="graphics":
+        run("python3","scripts/ci_display.py") # DisplayConfigurationSmoke
         run("python3","scripts/ci_graphics_phase_one.py")
         run("python3","scripts/ci_graphics_phase_two.py")
         build("tests/GraphicsPhaseOneSmoke/GraphicsPhaseOneSmoke.csproj")

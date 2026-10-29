@@ -14,6 +14,7 @@
 #if !defined(DND_GAMECUBE_STORAGE)
 __attribute__((weak)) void dnd_draw_backend_publish_texture(void){}
 __attribute__((weak)) void dnd_draw_backend_mesh_changed(void){}
+__attribute__((weak)) void dnd_draw_backend_2d_projection(float w,float h){dnd_draw_backend_2d((int)w,(int)h);}
 __attribute__((weak)) bool dnd_draw_backend_mesh(const DndDrawVertex *v,const uint16_t *i,int n,uint32_t c,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)i;(void)n;(void)c;(void)t;(void)m;(void)w;return false;}
 #endif
 
@@ -28,6 +29,7 @@ typedef struct {
     bool uniform_color;
     uint32_t mesh_color;
     int holds;
+    float logical_width,logical_height;
     int effect;
     int levels;
     int width,height,format,linear,vertices,indices,dynamic,capacity,count,texture,blend,draws,flushes;
@@ -428,7 +430,7 @@ static int canvas_viewport[4];
 static bool canvas_empty_clip;
 int dnd_canvas_begin(int token,int w,int h) {
     Resource *r=find(token,CANVAS);if(!r||w<1||h<1||w>16384||h>16384||dnd_device_pass_begin(2)<0)return -1;
-    active_canvas=token;r->count=0;r->texture=0;r->effect=0;r->blend=1;r->draws=0;r->flushes=0;r->width=w;r->height=h;
+    active_canvas=token;r->count=0;r->texture=0;r->effect=0;r->blend=1;r->draws=0;r->flushes=0;r->width=w;r->height=h;r->logical_width=(float)w;r->logical_height=(float)h;
     dnd_draw_backend_2d(w,h);canvas_empty_clip=false;canvas_viewport[0]=canvas_viewport[1]=0;canvas_viewport[2]=dnd_device_width();canvas_viewport[3]=dnd_device_height();return 0;
 }
 int dnd_canvas_flush(int token) {
@@ -480,8 +482,10 @@ int dnd_canvas_clip(int token,int x,int y,int w,int h) {
     if(!r||x<0||y<0||w<0||h<0||x>r->width-w||y>r->height-h||dnd_canvas_flush(token)<0)return -1;
     canvas_empty_clip=w==0||h==0;if(canvas_empty_clip)return 0;
     int screen_w=canvas_viewport[2],screen_h=canvas_viewport[3];
-    int left=x*screen_w/r->width,top=y*screen_h/r->height;
-    int right=(x+w)*screen_w/r->width,bottom=(y+h)*screen_h/r->height;
+    int left=(int)(x*screen_w/r->logical_width),top=(int)(y*screen_h/r->logical_height);
+    int right=(int)((x+w)*screen_w/r->logical_width),bottom=(int)((y+h)*screen_h/r->logical_height);
+    if(right>screen_w)right=screen_w;
+    if(bottom>screen_h)bottom=screen_h;
     /* Positive logical clips may disappear under viewport scaling. GX uses
      * inclusive endpoints and must never receive zero scissor extents. */
     canvas_empty_clip=right<=left||bottom<=top;
@@ -656,4 +660,12 @@ int dnd_canvas_geometry(int token,int mesh,int tex,DndArray *world,uint32_t colo
         dnd_draw_backend_vertices(vertices,geometry->vertices,0x90,tex?&tx:NULL,&material,transform);
     dnd_performance_add_triangles((uint32_t)geometry->vertices/3);
     canvas->draws++;return 0;
+}
+
+int dnd_canvas_layout(int token,float w,float h){
+    Resource *r=find(token,CANVAS);
+    if(!r||token!=active_canvas||dnd_device_pass()!=2||!isfinite(w)||!isfinite(h)||w<1||h<1||w>16384||h>16384)return -1;
+    if(dnd_canvas_flush(token)<0)return -1;
+    r->logical_width=w;r->logical_height=h;r->width=(int)ceilf(w);r->height=(int)ceilf(h);
+    dnd_draw_backend_2d_projection(w,h);return 0;
 }

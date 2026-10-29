@@ -2,6 +2,8 @@
 #include "dnd_model_internal.h"
 #include "dnd_performance.h"
 #include "dnd_storage.h"
+#include "dnd_draw.h"
+#include "dnd_graphics.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -403,6 +405,9 @@ static void renderware_melee_tests(void) {
 }
 int main(int argc, char **argv) {
   assert(argc == 2);
+  /* The model-only host omits GX video initialization and native mode symbols. */
+  assert(dnd_graphics_display_stat(2) == dnd_device_width());
+  assert(dnd_graphics_display_stat(3) == dnd_device_height());
   setenv("DND_STORAGE_ROOT", argv[1], 1);
   static unsigned char memory[128 * 1024];
   dnd_managed_heap_init(&heap, memory, sizeof(memory));
