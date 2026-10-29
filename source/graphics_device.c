@@ -10,7 +10,8 @@
 __attribute__((weak)) void dnd_draw_backend_invalidate_cache(void){}
 __attribute__((weak)) void dnd_draw_backend_overlay_shutdown(void){}
 __attribute__((weak)) int dnd_graphics_configure_display(int resolution,int scan){return resolution==0&&scan==0?0:-1;}
-__attribute__((weak)) int dnd_graphics_display_stat(int kind){return kind==0?2:kind==1?1:kind==2||kind==4?dnd_graphics_width():kind==3||kind==5?dnd_graphics_height():kind==6?59940:-1;}
+/* Device dimensions also exist in model-only hosts without GX video symbols. */
+__attribute__((weak)) int dnd_graphics_display_stat(int kind){return kind==0?2:kind==1?1:kind==2||kind==4?dnd_device_width():kind==3||kind==5?dnd_device_height():kind==6?59940:-1;}
 #endif
 static bool active,external,widescreen;
 /* GX presentation synchronizes the GPU; never signal an in-flight frame. */
