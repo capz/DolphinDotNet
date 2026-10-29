@@ -113,7 +113,8 @@ public sealed class HttpClient : IDisposable
         protected override bool Step()
         {
             if(stage==0){client=new TcpClient();connect=client.ConnectAsync(url.Host,url.Port,token);stage=1;return false;}
-            if(stage==1){if(!connect!.IsCompleted)return false;connect.GetAwaiter().GetResult();wire=BuildRequest();stage=2;return false;}
+            if(stage==1){if(!connect!.IsCompleted)return false;connect.GetAwaiter().GetResult();if(url.Secure){if(NativeNetwork.TlsStart(client!.Client.Handle,url.Host)<0)throw new IOException("TLS unavailable or not securely configured.");stage=5;return false;}wire=BuildRequest();stage=2;return false;}
+            if(stage==5){int result=NativeNetwork.TlsHandshake(client!.Client.Handle);if(result==-1)return false;if(result<0)throw new IOException("TLS handshake or certificate verification failed.");wire=BuildRequest();stage=2;return false;}
             if(stage==2){if(io!=null){if(!io.IsCompleted)return false;int n=io.GetAwaiter().GetResult();if(n==0)throw new IOException("HTTP write closed.");requestOffset+=n;io=null;}if(requestOffset==wire!.Length){stage=3;return false;}io=client!.Client.SendAsync(wire,requestOffset,wire.Length-requestOffset,SocketFlags.None,token);return false;}
             if(stage==3){if(io!=null){if(!io.IsCompleted)return false;int n=io.GetAwaiter().GetResult();io=null;if(n==0)throw new IOException("HTTP headers truncated.");used+=n;}for(int i=offset;i<=used-4;i++)if(headers[i]==13&&headers[i+1]==10&&headers[i+2]==13&&headers[i+3]==10){int end=i+4;response=ParseHeaders(end);if((int)response.StatusCode>=100&&(int)response.StatusCode<200){if((int)response.StatusCode==101)throw new NotSupportedException("HTTP upgrades unavailable.");Array.Copy(headers,end,headers,0,used-end);used-=end;offset=0;return false;}if(Redirect(response)){return false;}response.Content=new HttpContent{Body=new HttpBodyStream(client!,response,headers,end,used-end,request.Method.Method=="HEAD",token),Limit=owner.MaximumResponseBytes};if(option==HttpCompletionOption.ResponseHeadersRead){Finish();return true;}body=response.Content.ReadAsByteArrayAsync();stage=4;return false;}offset=used>3?used-3:0;if(used==headers.Length)throw new IOException("HTTP headers exceed limit.");io=client!.Client.ReceiveAsync(headers,used,headers.Length-used,SocketFlags.None,token);return false;}
             if(!body!.IsCompleted)return false;body.GetAwaiter().GetResult();Finish();return true;
@@ -123,8 +124,8 @@ public sealed class HttpClient : IDisposable
         {
             int code=(int)response.StatusCode;string? location=response.Headers.Get("location");if(location==null||!(code==301||code==302||code==303||code==307||code==308))return false;
             if(request.Method.Method!="GET"&&request.Method.Method!="HEAD")return false;if(++redirects>owner.MaximumRedirects)throw new IOException("HTTP redirect limit reached.");
-            string target;if(location.StartsWith("http://")||location.StartsWith("https://"))target=location;else if(location.StartsWith("//"))target=string.Concat("http:",location);else if(location.StartsWith("/"))target=string.Concat(string.Concat("http://",url.Authority),location);else{int last=0;for(int i=0;i<url.Path.Length&&url.Path[i]!='?';i++)if(url.Path[i]=='/')last=i;target=string.Concat(string.Concat(string.Concat("http://",url.Authority),url.Path.Substring(0,last+1)),location);}
-            var next=new HttpUrl(target);if(next.Authority!=url.Authority)crossOrigin=true;client!.Dispose();url=next;client=null;connect=null;io=null;wire=null;response.Dispose();this.response=null;stage=offset=used=requestOffset=0;return true;
+            string target;if(location.StartsWith("http://")||location.StartsWith("https://"))target=location;else if(location.StartsWith("//"))target=string.Concat(string.Concat(url.Scheme,":"),location);else if(location.StartsWith("/"))target=string.Concat(string.Concat(string.Concat(url.Scheme,"://"),url.Authority),location);else{int last=0;for(int i=0;i<url.Path.Length&&url.Path[i]!='?';i++)if(url.Path[i]=='/')last=i;target=string.Concat(string.Concat(string.Concat(string.Concat(url.Scheme,"://"),url.Authority),url.Path.Substring(0,last+1)),location);}
+            var next=new HttpUrl(target);if(url.Secure&&!next.Secure)throw new IOException("HTTPS redirects to plaintext HTTP are forbidden.");if(next.Scheme!=url.Scheme||HttpText.Lower(next.Host)!=HttpText.Lower(url.Host)||next.Port!=url.Port)crossOrigin=true;client!.Dispose();url=next;client=null;connect=null;io=null;wire=null;response.Dispose();this.response=null;stage=offset=used=requestOffset=0;return true;
         }
         private byte[] BuildRequest()
         {
@@ -144,11 +145,11 @@ public sealed class HttpClient : IDisposable
 }
 internal sealed class HttpUrl
 {
-    internal readonly string Host,Authority,Path;internal readonly int Port;
+    internal readonly string Host,Authority,Path,Scheme;internal readonly int Port;internal readonly bool Secure;
     internal HttpUrl(string url)
     {
-        if(url==null)throw new ArgumentNullException("url");if(url.StartsWith("https://"))throw new PlatformNotSupportedException("HTTPS requires a verified TLS provider; not available in this build.");if(!url.StartsWith("http://"))throw new NotSupportedException("Only http:// URLs are supported.");for(int i=0;i<url.Length;i++)if(url[i]<=32||url[i]>126||url[i]=='#'||url[i]=='\\')throw new ArgumentException("Invalid URL; supply an ASCII escaped URL.");
-        int end=7;while(end<url.Length&&url[end]!='/'&&url[end]!='?')end++;Authority=url.Substring(7,end-7);if(Authority.Length==0||HttpText.Index(Authority,'@')>=0||HttpText.Index(Authority,'[')>=0)throw new ArgumentException("Invalid IPv4 authority.");int colon=HttpText.Index(Authority,':');Host=colon<0?Authority:Authority.Substring(0,colon);Port=colon<0?80:HttpText.Number(Authority.Substring(colon+1),65535);if(Host.Length==0||Port==0)throw new ArgumentException("Invalid host or port.");Path=end==url.Length?"/":url[end]=='?'?string.Concat("/",url.Substring(end)):url.Substring(end);
+        if(url==null)throw new ArgumentNullException("url");Secure=url.StartsWith("https://");Scheme=Secure?"https":"http";if(!Secure&&!url.StartsWith("http://"))throw new NotSupportedException("Only http:// and https:// URLs are supported.");for(int i=0;i<url.Length;i++)if(url[i]<=32||url[i]>126||url[i]=='#'||url[i]=='\\')throw new ArgumentException("Invalid URL; supply an ASCII escaped URL.");
+        int start=Secure?8:7;int end=start;while(end<url.Length&&url[end]!='/'&&url[end]!='?')end++;Authority=url.Substring(start,end-start);if(Authority.Length==0||HttpText.Index(Authority,'@')>=0||HttpText.Index(Authority,'[')>=0)throw new ArgumentException("Invalid IPv4 authority.");int colon=HttpText.Index(Authority,':');Host=colon<0?Authority:Authority.Substring(0,colon);Port=colon<0?(Secure?443:80):HttpText.Number(Authority.Substring(colon+1),65535);if(Host.Length==0||Port==0)throw new ArgumentException("Invalid host or port.");Path=end==url.Length?"/":url[end]=='?'?string.Concat("/",url.Substring(end)):url.Substring(end);
     }
 }
 internal static class HttpText

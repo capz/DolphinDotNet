@@ -121,6 +121,7 @@ internal static class GameCubeBundle
         File.Copy(Path.Combine(root,"vendor","ufbx","LICENSE"),Path.Combine(directory,"vendor","ufbx","LICENSE"),true);
         File.Copy(Path.Combine(root, "scripts", "dol_sections.py"),
             Path.Combine(directory, "scripts", "dol_sections.py"), true);
+        File.Copy(Path.Combine(root,"scripts","build_tls.py"),Path.Combine(directory,"scripts","build_tls.py"),true);
         if (platform == "gamecube")
         {
             // Standalone DOLs require the same verified EXI correction as the
@@ -224,7 +225,7 @@ internal static class GameCubeBundle
             "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "debug_heartbeat", "disc_gamecube", "fst",
             "fst_gamecube", "iso_file", "dol", "dol_gamecube", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "numeric", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
-            "model_graphics", "model_transform", "network", "network_gamecube",
+            "model_graphics", "model_transform", "tls", "network", "network_gamecube",
             "network_gamecube_backend", "network_link_gamecube", "performance", "platform_gamecube",
             "storage", "storage_gamecube", "contiguous_write", "file_extents", "file_optimize", "stw", "system", "text", "timing", "worker"
         };
@@ -313,7 +314,7 @@ internal static class GameCubeBundle
         builder.AppendLine("SOURCES := source");
         builder.AppendLine("INCLUDES := include");
         builder.AppendLine("LIBDIRS := " + library);
-        builder.AppendLine("LIBS := " + libs);
+        builder.AppendLine("LIBS := " + (usesNetworking ? "-ldndtls " : "") + libs);
         var symbols = debugSymbols ? "-Og -g3 -gdwarf-4 -fno-inline -fno-omit-frame-pointer -fno-optimize-sibling-calls" : "-O2 -g";
         builder.AppendLine("CFLAGS := " + symbols + " -Wall -Wextra $(MACHDEP) $(INCLUDE)" +
             (isWiiU ? " -D__WIIU__ -D__WUT__" :
@@ -323,7 +324,7 @@ internal static class GameCubeBundle
                 usesNetworking ? " -DDND_GAMECUBE_STORAGE" :
                 " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK") +
             (overlayTelemetry ? " -DDND_DEBUG_TELEMETRY" : "") +
-            (sampleControls ? " -DDND_SAMPLE_CONTROLS" : ""));
+            (sampleControls ? " -DDND_SAMPLE_CONTROLS" : "") + (usesNetworking ? " -DDND_TLS" : ""));
         // Keep the reporting slot even when the app has not enabled/drawn the overlay yet.
         builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") +
             (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry -Wl,--undefined=dnd_debugger_heartbeat" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
@@ -340,8 +341,8 @@ internal static class GameCubeBundle
         builder.AppendLine("export VPATH := $(CURDIR)/source");
         builder.AppendLine("export DEPSDIR := $(CURDIR)/$(BUILD)");
         builder.AppendLine("export OFILES := $(notdir $(patsubst %.c,%.o,$(wildcard source/*.c)))");
-        builder.AppendLine("export INCLUDE := -I$(CURDIR)/include -I" + library + "/include -I$(CURDIR)/build");
-        builder.AppendLine("export LIBPATHS := " + (platform == "gamecube" ?
+        builder.AppendLine("export INCLUDE := -I$(CURDIR)/include " + (usesNetworking ? "-I$(CURDIR)/build/tls/source/include " : "") + "-I" + library + "/include -I$(CURDIR)/build");
+        builder.AppendLine("export LIBPATHS := " + (usesNetworking ? "-L$(CURDIR)/build/tls " : "") + (platform == "gamecube" ?
             "-L$(CURDIR)/build/exi-overlay " : "") + "-L" + library + "/lib");
         builder.AppendLine("export DOL_VALIDATOR := $(CURDIR)/scripts/dol_sections.py");
         if (platform == "gamecube")
@@ -350,8 +351,13 @@ internal static class GameCubeBundle
             builder.AppendLine("$(EXI_OVERLAY): scripts/build_exi_overlay.sh scripts/verify_exi_source.py vendor/libogc2/exi.c");
             builder.AppendLine("\t@bash scripts/build_exi_overlay.sh");
         }
+        if(usesNetworking){
+            builder.AppendLine(".PHONY: dnd-tls");
+            builder.AppendLine("dnd-tls: $(BUILD)");
+            builder.AppendLine("\tpython3 scripts/build_tls.py --output build/tls --cc \"$(CC)\" --ar \"$(AR)\" --cflags \"$(CFLAGS)\" --config include/dnd_tls_config.h");
+        }
         builder.AppendLine(".PHONY: all clean");
-        builder.AppendLine("all: " + (platform == "gamecube" ?
+        builder.AppendLine("all: " + (usesNetworking ? "dnd-tls " : "") + (platform == "gamecube" ?
             "$(EXI_OVERLAY) $(BUILD)" : "$(BUILD)"));
         builder.AppendLine("\t@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile");
         builder.AppendLine("$(BUILD):");

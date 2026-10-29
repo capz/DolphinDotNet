@@ -59,6 +59,7 @@ def main(area):
                   "ConnectionSmoke","InputSmoke"):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="network":
+        run("python3","scripts/ci_https.py")
         for p in ("AsyncSmoke","AutomaticAsyncSmoke","AutomaticTaskSmoke",
                   "NetworkSmoke","TimingSmoke","InputContextSmoke"):
             build("tests/"+p+"/"+p+".csproj")
