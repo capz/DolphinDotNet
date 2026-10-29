@@ -177,6 +177,8 @@ internal static class NativeStorageBindings
         ["NetConnect"]=("dnd_net_connect","iii",false),["NetConnected"]=("dnd_net_connected","i",false),["NetRead"]=("dnd_net_read","iaiia",false),["NetWrite"]=("dnd_net_write","iaiiii",false),
         ["NetEndpoint"]=("dnd_net_endpoint","iai",false),["NetOption"]=("dnd_net_option","iii",false),["NetClose"]=("dnd_net_close","i",false),["NetStop"]=("dnd_net_stop","",false),
         ["PerformanceVisible"]=("dnd_performance_visible","",false),
+        ["ConsoleVisible"]=("dnd_console_visible","",false),
+        ["ConsoleSetVisible"]=("dnd_console_set_visible","i",false),
         ["PerformanceSetVisible"]=("dnd_performance_set_visible","i",false),
         ["ModelTrs"]=("dnd_model_trs","aa",false),["ModelMultiply"]=("dnd_model_multiply_arrays","aaa",false),["ModelPosition"]=("dnd_model_position","aafff",false),["ModelTranslate"]=("dnd_model_translate","afff",false),["ModelRotate"]=("dnd_model_rotate","afff",false),["ModelCamera"]=("dnd_model_camera","aaa",false),
         ["ModelBegin"]=("dnd_model_begin","si",false),["ModelBeginObj"]=("dnd_model_begin_obj","si",false),["ModelBeginGlb"]=("dnd_model_begin_glb","sii",false),["ModelBeginBytes"]=("dnd_model_begin_bytes","ai",false),["ModelStep"]=("dnd_model_step","i",false),["ModelDispose"]=("dnd_model_dispose","i",false),["ModelStat"]=("dnd_model_stat","ii",false),

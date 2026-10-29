@@ -1,5 +1,11 @@
 # Debug overlay
 
+Use `DebugOverlay.TextVisible = false` to hide the top-of-screen text log and
+its backing rectangle during a custom UI. It defaults to `true`; hiding it
+retains the messages. Set it back to `true` to show them again. This switch is
+independent of `PerformanceVisible` and the sample Z-button statistics control.
+The native failure screen restores text visibility automatically.
+
 Enable or hide the performance panel at any time from managed game code:
 
 ```csharp
