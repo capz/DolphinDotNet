@@ -3,6 +3,10 @@ namespace Dolphin.Network;
 internal static class NativeNetwork
 {
     private static Exception Unsupported()=>new PlatformNotSupportedException("Requires DolphinDotNet AOT.");
+    internal static int TlsConfigure(byte[] roots,byte[] entropy,long unixSeconds)=>throw Unsupported();
+    internal static int TlsReset()=>throw Unsupported();
+    internal static int TlsStart(int handle,string hostname)=>throw Unsupported();
+    internal static int TlsHandshake(int handle)=>throw Unsupported();
     internal static int NetStart(int ip,int mask,int gateway,int dhcp)=>throw Unsupported();
     internal static int NetStatus()=>throw Unsupported();
     internal static int NetTime()=>throw Unsupported();

@@ -167,6 +167,8 @@ internal static class NativeStorageBindings
         ["GraphicsEndTriangles"]=("dnd_graphics_end_triangles","",false),
         ["GraphicsEndFrame"]=("dnd_immediate_end","",false),
         ["NetFailure"]=("dnd_net_failure","ii",true),["NetFailureCode"]=("dnd_net_failure_code","o",false),
+        ["TlsConfigure"]=("dnd_net_tls_configure","aal",false),["TlsReset"]=("dnd_net_tls_reset","",false),
+        ["TlsStart"]=("dnd_net_tls_start","is",false),["TlsHandshake"]=("dnd_net_tls_handshake","i",false),
         ["NetStart"]=("dnd_net_start","iiii",false),["NetStatus"]=("dnd_net_status","",false),["NetTime"]=("dnd_net_time","",false),["NetError"]=("dnd_net_error","",false),
         ["NetOpen"]=("dnd_net_open","i",false),["NetBind"]=("dnd_net_bind","iii",false),["NetListen"]=("dnd_net_listen","ii",false),["NetAccept"]=("dnd_net_accept","ia",false),
         ["NetConnect"]=("dnd_net_connect","iii",false),["NetConnected"]=("dnd_net_connected","i",false),["NetRead"]=("dnd_net_read","iaiia",false),["NetWrite"]=("dnd_net_write","iaiiii",false),

@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "dnd_managed.h"
+#include "dnd_tls.h"
 /* Nonblocking bridge results. Errors are negative; bytes and handles >= 0. */
 enum { DND_NET_WAIT=-1, DND_NET_ERROR=-2, DND_NET_STALE=-3,
        DND_NET_LIMIT=-4, DND_NET_TRUNCATED=-5 };

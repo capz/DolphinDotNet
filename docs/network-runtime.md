@@ -68,7 +68,7 @@ HTTP uses an incremental parser over TCP. It supports fixed-length, chunked and 
 
 Headers are capped at 8 KiB/64 fields; chunk metadata at 256 bytes per line; trailers at 8 KiB. Convenience response buffering defaults to 64 KiB and can be configured through the Dolphin HttpClient API. Streamed bodies are capped at 16 MiB. Use ResponseHeadersRead or GetStreamAsync for large data. GetStringAsync validates UTF-8. Connections use `Connection: close`; pooling, cookies, proxy support and decompression are deferred.
 
-`https://` fails with PlatformNotSupportedException. Verified TLS requires a native provider, trust material, credible time and adequate entropy; these are not implemented by this change. There is no insecure certificate bypass. HTTP/2, HTTP/3/QUIC, HttpListener/ASP.NET, reflection serializers and legacy WebRequest/WebClient remain outside this subset.
+`https://` is supported through the SDK native TLS provider after explicit trust, entropy and UTC initialization; see [HTTPS setup and limits](https.md). Missing configuration fails closed. There is no insecure certificate bypass. HTTP/2, HTTP/3/QUIC, HttpListener/ASP.NET, reflection serializers and legacy WebRequest/WebClient remain outside this subset.
 
 `Dolphin.Serialization.Json.JsonReader` is a bounded pull tokenizer for downloaded text: objects, arrays, property names, strings/escapes, numbers, booleans and null. It enforces grammar, depth 32, string length 4,096 and input length 65,536. Number tokens retain their lexical value; GetInt32 performs checked integer conversion. Read one token at a time to budget parsing. It has no reflection dependency or whole-document object graph; application code interprets tokens or builds explicit typed readers.
 
