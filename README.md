@@ -22,9 +22,9 @@ with devkitPPC and libogc2. Games run without a desktop CLR.
   - Out of the box support for adx, with looping regions converted from mp3 with sidecart metadata using supplied tooling
 
 ## Current focus ##
-   - **Supporting live debugging via emulator**
-   - Supporting on-device debugging via BBA (LAN)
-   - Supporting on-device debugging via USB Gecko (serial port)
+   - Supporting live debugging via emulator
+   - **Supporting on-device debugging via BBA (LAN)**
+   - **Supporting on-device debugging via USB Gecko (serial port)**
 
 ## Quick start: build and run Pong
 
