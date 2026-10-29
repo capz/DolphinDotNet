@@ -12,12 +12,14 @@ public sealed partial class Camera
     public void SetPerspective(float fieldOfViewDegrees,float aspectRatio,float nearPlane,float farPlane)
     {
         ValidateProjection(fieldOfViewDegrees,aspectRatio,nearPlane,farPlane);
+        AspectRatioMode=AspectRatioMode.Explicit;
         settings[9]=fieldOfViewDegrees;settings[10]=aspectRatio;settings[11]=nearPlane;settings[12]=farPlane;orthographic=false;Refresh();
     }
     public void SetOrthographic(float width,float height,float nearPlane,float farPlane)
     {
         GraphicsMath.Finite(width);GraphicsMath.Finite(height);if(width<=0||height<=0)throw new ArgumentOutOfRangeException("width");
         ValidateProjection(60,width/height,nearPlane,farPlane);
+        AspectRatioMode=AspectRatioMode.Explicit;
         orthoWidth=width;orthoHeight=height;settings[11]=nearPlane;settings[12]=farPlane;orthographic=true;Refresh();
     }
     private static void ValidateProjection(float fov,float aspect,float near,float far)
@@ -25,7 +27,7 @@ public sealed partial class Camera
     private void SetOrthographicMatrix()
     {for(int i=0;i<16;i++)Projection[i]=0;Projection[0]=2/orthoWidth;Projection[5]=2/orthoHeight;Projection[10]=-1/(settings[12]-settings[11]);Projection[14]=-settings[12]/(settings[12]-settings[11]);Projection[15]=1;}
     private void Combine()
-    {if(!matrixDirty)return;for(int c=0;c<4;c++)for(int r=0;r<4;r++){float v=0;for(int k=0;k<4;k++)v+=Projection[k*4+r]*View[c*4+k];combined[c*4+r]=v;}matrixDirty=false;}
+    {PrepareDisplay(GraphicsDevice.Default);if(!matrixDirty)return;for(int c=0;c<4;c++)for(int r=0;r<4;r++){float v=0;for(int k=0;k<4;k++)v+=Projection[k*4+r]*View[c*4+k];combined[c*4+r]=v;}matrixDirty=false;}
     /// <summary>Pixel coordinates in viewport; depth is 0 at near and 1 at far.</summary>
     public Vector3 Project(Vector3 world,Viewport viewport)
     {

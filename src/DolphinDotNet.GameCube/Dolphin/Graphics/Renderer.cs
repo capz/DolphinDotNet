@@ -16,6 +16,7 @@ public sealed partial class Renderer
         if(active)throw new InvalidOperationException("Renderer already active.");
         if(camera==null)throw new ArgumentNullException("camera");
         if(!device.IsFrameActive)throw new InvalidOperationException("Begin a device frame first.");
+        camera.PrepareDisplay(device);
         GraphicsDevice.Check(NativeModel.ModelFrameBegin(camera.View,camera.Projection),"Another render pass is active.");
         NativeGraphics.RenderScene(null);optionsActive=false;ownsFrame=false;active=true;
     }
@@ -73,6 +74,7 @@ public sealed partial class Renderer
     public void BeginFrame(Camera camera)
     {
         if (camera == null) throw new ArgumentNullException("camera");
+        camera.PrepareDisplay(device);
         BeginFrame(camera.View, camera.Projection);
     }
 

@@ -9,8 +9,10 @@
 #if !defined(DND_GAMECUBE_STORAGE)
 __attribute__((weak)) void dnd_draw_backend_invalidate_cache(void){}
 __attribute__((weak)) void dnd_draw_backend_overlay_shutdown(void){}
+__attribute__((weak)) int dnd_graphics_configure_display(int resolution,int scan){return resolution==0&&scan==0?0:-1;}
+__attribute__((weak)) int dnd_graphics_display_stat(int kind){return kind==0?2:kind==1?1:kind==2||kind==4?dnd_graphics_width():kind==3||kind==5?dnd_graphics_height():kind==6?59940:-1;}
 #endif
-static bool active,external;
+static bool active,external,widescreen;
 /* GX presentation synchronizes the GPU; never signal an in-flight frame. */
 static uint32_t frame_completed;
 static int pass, raw_depth;
@@ -133,4 +135,24 @@ void dnd_immediate_begin(float r,float g,float b,float a) {
 void dnd_immediate_end(void) {
     if(!dnd_draw_backend_immediate_ready() || dnd_device_pass_end(4)<0 || dnd_device_end()<0)
         dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"No complete immediate frame.");
+}
+
+int dnd_device_configure_display(int resolution,int scan,int wide){
+    dnd_async_require_application_thread();
+    if(active||pass||raw_depth||external||resolution<0||resolution>3||scan<0||scan>2||(wide!=0&&wide!=1))return -1;
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_GRAPHICS_TEST)
+    int r=dnd_graphics_configure_display(resolution,scan);if(r<0)return r;
+#else
+    if(resolution||scan)return -1;
+#endif
+    widescreen=wide!=0;return 0;
+}
+int dnd_device_display_stat(int kind){
+    if(kind==7)return widescreen;
+    if(external){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"Display information requires SDK-owned GX.");return -1;}
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_GRAPHICS_TEST)
+    return dnd_graphics_display_stat(kind);
+#else
+    return kind==0?2:kind==1?1:kind==2||kind==4?640:kind==3||kind==5?480:kind==6?59940:-1;
+#endif
 }

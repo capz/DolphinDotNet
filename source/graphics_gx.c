@@ -82,6 +82,7 @@ void dnd_graphics_init(void) {
     GX_SetFieldMode(mode->field_rendering,mode->viHeight==2*mode->xfbHeight?GX_ENABLE:GX_DISABLE);
     projection_ortho=false;identity(view_matrix);identity(projection_matrix);identity(immediate_world);
 }
+#include "dnd_display_gx.inc"
 int dnd_graphics_width(void){return mode?mode->fbWidth:640;}
 int dnd_graphics_height(void){return mode?mode->efbHeight:480;}
 void dnd_draw_backend_invalidate_efb(void){dnd_performance_clear_invalidated();}
@@ -98,13 +99,15 @@ void dnd_draw_backend_flush(void *data,int bytes,int invalidate){
 void dnd_draw_backend_viewport(int x,int y,int w,int h){GX_SetViewport((float)x,(float)y,(float)w,(float)h,0,1);}
 void dnd_draw_backend_scissor(int x,int y,int w,int h){GX_SetScissorBoxOffset(0,0);GX_SetScissor((u32)x,(u32)y,(u32)w,(u32)h);}
 void dnd_draw_backend_camera(const float *view,const float *projection){dnd_draw_backend_invalidate_cache();memcpy(view_matrix,view,64);memcpy(projection_matrix,projection,64);projection_ortho=projection[15]==1&&projection[11]==0;}
-void dnd_draw_backend_2d(int w,int h) {
+void dnd_draw_backend_2d_projection(float w,float h) {
     dnd_draw_backend_invalidate_cache();
     projection_ortho=true;Mtx44 p;guOrtho(p,0,(float)h,0,(float)w,-1,1);identity(view_matrix);
     for(int r=0;r<4;r++)for(int c=0;c<4;c++)projection_matrix[c*4+r]=p[r][c];
     dnd_draw_backend_viewport(0,0,dnd_graphics_width(),dnd_graphics_height());
     dnd_draw_backend_scissor(0,0,dnd_graphics_width(),dnd_graphics_height());
 }
+void dnd_draw_backend_2d(int w,int h){dnd_draw_backend_2d_projection((float)w,(float)h);}
+
 void dnd_draw_backend_restore(void) {
     dnd_draw_backend_invalidate_cache();
     GX_SetPixelFmt(mode&&mode->aa?GX_PF_RGB565_Z16:GX_PF_RGB8_Z24,GX_ZC_LINEAR);

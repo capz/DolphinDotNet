@@ -1,5 +1,9 @@
 #ifndef DND_DRAW_H
 #define DND_DRAW_H
+int dnd_device_configure_display(int resolution,int scan,int widescreen);
+int dnd_device_display_stat(int kind);
+int dnd_canvas_layout(int token,float width,float height);
+void dnd_draw_backend_2d_projection(float width,float height);
 #include "dnd_managed.h"
 #include "dnd_effect.h"
 #include <stdint.h>
