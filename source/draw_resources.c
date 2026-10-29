@@ -494,7 +494,7 @@ int dnd_canvas_blend(int token,int blend) {
 int dnd_canvas_stats(int token,int kind) { Resource *r=find(token,CANVAS);return !r?-1:kind==0?r->draws:kind==1?r->flushes:r->count; }
 int dnd_draw_copy_texture(int token,int x,int y,int w,int h) {
     Resource *r=find(token,TEXTURE);DndDrawTexture tx;
-    if(!r||!dnd_device_active()||dnd_device_pass()||!texture(token,&tx)||r->format!=6||r->levels!=1||!((w==r->width&&h==r->height)||(w==r->width*2&&h==r->height*2))||x<0||y<0||x>dnd_device_width()-w||y>dnd_device_height()-h)return -1;
+    if(!r||!dnd_device_active()||dnd_device_pass()||!texture(token,&tx)||r->format!=6||r->levels!=1||((r->width|r->height)&3)||((x|y)&1)||!((w==r->width&&h==r->height)||(w==r->width*2&&h==r->height*2))||x<0||y<0||x>dnd_device_width()-w||y>dnd_device_height()-h)return -1;
     dnd_draw_backend_copy(&tx,x,y,w,h);return 0;
 }
 

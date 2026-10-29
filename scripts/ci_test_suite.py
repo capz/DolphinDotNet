@@ -21,8 +21,15 @@ def aot(project,output):
     run("cc","-std=c11","-Wall","-Wextra","-Iinclude","-c",output,"-o",str(output)+".o")
 def main(area):
     if area=="native":
-        try: run("make","-C","tests","test", "CFLAGS=-D_DARWIN_C_SOURCE -std=c11 -Wall -Wextra -Werror -I../include")
-        finally: run("make","-C","tests","clean")
+        run("python3","-m","unittest","discover","-s","tests","-p","test_ci_native.py")
+        # The shipped release runtime uses O3/LTO. Execute assertions under
+        # those flags too; clean between modes because make does not track CFLAGS.
+        for optimization in ("", " -O3 -flto -fno-strict-aliasing"):
+            run("make","-C","tests","clean")
+            try:
+                run("make","-C","tests","test",
+                    "CFLAGS=-D_DARWIN_C_SOURCE -std=c11 -Wall -Wextra -Werror -I../include"+optimization)
+            finally: run("make","-C","tests","clean")
     elif area=="compiler":
         # Compiler.Tests is independent of the CLI executable; the AOT
         # integration fixtures below need the compiler itself built first.
