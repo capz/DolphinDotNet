@@ -54,19 +54,20 @@ def validate_capture(raw):
 
 
 def decode_texture_capture(capture, log, streaming=False, benchmark=False, capture_seconds=360):
-    if benchmark:
-        # FFV1 must decode every recorded frame before the fps filter samples it.
-        # Faster guests produce more source frames; CI's six-minute optimized
-        # recording exceeded the old fixed 120-second post-processing limit.
+    if streaming or benchmark:
+        # Both suites decode every FFV1 frame before sampling. Streaming soaks
+        # also exceed the short tail decoder's 30-second limit on shared CI.
         if not math.isfinite(capture_seconds) or capture_seconds <= 0:
             raise ValueError("Capture duration must be finite and positive")
-        timeout = max(120, math.ceil(min(capture_seconds, 360) * 2))
+        maximum_seconds = 360 if benchmark else 120
+        timeout = max(120, math.ceil(min(capture_seconds, maximum_seconds) * 2))
+    if benchmark:
         return run_ffmpeg(["-i", str(capture), "-vf", "fps=2,scale=640:480:flags=neighbor",
                            "-frames:v", "780", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log,
                           timeout=timeout)
     if streaming:
         return run_ffmpeg(["-i", str(capture), "-vf", "fps=3,scale=640:480:flags=neighbor",
-                           "-frames:v", "360", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log)
+                           "-frames:v", "360", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], log, timeout=timeout)
     # Read the actual tail, so a later exception/error screen cannot hide behind
     # a successful initial burst. Bound decoded memory to two seconds.
     return run_ffmpeg(["-sseof", "-2", "-i", str(capture), "-vf", "scale=640:480:flags=neighbor",

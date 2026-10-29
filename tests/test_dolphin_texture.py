@@ -136,17 +136,44 @@ class TextureAcceptanceTests(unittest.TestCase):
                         self.assertNotIn("-sseof", command)
                 decode_texture_capture(Path("default.avi"), log, benchmark=True)
                 self.assertEqual(720, run.call_args.kwargs["timeout"])
-                decode_texture_capture(Path("short.avi"), log, streaming=True)
+                decode_texture_capture(Path("short.avi"), log)
                 self.assertEqual(30, run.call_args.kwargs["timeout"])
 
-    def test_invalid_benchmark_duration_does_not_start_decoder(self):
+    def test_streaming_decode_budget_covers_soak_and_keeps_sampling_limits(self):
+        with TemporaryDirectory() as folder:
+            log = Path(folder) / "decode.log"
+            with patch("dolphin_shader_test.subprocess.run", return_value=Mock(stdout=b"", stderr=b"")) as run:
+                for seconds, expected in ((5, 120), (90, 180), (120, 240), (10000, 240), (1e308, 240)):
+                    with self.subTest(seconds=seconds):
+                        decode_texture_capture(Path("streaming.avi"), log, streaming=True,
+                                               capture_seconds=seconds)
+                        self.assertEqual(expected, run.call_args.kwargs["timeout"])
+                        command = run.call_args.args[0]
+                        self.assertIn("fps=3,scale=640:480:flags=neighbor", command)
+                        self.assertEqual("360", command[command.index("-frames:v") + 1])
+                        self.assertNotIn("-sseof", command)
+
+    def test_invalid_capture_duration_does_not_start_decoder(self):
         with TemporaryDirectory() as folder:
             with patch("dolphin_texture_test.run_ffmpeg") as run:
-                for seconds in (0, -1, float("inf"), float("nan")):
-                    with self.subTest(seconds=seconds), self.assertRaises(ValueError):
-                        decode_texture_capture(Path("invalid.avi"), Path(folder)/"decode.log",
-                                               benchmark=True, capture_seconds=seconds)
+                for benchmark in (False, True):
+                    for seconds in (0, -1, float("inf"), float("nan")):
+                        with self.subTest(benchmark=benchmark, seconds=seconds), self.assertRaises(ValueError):
+                            decode_texture_capture(Path("invalid.avi"), Path(folder)/"decode.log",
+                                                   streaming=True, benchmark=benchmark, capture_seconds=seconds)
                 run.assert_not_called()
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg not installed")
+    def test_streaming_ffv1_decode_preserves_start_and_late_failure(self):
+        with TemporaryDirectory() as folder:
+            root = Path(folder); video = root / "streaming.avi"
+            run_ffmpeg(["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "640x480",
+                        "-r", "60", "-i", "pipe:0", "-c:v", "ffv1", "-y", str(video)],
+                       root / "encode.log", input=board() * 90 + bytes(FRAME_BYTES) * 30)
+            raw = decode_texture_capture(video, root / "decode.log", streaming=True, capture_seconds=2)
+            self.assertEqual(6 * FRAME_BYTES, len(raw))
+            self.assertEqual(32, validate_board(raw[:FRAME_BYTES]))
+            with self.assertRaises(AssertionError):validate_board(raw[-FRAME_BYTES:])
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg not installed")
     def test_ffv1_capture_tail_rejects_late_error_screen(self):
