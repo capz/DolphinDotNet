@@ -85,13 +85,13 @@ Do not simultaneously attach Rider/Visual Studio to the same GDB connection.
 ```sh
 # USB Gecko virtual serial port; install pyserial first:
 python3 scripts/jsystem_hardware_regression.py \
-  --elf out/jsystem-hardware-fixture/JSystemHardwareFixture.elf \
+  --elf out/jsystem-hardware-fixture/Game.elf \
   --serial COM5 --baud 115200 --timeout 300 \
   --output out/jsystem-acceptance/
 
 # TCP/BBA / emulated GDB:
 python3 scripts/jsystem_hardware_regression.py \
-  --elf out/jsystem-hardware-fixture/JSystemHardwareFixture.elf \
+  --elf out/jsystem-hardware-fixture/Game.elf \
   --tcp 127.0.0.1:2166 --timeout 300 \
   --output out/jsystem-acceptance/
 ```
