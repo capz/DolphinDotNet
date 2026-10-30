@@ -83,6 +83,8 @@ def main(area):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="assets":
         test("tests/GameCubeFormatsTests")
+        test("tests/JSystemFixtureHostTests")
+        run("python3","-m","unittest","discover","-s","tests","-p","test_jsystem_hardware_regression.py")
         run("python3", "tests/gcft_cli_smoke.py")
         test("tests/SaveImageTests")
         test("tests/EffectCompilerTests")
@@ -97,7 +99,7 @@ def main(area):
         build("tools/DolphinDotNet.Compiler")
         with tempfile.TemporaryDirectory() as tmp:
             for p in ("HelloGameCube","GraphicsSmoke","AramSmoke","NetworkSmoke",
-                      "ControllerDolphinSmoke","DolLauncherSmoke",
+                      "ControllerDolphinSmoke","JSystemHardwareFixture","DolLauncherSmoke",
                       "DebuggerStackSmoke","DebuggerInspectionSmoke"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))
     else: raise ValueError("Unknown framework area: "+area)
