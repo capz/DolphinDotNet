@@ -209,6 +209,10 @@ public sealed class BmgCatalog
                 else output.Append((char)cp);
             }
         }
+        else if (encoding == 3)
+        {
+            output.Append(ShiftJisCodec.Decode(data, offset, count));
+        }
         else if (encoding == 4)
         {
             try { output.Append(new UTF8Encoding(false, true).GetString(data, offset, count)); }
@@ -219,9 +223,7 @@ public sealed class BmgCatalog
         }
         else
         {
-            // Single-byte and Shift-JIS profiles preserve bytes beyond ASCII.
-            // Game-dependent multi-byte Shift-JIS pages must not be silently
-            // mis-decoded on console runtimes without codepage tables.
+            // Single-byte legacy profiles preserve unassigned byte escapes.
             for (int i = offset; i < offset + count; i++)
             {
                 int c = data[i];
