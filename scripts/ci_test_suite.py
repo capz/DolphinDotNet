@@ -23,6 +23,7 @@ def main(area):
     if area=="native":
         run("python3","-m","unittest","discover","-s","tests","-p","test_ci_native.py")
         run("python3","-m","unittest","discover","-s","tests","-p","test_debug_hardware_automation.py")
+        run("python3","-m","unittest","discover","-s","tests","-p","test_hardware_asset_compatibility.py")
         # The shipped release runtime uses O3/LTO. Execute assertions under
         # those flags too; clean between modes because make does not track CFLAGS.
         for optimization in ("", " -O3 -flto -fno-strict-aliasing"):
@@ -83,6 +84,7 @@ def main(area):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="assets":
         test("tests/GameCubeFormatsTests")
+        test("tests/HardwareAssetCompatibilityPolicyTests")
         run("python3", "tests/gcft_cli_smoke.py")
         test("tests/SaveImageTests")
         test("tests/EffectCompilerTests")
@@ -98,7 +100,7 @@ def main(area):
         with tempfile.TemporaryDirectory() as tmp:
             for p in ("HelloGameCube","GraphicsSmoke","AramSmoke","NetworkSmoke",
                       "ControllerDolphinSmoke","DolLauncherSmoke",
-                      "DebuggerStackSmoke","DebuggerInspectionSmoke"):
+                      "DebuggerStackSmoke","DebuggerInspectionSmoke","HardwareAssetCompatibility"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))
     else: raise ValueError("Unknown framework area: "+area)
 if __name__=="__main__":

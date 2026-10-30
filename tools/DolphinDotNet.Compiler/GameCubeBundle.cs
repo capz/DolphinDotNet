@@ -222,7 +222,7 @@ internal static class GameCubeBundle
         }
 
         var sources = new[] {
-            "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "debug_heartbeat", "debug_automation", "disc_gamecube", "fst",
+            "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "debug_heartbeat", "debug_automation", "asset_compat", "disc_gamecube", "fst",
             "fst_gamecube", "iso_file", "dol", "dol_gamecube", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "numeric", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
             "model_graphics", "model_transform", "tls", "network", "network_gamecube",
@@ -328,7 +328,7 @@ internal static class GameCubeBundle
             (sampleControls ? " -DDND_SAMPLE_CONTROLS" : "") + (usesNetworking ? " -DDND_TLS" : ""));
         // Keep the reporting slot even when the app has not enabled/drawn the overlay yet.
         builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") +
-            (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry -Wl,--undefined=dnd_debugger_heartbeat -Wl,--undefined=dnd_automation_mailbox -Wl,--undefined=dnd_automation_frame_boundary" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
+            (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry -Wl,--undefined=dnd_debugger_heartbeat -Wl,--undefined=dnd_automation_mailbox -Wl,--undefined=dnd_automation_frame_boundary -Wl,--undefined=dnd_asset_compat_record" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
         // Keep symbol/debug targets readable and other platforms unchanged until
         // independently validated. DND_LTO=0 retains the release A/B control.
         builder.AppendLine("DND_LTO ?= " + (!debugSymbols && platform == "gamecube" ? "1" : "0"));
