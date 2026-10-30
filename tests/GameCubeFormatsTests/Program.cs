@@ -122,7 +122,7 @@ static class Program
         W32(effect, 0xC, 0xD8);
         W16(effect, 0x10, 0xCAFE); W16(effect, 0x12, 3); effect[0x16] = 1;
         Str(effect, 0x18, "BEM1"); W32(effect, 0x1C, 0x80);
-        W32(effect, 0x20, 4 << 18); // point volume
+        W32(effect, 0x20, 4 << 21); // point volume
         W32(effect, 0x18 + 0x4C, 0x3F800000); // one particle/frame
         W32(effect, 0x18 + 0x34, 0x3C23D70A); // velocity
         W32(effect, 0x18 + 0x60, 0x3F800000); // momentum retention
