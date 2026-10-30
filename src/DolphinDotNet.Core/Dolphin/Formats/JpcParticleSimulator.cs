@@ -17,6 +17,21 @@ public sealed class JpcParticleSimulator
     }
 
     private readonly ParticleState[] particles;
+    private readonly JpcParticleField[] fields = new JpcParticleField[8];
+    private int fieldCount;
+    public JpcExtraShapeProfile? ExtraShape { get; set; }
+
+    /// <summary>Add an immutable runtime force field. FLD1 chunk decoding remains
+    /// opt-in and unsupported until its retail layout is qualified.</summary>
+    public void AddField(JpcParticleField field)
+    {
+        if (field==null) throw new ArgumentNullException(nameof(field));
+        if (fieldCount==fields.Length) throw new InvalidOperationException("JPA field budget exhausted.");
+        fields[fieldCount++]=field;
+    }
+
+    public void ClearFields() { fieldCount=0; }
+
     private readonly JpcEmitterDefinition definition;
     private uint random;
     private float frameAccumulator, spawnRemainder;
@@ -132,6 +147,11 @@ public sealed class JpcParticleSimulator
             {
                 particles[i] = particles[--active];
                 continue;
+            }
+            for(int f=0;f<fieldCount;f++)
+            {
+                fields[f].Sample(p.X,p.Y,p.Z,out float fx,out float fy,out float fz);
+                p.Vx+=fx;p.Vy+=fy;p.Vz+=fz;
             }
             p.X += p.Vx; p.Y += p.Vy; p.Z += p.Vz;
             p.Vx *= definition.Drag;
