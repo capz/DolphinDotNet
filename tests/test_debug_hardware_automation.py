@@ -87,6 +87,19 @@ class HardwareAutomationTests(unittest.TestCase):
         with self.assertRaises(ValueError):rsp.write(0x80000000,b"")
         with self.assertRaises(ValueError):rsp.memory(0x80000000,1048577)
 
+    def test_rsp_drains_async_console_packets(self):
+        class ConsoleStream(PacketStream):
+            def write(self,data):
+                self.writes.append(data)
+                if data.startswith(b"$"):
+                    for reply in (b"O6869", b"S05"):
+                        self.incoming.extend(b"$"+reply+b"#"+("%02x"%(sum(reply)&255)).encode())
+                    self.incoming[:0]=b"+"
+                return len(data)
+        stream=ConsoleStream()
+        self.assertEqual(hw.Rsp(stream).stop("c"),"S05")
+        self.assertEqual(stream.writes.count(b"+"),2)
+
     def test_yuyv_to_rgb_and_png(self):
         pixels=hw.yuyv_to_rgb(bytes([16,128,235,128,16,128,235,128]),2,2,4)
         self.assertEqual(pixels,bytes([0,0,0,255,255,255]*2))
@@ -119,7 +132,7 @@ class HardwareAutomationTests(unittest.TestCase):
             self.assertEqual(fake.bps.count((fake.hook,False)),3)
             self.assertEqual(fake.bps.count((fake.hook,True)),4)
             self.assertTrue((Path(td)/"test-frame.png").is_file())
-        self.assertEqual(fake.stops,["c","s","c","s","c","s","c"])
+        self.assertEqual(fake.stops,["?","c","s","c","s","c","s","c"])
 
     def test_rejects_invalid_step(self):
         fake=FakeTarget()
