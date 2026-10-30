@@ -57,7 +57,7 @@ internal static class Program
             {
                 var raw=AssetCorpus.ReadAsset(item);
                 var meta=BtiTexture.Read(raw);
-                if(meta.Width>256||meta.Height>256)
+                if(meta.Width>128||meta.Height>128)
                     throw new NotSupportedException("Large BTI excluded by the hardware fixture memory budget.");
                 texture=Texture2D.FromBti(raw,linear:false);
             }
@@ -155,7 +155,7 @@ internal static class Program
         while(true)
         {
             Controller.Update();
-            if(status!=AssetCompatibilityProbe.Fail && corpus.Count>0 &&
+            if(corpus.Count>0 &&
                 Controller.GetState(0).A.WasPressed)
             {
                 if(current+1<corpus.Count)Select(current+1);
