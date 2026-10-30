@@ -110,6 +110,27 @@ internal static class Program
         catch(IOException){ /* tolerate individual damaged/unreadable directories */ }
         catch(UnauthorizedAccessException){ }
     }
+    private static void GatherImages(string root,string[] candidates,ref int count,
+        ref int visited,int depth)
+    {
+        if(depth>3||visited>=512||count>=candidates.Length)return;
+        try
+        {
+            foreach(string path in Directory.EnumerateFiles(root))
+            {
+                if(++visited>512||count>=candidates.Length)break;
+                if(ImageName(path))candidates[count++]=path;
+            }
+            foreach(string sub in Directory.EnumerateDirectories(root))
+            {
+                if(visited>=512||count>=candidates.Length)break;
+                visited++;
+                GatherImages(sub,candidates,ref count,ref visited,depth+1);
+            }
+        }
+        catch(IOException){ }
+        catch(UnauthorizedAccessException){ }
+    }
     private static void Discover()
     {
         bool mounted=false;
@@ -127,11 +148,8 @@ internal static class Program
             if(!mounted||!Directory.Exists(root)){problem="No accessible /games volume";return;}
             // Bounded list of ISO/GCM paths; never enumerate into a huge array.
             string[] discovered=new string[256];int available=0;
-            foreach(string path in Directory.EnumerateFiles(root))
-            {
-                if(ImageName(path)&&available<discovered.Length)discovered[available++]=path;
-                if(available==discovered.Length)break;
-            }
+            int visited=0;
+            GatherImages(root,discovered,ref available,ref visited,0);
             Sort(discovered,available);
             imageCount=Math.Min(MaxGames,available);
             for(int i=0;i<imageCount;i++)images[i]=discovered[i];
