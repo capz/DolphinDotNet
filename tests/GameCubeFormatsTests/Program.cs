@@ -103,6 +103,28 @@ static class Program
         bad = (byte[])genericBmg.Clone(); W16(bad, 0x4A, 0xD800);
         Reject(() => BmgCatalog.Read(bad), "Generic BMG invalid UTF-16 surrogate");
 
+        var bmgFlow = new byte[0xE0];
+        Buffer.BlockCopy(genericBmg, 0, bmgFlow, 0, genericBmg.Length);
+        W32(bmgFlow, 8, bmgFlow.Length); W32(bmgFlow, 0xC, 5);
+        Str(bmgFlow, 0xA0, "FLW1"); W32(bmgFlow, 0xA4, 0x20);
+        W16(bmgFlow, 0xA8, 1); W16(bmgFlow, 0xAA, 1);
+        bmgFlow[0xB0] = 1; W16(bmgFlow, 0xB2, 0);
+        W16(bmgFlow, 0xB4, 0xFFFF); W16(bmgFlow, 0xB8, 0xFFFF);
+        Str(bmgFlow, 0xC0, "FLI1"); W32(bmgFlow, 0xC4, 0x20);
+        W16(bmgFlow, 0xC8, 1); W16(bmgFlow, 0xD0, 0x55);
+        W16(bmgFlow, 0xD4, 0);
+        var flows = BmgFlowTables.Read(bmgFlow);
+        Check(flows.Nodes.Count == 1 && flows.Nodes[0].Kind == 1 &&
+              flows.Nodes[0].ValueB == 0xFFFF, "BMG FLW1 continuation and termination");
+        Check(flows.Indirections.Count == 1 && flows.Indirections[0] == 0xFFFF &&
+              flows.FlowIds[0x55] == 0, "BMG flow ID and indirection resolution");
+        bad = (byte[])bmgFlow.Clone(); W16(bad, 0xB4, 2);
+        Reject(() => BmgFlowTables.Read(bad), "BMG out-of-range flow node");
+        bad = (byte[])bmgFlow.Clone(); W16(bad, 0xB8, 3);
+        Reject(() => BmgFlowTables.Read(bad), "BMG out-of-range flow indirection");
+        bad = (byte[])bmgFlow.Clone(); W16(bad, 0xD4, 8);
+        Reject(() => BmgFlowTables.Read(bad), "BMG out-of-range named flow");
+
         var jpc = new byte[0x28];
         Str(jpc, 0, "JPAC2-10"); W16(jpc, 8, 1); W32(jpc, 0xC, 0x28);
         W16(jpc, 0x10, 0x1234); W16(jpc, 0x12, 2);
