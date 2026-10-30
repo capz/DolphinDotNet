@@ -3,7 +3,7 @@ using System;
 internal static class AssetFixturePolicy
 {
     public const int MaxAssets=32, MaxImages=12, MaxScannedEntries=2048,
-        MaxArchiveReads=16, MaxSourceBytes=4*1024*1024, MaxNestedDepth=6;
+        MaxArchiveReads=16, MaxSourceBytes=96*1024, MaxModelBytes=8*1024*1024, MaxNestedDepth=6;
     public const int Texture=1, Particle=2, Model=3;
     public static bool DiscImage(string path)
         => path.EndsWith(".iso",StringComparison.OrdinalIgnoreCase)
