@@ -17,7 +17,7 @@ images are not supported. The source mount must support opening an ISO image
 as `dvd:/`; a selected ODE disc and raw GC Loader SD access may be mutually
 exclusive on some firmware versions.
 
-The DOL enumerates at most 256 image filenames, opens at most four sorted
+The DOL visits at most 512 entries across up to four levels of /games folders,\nenumerates at most 256 image filenames, opens at most four sorted
 ISO/GCM images, visits at most 48 directories and 192 files per disc and samples
 at most eight fixture candidates per game (24 across all games). It checks
 standalone BTI, J3D BMD/BDL, BTP/BTK/BRK/BVA, JPAC, BMG and BFN assets,
