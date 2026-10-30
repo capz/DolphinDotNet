@@ -1,0 +1,151 @@
+using System;
+using System.IO;
+using static Dolphin.Formats.GameCubeBinary;
+
+namespace Dolphin.Formats;
+
+/// <summary>Standalone Nintendo BTI image decoder, including indexed and CMPR GX tiles.</summary>
+public sealed class BtiTexture
+{
+    public int Width { get; }
+    public int Height { get; }
+    public int ImageFormat { get; }
+    public int PaletteFormat { get; }
+    public int MipCount { get; }
+    public byte WrapS { get; }
+    public byte WrapT { get; }
+    public byte MinFilter { get; }
+    public byte MagFilter { get; }
+    public byte[] Rgba { get; }
+
+    private BtiTexture(int width, int height, int format, int palette, int mips, byte wrapS, byte wrapT,
+        byte minFilter, byte magFilter, byte[] rgba)
+    {
+        Width = width; Height = height; ImageFormat = format; PaletteFormat = palette; MipCount = mips;
+        WrapS = wrapS; WrapT = wrapT; MinFilter = minFilter; MagFilter = magFilter; Rgba = rgba;
+    }
+
+    public static BtiTexture Read(byte[] data)
+    {
+        Check(data, 0, 0x20);
+        if (data.Length > MaxAssetBytes) throw new InvalidDataException("BTI exceeds asset limit.");
+        int fmt = data[0], width = U16(data, 2), height = U16(data, 4);
+        int palFmt = data[9], palCount = U16(data, 0xA);
+        int mips = data[0x18] == 0 ? 1 : data[0x18];
+        if (width < 1 || height < 1 || width > 1024 || height > 1024 ||
+            (width & (width - 1)) != 0 || (height & (height - 1)) != 0)
+            throw new InvalidDataException("BTI dimensions must be bounded powers of two.");
+        int tileW, tileH, tileBytes;
+        switch (fmt)
+        {
+            case 0: case 8: tileW = 8; tileH = 8; tileBytes = 32; break;
+            case 1: case 2: case 9: tileW = 8; tileH = 4; tileBytes = 32; break;
+            case 3: case 4: case 5: case 10: tileW = 4; tileH = 4; tileBytes = 32; break;
+            case 6: tileW = 4; tileH = 4; tileBytes = 64; break;
+            case 14: tileW = 8; tileH = 8; tileBytes = 32; break;
+            default: throw new NotSupportedException("Unsupported Nintendo GX texel format " + fmt);
+        }
+        long blocksWide = (width + tileW - 1) / tileW;
+        long blocksHigh = (height + tileH - 1) / tileH;
+        long imageBytes = blocksWide * blocksHigh * tileBytes;
+        long imageStart = U32(data, 0x1C);
+        Check(data, imageStart, imageBytes);
+        bool indexed = fmt == 8 || fmt == 9 || fmt == 10;
+        long paletteStart = U32(data, 0xC);
+        if (indexed)
+        {
+            if (palFmt > 2 || palCount == 0 || palCount > 16384)
+                throw new InvalidDataException("Invalid BTI palette.");
+            Check(data, paletteStart, palCount * 2L);
+        }
+        var rgba = new byte[checked(width * height * 4)];
+        for (int by = 0; by < blocksHigh; by++)
+        for (int bx = 0; bx < blocksWide; bx++)
+        {
+            int block = (int)(imageStart + (by * blocksWide + bx) * tileBytes);
+            for (int y = 0; y < tileH; y++)
+            for (int x = 0; x < tileW; x++)
+            {
+                int px = bx * tileW + x, py = by * tileH + y;
+                if (px >= width || py >= height) continue;
+                int t = y * tileW + x;
+                int dst = (py * width + px) * 4;
+                int r = 0, g = 0, b = 0, a = 255, color = 0;
+                switch (fmt)
+                {
+                    case 0:
+                        r = g = b = Expand4((t & 1) == 0 ? data[block + t / 2] >> 4 : data[block + t / 2] & 15);
+                        break;
+                    case 1: r = g = b = data[block + t]; break;
+                    case 2:
+                        color = data[block + t]; a = Expand4(color >> 4); r = g = b = Expand4(color & 15); break;
+                    case 3:
+                        a = data[block + t * 2]; r = g = b = data[block + t * 2 + 1]; break;
+                    case 4:
+                        Decode565(U16(data, block + t * 2), out r, out g, out b); break;
+                    case 5:
+                        Decode5A3(U16(data, block + t * 2), out r, out g, out b, out a); break;
+                    case 6:
+                        a = data[block + t * 2]; r = data[block + t * 2 + 1];
+                        g = data[block + 32 + t * 2]; b = data[block + 32 + t * 2 + 1]; break;
+                    case 8:
+                        color = (t & 1) == 0 ? data[block + t / 2] >> 4 : data[block + t / 2] & 15;
+                        goto case 10;
+                    case 9:
+                        color = data[block + t]; goto case 10;
+                    case 10:
+                        if (fmt == 10) color = U16(data, block + t * 2) & 0x3FFF;
+                        if (color >= palCount) throw new InvalidDataException("BTI palette index outside table.");
+                        int raw = U16(data, paletteStart + color * 2L);
+                        if (palFmt == 0) { a = raw >> 8; r = g = b = raw & 255; }
+                        else if (palFmt == 1) Decode565(raw, out r, out g, out b);
+                        else Decode5A3(raw, out r, out g, out b, out a);
+                        break;
+                    case 14:
+                        int quad = (y / 4 * 2 + x / 4) * 8;
+                        int sub = block + quad;
+                        int c0 = U16(data, sub), c1 = U16(data, sub + 2);
+                        int code = (data[sub + 4 + y % 4] >> (6 - (x % 4) * 2)) & 3;
+                        int r0, g0, b0, r1, g1, b1;
+                        Decode565(c0, out r0, out g0, out b0);
+                        Decode565(c1, out r1, out g1, out b1);
+                        if (code == 0) { r = r0; g = g0; b = b0; }
+                        else if (code == 1) { r = r1; g = g1; b = b1; }
+                        else if (code == 2)
+                        {
+                            int w = c0 > c1 ? 2 : 1, d = c0 > c1 ? 3 : 2;
+                            r = (r0 * w + r1) / d; g = (g0 * w + g1) / d; b = (b0 * w + b1) / d;
+                        }
+                        else if (c0 > c1) { r = (r0 + 2 * r1) / 3; g = (g0 + 2 * g1) / 3; b = (b0 + 2 * b1) / 3; }
+                        else { a = 0; }
+                        break;
+                }
+                rgba[dst] = (byte)r; rgba[dst + 1] = (byte)g;
+                rgba[dst + 2] = (byte)b; rgba[dst + 3] = (byte)a;
+            }
+        }
+        return new BtiTexture(width, height, fmt, palFmt, mips, data[6], data[7],
+            data[0x14], data[0x15], rgba);
+    }
+
+    private static int Expand4(int v) => (v << 4) | v;
+    private static int Expand5(int v) => (v << 3) | (v >> 2);
+    private static int Expand6(int v) => (v << 2) | (v >> 4);
+    private static void Decode565(int raw, out int r, out int g, out int b)
+    {
+        r = Expand5((raw >> 11) & 31); g = Expand6((raw >> 5) & 63); b = Expand5(raw & 31);
+    }
+    private static void Decode5A3(int raw, out int r, out int g, out int b, out int a)
+    {
+        if ((raw & 0x8000) != 0)
+        {
+            a = 255; r = Expand5((raw >> 10) & 31);
+            g = Expand5((raw >> 5) & 31); b = Expand5(raw & 31);
+        }
+        else
+        {
+            a = (raw >> 12 & 7) * 255 / 7;
+            r = Expand4((raw >> 8) & 15); g = Expand4((raw >> 4) & 15); b = Expand4(raw & 15);
+        }
+    }
+}

@@ -81,6 +81,8 @@ def main(area):
         for p in ("GraphicsSmoke","ModelSmoke","ModelAsyncSmoke","TevMaterialTests"):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="assets":
+        test("tests/GameCubeFormatsTests")
+        run("python3", "tests/gcft_cli_smoke.py")
         test("tests/SaveImageTests")
         test("tests/EffectCompilerTests")
         build("tools/DolphinDotNet.Imaging/DolphinDotNet.Imaging.csproj")
