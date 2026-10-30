@@ -160,10 +160,11 @@ static class Program
         var gxPackage = BtiTexture.CreateNativePackage(mipBti)!;
         Check(gxPackage.Length == 32 + 64, "GX BTI two-level native mip payload");
         Check(gxPackage[0] == (byte)'D' && gxPackage[24] == 2, "GX DNTX v2 mip descriptor");
-        var indexedBti = (byte[])bti.Clone();
+        var indexedBti = new byte[0x80];
+        Buffer.BlockCopy(bti, 0, indexedBti, 0, bti.Length);
         indexedBti[0] = 8; indexedBti[9] = 1; W16(indexedBti, 0xA, 1);
         W32(indexedBti, 0xC, 0x20);
-        W32(indexedBti, 0x1C, 0x22);
+        W32(indexedBti, 0x1C, 0x40);
         Check(BtiTexture.CreateNativePackage(indexedBti) == null, "Indexed BTI requires palette expansion");
         var j3dChannels = new Dolphin.Graphics.J3dMaterialChannels(2);
         var state = new float[12];
