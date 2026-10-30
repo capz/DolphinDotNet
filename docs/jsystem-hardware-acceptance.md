@@ -40,9 +40,9 @@ firmware/image set for comparable golden tests.
 - **J3D2 BMD/BDL**: parse MAT3 names and attempt native model import and a
   stationary-camera draw. Advanced TEV and original game transforms are not
   validated automatically.
-- **JPAC**: parse effects and embedded BTI textures, attempt the first supported
-  billboard emitter and freeze its 20-tick deterministic simulation state.
-  Other profiles remain parser-only.
+- **JPAC**: identify validated version/count metadata only on the console.
+  Full JPAC effect/chunk decoding is host-tested separately; the current AOT
+  compiler cannot lower the full JPAC reader. No particle scene is claimed.
 - **BMG, BFN, J3D1 material tracks**: decode and report metadata counts;
   they display a plain background rather than pretending to render typography
   or material/shape animation.
