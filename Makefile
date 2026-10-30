@@ -23,7 +23,7 @@ LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map
 ifeq ($(DND_DEBUG_AUTOMATION),1)
 CFLAGS += -DDND_DEBUG_AUTOMATION
 CXXFLAGS += -DDND_DEBUG_AUTOMATION
-LDFLAGS += -Wl,--undefined=dnd_automation_mailbox -Wl,--undefined=dnd_automation_frame_boundary
+LDFLAGS += -Wl,--undefined=dnd_automation_mailbox -Wl,--undefined=dnd_automation_frame_boundary -Wl,--undefined=dnd_asset_corpus_report
 endif
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 export DOL_SECTIONS := $(CURDIR)/scripts/dol_sections.py
