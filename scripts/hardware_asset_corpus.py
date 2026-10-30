@@ -23,7 +23,7 @@ SIZE=224
 KIND={1:"bti",2:"j3d",3:"jpa",4:"bmg",5:"bfn",6:"rarc"}
 STATUS={1:"ok",2:"unsupported",3:"malformed",4:"runtime-error"}
 VISUAL={1,2,3}
-MAX_RECORDS=40
+MAX_RECORDS=56
 
 def corpus_symbol(elf):
     nm=shutil.which("powerpc-eabi-nm") or shutil.which("nm")
