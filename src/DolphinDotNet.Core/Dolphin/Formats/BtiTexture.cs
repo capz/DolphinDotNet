@@ -88,12 +88,14 @@ public sealed class BtiTexture
                         a = data[block + t * 2]; r = data[block + t * 2 + 1];
                         g = data[block + 32 + t * 2]; b = data[block + 32 + t * 2 + 1]; break;
                     case 8:
-                        color = (t & 1) == 0 ? data[block + t / 2] >> 4 : data[block + t / 2] & 15;
-                        goto case 10;
                     case 9:
-                        color = data[block + t]; goto case 10;
                     case 10:
-                        if (fmt == 10) color = U16(data, block + t * 2) & 0x3FFF;
+                        if (fmt == 8)
+                            color = (t & 1) == 0 ? data[block + t / 2] >> 4 : data[block + t / 2] & 15;
+                        else if (fmt == 9)
+                            color = data[block + t];
+                        else
+                            color = U16(data, block + t * 2) & 0x3FFF;
                         if (color >= palCount) throw new InvalidDataException("BTI palette index outside table.");
                         int raw = U16(data, paletteStart + color * 2L);
                         if (palFmt == 0) { a = raw >> 8; r = g = b = raw & 255; }
@@ -175,7 +177,7 @@ public sealed class BtiTexture
         WriteLittle32(output, 4, 2); WriteLittle32(output, 8, fmt);
         WriteLittle32(output, 12, image.Width); WriteLittle32(output, 16, image.Height);
         WriteLittle32(output, 20, payload); WriteLittle32(output, 24, mips);
-        Buffer.BlockCopy(data, (int)start, output, 32, payload);
+        for (int i = 0, offset = (int)start; i < payload; i++) output[32 + i] = data[offset + i];
         return output;
     }
 
