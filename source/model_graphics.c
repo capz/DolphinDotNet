@@ -14,6 +14,7 @@ static bool owns_frame;
 /* Temporary, frame-local animated J3D draw state. Never retained beyond one draw. */
 static const float *animated_material_channels;
 static unsigned animated_material_count;
+static const float *animated_mesh_visibility;
 #define DND_ANIM_CHANNELS 12
 
 static bool matrix_array(DndArray *a, float out[16]) {
@@ -184,6 +185,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
   if(only<0)dnd_model_sort_draws(in, world, frame_view);
   for (unsigned draw = 0; draw < (only>=0?1:model->meshes); draw++) {
     unsigned mi = only>=0?(unsigned)only:in->draw_order ? in->draw_order[draw] : draw;
+    if (animated_mesh_visibility && animated_mesh_visibility[mi] < 0.5f)continue;
     bool translucent=(model->material[model->mesh[mi].material].mode&4)!=0;
     if((filter==1&&translucent)||(filter==2&&!translucent))continue;
     DndMesh *mesh = &model->mesh[mi];
@@ -343,6 +345,21 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
  * Validate all records BEFORE issuing any GX commands; leave model data and
  * animation state untouched and always reset temporary state on return.
  */
+/* Per-mesh BVA visibility is independent of material identity. The caller
+ * explicitly maps source SHP1 shape indices onto imported mesh indices. */
+int dnd_model_draw_animated_shapes(int token,DndArray *transform,DndArray *channels,DndArray *mesh_visibility) {
+  DndInstance *in=dnd_instance_find(token);
+  if(!in || !in->model->ready || !mesh_visibility || animated_mesh_visibility ||
+     mesh_visibility->element_size!=4 || mesh_visibility->elements_are_references ||
+     mesh_visibility->length!=in->model->meshes)return -1;
+  const float *mask=(const float*)mesh_visibility->data;
+  for(unsigned i=0;i<in->model->meshes;i++)
+    if(!isfinite(mask[i]) || (mask[i]!=0 && mask[i]!=1))return -1;
+  animated_mesh_visibility=mask;
+  int result=dnd_model_draw_animated(token,transform,channels);
+  animated_mesh_visibility=NULL;
+  return result;
+}
 int dnd_model_draw_animated(int token,DndArray *transform,DndArray *channels) {
   DndInstance *in=dnd_instance_find(token);
   float world[16];
