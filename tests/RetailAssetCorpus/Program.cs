@@ -195,9 +195,64 @@ internal static class Program
         }
     }
 
+    // Nintendo commonly packs model/texture members inside RARC. Exercise two
+    // bounded resident assets from a sampled archive rather than considering
+    // archive indexing alone proof that every member can render.
+    private static void RenderArchiveMembers(RarcArchive archive,string outer,string discKey)
+    {
+        int checkedMembers=0,tested=0;
+        foreach(var entry in archive.Entries)
+        {
+            if(++checkedMembers>MaxArchiveMembers||tested>=2)break;
+            int kind=Classify(entry.Path);
+            if((kind!=1&&kind!=2)||entry.Length<=0||entry.Length>MaxSourceBytes)continue;
+            totalCandidates++;
+            tested++;
+            int result=Ok;
+            string innerPath=outer+"#"+entry.Path;
+            string key=discKey+"#"+innerPath;
+            bool rendered=false;
+            try
+            {
+                if(kind==1)
+                {
+                    var data=archive.ReadFile(entry,true);
+                    if(data.Length>MaxSourceBytes||GameCubeFormatDetector.Detect(data,entry.Path)!=GameCubeFileFormat.Bti)
+                        throw new NotSupportedException("Unsupported embedded BTI.");
+                    using(var tex=Texture2D.FromBti(data))
+                    {
+                        NativeAssetCorpus.Publish(kind,Ok,entry.Length,device.NativeBytes,key);
+                        DrawTexture(tex);
+                        rendered=true;
+                    }
+                }
+                else
+                {
+                    // The native source loader resolves path#member transparently.
+                    using(var model=Model.LoadJ3dAsync(innerPath,allowMaterialApproximation:false).GetAwaiter().GetResult())
+                    {
+                        NativeAssetCorpus.Publish(kind,Ok,entry.Length,device.NativeBytes,key);
+                        DrawModel(model);
+                        rendered=true;
+                    }
+                }
+            }
+            catch(NotSupportedException){result=Unsupported;}
+            catch(InvalidDataException){result=Malformed;}
+            catch(Exception){result=RenderError;}
+            if(!rendered)
+            {
+                NativeAssetCorpus.Publish(kind,result,entry.Length,device.NativeBytes,key);
+                DrawEmpty();
+            }
+            totalComplete++;
+        }
+    }
+
     private static void RenderCandidate(Candidate item,string discKey)
     {
         int result=Ok,bytes=0;
+        RarcArchive? nested=null;
         bool rendered=false;
         // Parse before opening a GPU frame so malformed input does not leave
         // the shared device in a partially submitted state.
@@ -247,14 +302,9 @@ internal static class Program
             }
             else if(kind==6)
             {
-                var archive=RarcArchive.Read(ReadBounded(item.Path,MaxArchiveBytes));
-                if(archive.Entries.Count==0)throw new NotSupportedException("Empty RARC.");
-                // The root RARC is indexed, not rendered. Embedded support is
-                // tested below in a future expanded profile; do not claim
-                // that simply opening its directory validates all child assets.
-                int max=archive.Entries.Count<MaxArchiveMembers?archive.Entries.Count:MaxArchiveMembers;
-                for(int i=0;i<max;i++)
-                    if(archive.Entries[i].Length>MaxSourceBytes)continue;
+                nested=RarcArchive.Read(ReadBounded(item.Path,MaxArchiveBytes));
+                if(nested.Entries.Count==0)throw new NotSupportedException("Empty RARC.");
+                // Archive directory validation is separate from nested asset rendering.
             }
             else throw new NotSupportedException("Unknown format.");
         }
@@ -267,6 +317,8 @@ internal static class Program
             DrawEmpty();
         }
         totalComplete++;
+        if(item.Kind==6 && result==Ok && nested!=null)
+            RenderArchiveMembers(nested,item.Path,discKey);
     }
 
     private static void RunDisc(string imagePath)
