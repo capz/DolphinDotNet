@@ -81,6 +81,7 @@ internal static class NativeStorageBindings
         ["TextureCreate"]=("dnd_texture_create","iiai",false),
         ["TexturePng"]=("dnd_texture_png","ai",false),
         ["TexturePackage"]=("dnd_texture_package","ai",false),
+        ["TextureSampler"]=("dnd_texture_sampler","iiiiif",false),
         ["TextureDimension"]=("dnd_texture_dimension","ii",false),
         ["TextureAllocateNative"]=("dnd_texture_allocate_native","iiii",false),
         ["TextureUpdateNative"]=("dnd_texture_update_native","iaii",false),
