@@ -24,6 +24,7 @@ internal static class Program
     private static Model? model;
     private static ModelInstance? instance;
     private static JpcParticleEmitter? particles;
+    private static Draw2D? batch;
     private static readonly GraphicsDevice device=GraphicsDevice.Default;
     private static readonly Renderer renderer=new Renderer();
     private static readonly Camera camera=new Camera();
@@ -200,12 +201,11 @@ internal static class Program
         {
             // Remount source read-only for this case. Keep the source mounted
             // until the following case so native model background loading works.
-            if(!Storage.IsMounted(StorageDevice.GcLoader)&&
-               !Storage.Mount(StorageDevice.GcLoader))
-            {
-                // Emulator fallback if the GCLoader block backend is absent.
-                Storage.Mount(StorageDevice.SdSerialPort2);
-            }
+            var source=c.Game.StartsWith("sd:/",StringComparison.Ordinal) ||
+                images[c.GameIndex].StartsWith("sd:/",StringComparison.Ordinal)
+                ? StorageDevice.SdSerialPort2 : StorageDevice.GcLoader;
+            if(!Storage.IsMounted(source) && !Storage.Mount(source))
+                throw new IOException("Disc image source is not mounted.");
             if(!Storage.MountDisc(images[c.GameIndex]))
                 throw new IOException("Selected disc cannot be mounted.");
             byte[] data;
@@ -263,7 +263,7 @@ internal static class Program
         device.BeginFrame(clear);
         if(texture!=null)
         {
-            using var batch=new Draw2D(device,new Draw2DOptions{Width=640,Height=480,VertexCapacity=12});
+            if(batch==null)throw new InvalidOperationException("2D batch not ready.");
             batch.Begin();
             float width=texture.Width,height=texture.Height;
             float scale=Math.Min(540f/width,400f/height);
@@ -286,6 +286,7 @@ internal static class Program
         Report(JSystemFixtureTelemetry.Scanning,0,0,0,0,"/games");
         Discover();
         camera.LookAt(new Vector3(0,1,6),Vector3.Zero,new Vector3(0,1,0));
+        batch=new Draw2D(device,new Draw2DOptions{Width=640,Height=480,VertexCapacity=12});
         if(count==0)
         {
             Report(JSystemFixtureTelemetry.Unavailable,0,0,0,0,problem);
