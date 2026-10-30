@@ -73,7 +73,7 @@ public sealed class JpcEmitterDefinition
                 case "BSP1":
                     if (shape != null) throw new InvalidDataException("Duplicate JPA shape.");
                     shape = archive.CopyChunk(chunk); break;
-                case "TDB1": case "TEX1": case "ESP1": break;
+                case "TDB1": case "TEX1": case "ESP1": case "SSP1": break;
                 // Every additional particle behavior requires an intentional renderer profile.
                 default: throw new NotSupportedException("Unsupported JPA emitter chunk: " + chunk.Type);
             }
