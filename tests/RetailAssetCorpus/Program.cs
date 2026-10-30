@@ -34,7 +34,7 @@ internal static class Program
         var folders=new string[32];
         int head=0,tail=1;
         folders[0]=gamesRoot;
-        while(head<tail && count<MaxImages && visits<512)
+        while(head<tail && visits<512)
         {
             string folder=folders[head++];
             foreach(string path in Directory.EnumerateFiles(folder))
