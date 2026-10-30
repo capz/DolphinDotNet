@@ -125,13 +125,20 @@ public sealed class J3dMaterialAnimation
     /// Konst channel values typically require clamping to [0,255] before GX submission.</summary>
     public float[] SampleColor(int trackIndex, bool konst, float frame)
     {
+        var values = new float[4];
+        SampleColor(trackIndex, konst, frame, values);
+        return values;
+    }
+
+    public void SampleColor(int trackIndex, bool konst, float frame, float[] values)
+    {
+        if (values == null || values.Length < 4) throw new ArgumentException("Four color channels required.", nameof(values));
         RequireKind("brk1");
         int regularCount = U16(data, chunk + 0xC), konstCount = U16(data, chunk + 0xE);
         int count = konst ? konstCount : regularCount;
         if (trackIndex < 0 || trackIndex >= count) throw new ArgumentOutOfRangeException(nameof(trackIndex));
         int anims = Relative(U32(data, chunk + (konst ? 0x24 : 0x20)), count * 0x1CL);
         int rec = anims + trackIndex * 0x1C;
-        var values = new float[4];
         float time = ResolveFrame(frame);
         for (int component = 0; component < 4; component++)
         {
@@ -141,22 +148,30 @@ public sealed class J3dMaterialAnimation
             int table = Relative(U32(data, chunk + tableOff + component * 4), countValues * 2L);
             values[component] = SampleTrack(rec + component * 6, table, countValues, 2, false, time);
         }
-        return values;
     }
 
     /// <summary>Sample BTK S/T/Q UV scale, rotation and translation tracks in order.
     /// Rotations are returned as raw signed 16-bit angular units, not degrees.</summary>
     public float[] SampleUv(int trackIndex, float frame)
     {
+        var values = new float[9];
+        SampleUv(trackIndex, frame, values);
+        return values;
+    }
+
+    public int TextureRotationFraction => FileType == "btk1" ? data[chunk + 9] : 0;
+
+    public void SampleUv(int trackIndex, float frame, float[] output)
+    {
+        if (output == null || output.Length < 9) throw new ArgumentException("Nine UV channels required.", nameof(output));
         RequireKind("btk1");
         if (trackIndex < 0 || trackIndex >= TrackCount) throw new ArgumentOutOfRangeException(nameof(trackIndex));
         int records = Relative(U32(data, chunk + 0x14), TrackCount * 0x36L);
         int scaleCount = U16(data, chunk + 0xE);
         int rotationCount = U16(data, chunk + 0x10);
         int translationCount = U16(data, chunk + 0x12);
-        var counts = new[] { scaleCount, rotationCount, translationCount };
-        var offsets = new[] { 0x28, 0x2C, 0x30 };
-        var output = new float[9];
+        int[] counts = { scaleCount, rotationCount, translationCount };
+        int[] offsets = { 0x28, 0x2C, 0x30 };
         int row = records + trackIndex * 0x36;
         float time = ResolveFrame(frame);
         for (int k = 0; k < 9; k++)
@@ -168,7 +183,14 @@ public sealed class J3dMaterialAnimation
             int table = Relative(U32(data, chunk + offsets[tableType]), count * (long)stride);
             output[k] = SampleTrack(row + k * 6, table, count, stride, floating, time);
         }
-        return output;
+    }
+
+    public float[] GetUvCenter(int trackIndex)
+    {
+        RequireKind("btk1");
+        if (trackIndex < 0 || trackIndex >= TrackCount) throw new ArgumentOutOfRangeException(nameof(trackIndex));
+        int center = Relative(U32(data, chunk + 0x24), TrackCount * 12L);
+        return new[] { F32(data, center + trackIndex * 12), F32(data, center + trackIndex * 12 + 4) };
     }
 
     private float SampleTrack(int record, int table, int tableCount, int stride, bool floating, float frame)
