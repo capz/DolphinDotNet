@@ -40,8 +40,9 @@ public sealed class J3dAnimationPlayer
         for (int i = 0; i < modelMaterialNames.Length; i++)
         {
             string name = modelMaterialNames[i] ?? throw new ArgumentException("Null material name.");
-            if (!materialLookup.TryAdd(name, i))
+            if (materialLookup.ContainsKey(name))
                 throw new ArgumentException("Duplicate MAT3 material name: " + name);
+            materialLookup.Add(name, i);
         }
     }
 
