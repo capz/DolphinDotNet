@@ -75,16 +75,16 @@ public sealed class JpcEmitterDefinition
         if (Ascii(dynamics, 0, 4) != "BEM1" || Ascii(shape, 0, 4) != "BSP1")
             throw new InvalidDataException("JPA chunk magic mismatch.");
         // Only the basic point/billboard style is implemented.
-        // Flags use Nintendo's big-endian JPAC layout, with volume/shape in high bits.
+        // gclib/bunfoe reads packed bitfields starting at the least significant bit.
         uint dynamicsFlags = U32(dynamics, v2 ? 8 : 12);
         uint shapeFlags = U32(shape, v2 ? 8 : 12);
         // An unrecognized shape or emitter volume must not silently be rendered incorrectly.
-        int volume = (int)((dynamicsFlags >> 21) & 7);
-        int shapeType = (int)((shapeFlags >> 28) & 15);
+        int volume = (int)((dynamicsFlags >> 8) & 7);
+        int shapeType = (int)(shapeFlags & 15);
         if (volume != 4 || shapeType != 2)
             throw new NotSupportedException("Only verified point emitters with billboards are supported.");
         // Reject emitter configurations which have field/child or scroll dependencies.
-        if ((shapeFlags & 0x80) != 0)
+        if ((shapeFlags & (1u << 24)) != 0)
             throw new NotSupportedException("JPA texture-scrolling effects require a GX texture-matrix profile.");
         int rateOff = v2 ? 0x4C : 0x1C;
         int lifeOff = v2 ? 0x72 : 0x2A;
