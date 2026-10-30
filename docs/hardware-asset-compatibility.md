@@ -18,8 +18,10 @@ It reads the files you already have in `gcloader:/games`.
   It also looks for supported loose files.
 - **GameCube:** it inspects eligible `.bti`, `.jpc`/`.jpa`,
   `.bmd`/`.bdl` and bounded `.arc`/`.szs` RARC members, then selects
-  them in stable case order. Each asset gets a real importer/texture/particle
-  draw attempt, deterministic fixed-step particle preparation, and a result
+  them in stable case order. J3D assets get a real native model-import/draw attempt; BTI assets get a
+  direct GX-tiled base-level preview; eligible JPA effects get deterministic
+  fixed-step simulation and a diagnostic 2D projection (not BSP1/TEV parity).
+  Each case gets a result
   published in a small exported native `dnd_asset_compat_record`.
 - **Host:** `scripts/run_hardware_asset_compatibility.py` uses the existing
   PR #141 `HardwareSession`: injected A release/press samples, post-GX
@@ -112,14 +114,18 @@ into managed memory:
 - Up to **96 KiB** for in-memory BTI/JPC and RARC indexing; J3D source models
   are recognized by a bounded header read and loaded through the **native
   importer**, with an 8 MiB source-size filter and 4 MiB native import budget
-- BTI previews up to 128×128 pixels; larger or unsupported formats are not
-  silently treated as compatible
+- BTI previews up to 128×128 power-of-two pixels in the eight native GX
+  non-indexed formats, with the base mip only. Indexed CI/TLUT formats,
+  larger images and authored mip/filter variants are not treated as fully
+  compatible. This intentionally avoids the desktop-only BtiTexture decoder
+  path not yet supported by the current GameCube closed-world AOT compiler
 - RARC nested member inspection uses the existing bounded decoder; some large,
   compressed or deeply nested retail archives will be **skipped**. The sample
   is not an exhaustive census of every game on the card
 - First supported JPA emitter among at most 12 inspected particles is chosen
-  (up to 64 active particles, seed 17, 30 fixed 60Hz simulation updates);
-  unsupported JPA profiles are explicitly reported
+  (up to 64 active particles, seed 17, 30 fixed 60Hz simulation updates).
+  JPA previews show a fixed 2D projection with native source texture, not
+  exact GX BSP1 color/alpha/TEV behavior; unsupported JPA profiles are reported
 
 The scanner is **read-only**. It does not boot games inside game images or
 support arbitrary studio-private file formats. Hardware USB Gecko throughput,
