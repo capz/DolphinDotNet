@@ -81,7 +81,7 @@ void dnd_automation_published_frame(const void *xfb,uint32_t width,uint32_t heig
     m->frame_serial++;
 }
 
-__attribute__((noinline,used,externally_visible))
+__attribute__((noinline,used))
 void dnd_automation_frame_boundary(void) {
     /* A stable address for GDB Z0; the barrier prevents tail/inlined removal. */
     __asm__ __volatile__("" ::: "memory");
