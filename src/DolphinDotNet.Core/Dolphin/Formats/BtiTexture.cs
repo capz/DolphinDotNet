@@ -175,7 +175,7 @@ public sealed class BtiTexture
         WriteLittle32(output, 4, 2); WriteLittle32(output, 8, fmt);
         WriteLittle32(output, 12, image.Width); WriteLittle32(output, 16, image.Height);
         WriteLittle32(output, 20, payload); WriteLittle32(output, 24, mips);
-        Buffer.BlockCopy(data, (int)start, output, 32, payload);
+        for (int i = 0, offset = (int)start; i < payload; i++) output[32 + i] = data[offset + i];
         return output;
     }
 
