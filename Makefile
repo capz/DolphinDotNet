@@ -17,6 +17,11 @@ LIBOGC ?= $(DEVKITPRO)/libogc2/gamecube
 LIBDIRS := $(PORTLIBS) $(LIBOGC)
 LIBPATHS_EXTRA := -L$(CURDIR)/build/exi-overlay -L$(LIBOGC)/lib
 CFLAGS := -DDND_GAMECUBE_STORAGE -g -O2 -fstack-usage -Wall -Wextra $(MACHDEP) $(INCLUDE)
+# Explicitly opt in for standalone native debug builds; release behavior is unchanged.
+ifeq ($(DND_DEBUG_AUTOMATION),1)
+CFLAGS += -DDND_DEBUG_AUTOMATION
+LDFLAGS += -Wl,--undefined=dnd_automation_mailbox -Wl,--undefined=dnd_automation_frame_boundary
+endif
 CXXFLAGS := $(CFLAGS)
 LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map
 ifneq ($(BUILD),$(notdir $(CURDIR)))
