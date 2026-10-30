@@ -537,6 +537,8 @@ int dnd_model_stat(int token, int kind) {
     return (int)m->clips;
   case 4:
     return (int)m->nodes;
+  case 5:
+    return (int)m->materials;
   case 6:
     return (int)texture_cache_bytes;
   default:
