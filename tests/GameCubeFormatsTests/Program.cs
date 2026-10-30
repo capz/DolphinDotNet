@@ -201,12 +201,26 @@ static class Program
         W32(btk, 0x20 + 0xB4, 0x3F800000);
         W32(btk, 0x20 + 0xC0, 0x3E800000); // S +0.25
         W32(btk, 0x20 + 0xC4, unchecked((int)0xBE000000)); // T -0.125
+        W32(btk, 0x3C, 0xD0); // TTK1 material name table
+        W16(btk, 0xF0, 1); W16(btk, 0xF6, 8);
+        Str(btk, 0xF8, "Body");
         var uvAnim = J3dMaterialAnimation.Read(btk);
         j3dChannels.Apply(uvAnim, 1, 0, 2f);
         j3dChannels.CopyMaterialState(1, state);
         Check(Math.Abs(state[7] - 0.25f) < 0.0001f, "BTK S translation");
         Check(Math.Abs(state[10] + 0.125f) < 0.0001f, "BTK T translation");
         Check(state[5] == 1 && state[9] == 1, "BTK affine identity scales");
+        Check(uvAnim.GetTrackMaterialName(0) == "Body", "Named BTK material track");
+        var j3dModel = new byte[0x80];
+        Str(j3dModel, 0, "J3D2"); Str(j3dModel, 4, "bmd3");
+        W32(j3dModel, 8, j3dModel.Length); W32(j3dModel, 0xC, 1);
+        Str(j3dModel, 0x20, "MAT3"); W32(j3dModel, 0x24, 0x60);
+        W16(j3dModel, 0x28, 1); W32(j3dModel, 0x34, 0x20);
+        W16(j3dModel, 0x40, 1); W16(j3dModel, 0x46, 8);
+        Str(j3dModel, 0x48, "Body");
+        var materialNames = J3dMaterialNames.Read(j3dModel);
+        Check(materialNames.Length == 1 && materialNames[0] == "Body",
+            "MAT3 source-name extraction");
         Console.WriteLine("GameCubeFormatsTests passed: " + assertionCount + " assertions");
     }
 }
