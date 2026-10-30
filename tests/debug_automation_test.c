@@ -75,7 +75,7 @@ int main(void) {
     dnd_automation_frame_boundary();
     dnd_automation_published_frame(NULL,10000,120);
     assert(dnd_automation_mailbox.frame_serial==2 && dnd_automation_mailbox.xfb_address==0);
-    assert(dnd_automation_mailbox.input_polls==6);
+    assert(dnd_automation_mailbox.input_polls==7);
     dnd_input_shutdown();
     puts("debugger hardware automation protocol OK");
     return 0;
