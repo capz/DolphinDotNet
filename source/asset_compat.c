@@ -30,7 +30,7 @@ void dnd_asset_compat_report(int status,int index,int total,int kind,
 }
 #else
 void dnd_asset_compat_report(int status,int index,int total,int kind,
-                             int scanned,const char *name) {
+                             int scanned,const DndString *name) {
     (void)status;(void)index;(void)total;(void)kind;(void)scanned;(void)name;
 }
 #endif
