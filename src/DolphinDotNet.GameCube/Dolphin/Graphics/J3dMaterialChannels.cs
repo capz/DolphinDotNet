@@ -24,6 +24,14 @@ public sealed class J3dMaterialChannels
         Reset();
     }
 
+    /// <summary>Copy one material's channel record for diagnostics and synthetic tests.</summary>
+    public void CopyMaterialState(int material, float[] destination)
+    {
+        if (destination == null || destination.Length < 12)
+            throw new ArgumentException("Twelve floats required.", nameof(destination));
+        Array.Copy(Values, Start(material), destination, 0, 12);
+    }
+
     public void Reset()
     {
         for (int i = 0; i < MaterialCount; i++)
