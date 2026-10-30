@@ -37,6 +37,14 @@ static class Program
         var bad = (byte[])yaz.Clone(); W32(bad, 4, GameCubeBinary.MaxAssetBytes + 1);
         Reject(() => GameCubeBinary.Yaz0Decode(bad), "Yaz0 declared budget");
 
+        Check(ShiftJisCodec.Decode(new byte[]{0x82,0xA0})=="あ", "JIS0208 hiragana mapping");
+        Check(ShiftJisCodec.Decode(new byte[]{0x83,0x65,0x83,0x58,0x83,0x67})=="テスト",
+              "Shift-JIS multi-byte katakana");
+        Check(ShiftJisCodec.Decode(new byte[]{0xA6})=="ｦ", "Shift-JIS halfwidth katakana");
+        Check(ShiftJisCodec.Decode(new byte[]{0x41,0x82,0xA0})=="Aあ",
+              "Shift-JIS mixed ASCII and DBCS text");
+        Reject(() => ShiftJisCodec.Decode(new byte[]{0x82}), "Truncated Shift-JIS lead");
+        Reject(() => ShiftJisCodec.Decode(new byte[]{0x82,0x7F}), "Invalid Shift-JIS trail");
         var bti = new byte[0x40];
         bti[0] = 4; W16(bti, 2, 4); W16(bti, 4, 4); bti[0x18] = 1;
         W32(bti, 0x1C, 0x20);
@@ -73,6 +81,11 @@ static class Program
         bad = (byte[])utf8Bmg.Clone(); bad[0x69] = 0xFF;
         Reject(() => BmgCatalog.Read(bad), "Generic BMG invalid UTF-8 rejected");
 
+        var shiftBmg = (byte[])bmg.Clone();
+        shiftBmg[0x10] = 3;
+        shiftBmg[0x68] = 0x82; shiftBmg[0x69] = 0xA0; shiftBmg[0x6A] = 0;
+        Check(BmgCatalog.Read(shiftBmg).Entries[0].EscapedText=="あ",
+            "BMG Shift-JIS independent of platform codepages");
         var genericBmg = new byte[0xA0];
         Str(genericBmg, 0, "MESGbmg1"); W32(genericBmg, 8, 0xA0);
         W32(genericBmg, 0xC, 3); genericBmg[0x10] = 2; // UTF-16BE
@@ -282,6 +295,64 @@ static class Program
         try { JpcEmitterDefinition.Read(JpcArchive.Read(cubeEffect), 0xCAFE); }
         catch (NotSupportedException) { torusRejected = true; }
         Check(torusRejected, "JPA unsupported torus fails explicitly");
+        var extraEffect = new byte[effect.Length + 0x60];
+        Buffer.BlockCopy(effect,0,extraEffect,0,0x98);
+        Buffer.BlockCopy(effect,0x98,extraEffect,0xF8,effect.Length-0x98);
+        W32(extraEffect,0xC,0x138); W16(extraEffect,0x12,4);
+        Str(extraEffect,0x98,"ESP1"); W32(extraEffect,0x9C,0x60);
+        W32(extraEffect,0xA0,0x10001); // enable alpha and XY scale
+        W32(extraEffect,0x98+16,0x3F800000); // scale out @ 1
+        W32(extraEffect,0x98+20,0x3F800000); // scale start x
+        W32(extraEffect,0x98+24,0x40000000); // scale end x
+        W32(extraEffect,0x98+28,0x3F800000); // scale start y
+        W32(extraEffect,0x98+32,0x40000000); // scale end y
+        W32(extraEffect,0x98+44,0x3E4CCCCD); // alpha in 0.2
+        W32(extraEffect,0x98+48,0x3F4CCCCD); // alpha out 0.8
+        W32(extraEffect,0x98+56,0x3F800000); // alpha base 1
+        var extraArchive = JpcArchive.Read(extraEffect);
+        var extraDefinition = JpcEmitterDefinition.Read(extraArchive,0xCAFE);
+        var extraProfile = JpcExtraShapeProfile.Read(extraArchive,0xCAFE)!;
+        extraProfile.Sample(0.5f,out float sx,out float sy,out float sa);
+        Check(extraDefinition.TextureIndex==0 && sx>1 && sy>1 && sa==1,
+            "JPA ESP1 scale/alpha sample");
+        extraProfile.Sample(0.9f,out sx,out sy,out sa);
+        Check(sa<1 && sa>0, "JPA ESP1 alpha fade-out");
+        var profileBytes = (byte[])extraEffect.Clone();
+        W32(profileBytes,0xA0,0x10001 | (1 << 24)); // rotation unsupported
+        bool extraRejected=false;
+        try { JpcExtraShapeProfile.Read(JpcArchive.Read(profileBytes),0xCAFE); }
+        catch(NotSupportedException) { extraRejected=true; }
+        Check(extraRejected,"JPA unsupported ESP1 flags are rejected");
+
+        var childEffect = new byte[extraEffect.Length+0x48];
+        Buffer.BlockCopy(extraEffect,0,childEffect,0,0xF8);
+        Buffer.BlockCopy(extraEffect,0xF8,childEffect,0x140,extraEffect.Length-0xF8);
+        W32(childEffect,0xC,0x180); W16(childEffect,0x12,5);
+        Str(childEffect,0xF8,"SSP1"); W32(childEffect,0xFC,0x48);
+        W32(childEffect,0x100,2); // billboard child
+        W32(childEffect,0xF8+32,0x3F800000);
+        W32(childEffect,0xF8+36,0x3F800000);
+        W32(childEffect,0xF8+60,0x3F000000); // child after 50% life
+        W16(childEffect,0xF8+64,5);
+        W16(childEffect,0xF8+66,1);
+        var childArchive = JpcArchive.Read(childEffect);
+        var childConfig = JpcChildShapeProfile.Read(childArchive,0xCAFE)!;
+        Check(childConfig.LifetimeFrames==5 && childConfig.ChildrenPerParent==1,
+            "JPAC2 SSP1 child emitter profile");
+        var childSimulator = new JpcParticleSimulator(
+            JpcEmitterDefinition.Read(childArchive,0xCAFE),128,33) { ChildShape=childConfig };
+        for(int i=0;i<16;i++)childSimulator.Update(1f/60f);
+        bool hasChild=false;
+        for(int i=0;i<childSimulator.ActiveCount;i++)hasChild|=childSimulator.GetParticle(i).IsChild;
+        Check(hasChild,"JPA SSP1 deterministic child spawning");
+
+        var force = new JpcParticleField(JpcForceKind.Directional,0,-1,0,0.1f);
+        force.Sample(0,0,0,out float fx,out float fy,out float fz);
+        Check(fx==0 && fy==-0.1f && fz==0,"JPA directional FLD-style force");
+        var fieldSimulator=new JpcParticleSimulator(definition,16,123);
+        fieldSimulator.AddField(force);fieldSimulator.Update(2f/60f);
+        Check(fieldSimulator.GetParticle(0).Vy < 0.1f,
+              "JPA external field influences particle velocity");
         var mipBti = new byte[0x60];
         Buffer.BlockCopy(bti, 0, mipBti, 0, bti.Length);
         mipBti[0x18] = 2;
