@@ -9,7 +9,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
 
-test: display_mode_test graphics_resource_boundaries_test graphics_phase_two_test graphics_submission_test render_state_gx_test overlay_list_test array_fast_test indexed_mesh_gx_test canvas_rectangle_test texture_reuse_test throughput_runtime_test asset_native_test mesh_range_test native_buffer_crc_test file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
+test: display_mode_test graphics_resource_boundaries_test graphics_phase_two_test graphics_submission_test render_state_gx_test overlay_list_test array_fast_test indexed_mesh_gx_test canvas_rectangle_test texture_reuse_test throughput_runtime_test asset_native_test mesh_range_test native_buffer_crc_test file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
 	./display_mode_test
 	./graphics_resource_boundaries_test
 	./graphics_phase_two_test
@@ -39,6 +39,7 @@ test: display_mode_test graphics_resource_boundaries_test graphics_phase_two_tes
 	./stw_test
 	./input_native_test
 	./debug_automation_test
+	./asset_corpus_abi_test
 	./input_overlay_test
 	./input_gamecube_test
 	./hardware_gamecube_test
@@ -68,6 +69,9 @@ input_gamecube_test: input_gamecube_test.c ../source/input_gamecube.c
 
 input_overlay_test: input_native_test.c input_test_backend.c ../source/input.c ../source/performance.c
 	$(CC) $(CFLAGS) -DDND_SAMPLE_CONTROLS $^ -lm -o $@
+
+asset_corpus_abi_test: asset_corpus_abi_test.c ../source/asset_corpus.c
+	$(CC) $(CFLAGS) -DDND_DEBUG_AUTOMATION $^ -o $@
 
 debug_automation_test: debug_automation_test.c input_test_backend.c ../source/input.c ../source/debug_automation.c
 	$(CC) $(CFLAGS) -DDND_DEBUG_AUTOMATION $^ -lm -o $@
@@ -128,7 +132,7 @@ clean:
 	rm -f asset_native_test throughput_runtime_test
 	rm -f mesh_range_test native_buffer_crc_test
 	rm -f file_optimize_test file_extents_test contiguous_write_test dol_test
-	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test
+	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test
 
 asset_native_test: asset_native_test.c ../source/storage.c ../source/draw_resources.c ../source/managed_runtime.c ../source/stw.c ../source/gc_stw.c ../source/file_optimize.c ../source/file_extents.c ../source/contiguous_write.c
 	$(CC) $(CFLAGS) -Dread=dnd_asset_test_read -pthread -ffunction-sections -fdata-sections $^ $(GC_LDFLAGS) -lm -o $@
