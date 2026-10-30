@@ -11,6 +11,11 @@ __attribute__((weak)) bool dnd_draw_backend_scene_active(void){return false;}
 __attribute__((weak)) void dnd_draw_backend_scene(int lit,const float *view){(void)lit;(void)view;}
 static float frame_view[16], frame_projection[16];
 static bool owns_frame;
+/* Temporary, frame-local animated J3D draw state. Never retained beyond one draw. */
+static const float *animated_material_channels;
+static unsigned animated_material_count;
+#define DND_ANIM_CHANNELS 12
+
 static bool matrix_array(DndArray *a, float out[16]) {
   if (!a || a->element_size != 4 || a->elements_are_references ||
       a->length != 16)
@@ -194,7 +199,16 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     if (!dnd_model_inverse(normal, mv))
       return -1;
     dnd_performance_add_triangles(mesh->indices / 3);
-    DndMaterial *mat = &model->material[mesh->material];
+    DndMaterial *mat = &model->material[mesh->material], animated_copy;
+    const float *anim = NULL;
+    if (animated_material_channels && (unsigned)mesh->material < animated_material_count) {
+      anim = animated_material_channels + (unsigned)mesh->material * DND_ANIM_CHANNELS;
+      if (anim[0] < 0.5f) continue;
+      animated_copy = *mat;
+      for (int c = 0; c < 4; c++) animated_copy.color[c] *= anim[c + 1];
+      if (anim[11] >= 0) animated_copy.texture = (int)anim[11];
+      mat = &animated_copy;
+    }
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     dnd_draw_backend_restore();
     Mtx matrix;
@@ -307,7 +321,13 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
         GX_Position3f32(v[0], v[1], v[2]);
         if(custom_scene&&!(mat->mode&2))GX_Normal3f32(v[3],v[4],v[5]);
         GX_Color4u8(color[0], color[1], color[2], color[3]);
-        GX_TexCoord2f32(dnd_model_f32(src + 24), dnd_model_f32(src + 28));
+        float u=dnd_model_f32(src+24),v=dnd_model_f32(src+28);
+        if(anim) {
+          float su=anim[5]*u+anim[6]*v+anim[7];
+          float sv=anim[8]*u+anim[9]*v+anim[10];
+          u=su;v=sv;
+        }
+        GX_TexCoord2f32(u,v);
       }
       GX_End();
       first += count;
@@ -315,6 +335,39 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
 #endif
   }
   return 0;
+}
+
+/*
+ * Per-material J3D animation draw. Each record is:
+ * visible, RGBA multipliers, UV affine 2x3, texture index (-1 retains source).
+ * Validate all records BEFORE issuing any GX commands; leave model data and
+ * animation state untouched and always reset temporary state on return.
+ */
+int dnd_model_draw_animated(int token,DndArray *transform,DndArray *channels) {
+  DndInstance *in=dnd_instance_find(token);
+  float world[16];
+  if(!in||!in->model->ready||!dnd_model_frame_active||
+     !matrix_array(transform,world)||animated_material_channels||
+     !channels||channels->element_size!=4||channels->elements_are_references||
+     in->model->materials>4096 ||
+     channels->length!=(unsigned)in->model->materials*DND_ANIM_CHANNELS)
+    return -1;
+  const float *values=(const float *)channels->data;
+  for(unsigned m=0;m<in->model->materials;m++) {
+    const float *a=values+m*DND_ANIM_CHANNELS;
+    for(int c=0;c<DND_ANIM_CHANNELS;c++)if(!isfinite(a[c]))return -1;
+    if(a[0]!=0&&a[0]!=1)return -1;
+    for(int c=1;c<5;c++)if(a[c]<0||a[c]>1)return -1;
+    for(int c=5;c<11;c++)if(fabsf(a[c])>4096)return -1;
+    if(a[11]!=-1 && (a[11]<0||a[11]>=(float)in->model->textures||
+                       a[11]!=(float)(int)a[11]))return -1;
+  }
+  animated_material_channels=values;
+  animated_material_count=in->model->materials;
+  int result=draw_model_selected(in,world,NULL,0,-1);
+  animated_material_channels=NULL;
+  animated_material_count=0;
+  return result;
 }
 
 /* A synchronous batch borrows the caller's flattened matrices. References are
