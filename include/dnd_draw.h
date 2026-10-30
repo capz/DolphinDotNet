@@ -11,7 +11,7 @@ void dnd_draw_backend_2d_projection(float width,float height);
 #include <stdbool.h>
 
 typedef struct { float x,y,z,nx,ny,nz,u,v; uint32_t color; } DndDrawVertex;
-typedef struct { const void *data; uint32_t bytes; int width,height,format; bool linear; int levels; } DndDrawTexture;
+typedef struct { const void *data; uint32_t bytes; int width,height,format; bool linear; int levels; bool sampler_set; int wrap_s,wrap_t,min_filter,mag_filter; float lod_bias; } DndDrawTexture;
 typedef struct { uint32_t color; int flags; float cutoff; const DndDrawEffect *effect; const DndDrawTexture *secondary; } DndDrawMaterial;
 bool dnd_draw_backend_mesh(const DndDrawVertex *vertices,const uint16_t *indices,int count,uint32_t uniform_color,
                            const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world);
@@ -63,6 +63,7 @@ int dnd_texture_create_range(int width,int height,DndArray *rgba,int offset,int 
 int dnd_texture_create(int width,int height,DndArray *rgba,int linear);
 int dnd_texture_png(DndArray *png,int linear);
 int dnd_texture_package(DndArray *package,int linear);
+int dnd_texture_sampler(int token,int wrap_s,int wrap_t,int min_filter,int mag_filter,float lod_bias);
 int dnd_texture_allocate_native(int width,int height,int format,int linear);
 int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int count);
 int dnd_texture_update_buffer(int texture_token,int buffer_token,int source_offset,int count);
