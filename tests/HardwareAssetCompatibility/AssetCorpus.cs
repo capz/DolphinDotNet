@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using Dolphin.Formats;
 using Dolphin.Storage;
 using DDirectory = Dolphin.IO.Directory;
 using DFile = Dolphin.IO.File;
@@ -10,8 +9,10 @@ internal sealed class AssetCase
 {
     public readonly string SourceImage, Path, Member;
     public readonly int Kind;
-    public AssetCase(string sourceImage,string path,string member,int kind)
-    {SourceImage=sourceImage;Path=path;Member=member;Kind=kind;}
+    public readonly long MemberOffset;
+    public readonly int MemberLength;
+    public AssetCase(string sourceImage,string path,string member,int kind,long offset=0,int length=0)
+    {SourceImage=sourceImage;Path=path;Member=member;Kind=kind;MemberOffset=offset;MemberLength=length;}
     public string Name => (SourceImage.Length>0 ? DPath.GetFileName(SourceImage)+"::" : "")+
         Path+(Member.Length>0?"#"+Member:"");
 }
@@ -84,25 +85,18 @@ internal sealed class AssetCorpus
     {
         try
         {
-            var archive=RarcArchive.Read(ReadBounded(path));
-            foreach(var entry in archive.Entries)
-            {
-                if(count>=AssetFixturePolicy.MaxAssets)break;
-                int kind=AssetFixturePolicy.Kind(entry.Path);
-                if(kind==0||entry.Length<0x20||entry.Length>(kind==AssetFixturePolicy.Model?AssetFixturePolicy.MaxModelBytes:AssetFixturePolicy.MaxSourceBytes))continue;
-                using var stream=archive.OpenMemberStream(entry.Path);
-                var header=new byte[0x20];
-                if(stream.Read(header,0,header.Length)!=header.Length ||
-                   !AssetFixturePolicy.ValidHeader(kind,header))continue;
-                Add(new AssetCase(sourceImage,path,entry.Path,kind));
-            }
+            using var stream=DFile.OpenRead(path);
+            StreamingRarcIndex.Probe(stream,this,sourceImage,path);
         }
-        catch(Exception error) when (error is InvalidDataException or NotSupportedException or IOException or OutOfMemoryException)
+        catch(Exception error) when(error is InvalidDataException or NotSupportedException or IOException)
         {
-            // An archive that cannot be indexed is not evidence that its
-            // contents render; never add speculative members to the corpus.
+            // Unsupported or corrupt archive metadata is not a testable member.
         }
     }
+
+    internal void AddArchiveCandidate(string sourceImage,string archivePath,
+        string member,int kind,long offset,int size)
+        => Add(new AssetCase(sourceImage,archivePath,member,kind,offset,size));
 
     private void Add(AssetCase candidate)
     {
@@ -132,15 +126,21 @@ internal sealed class AssetCorpus
 
     public static byte[] ReadAsset(AssetCase entry)
     {
-        byte[] bytes=ReadBounded(entry.Path);
-        if(entry.Member.Length==0)return bytes;
-        var archive=RarcArchive.Read(bytes);
-        if(!archive.TryGetEntry(entry.Member,out var member)||
-            member.Length>AssetFixturePolicy.MaxSourceBytes)
+        if(entry.Member.Length==0)return ReadBounded(entry.Path);
+        if(entry.MemberLength<0x20 || entry.MemberLength>AssetFixturePolicy.MaxSourceBytes)
             throw new NotSupportedException("Unbounded RARC member.");
-        bytes=archive.ReadFile(member,decompressYaz0:true);
-        if(bytes.Length>AssetFixturePolicy.MaxSourceBytes)
-            throw new NotSupportedException("Expanded RARC member exceeds fixture limit.");
+        using var stream=DFile.OpenRead(entry.Path);
+        if(entry.MemberOffset<0 || entry.MemberOffset>stream.Length-entry.MemberLength)
+            throw new InvalidDataException("RARC member exceeds archive.");
+        stream.Seek(entry.MemberOffset,SeekOrigin.Begin);
+        var bytes=new byte[entry.MemberLength];
+        int offset=0;
+        while(offset<bytes.Length)
+        {
+            int count=stream.Read(bytes,offset,bytes.Length-offset);
+            if(count<=0)throw new EndOfStreamException("Short RARC member.");
+            offset+=count;
+        }
         return bytes;
     }
 }
