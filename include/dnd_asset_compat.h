@@ -26,7 +26,9 @@ typedef struct {
     volatile uint32_t scanned;    /* 0x1c, bounded candidate count */
     char name[224];               /* 0x20, always NUL terminated */
 } DndAssetCompatRecord;
+#ifdef DND_DEBUG_AUTOMATION
 extern DndAssetCompatRecord dnd_asset_compat_record;
+#endif
 void dnd_asset_compat_report(int status,int index,int total,int kind,
                              int scanned,const DndString *name);
 #endif
