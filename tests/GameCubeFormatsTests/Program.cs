@@ -153,6 +153,18 @@ static class Program
         Check(sim.ActiveCount == 0, "JPA expiry without survivors");
         Reject(() => JpcEmitterDefinition.Read(JpcArchive.Read(jpc), 0x1234),
             "JPA incomplete emitter profile");
+        var mipBti = new byte[0x60];
+        Buffer.BlockCopy(bti, 0, mipBti, 0, bti.Length);
+        mipBti[0x18] = 2;
+        W16(mipBti, 2, 4); W16(mipBti, 4, 4);
+        var gxPackage = BtiTexture.CreateNativePackage(mipBti)!;
+        Check(gxPackage.Length == 32 + 64, "GX BTI two-level native mip payload");
+        Check(gxPackage[0] == (byte)'D' && gxPackage[24] == 2, "GX DNTX v2 mip descriptor");
+        var indexedBti = (byte[])bti.Clone();
+        indexedBti[0] = 8; indexedBti[9] = 1; W16(indexedBti, 0xA, 1);
+        W32(indexedBti, 0xC, 0x20);
+        W32(indexedBti, 0x1C, 0x22);
+        Check(BtiTexture.CreateNativePackage(indexedBti) == null, "Indexed BTI requires palette expansion");
         var j3dChannels = new Dolphin.Graphics.J3dMaterialChannels(2);
         var state = new float[12];
         j3dChannels.SetVisibility(0, false);
