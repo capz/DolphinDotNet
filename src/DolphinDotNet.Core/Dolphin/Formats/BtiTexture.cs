@@ -128,6 +128,58 @@ public sealed class BtiTexture
             data[0x14], data[0x15], rgba);
     }
 
+    /// <summary>Build an immutable DNTX v2 package directly from the source's GX
+    /// tiled bytes (including all mip levels). Indexed CI formats return null
+    /// because the native DNTX sampler has no palette table.</summary>
+    public static byte[]? CreateNativePackage(byte[] data)
+    {
+        var image = Read(data);
+        int fmt = image.ImageFormat;
+        if (fmt == 8 || fmt == 9 || fmt == 10) return null;
+        int mips = image.MipCount;
+        if (mips < 1 || mips > 11) throw new InvalidDataException("Invalid BTI mip count.");
+        int tileW, tileH, tileBytes;
+        switch (fmt)
+        {
+            case 0: tileW = 8; tileH = 8; tileBytes = 32; break;
+            case 1: case 2: tileW = 8; tileH = 4; tileBytes = 32; break;
+            case 3: case 4: case 5: tileW = 4; tileH = 4; tileBytes = 32; break;
+            case 6: tileW = 4; tileH = 4; tileBytes = 64; break;
+            case 14: tileW = 8; tileH = 8; tileBytes = 32; break;
+            default: return null;
+        }
+        long start = U32(data, 0x1C);
+        int width = image.Width, height = image.Height;
+        int payload = 0;
+        for (int level = 0; level < mips; level++)
+        {
+            int byteCount = checked((int)((long)((width + tileW - 1) / tileW) *
+                    ((height + tileH - 1) / tileH) * tileBytes));
+            Check(data, start + payload, byteCount);
+            payload = checked(payload + byteCount);
+            if (level + 1 < mips && width == 1 && height == 1)
+                throw new InvalidDataException("BTI has more mip levels than image dimensions allow.");
+            width = Math.Max(1, width / 2);
+            height = Math.Max(1, height / 2);
+        }
+        if (payload > MaxAssetBytes - 32)
+            throw new InvalidDataException("BTI texture package exceeds budget.");
+        var output = new byte[payload + 32];
+        output[0] = (byte)'D'; output[1] = (byte)'N';
+        output[2] = (byte)'T'; output[3] = (byte)'X';
+        void U32Le(int offset, int value)
+        {
+            output[offset] = (byte)value;
+            output[offset + 1] = (byte)(value >> 8);
+            output[offset + 2] = (byte)(value >> 16);
+            output[offset + 3] = (byte)(value >> 24);
+        }
+        U32Le(4, 2); U32Le(8, fmt); U32Le(12, image.Width); U32Le(16, image.Height);
+        U32Le(20, payload); U32Le(24, mips);
+        Buffer.BlockCopy(data, (int)start, output, 32, payload);
+        return output;
+    }
+
     private static int Expand4(int v) => (v << 4) | v;
     private static int Expand5(int v) => (v << 3) | (v >> 2);
     private static int Expand6(int v) => (v << 2) | (v >> 4);
