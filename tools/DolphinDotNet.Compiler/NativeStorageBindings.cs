@@ -6,6 +6,8 @@ internal static class NativeStorageBindings
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
         ["ModelDrawEffect"]=("dnd_model_draw_effect","iai",false),
+        ["Publish"]=("dnd_corpus_publish","iiiis",false),
+        ["Finish"]=("dnd_corpus_finish","iiii",false),
         ["ModelDrawModels"]=("dnd_model_draw_models","aai",false),
         ["ModelDrawMaterial"]=("dnd_model_draw_material","iaiiiifi",false),
         ["ModelDrawAnimated"]=("dnd_model_draw_animated","iaa",false),
