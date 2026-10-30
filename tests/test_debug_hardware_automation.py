@@ -83,7 +83,7 @@ class HardwareAutomationTests(unittest.TestCase):
         self.assertEqual(rsp.memory(0x80000000,4),b"\x01\x02\x03\x04")
         rsp.write(0x80000200,b"\x00\x01\xfe\xff")
         self.assertEqual(rsp.stop("s"),"S05")
-        self.assertIn(b"$M80000200,4:0001feff#",stream.writes)
+        self.assertTrue(any(packet.startswith(b"$M80000200,4:0001feff#") for packet in stream.writes))
         with self.assertRaises(ValueError):rsp.write(0x80000000,b"")
         with self.assertRaises(ValueError):rsp.memory(0x80000000,1048577)
 
