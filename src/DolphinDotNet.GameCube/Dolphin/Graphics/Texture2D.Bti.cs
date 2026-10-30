@@ -16,7 +16,11 @@ public sealed partial class Texture2D
         var image = BtiTexture.Read(data);
         if (image.Width < 4 || image.Height < 4)
             throw new InvalidDataException("Native Texture2D requires at least 4x4 pixels.");
-        return Create(image.Width, image.Height, image.Rgba, linear);
+        var native = BtiTexture.CreateNativePackage(data);
+        // GX-compatible non-indexed BTIs retain their original tiling, format
+        // and mip chain. Indexed images fall back to an expanded RGBA8 base level.
+        return native != null ? FromPackage(native, linear) :
+            Create(image.Width, image.Height, image.Rgba, linear);
     }
 
     /// <summary>Read a BTI from a mounted volume using bounded async storage I/O.</summary>
