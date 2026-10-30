@@ -32,7 +32,7 @@ Supported sampling profiles:
 | JPAC1/JPAC2 | Parse + bounded billboard emitter GX draw | Only currently supported emitter/particle subset |
 | BMG | Decode-only | Generic message decoder; no text layout/visual equivalence |
 | BFN | Decode-only | Font metadata reader; no glyph atlas/render comparison |
-| RARC/Yaz0 | Index-only | Bounded archive directory read; **not** rendering of every nested member |
+| RARC/Yaz0 | Index + limited embedded BTI/J3D draws | Bounded archive traversal, at most two visual members per archive |
 
 Results distinguish `ok`, `unsupported`, `malformed` and
 `runtime-error`. Each result includes source length, native allocated GX
@@ -40,9 +40,9 @@ bytes and a stable key consisting of Game ID/disc number/revision plus
 the in-disc path. Parsing and rendering are different evidence; capture files
 for decode-only tests are plain diagnostic background frames.
 
-**Limitations:** The current scan only selects directly named supported files
-inside the GameCube FST; it does **not** exhaustively discover compressed
-J3D/BTI content inside nested RARC containers. Models use a fixed camera and
+**Limitations:** The scan checks direct FST entries and at most 64 members of each selected
+RARC, attempting up to two embedded BTI/J3D render tests per archive. It
+does **not** exhaustively inspect nested archives or every retail format. Models use a fixed camera and
 may be off-screen if their native scale is unusual. Sprite capture is at the
 native VI resolution without depth, alpha or HDMI/analog capture. Unsupported
 assets are reported; no automatic material approximation is made.
@@ -120,7 +120,7 @@ or display configurations.
 - Missing debugger symbols, unexpected mailbox versions, duplicate/missing
   case IDs, skipped frames, rejected input injection, truncated XFB
   data and exceeded frame budgets fail without claiming compatibility.
-- Max cases: 40 overall (this fixture selects at most four images × ten);
+- Max cases: 56 overall (four images × up to ten direct and four embedded cases);
   no raw game assets or game image bytes leave the console.
 - An individual input override is bounded to 3,600 polls and expires;
   controller port 4 is isolated from normal ports 1–3.
