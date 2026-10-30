@@ -48,7 +48,7 @@ static unsigned glyph_quads;
 static int glyph_vertices;
 static bool glyph_atlas_active,glyph_atlas_ready;
 static unsigned char glyph_atlas[4096] __attribute__((aligned(32)));
-static const DndDrawTexture glyph_texture={glyph_atlas,sizeof(glyph_atlas),128,64,GX_TF_I4,false,1};
+static const DndDrawTexture glyph_texture={glyph_atlas,sizeof(glyph_atlas),128,64,GX_TF_I4,false,1,false,0,0,0,0,0};
 static DndOverlayList overlay_lists[2];
 static unsigned char glyph_supported[128];
 static bool glyph_list_ready,indexed_layout;
