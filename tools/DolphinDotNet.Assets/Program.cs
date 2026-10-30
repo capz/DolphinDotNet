@@ -1,9 +1,10 @@
 using DolphinDotNet.Assets;
 try
 {
+    if (args.Length > 0 && args[0] == "gcft") { GameCubeAssetCommands.Run(args); return 0; }
     if (args.Length == 0 || args[0] == "--help")
     {
-        Console.WriteLine("dnd-assets model INPUT.{glb,gltf,fbx,obj,dae,3ds,stl,ply,gj,xj} OUTPUT.dndmodel [--texture-limit N] [--assimp PATH] [--allow-material-approximation] [--compile-gx-materials] [--bake-neutral-studio]\ndnd-assets audio INPUT.mp3 OUTPUT.adx [--loops PATH] [--loop NAME] [--sample-rate HZ] [--ffmpeg PATH]\ndnd-assets texture INPUT.png OUTPUT.dndtex [--mipmaps]\ndnd-assets font ATLAS.png OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]\nFBX/OBJ/DAE/3DS/STL/PLY require Assimp CLI 5.3.x. PSO GJ/XJ geometry uses built-in .NET parsers; textured PSO materials currently require --allow-material-approximation. Outputs include a dependency manifest.");
+        Console.WriteLine("dnd-assets gcft inspect INPUT | gcft extract ARCHIVE OUTPUT_DIR | gcft pack INPUT_DIR OUTPUT.arc | gcft bti INPUT.bti OUTPUT.png\ndnd-assets model INPUT.{glb,gltf,fbx,obj,dae,3ds,stl,ply,gj,xj} OUTPUT.dndmodel [--texture-limit N] [--assimp PATH] [--allow-material-approximation] [--compile-gx-materials] [--bake-neutral-studio]\ndnd-assets audio INPUT.mp3 OUTPUT.adx [--loops PATH] [--loop NAME] [--sample-rate HZ] [--ffmpeg PATH]\ndnd-assets texture INPUT.png OUTPUT.dndtex [--mipmaps]\ndnd-assets font ATLAS.png OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]\nFBX/OBJ/DAE/3DS/STL/PLY require Assimp CLI 5.3.x. PSO GJ/XJ geometry uses built-in .NET parsers; textured PSO materials currently require --allow-material-approximation. Outputs include a dependency manifest.");
         return 0;
     }
     if (args.Length >= 3 && args[0] == "audio")
