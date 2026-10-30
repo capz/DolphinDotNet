@@ -62,6 +62,39 @@ public sealed class J3dMaterialAnimation
         throw new InvalidDataException("Expected J3D animation chunk is missing.");
     }
 
+    /// <summary>Resolve an animation track's authored material name. BVA
+    /// visibility references shapes instead of materials and has no name table.</summary>
+    public string GetTrackMaterialName(int trackIndex, bool konst = false)
+    {
+        if (FileType == "bva1")
+            throw new NotSupportedException("BVA shape visibility is not material-name indexed.");
+        int count = TrackCount;
+        uint namesOffset;
+        if (FileType == "brk1")
+        {
+            int regular = U16(data, chunk + 0xC), konstCount = U16(data, chunk + 0xE);
+            count = konst ? konstCount : regular;
+            namesOffset = U32(data, chunk + (konst ? 0x34 : 0x30));
+        }
+        else namesOffset = U32(data, chunk + 0x1C);
+        if (trackIndex < 0 || trackIndex >= count)
+            throw new ArgumentOutOfRangeException(nameof(trackIndex));
+        int table = Relative(namesOffset, 4);
+        int listed = U16(data, table);
+        if (listed < count || 4L + listed * 4L > size - namesOffset)
+            throw new InvalidDataException("J3D material-name table is truncated.");
+        int nameOffset = U16(data, table + 6 + trackIndex * 4L);
+        if (nameOffset < 4 + listed * 4 || nameOffset >= size - namesOffset)
+            throw new InvalidDataException("J3D animation name offset invalid.");
+        return NullTerminated(data, table + nameOffset, chunk + size, 64);
+    }
+
+    public int GetTrackCount(bool konst = false)
+    {
+        if (FileType != "brk1") return TrackCount;
+        return U16(data, chunk + (konst ? 0xE : 0xC));
+    }
+
     public float ResolveFrame(float frame)
     {
         if (float.IsNaN(frame) || float.IsInfinity(frame) || frame < 0)
@@ -125,13 +158,20 @@ public sealed class J3dMaterialAnimation
     /// Konst channel values typically require clamping to [0,255] before GX submission.</summary>
     public float[] SampleColor(int trackIndex, bool konst, float frame)
     {
+        var values = new float[4];
+        SampleColor(trackIndex, konst, frame, values);
+        return values;
+    }
+
+    public void SampleColor(int trackIndex, bool konst, float frame, float[] values)
+    {
+        if (values == null || values.Length < 4) throw new ArgumentException("Four color channels required.", nameof(values));
         RequireKind("brk1");
         int regularCount = U16(data, chunk + 0xC), konstCount = U16(data, chunk + 0xE);
         int count = konst ? konstCount : regularCount;
         if (trackIndex < 0 || trackIndex >= count) throw new ArgumentOutOfRangeException(nameof(trackIndex));
         int anims = Relative(U32(data, chunk + (konst ? 0x24 : 0x20)), count * 0x1CL);
         int rec = anims + trackIndex * 0x1C;
-        var values = new float[4];
         float time = ResolveFrame(frame);
         for (int component = 0; component < 4; component++)
         {
@@ -141,35 +181,63 @@ public sealed class J3dMaterialAnimation
             int table = Relative(U32(data, chunk + tableOff + component * 4), countValues * 2L);
             values[component] = SampleTrack(rec + component * 6, table, countValues, 2, false, time);
         }
-        return values;
     }
 
     /// <summary>Sample BTK S/T/Q UV scale, rotation and translation tracks in order.
     /// Rotations are returned as raw signed 16-bit angular units, not degrees.</summary>
     public float[] SampleUv(int trackIndex, float frame)
     {
+        var values = new float[9];
+        SampleUv(trackIndex, frame, values);
+        return values;
+    }
+
+    public int TextureRotationFraction => FileType == "btk1" ? data[chunk + 9] : 0;
+    public bool IsMayaTextureMatrix => FileType == "btk1" && size >= 0x60 && U32(data, chunk + 0x5C) == 1;
+
+    public void SampleUv(int trackIndex, float frame, float[] output)
+    {
+        if (output == null || output.Length < 9) throw new ArgumentException("Nine UV channels required.", nameof(output));
         RequireKind("btk1");
         if (trackIndex < 0 || trackIndex >= TrackCount) throw new ArgumentOutOfRangeException(nameof(trackIndex));
         int records = Relative(U32(data, chunk + 0x14), TrackCount * 0x36L);
         int scaleCount = U16(data, chunk + 0xE);
         int rotationCount = U16(data, chunk + 0x10);
         int translationCount = U16(data, chunk + 0x12);
-        var counts = new[] { scaleCount, rotationCount, translationCount };
-        var offsets = new[] { 0x28, 0x2C, 0x30 };
-        var output = new float[9];
-        int row = records + trackIndex * 0x36;
+         int row = records + trackIndex * 0x36;
         float time = ResolveFrame(frame);
         for (int k = 0; k < 9; k++)
         {
             int tableType = k % 3;
-            int count = counts[tableType];
+            int count = tableType == 0 ? scaleCount : tableType == 1 ? rotationCount : translationCount;
             bool floating = tableType != 1;
             int stride = floating ? 4 : 2;
-            int table = Relative(U32(data, chunk + offsets[tableType]), count * (long)stride);
+            int tableOffset = tableType == 0 ? 0x28 : tableType == 1 ? 0x2C : 0x30;
+            int table = Relative(U32(data, chunk + tableOffset), count * (long)stride);
             output[k] = SampleTrack(row + k * 6, table, count, stride, floating, time);
         }
-        return output;
     }
+
+    public float[] GetUvCenter(int trackIndex)
+    {
+        var destination = new float[2];
+        GetUvCenter(trackIndex, destination);
+        return destination;
+    }
+
+    public void GetUvCenter(int trackIndex, float[] destination)
+    {
+        if (destination == null || destination.Length < 2)
+            throw new ArgumentException("Two center coordinates required.", nameof(destination));
+        RequireKind("btk1");
+        if (trackIndex < 0 || trackIndex >= TrackCount) throw new ArgumentOutOfRangeException(nameof(trackIndex));
+        int center = Relative(U32(data, chunk + 0x24), TrackCount * 12L);
+        destination[0] = F32(data, center + trackIndex * 12);
+        destination[1] = F32(data, center + trackIndex * 12 + 4);
+    }
+
+    private float TrackValue(int table, int stride, bool floating, int index) =>
+        floating ? F32(data, table + index * stride) : S16(data, table + index * stride);
 
     private float SampleTrack(int record, int table, int tableCount, int stride, bool floating, float frame)
     {
@@ -178,19 +246,19 @@ public sealed class J3dMaterialAnimation
         int step = count == 1 ? 1 : tangentMode == 0 ? 3 : 4;
         if ((long)index + (long)count * step > tableCount)
             throw new InvalidDataException("Animation key points outside table.");
-        float Value(int at) => floating ? F32(data, table + at * stride) : S16(data, table + at * stride);
-        if (count == 1) return Value(index);
-        float t0 = Value(index), v0 = Value(index + 1);
+
+        if (count == 1) return TrackValue(table, stride, floating, index);
+        float t0 = TrackValue(table, stride, floating, index), v0 = TrackValue(table, stride, floating, index + 1);
         for (int i = 1; i < count; i++)
         {
             int next = index + i * step;
-            float t1 = Value(next), v1 = Value(next + 1);
+            float t1 = TrackValue(table, stride, floating, next), v1 = TrackValue(table, stride, floating, next + 1);
             if (t1 <= t0) throw new InvalidDataException("Non-monotonic J3D animation keys.");
             if (frame <= t1)
             {
                 float u = Math.Max(0, Math.Min(1, (frame - t0) / (t1 - t0)));
-                float outTan = Value(index + (i - 1) * step + (tangentMode == 0 ? 2 : 3));
-                float inTan = Value(next + 2);
+                float outTan = TrackValue(table, stride, floating, index + (i - 1) * step + (tangentMode == 0 ? 2 : 3));
+                float inTan = TrackValue(table, stride, floating, next + 2);
                 float h00 = 2 * u * u * u - 3 * u * u + 1;
                 float h10 = u * u * u - 2 * u * u + u;
                 float h01 = -2 * u * u * u + 3 * u * u;

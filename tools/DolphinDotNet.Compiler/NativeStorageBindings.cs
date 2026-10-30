@@ -8,6 +8,7 @@ internal static class NativeStorageBindings
         ["ModelDrawEffect"]=("dnd_model_draw_effect","iai",false),
         ["ModelDrawModels"]=("dnd_model_draw_models","aai",false),
         ["ModelDrawMaterial"]=("dnd_model_draw_material","iaiiiifi",false),
+        ["ModelDrawAnimated"]=("dnd_model_draw_animated","iaa",false),
         ["DolPrepare"]=("dnd_dol_prepare","a",false),
         ["DolBegin"]=("dnd_dol_begin","s",false),
         ["DolStep"]=("dnd_dol_step","i",false),
