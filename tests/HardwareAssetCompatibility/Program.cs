@@ -134,7 +134,7 @@ internal static class Program
         AssetCompatibilityProbe.Report(AssetCompatibilityProbe.Scanning,-1,0,0,0,"gcloader:/games");
         string? problem=null;
         try{corpus.Scan();}
-        catch(Exception error){problem=error.GetType().Name;}
+        catch(Exception){problem="gcloader-scan-failed";}
 
         if(problem==null && corpus.Count>0)
         {
