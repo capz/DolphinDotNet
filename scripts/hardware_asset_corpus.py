@@ -181,6 +181,13 @@ def main(argv=None):
         target.write_text(json.dumps(actual,indent=2,sort_keys=True)+"\n",encoding="utf-8")
         if args.baseline:
             compare(json.loads(args.baseline.read_text(encoding="utf-8")),actual)
+        bad=[case for case in actual["records"] if case["status"] in ("malformed","runtime-error")]
+        if bad:
+            raise AssertionError("Asset corpus reported "+str(len(bad))+
+                                 " malformed/runtime failures. See "+str(target))
+        if not args.allow_empty and not any(r["visual"] for r in actual["records"]):
+            raise AssertionError("No renderable BTI/J3D/JPA samples passed; "
+                                 "cannot establish visual compatibility. See "+str(target))
         print(json.dumps({"status":"pass","report":str(target),
                           "cases":len(actual["records"]),
                           "rendered":sum(1 for x in actual["records"] if x["visual"]),
