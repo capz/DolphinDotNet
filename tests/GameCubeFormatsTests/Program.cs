@@ -60,6 +60,19 @@ static class Program
         bad = (byte[])bmg.Clone(); W32(bad, 0x30, 0x100);
         Reject(() => BmgMessages.Read(bad), "BMG invalid text offset");
 
+        var cp1252Bmg = (byte[])bmg.Clone();
+        cp1252Bmg[0x10] = 1; cp1252Bmg[0x68] = 0x80; cp1252Bmg[0x69] = 0;
+        Check(BmgCatalog.Read(cp1252Bmg).Entries[0].EscapedText == "€",
+            "Generic BMG Windows-1252 extended characters");
+        var utf8Bmg = (byte[])bmg.Clone();
+        utf8Bmg[0x10] = 4;
+        utf8Bmg[0x68] = 0xE9; utf8Bmg[0x69] = 0x9B;
+        utf8Bmg[0x6A] = 0xAA; utf8Bmg[0x6B] = 0;
+        Check(BmgCatalog.Read(utf8Bmg).Entries[0].EscapedText == "雪",
+            "Generic BMG UTF-8 multibyte decoding");
+        bad = (byte[])utf8Bmg.Clone(); bad[0x69] = 0xFF;
+        Reject(() => BmgCatalog.Read(bad), "Generic BMG invalid UTF-8 rejected");
+
         var genericBmg = new byte[0xA0];
         Str(genericBmg, 0, "MESGbmg1"); W32(genericBmg, 8, 0xA0);
         W32(genericBmg, 0xC, 3); genericBmg[0x10] = 2; // UTF-16BE
