@@ -32,6 +32,7 @@ public sealed class Model : IDisposable
     private AramBuffer? cold;
     public AnimationCollection Animations {get;}
     public int NodeCount {get;}
+    public int MaterialCount { get { Check(); return NativeModel.ModelStat(Token,5); } }
     public bool IsResident {get{Check();return NativeModel.ModelStat(Token,0)==1;}}
     public int NativeBytes {get{Check();return NativeModel.ModelStat(Token,1);}}
     public int AramBytes {get{Check();return cold==null?0:cold.Length;}}
