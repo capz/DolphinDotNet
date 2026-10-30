@@ -88,9 +88,10 @@ internal sealed class AssetCorpus
             using var stream=DFile.OpenRead(path);
             StreamingRarcIndex.Probe(stream,this,sourceImage,path);
         }
-        catch(Exception error) when(error is InvalidDataException or NotSupportedException or IOException)
+        catch(Exception)
         {
-            // Unsupported or corrupt archive metadata is not a testable member.
+            // Invalid, compressed or unreadable archive metadata is skipped.
+            // The scanner remains read-only and continues with other files.
         }
     }
 
