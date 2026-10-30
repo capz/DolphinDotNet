@@ -79,12 +79,12 @@ public sealed class JpcEmitterDefinition
         uint dynamicsFlags = U32(dynamics, v2 ? 8 : 12);
         uint shapeFlags = U32(shape, v2 ? 8 : 12);
         // An unrecognized shape or emitter volume must not silently be rendered incorrectly.
-        int volume = (int)((dynamicsFlags >> 18) & 7);
+        int volume = (int)((dynamicsFlags >> 21) & 7);
         int shapeType = (int)((shapeFlags >> 28) & 15);
         if (volume != 4 || shapeType != 2)
             throw new NotSupportedException("Only verified point emitters with billboards are supported.");
         // Reject emitter configurations which have field/child or scroll dependencies.
-        if ((shapeFlags & 0x100) != 0)
+        if ((shapeFlags & 0x80) != 0)
             throw new NotSupportedException("JPA texture-scrolling effects require a GX texture-matrix profile.");
         int rateOff = v2 ? 0x4C : 0x1C;
         int lifeOff = v2 ? 0x72 : 0x2A;
