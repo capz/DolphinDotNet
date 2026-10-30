@@ -456,7 +456,7 @@ int dnd_canvas_flush(int token) {
         Resource *retired=NULL;
         int ti=(r->texture&1023)-1;
         if(r->texture>0&&ti>=0&&ti<SLOTS&&slots[ti].generation==(r->texture>>10)&&slots[ti].kind==TEXTURE)retired=&slots[ti];
-        if(retired)tx=(DndDrawTexture){retired->data,(uint32_t)retired->bytes,retired->width,retired->height,retired->format,retired->linear!=0,retired->levels};
+        if(retired)tx=(DndDrawTexture){retired->data,(uint32_t)retired->bytes,retired->width,retired->height,retired->format,retired->linear!=0,retired->levels,retired->sampler_set,retired->wrap_s,retired->wrap_t,retired->min_filter,retired->mag_filter,retired->lod_bias};
         else if(!texture(r->texture,&tx))return -1;
         Resource *fx=NULL;
         if(r->effect){int index=(r->effect&1023)-1;
