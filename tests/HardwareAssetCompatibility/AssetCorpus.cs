@@ -73,7 +73,7 @@ internal sealed class AssetCorpus
     {
         try {
             using var file=DFile.OpenRead(path);
-            if(file.Length<0x20||file.Length>AssetFixturePolicy.MaxSourceBytes)return false;
+            if(file.Length<0x20||file.Length>(kind==AssetFixturePolicy.Model?AssetFixturePolicy.MaxModelBytes:AssetFixturePolicy.MaxSourceBytes))return false;
             var bytes=new byte[0x20];
             return file.Read(bytes,0,bytes.Length)==bytes.Length &&
                 AssetFixturePolicy.ValidHeader(kind,bytes);
@@ -89,7 +89,7 @@ internal sealed class AssetCorpus
             {
                 if(count>=AssetFixturePolicy.MaxAssets)break;
                 int kind=AssetFixturePolicy.Kind(entry.Path);
-                if(kind==0||entry.Length<0x20||entry.Length>AssetFixturePolicy.MaxSourceBytes)continue;
+                if(kind==0||entry.Length<0x20||entry.Length>(kind==AssetFixturePolicy.Model?AssetFixturePolicy.MaxModelBytes:AssetFixturePolicy.MaxSourceBytes))continue;
                 using var stream=archive.OpenMemberStream(entry.Path);
                 var header=new byte[0x20];
                 if(stream.Read(header,0,header.Length)!=header.Length ||
@@ -106,7 +106,7 @@ internal sealed class AssetCorpus
 
     private void Add(AssetCase candidate)
     {
-        if(count>=entries.Length)return;
+        if(count>=entries.Length || candidate.Name.Length>215)return;
         // Stable case ordering for a fixed candidate set, independent of VFAT iteration.
         int at=count;
         while(at>0 && string.CompareOrdinal(candidate.Name,entries[at-1].Name)<0)
