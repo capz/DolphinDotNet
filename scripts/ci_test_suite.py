@@ -22,6 +22,7 @@ def aot(project,output):
 def main(area):
     if area=="native":
         run("python3","-m","unittest","discover","-s","tests","-p","test_ci_native.py")
+        run("python3","-m","unittest","discover","-s","tests","-p","test_debug_hardware_automation.py")
         # The shipped release runtime uses O3/LTO. Execute assertions under
         # those flags too; clean between modes because make does not track CFLAGS.
         for optimization in ("", " -O3 -flto -fno-strict-aliasing"):
