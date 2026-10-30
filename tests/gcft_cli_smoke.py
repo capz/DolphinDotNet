@@ -40,14 +40,14 @@ with tempfile.TemporaryDirectory() as tmp:
     struct.pack_into(">I", bfn, 0x44, 0x40)
     struct.pack_into(">HHHHI", bfn, 0x48, 65, 65, 8, 8, 32)
     struct.pack_into(">HHHH", bfn, 0x56, 1, 1, 8, 8)
-    bfn[0x60:0x80] = b"\\xff" * 32
+    bfn[0x60:0x80] = b"\xff" * 32
     font_file = base / "sample.bfn"
     font_file.write_bytes(bfn)
     assert "1 glyph sheets" in command("inspect", font_file)
     font_dir = base / "fonts"
     command("bfn", font_file, font_dir)
     png = (font_dir / "sheet-000.png").read_bytes()
-    assert png[:8] == b"\\x89PNG\\r\\n\\x1a\\n"
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
     assert struct.unpack_from(">II", png, 16) == (8, 8)
 
 print("GCFT desktop archive roundtrip passed")
