@@ -98,8 +98,8 @@ def main(area):
         # Hardware/emulator execution belongs in independent console acceptance.
         build("tools/DolphinDotNet.Compiler")
         with tempfile.TemporaryDirectory() as tmp:
-            for p in ("HelloGameCube","GraphicsSmoke","AramSmoke","NetworkSmoke",
-                      "ControllerDolphinSmoke","JSystemHardwareFixture","DolLauncherSmoke",
+            for p in ("JSystemHardwareFixture","HelloGameCube","GraphicsSmoke","AramSmoke","NetworkSmoke",
+                      "ControllerDolphinSmoke","DolLauncherSmoke",
                       "DebuggerStackSmoke","DebuggerInspectionSmoke"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))
     else: raise ValueError("Unknown framework area: "+area)
