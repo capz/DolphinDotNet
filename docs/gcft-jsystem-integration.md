@@ -13,7 +13,7 @@ or third-party rendering components are included.
 | Detection | `GameCubeFormatDetector.Detect` | magic-based GCM, RARC, Yaz0, Yay0, BMG, BFN, J3D, JPC, TPL; hinted BTI | DOL and most proprietary disc assets have no universal magic |
 | Archives | `RarcArchive.Read/OpenAsync`, `Entries`, `ReadFile` | read-only RARC tree, raw/Yaz0 wrapper, decompression on demand for Yaz0 members | no zero-copy member streaming, raw archive limited to 16 MiB |
 | Textures | `BtiTexture.Read`, `Texture2D.FromBti/LoadBtiAsync` | GX I4/I8/IA4/IA8/RGB565/RGB5A3/RGBA8/CI4/CI8/CI14X2/CMPR | base mip into native RGBA8; wrap/LOD/minification and palette indexing not passed to native sampler |
-| Material animations | `J3dMaterialAnimation.Read` | J3D1 BTK, BRK, BTP, BVA: bounded track decode + frame sampling | no model-material binding; source TEV and indirect stages may be unsupported |
+| Material animations | `J3dMaterialAnimation.Read` | J3D1 BTK, BRK, BTP, BVA: bounded track decode + frame sampling | caller-owned Material binding for BTP/BRK/BVA; imported per-submesh binding and BTK GX matrix playback remain unsupported |
 | Particles | `JpcArchive.Read/LoadAsync` | JPAC1-00 and JPAC2-10 particle IDs, chunk inventory, texture references, TEX1 embedded BTI extraction | no emitter simulation, physics, billboard renderer or original TEV fidelity |
 | Messages | `BmgMessages.Read/LoadAsync` | Wind Waker MESGbmg1 INF1/DAT1 with preserved byte sequences and control escapes | not a generic multilingual BMG engine |
 | Fonts | `BfnFont.Read` | BFN1 INF1 metrics, MAP1 mapping, WID1 character widths | GLY1 image rasterization and text layout not included |
@@ -43,6 +43,10 @@ using var cursor = await Texture2D.LoadBtiAsync("sd:/assets/cursor.bti");
 // Non-skeletal J3D tracks currently return data, not a model-side material override.
 var animation = J3dMaterialAnimation.Read(archive.ReadFile("anim/scroll.btk"));
 float[] uv = animation.SampleUv(0, 12.5f);
+
+// BTP/BRK/BVA can drive an explicit override Material for a caller-owned model.
+// bool draw = J3dMaterialBinding.Apply(animation, material, 12.5f, 0, textures);
+// if (draw) renderer.DrawModelWithMaterial(instance, world, material);
 
 // JPC parsing exposes particles and image data, without promising GX playback.
 var jpc = JpcArchive.Read(archive.ReadFile("particle/effects.jpc"));
