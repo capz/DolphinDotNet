@@ -10,7 +10,8 @@ int main(void) {
     assert(dnd_asset_compat_record.magic==DND_ASSET_MAGIC);
     assert(dnd_asset_compat_record.version==1);
     name.length=5;
-    for(unsigned i=0;i<5;i++)name.chars[i]=(uint16_t)("A/B\xE9x"[i]);
+    for(unsigned i=0;i<5;i++)name.chars[i]=(uint16_t)("A/B?x"[i]);
+    name.chars[3]=0xe9;
     dnd_asset_compat_report(DND_ASSET_READY,-1,2,0,5,(const DndString*)&name);
     assert(dnd_asset_compat_record.status==DND_ASSET_READY);
     assert(dnd_asset_compat_record.index==0xffffffffu);
