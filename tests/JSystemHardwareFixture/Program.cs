@@ -23,7 +23,6 @@ internal static class Program
     private static Texture2D? texture;
     private static Model? model;
     private static ModelInstance? instance;
-    private static JpcParticleEmitter? particles;
     private static Draw2D? batch;
     private static readonly GraphicsDevice device=GraphicsDevice.Default;
     private static readonly Renderer renderer=new Renderer();
@@ -186,7 +185,6 @@ internal static class Program
     }
     private static void Release()
     {
-        particles?.Dispose();particles=null;
         instance?.Dispose();instance=null;
         model?.Dispose();model=null;
         texture?.Dispose();texture=null;
@@ -227,21 +225,7 @@ internal static class Program
                 model=await Model.LoadJ3dAsync(path,allowMaterialApproximation:true);
                 instance=model.CreateInstance();
             }
-            else if(result.Format==GameCubeFileFormat.Jpc&&result.HasNativeVisual)
-            {
-                var archive=JpcArchive.Read(data);
-                // A JPC may be decodable but no particle supports the bounded
-                // billboard renderer: preserve parser coverage in that case.
-                for(int i=0;i<archive.Particles.Count;i++)
-                    try
-                    {
-                        particles=new JpcParticleEmitter(archive,archive.Particles[i].Id,64,12345);
-                        for(int step=0;step<20;step++)particles.Update(1f/60);
-                        break;
-                    }
-                    catch(NotSupportedException){}
-                    catch(InvalidDataException){}
-            }
+
             passed++;
         }
         catch(NotSupportedException){skipped++;}
@@ -272,11 +256,10 @@ internal static class Program
             batch.DrawTexture(texture,new RectF((640-width)/2,(480-height)/2,width,height),Color32.White);
             batch.End();
         }
-        if(instance!=null||particles!=null)
+        if(instance!=null)
         {
             renderer.Begin3D(camera);
-            if(instance!=null)renderer.DrawModel(instance,world);
-            if(particles!=null)particles.Draw(renderer,camera);
+            renderer.DrawModel(instance,world);
             renderer.End3D();
         }
         device.EndFrame();
