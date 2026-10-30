@@ -1,4 +1,7 @@
 #include "dnd_input.h"
+#ifdef DND_DEBUG_AUTOMATION
+#include "dnd_debug_automation.h"
+#endif
 #ifdef DND_SAMPLE_CONTROLS
 #include "dnd_performance.h"
 #endif
@@ -37,6 +40,9 @@ void dnd_input_poll(void) {
     dnd_input_init();
     DndInputSample samples[4]={0};
     dnd_input_backend_sample(samples);
+#ifdef DND_DEBUG_AUTOMATION
+    dnd_automation_input(samples);
+#endif
     for (unsigned i=0; i<4; i++) {
         const DndInputSample *raw=&samples[i];
         DndGamePad *pad=&pads[i];
