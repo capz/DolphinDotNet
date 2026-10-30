@@ -11,7 +11,7 @@ internal static class GameCubeAssetCommands
     public static void Run(string[] args)
     {
         if (args.Length < 3) throw new ArgumentException(
-            "gcft inspect INPUT | gcft extract ARCHIVE OUTPUT_DIR | gcft pack INPUT_DIR OUTPUT.arc | gcft bti INPUT.bti OUTPUT.png | gcft bfn INPUT.bfn OUTPUT_DIR");
+            "gcft inspect INPUT | gcft extract ARCHIVE OUTPUT_DIR | gcft pack INPUT_DIR OUTPUT.arc | gcft bti INPUT.bti OUTPUT.png | gcft bfn INPUT.bfn OUTPUT_DIR | gcft bmg INPUT.bmg");
         switch (args[1])
         {
             case "inspect":
@@ -33,6 +33,10 @@ internal static class GameCubeAssetCommands
             case "bfn":
                 if (args.Length != 4) throw new ArgumentException("gcft bfn INPUT.bfn OUTPUT_DIR");
                 ExtractBfn(File.ReadAllBytes(args[2]), args[3]);
+                break;
+            case "bmg":
+                if (args.Length != 3) throw new ArgumentException("gcft bmg INPUT.bmg");
+                DumpGenericBmg(File.ReadAllBytes(args[2]));
                 break;
             default: throw new ArgumentException("Unknown gcft subcommand.");
         }
@@ -96,6 +100,14 @@ internal static class GameCubeAssetCommands
             File.WriteAllBytes(full, archive.ReadFile(entry));
         }
         Console.WriteLine("Extracted " + archive.Entries.Count + " files.");
+    }
+
+    private static void DumpGenericBmg(byte[] data)
+    {
+        var catalog = BmgCatalog.Read(data);
+        Console.WriteLine("BMG encoding " + catalog.EncodingCode + " (" + catalog.Entries.Count + " messages)");
+        foreach (var entry in catalog.Entries)
+            Console.WriteLine(entry.Id.ToString("X8") + "\t" + entry.EscapedText);
     }
 
     private static void ExtractBfn(byte[] data, string outputDirectory)

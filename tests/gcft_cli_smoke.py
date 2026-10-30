@@ -50,4 +50,20 @@ with tempfile.TemporaryDirectory() as tmp:
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
     assert struct.unpack_from(">II", png, 16) == (8, 8)
 
+    # Generic BMG: variable-size INF1 entries and UTF-16BE text without
+    # Wind Waker-specific message attributes.
+    bmg = bytearray(0x80)
+    bmg[:8] = b"MESGbmg1"
+    struct.pack_into(">II", bmg, 8, 0x80, 2)
+    bmg[0x10] = 2
+    bmg[0x20:0x24] = b"INF1"
+    struct.pack_into(">IHH", bmg, 0x24, 0x20, 1, 4)
+    bmg[0x40:0x44] = b"DAT1"
+    struct.pack_into(">I", bmg, 0x44, 0x40)
+    bmg[0x48:0x4C] = bytes((0, 65, 0, 0))
+    message_file = base / "generic.bmg"
+    message_file.write_bytes(bmg)
+    listing = command("bmg", message_file)
+    assert "BMG encoding 2" in listing and "00000000\tA" in listing, listing
+
 print("GCFT desktop archive roundtrip passed")

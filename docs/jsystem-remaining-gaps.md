@@ -22,12 +22,12 @@ This is the live checklist built from [the baseline interoperability matrix](gcf
 | --- | --- | --- |
 | RARC read/archive extraction | implemented, read-only; streams do not decompress | chunked decompression of Yaz0/Yay0 members without loading entire archives, nested archives, controlled editing |
 | BFN font | glyph mapping, widths, GLY1 tile/sheet RGBA extraction | draw-time text layout, wrapping, kerning, Shift-JIS glyph shaping, renderer atlas caching |
-| BMG messages | Wind Waker INF1/DAT1 profile | standard BMG entry-size variants, MID1 IDs, UTF-16BE/Shift-JIS text, game-specific control sequences |
+| BMG messages | original Wind Waker reader plus generic variable INF1, MID1, CP1252/UTF-16BE/UTF-8 and escaped tags; read-only FLW1/FLI1 flow node/link/ID tables | Shift-JIS codepage tables, flow execution (game-specific events/queries), tag semantics and writing |
 | JPA volume emission | bounded point/cube/sphere/cylinder/circle/line, deterministic approximations | torus, partial sweeps, inner radius, emitter rotations and distribution parity with Nintendo JParticle |
 | JPA simulation | base lifetime, velocity/spread, drag and alpha | FLD1 forces, SSP1 children, ESP1 alpha/scale/rotation animations, keyframes, collision and spawn timing |
 | GX particles | textured alpha billboards with depth ordering | alternate billboard axes, strips, special GX blend/TEV/indirect stages, optimized batching |
 | J3D material animation | named BTP/BTK/BRK, explicit BVA shape-to-material mapping | true per-shape visibility, multiple texture coordinates, Maya matrices, indirect material stages and original TEV semantics |
-| BTI formats | 11 base formats; raw non-indexed native mip chains | CI4/CI8/CI14X2 mip chains, wrap S/T, independent min/mag, LOD bias, anisotropy and sampler fidelity |
+| BTI formats | all 11 base formats, non-power-of-two source decoding, raw non-indexed mip chains, indexed CI4/CI8/CI14X2 mip chains converted into GX RGBA8 | wrap S/T, independent min/mag, LOD bias, anisotropy, native CI/TLUT and sampler fidelity |
 | GCM writeback | read-only disc filesystem support | disc image rebuilding or patching; preservation of FST/BI2 and alignment |
 | DOL/REL | existing DOL debugging, gclib research | REL relocation reader/patching where needed; debugging independent of format-loading |
 | Validation | synthetic malformed-input, host/AOT/native/GameCube compile checks | legitimate owned-disc fixture corpus, actual hardware render captures and measured RAM/GX budgets |
@@ -80,6 +80,48 @@ Partial sweeps, inner radii, rotations and torus emitters are rejected for
 non-point shapes. Non-billboard BSP1, child/field chunks, advanced blend and
 material animators remain unsupported. The 256-particle cap and 60-Hz
 fixed step remain unchanged.
+
+## Generic BMG and indexed BTI extensions (PR #139)
+
+The optional `BmgCatalog.Read(bytes)` reads big-endian `MESGbmg1`
+`INF1`, `DAT1` and `MID1` (when supplied) without applying a
+game-specific attribute structure. Entries provide `Index`, a 32-bit
+`Id`, raw attribute bytes, raw encoded text, rendered `EscapedText` and
+uninterpreted `ControlTag` records. Encoding 0 is treated as a legacy
+single-byte profile; 1 supports CP1252; 2 supports strict UTF-16BE;
+4 supports strict UTF-8. Encoding 3 preserves non-ASCII Shift-JIS bytes
+as `\\xNN` escapes until game-specific code pages are available.
+
+```csharp
+var catalog = BmgCatalog.Read(bmgBytes);
+foreach (var message in catalog.Entries)
+{
+    // Integer IDs originate from MID1 when available, otherwise the INF1 index.
+    Console.WriteLine(message.Id + ": " + message.EscapedText);
+}
+```
+
+Read-only `BmgFlowTables.Read(bytes)` optionally parses `FLW1` nodes,
+indirection links and `FLI1` named flow IDs. It validates bounded references
+and exposes the raw branch/event fields without invoking game-specific
+callbacks. There is **no** conversation-flow executor.
+
+For desktop inspection use:
+
+```sh
+dotnet run --project tools/DolphinDotNet.Assets -- gcft bmg messages.bmg
+```
+
+`BmgMessages.Read` remains unchanged for detailed Wind Waker INF1
+message attributes. Generic tag decoding retains byte-exact tags but
+**does not execute text effects or game-specific commands**.
+
+`BtiTexture.CreateNativePackage` now preserves indexed source mipmaps
+by expanding each CI4, CI8 or CI14X2 level into GX-tiled RGBA8 within a
+single DNTX v2 allocation. The original indexed payload is not submitted
+to the GX TLUT sampler. Non-power-of-two BTI dimensions are accepted by
+the image reader; native mip packages still require power-of-two images,
+so `Texture2D.FromBti` falls back to RGBA8 base level for NPOT files.
 
 ## Verification
 
