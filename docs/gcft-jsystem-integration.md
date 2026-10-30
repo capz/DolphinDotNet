@@ -1,4 +1,4 @@
-# GCFT/JSystem interoperability (single coordinated branch)
+# GCFT/JSystem interoperability (baseline and runtime extensions)
 
 This feature borrows format research from [GameCube File Tools](https://github.com/LagoLunatic/GCFT)
 and its [gclib](https://github.com/LagoLunatic/gclib) submodule. All new readers are
@@ -12,19 +12,19 @@ or third-party rendering components are included.
 | Binary | `GameCubeBinary` | bounded big-endian access and Yaz0 decode | Yay0 retained in existing native model importer; not available from this shared reader |
 | Detection | `GameCubeFormatDetector.Detect` | magic-based GCM, RARC, Yaz0, Yay0, BMG, BFN, J3D, JPC, TPL; hinted BTI | DOL and most proprietary disc assets have no universal magic |
 | Archives | `RarcArchive.Read/OpenAsync`, `Entries`, `ReadFile` | read-only RARC tree, raw/Yaz0 wrapper, decompression on demand for Yaz0 members | no zero-copy member streaming, raw archive limited to 16 MiB |
-| Textures | `BtiTexture.Read`, `Texture2D.FromBti/LoadBtiAsync` | GX I4/I8/IA4/IA8/RGB565/RGB5A3/RGBA8/CI4/CI8/CI14X2/CMPR | base mip into native RGBA8; wrap/LOD/minification and palette indexing not passed to native sampler |
-| Material animations | `J3dMaterialAnimation.Read` | J3D1 BTK, BRK, BTP, BVA: bounded track decode + frame sampling | caller-owned Material binding for BTP/BRK/BVA; imported per-submesh binding and BTK GX matrix playback remain unsupported |
-| Particles | `JpcArchive.Read/LoadAsync` | JPAC1-00 and JPAC2-10 particle IDs, chunk inventory, texture references, TEX1 embedded BTI extraction | no emitter simulation, physics, billboard renderer or original TEV fidelity |
+| Textures | `BtiTexture.Read`, `Texture2D.FromBti/LoadBtiAsync` | GX I4/I8/IA4/IA8/RGB565/RGB5A3/RGBA8/CI4/CI8/CI14X2/CMPR | native GX mip-chain preservation for non-indexed formats; indexed base RGBA8 fallback; wrap/filter/LOD remain approximated |
+| Material animations | `J3dMaterialAnimation.Read` | J3D1 BTK, BRK, BTP, BVA: bounded track decode + frame sampling | opt-in per-material GX model draw and name-based BTK/BTP/BRK binding; advanced TEV and BVA shape mapping remain limited |
+| Particles | `JpcArchive.Read/LoadAsync` | JPAC1-00 and JPAC2-10 particle IDs, chunk inventory, texture references, TEX1 embedded BTI extraction | point/billboard emitter simulator and GX renderer now available for a strict subset; no complete original JPA/TEV fidelity |
 | Messages | `BmgMessages.Read/LoadAsync` | Wind Waker MESGbmg1 INF1/DAT1 with preserved byte sequences and control escapes | not a generic multilingual BMG engine |
 | Fonts | `BfnFont.Read` | BFN1 INF1 metrics, MAP1 mapping, WID1 character widths | GLY1 image rasterization and text layout not included |
 | Desktop | `dnd-assets gcft` | inspect, RARC extract, deterministic folder-to-RARC pack, BTI-to-PNG | no write-back to retail GCM, no arbitrary in-place update |
 | GCM, DOL | pre-existing storage/debugging facilities | existing native disc mounting and executable mapping | do not duplicate with GCFT desktop code |
 
-The single-branch delivery does **not** claim that metadata-only particle or J3D
-material readers provide complete original game playback. Full GX particle
-rendering and applying BTK/BRK/BTP/BVA to imported model draw commands require
-additional renderer work and retail fixture qualification; this is a deliberately
-reviewable foundation, not a complete compatibility claim.
+The merged parser foundation (#136) now has a separate runtime extension (#137).
+See [JSystem runtime playback](jsystem-runtime-playback.md) for supported GX
+point/billboard particle rendering, named J3D material animation and native
+BTI mip-chain playback. Advanced JPA physics, full indirect TEV reproduction,
+and retail-disc hardware validation remain outside the verified subset.
 
 ## Console usage
 
