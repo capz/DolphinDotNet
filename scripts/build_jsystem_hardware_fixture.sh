@@ -23,4 +23,4 @@ case "$mode" in
   *) echo "Usage: $0 usb [channel] | tcp IP MASK GATEWAY [PORT]" >&2; exit 2;;
 esac
 make -C "$out"
-echo "Fixture DOL and ELF: $out/JSystemHardwareFixture.dol / $out/JSystemHardwareFixture.elf"
+echo "Fixture DOL and ELF: $out/Game.dol / $out/Game.elf"
