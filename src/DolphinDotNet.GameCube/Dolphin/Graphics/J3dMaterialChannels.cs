@@ -11,6 +11,7 @@ public sealed class J3dMaterialChannels
     internal readonly float[] Values;
     private readonly float[] scratchColor = new float[4];
     private readonly float[] scratchUv = new float[9];
+    private readonly float[] scratchCenter = new float[2];
     public int MaterialCount { get; }
 
     public J3dMaterialChannels(Model model) : this(model != null ? model.MaterialCount : throw new ArgumentNullException(nameof(model))) { }
@@ -66,14 +67,17 @@ public sealed class J3dMaterialChannels
     public void SetUvAffine(int material, float m00, float m01, float m02,
         float m10, float m11, float m12)
     {
-        var values = new[] { m00, m01, m02, m10, m11, m12 };
+        ValidateUv(m00); ValidateUv(m01); ValidateUv(m02);
+        ValidateUv(m10); ValidateUv(m11); ValidateUv(m12);
         int at = Start(material) + 5;
-        for (int i = 0; i < 6; i++)
-        {
-            if (float.IsNaN(values[i]) || float.IsInfinity(values[i]) || Math.Abs(values[i]) > 4096)
-                throw new ArgumentOutOfRangeException(nameof(m00), "UV transform is not finite and bounded.");
-            Values[at + i] = values[i];
-        }
+        Values[at] = m00; Values[at + 1] = m01; Values[at + 2] = m02;
+        Values[at + 3] = m10; Values[at + 4] = m11; Values[at + 5] = m12;
+    }
+
+    private static void ValidateUv(float value)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || Math.Abs(value) > 4096)
+            throw new ArgumentOutOfRangeException(nameof(value), "UV transform is not finite and bounded.");
     }
 
     /// <summary>Apply one indexed animation track to one source material.
@@ -98,19 +102,22 @@ public sealed class J3dMaterialChannels
                 break;
             case "btk1":
                 animation.SampleUv(track, frame, scratchUv);
-                var center = animation.GetUvCenter(track);
+                if (animation.IsMayaTextureMatrix)
+                    throw new NotSupportedException("Maya-mode BTK texture matrices require separate GX conversion.");
+                animation.GetUvCenter(track, scratchCenter);
                 // J3D supports three S/T/Q rotations and multiple matrix modes.
                 // This adapter accepts the ordinary affine S/T profile only.
                 if (Math.Abs(scratchUv[6] - 1) > 0.001 || Math.Abs(scratchUv[7]) > 0.001 ||
                     Math.Abs(scratchUv[8]) > 0.001 ||
                     Math.Abs(scratchUv[1] - scratchUv[4]) > 0.001)
                     throw new NotSupportedException("Non-affine BTK S/T/Q texture transforms are unsupported.");
-                double radians = scratchUv[1] * Math.Pow(2, animation.TextureRotationFraction) *
-                                 Math.PI / 32768.0;
+                int fraction = animation.TextureRotationFraction;
+                if (fraction > 15) throw new NotSupportedException("Invalid BTK rotation scale.");
+                double radians = scratchUv[1] * (1 << fraction) * Math.PI / 32768.0;
                 float c = (float)Math.Cos(radians), s = (float)Math.Sin(radians);
                 float m00 = c * scratchUv[0], m01 = -s * scratchUv[3],
                       m10 = s * scratchUv[0], m11 = c * scratchUv[3];
-                float cx = center[0], cy = center[1];
+                float cx = scratchCenter[0], cy = scratchCenter[1];
                 SetUvAffine(material, m00, m01, cx + scratchUv[2] - m00 * cx - m01 * cy,
                     m10, m11, cy + scratchUv[5] - m10 * cx - m11 * cy);
                 break;
