@@ -10,11 +10,11 @@ public static class AssetCompatibilityProbe
     public const int Texture=1, Particle=2, Model=3;
 
     public static void Report(int status,int index,int total,int kind,int scanned,string name)
-        => NativeAssetCompatibility.Report(status,index,total,kind,scanned,name);
+        => NativeAssetCompatibility.AssetCompatReport(status,index,total,kind,scanned,name);
 }
 
 internal static class NativeAssetCompatibility
 {
-    internal static void Report(int status,int index,int total,int kind,int scanned,string name)
+    internal static void AssetCompatReport(int status,int index,int total,int kind,int scanned,string name)
         => throw new System.PlatformNotSupportedException("The asset compatibility probe requires GameCube AOT.");
 }
