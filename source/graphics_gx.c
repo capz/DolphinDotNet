@@ -26,7 +26,11 @@ static bool cached_has_primary,cached_has_secondary;
 static bool texture_same(const DndDrawTexture *a,const DndDrawTexture *b) {
     return a->data==b->data && a->bytes==b->bytes &&
            a->width==b->width && a->height==b->height &&
-           a->format==b->format && a->linear==b->linear && a->levels==b->levels;
+           a->format==b->format && a->linear==b->linear && a->levels==b->levels &&
+           a->sampler_set==b->sampler_set &&
+           (!a->sampler_set || (a->wrap_s==b->wrap_s && a->wrap_t==b->wrap_t &&
+              a->min_filter==b->min_filter && a->mag_filter==b->mag_filter &&
+              a->lod_bias==b->lod_bias));
 }
 void dnd_draw_backend_invalidate_cache(void){material_cache_valid=false;}
 void dnd_draw_backend_publish_texture(void){
@@ -167,15 +171,15 @@ static bool draw_state(const DndDrawTexture *texture,const DndDrawMaterial *mate
     if(blend==3)GX_SetBlendMode(GX_BM_BLEND,GX_BL_ONE,GX_BL_INVSRCALPHA,GX_LO_CLEAR);
     GX_SetClipMode(GX_CLIP_ENABLE);GX_SetCoPlanar(GX_FALSE);GX_SetFog(GX_FOG_NONE,0,1,0,1,(GXColor){0,0,0,0});
     if(texture) {
-        GXTexObj tex;GX_InitTexObj(&tex,(void*)texture->data,(u16)texture->width,(u16)texture->height,(u8)texture->format,world_reflection&&!secondary?GX_REPEAT:GX_CLAMP,GX_CLAMP,texture->levels>1);
-        GX_InitTexObjLOD(&tex,texture->levels>1?(texture->linear?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):(texture->linear?GX_LINEAR:GX_NEAR),texture->linear?GX_LINEAR:GX_NEAR,0,(f32)(texture->levels>1?texture->levels-1:0),0,GX_FALSE,GX_FALSE,GX_ANISO_1);
+        GXTexObj tex;GX_InitTexObj(&tex,(void*)texture->data,(u16)texture->width,(u16)texture->height,(u8)texture->format,texture->sampler_set?texture->wrap_s:(world_reflection&&!secondary?GX_REPEAT:GX_CLAMP),texture->sampler_set?texture->wrap_t:GX_CLAMP,texture->levels>1);
+        GX_InitTexObjLOD(&tex,texture->sampler_set?texture->min_filter:(texture->levels>1?(texture->linear?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):(texture->linear?GX_LINEAR:GX_NEAR)),texture->sampler_set?texture->mag_filter:(texture->linear?GX_LINEAR:GX_NEAR),0,(f32)(texture->levels>1?texture->levels-1:0),texture->sampler_set?texture->lod_bias:0,GX_FALSE,GX_FALSE,GX_ANISO_1);
         managed_sampler(&tex,0,texture->levels,texture->linear,world_reflection&&!secondary?GX_REPEAT:GX_CLAMP,GX_CLAMP);
     GX_LoadTexObj(&tex,GX_TEXMAP0);
     }
     if(texture||secondary)GX_SetTexCoordGen(GX_TEXCOORD0,GX_TG_MTX2x4,GX_TG_TEX0,GX_IDENTITY);
     if(secondary){
-        GXTexObj tex;GX_InitTexObj(&tex,(void*)secondary->data,(u16)secondary->width,(u16)secondary->height,(u8)secondary->format,world_reflection?GX_REPEAT:GX_CLAMP,GX_CLAMP,secondary->levels>1);
-        GX_InitTexObjLOD(&tex,secondary->levels>1?(secondary->linear?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):(secondary->linear?GX_LINEAR:GX_NEAR),secondary->linear?GX_LINEAR:GX_NEAR,0,(f32)(secondary->levels>1?secondary->levels-1:0),0,GX_FALSE,GX_FALSE,GX_ANISO_1);
+        GXTexObj tex;GX_InitTexObj(&tex,(void*)secondary->data,(u16)secondary->width,(u16)secondary->height,(u8)secondary->format,secondary->sampler_set?secondary->wrap_s:(world_reflection?GX_REPEAT:GX_CLAMP),secondary->sampler_set?secondary->wrap_t:GX_CLAMP,secondary->levels>1);
+        GX_InitTexObjLOD(&tex,secondary->sampler_set?secondary->min_filter:(secondary->levels>1?(secondary->linear?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):(secondary->linear?GX_LINEAR:GX_NEAR)),secondary->sampler_set?secondary->mag_filter:(secondary->linear?GX_LINEAR:GX_NEAR),0,(f32)(secondary->levels>1?secondary->levels-1:0),secondary->sampler_set?secondary->lod_bias:0,GX_FALSE,GX_FALSE,GX_ANISO_1);
         managed_sampler(&tex,1,secondary->levels,secondary->linear,world_reflection?GX_REPEAT:GX_CLAMP,GX_CLAMP);
         GX_LoadTexObj(&tex,GX_TEXMAP1);GX_SetTexCoordGen(GX_TEXCOORD1,GX_TG_MTX2x4,GX_TG_TEX1,GX_IDENTITY);
         GX_SetTexCoordScaleManually(GX_TEXCOORD1,GX_FALSE,1,1);GX_SetTexCoordBias(GX_TEXCOORD1,GX_FALSE,GX_FALSE);
