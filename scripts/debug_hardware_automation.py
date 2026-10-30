@@ -77,24 +77,31 @@ class Rsp:
         if payload == "c" or payload == "s":
             # All-stop RSP: a resumed target replies only at a breakpoint/step.
             pass
-        if self.read_exact(1) != b"$":
-            raise IOError("Missing GDB reply frame.")
-        response = bytearray()
         while True:
-            item = self.read_exact(1)
-            if item == b"#":
-                break
-            if len(response) > 16384:
-                raise IOError("Oversized RSP reply.")
-            response.extend(item)
-        remote_checksum = int(self.read_exact(2), 16)
-        if remote_checksum != sum(response) & 0xff:
-            self.stream.write(b"-")
+            if self.read_exact(1) != b"$":
+                raise IOError("Missing GDB reply frame.")
+            response = bytearray()
+            while True:
+                item = self.read_exact(1)
+                if item == b"#":
+                    break
+                if len(response) > 16384:
+                    raise IOError("Oversized RSP reply.")
+                response.extend(item)
+            remote_checksum = int(self.read_exact(2), 16)
+            if remote_checksum != sum(response) & 0xff:
+                self.stream.write(b"-")
+                self.stream.flush()
+                raise IOError("Invalid RSP reply checksum.")
+            self.stream.write(b"+")
             self.stream.flush()
-            raise IOError("Invalid RSP reply checksum.")
-        self.stream.write(b"+")
-        self.stream.flush()
-        return response.decode("ascii")
+            # GDB can send asynchronous console-output packets before the
+            # actual stop/memory response. Acknowledge and drain them.
+            if len(response)>1 and response[0] == ord("O") and \
+               len(response[1:]) % 2 == 0 and \
+               all(ch in b"0123456789abcdefABCDEF" for ch in response[1:]):
+                continue
+            return response.decode("ascii")
 
     def memory(self, addr, count):
         if not 0 <= count <= 1024*1024:
@@ -184,6 +191,8 @@ class HardwareSession:
         return state
 
     def begin(self):
+        # Confirm the target is stopped before reading or patching its memory.
+        self.rsp.stop("?")
         self.state()
         self.rsp.breakpoint(self.boundary_address)
         self.rsp.stop("c")
