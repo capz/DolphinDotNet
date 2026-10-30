@@ -40,8 +40,18 @@ public static class JSystemFixtureProbe
                 var bti=BtiTexture.Read(data);
                 return new Result(kind,bti.MipCount,bti.Width>=4&&bti.Height>=4);
             case GameCubeFileFormat.Jpc:
-                var particles=JpcArchive.Read(data);
-                return new Result(kind,particles.Particles.Count,particles.Particles.Count>0);
+                // Deliberately header-only on console. The full JPAC parser
+                // currently exceeds the AOT stack-analysis profile. Do not
+                // report a compatible particle renderer based on the header.
+                GameCubeBinary.Check(data,0,0x10);
+                string version=GameCubeBinary.Ascii(data,0,8);
+                if(version!="JPAC1-00"&&version!="JPAC2-10")
+                    throw new InvalidDataException("Unknown JPAC header.");
+                int particles=GameCubeBinary.U16(data,8);
+                int textures=GameCubeBinary.U16(data,0xA);
+                if(particles>4096||textures>4096)
+                    throw new InvalidDataException("Excessive JPAC entry counts.");
+                return new Result(kind,particles,false);
             case GameCubeFileFormat.J3d:
                 if(GameCubeBinary.Ascii(data,0,4)=="J3D2")
                     return new Result(kind,J3dMaterialNames.Read(data).Length,true);
