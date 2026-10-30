@@ -35,9 +35,7 @@ public static class GameCubeBinary
     public static float F32(byte[] data, long offset)
     {
         uint bits = U32(data, offset);
-        var bytes = BitConverter.GetBytes(bits);
-        if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
-        return BitConverter.ToSingle(bytes, 0);
+        return BitConverter.ToSingle(BitConverter.GetBytes(bits), 0);
     }
 
     public static string Ascii(byte[] data, long offset, int length)
