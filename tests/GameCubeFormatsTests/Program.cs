@@ -104,6 +104,19 @@ static class Program
         Check(Encoding.ASCII.GetString(archive.ReadFile("hi.txt")) == "ABC", "RARC bytes");
         bad = (byte[])rarc.Clone(); W32(bad, 0x90, 0xFFFF);
         Reject(() => RarcArchive.Read(bad), "RARC member offset bounds");
+        var bfn = new byte[0x40];
+        Str(bfn, 0, "FONTbfn1"); W32(bfn, 8, 0x40); W32(bfn, 0xC, 1);
+        Str(bfn, 0x20, "INF1"); W32(bfn, 0x24, 0x20);
+        W16(bfn, 0x2A, 10); W16(bfn, 0x2C, 2); W16(bfn, 0x2E, 8);
+        W16(bfn, 0x30, 12); W16(bfn, 0x32, 0xAB);
+        var font = BfnFont.Read(bfn);
+        Check(font.Ascent == 10 && font.LineHeight == 12, "BFN metrics");
+        Check(font.GlyphForEncodedCharacter(0x41) == 0xAB && font.WidthForGlyph(3) == 8,
+            "BFN default glyph and width");
+        Check(GameCubeFormatDetector.Detect(bmg) == GameCubeFileFormat.Bmg, "BMG detection");
+        Check(GameCubeFormatDetector.Detect(jpc) == GameCubeFileFormat.Jpc, "JPAC detection");
+        Check(GameCubeFormatDetector.Detect(bti, "texture.bti") == GameCubeFileFormat.Bti,
+            "Hinted BTI detection");
         Console.WriteLine("GameCubeFormatsTests passed: " + assertionCount + " assertions");
     }
 }
