@@ -349,23 +349,29 @@ internal static class Program
         DrawEmpty();
         StorageDevice source;
         string root;
-        if(Storage.Mount(StorageDevice.GcLoader) &&
-           Directory.Exists("gcloader:/games"))
+        bool loaderMounted=Storage.Mount(StorageDevice.GcLoader);
+        if(loaderMounted && Directory.Exists("gcloader:/games"))
         {
             source=StorageDevice.GcLoader;root="gcloader:/games";
         }
-        else if(Storage.Mount(StorageDevice.SdSerialPort2))
-        {
-            source=StorageDevice.SdSerialPort2;root="sd:/games";
-        }
         else
         {
-            NativeAssetCorpus.Finish(0,0,0,0);
-            for(;;){Controller.Update();DrawEmpty();}
+            if(loaderMounted)Storage.Unmount(StorageDevice.GcLoader);
+            if(Storage.Mount(StorageDevice.SdSerialPort2))
+            {
+                source=StorageDevice.SdSerialPort2;root="sd:/games";
+            }
+            else
+            {
+                NativeAssetCorpus.Finish(0,0,0,0);
+                for(;;){Controller.Update();DrawEmpty();}
+            }
         }
         try
         {
-            int count=FindImages(root);
+            int count=0;
+            try { count=FindImages(root); }
+            catch(IOException) { /* Mount present but directory could not be read. */ }
             for(int i=0;i<count;i++)
             {
                 try{RunDisc(images[i]);}
