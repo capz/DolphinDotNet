@@ -107,7 +107,11 @@ python3 scripts/hardware_asset_corpus.py \
 
 The runner fails on missing/added cases, changed classification,
 changed raw-XFB hashes for successful *visual* cases, or increased
-per-case native GX allocation. Decode-only cases are not misleadingly
+per-case native GX allocation.
+Even without a baseline, `malformed` and `runtime-error` cases fail, as does
+an asset run without any successful visual BTI/J3D/JPA sample. `unsupported`
+is a recorded skip, not a fabricated pass; the JSON report is written
+before these assertions. Decode-only cases are not misleadingly
 compared by blank framebuffer hashes. For emulator/hardware color-space
 differences or intentional render changes, inspect the PNGs and produce a
 new reviewed reference baseline. Avoid blindly comparing different VI modes
