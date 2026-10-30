@@ -60,6 +60,36 @@ static class Program
         bad = (byte[])bmg.Clone(); W32(bad, 0x30, 0x100);
         Reject(() => BmgMessages.Read(bad), "BMG invalid text offset");
 
+        var genericBmg = new byte[0xA0];
+        Str(genericBmg, 0, "MESGbmg1"); W32(genericBmg, 8, 0xA0);
+        W32(genericBmg, 0xC, 3); genericBmg[0x10] = 2; // UTF-16BE
+        Str(genericBmg, 0x20, "INF1"); W32(genericBmg, 0x24, 0x20);
+        W16(genericBmg, 0x28, 2); W16(genericBmg, 0x2A, 4);
+        W32(genericBmg, 0x30, 0); W32(genericBmg, 0x34, 0x10);
+        Str(genericBmg, 0x40, "DAT1"); W32(genericBmg, 0x44, 0x40);
+        W16(genericBmg, 0x48, 0x0048); W16(genericBmg, 0x4A, 0x00E9);
+        W16(genericBmg, 0x4C, 0); // "Hé"
+        W16(genericBmg, 0x58, 0x0041); W16(genericBmg, 0x5A, 0x001A);
+        genericBmg[0x5C] = 5; genericBmg[0x5D] = 0xFF;
+        W16(genericBmg, 0x5E, 1); W16(genericBmg, 0x60, 0);
+        Str(genericBmg, 0x80, "MID1"); W32(genericBmg, 0x84, 0x20);
+        W16(genericBmg, 0x88, 2);
+        W32(genericBmg, 0x90, 0x1234); W32(genericBmg, 0x94, unchecked((int)0x87654321));
+        var catalog = BmgCatalog.Read(genericBmg);
+        Check(catalog.EncodingCode == 2 && catalog.Entries.Count == 2,
+            "Generic BMG UTF-16BE and MID1 enumeration");
+        Check(catalog.Entries[0].Id == 0x1234 && catalog.Entries[0].EscapedText == "Hé",
+            "Generic BMG UTF-16BE decoded text");
+        Check(catalog.Entries[1].Id == 0x87654321 && catalog.Entries[1].Tags.Count == 1 &&
+              catalog.Entries[1].Tags[0].Group == 0xFF && catalog.Entries[1].Tags[0].Number == 1,
+            "Generic BMG MID1 IDs and preserved format tags");
+        bad = (byte[])genericBmg.Clone(); W16(bad, 0x88, 1);
+        Reject(() => BmgCatalog.Read(bad), "Generic BMG mismatched MID1 counts");
+        bad = (byte[])genericBmg.Clone(); bad[0x5C] = 250;
+        Reject(() => BmgCatalog.Read(bad), "Generic BMG truncated tag");
+        bad = (byte[])genericBmg.Clone(); W16(bad, 0x4A, 0xD800);
+        Reject(() => BmgCatalog.Read(bad), "Generic BMG invalid UTF-16 surrogate");
+
         var jpc = new byte[0x28];
         Str(jpc, 0, "JPAC2-10"); W16(jpc, 8, 1); W32(jpc, 0xC, 0x28);
         W16(jpc, 0x10, 0x1234); W16(jpc, 0x12, 2);
@@ -229,7 +259,27 @@ static class Program
         indexedBti[0] = 8; indexedBti[9] = 1; W16(indexedBti, 0xA, 1);
         W32(indexedBti, 0xC, 0x20);
         W32(indexedBti, 0x1C, 0x40);
-        Check(BtiTexture.CreateNativePackage(indexedBti) == null, "Indexed BTI requires palette expansion");
+        var indexedPackage = BtiTexture.CreateNativePackage(indexedBti)!;
+        Check(indexedPackage.Length == 32 + 64 && indexedPackage[8] == 6,
+            "CI4 BTI expanded as native RGBA8 texture package");
+
+        var indexedMipBti = new byte[0x80];
+        indexedMipBti[0] = 8; W16(indexedMipBti, 2, 8); W16(indexedMipBti, 4, 8);
+        indexedMipBti[9] = 1; W16(indexedMipBti, 0xA, 1);
+        W32(indexedMipBti, 0xC, 0x20); W16(indexedMipBti, 0x20, 0xF800);
+        indexedMipBti[0x18] = 2; W32(indexedMipBti, 0x1C, 0x40);
+        var indexedMips = BtiTexture.CreateNativePackage(indexedMipBti)!;
+        Check(indexedMips.Length == 32 + 256 + 64 && indexedMips[24] == 2 &&
+              indexedMips[33] == 255 && indexedMips[32] == 255 &&
+              indexedMips[289] == 255,
+              "CI4 two-level mip chain preserves color in GX RGBA8 tiles");
+        bad = (byte[])indexedMipBti.Clone(); W32(bad, 0x1C, 0x60);
+        Reject(() => BtiTexture.CreateNativePackage(bad), "Indexed BTI truncated mips");
+        var oddBti = (byte[])bti.Clone(); W16(oddBti, 2, 3); W16(oddBti, 4, 3);
+        Check(BtiTexture.Read(oddBti).Width == 3 &&
+              BtiTexture.CreateNativePackage(oddBti) == null,
+              "Non-power-of-two BTI decodes with RGBA fallback");
+
         var j3dChannels = new Dolphin.Graphics.J3dMaterialChannels(2);
         var state = new float[12];
         j3dChannels.SetVisibility(0, false);
