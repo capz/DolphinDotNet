@@ -89,6 +89,12 @@ public sealed class J3dMaterialAnimation
         return NullTerminated(data, table + nameOffset, chunk + size, 64);
     }
 
+    public int GetTrackCount(bool konst = false)
+    {
+        if (FileType != "brk1") return TrackCount;
+        return U16(data, chunk + (konst ? 0xE : 0xC));
+    }
+
     public float ResolveFrame(float frame)
     {
         if (float.IsNaN(frame) || float.IsInfinity(frame) || frame < 0)
