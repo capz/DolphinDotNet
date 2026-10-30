@@ -50,6 +50,7 @@ public sealed class BmgCatalog
     public static BmgCatalog Read(byte[] input)
     {
         byte[] data = UnwrapYaz0(input);
+        Check(data, 0, 0x20);
         if (Ascii(data, 0, 8) != "MESGbmg1")
             throw new InvalidDataException("Not a big-endian MESGbmg1.");
         uint declared = U32(data, 8), count = U32(data, 0xC);
