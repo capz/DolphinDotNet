@@ -168,6 +168,7 @@ internal static class Program
                             catch(InvalidDataException){skipped++;}
                             catch(NotSupportedException){skipped++;}
                             catch(OutOfMemoryException){skipped++;}
+                            catch(OverflowException){skipped++;}
                         }
                         else if(UnderLimit(file,MaxAssetBytes))AddCase(i,file);
                     }
@@ -212,9 +213,21 @@ internal static class Program
                 if(!UnderLimit(c.File,MaxArchiveBytes))
                     throw new NotSupportedException("Archive exceeds fixture budget.");
                 var arc=RarcArchive.Read(File.ReadAllBytes(c.File));
-                data=arc.ReadFile(c.Member,true);
+                data=arc.ReadFile(c.Member,false);
+                if(data.Length>MaxAssetBytes)throw new NotSupportedException("Oversized archive member.");
+                if(data.Length>=8 && GameCubeBinary.Ascii(data,0,4)=="Yaz0")
+                {
+                    if(GameCubeBinary.U32(data,4)>MaxAssetBytes)
+                        throw new NotSupportedException("Oversized Yaz0 decoded member.");
+                    data=GameCubeBinary.UnwrapYaz0(data);
+                }
             }
-            else data=File.ReadAllBytes(c.File);
+            else
+            {
+                if(!UnderLimit(c.File,MaxAssetBytes))
+                    throw new NotSupportedException("Asset exceeds fixture budget.");
+                data=File.ReadAllBytes(c.File);
+            }
             var result=JSystemFixtureProbe.Inspect(c.IsArchive?c.Member:c.File,data);
             kind=(int)result.Format;detail=result.Elements;
             if(result.Format==GameCubeFileFormat.Bti&&result.HasNativeVisual)
@@ -236,6 +249,7 @@ internal static class Program
         // A known asset may exceed the console heap; keep the DOL alive and
         // expose the failure rather than advancing automatically.
         catch(OutOfMemoryException){failed++;}
+        catch(OverflowException){failed++;}
         finally
         {
             Report(JSystemFixtureTelemetry.Showing,selected,kind,detail,c.Label);
