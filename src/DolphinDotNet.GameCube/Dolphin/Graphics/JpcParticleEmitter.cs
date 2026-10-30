@@ -24,6 +24,7 @@ public sealed class JpcParticleEmitter : IDisposable
         if (archive == null) throw new ArgumentNullException(nameof(archive));
         var config = JpcEmitterDefinition.Read(archive, particleId);
         Simulation = new JpcParticleSimulator(config, maxParticles, seed);
+        Simulation.ExtraShape = JpcExtraShapeProfile.Read(archive,particleId);
         drawOrder = new int[maxParticles];
         cameraDepths = new float[maxParticles];
         // Decode once during setup, never from Update or Draw.
@@ -39,6 +40,35 @@ public sealed class JpcParticleEmitter : IDisposable
             DepthWrite = false,
             Lighting = LightingMode.Unlit
         };
+    }
+
+    /// <summary>Apply an existing validated DNEF GX TEV effect to this
+    /// particle emitter. Effect lifetime is caller-owned; configure outside frames.
+    /// Multi-texture, indirect and game-specific BSP1 TEV recipes require
+    /// source-material interpretation and are not inferred here.</summary>
+    public void ConfigureTev(GxEffect? effect)
+    {
+        Check();
+        if(effect != null)
+        {
+            effect.Check();
+            if(effect.RequiresSecondaryTexture)
+                throw new NotSupportedException("JPA effect requires a second texture.");
+        }
+        material.Effect=effect;
+    }
+
+    public BlendMode BlendMode
+    {
+        get { Check(); return material.Blend; }
+        set
+        {
+            Check();
+            if(value!=BlendMode.Alpha && value!=BlendMode.Additive &&
+               value!=BlendMode.PremultipliedAlpha && value!=BlendMode.Opaque)
+                throw new ArgumentOutOfRangeException(nameof(value));
+            material.Blend=value;
+        }
     }
 
     public void Update(float deltaSeconds)
@@ -77,10 +107,14 @@ public sealed class JpcParticleEmitter : IDisposable
         for (int i = 0; i < count; i++)
         {
             var p = Simulation.GetParticle(drawOrder[i]);
-            byte alpha = (byte)Math.Max(0, Math.Min(255, Math.Round(config.Alpha * p.Alpha)));
+            float scaleX=1,scaleY=1,alphaFactor=1;
+            Simulation.ExtraShape?.Sample(p.AgeFrames/p.LifetimeFrames,
+                out scaleX,out scaleY,out alphaFactor);
+            byte alpha = (byte)Math.Max(0, Math.Min(255, Math.Round(config.Alpha * p.Alpha * alphaFactor)));
             if (alpha == 0) continue;
             material.Color = new Color32(config.Red, config.Green, config.Blue, alpha);
-            renderer.DrawBillboard(billboard, camera, new Vector3(p.X, p.Y, p.Z), size, material);
+            renderer.DrawBillboard(billboard, camera, new Vector3(p.X, p.Y, p.Z),
+                new Vector2(size.X * scaleX, size.Y * scaleY), material);
         }
     }
 
