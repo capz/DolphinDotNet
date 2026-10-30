@@ -236,6 +236,9 @@ public sealed class J3dMaterialAnimation
         destination[1] = F32(data, center + trackIndex * 12 + 4);
     }
 
+    private float TrackValue(int table, int stride, bool floating, int index) =>
+        floating ? F32(data, table + index * stride) : S16(data, table + index * stride);
+
     private float SampleTrack(int record, int table, int tableCount, int stride, bool floating, float frame)
     {
         int count = U16(data, record), index = U16(data, record + 2), tangentMode = U16(data, record + 4);
@@ -243,19 +246,19 @@ public sealed class J3dMaterialAnimation
         int step = count == 1 ? 1 : tangentMode == 0 ? 3 : 4;
         if ((long)index + (long)count * step > tableCount)
             throw new InvalidDataException("Animation key points outside table.");
-        float Value(int at) => floating ? F32(data, table + at * stride) : S16(data, table + at * stride);
-        if (count == 1) return Value(index);
-        float t0 = Value(index), v0 = Value(index + 1);
+
+        if (count == 1) return TrackValue(table, stride, floating, index);
+        float t0 = TrackValue(table, stride, floating, index), v0 = TrackValue(table, stride, floating, index + 1);
         for (int i = 1; i < count; i++)
         {
             int next = index + i * step;
-            float t1 = Value(next), v1 = Value(next + 1);
+            float t1 = TrackValue(table, stride, floating, next), v1 = TrackValue(table, stride, floating, next + 1);
             if (t1 <= t0) throw new InvalidDataException("Non-monotonic J3D animation keys.");
             if (frame <= t1)
             {
                 float u = Math.Max(0, Math.Min(1, (frame - t0) / (t1 - t0)));
-                float outTan = Value(index + (i - 1) * step + (tangentMode == 0 ? 2 : 3));
-                float inTan = Value(next + 2);
+                float outTan = TrackValue(table, stride, floating, index + (i - 1) * step + (tangentMode == 0 ? 2 : 3));
+                float inTan = TrackValue(table, stride, floating, next + 2);
                 float h00 = 2 * u * u * u - 3 * u * u + 1;
                 float h10 = u * u * u - 2 * u * u + u;
                 float h01 = -2 * u * u * u + 3 * u * u;
