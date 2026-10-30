@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 namespace Dolphin.Graphics;
 
-public sealed class Texture2D : IDisposable
+public sealed partial class Texture2D : IDisposable
 {
     internal readonly int Token;
     private bool disposed;
