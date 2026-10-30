@@ -22,7 +22,7 @@ This is the live checklist built from [the baseline interoperability matrix](gcf
 | --- | --- | --- |
 | RARC read/archive extraction | implemented, read-only; streams do not decompress | chunked decompression of Yaz0/Yay0 members without loading entire archives, nested archives, controlled editing |
 | BFN font | glyph mapping, widths, GLY1 tile/sheet RGBA extraction | draw-time text layout, wrapping, kerning, Shift-JIS glyph shaping, renderer atlas caching |
-| BMG messages | original Wind Waker reader plus generic variable INF1, MID1, CP1252/UTF-16BE/UTF-8 and escaped control tags | Shift-JIS codepage tables, FLW1/FLI1 conversation flow, game-specific tag interpretation and writing |
+| BMG messages | original Wind Waker reader plus generic variable INF1, MID1, CP1252/UTF-16BE/UTF-8 and escaped tags; read-only FLW1/FLI1 flow node/link/ID tables | Shift-JIS codepage tables, flow execution (game-specific events/queries), tag semantics and writing |
 | JPA volume emission | bounded point/cube/sphere/cylinder/circle/line, deterministic approximations | torus, partial sweeps, inner radius, emitter rotations and distribution parity with Nintendo JParticle |
 | JPA simulation | base lifetime, velocity/spread, drag and alpha | FLD1 forces, SSP1 children, ESP1 alpha/scale/rotation animations, keyframes, collision and spawn timing |
 | GX particles | textured alpha billboards with depth ordering | alternate billboard axes, strips, special GX blend/TEV/indirect stages, optimized batching |
@@ -100,6 +100,11 @@ foreach (var message in catalog.Entries)
     Console.WriteLine(message.Id + ": " + message.EscapedText);
 }
 ```
+
+Read-only `BmgFlowTables.Read(bytes)` optionally parses `FLW1` nodes,
+indirection links and `FLI1` named flow IDs. It validates bounded references
+and exposes the raw branch/event fields without invoking game-specific
+callbacks. There is **no** conversation-flow executor.
 
 For desktop inspection use:
 
