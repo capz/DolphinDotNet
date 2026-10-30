@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using DStream = Dolphin.IO.Stream;
 
 /// <summary>
 /// Read-only, allocation-bounded RARC metadata walker over a seekable stream.
@@ -9,7 +10,7 @@ using System.Text;
 /// </summary>
 internal sealed class StreamingRarcIndex
 {
-    private readonly Stream stream;
+    private readonly DStream stream;
     private readonly AssetCorpus corpus;
     private readonly string sourceImage, archivePath;
     private readonly long dataBase,nodeBase,entryBase,stringBase,stringLength;
@@ -18,7 +19,7 @@ internal sealed class StreamingRarcIndex
     private readonly byte[] header=new byte[0x40], node=new byte[0x10],
         entry=new byte[0x14],name=new byte[128],preview=new byte[0x20];
     private int considered;
-    private StreamingRarcIndex(Stream stream,AssetCorpus corpus,string image,string path)
+    private StreamingRarcIndex(DStream stream,AssetCorpus corpus,string image,string path)
     {
         this.stream=stream;this.corpus=corpus;sourceImage=image;archivePath=path;
         ReadExact(0,header,0,header.Length);
@@ -111,7 +112,7 @@ internal sealed class StreamingRarcIndex
         }
         visiting[id]=false;
     }
-    public static void Probe(Stream stream,AssetCorpus corpus,string sourceImage,string archivePath)
+    public static void Probe(DStream stream,AssetCorpus corpus,string sourceImage,string archivePath)
     {
         if(stream==null||!stream.CanRead||!stream.CanSeek)
             throw new ArgumentException("RARC stream must be seekable.");
