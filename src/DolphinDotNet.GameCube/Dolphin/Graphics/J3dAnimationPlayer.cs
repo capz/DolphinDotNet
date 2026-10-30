@@ -19,6 +19,39 @@ public sealed class J3dAnimationPlayer
         { Animation = anim; Material = material; Track = track; Konst = konst; }
     }
 
+    private readonly struct MeshBinding
+    {
+        public readonly J3dMaterialAnimation Animation;
+        public readonly int SourceShape, MeshIndex;
+        public MeshBinding(J3dMaterialAnimation animation,int sourceShape,int mesh)
+        { Animation=animation;SourceShape=sourceShape;MeshIndex=mesh; }
+    }
+
+    private readonly List<MeshBinding> meshBindings = new List<MeshBinding>();
+    private readonly float[] meshVisibility;
+    public int MeshCount => meshVisibility.Length;
+    public void CopyMeshVisibility(float[] destination)
+    {
+        if(destination==null||destination.Length<meshVisibility.Length)
+            throw new ArgumentException("Destination must fit all meshes.",nameof(destination));
+        Array.Copy(meshVisibility,destination,meshVisibility.Length);
+    }
+
+    /// <summary>Bind BVA source shape to the imported mesh index, not an entire
+    /// shared material. Source SHP1-to-DNMD mesh mapping remains caller supplied.</summary>
+    public void BindMeshVisibility(J3dMaterialAnimation bva,int sourceShape,int meshIndex)
+    {
+        if(bva==null)throw new ArgumentNullException(nameof(bva));
+        if(bva.FileType!="bva1")throw new ArgumentException("BVA animation required.",nameof(bva));
+        if(sourceShape<0||sourceShape>=bva.TrackCount)throw new ArgumentOutOfRangeException(nameof(sourceShape));
+        if(meshIndex<0||meshIndex>=meshVisibility.Length)throw new ArgumentOutOfRangeException(nameof(meshIndex));
+        foreach(var binding in meshBindings)
+            if(binding.MeshIndex==meshIndex)
+                throw new InvalidOperationException("A mesh has an existing BVA binding.");
+        meshBindings.Add(new MeshBinding(bva,sourceShape,meshIndex));
+        Refresh();
+    }
+
     private readonly List<Binding> bindings = new List<Binding>();
     private readonly Dictionary<string,int> materialLookup =
         new Dictionary<string,int>(StringComparer.Ordinal);
@@ -37,6 +70,7 @@ public sealed class J3dAnimationPlayer
             throw new ArgumentOutOfRangeException(nameof(fps));
         FramesPerSecond = fps;
         Channels = new J3dMaterialChannels(model);
+        meshVisibility=new float[model.MeshCount];
         for (int i = 0; i < modelMaterialNames.Length; i++)
         {
             string name = modelMaterialNames[i] ?? throw new ArgumentException("Null material name.");
@@ -103,7 +137,10 @@ public sealed class J3dAnimationPlayer
     private void Refresh()
     {
         Channels.Reset();
+        for(int i=0;i<meshVisibility.Length;i++)meshVisibility[i]=1;
         float frame = ElapsedSeconds * FramesPerSecond;
+        foreach(var mesh in meshBindings)
+            meshVisibility[mesh.MeshIndex]=mesh.Animation.SampleVisibility(mesh.SourceShape,frame)?1:0;
         foreach (var binding in bindings)
             Channels.Apply(binding.Animation, binding.Material, binding.Track, frame, binding.Konst);
     }
@@ -111,6 +148,7 @@ public sealed class J3dAnimationPlayer
     public void Draw(Renderer renderer, ModelInstance instance, Transform world)
     {
         if (renderer == null) throw new ArgumentNullException(nameof(renderer));
-        renderer.DrawModelAnimated(instance, world, Channels);
+        if(meshBindings.Count==0)renderer.DrawModelAnimated(instance, world, Channels);
+        else renderer.DrawModelAnimatedMeshes(instance, world, Channels, meshVisibility);
     }
 }

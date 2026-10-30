@@ -12,11 +12,29 @@ public sealed class JpcParticleSimulator
         public float X, Y, Z;
         public float Vx, Vy, Vz;
         public float AgeFrames, LifetimeFrames;
+        public bool IsChild, ChildSpawned;
         public float Alpha => LifetimeFrames > 0 ?
             Math.Max(0, Math.Min(1, 1 - AgeFrames / LifetimeFrames)) : 0;
     }
 
     private readonly ParticleState[] particles;
+    private readonly ParticleState[] pendingChildren;
+    public JpcChildShapeProfile? ChildShape { get; set; }
+    private readonly JpcParticleField[] fields = new JpcParticleField[8];
+    private int fieldCount;
+    public JpcExtraShapeProfile? ExtraShape { get; set; }
+
+    /// <summary>Add an immutable runtime force field. FLD1 chunk decoding remains
+    /// opt-in and unsupported until its retail layout is qualified.</summary>
+    public void AddField(JpcParticleField field)
+    {
+        if (field==null) throw new ArgumentNullException(nameof(field));
+        if (fieldCount==fields.Length) throw new InvalidOperationException("JPA field budget exhausted.");
+        fields[fieldCount++]=field;
+    }
+
+    public void ClearFields() { fieldCount=0; }
+
     private readonly JpcEmitterDefinition definition;
     private uint random;
     private float frameAccumulator, spawnRemainder;
@@ -36,6 +54,7 @@ public sealed class JpcParticleSimulator
         if (maxParticles < 1 || maxParticles > 256)
             throw new ArgumentOutOfRangeException(nameof(maxParticles));
         particles = new ParticleState[maxParticles];
+        pendingChildren = new ParticleState[maxParticles];
         random = seed == 0 ? 1 : seed;
     }
 
@@ -124,6 +143,7 @@ public sealed class JpcParticleSimulator
 
     private void Step()
     {
+        int pending = 0;
         for (int i = 0; i < active;)
         {
             var p = particles[i];
@@ -133,11 +153,42 @@ public sealed class JpcParticleSimulator
                 particles[i] = particles[--active];
                 continue;
             }
+            for(int f=0;f<fieldCount;f++)
+            {
+                fields[f].Sample(p.X,p.Y,p.Z,out float fx,out float fy,out float fz);
+                p.Vx+=fx;p.Vy+=fy;p.Vz+=fz;
+            }
+            if(ChildShape != null && !p.IsChild && !p.ChildSpawned &&
+               p.AgeFrames >= ChildShape.Timing * p.LifetimeFrames)
+            {
+                pendingChildren[pending++] = p;
+                p.ChildSpawned = true;
+            }
+            if(p.IsChild && ChildShape!=null) p.Vy -= ChildShape.Gravity;
             p.X += p.Vx; p.Y += p.Vy; p.Z += p.Vz;
             p.Vx *= definition.Drag;
             p.Vy *= definition.Drag;
             p.Vz *= definition.Drag;
             particles[i++] = p;
+        }
+
+        if(ChildShape != null)
+        {
+            for(int k=0;k<pending;k++)
+            {
+                var parent=pendingChildren[k];
+                for(int n=0;n<ChildShape.ChildrenPerParent && active<particles.Length;n++)
+                {
+                    particles[active++]=new ParticleState
+                    {
+                        IsChild=true, X=parent.X,Y=parent.Y,Z=parent.Z,
+                        Vx=parent.Vx*ChildShape.VelocityInheritance,
+                        Vy=parent.Vy*ChildShape.VelocityInheritance+ChildShape.BaseVelocity,
+                        Vz=parent.Vz*ChildShape.VelocityInheritance,
+                        LifetimeFrames=ChildShape.LifetimeFrames
+                    };
+                }
+            }
         }
 
         if (!emitting) return;

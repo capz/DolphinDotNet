@@ -24,4 +24,28 @@ public sealed partial class Renderer
         GraphicsDevice.Check(NativeModel.ModelDrawAnimated(instance.Token, world, channels.Values),
             "Invalid J3D animation state, model, transform or 3D pass.");
     }
+    /// <summary>Draw with per-material animation and independent per-mesh BVA masks.
+    /// Call only from an active 3D pass; source geometry and materials remain unchanged.</summary>
+    public void DrawModelAnimatedMeshes(ModelInstance instance, Transform transform,
+        J3dMaterialChannels channels, float[] meshVisibility)
+    {
+        if(transform==null)throw new ArgumentNullException(nameof(transform));
+        DrawModelAnimatedMeshes(instance,transform.WorldMatrix,channels,meshVisibility);
+    }
+
+    public void DrawModelAnimatedMeshes(ModelInstance instance,float[] world,
+        J3dMaterialChannels channels,float[] meshVisibility)
+    {
+        if(instance==null)throw new ArgumentNullException(nameof(instance));
+        if(world==null)throw new ArgumentNullException(nameof(world));
+        if(channels==null)throw new ArgumentNullException(nameof(channels));
+        if(meshVisibility==null)throw new ArgumentNullException(nameof(meshVisibility));
+        instance.Check();
+        if(channels.MaterialCount!=instance.Model.MaterialCount ||
+           meshVisibility.Length!=instance.Model.MeshCount)
+            throw new ArgumentException("J3D animation mask counts do not match the source model.");
+        GraphicsDevice.Check(NativeModel.ModelDrawAnimatedShapes(instance.Token,world,
+            channels.Values,meshVisibility),
+            "Invalid J3D mesh visibility, material animation or 3D pass.");
+    }
 }

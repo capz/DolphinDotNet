@@ -22,12 +22,12 @@ This is the live checklist built from [the baseline interoperability matrix](gcf
 | --- | --- | --- |
 | RARC read/archive extraction | implemented, read-only; streams do not decompress | chunked decompression of Yaz0/Yay0 members without loading entire archives, nested archives, controlled editing |
 | BFN font | glyph mapping, widths, GLY1 tile/sheet RGBA extraction | draw-time text layout, wrapping, kerning, Shift-JIS glyph shaping, renderer atlas caching |
-| BMG messages | original Wind Waker reader plus generic variable INF1, MID1, CP1252/UTF-16BE/UTF-8 and escaped tags; read-only FLW1/FLI1 flow node/link/ID tables | Shift-JIS codepage tables, flow execution (game-specific events/queries), tag semantics and writing |
+| BMG messages | original Wind Waker reader, generic variable INF1/MID1/UTF-16BE/UTF-8/CP1252/Shift-JIS, escaped tags; read-only FLW1/FLI1 flow tables | game-specific flow execution, Japanese text layout, control tags and writing |
 | JPA volume emission | bounded point/cube/sphere/cylinder/circle/line, deterministic approximations | torus, partial sweeps, inner radius, emitter rotations and distribution parity with Nintendo JParticle |
-| JPA simulation | base lifetime, velocity/spread, drag and alpha | FLD1 forces, SSP1 children, ESP1 alpha/scale/rotation animations, keyframes, collision and spawn timing |
-| GX particles | textured alpha billboards with depth ordering | alternate billboard axes, strips, special GX blend/TEV/indirect stages, optimized batching |
-| J3D material animation | named BTP/BTK/BRK, explicit BVA shape-to-material mapping | true per-shape visibility, multiple texture coordinates, Maya matrices, indirect material stages and original TEV semantics |
-| BTI formats | all 11 base formats, non-power-of-two source decoding, raw non-indexed mip chains, indexed CI4/CI8/CI14X2 mip chains converted into GX RGBA8 | wrap S/T, independent min/mag, LOD bias, anisotropy, native CI/TLUT and sampler fidelity |
+| JPA simulation | base lifetime/velocity/drag, limited JPAC2 ESP1 alpha/scale, SSP1 billboard children and caller-defined gravity/radial/vortex fields | retail FLD1 decoding, full SSP1/ESP1 rotation and keyframes, collisions and authored spawn timing parity |
+| GX particles | alpha billboards, depth sorting, configurable blend and validated DNEF TEV effects | automatic BSP1 material-to-TEV conversion, strips, alternate billboard axes, indirect stages and batching |
+| J3D material animation | named BTP/BTK/BRK, BVA material overrides and opt-in native per-imported-mesh BVA visibility | automatic SHP1-to-mesh identity mapping, multiple UV generators, Maya matrix modes, indirect stages and original TEV semantics |
+| BTI formats | 11 base formats, NPOT decoding, non-indexed and CI mips, opt-in GX S/T wrap, min/mag filtering and signed LOD bias | native indexed TLUT, edge LOD, anisotropy, per-level LOD clamps and visual sampler validation |
 | GCM writeback | read-only disc filesystem support | disc image rebuilding or patching; preservation of FST/BI2 and alignment |
 | DOL/REL | existing DOL debugging, gclib research | REL relocation reader/patching where needed; debugging independent of format-loading |
 | Validation | synthetic malformed-input, host/AOT/native/GameCube compile checks | legitimate owned-disc fixture corpus, actual hardware render captures and measured RAM/GX budgets |
@@ -138,3 +138,11 @@ Passing those does not establish game-specific compatibility. Source format
 references are [GCFT](https://github.com/LagoLunatic/GCFT) and
 [gclib](https://github.com/LagoLunatic/gclib), MIT; see the baseline license
 notes. No proprietary images, game discs, or fonts were added.
+
+## Next advanced runtime follow-up (PR #140)
+
+The independent decoder/sampler and bounded JPA/J3D extensions are detailed
+in [advanced runtime fidelity](jsystem-advanced-fidelity.md). Passing synthetic
+format fixtures and native GX compilation **does not** mean retail parity; the
+unknown FLD1/SSP1, GX TEV and game-specific imported shape identity paths
+still require owned-disc reference captures and tested game-specific adapters.

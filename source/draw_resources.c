@@ -32,6 +32,9 @@ typedef struct {
     float logical_width,logical_height;
     int effect;
     int levels;
+    bool sampler_set;
+    int wrap_s,wrap_t,min_filter,mag_filter;
+    float lod_bias;
     int width,height,format,linear,vertices,indices,dynamic,capacity,count,texture,blend,draws,flushes;
 } Resource;
 static Resource slots[SLOTS];
@@ -335,10 +338,23 @@ int dnd_mesh_update(int token,DndArray *a,int offset,int count,int format) {
     for(int start=0;start<count;start+=768) { int n=count-start;if(n>768)n=768;(void)vertices(a,start,n,format,staging);memcpy(r->data+(size_t)(offset+start)*sizeof(DndDrawVertex),staging,(size_t)n*sizeof(DndDrawVertex)); }
     mesh_color(r);dnd_draw_backend_flush(r->data,r->bytes,0);dnd_draw_backend_mesh_changed();return 0;
 }
+int dnd_texture_sampler(int token,int wrap_s,int wrap_t,int min_filter,int mag_filter,float lod_bias) {
+    Resource *r=find(token,TEXTURE);
+    if(!r || dnd_device_active() || dnd_raw_depth() ||
+       wrap_s<0 || wrap_s>2 || wrap_t<0 || wrap_t>2 ||
+       min_filter<0 || min_filter>5 || mag_filter<0 || mag_filter>1 ||
+       !isfinite(lod_bias) || lod_bias < -4.0f || lod_bias > 3.99f ||
+       (r->levels<=1 && min_filter>=2))return -1;
+    r->sampler_set=true;
+    r->wrap_s=wrap_s;r->wrap_t=wrap_t;
+    r->min_filter=min_filter;r->mag_filter=mag_filter;r->lod_bias=lod_bias;
+    dnd_draw_backend_mesh_changed();
+    return 0;
+}
 static bool texture(int token,DndDrawTexture *out) {
     memset(out,0,sizeof(*out));if(!token)return true;
     Resource *r=find(token,TEXTURE);if(!r)return false;
-    *out=(DndDrawTexture){r->data,(uint32_t)r->bytes,r->width,r->height,r->format,r->linear!=0,r->levels};return true;
+    *out=(DndDrawTexture){r->data,(uint32_t)r->bytes,r->width,r->height,r->format,r->linear!=0,r->levels,r->sampler_set,r->wrap_s,r->wrap_t,r->min_filter,r->mag_filter,r->lod_bias};return true;
 }
 int dnd_texture_resolve(int token,DndDrawTexture *out){return texture(token,out)?0:-1;}
 static int mesh_submit(Resource *r,int tex,DndDrawTexture tx,DndDrawTexture extra,int secondary,const float *transform,uint32_t color,int flags,float cutoff,const DndDrawEffect *effect) {
@@ -440,7 +456,7 @@ int dnd_canvas_flush(int token) {
         Resource *retired=NULL;
         int ti=(r->texture&1023)-1;
         if(r->texture>0&&ti>=0&&ti<SLOTS&&slots[ti].generation==(r->texture>>10)&&slots[ti].kind==TEXTURE)retired=&slots[ti];
-        if(retired)tx=(DndDrawTexture){retired->data,(uint32_t)retired->bytes,retired->width,retired->height,retired->format,retired->linear!=0,retired->levels};
+        if(retired)tx=(DndDrawTexture){retired->data,(uint32_t)retired->bytes,retired->width,retired->height,retired->format,retired->linear!=0,retired->levels,retired->sampler_set,retired->wrap_s,retired->wrap_t,retired->min_filter,retired->mag_filter,retired->lod_bias};
         else if(!texture(r->texture,&tx))return -1;
         Resource *fx=NULL;
         if(r->effect){int index=(r->effect&1023)-1;
