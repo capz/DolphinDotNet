@@ -117,6 +117,17 @@ public sealed class RarcArchive
         return lookup.TryGetValue(path, out entry!);
     }
 
+    /// <summary>Open a seekable, read-only view over a raw RARC member without
+    /// allocating a second member-sized buffer. The stream retains the archive
+    /// backing array and cannot expose or modify it. Compressed members remain
+    /// compressed; use ReadFile(path, true) for bounded Yaz0 expansion.</summary>
+    public Stream OpenMemberStream(string path)
+    {
+        if (!TryGetEntry(path, out var entry))
+            throw new FileNotFoundException("RARC member not found.", path);
+        return new MemoryStream(bytes, entry.Offset, entry.Length, false, false);
+    }
+
     public byte[] ReadFile(string path, bool decompressYaz0 = false)
     {
         if (!TryGetEntry(path, out var entry)) throw new FileNotFoundException("RARC member not found.", path);

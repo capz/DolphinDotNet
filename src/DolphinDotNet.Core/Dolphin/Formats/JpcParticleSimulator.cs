@@ -3,7 +3,7 @@ using System.IO;
 
 namespace Dolphin.Formats;
 
-/// <summary>Bounded deterministic 60 Hz simulation for a supported JPA point emitter.
+/// <summary>Bounded deterministic 60 Hz simulation for a supported JPA billboard emitter.
 /// Graphics allocations, native GX submission and caller camera state are separate.</summary>
 public sealed class JpcParticleSimulator
 {
@@ -76,6 +76,52 @@ public sealed class JpcParticleSimulator
         return (random & 0xFFFFFF) / 8388607.5f - 1f;
     }
 
+    /// <summary>Deterministic bounded volume sampling for the supported
+    /// axis-aligned emitter profiles. Torus, partial sweep and inherited
+    /// emitter rotation are intentionally excluded by the parser.</summary>
+    private void SampleVolume(out float x, out float y, out float z)
+    {
+        x = 0; y = 0; z = 0;
+        float radius = definition.VolumeSize;
+        switch (definition.Volume)
+        {
+            case JpcEmitterVolume.Point: return;
+            case JpcEmitterVolume.Cube:
+                x = RandomSigned(); y = RandomSigned(); z = RandomSigned(); break;
+            case JpcEmitterVolume.Line:
+                x = RandomSigned(); break;
+            case JpcEmitterVolume.Circle:
+            case JpcEmitterVolume.Cylinder:
+            {
+                double angle = (RandomSigned() + 1) * Math.PI;
+                double distance = Math.Sqrt((RandomSigned() + 1) * 0.5);
+                x = (float)(Math.Cos(angle) * distance);
+                z = (float)(Math.Sin(angle) * distance);
+                if (definition.Volume == JpcEmitterVolume.Cylinder)
+                    y = RandomSigned();
+                break;
+            }
+            case JpcEmitterVolume.Sphere:
+            {
+                // A bounded rejection sampler avoids nonuniform radial clusters.
+                // No allocations, and independent repeatability for a fixed seed.
+                for (int attempt = 0; attempt < 32; attempt++)
+                {
+                    x = RandomSigned(); y = RandomSigned(); z = RandomSigned();
+                    float distanceSq = x * x + y * y + z * z;
+                    if (distanceSq <= 1) break;
+                    if (attempt == 31) { x = 0; y = 0; z = 0; }
+                }
+                break;
+            }
+            default:
+                throw new InvalidOperationException("Unsupported JPA emitter volume.");
+        }
+        x *= radius * definition.EmitterScaleX;
+        y *= radius * definition.EmitterScaleY;
+        z *= radius * definition.EmitterScaleZ;
+    }
+
     private void Step()
     {
         for (int i = 0; i < active;)
@@ -111,9 +157,12 @@ public sealed class JpcParticleSimulator
             dx = dx / length + RandomSigned() * definition.VelocitySpread;
             dy = dy / length + RandomSigned() * definition.VelocitySpread;
             dz = dz / length + RandomSigned() * definition.VelocitySpread;
+            SampleVolume(out float offsetX, out float offsetY, out float offsetZ);
             particles[active++] = new ParticleState
             {
-                X = X + definition.PositionX, Y = Y + definition.PositionY, Z = Z + definition.PositionZ,
+                X = X + definition.PositionX + offsetX,
+                Y = Y + definition.PositionY + offsetY,
+                Z = Z + definition.PositionZ + offsetZ,
                 Vx = dx * definition.InitialVelocity,
                 Vy = dy * definition.InitialVelocity,
                 Vz = dz * definition.InitialVelocity,

@@ -6,9 +6,11 @@ namespace Dolphin.Formats;
 
 /// <summary>
 /// Conservative JPA emitter profile used by the GX billboard adapter.
-/// Supports basic point-emitter BEM1/BSP1 data; advanced field, child,
+/// Supports bounded BEM1 billboard volumes; advanced field, child,
 /// rotation and shader animation profiles fail explicitly.
 /// </summary>
+public enum JpcEmitterVolume { Cube = 0, Sphere = 1, Cylinder = 2, Torus = 3, Point = 4, Circle = 5, Line = 6 }
+
 public sealed class JpcEmitterDefinition
 {
     public ushort ParticleId { get; }
@@ -31,10 +33,16 @@ public sealed class JpcEmitterDefinition
     public float DirectionX { get; }
     public float DirectionY { get; }
     public float DirectionZ { get; }
+    public JpcEmitterVolume Volume { get; }
+    public float VolumeSize { get; }
+    public float EmitterScaleX { get; }
+    public float EmitterScaleY { get; }
+    public float EmitterScaleZ { get; }
 
     private JpcEmitterDefinition(ushort id, float rate, int life, float velocity, float spread,
         float drag, float sizeX, float sizeY, float x, float y, float z, float dirX,
         float dirY, float dirZ, int maxFrames, int textureIndex,
+        JpcEmitterVolume volume, float volumeSize, float scaleX, float scaleY, float scaleZ,
         byte red, byte green, byte blue, byte alpha)
     {
         ParticleId = id; SpawnRate = rate; ParticleLifetimeFrames = life;
@@ -42,6 +50,8 @@ public sealed class JpcEmitterDefinition
         SizeX = sizeX; SizeY = sizeY; PositionX = x; PositionY = y; PositionZ = z;
         DirectionX = dirX; DirectionY = dirY; DirectionZ = dirZ;
         MaxEmitterFrames = maxFrames; TextureIndex = textureIndex;
+        Volume = volume; VolumeSize = volumeSize;
+        EmitterScaleX = scaleX; EmitterScaleY = scaleY; EmitterScaleZ = scaleZ;
         Red = red; Green = green; Blue = blue; Alpha = alpha;
     }
 
@@ -74,15 +84,15 @@ public sealed class JpcEmitterDefinition
         Check(shape, 0, v2 ? 0x34 : 0x60);
         if (Ascii(dynamics, 0, 4) != "BEM1" || Ascii(shape, 0, 4) != "BSP1")
             throw new InvalidDataException("JPA chunk magic mismatch.");
-        // Only the basic point/billboard style is implemented.
+        // Only the basic volume / billboard style is implemented.
         // gclib/bunfoe reads packed bitfields starting at the least significant bit.
         uint dynamicsFlags = U32(dynamics, v2 ? 8 : 12);
         uint shapeFlags = U32(shape, v2 ? 8 : 12);
         // An unrecognized shape or emitter volume must not silently be rendered incorrectly.
         int volume = (int)((dynamicsFlags >> 8) & 7);
         int shapeType = (int)(shapeFlags & 15);
-        if (volume != 4 || shapeType != 2)
-            throw new NotSupportedException("Only verified point emitters with billboards are supported.");
+        if (shapeType != 2 || volume == 3 || volume > 6)
+            throw new NotSupportedException("Only billboard emitters with simple volumes are supported.");
         // Reject emitter configurations which have field/child or scroll dependencies.
         if ((shapeFlags & (1u << 24)) != 0)
             throw new NotSupportedException("JPA texture-scrolling effects require a GX texture-matrix profile.");
@@ -103,13 +113,25 @@ public sealed class JpcEmitterDefinition
         int max = S16(dynamics, v2 ? 0x6E : 0x26);
         float x = F32(dynamics, posOff), y = F32(dynamics, posOff + 4), z = F32(dynamics, posOff + 8);
         float dx = F32(dynamics, dirOff), dy = F32(dynamics, dirOff + 4), dz = F32(dynamics, dirOff + 8);
+        float sweep = F32(dynamics, v2 ? 0x58 : 0x10);
+        float minRadius = F32(dynamics, v2 ? 0x5C : 0x14);
+        float volumeSize = U16(dynamics, v2 ? 0x74 : 0x18);
+        int scaleOff = v2 ? 0x10 : 0x60;
+        float scaleX = F32(dynamics, scaleOff), scaleY = F32(dynamics, scaleOff + 4),
+              scaleZ = F32(dynamics, scaleOff + 8);
+        if (volume != 4 && (!Finite(sweep) || sweep != 0 || !Finite(minRadius) || minRadius != 0))
+            throw new NotSupportedException("Volume sweeps and inner radii require original JPAC distribution rules.");
         if (!Finite(rate) || rate < 0 || rate > 1024 || !Finite(speed) || Math.Abs(speed) > 1000 ||
             !Finite(spread) || spread < 0 || spread > 1000 ||
             !Finite(drag) || drag < 0 || drag > 2 ||
             !Finite(sizeX) || !Finite(sizeY) || sizeX <= 0 || sizeY <= 0 || sizeX > 1024 || sizeY > 1024 ||
             !Finite(x) || !Finite(y) || !Finite(z) ||
             !Finite(dx) || !Finite(dy) || !Finite(dz) ||
-            dx * dx + dy * dy + dz * dz < 0.00001f || life <= 0 || life > 32767)
+            dx * dx + dy * dy + dz * dz < 0.00001f || life <= 0 || life > 32767 ||
+            (volume != 4 && (volumeSize < 1 || volumeSize > 4096 ||
+             !Finite(scaleX) || !Finite(scaleY) || !Finite(scaleZ) ||
+             scaleX <= 0 || scaleY <= 0 || scaleZ <= 0 ||
+             scaleX > 1024 || scaleY > 1024 || scaleZ > 1024)))
             throw new InvalidDataException("Invalid JPA emitter parameter.");
         int localTexture = shape[textureOff];
         int texIndex = particle.TextureIds.Count > 0
@@ -119,6 +141,7 @@ public sealed class JpcEmitterDefinition
             throw new InvalidDataException("JPA billboard has no valid texture.");
         return new JpcEmitterDefinition(id, rate, life, speed, spread, drag,
             sizeX, sizeY, x, y, z, dx, dy, dz, max, texIndex,
+            (JpcEmitterVolume)volume, volumeSize, scaleX, scaleY, scaleZ,
             shape[colorOff], shape[colorOff + 1], shape[colorOff + 2], shape[colorOff + 3]);
     }
 
