@@ -32,9 +32,8 @@ public sealed class BtiTexture
         int fmt = data[0], width = U16(data, 2), height = U16(data, 4);
         int palFmt = data[9], palCount = U16(data, 0xA);
         int mips = data[0x18] == 0 ? 1 : data[0x18];
-        if (width < 1 || height < 1 || width > 1024 || height > 1024 ||
-            (width & (width - 1)) != 0 || (height & (height - 1)) != 0)
-            throw new InvalidDataException("BTI dimensions must be bounded powers of two.");
+        if (width < 1 || height < 1 || width > 1024 || height > 1024)
+            throw new InvalidDataException("BTI dimensions must be between 1 and 1024.");
         int tileW, tileH, tileBytes;
         switch (fmt)
         {
@@ -135,7 +134,13 @@ public sealed class BtiTexture
     {
         var image = Read(data);
         int fmt = image.ImageFormat;
-        if (fmt == 8 || fmt == 9 || fmt == 10) return null;
+        // DNTX does not accept palette indices; convert each indexed mip into
+        // GX-tiled RGBA8 instead of discarding the source mip chain.
+        if (fmt == 8 || fmt == 9 || fmt == 10)
+            return CreateIndexedMipPackage(data, image);
+        // Non-power-of-two BTIs are valid retail assets, but DNTX mip packages
+        // require power-of-two dimensions; callers use the RGBA base fallback.
+        if (!PowerOfTwo(image.Width) || !PowerOfTwo(image.Height)) return null;
         int mips = image.MipCount;
         if (mips < 1 || mips > 11) throw new InvalidDataException("Invalid BTI mip count.");
         int tileW, tileH, tileBytes;
@@ -171,6 +176,93 @@ public sealed class BtiTexture
         WriteLittle32(output, 12, image.Width); WriteLittle32(output, 16, image.Height);
         WriteLittle32(output, 20, payload); WriteLittle32(output, 24, mips);
         Buffer.BlockCopy(data, (int)start, output, 32, payload);
+        return output;
+    }
+
+    private static bool PowerOfTwo(int value) => value > 0 && (value & (value - 1)) == 0;
+
+    private static void WriteBig16(byte[] destination, int offset, int value)
+    {
+        destination[offset] = (byte)(value >> 8);
+        destination[offset + 1] = (byte)value;
+    }
+
+    private static void WriteBig32(byte[] destination, int offset, uint value)
+    {
+        destination[offset] = (byte)(value >> 24);
+        destination[offset + 1] = (byte)(value >> 16);
+        destination[offset + 2] = (byte)(value >> 8);
+        destination[offset + 3] = (byte)value;
+    }
+
+    /// <summary>Preserve each indexed CI4/CI8/CI14X2 level by expanding it into
+    /// a native GX RGBA8 4x4-tiled mip chain, with the original BTI palette.</summary>
+    private static byte[]? CreateIndexedMipPackage(byte[] source, BtiTexture image)
+    {
+        if (!PowerOfTwo(image.Width) || !PowerOfTwo(image.Height)) return null;
+        int tilesW = image.ImageFormat == 8 ? 8 : image.ImageFormat == 9 ? 8 : 4;
+        int tilesH = image.ImageFormat == 8 ? 8 : image.ImageFormat == 9 ? 4 : 4;
+        int mips = image.MipCount;
+        if (mips < 1 || mips > 11) throw new InvalidDataException("Invalid indexed BTI mip count.");
+        int width = image.Width, height = image.Height;
+        long sourceStart = U32(source, 0x1C);
+        int sourceBytes = 0, destinationBytes = 0;
+        for (int i = 0; i < mips; i++)
+        {
+            int sourceLength = checked(((width + tilesW - 1) / tilesW) *
+                ((height + tilesH - 1) / tilesH) * 32);
+            Check(source, sourceStart + sourceBytes, sourceLength);
+            sourceBytes = checked(sourceBytes + sourceLength);
+            int nativeLength = checked(((width + 3) / 4) * ((height + 3) / 4) * 64);
+            destinationBytes = checked(destinationBytes + nativeLength);
+            if (destinationBytes > MaxAssetBytes - 32)
+                throw new InvalidDataException("Indexed BTI mip chain exceeds memory budget.");
+            if (i + 1 < mips && width == 1 && height == 1)
+                throw new InvalidDataException("Invalid indexed BTI mip count for source dimensions.");
+            width = Math.Max(1, width / 2);
+            height = Math.Max(1, height / 2);
+        }
+        byte[] output = new byte[destinationBytes + 32];
+        output[0] = (byte)'D'; output[1] = (byte)'N';
+        output[2] = (byte)'T'; output[3] = (byte)'X';
+        WriteLittle32(output, 4, 2); WriteLittle32(output, 8, 6);
+        WriteLittle32(output, 12, image.Width); WriteLittle32(output, 16, image.Height);
+        WriteLittle32(output, 20, destinationBytes); WriteLittle32(output, 24, mips);
+
+        // Header offset changes only in this detached copy, never in caller
+        // input. Palette metadata stays stable across all mip levels.
+        byte[] detached = (byte[])source.Clone();
+        width = image.Width; height = image.Height;
+        int srcOffset = 0, dstOffset = 32;
+        for (int level = 0; level < mips; level++)
+        {
+            WriteBig16(detached, 2, width); WriteBig16(detached, 4, height);
+            WriteBig32(detached, 0x1C, (uint)(sourceStart + srcOffset));
+            BtiTexture decoded = Read(detached);
+            byte[] pixels = decoded.Rgba;
+            int cols = (width + 3) / 4, rows = (height + 3) / 4;
+            for (int by = 0; by < rows; by++)
+            for (int bx = 0; bx < cols; bx++)
+            {
+                int tile = dstOffset + (by * cols + bx) * 64;
+                for (int y = 0; y < 4; y++)
+                for (int x = 0; x < 4; x++)
+                {
+                    int px = bx * 4 + x, py = by * 4 + y;
+                    int element = (y * 4 + x) * 2;
+                    if (px >= width || py >= height) continue;
+                    int sourcePixel = (py * width + px) * 4;
+                    output[tile + element] = pixels[sourcePixel + 3];   // A
+                    output[tile + element + 1] = pixels[sourcePixel];   // R
+                    output[tile + 32 + element] = pixels[sourcePixel + 1]; // G
+                    output[tile + 32 + element + 1] = pixels[sourcePixel + 2]; // B
+                }
+            }
+            dstOffset = checked(dstOffset + cols * rows * 64);
+            srcOffset = checked(srcOffset + ((width + tilesW - 1) / tilesW) *
+                ((height + tilesH - 1) / tilesH) * 32);
+            width = Math.Max(1, width / 2); height = Math.Max(1, height / 2);
+        }
         return output;
     }
 
