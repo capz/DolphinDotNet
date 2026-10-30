@@ -1,6 +1,7 @@
 #ifndef DND_ASSET_COMPAT_H
 #define DND_ASSET_COMPAT_H
 #include <stdint.h>
+#include "dnd_managed.h"
 enum {
     DND_ASSET_MAGIC = 0x444e4143u, /* DNAC */
     DND_ASSET_VERSION = 1,
@@ -27,5 +28,5 @@ typedef struct {
 } DndAssetCompatRecord;
 extern DndAssetCompatRecord dnd_asset_compat_record;
 void dnd_asset_compat_report(int status,int index,int total,int kind,
-                             int scanned,const char *name);
+                             int scanned,const DndString *name);
 #endif
