@@ -195,7 +195,7 @@ internal static class Program
         }
     }
 
-    private static void RenderCandidate(Candidate item)
+    private static void RenderCandidate(Candidate item,string discKey)
     {
         int result=Ok,bytes=0;
         bool rendered=false;
@@ -212,7 +212,7 @@ internal static class Program
                     throw new InvalidDataException("Not a supported BTI.");
                 using(var texture=Texture2D.FromBti(raw))
                 {
-                    NativeAssetCorpus.Publish(kind,Ok,bytes,device.NativeBytes,item.Path);
+                    NativeAssetCorpus.Publish(kind,Ok,bytes,device.NativeBytes,discKey+"#"+item.Path);
                     DrawTexture(texture);rendered=true;
                 }
             }
@@ -226,14 +226,14 @@ internal static class Program
                 // Strict MAT3 compatibility: approximation is deliberately OFF.
                 using(var model=Model.LoadJ3dAsync(item.Path,allowMaterialApproximation:false).GetAwaiter().GetResult())
                 {
-                    NativeAssetCorpus.Publish(kind,Ok,bytes,device.NativeBytes,item.Path);
+                    NativeAssetCorpus.Publish(kind,Ok,bytes,device.NativeBytes,discKey+"#"+item.Path);
                     DrawModel(model);rendered=true;
                 }
             }
             else if(kind==3)
             {
                 var archive=JpcArchive.Read(ReadBounded(item.Path,MaxSourceBytes));
-                NativeAssetCorpus.Publish(kind,Ok,bytes,device.NativeBytes,item.Path);
+                NativeAssetCorpus.Publish(kind,Ok,bytes,device.NativeBytes,discKey+"#"+item.Path);
                 DrawParticles(archive);rendered=true;
             }
             else if(kind==4)
@@ -263,7 +263,7 @@ internal static class Program
         catch(Exception){result=RenderError;}
         if(!rendered)
         {
-            NativeAssetCorpus.Publish(item.Kind,result,bytes,device.NativeBytes,item.Path);
+            NativeAssetCorpus.Publish(item.Kind,result,bytes,device.NativeBytes,discKey+"#"+item.Path);
             DrawEmpty();
         }
         totalComplete++;
@@ -277,12 +277,14 @@ internal static class Program
         try
         {
             int count=ScanDisc();
+            var identity=Storage.GetMountedDiscIdentity();
+            string discKey=identity.GameId+"-"+identity.DiscNumber+"-"+identity.Revision;
             totalCandidates+=count;
             totalDiscs++;
             for(int i=0;i<count;i++)
             {
                 Controller.Update(); // synthetic PAD input is exercised every case
-                RenderCandidate(candidates[i]);
+                RenderCandidate(candidates[i],discKey);
             }
         }
         finally {Storage.Unmount(StorageDevice.DvdDrive);}
@@ -295,7 +297,8 @@ internal static class Program
         DrawEmpty();
         StorageDevice source;
         string root;
-        if(Storage.Mount(StorageDevice.GcLoader))
+        if(Storage.Mount(StorageDevice.GcLoader) &&
+           Directory.Exists("gcloader:/games"))
         {
             source=StorageDevice.GcLoader;root="gcloader:/games";
         }
