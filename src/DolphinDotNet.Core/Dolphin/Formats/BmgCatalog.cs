@@ -209,7 +209,13 @@ public sealed class BmgCatalog
             }
         }
         else if (encoding == 4)
-            output.Append(Encoding.UTF8.GetString(data, offset, count));
+        {
+            try { output.Append(new UTF8Encoding(false, true).GetString(data, offset, count)); }
+            catch (DecoderFallbackException error)
+            {
+                throw new InvalidDataException("Invalid UTF-8 BMG message payload.", error);
+            }
+        }
         else
         {
             // Single-byte and Shift-JIS profiles preserve bytes beyond ASCII.
@@ -221,8 +227,25 @@ public sealed class BmgCatalog
                 if (c >= 0x20 && c <= 0x7E && c != '\\') output.Append((char)c);
                 else if (c == '\n') output.Append('\n');
                 else if (encoding <= 1 && c >= 0xA0) output.Append((char)c);
+                else if (encoding <= 1 && c >= 0x80 && c <= 0x9F)
+                {
+                    char decoded = Cp1252Extended(c);
+                    if (decoded == 0) output.Append(@"\x").Append(c.ToString("X2"));
+                    else output.Append(decoded);
+                }
                 else output.Append(@"\x").Append(c.ToString("X2"));
             }
         }
     }
+
+    private static char Cp1252Extended(int code)
+    {
+        // Undefined Windows-1252 byte values remain escaped, not U+FFFD.
+        const string upper = "\u20AC\0\u201A\u0192\u201E\u2026\u2020\u2021" +
+            "\u02C6\u2030\u0160\u2039\u0152\0\u017D\0" +
+            "\0\u2018\u2019\u201C\u201D\u2022\u2013\u2014" +
+            "\u02DC\u2122\u0161\u203A\u0153\0\u017E\u0178";
+        return upper[code - 0x80];
+    }
+
 }
