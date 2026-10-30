@@ -122,14 +122,14 @@ static class Program
         W32(effect, 0xC, 0xD8);
         W16(effect, 0x10, 0xCAFE); W16(effect, 0x12, 3); effect[0x16] = 1;
         Str(effect, 0x18, "BEM1"); W32(effect, 0x1C, 0x80);
-        W32(effect, 0x20, 4 << 21); // point volume
+        W32(effect, 0x20, 4 << 8); // point volume, bit positions 8-10
         W32(effect, 0x18 + 0x4C, 0x3F800000); // one particle/frame
         W32(effect, 0x18 + 0x34, 0x3C23D70A); // velocity
         W32(effect, 0x18 + 0x60, 0x3F800000); // momentum retention
         W32(effect, 0x18 + 0x28 + 4, 0x3F800000); // direction +Y
         W16(effect, 0x18 + 0x72, 30); W16(effect, 0x18 + 0x6E, 10);
         Str(effect, 0x98, "BSP1"); W32(effect, 0x9C, 0x34);
-        W32(effect, 0xA0, unchecked((int)(2u << 28))); // billboard
+        W32(effect, 0xA0, 2); // billboard, low shape bits
         W32(effect, 0x98 + 0x10, 0x3F800000);
         W32(effect, 0x98 + 0x14, 0x3F800000);
         effect[0x98 + 0x26] = 255; effect[0x98 + 0x27] = 200;
