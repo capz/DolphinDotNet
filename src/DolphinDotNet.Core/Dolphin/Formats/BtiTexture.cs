@@ -73,13 +73,14 @@ public sealed class BtiTexture
                 switch (fmt)
                 {
                     case 0:
-                        r = g = b = Expand4((t & 1) == 0 ? data[block + t / 2] >> 4 : data[block + t / 2] & 15);
+                        color = (t & 1) == 0 ? data[block + t / 2] >> 4 : data[block + t / 2] & 15;
+                        r = Expand4(color); g = r; b = r;
                         break;
-                    case 1: r = g = b = data[block + t]; break;
+                    case 1: r = data[block + t]; g = r; b = r; break;
                     case 2:
-                        color = data[block + t]; a = Expand4(color >> 4); r = g = b = Expand4(color & 15); break;
+                        color = data[block + t]; a = Expand4(color >> 4); r = Expand4(color & 15); g = r; b = r; break;
                     case 3:
-                        a = data[block + t * 2]; r = g = b = data[block + t * 2 + 1]; break;
+                        a = data[block + t * 2]; r = data[block + t * 2 + 1]; g = r; b = r; break;
                     case 4:
                         Decode565(U16(data, block + t * 2), out r, out g, out b); break;
                     case 5:
@@ -96,7 +97,7 @@ public sealed class BtiTexture
                         if (fmt == 10) color = U16(data, block + t * 2) & 0x3FFF;
                         if (color >= palCount) throw new InvalidDataException("BTI palette index outside table.");
                         int raw = U16(data, paletteStart + color * 2L);
-                        if (palFmt == 0) { a = raw >> 8; r = g = b = raw & 255; }
+                        if (palFmt == 0) { a = raw >> 8; r = raw & 255; g = r; b = r; }
                         else if (palFmt == 1) Decode565(raw, out r, out g, out b);
                         else Decode5A3(raw, out r, out g, out b, out a);
                         break;
