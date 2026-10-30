@@ -4,6 +4,9 @@
 #include "dnd_console.h"
 #include "dnd_performance.h"
 #include "dnd_debug_heartbeat.h"
+#ifdef DND_DEBUG_AUTOMATION
+#include "dnd_debug_automation.h"
+#endif
 #include "dnd_network_platform.h"
 #include "dnd_aram.h"
 #include <math.h>
@@ -350,6 +353,9 @@ void dnd_graphics_end_frame(void) {
     GX_SetZMode(GX_TRUE,GX_LEQUAL,GX_TRUE);GX_SetColorUpdate(GX_TRUE);GX_CopyDisp(xfb[fb],GX_TRUE);
     int wait_context=dnd_async_app_wait_begin();
     uint64_t gpu_at=gettime();GX_DrawDone();uint64_t gpu_us=ticks_to_microsecs(gettime()-gpu_at);
+#ifdef DND_DEBUG_AUTOMATION
+    dnd_automation_published_frame(xfb[fb],mode->fbWidth,mode->xfbHeight);
+#endif
     overlay_serial++;
     VIDEO_SetNextFramebuffer(xfb[fb]);if(first_frame){first_frame=false;VIDEO_SetBlack(FALSE);}VIDEO_Flush();uint64_t vi_at=gettime();VIDEO_WaitVSync();
     dnd_performance_frame_waits((uint32_t)gpu_us,(uint32_t)ticks_to_microsecs(gettime()-vi_at));
@@ -357,6 +363,9 @@ void dnd_graphics_end_frame(void) {
     dnd_performance_gate_wait((uint32_t)ticks_to_microsecs(gettime()-gate_at));
     dnd_performance_clear_completed();fb^=1;
     if(dnd_performance_visible())dnd_performance_presented(ticks_to_microsecs(gettime()));
+#ifdef DND_DEBUG_AUTOMATION
+    dnd_automation_frame_boundary();
+#endif
 }
 void dnd_graphics_present(void){dnd_graphics_begin_overlay();dnd_console_render();dnd_graphics_end_frame();}
 void dnd_graphics_model_begin(void){dnd_graphics_begin_frame(0.025f,0.035f,0.06f,1);}
