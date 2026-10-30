@@ -25,6 +25,7 @@ public sealed class JpcParticleEmitter : IDisposable
         var config = JpcEmitterDefinition.Read(archive, particleId);
         Simulation = new JpcParticleSimulator(config, maxParticles, seed);
         Simulation.ExtraShape = JpcExtraShapeProfile.Read(archive,particleId);
+        Simulation.ChildShape = JpcChildShapeProfile.Read(archive,particleId);
         drawOrder = new int[maxParticles];
         cameraDepths = new float[maxParticles];
         // Decode once during setup, never from Update or Draw.
@@ -110,6 +111,11 @@ public sealed class JpcParticleEmitter : IDisposable
             float scaleX=1,scaleY=1,alphaFactor=1;
             Simulation.ExtraShape?.Sample(p.AgeFrames/p.LifetimeFrames,
                 out scaleX,out scaleY,out alphaFactor);
+            if(p.IsChild && Simulation.ChildShape != null)
+            {
+                scaleX*=Simulation.ChildShape.ScaleX;
+                scaleY*=Simulation.ChildShape.ScaleY;
+            }
             byte alpha = (byte)Math.Max(0, Math.Min(255, Math.Round(config.Alpha * p.Alpha * alphaFactor)));
             if (alpha == 0) continue;
             material.Color = new Color32(config.Red, config.Green, config.Blue, alpha);
