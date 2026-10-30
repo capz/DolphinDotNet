@@ -82,7 +82,9 @@ public sealed class JpcArchive
             {
                 if (Ascii(data, offset, 8) != "JEFFjpa1") throw new InvalidDataException("Invalid JPAC1 particle.");
                 id = U16(data, offset + 0x18);
-                chunks = checked((int)U32(data, offset + 0xC));
+                uint rawChunks = U32(data, offset + 0xC);
+                if(rawChunks > 1024) throw new InvalidDataException("JPAC chunk count exceeds limits.");
+                chunks = (int)rawChunks;
                 usedTextures = data[offset + 0x16];
                 offset += 0x20;
             }
@@ -100,7 +102,9 @@ public sealed class JpcArchive
             for (int j = 0; j < chunks; j++)
             {
                 Check(data, offset, 8);
-                int size = checked((int)U32(data, offset + 4));
+                uint rawSize = U32(data, offset + 4);
+                if(rawSize > data.Length) throw new InvalidDataException("JPAC chunk size exceeds asset bounds.");
+                int size = (int)rawSize;
                 if (size < 8) throw new InvalidDataException("Zero-length JPAC chunk.");
                 Check(data, offset, size);
                 string type = Ascii(data, offset, 4);
@@ -110,7 +114,7 @@ public sealed class JpcArchive
                     if (tdbOffset >= 0) throw new InvalidDataException("Duplicate TDB1.");
                     tdbOffset = offset; tdbLength = size;
                 }
-                offset = checked(offset + size);
+                offset += size; /* Validated by Check(data,offset,size) above. */
             }
             if (usedTextures > 0 && tdbOffset < 0) throw new InvalidDataException("Missing TDB1 references.");
             if (tdbOffset >= 0)
@@ -137,13 +141,15 @@ public sealed class JpcArchive
         {
             Check(data, offset, 0x40);
             if (Ascii(data, offset, 4) != "TEX1") throw new InvalidDataException("Invalid JPAC texture chunk.");
-            int size = checked((int)U32(data, offset + 4));
+            uint rawSize = U32(data, offset + 4);
+                if(rawSize > data.Length) throw new InvalidDataException("JPAC chunk size exceeds asset bounds.");
+                int size = (int)rawSize;
             if (size < 0x40) throw new InvalidDataException("Invalid TEX1 length.");
             Check(data, offset, size);
             string name = NullTerminated(data, offset + 0xC, offset + 0x20, 0x14);
             if (!names.Add(name)) throw new InvalidDataException("Duplicate JPAC texture name.");
             archive.textures.Add(new Texture(name, Slice(data, offset + 0x20, size - 0x20)));
-            offset = checked(offset + size);
+            offset += size; /* Validated by Check(data,offset,size) above. */
         }
         return archive;
     }
