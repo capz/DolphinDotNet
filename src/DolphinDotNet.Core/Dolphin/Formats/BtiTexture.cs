@@ -167,17 +167,19 @@ public sealed class BtiTexture
         var output = new byte[payload + 32];
         output[0] = (byte)'D'; output[1] = (byte)'N';
         output[2] = (byte)'T'; output[3] = (byte)'X';
-        void U32Le(int offset, int value)
-        {
-            output[offset] = (byte)value;
-            output[offset + 1] = (byte)(value >> 8);
-            output[offset + 2] = (byte)(value >> 16);
-            output[offset + 3] = (byte)(value >> 24);
-        }
-        U32Le(4, 2); U32Le(8, fmt); U32Le(12, image.Width); U32Le(16, image.Height);
-        U32Le(20, payload); U32Le(24, mips);
+        WriteLittle32(output, 4, 2); WriteLittle32(output, 8, fmt);
+        WriteLittle32(output, 12, image.Width); WriteLittle32(output, 16, image.Height);
+        WriteLittle32(output, 20, payload); WriteLittle32(output, 24, mips);
         Buffer.BlockCopy(data, (int)start, output, 32, payload);
         return output;
+    }
+
+    private static void WriteLittle32(byte[] destination, int offset, int value)
+    {
+        destination[offset] = (byte)value;
+        destination[offset + 1] = (byte)(value >> 8);
+        destination[offset + 2] = (byte)(value >> 16);
+        destination[offset + 3] = (byte)(value >> 24);
     }
 
     private static int Expand4(int v) => (v << 4) | v;
