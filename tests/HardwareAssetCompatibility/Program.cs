@@ -20,7 +20,7 @@ internal static class Program
     private static Texture2D? texture;
     private static Model? model;
     private static ModelInstance? instance;
-    private static JpcParticleEmitter? particle;
+    private static JpcParticleSimulator? particle;
     private static string mountedImage="";
     private static int current=-1, status=AssetCompatibilityProbe.Scanning;
     private static AssetCorpus corpus=new AssetCorpus();
@@ -28,7 +28,7 @@ internal static class Program
 
     private static void Release()
     {
-        particle?.Dispose();particle=null;
+        particle=null;
         instance?.Dispose();instance=null;
         model?.Dispose();model=null;
         texture?.Dispose();texture=null;
@@ -56,10 +56,7 @@ internal static class Program
             if(item.Kind==AssetFixturePolicy.Texture)
             {
                 var raw=AssetCorpus.ReadAsset(item);
-                var meta=BtiTexture.Read(raw);
-                if(meta.Width>128||meta.Height>128)
-                    throw new NotSupportedException("Large BTI excluded by the hardware fixture memory budget.");
-                texture=Texture2D.FromBti(raw,linear:false);
+                texture=NativeBtiPreview.Create(raw);
             }
             else if(item.Kind==AssetFixturePolicy.Particle)
             {
@@ -69,12 +66,17 @@ internal static class Program
                 for(int i=0;i<archive.Particles.Count&&i<12;i++)
                 {
                     try {
-                        particle=new JpcParticleEmitter(archive,archive.Particles[i].Id,maxParticles:64,seed:17);
+                        var definition=JpcEmitterDefinition.Read(archive,archive.Particles[i].Id);
+                        // Keep source texture in native GX tile order. The case
+                        // is unsupported if it requires CI palette/large BTI.
+                        texture=NativeBtiPreview.Create(archive.Textures[definition.TextureIndex].BtiData);
+                        particle=new JpcParticleSimulator(definition,maxParticles:64,seed:17);
+                        particle.ExtraShape=JpcExtraShapeProfile.Read(archive,definition.ParticleId);
+                        particle.ChildShape=JpcChildShapeProfile.Read(archive,definition.ParticleId);
                         break;
-                    }catch(NotSupportedException){}
+                    }catch(NotSupportedException){texture?.Dispose();texture=null;}
                 }
-                if(particle==null)throw new NotSupportedException("No particle uses the supported JPA playback profile.");
-                // Deterministic simulation step count independent of console speed.
+                if(particle==null)throw new NotSupportedException("No JPA particle matches the bounded simulator/texture profile.");
                 for(int frame=0;frame<30;frame++)particle.Update(1f/60f);
             }
             else if(item.Kind==AssetFixturePolicy.Model)
@@ -106,22 +108,35 @@ internal static class Program
         // No animation is based on VI wall-clock time: golden hash comparisons
         // sample an identical simulation age for the same selected asset.
         Device.BeginFrame(Color32.Black);
-        if(texture!=null && batch!=null)
+        if(particle!=null && texture!=null && batch!=null)
+        {
+            // Deterministic diagnostic projection, NOT the original BSP1 TEV.
+            // The native tiled texture and CPU simulation are real fixture data.
+            batch.Begin();
+            for(int i=0;i<particle.ActiveCount;i++)
+            {
+                var p=particle.GetParticle(i);
+                float x=Device.Width/2f+p.X*36f;
+                float y=Device.Height/2f-p.Y*36f;
+                float size=12f*p.Alpha;
+                if(size>=1)
+                    batch.DrawTexture(texture,new RectF(x-size/2,y-size/2,size,size),Color32.White);
+            }
+            batch.End();
+        }
+        else if(texture!=null && batch!=null)
         {
             batch.Begin();
             int width=Device.Width, height=Device.Height;
-            // Show original aspect, entire image, no interpolation imposed
-            // beyond the native texture's authored sampler.
             float factor=Math.Min(width/(float)texture.Width,height/(float)texture.Height);
             float w=texture.Width*factor,h=texture.Height*factor;
             batch.DrawTexture(texture,new RectF((width-w)/2,(height-h)/2,w,h),Color32.White);
             batch.End();
         }
-        else if(instance!=null || particle!=null)
+        else if(instance!=null)
         {
             Renderer.Begin3D(Camera);
-            if(instance!=null)Renderer.DrawModel(instance,Identity);
-            if(particle!=null)particle.Draw(Renderer,Camera);
+            Renderer.DrawModel(instance,Identity);
             Renderer.End3D();
         }
         Device.EndFrame();
