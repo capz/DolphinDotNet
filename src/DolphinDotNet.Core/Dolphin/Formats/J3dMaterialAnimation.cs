@@ -62,6 +62,33 @@ public sealed class J3dMaterialAnimation
         throw new InvalidDataException("Expected J3D animation chunk is missing.");
     }
 
+    /// <summary>Resolve an animation track's authored material name. BVA
+    /// visibility references shapes instead of materials and has no name table.</summary>
+    public string GetTrackMaterialName(int trackIndex, bool konst = false)
+    {
+        if (FileType == "bva1")
+            throw new NotSupportedException("BVA shape visibility is not material-name indexed.");
+        int count = TrackCount;
+        uint namesOffset;
+        if (FileType == "brk1")
+        {
+            int regular = U16(data, chunk + 0xC), konstCount = U16(data, chunk + 0xE);
+            count = konst ? konstCount : regular;
+            namesOffset = U32(data, chunk + (konst ? 0x34 : 0x30));
+        }
+        else namesOffset = U32(data, chunk + 0x1C);
+        if (trackIndex < 0 || trackIndex >= count)
+            throw new ArgumentOutOfRangeException(nameof(trackIndex));
+        int table = Relative(namesOffset, 4);
+        int listed = U16(data, table);
+        if (listed < count || 4L + listed * 4L > size - namesOffset)
+            throw new InvalidDataException("J3D material-name table is truncated.");
+        int nameOffset = U16(data, table + 6 + trackIndex * 4L);
+        if (nameOffset < 4 + listed * 4 || nameOffset >= size - namesOffset)
+            throw new InvalidDataException("J3D animation name offset invalid.");
+        return NullTerminated(data, table + nameOffset, chunk + size, 64);
+    }
+
     public float ResolveFrame(float frame)
     {
         if (float.IsNaN(frame) || float.IsInfinity(frame) || frame < 0)
