@@ -117,6 +117,42 @@ static class Program
         Check(GameCubeFormatDetector.Detect(jpc) == GameCubeFileFormat.Jpc, "JPAC detection");
         Check(GameCubeFormatDetector.Detect(bti, "texture.bti") == GameCubeFileFormat.Bti,
             "Hinted BTI detection");
+        var effect = new byte[0x138];
+        Str(effect, 0, "JPAC2-10"); W16(effect, 8, 1); W16(effect, 0xA, 1);
+        W32(effect, 0xC, 0xD8);
+        W16(effect, 0x10, 0xCAFE); W16(effect, 0x12, 3); effect[0x16] = 1;
+        Str(effect, 0x18, "BEM1"); W32(effect, 0x1C, 0x80);
+        W32(effect, 0x20, 4 << 18); // point volume
+        W32(effect, 0x18 + 0x4C, 0x3F800000); // one particle/frame
+        W32(effect, 0x18 + 0x34, 0x3C23D70A); // velocity
+        W32(effect, 0x18 + 0x60, 0x3F800000); // momentum retention
+        W32(effect, 0x18 + 0x28 + 4, 0x3F800000); // direction +Y
+        W16(effect, 0x18 + 0x72, 30); W16(effect, 0x18 + 0x6E, 10);
+        Str(effect, 0x98, "BSP1"); W32(effect, 0x9C, 0x34);
+        W32(effect, 0xA0, unchecked((int)(2u << 28))); // billboard
+        W32(effect, 0x98 + 0x10, 0x3F800000);
+        W32(effect, 0x98 + 0x14, 0x3F800000);
+        effect[0x98 + 0x26] = 255; effect[0x98 + 0x27] = 200;
+        effect[0x98 + 0x28] = 100; effect[0x98 + 0x29] = 255;
+        Str(effect, 0xCC, "TDB1"); W32(effect, 0xD0, 0x0A);
+        Str(effect, 0xD8, "TEX1"); W32(effect, 0xDC, 0x60);
+        Str(effect, 0xE4, "sprite"); Buffer.BlockCopy(bti, 0, effect, 0xF8, bti.Length);
+        var effectArchive = JpcArchive.Read(effect);
+        var definition = JpcEmitterDefinition.Read(effectArchive, 0xCAFE);
+        Check(definition.SpawnRate == 1 && definition.ParticleLifetimeFrames == 30,
+            "JPA emitter configuration");
+        Check(definition.TextureIndex == 0 && definition.SizeX == 1, "JPA texture and shape");
+        var sim = new JpcParticleSimulator(definition, 16, 123);
+        sim.Update(3f / 60f);
+        Check(sim.ActiveCount == 3, "JPA deterministic spawn");
+        Check(sim.GetParticle(0).LifetimeFrames == 30, "JPA lifetime");
+        for (int i = 0; i < 20; i++) sim.Update(1f / 60f);
+        Check(!sim.IsEmitting && sim.ActiveCount == 10, "JPA finite emitter lifetime");
+        sim.Stop();
+        for (int i = 0; i < 31; i++) sim.Update(1f / 60f);
+        Check(sim.ActiveCount == 0, "JPA expiry without survivors");
+        Reject(() => JpcEmitterDefinition.Read(JpcArchive.Read(jpc), 0x1234),
+            "JPA incomplete emitter profile");
         Console.WriteLine("GameCubeFormatsTests passed: " + assertionCount + " assertions");
     }
 }
