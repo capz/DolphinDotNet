@@ -283,16 +283,16 @@ internal static class Program
     }
     private static async Task<int> Main()
     {
-        Report(JSystemFixtureTelemetry.Scanning,0,0,0,0,"/games");
+        Report(JSystemFixtureTelemetry.Scanning,0,0,0,"/games");
         Discover();
         camera.LookAt(new Vector3(0,1,6),Vector3.Zero,new Vector3(0,1,0));
         batch=new Draw2D(device,new Draw2DOptions{Width=640,Height=480,VertexCapacity=12});
         if(count==0)
         {
-            Report(JSystemFixtureTelemetry.Unavailable,0,0,0,0,problem);
+            Report(JSystemFixtureTelemetry.Unavailable,0,0,0,problem);
             while(true){Controller.Update();Frame();}
         }
-        Report(JSystemFixtureTelemetry.Ready,0,0,0,0,"discovery-complete");
+        Report(JSystemFixtureTelemetry.Ready,0,0,0,"discovery-complete");
         int index=0;
         await ShowAsync(index);
         while(true)
