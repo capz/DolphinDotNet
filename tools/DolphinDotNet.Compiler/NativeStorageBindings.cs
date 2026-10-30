@@ -138,6 +138,7 @@ internal static class NativeStorageBindings
         ["AudioVoiceControl"]=("dnd_audio_voice_control","iif",false),
         ["AudioVoiceStop"]=("dnd_audio_voice_stop","i",false),
         ["TimingNow"]=("dnd_timing_now","",false),
+        ["FixtureReport"]=("dnd_fixture_report","iiiiiiiiiis",false),
         ["InputUpdate"]=("dnd_input_poll","",false),
         ["InputFlags"]=("dnd_input_flags","i",false),
         ["InputButtons"]=("dnd_input_buttons","ii",false),
