@@ -153,6 +153,47 @@ static class Program
         Check(sim.ActiveCount == 0, "JPA expiry without survivors");
         Reject(() => JpcEmitterDefinition.Read(JpcArchive.Read(jpc), 0x1234),
             "JPA incomplete emitter profile");
+        var j3dChannels = new Dolphin.Graphics.J3dMaterialChannels(2);
+        var state = new float[12];
+        j3dChannels.SetVisibility(0, false);
+        j3dChannels.SetColor(0, new Dolphin.Graphics.Color32(255, 128, 0, 64));
+        j3dChannels.SetTextureIndex(0, 1);
+        j3dChannels.CopyMaterialState(0, state);
+        Check(state[0] == 0 && state[1] == 1 && state[3] == 0, "J3D material visibility/color");
+        Check(state[11] == 1 && state[4] > 0 && state[4] < 1, "J3D texture channel");
+        j3dChannels.Apply(anim, 0, 0, 1f);
+        j3dChannels.CopyMaterialState(0, state);
+        Check(state[0] == 0, "J3D BVA applies material visibility");
+        j3dChannels.Reset();
+        j3dChannels.CopyMaterialState(0, state);
+        Check(state[0] == 1 && state[11] == -1 && state[5] == 1 && state[9] == 1,
+            "J3D reset source defaults");
+
+        var btk = new byte[0x120];
+        Str(btk, 0, "J3D1"); Str(btk, 4, "btk1");
+        W32(btk, 8, btk.Length); W32(btk, 0xC, 1);
+        Str(btk, 0x20, "TTK1"); W32(btk, 0x24, 0x100);
+        W16(btk, 0x2A, 30); W16(btk, 0x2C, 3);
+        W16(btk, 0x2E, 2); W16(btk, 0x30, 1); W16(btk, 0x32, 3);
+        W32(btk, 0x34, 0x60); W32(btk, 0x44, 0xA0);
+        W32(btk, 0x48, 0xB0); W32(btk, 0x4C, 0xB8); W32(btk, 0x50, 0xC0);
+        for (int k = 0; k < 9; k++)
+        {
+            int rec = 0x20 + 0x60 + k * 6;
+            W16(btk, rec, 1);
+            int index = k == 3 ? 1 : k == 5 ? 1 : k == 8 ? 2 : 0;
+            W16(btk, rec + 2, index);
+        }
+        W32(btk, 0x20 + 0xB0, 0x3F800000);
+        W32(btk, 0x20 + 0xB4, 0x3F800000);
+        W32(btk, 0x20 + 0xC0, 0x3E800000); // S +0.25
+        W32(btk, 0x20 + 0xC4, unchecked((int)0xBE000000)); // T -0.125
+        var uvAnim = J3dMaterialAnimation.Read(btk);
+        j3dChannels.Apply(uvAnim, 1, 0, 2f);
+        j3dChannels.CopyMaterialState(1, state);
+        Check(Math.Abs(state[7] - 0.25f) < 0.0001f, "BTK S translation");
+        Check(Math.Abs(state[10] + 0.125f) < 0.0001f, "BTK T translation");
+        Check(state[5] == 1 && state[9] == 1, "BTK affine identity scales");
         Console.WriteLine("GameCubeFormatsTests passed: " + assertionCount + " assertions");
     }
 }
