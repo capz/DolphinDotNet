@@ -104,6 +104,16 @@ static class Program
         Check(Encoding.ASCII.GetString(archive.ReadFile("hi.txt")) == "ABC", "RARC bytes");
         bad = (byte[])rarc.Clone(); W32(bad, 0x90, 0xFFFF);
         Reject(() => RarcArchive.Read(bad), "RARC member offset bounds");
+        using (var memberStream = archive.OpenMemberStream("hi.txt"))
+        {
+            Check(memberStream.CanRead && memberStream.CanSeek && !memberStream.CanWrite,
+                "RARC member stream is read-only and seekable");
+            Check(memberStream.Length == 3 && memberStream.ReadByte() == (byte)'A',
+                "RARC member stream exposes bounded member bytes");
+            memberStream.Seek(2, SeekOrigin.Begin);
+            Check(memberStream.ReadByte() == (byte)'C' && memberStream.ReadByte() == -1,
+                "RARC member stream enforces EOF");
+        }
         var bfn = new byte[0x40];
         Str(bfn, 0, "FONTbfn1"); W32(bfn, 8, 0x40); W32(bfn, 0xC, 1);
         Str(bfn, 0x20, "INF1"); W32(bfn, 0x24, 0x20);
@@ -113,6 +123,28 @@ static class Program
         Check(font.Ascent == 10 && font.LineHeight == 12, "BFN metrics");
         Check(font.GlyphForEncodedCharacter(0x41) == 0xAB && font.WidthForGlyph(3) == 8,
             "BFN default glyph and width");
+        var glyphBfn = new byte[0x80];
+        Str(glyphBfn, 0, "FONTbfn1"); W32(glyphBfn, 8, 0x80); W32(glyphBfn, 0xC, 2);
+        Str(glyphBfn, 0x20, "INF1"); W32(glyphBfn, 0x24, 0x20);
+        Str(glyphBfn, 0x40, "GLY1"); W32(glyphBfn, 0x44, 0x40);
+        W16(glyphBfn, 0x48, 65); W16(glyphBfn, 0x4A, 65);
+        W16(glyphBfn, 0x4C, 8); W16(glyphBfn, 0x4E, 8);
+        W32(glyphBfn, 0x50, 32);
+        glyphBfn[0x55] = 0; // GX I4
+        W16(glyphBfn, 0x56, 1); W16(glyphBfn, 0x58, 1);
+        W16(glyphBfn, 0x5A, 8); W16(glyphBfn, 0x5C, 8);
+        for (int i = 0x60; i < 0x80; i++) glyphBfn[i] = 0xFF;
+        var sheets = BfnGlyphSheets.Read(glyphBfn);
+        Check(sheets.Sheets.Count == 1 && sheets.TryGetGlyph(65, out var glyph) &&
+              glyph.X == 0 && glyph.Y == 0 && glyph.Width == 8,
+              "BFN glyph rect and sheet index");
+        byte[] glyphPixels = sheets.CopyGlyph(65);
+        Check(glyphPixels.Length == 8 * 8 * 4 && glyphPixels[0] == 255 &&
+              glyphPixels[1] == 255 && glyphPixels[2] == 255,
+              "BFN GLY1 native I4 tile conversion");
+        Check(!sheets.TryGetGlyph(66, out _), "BFN missing glyph");
+        bad = (byte[])glyphBfn.Clone(); W32(bad, 0x50, 64);
+        Reject(() => BfnGlyphSheets.Read(bad), "BFN sheet length validation");
         Check(GameCubeFormatDetector.Detect(bmg) == GameCubeFileFormat.Bmg, "BMG detection");
         Check(GameCubeFormatDetector.Detect(jpc) == GameCubeFileFormat.Jpc, "JPAC detection");
         Check(GameCubeFormatDetector.Detect(bti, "texture.bti") == GameCubeFileFormat.Bti,
@@ -153,6 +185,38 @@ static class Program
         Check(sim.ActiveCount == 0, "JPA expiry without survivors");
         Reject(() => JpcEmitterDefinition.Read(JpcArchive.Read(jpc), 0x1234),
             "JPA incomplete emitter profile");
+        var cubeEffect = (byte[])effect.Clone();
+        W32(cubeEffect, 0x20, 0); // JPAC cube volume
+        W16(cubeEffect, 0x18 + 0x74, 5);
+        W32(cubeEffect, 0x18 + 0x10, 0x3F800000); // volume scale X
+        W32(cubeEffect, 0x18 + 0x14, 0x3F800000); // volume scale Y
+        W32(cubeEffect, 0x18 + 0x18, 0x3F800000); // volume scale Z
+        var cubeDef = JpcEmitterDefinition.Read(JpcArchive.Read(cubeEffect), 0xCAFE);
+        Check(cubeDef.Volume == JpcEmitterVolume.Cube && cubeDef.VolumeSize == 5,
+              "JPA bounded volume metadata");
+        var cubeSim = new JpcParticleSimulator(cubeDef, 16, 123);
+        cubeSim.Update(1f / 60f);
+        var spawn = cubeSim.GetParticle(0);
+        Check(cubeSim.ActiveCount == 1 && Math.Abs(spawn.X) <= 5 &&
+              Math.Abs(spawn.Y) <= 5 && Math.Abs(spawn.Z) <= 5,
+              "JPA cube spawn bounds");
+        var cubeSim2 = new JpcParticleSimulator(cubeDef, 16, 123);
+        cubeSim2.Update(1f / 60f);
+        var repeat = cubeSim2.GetParticle(0);
+        Check(repeat.X == spawn.X && repeat.Y == spawn.Y && repeat.Z == spawn.Z,
+              "JPA deterministic volume sampling");
+        W32(cubeEffect, 0x20, 1 << 8); // JPAC sphere volume
+        var sphereDef = JpcEmitterDefinition.Read(JpcArchive.Read(cubeEffect), 0xCAFE);
+        var sphereSim = new JpcParticleSimulator(sphereDef, 16, 123);
+        sphereSim.Update(1f / 60f);
+        var sphere = sphereSim.GetParticle(0);
+        Check(sphere.X * sphere.X + sphere.Y * sphere.Y + sphere.Z * sphere.Z <= 25.01f,
+              "JPA sphere emission volume");
+        W32(cubeEffect, 0x20, 3 << 8); // torus remains unsupported
+        bool torusRejected = false;
+        try { JpcEmitterDefinition.Read(JpcArchive.Read(cubeEffect), 0xCAFE); }
+        catch (NotSupportedException) { torusRejected = true; }
+        Check(torusRejected, "JPA unsupported torus fails explicitly");
         var mipBti = new byte[0x60];
         Buffer.BlockCopy(bti, 0, mipBti, 0, bti.Length);
         mipBti[0x18] = 2;
