@@ -321,13 +321,13 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
         GX_Position3f32(v[0], v[1], v[2]);
         if(custom_scene&&!(mat->mode&2))GX_Normal3f32(v[3],v[4],v[5]);
         GX_Color4u8(color[0], color[1], color[2], color[3]);
-        float u=dnd_model_f32(src+24),v=dnd_model_f32(src+28);
+        float tex_u=dnd_model_f32(src+24),tex_v=dnd_model_f32(src+28);
         if(anim) {
-          float su=anim[5]*u+anim[6]*v+anim[7];
-          float sv=anim[8]*u+anim[9]*v+anim[10];
-          u=su;v=sv;
+          float su=anim[5]*tex_u+anim[6]*tex_v+anim[7];
+          float sv=anim[8]*tex_u+anim[9]*tex_v+anim[10];
+          tex_u=su;tex_v=sv;
         }
-        GX_TexCoord2f32(u,v);
+        GX_TexCoord2f32(tex_u,tex_v);
       }
       GX_End();
       first += count;
