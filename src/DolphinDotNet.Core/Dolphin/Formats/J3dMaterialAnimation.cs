@@ -160,6 +160,7 @@ public sealed class J3dMaterialAnimation
     }
 
     public int TextureRotationFraction => FileType == "btk1" ? data[chunk + 9] : 0;
+    public bool IsMayaTextureMatrix => FileType == "btk1" && size >= 0x60 && U32(data, chunk + 0x5C) == 1;
 
     public void SampleUv(int trackIndex, float frame, float[] output)
     {
@@ -170,27 +171,36 @@ public sealed class J3dMaterialAnimation
         int scaleCount = U16(data, chunk + 0xE);
         int rotationCount = U16(data, chunk + 0x10);
         int translationCount = U16(data, chunk + 0x12);
-        int[] counts = { scaleCount, rotationCount, translationCount };
-        int[] offsets = { 0x28, 0x2C, 0x30 };
-        int row = records + trackIndex * 0x36;
+         int row = records + trackIndex * 0x36;
         float time = ResolveFrame(frame);
         for (int k = 0; k < 9; k++)
         {
             int tableType = k % 3;
-            int count = counts[tableType];
+            int count = tableType == 0 ? scaleCount : tableType == 1 ? rotationCount : translationCount;
             bool floating = tableType != 1;
             int stride = floating ? 4 : 2;
-            int table = Relative(U32(data, chunk + offsets[tableType]), count * (long)stride);
+            int tableOffset = tableType == 0 ? 0x28 : tableType == 1 ? 0x2C : 0x30;
+            int table = Relative(U32(data, chunk + tableOffset), count * (long)stride);
             output[k] = SampleTrack(row + k * 6, table, count, stride, floating, time);
         }
     }
 
     public float[] GetUvCenter(int trackIndex)
     {
+        var destination = new float[2];
+        GetUvCenter(trackIndex, destination);
+        return destination;
+    }
+
+    public void GetUvCenter(int trackIndex, float[] destination)
+    {
+        if (destination == null || destination.Length < 2)
+            throw new ArgumentException("Two center coordinates required.", nameof(destination));
         RequireKind("btk1");
         if (trackIndex < 0 || trackIndex >= TrackCount) throw new ArgumentOutOfRangeException(nameof(trackIndex));
         int center = Relative(U32(data, chunk + 0x24), TrackCount * 12L);
-        return new[] { F32(data, center + trackIndex * 12), F32(data, center + trackIndex * 12 + 4) };
+        destination[0] = F32(data, center + trackIndex * 12);
+        destination[1] = F32(data, center + trackIndex * 12 + 4);
     }
 
     private float SampleTrack(int record, int table, int tableCount, int stride, bool floating, float frame)
