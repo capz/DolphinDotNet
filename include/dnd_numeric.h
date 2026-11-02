@@ -16,4 +16,5 @@ int dnd_numeric_i64(DndString *s,intptr_t out,int throwing);
 int dnd_numeric_u64(DndString *s,intptr_t out,int throwing);
 int dnd_numeric_f32(DndString *s,intptr_t out,int throwing);
 int dnd_numeric_f64(DndString *s,intptr_t out,int throwing);
+float dnd_numeric_i32_bits_to_single(int32_t bits);
 #endif

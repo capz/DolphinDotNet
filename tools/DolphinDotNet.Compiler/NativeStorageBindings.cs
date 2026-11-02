@@ -6,6 +6,8 @@ internal static class NativeStorageBindings
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
         ["ModelDrawEffect"]=("dnd_model_draw_effect","iai",false),
+        ["Publish"]=("dnd_corpus_publish","iiiis",false),
+        ["Finish"]=("dnd_corpus_finish","iiii",false),
         ["ModelDrawModels"]=("dnd_model_draw_models","aai",false),
         ["ModelDrawMaterial"]=("dnd_model_draw_material","iaiiiifi",false),
         ["ModelDrawAnimated"]=("dnd_model_draw_animated","iaa",false),
@@ -22,6 +24,7 @@ internal static class NativeStorageBindings
         ["TextCase"]=("dnd_text_case","si",true),
         ["TextRangeEqual"]=("dnd_text_range_equal","sisiii",false),
         ["RepeatChar"]=("dnd_string_repeat","ii",true),
+        ["Int32BitsToSingle"]=("dnd_numeric_i32_bits_to_single","i",false),
         ["Unary"]=("dnd_numeric_unary","id",false),
         ["Binary"]=("dnd_numeric_binary","idd",false),
         ["Fma"]=("dnd_numeric_fma","iddd",false),
@@ -243,6 +246,10 @@ internal static class NativeStorageBindings
         bool detachedTextureCopy = call.Operation is "TextureStageArray" or "TextureStageBuffer";
         if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||(!detachedTextureCopy && call.Operation.StartsWith("Texture",StringComparison.Ordinal))||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation=="AssetCompatReport"||call.Operation is "ModelDrawModels" or "ModelDraw" or "ModelDrawEffect" or "ModelDrawMaterial" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");
+        if(call.Operation=="Publish")
+            b.AppendLine("  extern void dnd_corpus_publish(int,int,int,int,DndString*);");
+        if(call.Operation=="Finish")
+            b.AppendLine("  extern void dnd_corpus_finish(int,int,int,int);");
         if(call.Operation=="AssetCompatReport")
             b.AppendLine("  extern void dnd_asset_compat_report(int,int,int,int,int,const DndString*);");
         if(call.Operation=="DolRequest")b.AppendLine("  dnd_async_require_application_thread();");
