@@ -37,7 +37,7 @@ public sealed class BmgFlowTables
         for (int i = 0; i < count; i++)
         {
             Check(data, offset, 8);
-            int length = checked((int)U32(data, offset + 4));
+            int length = AssetInt(U32(data, offset + 4));
             if (length < 8 || length > data.Length - offset)
                 throw new InvalidDataException("BMG section exceeds data.");
             string name = Ascii(data, offset, 4);

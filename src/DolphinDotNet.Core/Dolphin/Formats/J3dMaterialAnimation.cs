@@ -47,7 +47,7 @@ public sealed class J3dMaterialAnimation
         {
             Check(data, pos, 8);
             string chunkType = Ascii(data, pos, 4);
-            int size = checked((int)U32(data, pos + 4));
+            int size = AssetInt(U32(data, pos + 4));
             if (size < 0x18 || (long)pos + size > declared) throw new InvalidDataException("Invalid J3D chunk size.");
             if (chunkType == expected)
             {
@@ -57,7 +57,7 @@ public sealed class J3dMaterialAnimation
                 return new J3dMaterialAnimation(data, type, expected, pos, size,
                     U16(data, pos + 0xA), data[pos + 8], tracks);
             }
-            pos = checked(pos + size);
+            pos = AssetInt((long)pos + size);
         }
         throw new InvalidDataException("Expected J3D animation chunk is missing.");
     }

@@ -23,6 +23,15 @@ public static class GameCubeBinary
         return (ushort)((data[i] << 8) | data[i + 1]);
     }
 
+    // Explicit range checks also work in the GameCube AOT backend, which
+    // does not lower checked CIL conversions/arithmetic.
+    public static int AssetInt(long value)
+    {
+        if (value < 0 || value > int.MaxValue)
+            throw new InvalidDataException("Asset length exceeds Int32 range.");
+        return (int)value;
+    }
+
     public static short S16(byte[] data, long offset) => unchecked((short)U16(data, offset));
 
     public static uint U32(byte[] data, long offset)

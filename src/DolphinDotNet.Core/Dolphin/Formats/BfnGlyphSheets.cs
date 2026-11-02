@@ -18,12 +18,20 @@ public sealed class BfnGlyphSheets
         public int Width { get; }
         public int Height { get; }
         public int ImageFormat { get; }
-        public byte[] Rgba => (byte[])pixels.Clone();
+        public byte[] Rgba
+        {
+            get
+            {
+                var copy = new byte[pixels.Length];
+                for (int i = 0; i < pixels.Length; i++) copy[i] = pixels[i];
+                return copy;
+            }
+        }
 
         internal Sheet(byte[] data, int format, int width, int height)
         {
             Width = width; Height = height; ImageFormat = format;
-            var bti = new byte[checked(0x20 + data.Length)];
+            var bti = new byte[AssetInt((long)0x20 + data.Length)];
             bti[0] = (byte)format;
             bti[2] = (byte)(width >> 8);
             bti[3] = (byte)width;
@@ -31,7 +39,7 @@ public sealed class BfnGlyphSheets
             bti[5] = (byte)height;
             bti[0x18] = 1;
             bti[0x1F] = 0x20;
-            Buffer.BlockCopy(data, 0, bti, 0x20, data.Length);
+            for (int i = 0; i < data.Length; i++) bti[0x20 + i] = data[i];
             pixels = BtiTexture.Read(bti).Rgba;
         }
 
@@ -40,7 +48,7 @@ public sealed class BfnGlyphSheets
             if (width < 1 || height < 1 || x < 0 || y < 0 ||
                 x > Width - width || y > Height - height)
                 throw new ArgumentOutOfRangeException(nameof(x), "Glyph bounds are outside the sheet.");
-            var result = new byte[checked(width * height * 4)];
+            var result = new byte[AssetInt((long)width * height * 4)];
             for (int row = 0; row < height; row++)
                 Buffer.BlockCopy(pixels, ((y + row) * Width + x) * 4,
                     result, row * width * 4, width * 4);
@@ -70,7 +78,7 @@ public sealed class BfnGlyphSheets
         {
             if (glyphCode < range.First || glyphCode > range.Last) continue;
             int index = glyphCode - range.First;
-            int cells = checked(range.Rows * range.Columns);
+            int cells = AssetInt((long)range.Rows * range.Columns);
             int sheet = range.StartingSheet + index / cells;
             int local = index % cells;
             glyph = new Glyph(sheet, local % range.Columns * range.CellWidth,
