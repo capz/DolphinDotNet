@@ -8,6 +8,8 @@ internal static class ArrayShapeChecks
     {
         byte[] bytes=new byte[]{1,2,3};var byteCopy=(byte[])bytes.Clone();
         byteCopy[0]=9;Check(bytes[0]==1&&byteCopy[0]==9&&!object.ReferenceEquals(bytes,byteCopy));
+        object boxedBytes=byteCopy;Check(boxedBytes is byte[]&&boxedBytes is not int[]);
+        bool wrongType=false;try{var invalid=(int[])boxedBytes;}catch(InvalidCastException){wrongType=true;}Check(wrongType);
         var emptyVector=new int[0];Check(!object.ReferenceEquals(emptyVector,emptyVector.Clone()));
         int[,] matrix=new int[3,4];Check(matrix.Length==12&&matrix.LongLength==12&&matrix.Rank==2);
         Check(matrix.GetLength(0)==3&&matrix.GetLength(1)==4&&matrix.GetLowerBound(1)==0&&matrix.GetUpperBound(0)==2);
