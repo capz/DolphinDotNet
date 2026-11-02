@@ -63,6 +63,7 @@ int dnd_texture_create_range(int width,int height,DndArray *rgba,int offset,int 
 int dnd_texture_create(int width,int height,DndArray *rgba,int linear);
 int dnd_texture_png(DndArray *png,int linear);
 int dnd_texture_package(DndArray *package,int linear);
+int dnd_texture_ipl_font(DndArray *metadata,int linear);
 int dnd_texture_sampler(int token,int wrap_s,int wrap_t,int min_filter,int mag_filter,float lod_bias);
 int dnd_texture_allocate_native(int width,int height,int format,int linear);
 int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int count);

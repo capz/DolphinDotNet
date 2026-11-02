@@ -81,7 +81,7 @@ def main(area):
         with tempfile.TemporaryDirectory() as tmp:
             run("dotnet","run","--project","tests/ModelAssetTests","-c","Release","--",tmp)
             run("python3","scripts/ci_model_tests.py",tmp)
-        for p in ("GraphicsSmoke","ModelSmoke","ModelAsyncSmoke","TevMaterialTests"):
+        for p in ("GraphicsSmoke","IplFontSmoke","ModelSmoke","ModelAsyncSmoke","TevMaterialTests"):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="assets":
         test("tests/GameCubeFormatsTests")
@@ -101,7 +101,7 @@ def main(area):
         # Hardware/emulator execution belongs in independent console acceptance.
         build("tools/DolphinDotNet.Compiler")
         with tempfile.TemporaryDirectory() as tmp:
-            for p in ("JSystemHardwareFixture","HelloGameCube","GraphicsSmoke","AramSmoke","NetworkSmoke",
+            for p in ("JSystemHardwareFixture","HelloGameCube","GraphicsSmoke","IplFontSmoke","AramSmoke","NetworkSmoke",
                       "ControllerDolphinSmoke","DolLauncherSmoke",
                       "DebuggerStackSmoke","DebuggerInspectionSmoke","RetailAssetCorpus","HardwareAssetCompatibility"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))

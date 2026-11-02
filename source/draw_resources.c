@@ -1,4 +1,5 @@
 #include "dnd_draw.h"
+#include "dnd_ipl_font.h"
 #include "dnd_async.h"
 #include "dnd_performance.h"
 #include "dnd_crc32.h"
@@ -12,6 +13,8 @@
 #include "dnd_texture_png.h"
 /* Isolated host fixtures can link texture/resource plumbing without GX. */
 #if !defined(DND_GAMECUBE_STORAGE)
+__attribute__((weak)) void dnd_ipl_font_shutdown(void){}
+__attribute__((weak)) int dnd_ipl_font_build(uint8_t *a,size_t b,int32_t *m,size_t n){(void)a;(void)b;(void)m;(void)n;return 0;}
 __attribute__((weak)) void dnd_draw_backend_publish_texture(void){}
 __attribute__((weak)) void dnd_draw_backend_mesh_changed(void){}
 __attribute__((weak)) void dnd_draw_backend_2d_projection(float w,float h){dnd_draw_backend_2d((int)w,(int)h);}
@@ -107,7 +110,7 @@ uint64_t dnd_buffer_held_address(int token,int offset,int count) {
        offset>r->bytes || count>r->bytes-offset)return 0;
     return (uint64_t)(uintptr_t)(r->data+offset);
 }
-void dnd_draw_shutdown(void) { active_canvas=0;for(int i=0;i<SLOTS;i++) if(slots[i].kind) release(&slots[i]); }
+void dnd_draw_shutdown(void) { active_canvas=0;for(int i=0;i<SLOTS;i++) if(slots[i].kind) release(&slots[i]);dnd_ipl_font_shutdown(); }
 int dnd_draw_live(void) { int n=0;for(int i=0;i<SLOTS;i++) if(slots[i].kind)n++;return n; }
 int dnd_draw_total_bytes(void) { return total_bytes; }
 int dnd_draw_bytes(int token) { Resource *r=find(token,0);return r?r->bytes:-1; }
@@ -160,6 +163,15 @@ static int texture_size(int w,int h,int format) {
     return ((w+bw-1)/bw)*((h+bh-1)/bh)*bytes;
 }
 static uint32_t le32(const unsigned char *p) { return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24; }
+int dnd_texture_ipl_font(DndArray *metadata,int linear) {
+    dnd_async_require_application_thread();
+    if(dnd_exception_pending()||dnd_device_active()||!metadata||metadata->element_size!=4||metadata->elements_are_references||metadata->length!=DND_IPL_METADATA||(linear!=0&&linear!=1))return 0;
+    int bytes=DND_IPL_WIDTH*DND_IPL_HEIGHT*2,token=create(TEXTURE,bytes,32);Resource *r=find(token,TEXTURE);
+    if(!r)return 0;
+    if(!dnd_ipl_font_build(r->data,(size_t)bytes,(int32_t*)metadata->data,metadata->length)){release(r);return 0;}
+    r->width=DND_IPL_WIDTH;r->height=DND_IPL_HEIGHT;r->format=3;r->linear=linear!=0;r->levels=1;
+    dnd_draw_backend_flush(r->data,bytes,2);return token;
+}
 int dnd_texture_package(DndArray *a,int linear) {
     if(dnd_device_active() || !a || a->element_size!=1 || a->elements_are_references || a->length<32) return 0;
     const unsigned char *p=a->data;

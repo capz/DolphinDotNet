@@ -1,5 +1,8 @@
 # DolphinDotNet
 
+Console UI can use the native [IPL firmware font](docs/ipl-font.md) through
+`IplFont.Load()` and `Draw2D.DrawText`, without bundling firmware font data.
+
 <img width="384" height="256" alt="ddntext25" src="https://github.com/user-attachments/assets/5de1effc-b9f5-4567-a900-226ce102fd04" />
 
 
