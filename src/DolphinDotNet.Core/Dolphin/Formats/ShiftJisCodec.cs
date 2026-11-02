@@ -276,7 +276,31 @@ public static class ShiftJisCodec
         "eYqnir6K34oi+vaKU4t/i/CM9IwSjXaNI/rPjiT6JfpnkN6QJvoVkSeR2pHXkd6R7ZHukeSR5ZEGkhCSCpI6kkCSPJJOklmSUZI5kmeSp5J3kniS" +
         "55LXktmS0JIn+tWS4JLTkiWTIZP7kij6HpP/kh2TApNwk1eTpJPGk96T+JMxlEWUSJSSldz5Kfqdlq+WM5c7l0OXTZdPl1GXVZdXmGWYKvor+ieZ" +
         "LPqemU6a2ZrcmnWbcpuPm7Gbu5sAnHCda50t+hme0Z4=";
-    private static readonly string Index = Encoding.Unicode.GetString(Convert.FromBase64String(IndexData));
+    private static readonly string Index = DecodeIndex();
+
+    // Decode our fixed Base64 UTF-16LE table without host-only Convert/Encoding APIs.
+    private static string DecodeIndex()
+    {
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        var text = new StringBuilder(IndexData.Length * 3 / 8);
+        int bits = 0, available = 0, low = -1;
+        for (int i = 0; i < IndexData.Length; i++)
+        {
+            char ch = IndexData[i];
+            if (ch == '=') break;
+            int value = alphabet.IndexOf(ch);
+            if (value < 0) throw new InvalidDataException("Invalid embedded Shift-JIS table.");
+            bits = (bits << 6) | value;
+            available += 6;
+            if (available < 8) continue;
+            available -= 8;
+            int next = (bits >> available) & 255;
+            if (low < 0) low = next;
+            else { text.Append((char)(low | (next << 8))); low = -1; }
+        }
+        if (low >= 0) throw new InvalidDataException("Truncated embedded Shift-JIS table.");
+        return text.ToString();
+    }
 
     public static string Decode(byte[] source) => Decode(source, 0, source == null ? 0 : source.Length);
 

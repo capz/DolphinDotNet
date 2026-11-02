@@ -57,7 +57,8 @@ public sealed class BtiTexture
                 throw new InvalidDataException("Invalid BTI palette.");
             Check(data, paletteStart, palCount * 2L);
         }
-        var rgba = new byte[checked(width * height * 4)];
+        // Dimensions are bounded to 1024 above, so this product fits in Int32.
+        var rgba = new byte[width * height * 4];
         for (int by = 0; by < blocksHigh; by++)
         for (int bx = 0; bx < blocksWide; bx++)
         {
@@ -159,10 +160,10 @@ public sealed class BtiTexture
         int payload = 0;
         for (int level = 0; level < mips; level++)
         {
-            int byteCount = checked((int)((long)((width + tileW - 1) / tileW) *
-                    ((height + tileH - 1) / tileH) * tileBytes));
+            int byteCount = AssetInt((long)((width + tileW - 1) / tileW) *
+                    ((height + tileH - 1) / tileH) * tileBytes);
             Check(data, start + payload, byteCount);
-            payload = checked(payload + byteCount);
+            payload = AssetInt((long)payload + byteCount);
             if (level + 1 < mips && width == 1 && height == 1)
                 throw new InvalidDataException("BTI has more mip levels than image dimensions allow.");
             width = Math.Max(1, width / 2);
@@ -210,12 +211,12 @@ public sealed class BtiTexture
         int sourceBytes = 0, destinationBytes = 0;
         for (int i = 0; i < mips; i++)
         {
-            int sourceLength = checked(((width + tilesW - 1) / tilesW) *
+            int sourceLength = AssetInt((long)((width + tilesW - 1) / tilesW) *
                 ((height + tilesH - 1) / tilesH) * 32);
             Check(source, sourceStart + sourceBytes, sourceLength);
-            sourceBytes = checked(sourceBytes + sourceLength);
-            int nativeLength = checked(((width + 3) / 4) * ((height + 3) / 4) * 64);
-            destinationBytes = checked(destinationBytes + nativeLength);
+            sourceBytes = AssetInt((long)sourceBytes + sourceLength);
+            int nativeLength = AssetInt((long)((width + 3) / 4) * ((height + 3) / 4) * 64);
+            destinationBytes = AssetInt((long)destinationBytes + nativeLength);
             if (destinationBytes > MaxAssetBytes - 32)
                 throw new InvalidDataException("Indexed BTI mip chain exceeds memory budget.");
             if (i + 1 < mips && width == 1 && height == 1)
@@ -232,7 +233,8 @@ public sealed class BtiTexture
 
         // Header offset changes only in this detached copy, never in caller
         // input. Palette metadata stays stable across all mip levels.
-        byte[] detached = (byte[])source.Clone();
+        byte[] detached = new byte[source.Length];
+        for (int i = 0; i < source.Length; i++) detached[i] = source[i];
         width = image.Width; height = image.Height;
         int srcOffset = 0, dstOffset = 32;
         for (int level = 0; level < mips; level++)
@@ -259,8 +261,8 @@ public sealed class BtiTexture
                     output[tile + 32 + element + 1] = pixels[sourcePixel + 2]; // B
                 }
             }
-            dstOffset = checked(dstOffset + cols * rows * 64);
-            srcOffset = checked(srcOffset + ((width + tilesW - 1) / tilesW) *
+            dstOffset = AssetInt((long)dstOffset + cols * rows * 64);
+            srcOffset = AssetInt((long)srcOffset + ((width + tilesW - 1) / tilesW) *
                 ((height + tilesH - 1) / tilesH) * 32);
             width = Math.Max(1, width / 2); height = Math.Max(1, height / 2);
         }

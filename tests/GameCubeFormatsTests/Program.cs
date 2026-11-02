@@ -30,6 +30,11 @@ static class Program
     }
     static void Main()
     {
+        Check(GameCubeBinary.AssetInt(0) == 0, "zero asset length");
+        Check(GameCubeBinary.AssetInt(int.MaxValue) == int.MaxValue, "maximum asset length");
+        Reject(() => GameCubeBinary.AssetInt(-1), "negative asset length");
+        Reject(() => GameCubeBinary.AssetInt((long)int.MaxValue + 1), "overflowing asset length");
+
         var yaz = new byte[20];
         Str(yaz, 0, "Yaz0"); W32(yaz, 4, 3);
         yaz[16] = 0xE0; yaz[17] = (byte)'A'; yaz[18] = (byte)'B'; yaz[19] = (byte)'C';
