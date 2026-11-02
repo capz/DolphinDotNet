@@ -403,7 +403,13 @@ internal static class ValueCBackend
                     }
                     case ValueIrLoadStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine($"  v{x.Result.Id} = {(x.Address||field.StorageSize>0?"(intptr_t)":"")}{(x.Address&&field.StorageSize==0?"&":"")}{StaticSymbol(field)};");break;}
                     case ValueIrStoreStaticField x:{var field=model.Fields[(x.TypeName,x.FieldName)];if(HasTypeInitializer(x.TypeName,model))b.AppendLine($"  {EnsureSymbol(x.TypeName)}();");b.AppendLine(field.StorageSize>0?$"  memcpy({StaticSymbol(field)},(void*)v{x.Value.Id},{field.StorageSize}u);":$"  {StaticSymbol(field)} = v{x.Value.Id};");break;}
-                    case ValueIrTypeTest x:b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)});");break;
+                    case ValueIrTypeTest x:
+                        if(x.ArrayShape is {} shape) {
+                            var element=shape.Element;
+                            if(element.TypeName is null)throw new NotSupportedException("Array cast requires an exact element type.");
+                            b.AppendLine($"  v{x.Result.Id} = (intptr_t)dnd_array_type_test((DndObject*)v{x.Object.Id}, {shape.Rank}u, {(shape.Vector?"true":"false")}, {(element.IsReference?"sizeof(DndObject*)":$"{element.Size}u")}, {TypeExpr(element.TypeName)}, {(element.IsReference?"true":"false")}, {(x.ThrowOnFailure?"true":"false")});");
+                        } else b.AppendLine($"  v{x.Result.Id} = (intptr_t){(x.ThrowOnFailure?"dnd_cast":"dnd_isinst")}((DndObject*)v{x.Object.Id}, {TypeExpr(x.TypeName)});");
+                        break;
                     case ValueIrStringLength x:b.AppendLine($"  if(dnd_require_object_fast((DndObject*)v{x.String.Id})) v{x.Result.Id} = ((DndString*)v{x.String.Id})->length;");break;
                     case ValueIrPrimitiveToString x:
                     {
