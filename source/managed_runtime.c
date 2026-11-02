@@ -443,6 +443,49 @@ DndArray *dnd_managed_array_new_shaped(DndManagedHeap *heap,uint32_t rank,const 
     array->length=(uint32_t)length;array->element_size=element_size;array->element_type=element_type;array->elements_are_references=references?1:0;array->reserved[0]=(uint8_t)rank;
     int32_t *shape=array_shape(array);for(uint32_t i=0;i<rank;i++){shape[i*2]=bounds?dimensions[i*2]:0;shape[i*2+1]=dimensions[bounds?i*2+1:i];}return array;
 }
+DndArray *dnd_array_type_test(DndObject *object, uint32_t rank, bool vector,
+    uint32_t element_size, const DndType *element_type, bool references, bool throw_on_failure) {
+    if (!object) return NULL;
+    if (object->type == &DND_TYPE_ARRAY) {
+        DndArray *array = (DndArray *)object;
+        bool same_shape = (uint32_t)dnd_array_rank(array) == rank &&
+            (array->reserved[0] == 0) == vector;
+        bool same_element = array->element_size == element_size &&
+            (array->elements_are_references != 0) == references &&
+            (references ? dnd_type_is_assignable_from(element_type, array->element_type) :
+                element_type == array->element_type);
+        if (same_shape && same_element) return array;
+    }
+    if (throw_on_failure) dnd_exception_throw(DND_EXCEPTION_INVALID_CAST, "Invalid array cast.");
+    return NULL;
+}
+
+/* Array.Clone is shallow: copy the element layout, payload and shape, but
+ * allocate a fresh object header so identity and GC state remain independent. */
+DndArray *dnd_array_clone(DndManagedHeap *heap, DndArray *source) {
+    if (!source) {
+        dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE, "Array is null.");
+        return NULL;
+    }
+    size_t payload = (size_t)source->length * source->element_size;
+    if (source->reserved[0])
+        payload = ((payload + 3u) & ~(size_t)3u) + source->reserved[0] * 8u;
+    size_t bytes = sizeof(DndArray) + payload;
+    DndObject *root = (DndObject *)source;
+    DndObject **slots[] = { &root };
+    DndRootSet roots;
+    dnd_roots_init(&roots, slots, 1);
+    dnd_root_add(&roots, &root);
+    DndGcRootRegistration registration = {0};
+    if (!dnd_gc_register_roots(&registration, &roots)) return NULL;
+    DndArray *copy = (DndArray *)allocate(heap, &DND_TYPE_ARRAY, bytes);
+    if (copy)
+        memcpy((uint8_t *)copy + sizeof(DndObject),
+            (uint8_t *)source + sizeof(DndObject), bytes - sizeof(DndObject));
+    dnd_gc_unregister_roots(&registration);
+    return copy;
+}
+
 void *dnd_array_shaped_at(DndArray *array,uint32_t rank,const int32_t *indices) {
     if(!array){dnd_exception_throw(DND_EXCEPTION_NULL_REFERENCE,"Array is null.");return NULL;}
     if(!indices||rank!=(uint32_t)dnd_array_rank(array)){dnd_exception_throw(DND_EXCEPTION_ARGUMENT,"Array rank mismatch.");return NULL;}

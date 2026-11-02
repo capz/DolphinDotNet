@@ -57,7 +57,8 @@ public sealed class BtiTexture
                 throw new InvalidDataException("Invalid BTI palette.");
             Check(data, paletteStart, palCount * 2L);
         }
-        var rgba = new byte[checked(width * height * 4)];
+        // Dimensions are bounded to 1024 above, so this product fits in Int32.
+        var rgba = new byte[width * height * 4];
         for (int by = 0; by < blocksHigh; by++)
         for (int bx = 0; bx < blocksWide; bx++)
         {
@@ -73,13 +74,14 @@ public sealed class BtiTexture
                 switch (fmt)
                 {
                     case 0:
-                        r = g = b = Expand4((t & 1) == 0 ? data[block + t / 2] >> 4 : data[block + t / 2] & 15);
+                        color = (t & 1) == 0 ? data[block + t / 2] >> 4 : data[block + t / 2] & 15;
+                        r = Expand4(color); g = r; b = r;
                         break;
-                    case 1: r = g = b = data[block + t]; break;
+                    case 1: r = data[block + t]; g = r; b = r; break;
                     case 2:
-                        color = data[block + t]; a = Expand4(color >> 4); r = g = b = Expand4(color & 15); break;
+                        color = data[block + t]; a = Expand4(color >> 4); r = Expand4(color & 15); g = r; b = r; break;
                     case 3:
-                        a = data[block + t * 2]; r = g = b = data[block + t * 2 + 1]; break;
+                        a = data[block + t * 2]; r = data[block + t * 2 + 1]; g = r; b = r; break;
                     case 4:
                         Decode565(U16(data, block + t * 2), out r, out g, out b); break;
                     case 5:
@@ -88,15 +90,17 @@ public sealed class BtiTexture
                         a = data[block + t * 2]; r = data[block + t * 2 + 1];
                         g = data[block + 32 + t * 2]; b = data[block + 32 + t * 2 + 1]; break;
                     case 8:
-                        color = (t & 1) == 0 ? data[block + t / 2] >> 4 : data[block + t / 2] & 15;
-                        goto case 10;
                     case 9:
-                        color = data[block + t]; goto case 10;
                     case 10:
-                        if (fmt == 10) color = U16(data, block + t * 2) & 0x3FFF;
+                        if (fmt == 8)
+                            color = (t & 1) == 0 ? data[block + t / 2] >> 4 : data[block + t / 2] & 15;
+                        else if (fmt == 9)
+                            color = data[block + t];
+                        else
+                            color = U16(data, block + t * 2) & 0x3FFF;
                         if (color >= palCount) throw new InvalidDataException("BTI palette index outside table.");
                         int raw = U16(data, paletteStart + color * 2L);
-                        if (palFmt == 0) { a = raw >> 8; r = g = b = raw & 255; }
+                        if (palFmt == 0) { a = raw >> 8; r = raw & 255; g = r; b = r; }
                         else if (palFmt == 1) Decode565(raw, out r, out g, out b);
                         else Decode5A3(raw, out r, out g, out b, out a);
                         break;
@@ -158,10 +162,10 @@ public sealed class BtiTexture
         int payload = 0;
         for (int level = 0; level < mips; level++)
         {
-            int byteCount = checked((int)((long)((width + tileW - 1) / tileW) *
-                    ((height + tileH - 1) / tileH) * tileBytes));
+            int byteCount = AssetInt((long)((width + tileW - 1) / tileW) *
+                    ((height + tileH - 1) / tileH) * tileBytes);
             Check(data, start + payload, byteCount);
-            payload = checked(payload + byteCount);
+            payload = AssetInt((long)payload + byteCount);
             if (level + 1 < mips && width == 1 && height == 1)
                 throw new InvalidDataException("BTI has more mip levels than image dimensions allow.");
             width = Math.Max(1, width / 2);
@@ -175,7 +179,7 @@ public sealed class BtiTexture
         WriteLittle32(output, 4, 2); WriteLittle32(output, 8, fmt);
         WriteLittle32(output, 12, image.Width); WriteLittle32(output, 16, image.Height);
         WriteLittle32(output, 20, payload); WriteLittle32(output, 24, mips);
-        Buffer.BlockCopy(data, (int)start, output, 32, payload);
+        Array.Copy(data, (int)start, output, 32, payload);
         return output;
     }
 
@@ -209,12 +213,12 @@ public sealed class BtiTexture
         int sourceBytes = 0, destinationBytes = 0;
         for (int i = 0; i < mips; i++)
         {
-            int sourceLength = checked(((width + tilesW - 1) / tilesW) *
+            int sourceLength = AssetInt((long)((width + tilesW - 1) / tilesW) *
                 ((height + tilesH - 1) / tilesH) * 32);
             Check(source, sourceStart + sourceBytes, sourceLength);
-            sourceBytes = checked(sourceBytes + sourceLength);
-            int nativeLength = checked(((width + 3) / 4) * ((height + 3) / 4) * 64);
-            destinationBytes = checked(destinationBytes + nativeLength);
+            sourceBytes = AssetInt((long)sourceBytes + sourceLength);
+            int nativeLength = AssetInt((long)((width + 3) / 4) * ((height + 3) / 4) * 64);
+            destinationBytes = AssetInt((long)destinationBytes + nativeLength);
             if (destinationBytes > MaxAssetBytes - 32)
                 throw new InvalidDataException("Indexed BTI mip chain exceeds memory budget.");
             if (i + 1 < mips && width == 1 && height == 1)
@@ -258,8 +262,8 @@ public sealed class BtiTexture
                     output[tile + 32 + element + 1] = pixels[sourcePixel + 2]; // B
                 }
             }
-            dstOffset = checked(dstOffset + cols * rows * 64);
-            srcOffset = checked(srcOffset + ((width + tilesW - 1) / tilesW) *
+            dstOffset = AssetInt((long)dstOffset + cols * rows * 64);
+            srcOffset = AssetInt((long)srcOffset + ((width + tilesW - 1) / tilesW) *
                 ((height + tilesH - 1) / tilesH) * 32);
             width = Math.Max(1, width / 2); height = Math.Max(1, height / 2);
         }

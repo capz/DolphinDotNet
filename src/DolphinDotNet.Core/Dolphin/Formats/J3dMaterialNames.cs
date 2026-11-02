@@ -22,7 +22,9 @@ public static class J3dMaterialNames
         {
             if (cursor + 8 > declared) throw new InvalidDataException("Truncated J3D model chunk.");
             string name = Ascii(bytes, cursor, 4);
-            int size = checked((int)U32(bytes, cursor + 4));
+            uint rawSize = U32(bytes, cursor + 4);
+            if (rawSize > int.MaxValue) throw new InvalidDataException("Invalid J3D model chunk size.");
+            int size = (int)rawSize;
             if (size < 8 || (long)cursor + size > declared)
                 throw new InvalidDataException("Invalid J3D model chunk size.");
             if (name == "MAT3")
@@ -46,7 +48,8 @@ public static class J3dMaterialNames
                 }
                 return result;
             }
-            cursor = checked(cursor + size);
+            // The chunk end is bounded by the validated byte array above.
+            cursor = cursor + size;
         }
         throw new InvalidDataException("J3D model is missing MAT3.");
     }

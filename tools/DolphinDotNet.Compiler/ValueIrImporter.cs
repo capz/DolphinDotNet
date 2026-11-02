@@ -228,7 +228,7 @@ internal static class ValueIrImporter
                     case 0x65 or 0x66:{var input=Pop(stack,cil);var unary=New(Unmap(input.Kind));instructions.Add(new ValueIrUnary(unary,cil.OpCode==0x65?"neg":"not",input));stack.Add(unary);break;}
                     case 0x74 or 0x75:
                     {
-                        var type=resolveType(cil)??throw new NotSupportedException($"Unable to resolve type test at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrTypeTest(result,obj,type,cil.OpCode==0x74));stack.Add(result);break;
+                        var shape=shapedArray?.Invoke(cil);var type=shape is not null?"System.Array":resolveType(cil)??throw new NotSupportedException($"Unable to resolve type test at IL_{cil.Offset:x4}.");var obj=Pop(stack,cil);var result=New(CilStackKind.ObjectReference);instructions.Add(new ValueIrTypeTest(result,obj,type,cil.OpCode==0x74,shape));stack.Add(result);break;
                     }
                     case 0xd0:{var data=New(CilStackKind.NativeInt);instructions.Add(new ValueIrDataToken(data,fieldData(cil)));stack.Add(data);break;}
                     case 0x72:
@@ -307,6 +307,11 @@ internal static class ValueIrImporter
                                 }
                             }else instructions.Add(other is {} o?new ValueIrObjectEquals(value,input,o,ik==IntrinsicKind.ObjectEquals,ik==IntrinsicKind.ObjectEquals&&cil.OpCode==0x28):new ValueIrObjectHash(value,input,cil.OpCode==0x28));
                             stack.Add(value);break;
+                        }
+                        if(ik == IntrinsicKind.ArrayClone)
+                        {
+                            var array=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);
+                            instructions.Add(new ValueIrArrayOperation(value,ik.ToString(),new[]{array}));stack.Add(value);break;
                         }
                         if(ik is IntrinsicKind.ArrayLength or IntrinsicKind.ArrayLongLength or IntrinsicKind.ArrayRank)
                         {

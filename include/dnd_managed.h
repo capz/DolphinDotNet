@@ -236,6 +236,8 @@ int32_t dnd_array_get_length(DndArray *array, int32_t dimension);
 int32_t dnd_array_get_lower_bound(DndArray *array, int32_t dimension);
 int32_t dnd_array_get_upper_bound(DndArray *array, int32_t dimension);
 bool dnd_array_clear(DndArray *array, int32_t index, int32_t length);
+DndArray *dnd_array_type_test(DndObject *object, uint32_t rank, bool vector, uint32_t element_size, const DndType *element_type, bool references, bool throw_on_failure);
+DndArray *dnd_array_clone(DndManagedHeap *heap, DndArray *source);
 bool dnd_array_copy(DndArray *source, int32_t source_index, DndArray *destination, int32_t destination_index, int32_t length);
 int32_t dnd_array_index_of(DndArray *array, uint64_t value, uint32_t size, bool reference, int32_t start, int32_t count);
 bool dnd_type_is_assignable_from(const DndType *target, const DndType *actual);
