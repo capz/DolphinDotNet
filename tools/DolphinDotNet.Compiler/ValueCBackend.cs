@@ -503,6 +503,7 @@ internal static class ValueCBackend
                             b.AppendLine($"  if(v{a[0].Id} && ((DndObject*)v{a[0].Id})->type==&DND_TYPE_ARRAY) {{");
                         switch(x.Operation)
                         {
+                            case "ArrayClone": b.AppendLine($"  v{x.Result.Value.Id} = (intptr_t)dnd_array_clone(dnd_value_heap, (DndArray*)v{a[0].Id});"); break;
                             case "ArrayLength": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_length_fast((DndArray*)v{a[0].Id});"); break;
                             case "ArrayLongLength": b.AppendLine($"  v{x.Result.Value.Id} = dnd_array_long_length((DndArray*)v{a[0].Id});"); break;
                             case "ArrayRank": b.AppendLine($"  v{x.Result.Value.Id}=dnd_array_rank((DndArray*)v{a[0].Id});"); break;

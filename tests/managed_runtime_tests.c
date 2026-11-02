@@ -50,8 +50,44 @@ static void shaped_array_contracts(void) {
     assert(dnd_array_shaped_reference_address(refs,2,zero,&DND_TYPE_STRING));
 }
 
+static void array_clone_contracts(void) {
+    uint8_t memory[4096]; DndManagedHeap heap;
+    dnd_managed_heap_init(&heap, memory, sizeof(memory));
+    assert(!dnd_array_clone(&heap, NULL));
+    assert(dnd_exception_kind() == DND_EXCEPTION_NULL_REFERENCE);
+    dnd_exception_clear();
+    DndArray *empty = dnd_managed_array_new(&heap, 0, 4);
+    DndArray *empty_copy = dnd_array_clone(&heap, empty);
+    assert(empty_copy && empty_copy != empty && empty_copy->length == 0);
+    int32_t dimensions[] = {-2, 2, 5, 3};
+    DndArray *source = dnd_managed_array_new_shaped(&heap, 2, dimensions, true,
+        4, &DND_TYPE_BOXED_INT32, false);
+    assert(dnd_array_store_i32(source, 5, 73));
+    DndArray *copy = dnd_array_clone(&heap, source);
+    assert(copy && copy != source && copy->element_type == source->element_type);
+    assert(dnd_array_rank(copy) == 2 && dnd_array_get_length(copy, 1) == 3);
+    assert(dnd_array_get_lower_bound(copy, 0) == -2 && dnd_array_get_upper_bound(copy, 1) == 7);
+    assert(dnd_array_load_i32(copy, 5) == 73);
+    assert(dnd_array_store_i32(copy, 5, 99) && dnd_array_load_i32(source, 5) == 73);
+    DndArray *refs = dnd_managed_array_new_typed(&heap, 1, sizeof(DndObject *), &NODE_TYPE, true);
+    TestNode *child = (TestNode *)dnd_object_new(&heap, &NODE_TYPE);
+    child->value = 42;
+    assert(dnd_array_store_ref(refs, 0, (DndObject *)child));
+    /* Clone's allocation must keep its source and children alive by itself. */
+    dnd_gc_set_stress(true);
+    DndArray *refs_copy = dnd_array_clone(&heap, refs);
+    dnd_gc_set_stress(false);
+    assert(refs_copy && refs_copy != refs && refs_copy->elements_are_references);
+    assert(dnd_array_load_ref(refs_copy, 0) == (DndObject *)child);
+    DndObject *root = (DndObject *)refs_copy; DndObject **slots[1]; DndRootSet roots;
+    dnd_roots_init(&roots, slots, 1); assert(dnd_root_add(&roots, &root));
+    dnd_gc_collect(&heap, &roots);
+    assert(((TestNode *)dnd_array_load_ref(refs_copy, 0))->value == 42);
+}
+
 int main(void) {
     shaped_array_contracts();
+    array_clone_contracts();
     uint8_t memory[16384];
     DndManagedHeap heap;
     dnd_managed_heap_init(&heap, memory, sizeof(memory));

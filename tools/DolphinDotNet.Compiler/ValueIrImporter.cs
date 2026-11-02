@@ -308,6 +308,11 @@ internal static class ValueIrImporter
                             }else instructions.Add(other is {} o?new ValueIrObjectEquals(value,input,o,ik==IntrinsicKind.ObjectEquals,ik==IntrinsicKind.ObjectEquals&&cil.OpCode==0x28):new ValueIrObjectHash(value,input,cil.OpCode==0x28));
                             stack.Add(value);break;
                         }
+                        if(ik == IntrinsicKind.ArrayClone)
+                        {
+                            var array=Pop(stack,cil);var value=New(CilStackKind.ObjectReference);
+                            instructions.Add(new ValueIrArrayOperation(value,ik.ToString(),new[]{array}));stack.Add(value);break;
+                        }
                         if(ik is IntrinsicKind.ArrayLength or IntrinsicKind.ArrayLongLength or IntrinsicKind.ArrayRank)
                         {
                             var array=Pop(stack,cil);var value=New(ik==IntrinsicKind.ArrayLongLength?CilStackKind.I8:CilStackKind.I4);

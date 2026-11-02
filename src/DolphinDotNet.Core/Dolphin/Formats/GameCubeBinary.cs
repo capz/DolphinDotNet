@@ -71,7 +71,7 @@ public static class GameCubeBinary
         Check(data, offset, count);
         if (count > MaxAssetBytes) throw new InvalidDataException("Asset exceeds native size budget.");
         var copy = new byte[(int)count];
-        Buffer.BlockCopy(data, (int)offset, copy, 0, copy.Length);
+        Array.Copy(data, (int)offset, copy, 0, copy.Length);
         return copy;
     }
 

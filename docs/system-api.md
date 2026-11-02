@@ -21,3 +21,10 @@ Separator handling, GetFileName and Combine are platform-neutral and accept both
 BaseDirectory is currently "/" and TryGetSwitch returns false. This is enough for libraries that probe AppContext, while avoiding claims of desktop/runtime configuration support.
 
 These are runtime primitives. Mapping normal System.* calls to them belongs in the compiler intrinsic/CoreLib layer.
+
+## Array.Clone
+
+`Array.Clone()` creates an independent shallow copy in the GameCube runtime.
+It preserves the element type, rank, lengths, and lower bounds; reference elements
+and references embedded in value types remain shared. Empty arrays receive a new
+identity, and a null receiver raises `NullReferenceException`.
