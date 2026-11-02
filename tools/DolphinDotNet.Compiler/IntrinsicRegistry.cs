@@ -106,6 +106,7 @@ internal static class IntrinsicRegistry
             ("Dolphin.Timing.NativeTiming",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Diagnostics.NativeDiagnostics",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Diagnostics.NativeCorpusBridge",_)=>IntrinsicKind.NativeStorage,
+            ("Dolphin.Diagnostics.NativeAssetCompatibility",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Memory.NativeAram",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.IO.NativeDol",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Storage.NativeStorage",_)=>IntrinsicKind.NativeStorage,
