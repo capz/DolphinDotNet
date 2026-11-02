@@ -24,6 +24,7 @@ internal static class NativeStorageBindings
         ["TextCase"]=("dnd_text_case","si",true),
         ["TextRangeEqual"]=("dnd_text_range_equal","sisiii",false),
         ["RepeatChar"]=("dnd_string_repeat","ii",true),
+        ["Int32BitsToSingle"]=("dnd_numeric_i32_bits_to_single","i",false),
         ["Unary"]=("dnd_numeric_unary","id",false),
         ["Binary"]=("dnd_numeric_binary","idd",false),
         ["Fma"]=("dnd_numeric_fma","iddd",false),
