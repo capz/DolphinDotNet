@@ -245,6 +245,10 @@ internal static class NativeStorageBindings
         bool detachedTextureCopy = call.Operation is "TextureStageArray" or "TextureStageBuffer";
         if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||(!detachedTextureCopy && call.Operation.StartsWith("Texture",StringComparison.Ordinal))||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation=="AssetCompatReport"||call.Operation is "ModelDrawModels" or "ModelDraw" or "ModelDrawEffect" or "ModelDrawMaterial" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");
+        if(call.Operation=="Publish")
+            b.AppendLine("  extern void dnd_corpus_publish(int,int,int,int,DndString*);");
+        if(call.Operation=="Finish")
+            b.AppendLine("  extern void dnd_corpus_finish(int,int,int,int);");
         if(call.Operation=="AssetCompatReport")
             b.AppendLine("  extern void dnd_asset_compat_report(int,int,int,int,int,const DndString*);");
         if(call.Operation=="DolRequest")b.AppendLine("  dnd_async_require_application_thread();");
