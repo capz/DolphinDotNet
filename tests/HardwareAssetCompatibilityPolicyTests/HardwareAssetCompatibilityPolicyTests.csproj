@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../HardwareAssetCompatibility/AssetFixturePolicy.cs" Link="AssetFixturePolicy.cs" />
+    <Compile Include="../HardwareAssetCompatibility/AssetCorpus.cs" Link="AssetCorpus.cs" />
+    <Compile Include="../HardwareAssetCompatibility/StreamingRarcIndex.cs" Link="StreamingRarcIndex.cs" />
+    <ProjectReference Include="../../src/DolphinDotNet.GameCube/DolphinDotNet.GameCube.csproj" />
+  </ItemGroup>
+</Project>
