@@ -12,6 +12,12 @@ public sealed partial class Texture2D : IDisposable
     public int MipLevels {get{Check();return NativeGraphics.TextureDimension(Token,3);}}
     public int NativeBytes {get{Check();return NativeGraphics.DrawBytes(Token);}}
     private Texture2D(int token){Token=token;Width=NativeGraphics.TextureDimension(token,0);Height=NativeGraphics.TextureDimension(token,1);}
+    internal static Texture2D CreateIplFont(int[] metrics,bool linear)
+    {
+        int token=NativeGraphics.IplFontCreate(metrics,linear?1:0);
+        if(token==0)throw new InvalidOperationException("IPL font unavailable, graphics frame active, or native budget exhausted.");
+        return new Texture2D(token);
+    }
     public static Texture2D Create(int width,int height,byte[] rgba,bool linear=false)
     {
         if(rgba==null)throw new ArgumentNullException("rgba");

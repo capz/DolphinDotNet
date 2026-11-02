@@ -9,8 +9,11 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
 
+test: ipl_font_test
+
 test: display_mode_test graphics_resource_boundaries_test graphics_phase_two_test graphics_submission_test render_state_gx_test overlay_list_test array_fast_test indexed_mesh_gx_test canvas_rectangle_test texture_reuse_test throughput_runtime_test asset_native_test mesh_range_test native_buffer_crc_test file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test jsystem_fixture_telemetry_test asset_compat_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
 	./display_mode_test
+	./ipl_font_test
 	./graphics_resource_boundaries_test
 	./graphics_phase_two_test
 	./graphics_submission_test
@@ -47,6 +50,9 @@ test: display_mode_test graphics_resource_boundaries_test graphics_phase_two_tes
 	./hardware_gamecube_test
 	./disc_mount_test
 	./dol_test
+
+ipl_font_test: ipl_font_test.c ../source/ipl_font.c ../include/dnd_ipl_font.h ipl_font_stub/ogc/system.h
+	$(CC) $(CFLAGS) -DDND_IPL_FONT_TEST -Iipl_font_stub ipl_font_test.c ../source/ipl_font.c -o $@
 
 file_optimize_test: file_optimize_test.c ../source/file_optimize.c
 	$(CC) $(CFLAGS) $^ -o $@
@@ -133,6 +139,7 @@ texture_reuse_test: texture_reuse_test.c ../source/draw_resources.c
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $^ $(CRC_DEAD_STRIP) -lm -o $@
 
 clean:
+	rm -f ipl_font_test
 	rm -f display_mode_test
 	rm -f graphics_resource_boundaries_test
 	rm -f graphics_phase_two_test graphics_submission_test render_state_gx_test canvas_rectangle_test indexed_mesh_gx_test array_fast_test overlay_list_test

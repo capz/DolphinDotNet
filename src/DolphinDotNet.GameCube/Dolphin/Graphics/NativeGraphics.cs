@@ -4,6 +4,7 @@ namespace Dolphin.Graphics;
 
 internal static class NativeGraphics
 {
+    internal static int IplFontCreate(int[] metrics,int linear)=>throw Unsupported();
     internal static int DeviceConfigureDisplay(int resolution,int scan,int widescreen)=>throw new PlatformNotSupportedException("Requires AOT.");
     internal static int DeviceDisplayStat(int kind)=>throw new PlatformNotSupportedException("Requires AOT.");
     internal static int CanvasLayout(int token,float width,float height)=>throw new PlatformNotSupportedException("Requires AOT.");

@@ -223,7 +223,7 @@ internal static class GameCubeBundle
 
         var sources = new[] {
             "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "debug_heartbeat", "debug_automation", "asset_corpus", "asset_fixture", "asset_compat", "disc_gamecube", "fst",
-            "fst_gamecube", "iso_file", "dol", "dol_gamecube", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "gx_raw", "gx_guard", "input", "input_gamecube",
+            "fst_gamecube", "iso_file", "dol", "dol_gamecube", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "ipl_font", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "numeric", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
             "model_graphics", "model_transform", "tls", "network", "network_gamecube",
             "network_gamecube_backend", "network_link_gamecube", "performance", "platform_gamecube",

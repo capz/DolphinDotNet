@@ -138,6 +138,18 @@ public sealed partial class Draw2D : IDisposable
         FillRectangle(new RectF(rectangle.X,rectangle.Y+t,t,rectangle.Height-2*t),color);
         FillRectangle(new RectF(rectangle.X+rectangle.Width-t,rectangle.Y+t,t,rectangle.Height-2*t),color);
     }
+    /// <summary>Draw proportional printable-ASCII text from the console firmware.</summary>
+    public void DrawText(IplFont font,string text,Vector2 position,Color32 color,float scale=1)
+    {
+        Require();if(font==null)throw new ArgumentNullException("font");if(text==null)throw new ArgumentNullException("text");if(!(scale>0&&scale<=1024))throw new ArgumentOutOfRangeException("scale");font.Check();
+        float x=position.X,y=position.Y;
+        for(int i=0;i<text.Length;i++){
+            char c=text[i];if(c=='\r')continue;if(c=='\n'){x=position.X;y+=font.LineHeight*scale;continue;}
+            var source=font.Glyph(c=='\t'?' ':c,out int advance);
+            if(c!=' '&&c!='\t')DrawTexture(font.Texture,source,new RectF(x,y,source.Width*scale,source.Height*scale),color);
+            x+=advance*scale*(c=='\t'?4:1);
+        }
+    }
     public void DrawText(BitmapFont font,string text,Vector2 position,Color32 color,float scale=1)
     {
         Require();if(font==null)throw new ArgumentNullException("font");if(text==null)throw new ArgumentNullException("text");if(!(scale>0&&scale<=1024))throw new ArgumentOutOfRangeException("scale");
