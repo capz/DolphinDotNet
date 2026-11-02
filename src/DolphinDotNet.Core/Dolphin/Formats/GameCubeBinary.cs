@@ -71,8 +71,7 @@ public static class GameCubeBinary
         Check(data, offset, count);
         if (count > MaxAssetBytes) throw new InvalidDataException("Asset exceeds native size budget.");
         var copy = new byte[(int)count];
-        // Byte-precise copy also works with DolphinDotNet's closed-world AOT.
-        for (int i = 0, start = (int)offset; i < copy.Length; i++) copy[i] = data[start + i];
+        Array.Copy(data, (int)offset, copy, 0, copy.Length);
         return copy;
     }
 

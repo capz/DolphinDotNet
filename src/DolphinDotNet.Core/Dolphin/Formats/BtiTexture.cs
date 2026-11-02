@@ -179,7 +179,7 @@ public sealed class BtiTexture
         WriteLittle32(output, 4, 2); WriteLittle32(output, 8, fmt);
         WriteLittle32(output, 12, image.Width); WriteLittle32(output, 16, image.Height);
         WriteLittle32(output, 20, payload); WriteLittle32(output, 24, mips);
-        for (int i = 0, offset = (int)start; i < payload; i++) output[32 + i] = data[offset + i];
+        Array.Copy(data, (int)start, output, 32, payload);
         return output;
     }
 
@@ -235,8 +235,7 @@ public sealed class BtiTexture
 
         // Header offset changes only in this detached copy, never in caller
         // input. Palette metadata stays stable across all mip levels.
-        byte[] detached = new byte[source.Length];
-        for (int i = 0; i < source.Length; i++) detached[i] = source[i];
+        byte[] detached = (byte[])source.Clone();
         width = image.Width; height = image.Height;
         int srcOffset = 0, dstOffset = 32;
         for (int level = 0; level < mips; level++)

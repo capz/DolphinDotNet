@@ -18,15 +18,7 @@ public sealed class BfnGlyphSheets
         public int Width { get; }
         public int Height { get; }
         public int ImageFormat { get; }
-        public byte[] Rgba
-        {
-            get
-            {
-                var copy = new byte[pixels.Length];
-                for (int i = 0; i < pixels.Length; i++) copy[i] = pixels[i];
-                return copy;
-            }
-        }
+        public byte[] Rgba => (byte[])pixels.Clone();
 
         internal Sheet(byte[] data, int format, int width, int height)
         {
@@ -39,7 +31,7 @@ public sealed class BfnGlyphSheets
             bti[5] = (byte)height;
             bti[0x18] = 1;
             bti[0x1F] = 0x20;
-            for (int i = 0; i < data.Length; i++) bti[0x20 + i] = data[i];
+            Array.Copy(data, 0, bti, 0x20, data.Length);
             pixels = BtiTexture.Read(bti).Rgba;
         }
 
