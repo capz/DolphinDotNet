@@ -44,7 +44,7 @@ public static class GameCubeBinary
     public static float F32(byte[] data, long offset)
     {
         uint bits = U32(data, offset);
-        return BitConverter.ToSingle(BitConverter.GetBytes(bits), 0);
+        return Dolphin.Numerics.BitConverter.Int32BitsToSingle((int)bits);
     }
 
     public static string Ascii(byte[] data, long offset, int length)

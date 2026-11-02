@@ -6,6 +6,9 @@ internal static class ArrayShapeChecks
     private static void Check(bool condition){CheckCount++;if(!condition)throw new InvalidOperationException("Multidimensional array contract failed.");}
     internal static void Run()
     {
+        Check(Dolphin.Numerics.BitConverter.Int32BitsToSingle(0x3F800000)==1f);
+        Check(Dolphin.Numerics.BitConverter.Int32BitsToSingle(1)>0f);
+        Check(1f/Dolphin.Numerics.BitConverter.Int32BitsToSingle(unchecked((int)0x80000000))==float.NegativeInfinity);
         byte[] bytes=new byte[]{1,2,3};var byteCopy=(byte[])bytes.Clone();
         byteCopy[0]=9;Check(bytes[0]==1&&byteCopy[0]==9&&!object.ReferenceEquals(bytes,byteCopy));
         object boxedBytes=byteCopy;Check(boxedBytes is byte[]&&boxedBytes is not int[]);

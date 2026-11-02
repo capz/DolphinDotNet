@@ -255,3 +255,9 @@ int dnd_numeric_f32(DndString *s,intptr_t out,int throwing){return floating(s,(v
 int dnd_numeric_f64(DndString *s,intptr_t out,int throwing){return floating(s,(void*)out,0,throwing);}
 
 bool dnd_format_provider(DndObject *provider){if(!provider||strcmp(provider->type->name,"Dolphin.Globalization.CultureInfo")==0)return true;dnd_exception_throw(DND_EXCEPTION_NOT_SUPPORTED,"Only invariant formatting is available.");return false;}
+
+float dnd_numeric_i32_bits_to_single(int32_t bits) {
+    float value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
