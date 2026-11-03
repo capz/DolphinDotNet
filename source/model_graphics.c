@@ -16,6 +16,15 @@ static const float *animated_material_channels;
 static unsigned animated_material_count;
 static const float *animated_mesh_visibility;
 #define DND_ANIM_CHANNELS 12
+static bool indexed_models_enabled=true;
+int dnd_model_indexed_path(int enabled){
+  if(enabled==-1)return indexed_models_enabled?1:0;
+  if((enabled!=0&&enabled!=1)||dnd_device_active())return -1;
+  indexed_models_enabled=enabled!=0;return enabled;
+}
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
+#include "dnd_indexed_model.inc"
+#endif
 
 static bool matrix_array(DndArray *a, float out[16]) {
   if (!a || a->element_size != 4 || a->elements_are_references ||
@@ -287,6 +296,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     dnd_draw_backend_tev(selected, mat->texture >= 0);
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     bool custom_scene=dnd_draw_backend_scene_active();
+    if(indexed_model(mesh,mat,normal,custom_scene,anim!=NULL))continue;
     if(custom_scene){
       if(!(mat->mode&2)){Mtx n;for(int r=0;r<3;r++)for(int c=0;c<4;c++)n[r][c]=c<3?normal[r*4+c]:0;GX_LoadNrmMtxImm(n,GX_PNMTX0);GX_SetVtxDesc(GX_VA_NRM,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);}
       dnd_draw_backend_scene(!(mat->mode&2),frame_view);

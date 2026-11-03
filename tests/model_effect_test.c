@@ -40,6 +40,19 @@ typedef struct {
   float position[9],uv[6],world_x; GXColor vertex[3];
 } Draw;
 static Draw state,record[16];static int draws,restores,position_index,color_index,uv_index;
+static const unsigned char *indexed_arrays[32];static int indexed_stride[32],indexed_positions,indexed_normals,indexed_uvs;
+static GXColor indexed_tint;static Mtx indexed_normal;
+void GX_SetChanMatColor(int channel,GXColor c){assert(channel==GX_COLOR0A0);indexed_tint=c;}
+void GX_SetChanAmbColor(int channel,GXColor c){assert(channel==GX_COLOR0A0&&c.r==64&&c.g==64&&c.b==64);}
+void GX_InitLightPos(GXLightObj *p,float x,float y,float z){(void)p;assert(x==0&&y==0&&z==1000000);}
+void GX_InitLightColor(GXLightObj *p,GXColor c){(void)p;assert(c.r==191&&c.g==191&&c.b==191);}
+void GX_InitLightAttn(GXLightObj *p,float a,float b,float c,float d,float e,float f){(void)p;assert(a==1&&b==0&&c==0&&d==1&&e==0&&f==0);}
+void GX_LoadLightObj(GXLightObj *p,int slot){(void)p;assert(slot==GX_LIGHT0);}
+void GX_SetArray(int attribute,void *p,int stride){assert(attribute>=0&&attribute<32&&stride==80);indexed_arrays[attribute]=p;indexed_stride[attribute]=stride;}
+void GX_InvVtxCache(void){}
+void GX_Position1x16(u16 index){const unsigned char *p=indexed_arrays[GX_VA_POS]+index*indexed_stride[GX_VA_POS];indexed_positions++;GX_Position3f32(dnd_model_f32(p),dnd_model_f32(p+4),dnd_model_f32(p+8));state.vertex[color_index++]=indexed_tint;}
+void GX_Normal1x16(u16 index){const unsigned char *p=indexed_arrays[GX_VA_NRM]+index*indexed_stride[GX_VA_NRM];indexed_normals++;float normal[3];for(int i=0;i<3;i++)normal[i]=dnd_model_f32(p+i*4);float nz=0;for(int i=0;i<3;i++)nz+=indexed_normal[2][i]*normal[i];float shade=(64+191*fmaxf(0,nz))/255;GXColor *c=&state.vertex[color_index-1];c->r=(u8)fminf(255,c->r*shade);c->g=(u8)fminf(255,c->g*shade);c->b=(u8)fminf(255,c->b*shade);}
+void GX_TexCoord1x16(u16 index){const unsigned char *p=indexed_arrays[GX_VA_TEX0]+index*indexed_stride[GX_VA_TEX0];indexed_uvs++;GX_TexCoord2f32(dnd_model_f32(p),dnd_model_f32(p+4));}
 void dnd_draw_backend_restore(void){memset(&state,0,sizeof(state));memset(state.colors,0x5a,sizeof(state.colors));memset(state.konst,0x5a,sizeof(state.konst));state.count=-1;restores++;}
 void GX_SetNumTevStages(int n){assert(n>0&&n<=16);state.count=n;}
 void GX_SetTevDirect(int s){state.stages[s].direct=1;}
@@ -117,6 +130,7 @@ static void assert_geometry_equal(Draw a,Draw b) {
  assert(!memcmp(&a,&b,sizeof(a)));
 }
 int main(void) {
+ assert(dnd_model_indexed_path(-1)==1&&dnd_model_indexed_path(0)==0&&dnd_model_indexed_path(1)==1&&dnd_model_indexed_path(2)<0);
  DndDrawEffect dual={.count=3,.texture=3,.stages={{15,15,15,10,0,0,0,0},{15,15,15,8,0,0,0,1},{15,15,15,0,0,0,0,0}}};
  dnd_draw_backend_tev(&dual,true);assert(state.stages[0].tex==GX_TEXMAP0&&state.stages[1].tex==GX_TEXMAP1&&state.stages[1].coord==GX_TEXCOORD1&&state.stages[2].tex==GX_TEXMAP0);
  channel_test=1;dnd_material_channels(true);channel_test=2;dnd_material_channels(false);
@@ -162,6 +176,7 @@ int main(void) {
  int wrong=dnd_buffer_create(32,32);assert(wrong>0);
  assert(dnd_model_draw_effect(123,world,short_effect)==-1);
  assert(dnd_model_frame_begin(camera,camera)==0);
+ assert(dnd_model_indexed_path(0)<0&&dnd_model_indexed_path(-1)==1);
  assert(dnd_model_draw(123,world)==0);assert(draws==3&&restores==3);
  Draw baseline[3];memcpy(baseline,record,sizeof(baseline));
  for(int i=0;i<4;i++){assert(baseline[0].colors[i].r==0&&baseline[0].konst[i].r==0);}
@@ -268,6 +283,24 @@ int main(void) {
  assert(dnd_draw_release(override_texture)==0);
  assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==3);
  custom_scene_active=true;int previous_normals=scene_normals;assert(dnd_model_draw(123,world)==0&&scene_normals>previous_normals&&scene_lights>0);custom_scene_active=false;
+ // The real indexed production path preserves geometry, UV, authored alpha,
+ // culling and imported material state. Skinning stays on the direct path.
+ for(int i=0;i<3;i++){meshes[i].uniform_color=meshes[i].unit_normals=true;float color[]={.8f,.6f,.4f,.5f};memcpy(meshes[i].color,color,sizeof(color));}
+ before=draws;int old_positions=indexed_positions,old_normals=indexed_normals,old_uvs=indexed_uvs;size_t old_allocations=allocations;
+ assert(dnd_model_draw(123,world)==0);
+ assert(indexed_positions==old_positions+6&&indexed_normals==old_normals+3&&indexed_uvs==old_uvs+6&&allocations==old_allocations);
+ for(int i=0;i<3;i++)assert_geometry_equal(baseline[i],record[(before+i)%16]);
+ // Normalize uniform scale once, including mirrored transforms.
+ wm[0]=-4;wm[5]=wm[10]=4;old_positions=indexed_positions;assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+6);
+ assert(fabsf(indexed_normal[0][0]+1)<.00001f&&fabsf(indexed_normal[1][1]-1)<.00001f&&fabsf(indexed_normal[2][2]-1)<.00001f);
+ // Nonuniform/sheared lit transforms, invalid normal lengths, nonuniform
+ // colors, oversized indices and scene options must retain the direct path.
+ wm[5]=2;old_positions=indexed_positions;assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+3);
+ wm[0]=-1;wm[5]=wm[10]=1;meshes[2].unit_normals=false;old_positions=indexed_positions;
+ assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+3);meshes[2].unit_normals=true;
+ meshes[0].uniform_color=false;meshes[2].vertices=65537;old_positions=indexed_positions;
+ assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions);meshes[0].uniform_color=true;meshes[2].vertices=3;
+ custom_scene_active=true;old_positions=indexed_positions;assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions);custom_scene_active=false;
  assert(dnd_model_frame_end()==0);
  assert(dnd_draw_release(short_effect)==0&&dnd_draw_release(textured)==0&&dnd_draw_release(replacement)==0&&dnd_draw_release(wrong)==0);
  assert(dnd_draw_total_bytes()==0&&dnd_draw_live()==0);
@@ -276,5 +309,5 @@ int main(void) {
  puts("Model GX effect selection, alpha, geometry, preflight and lifetime passed.");return 0;
 }
 
-void GX_LoadNrmMtxImm(Mtx m,u32 id){(void)m;(void)id;}
+void GX_LoadNrmMtxImm(Mtx m,u32 id){memcpy(indexed_normal,m,sizeof(indexed_normal));(void)id;}
 void GX_Normal3f32(float x,float y,float z){assert(isfinite(x)&&isfinite(y)&&isfinite(z));scene_normals++;}

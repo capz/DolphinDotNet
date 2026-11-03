@@ -359,9 +359,17 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
         mesh->indices % 3)
       return false;
     mesh->data = r[1].p;
+    mesh->uniform_color = mesh->unit_normals = true;
     for (unsigned v = 0; v < mesh->vertices; v++) {
       float attributes[12], weights[4];
       floats(&r[1], attributes, 12);
+      float normal_length=attributes[3]*attributes[3]+attributes[4]*attributes[4]+attributes[5]*attributes[5];
+      if(fabsf(normal_length-1)>0.0001f)mesh->unit_normals=false;
+      for(int c=0;c<4;c++){
+        float color=attributes[8+c];
+        if(v==0)mesh->color[c]=color;
+        if(color!=mesh->color[c]||color<0||color>1)mesh->uniform_color=false;
+      }
       unsigned joints[4];
       for (int j = 0; j < 4; j++)
         joints[j] = number(&r[1]);
@@ -424,6 +432,11 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
   for (int i = 0; i < 6; i++)
     if (!r[i].ok || r[i].p != r[i].end)
       return false;
+#ifdef DND_GAMECUBE_STORAGE
+  /* GX indexed arrays read RAM, not the CPU's dirty data cache. Publication
+   * and ARAM restore both pass here, outside any active render pass. */
+  DCFlushRange(package,m->length);
+#endif
   return true;
 }
 /* Create a resident model from caller-owned memory (validated, copied first).
