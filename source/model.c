@@ -364,7 +364,10 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
       float attributes[12], weights[4];
       floats(&r[1], attributes, 12);
       float normal_length=attributes[3]*attributes[3]+attributes[4]*attributes[4]+attributes[5]*attributes[5];
-      if(fabsf(normal_length-1)>0.0001f)mesh->unit_normals=false;
+      /* Zero normals produce ambient-only lighting in both paths. Several
+       * exporters use them on degenerate faces; do not reject an otherwise
+       * eligible whole mesh for those vertices. */
+      if(normal_length!=0&&fabsf(normal_length-1)>0.0001f)mesh->unit_normals=false;
       for(int c=0;c<4;c++){
         float color=attributes[8+c];
         if(v==0)mesh->color[c]=color;

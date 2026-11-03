@@ -9,7 +9,7 @@ texture, alpha/depth, determinant-aware culling and submesh sorting remain activ
 
 Eligibility is conservative: no skin, at most 65,536 vertices, one uniform color
 within [0,1], no animated material channels and no custom scene options. Lit
-meshes additionally need unit source normals and an orthogonal uniform-scale
+meshes additionally need unit (or zero, ambient-only) source normals and an orthogonal uniform-scale
 modelview transform. Other cases retain the direct renderer. These conditions
 are checked per mesh/transform, so unsupported geometry is never omitted.
 Uniform color and normal-length metadata is computed during package validation
@@ -23,7 +23,7 @@ lighting. The inverse-transpose normal matrix has its common scale removed
 once per draw, including mirrored transforms. Alpha is independent of lighting.
 GX's 8-bit lighting can differ slightly from CPU floating-point shading; this
 path is not advertised as pixel-identical. Explicit scene lighting, animated
-channels, nonuniform colors/scales, shears and non-unit normals use the existing
+channels, nonuniform colors/scales, shears and other non-unit normals use the existing
 path. Full managed material overrides also retain their existing implementation.
 
 The native diagnostic API `dnd_model_indexed_path(-1)` queries the enabled mode;

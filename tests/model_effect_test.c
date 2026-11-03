@@ -290,6 +290,11 @@ int main(void) {
  assert(dnd_model_draw(123,world)==0);
  assert(indexed_positions==old_positions+6&&indexed_normals==old_normals+3&&indexed_uvs==old_uvs+6&&allocations==old_allocations);
  for(int i=0;i<3;i++)assert_geometry_equal(baseline[i],record[(before+i)%16]);
+ // Exported zero normals receive ambient-only shading, just like the original
+ // zero-length CPU normal case, without disabling the entire mesh fast path.
+ memset(data+12,0,12);before=draws;old_positions=indexed_positions;
+ assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+6);
+ assert(record[(before+2)%16].vertex[0].r==25);data[20]=0xbf;data[21]=0x80;
  // Normalize uniform scale once, including mirrored transforms.
  wm[0]=-4;wm[5]=wm[10]=4;old_positions=indexed_positions;assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+6);
  assert(fabsf(indexed_normal[0][0]+1)<.00001f&&fabsf(indexed_normal[1][1]-1)<.00001f&&fabsf(indexed_normal[2][2]-1)<.00001f);
