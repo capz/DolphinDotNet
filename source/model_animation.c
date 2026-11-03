@@ -4,6 +4,9 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef DND_GAMECUBE_STORAGE
+#include <gccore.h>
+#endif
 static int next_instance = 1;
 void dnd_model_identity(float m[16]) {
   memset(m, 0, 64);
@@ -264,6 +267,11 @@ int dnd_model_evaluate(DndInstance *in) {
       }
       memcpy(in->vertices[i] + v * 6, out, 24);
     }
+#ifdef DND_GAMECUBE_STORAGE
+    /* Publish the completed pose once. Indexed GX reads this existing buffer;
+     * Update/evaluation is prohibited while a device frame is active. */
+    DCFlushRange(in->vertices[i],mesh->vertices*6*sizeof(float));
+#endif
   }
   return 0;
 }

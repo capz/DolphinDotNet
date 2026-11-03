@@ -1,15 +1,16 @@
 /* Static uniform-color models can point GX directly at immutable big-endian
  * DNMD attributes (80-byte stride). No expanded copy or per-frame allocation.
- * Keep the direct path for skinning, animated UV/color channels, nonuniform
+ * Evaluated skin buffers provide native position/normal pairs at stride 24.
+ * Keep the direct path for animated UV/color channels, nonuniform
  * colors, non-unit normals and lit nonuniform/sheared transforms. */
 static bool indexed_model(const DndMesh *mesh,const DndMaterial *material,
-                          const float normal[16],bool custom_scene,bool animated) {
+                          const float normal[16],bool custom_scene,bool animated,const float *skin) {
 #if !defined(DND_INDEXED_MODELS) || DND_INDEXED_MODELS
   bool lit=!(material->mode&2);
-  if(!indexed_models_enabled||mesh->skin>=0||mesh->vertices>65536||!mesh->uniform_color||animated||custom_scene)return false;
+  if(!indexed_models_enabled||(mesh->skin>=0&&!skin)||mesh->vertices>65536||!mesh->uniform_color||animated||custom_scene)return false;
   float scale=1;
   if(lit){
-    if(!mesh->unit_normals)return false;
+    if(!skin&&!mesh->unit_normals)return false; /* Evaluated skin normals are normalized. */
     /* Rows of inverse(modelview) are columns of its normal matrix. Normalize
      * one common scale once, preserving mirrors. GX does not normalize input
      * normals for us. Nonuniform/sheared transforms retain exact CPU shading. */
@@ -43,8 +44,8 @@ static bool indexed_model(const DndMesh *mesh,const DndMaterial *material,
                  lit?GX_LIGHT0:GX_LIGHTNULL,lit?GX_DF_CLAMP:GX_DF_NONE,GX_AF_NONE);
   GX_SetChanCtrl(GX_ALPHA0,GX_DISABLE,GX_SRC_REG,GX_SRC_REG,GX_LIGHTNULL,GX_DF_NONE,GX_AF_NONE);
   GX_ClearVtxDesc();GX_InvVtxCache();
-  GX_SetVtxDesc(GX_VA_POS,GX_INDEX16);GX_SetArray(GX_VA_POS,(void*)mesh->data,80);
-  if(lit){GX_SetVtxDesc(GX_VA_NRM,GX_INDEX16);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);GX_SetArray(GX_VA_NRM,(void*)(mesh->data+12),80);}
+  GX_SetVtxDesc(GX_VA_POS,GX_INDEX16);GX_SetArray(GX_VA_POS,skin?(void*)skin:(void*)mesh->data,skin?24:80);
+  if(lit){GX_SetVtxDesc(GX_VA_NRM,GX_INDEX16);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);GX_SetArray(GX_VA_NRM,skin?(void*)(skin+3):(void*)(mesh->data+12),skin?24:80);}
   bool textured=material->texture>=0||material->combiner;
   if(textured){GX_SetVtxDesc(GX_VA_TEX0,GX_INDEX16);GX_SetArray(GX_VA_TEX0,(void*)(mesh->data+24),80);}
   for(unsigned first=0;first<mesh->indices;){
@@ -58,6 +59,6 @@ static bool indexed_model(const DndMesh *mesh,const DndMaterial *material,
   }
   return true;
 #else
-  (void)mesh;(void)material;(void)normal;(void)custom_scene;(void)animated;return false;
+  (void)mesh;(void)material;(void)normal;(void)custom_scene;(void)animated;(void)skin;return false;
 #endif
 }

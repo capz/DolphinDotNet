@@ -40,7 +40,7 @@ typedef struct {
   float position[9],uv[6],world_x; GXColor vertex[3];
 } Draw;
 static Draw state,record[16];static int draws,restores,position_index,color_index,uv_index;
-static const unsigned char *indexed_arrays[32];static int indexed_stride[32],indexed_positions,indexed_normals,indexed_uvs;
+static const unsigned char *indexed_arrays[32];static int indexed_stride[32],indexed_positions,indexed_normals,indexed_uvs,skin_normal_reads;
 static GXColor indexed_tint;static Mtx indexed_normal;
 void GX_SetChanMatColor(int channel,GXColor c){assert(channel==GX_COLOR0A0);indexed_tint=c;}
 void GX_SetChanAmbColor(int channel,GXColor c){assert(channel==GX_COLOR0A0&&c.r==64&&c.g==64&&c.b==64);}
@@ -48,10 +48,11 @@ void GX_InitLightPos(GXLightObj *p,float x,float y,float z){(void)p;assert(x==0&
 void GX_InitLightColor(GXLightObj *p,GXColor c){(void)p;assert(c.r==191&&c.g==191&&c.b==191);}
 void GX_InitLightAttn(GXLightObj *p,float a,float b,float c,float d,float e,float f){(void)p;assert(a==1&&b==0&&c==0&&d==1&&e==0&&f==0);}
 void GX_LoadLightObj(GXLightObj *p,int slot){(void)p;assert(slot==GX_LIGHT0);}
-void GX_SetArray(int attribute,void *p,int stride){assert(attribute>=0&&attribute<32&&stride==80);indexed_arrays[attribute]=p;indexed_stride[attribute]=stride;}
+void GX_SetArray(int attribute,void *p,int stride){assert(attribute>=0&&attribute<32&&(stride==80||stride==24));indexed_arrays[attribute]=p;indexed_stride[attribute]=stride;}
+static float indexed_float(int attribute,u16 index,int component){const unsigned char *p=indexed_arrays[attribute]+index*indexed_stride[attribute]+component*4;float value;if(indexed_stride[attribute]==24){memcpy(&value,p,4);return value;}return dnd_model_f32(p);}
 void GX_InvVtxCache(void){}
-void GX_Position1x16(u16 index){const unsigned char *p=indexed_arrays[GX_VA_POS]+index*indexed_stride[GX_VA_POS];indexed_positions++;GX_Position3f32(dnd_model_f32(p),dnd_model_f32(p+4),dnd_model_f32(p+8));state.vertex[color_index++]=indexed_tint;}
-void GX_Normal1x16(u16 index){const unsigned char *p=indexed_arrays[GX_VA_NRM]+index*indexed_stride[GX_VA_NRM];indexed_normals++;float normal[3];for(int i=0;i<3;i++)normal[i]=dnd_model_f32(p+i*4);float nz=0;for(int i=0;i<3;i++)nz+=indexed_normal[2][i]*normal[i];float shade=(64+191*fmaxf(0,nz))/255;GXColor *c=&state.vertex[color_index-1];c->r=(u8)fminf(255,c->r*shade);c->g=(u8)fminf(255,c->g*shade);c->b=(u8)fminf(255,c->b*shade);}
+void GX_Position1x16(u16 index){indexed_positions++;GX_Position3f32(indexed_float(GX_VA_POS,index,0),indexed_float(GX_VA_POS,index,1),indexed_float(GX_VA_POS,index,2));state.vertex[color_index++]=indexed_tint;}
+void GX_Normal1x16(u16 index){indexed_normals++;if(indexed_stride[GX_VA_NRM]==24)skin_normal_reads++;float normal[3];for(int i=0;i<3;i++)normal[i]=indexed_float(GX_VA_NRM,index,i);float nz=0;for(int i=0;i<3;i++)nz+=indexed_normal[2][i]*normal[i];float shade=(64+191*fmaxf(0,nz))/255;GXColor *c=&state.vertex[color_index-1];c->r=(u8)fminf(255,c->r*shade);c->g=(u8)fminf(255,c->g*shade);c->b=(u8)fminf(255,c->b*shade);}
 void GX_TexCoord1x16(u16 index){const unsigned char *p=indexed_arrays[GX_VA_TEX0]+index*indexed_stride[GX_VA_TEX0];indexed_uvs++;GX_TexCoord2f32(dnd_model_f32(p),dnd_model_f32(p+4));}
 void dnd_draw_backend_restore(void){memset(&state,0,sizeof(state));memset(state.colors,0x5a,sizeof(state.colors));memset(state.konst,0x5a,sizeof(state.konst));state.count=-1;restores++;}
 void GX_SetNumTevStages(int n){assert(n>0&&n<=16);state.count=n;}
@@ -284,27 +285,33 @@ int main(void) {
  assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==3);
  custom_scene_active=true;int previous_normals=scene_normals;assert(dnd_model_draw(123,world)==0&&scene_normals>previous_normals&&scene_lights>0);custom_scene_active=false;
  // The real indexed production path preserves geometry, UV, authored alpha,
- // culling and imported material state. Skinning stays on the direct path.
+ // culling and imported material state. Skins use evaluated poses, not bind geometry.
  for(int i=0;i<3;i++){meshes[i].uniform_color=meshes[i].unit_normals=true;float color[]={.8f,.6f,.4f,.5f};memcpy(meshes[i].color,color,sizeof(color));}
  before=draws;int old_positions=indexed_positions,old_normals=indexed_normals,old_uvs=indexed_uvs;size_t old_allocations=allocations;
  assert(dnd_model_draw(123,world)==0);
- assert(indexed_positions==old_positions+6&&indexed_normals==old_normals+3&&indexed_uvs==old_uvs+6&&allocations==old_allocations);
+ assert(indexed_positions==old_positions+9&&indexed_normals==old_normals+3&&indexed_uvs==old_uvs+9&&allocations==old_allocations);
  for(int i=0;i<3;i++)assert_geometry_equal(baseline[i],record[(before+i)%16]);
+ // A lit skin fetches normalized evaluated normals at stride 24, independent
+ // of raw bind-pose normal metadata. Positions still include the pose offset.
+ materials[1].mode&=~2;meshes[1].unit_normals=false;int old_skin_reads=skin_normal_reads;before=draws;
+ assert(dnd_model_draw(123,world)==0&&skin_normal_reads==old_skin_reads+3);
+ assert(record[(before+1)%16].vertex[0].r==25&&record[(before+1)%16].position[0]==10);
+ materials[1].mode=original_materials[1].mode;meshes[1].unit_normals=true;
  // Exported zero normals receive ambient-only shading, just like the original
  // zero-length CPU normal case, without disabling the entire mesh fast path.
  memset(data+12,0,12);before=draws;old_positions=indexed_positions;
- assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+6);
+ assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+9);
  assert(record[(before+2)%16].vertex[0].r==25);data[20]=0xbf;data[21]=0x80;
  // Normalize uniform scale once, including mirrored transforms.
- wm[0]=-4;wm[5]=wm[10]=4;old_positions=indexed_positions;assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+6);
+ wm[0]=-4;wm[5]=wm[10]=4;old_positions=indexed_positions;assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+9);
  assert(fabsf(indexed_normal[0][0]+1)<.00001f&&fabsf(indexed_normal[1][1]-1)<.00001f&&fabsf(indexed_normal[2][2]-1)<.00001f);
  // Nonuniform/sheared lit transforms, invalid normal lengths, nonuniform
  // colors, oversized indices and scene options must retain the direct path.
- wm[5]=2;old_positions=indexed_positions;assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+3);
+ wm[5]=2;old_positions=indexed_positions;assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+6);
  wm[0]=-1;wm[5]=wm[10]=1;meshes[2].unit_normals=false;old_positions=indexed_positions;
- assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+3);meshes[2].unit_normals=true;
- meshes[0].uniform_color=false;meshes[2].vertices=65537;old_positions=indexed_positions;
- assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions);meshes[0].uniform_color=true;meshes[2].vertices=3;
+ assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions+6);meshes[2].unit_normals=true;
+ meshes[0].uniform_color=meshes[1].uniform_color=false;meshes[2].vertices=65537;old_positions=indexed_positions;
+ assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions);meshes[0].uniform_color=meshes[1].uniform_color=true;meshes[2].vertices=3;
  custom_scene_active=true;old_positions=indexed_positions;assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions);custom_scene_active=false;
  assert(dnd_model_frame_end()==0);
  assert(dnd_draw_release(short_effect)==0&&dnd_draw_release(textured)==0&&dnd_draw_release(replacement)==0&&dnd_draw_release(wrong)==0);

@@ -1,15 +1,21 @@
-# Indexed rigid model submission
+# Indexed model submission
 
-Static meshes with uniform vertex color can bind their resident DNMD position,
+Meshes with uniform vertex color can bind their resident DNMD position,
 normal and UV arrays directly to GX using the package's 80-byte vertex stride.
 The index loop sends 16-bit references rather than decoding, shading, packing
-and emitting full attributes for every triangle corner. No expanded geometry
+and emitting full attributes for every triangle corner. Skinned models bind
+the already evaluated native position/normal pairs at a 24-byte stride, keeping
+UVs in the immutable package. Pose buffers are flushed after evaluation, before
+any render pass; their allocation and instance lifetime remain unchanged.
+No expanded geometry
 allocation or per-frame allocation is introduced. The existing material/TEV,
 texture, alpha/depth, determinant-aware culling and submesh sorting remain active.
 
-Eligibility is conservative: no skin, at most 65,536 vertices, one uniform color
+Eligibility is conservative: at most 65,536 vertices, one uniform color
 within [0,1], no animated material channels and no custom scene options. Lit
-meshes additionally need unit (or zero, ambient-only) source normals and an orthogonal uniform-scale
+static meshes additionally need unit (or zero, ambient-only) source normals;
+evaluated skin normals are already normalized by the pose evaluator. All lit
+meshes need an orthogonal uniform-scale
 modelview transform. Other cases retain the direct renderer. These conditions
 are checked per mesh/transform, so unsupported geometry is never omitted.
 Uniform color and normal-length metadata is computed during package validation
@@ -35,7 +41,7 @@ one executable. It does not alter model data or instance state. A
 
 Recording GX tests exercise the production code, actual indexed references,
 material/alpha/UV preservation, mirrored uniform scale, all relevant fallback
-conditions and allocation stability. Loader, ARAM restore, native AOT and GC
+conditions, lit/unlit evaluated skin buffers and allocation stability. Loader, ARAM restore, native AOT and GC
 stress tests exercise the unchanged residency/lifetime contracts. Dolphin/real
 GameCube measurements are still needed to establish performance; no hardware
 frame-time claim follows from a host recording test.

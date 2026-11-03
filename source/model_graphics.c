@@ -296,7 +296,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     dnd_draw_backend_tev(selected, mat->texture >= 0);
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     bool custom_scene=dnd_draw_backend_scene_active();
-    if(indexed_model(mesh,mat,normal,custom_scene,anim!=NULL))continue;
+    if(indexed_model(mesh,mat,normal,custom_scene,anim!=NULL,mesh->skin>=0?in->vertices[mi]:NULL))continue;
     if(custom_scene){
       if(!(mat->mode&2)){Mtx n;for(int r=0;r<3;r++)for(int c=0;c<4;c++)n[r][c]=c<3?normal[r*4+c]:0;GX_LoadNrmMtxImm(n,GX_PNMTX0);GX_SetVtxDesc(GX_VA_NRM,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);}
       dnd_draw_backend_scene(!(mat->mode&2),frame_view);

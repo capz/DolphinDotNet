@@ -367,7 +367,8 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
       /* Zero normals produce ambient-only lighting in both paths. Several
        * exporters use them on degenerate faces; do not reject an otherwise
        * eligible whole mesh for those vertices. */
-      if(normal_length!=0&&fabsf(normal_length-1)>0.0001f)mesh->unit_normals=false;
+      bool zero_normal=attributes[3]==0&&attributes[4]==0&&attributes[5]==0;
+      if(!zero_normal&&fabsf(normal_length-1)>0.0001f)mesh->unit_normals=false;
       for(int c=0;c<4;c++){
         float color=attributes[8+c];
         if(v==0)mesh->color[c]=color;
