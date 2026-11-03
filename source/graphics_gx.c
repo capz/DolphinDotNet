@@ -131,7 +131,6 @@ typedef struct { Mtx modelview,normal,inverse_view; uint32_t bindings; } DndVert
 static bool draw_state(const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world,DndVertexState *output) {
     const DndDrawTexture *secondary=material->secondary;
     bool same=material_cache_valid &&
-        cached_material.color==material->color &&
         cached_material.flags==material->flags &&
         cached_material.cutoff==material->cutoff &&
         cached_material.effect==material->effect &&

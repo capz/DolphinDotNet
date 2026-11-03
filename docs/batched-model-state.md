@@ -39,6 +39,14 @@ Two additional counters reset at device BeginFrame:
 - `GpuProfiler.MaterialChanges`: full material pipeline setups in either native
   renderer. Object matrices and tint alone are not additional setups.
 
+`Draw2D.DrawTexturedQuads` accepts ordered XYUV float arrays and texture references
+for custom text/layout engines, bounded by SpriteCapacity. It reuses native sprite
+validation and avoids managed SpriteDraw conversion; normalized UVs may repeat.
+Camera transforms use reserved staging; ordinary canvases borrow coordinates
+without another managed copy. Tint-only changes in the ordinary backend reuse
+material state; direct vertex colors and indexed register tint are still applied
+per draw.
+
 The former imported-model counts were missing; historical snapshots cannot be
 compared as complete draw totals. Recording fixtures compare geometry, alpha,
 TEV, ordering, no-allocation behavior and actual GX loads between modes,
