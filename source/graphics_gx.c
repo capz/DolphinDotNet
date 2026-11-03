@@ -127,7 +127,7 @@ void dnd_draw_backend_restore(void) {
 #include "dnd_render_gx.inc"
 #include "dnd_tev_backend.inc"
 #include "dnd_material_channels.inc"
-typedef struct { Mtx modelview,normal,inverse_view; } DndVertexState;
+typedef struct { Mtx modelview,normal,inverse_view; uint32_t bindings; } DndVertexState;
 static bool draw_state(const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world,DndVertexState *output) {
     const DndDrawTexture *secondary=material->secondary;
     bool same=material_cache_valid &&
@@ -139,8 +139,8 @@ static bool draw_state(const DndDrawTexture *texture,const DndDrawMaterial *mate
         cached_has_secondary==(secondary!=NULL) &&
         (!texture || texture_same(texture,&cached_primary)) &&
         (!secondary || texture_same(secondary,&cached_secondary));
-    if(!same)dnd_draw_backend_restore();
-    dnd_performance_add_draw(same?0:(texture?1u:0u)+(secondary?1u:0u));
+    if(!same){dnd_draw_backend_restore();dnd_performance_material();}
+    uint32_t bindings=same?0:(texture?1u:0u)+(secondary?1u:0u);
     float mv[16];multiply(mv,view_matrix,world);Mtx m;Mtx44 p;
     for(int r=0;r<3;r++)for(int c=0;c<4;c++)m[r][c]=mv[c*4+r];
     for(int r=0;r<4;r++)for(int c=0;c<4;c++)p[r][c]=projection_matrix[c*4+r];
@@ -203,6 +203,7 @@ static bool draw_state(const DndDrawTexture *texture,const DndDrawMaterial *mate
     }
     GX_SetCullMode((material->flags&4)?(determinant<0?GX_CULL_FRONT:GX_CULL_BACK):GX_CULL_NONE);
     if(output) {
+        output->bindings=bindings;
         memcpy(output->modelview,m,sizeof(m));
         if(lit||environment)memcpy(output->normal,normal,sizeof(normal));
         if(world_reflection)memcpy(output->inverse_view,inverse_view,sizeof(inverse_view));
@@ -217,6 +218,7 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
     bool lit=(material->flags&32)!=0,environment=(material->flags&192)!=0,world_reflection=(material->flags&128)!=0;
     float (*m)[4]=state.modelview,(*normal)[4]=state.normal,(*inverse_view)[4]=state.inverse_view;
     GX_Begin((u8)primitive,GX_VTXFMT0,(u16)count);
+    dnd_performance_add_draw(state.bindings);
     for(int i=0;i<count;i++) {
         GX_Position3f32(v[i].x,v[i].y,v[i].z);
         if(lit)GX_Normal3f32(v[i].nx,v[i].ny,v[i].nz);

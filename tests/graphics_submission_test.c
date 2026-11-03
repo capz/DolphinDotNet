@@ -13,6 +13,7 @@ void dnd_draw_backend_viewport(int x,int y,int w,int h){assert(x>=0&&y>=0&&w>0&&
 void dnd_draw_backend_scissor(int x,int y,int w,int h){assert(w>0&&h>0);scissor[0]=x;scissor[1]=y;scissor[2]=w;scissor[3]=h;}
 void dnd_draw_backend_options(const float *p,int scene){(void)p;(void)scene;options++;}
 void dnd_performance_add_triangles(uint32_t n){assert(n>0);}
+void dnd_performance_drawing_api(void){}
 void dnd_exception_throw(DndExceptionKind k,const char *m){(void)k;(void)m;abort();}
 bool dnd_draw_backend_mesh(const DndDrawVertex *v,const uint16_t *i,int n,uint32_t c,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)i;(void)c;(void)t;(void)m;assert(n==3);draws++;translation=w[12];return true;}
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)m;(void)w;assert(n==6&&primitive==0x90&&t);draws++;}

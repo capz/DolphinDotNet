@@ -1,4 +1,6 @@
 static bool vertex_cache_dirty=true;
+static const DndDrawVertex *vertex_cache_source;
+static int vertex_cache_layout=-1;
 void dnd_draw_backend_mesh_changed(void){vertex_cache_dirty=true;}
 /* Uniform-color, unlit meshes can use GX indexed arrays directly. The CPU
  * sends indices; GX fetches the existing immutable vertex allocation. No
@@ -8,8 +10,10 @@ bool dnd_draw_backend_mesh(const DndDrawVertex *vertices,const uint16_t *indices
                            const DndDrawMaterial *material,const float *world) {
 #if !defined(DND_INDEXED_MESHES) || DND_INDEXED_MESHES
     if(material->flags&224)return false; /* Keep lit and generated-UV paths unchanged. */
-    if(!draw_state(texture,material,world,NULL))return true;
-    if(vertex_cache_dirty){GX_InvVtxCache();vertex_cache_dirty=false;}
+    DndVertexState state;
+    if(!draw_state(texture,material,world,&state))return true;
+    int layout=(texture?1:0)|(material->secondary?2:0);
+    if(vertex_cache_dirty||vertex_cache_source!=vertices||vertex_cache_layout!=layout){GX_InvVtxCache();vertex_cache_dirty=false;vertex_cache_source=vertices;vertex_cache_layout=layout;}
     GX_SetChanCtrl(GX_COLOR0,GX_DISABLE,GX_SRC_REG,GX_SRC_REG,GX_LIGHTNULL,GX_DF_NONE,GX_AF_NONE);
     GX_SetChanCtrl(GX_ALPHA0,GX_DISABLE,GX_SRC_REG,GX_SRC_REG,GX_LIGHTNULL,GX_DF_NONE,GX_AF_NONE);
     GX_SetChanMatColor(GX_COLOR0A0,color(tint(uniform_color,material->color)));
@@ -26,6 +30,7 @@ bool dnd_draw_backend_mesh(const DndDrawVertex *vertices,const uint16_t *indices
     for(int start=0;start<count;) {
         int n=count-start;if(n>65535)n=65535; /* Preserve whole triangles. */
         GX_Begin(GX_TRIANGLES,GX_VTXFMT0,(u16)n);
+        dnd_performance_add_draw(start==0?state.bindings:0);
         for(int j=0;j<n;j++) {
             u16 index=indices?indices[start+j]:(u16)(start+j);
             GX_Position1x16(index);

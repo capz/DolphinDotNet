@@ -1,8 +1,9 @@
 namespace Dolphin.Diagnostics;
 
 /// <summary>GX submission telemetry (not an accurate GPU-timing or hardware cache-miss query).
-/// Counters reset at device BeginFrame, and count backend vertex draw operations
-/// and attempted texture bindings, including native model draws.</summary>
+/// Counters reset at device BeginFrame. DrawSubmissions counts GX primitive
+/// submissions including split and imported-model draws; TextureBindings counts
+/// issued texture-object loads, including native model draws.</summary>
 public static class GpuProfiler
 {
     /// <summary>Native rectangle construction; keep the legacy path only for throughput validation.</summary>
@@ -18,6 +19,11 @@ public static class GpuProfiler
     public static int BeginFrameCopyMicroseconds=>Dolphin.Graphics.NativeGraphics.PerformanceRenderStat(5);
     public static int GateReacquireMicroseconds=>Dolphin.Graphics.NativeGraphics.PerformanceRenderStat(6);
     public static bool BeginFrameCopied=>Dolphin.Graphics.NativeGraphics.PerformanceRenderStat(7)!=0;
+    /// <summary>Native drawing API entries: shapes, sprites, retained geometry,
+    /// meshes and model batches. Includes attempts; excludes getters/state setters.</summary>
+    public static int DrawingApiCalls=>Dolphin.Graphics.NativeGraphics.PerformanceRenderStat(8);
+    /// <summary>Material pipeline setups issued by either native renderer.</summary>
+    public static int MaterialChanges=>Dolphin.Graphics.NativeGraphics.PerformanceRenderStat(9);
     /// <summary>Last completed frame's blocking GX_DrawDone duration, in microseconds.
     /// Read after EndFrame and before the next BeginFrame. Includes outstanding work, not total GPU time.</summary>
     public static int GpuWaitMicroseconds => Dolphin.Graphics.NativeGraphics.PerformanceRenderStat(3);
