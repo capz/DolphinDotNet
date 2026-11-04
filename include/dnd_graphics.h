@@ -1,6 +1,7 @@
 #ifndef DND_GRAPHICS_H
 #define DND_GRAPHICS_H
 int dnd_graphics_configure_display(int resolution,int scan);
+int dnd_graphics_configure_quality(int resolution,int scan,int aa);
 int dnd_graphics_display_stat(int kind);
 #include <stdbool.h>
 void dnd_graphics_init(void);

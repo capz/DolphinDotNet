@@ -2,9 +2,9 @@ using System;
 namespace Dolphin.Graphics;
 public sealed partial class Draw2D
 {
-    private readonly float[] sampling=new float[20];
+    private readonly float[] sampling=new float[40];
     public void SetSampler(SamplerState sampler,UvTransform transform=default)
-    {Require();Flush();Material.WriteSampler(sampling,0,sampler,transform);Material.WriteSampler(sampling,10,default,default);GraphicsDevice.Check(NativeGraphics.RenderMaterial(sampling),"Invalid sampler.");}
+    {Require();Flush();Material.WriteSampler(sampling,0,sampler,transform);Material.WriteSampler(sampling,20,default,default);GraphicsDevice.Check(NativeGraphics.RenderMaterial(sampling),"Invalid sampler.");}
     private bool cameraActive;
     private readonly float[] cameraMatrix=new float[6];
     private readonly int[] clipStack=new int[64],spriteTextures,spriteColors;

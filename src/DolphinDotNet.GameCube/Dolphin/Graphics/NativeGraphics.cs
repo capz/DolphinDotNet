@@ -5,6 +5,7 @@ namespace Dolphin.Graphics;
 internal static class NativeGraphics
 {
     internal static int IplFontCreate(int[] metrics,int linear)=>throw Unsupported();
+    internal static int DeviceConfigureQuality(int resolution,int scan,int widescreen,int aa)=>throw new PlatformNotSupportedException("Requires AOT.");
     internal static int DeviceConfigureDisplay(int resolution,int scan,int widescreen)=>throw new PlatformNotSupportedException("Requires AOT.");
     internal static int DeviceDisplayStat(int kind)=>throw new PlatformNotSupportedException("Requires AOT.");
     internal static int CanvasLayout(int token,float width,float height)=>throw new PlatformNotSupportedException("Requires AOT.");
@@ -80,6 +81,7 @@ internal static class NativeGraphics
     internal static int MeshDrawMaterial(int mesh,int texture,int secondary,float[] world,uint color,int flags,float cutoff,int effect) => throw Unsupported();
     internal static int MeshDrawBatch(int[] meshes,int count,int texture,int secondary,float[] world,uint color,int flags,float cutoff,int effect) => throw Unsupported();
     internal static int MeshPrimitives(VertexPositionColor[] vertices,int offset,int count,int format,int primitive,float[] world,uint color,int flags) => throw Unsupported();
+    internal static int RenderDefaults(float[]? settings)=>throw Unsupported();
     internal static int RenderScene(float[]? settings)=>throw Unsupported();
     internal static int RenderMaterial(float[]? settings)=>throw Unsupported();
     internal static int MeshDrawMany(int[] meshes,float[][] worlds,int count,int texture,int secondary,uint color,int flags,float cutoff,int effect)=>throw Unsupported();

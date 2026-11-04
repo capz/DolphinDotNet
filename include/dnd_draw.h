@@ -1,6 +1,7 @@
 #ifndef DND_DRAW_H
 #define DND_DRAW_H
 int dnd_device_configure_display(int resolution,int scan,int widescreen);
+int dnd_device_configure_quality(int resolution,int scan,int widescreen,int aa);
 int dnd_device_display_stat(int kind);
 int dnd_canvas_layout(int token,float width,float height);
 void dnd_draw_backend_2d_projection(float width,float height);
@@ -90,6 +91,8 @@ int dnd_texture_resolve(int token,DndDrawTexture *out);
 int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint32_t color,int flags,float cutoff,int effect);
 int dnd_render_scene(DndArray *settings);
 int dnd_render_material(DndArray *settings);
+int dnd_render_defaults(DndArray *settings);
+void dnd_draw_backend_imported_sampler(void *object,int slot,int levels,int linear,int wrap_s,int wrap_t);
 void dnd_draw_backend_options(const float *settings,int scene);
 bool dnd_draw_backend_scene_active(void);
 void dnd_draw_backend_scene(int lit,const float *view);

@@ -187,3 +187,5 @@ The resident receiver returns to readiness after a normal application exit,
 allowing repeated uploads without rebooting the launcher.
 Its source, tests and native build now live in DolphinDotNet.Debuggers. Both IDE
 plugins bundle the bootable DOL, also available from that repository's releases.
+
+See [graphics quality controls](docs/graphics-quality.md) for global hardware antialiasing, per-material mipmap/filtering overrides, and device-wide sampler defaults.
