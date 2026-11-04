@@ -8,7 +8,10 @@ changes increment minor, fixes increment patch. Preview builds use
 `0.1.0-preview.<workflow-run>.<attempt>`; release versions are immutable.
 
 The **NuGet preview** workflow builds packages and tests an isolated external
-consumer on macOS for pull requests affecting distribution or its inputs.
+consumer on macOS for pull requests affecting distribution or its inputs, and
+for every push to `main` (including merges that only change documentation).
+Each successful `main` push publishes its verified packages to nuget.org with
+a unique preview version. Runs are not cancelled by newer merges.
 CI uses Windows and macOS runners only. Native GameCube/container builds,
 Linux-specific checks and real-Dolphin smoke tests are no longer scheduled.
 IDE extensions are built and released from
@@ -20,15 +23,17 @@ host before promoting a release. Verify native DOL generation, Visual Studio on
 Windows, Rider on its supported hosts, the Native devkitPPC path, and hardware
 separately. A green Windows/macOS build does not establish console execution.
 
-Publishing is opt-in: manually dispatch the workflow on `main` with `publish`
-enabled after review/merge. Authentication uses [NuGet trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing)
+Publishing is automatic after merges to `main`. To publish an additional preview
+from `main`, manually dispatch the workflow with `publish` enabled; the default
+manual dispatch only verifies packages. Authentication uses [NuGet trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing)
 and GitHub OIDC; no long-lived API key secret is required.
 
 Before the first publication:
 
 1. In GitHub repository **Settings → Environments**, create/configure
-   `nuget-preview`. Set required reviewers and restrict deployment branches to
-   `main`. Add the environment **variable** `NUGET_USER` with your nuget.org
+   `nuget-preview`. Restrict deployment branches to `main`, and remove required
+   reviewers, wait timers, and custom protection rules that require manual
+   intervention so each merge can publish unattended. Add the environment **variable** `NUGET_USER` with your nuget.org
    profile username (not your email address). This is not a secret.
 2. Sign in to nuget.org, open your username menu → **Trusted Publishing**, and
    add a GitHub policy with these exact identifiers:
@@ -45,19 +50,21 @@ Before the first publication:
    and new versions for later releases. The `NUGET_USER` account must be
    authorized for that owner and package scope; a GitHub username alone does
    not establish NuGet ownership.
-3. Merge the workflow changes. In **Actions → NuGet preview → Run workflow**,
-   select `main`, enable `publish`, and approve the environment deployment when
-   requested. Do this only when you intend to publish the preview.
+3. Merge the workflow changes. The resulting `main` push verifies and publishes
+   the packages automatically. Check **Actions → NuGet preview** for the result.
+   For an additional publication, use **Run workflow** on `main` with `publish`
+   enabled.
 
 Only the publish job has `id-token: write`. It remains gated on successful
-consumer and Dolphin smoke jobs, manual publication intent, the `main` branch,
-and the `nuget-preview` environment. After downloading the exact verified
+package build and external consumer verification, the `main` branch, and either
+a push event or an explicitly enabled manual dispatch. The job uses the
+`nuget-preview` environment. After downloading the exact verified
 artifact, `NuGet/login@v1` exchanges the GitHub OIDC token for a short-lived NuGet
 credential immediately before pushing. The normal `dotnet nuget push --api-key`
 argument receives this temporary credential from the action output; it does not
 read a stored API-key secret. Never print tokens or add them to artifacts.
 
-Default dispatches and PR runs only build/test and do not request a publishing
+Default manual dispatches and PR runs only build/test and do not request a publishing
 token. If an old `NUGET_API_KEY` secret exists solely for this workflow, remove
 it after adopting trusted publishing. Diagnose policy failures by checking the
 NuGet username, policy owner/scope, workflow filename and environment name.

@@ -9,8 +9,8 @@ WORKFLOW=(ROOT/".github/workflows/build.yml").read_text()
 PREVIEW=(ROOT/".github/workflows/nuget-preview.yml").read_text()
 SUITE=(ROOT/"scripts/ci_test_suite.py").read_text()
 SELECTOR=(ROOT/"scripts/ci_changes.py").read_text()
-def job(name):
-    m=re.search(r'^  '+re.escape(name)+r':\n(?P<body>.*?)(?=^  [\w-]+:|\Z)',WORKFLOW,re.M|re.S)
+def job(name,workflow=WORKFLOW):
+    m=re.search(r'^  '+re.escape(name)+r':\n(?P<body>.*?)(?=^  [\w-]+:|\Z)',workflow,re.M|re.S)
     assert m,name
     return m.group("body")
 
@@ -67,6 +67,31 @@ class WorkflowCoverageTests(unittest.TestCase):
         self.assertIn("tests/sdk_consumer.py --workspace",PREVIEW)
         self.assertIn("    environment: nuget-preview",PREVIEW)
         self.assertIn("NuGet/login@v1",PREVIEW)
+    def test_nuget_publishes_every_main_push(self):
+        push=re.search(r"^  push:\n(?P<body>.*?)(?=^  [\w-]+:)",PREVIEW,re.M|re.S)
+        self.assertIsNotNone(push)
+        self.assertIn("branches: [main]",push.group("body"))
+        self.assertNotIn("paths",push.group("body"))
+        self.assertNotIn("cancel-in-progress: true",PREVIEW)
+        self.assertIn("${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}",job("verify",PREVIEW))
+
+    def test_nuget_publication_event_guards(self):
+        publish=job("publish",PREVIEW)
+        condition=re.search(r"^    if: (.+)$",publish,re.M).group(1)
+        # Exercise the actual workflow expression across events/branches/inputs.
+        expression=condition.replace("&&"," and ").replace("||"," or ")
+        for event in ("push","pull_request","workflow_dispatch","pull_request_target"):
+            for ref in ("refs/heads/main","refs/heads/feature","refs/tags/v1.0.0"):
+                for requested in (False,True):
+                    value=expression.replace("github.event_name",repr(event)).replace("github.ref",repr(ref)).replace("inputs.publish",repr(requested))
+                    expected=ref=="refs/heads/main" and (event=="push" or (event=="workflow_dispatch" and requested))
+                    self.assertEqual(eval(value,{"__builtins__":{}}),expected,(event,ref,requested))
+        self.assertIn("needs: verify",publish)
+        self.assertNotIn("always()",condition)
+        self.assertIn("id-token: write",publish)
+        self.assertNotIn("id-token: write",job("verify",PREVIEW))
+        self.assertIn("actions/download-artifact@v4",publish)
+
     def test_host_runners_unchanged(self):
         self.assertNotIn("ubuntu",WORKFLOW.lower())
         self.assertIn("os: [windows-latest, macos-latest]",WORKFLOW)
