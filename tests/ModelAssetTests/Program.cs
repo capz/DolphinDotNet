@@ -89,6 +89,7 @@ if(BinaryPrimitives.ReadUInt32BigEndian(xjData)!=0x444e444d)
     throw new Exception("Direct PSO XJ binary import failed.");
 File.WriteAllText(Path.Combine(output,"sd","live.obj"),
     "v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nf 1/1 2/2 3/3\n");
+MipBudgetTests.Run(root,output);
 string gltf=Path.Combine(output,"animated.gltf"),package=Path.Combine(output,"sd","animated.dndmodel");File.WriteAllText(gltf,root.ToJsonString());ModelConverter.Convert(gltf,package);
 byte[] bytes=File.ReadAllBytes(package);if(BinaryPrimitives.ReadUInt32BigEndian(bytes)!=0x444e444d)throw new Exception("Package magic.");
 int textureOffset=checked((int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16+3*16+4)));var texture=bytes.AsSpan(textureOffset+4+28,64);if(texture[0]!=255||texture[1]!=0||texture[3]!=30||texture[32]!=0||texture[33]!=50||texture[40]!=40)throw new Exception("GX RGBA8 tile fixture.");
