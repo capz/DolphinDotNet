@@ -1,9 +1,11 @@
 /* Shared scene/sampler state owned by the current managed pass. */
 static bool scene_options_active,style_options_active;
-static float scene_options[136],style_options[20];
+static float scene_options[136],style_options[40],default_options[40];
+static bool default_options_active;
 void dnd_draw_backend_options(const float *p,int scene){
+    if(scene==2){if(p)memcpy(default_options,p,sizeof default_options);default_options_active=p!=NULL;dnd_draw_backend_invalidate_cache();return;}
     bool *active=scene?&scene_options_active:&style_options_active;
-    float *values=scene?scene_options:style_options;size_t bytes=(scene?136u:20u)*sizeof(float);
+    float *values=scene?scene_options:style_options;size_t bytes=(scene?136u:40u)*sizeof(float);
     if(*active!=(p!=NULL)||(p&&memcmp(values,p,bytes))){if(p)memcpy(values,p,bytes);*active=p!=NULL;dnd_draw_backend_invalidate_cache();}
     if(scene&&style_options_active){style_options_active=false;dnd_draw_backend_invalidate_cache();}
 }
@@ -38,17 +40,31 @@ void dnd_draw_backend_scene(int lit,const float *view){
     GX_SetFog(kind,fog?p[5]:0,fog?p[6]:1,p[10],p[11],(GXColor){(u8)p[7],(u8)p[8],(u8)p[9],255});
 }
 static bool managed_style_active(void){return style_options_active&&(dnd_device_pass()==1||dnd_device_pass()==2);}
-static int managed_wrap(int fallback,int slot,int axis){int mode=(int)style_options[slot*10+axis+1];return !managed_style_active()||mode==0?fallback:mode-1;}
+static const float *managed_sampling(int slot){
+    const float *p=managed_style_active()?style_options+slot*20:NULL;
+    return p&&(p[0]||p[1]||p[2]||p[3])?p:default_options_active?default_options+slot*20:p;
+}
+static int managed_wrap(int fallback,int slot,int axis){const float *p=managed_sampling(slot);return !p||p[axis+1]==0?fallback:(int)p[axis+1]-1;}
 static void managed_sampler(GXTexObj *tex,int slot,int levels,bool linear,int wrap_s,int wrap_t){
-    if(!managed_style_active())return;
-    int filter=(int)style_options[slot*10];
+    if(dnd_device_pass()!=1&&dnd_device_pass()!=2)return;
+    const float *p=managed_sampling(slot);if(!p)return;
     GX_InitTexObjWrapMode(tex,managed_wrap(wrap_s,slot,0),managed_wrap(wrap_t,slot,1));
-    int kind=(filter?filter==2:linear)?GX_LINEAR:GX_NEAR;
-    GX_InitTexObjLOD(tex,levels>1?(kind==GX_LINEAR?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):kind,kind,0,levels>1?levels-1:0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
+    if(!p[0]&&!p[3])return; /* Preserve explicit texture LOD when only UV/wrap changes. */
+    int kind=(p[0]?p[0]==2:linear)?GX_LINEAR:GX_NEAR;
+    int min=levels>1?(kind==GX_LINEAR?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):kind,mag=kind;
+    float lo=0,hi=levels>1?levels-1:0,bias=0;int clamp=0,edge=0,aniso=0;
+    if(p[3]){min=(int)p[10];mag=(int)p[11];lo=fminf(p[12],hi);hi=fminf(p[13],hi);bias=p[14];clamp=(int)p[15];edge=(int)p[16];aniso=(int)p[17];if(levels<=1&&min>=2)min=(min==3||min==5)?GX_LINEAR:GX_NEAR;}
+    GX_InitTexObjLOD(tex,min,mag,lo,hi,bias,clamp,edge,aniso);
+}
+/* Imported material draws retain authored UVs and use only device defaults. */
+void dnd_draw_backend_imported_sampler(void *object,int slot,int levels,int linear,int wrap_s,int wrap_t){
+    bool saved=style_options_active;style_options_active=false;
+    managed_sampler((GXTexObj*)object,slot,levels,linear!=0,wrap_s,wrap_t);
+    style_options_active=saved;
 }
 static void managed_uv(int slot){
     if(!managed_style_active())return;
-    const float *p=style_options+slot*10+4;
+    const float *p=style_options+slot*20+4;
     Mtx matrix={{p[0],p[2],0,p[4]},{p[1],p[3],0,p[5]},{0,0,1,0}};
     u32 id=slot==0?GX_TEXMTX0:GX_TEXMTX1;
     GX_LoadTexMtxImm(matrix,id,GX_MTX2x4);

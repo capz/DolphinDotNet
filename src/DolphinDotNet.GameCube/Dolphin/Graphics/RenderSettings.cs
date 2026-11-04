@@ -2,11 +2,28 @@ using System;
 namespace Dolphin.Graphics;
 public enum TextureAddressMode { Default,Clamp,Repeat,Mirror }
 public enum TextureFilter { Default,Nearest,Linear }
+public enum TextureAnisotropy { One=0, Two=1, Four=2 }
 public readonly struct SamplerState
 {
+    internal bool Advanced {get;}
+    public TextureMinFilter MinFilter {get;} public TextureMagFilter MagFilter {get;}
+    public float MinLod {get;} public float MaxLod {get;} public float LodBias {get;}
+    public bool BiasClamp {get;} public bool EdgeLod {get;} public TextureAnisotropy Anisotropy {get;}
+    /// <summary>GX sampler override. LOD is clamped to the texture's resident mip chain.
+    /// Mip filters on a single-level texture fall back to their base filter.</summary>
+    public SamplerState(TextureMinFilter minFilter,TextureMagFilter magFilter,
+        float minLod=0,float maxLod=10,float lodBias=0,TextureAnisotropy anisotropy=TextureAnisotropy.One,
+        bool biasClamp=false,bool edgeLod=false,TextureAddressMode u=TextureAddressMode.Default,TextureAddressMode v=TextureAddressMode.Default)
+        : this(u,v)
+    {
+        if((int)minFilter<0||(int)minFilter>5||(int)magFilter<0||(int)magFilter>1||(int)anisotropy<0||(int)anisotropy>2)throw new ArgumentOutOfRangeException("minFilter");
+        GraphicsMath.Finite(minLod);GraphicsMath.Finite(maxLod);GraphicsMath.Finite(lodBias);
+        if(minLod<0||maxLod<minLod||maxLod>10||lodBias< -4||lodBias>3.99f)throw new ArgumentOutOfRangeException("minLod");
+        Advanced=true;MinFilter=minFilter;MagFilter=magFilter;MinLod=minLod;MaxLod=maxLod;LodBias=lodBias;Anisotropy=anisotropy;BiasClamp=biasClamp;EdgeLod=edgeLod;
+    }
     public TextureAddressMode U {get;} public TextureAddressMode V {get;} public TextureFilter Filter {get;}
     public SamplerState(TextureAddressMode u,TextureAddressMode v,TextureFilter filter=TextureFilter.Default)
-    {if((int)u<0||(int)u>3||(int)v<0||(int)v>3||(int)filter<0||(int)filter>2)throw new ArgumentException("Invalid sampler.");U=u;V=v;Filter=filter;}
+    {this=default;if((int)u<0||(int)u>3||(int)v<0||(int)v>3||(int)filter<0||(int)filter>2)throw new ArgumentException("Invalid sampler.");U=u;V=v;Filter=filter;}
 }
 public readonly struct UvTransform
 {

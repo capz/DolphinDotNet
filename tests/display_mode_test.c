@@ -12,6 +12,9 @@ MODE(TVNtsc480IntDf,0,640,480,480,480);MODE(TVNtsc480Prog,2,640,480,480,480);
 MODE(TVMpal480IntDf,8,640,480,480,480);MODE(TVMpal480Prog,10,640,480,480,480);
 MODE(TVEurgb60Hz480IntDf,20,640,480,480,480);MODE(TVEurgb60Hz480Prog,22,640,480,480,480);
 MODE(TVPal576IntDfScale,4,640,480,576,576);MODE(TVPal576ProgScale,6,640,480,576,576);
+MODE(TVNtsc480IntAa,0,640,242,480,480);MODE(TVNtsc480ProgAa,2,640,242,480,480);
+MODE(TVMpal480IntAa,8,640,242,480,480);MODE(TVMpal480ProgAa,10,640,242,480,480);
+MODE(TVEurgb60Hz480IntAa,20,640,242,480,480);MODE(TVEurgb60Hz480ProgAa,22,640,242,480,480);
 static GXRModeObj *mode=&TVNtsc480IntDf;static void *xfb[2];static unsigned fb;static bool first_frame;
 static int dtv,allocations,fail_at,live,waits,gpu_waits,configured,pending;
 static void *allocate(GXRModeObj *m){assert(m);allocations++;if(allocations==fail_at)return NULL;live++;return malloc(16);}
@@ -59,6 +62,15 @@ int main(void){
  int before=allocations;assert(dnd_graphics_configure_display(0,0)==0&&allocations==before&&gpu_waits==1);
  assert(dnd_graphics_configure_display(1,1)<0&&allocations==before);
  assert(dnd_graphics_configure_display(1,2)==0&&mode->fbWidth==320&&mode->xfbHeight==240);
+ TVNtsc480ProgAa.aa=TVNtsc480IntAa.aa=TVEurgb60Hz480ProgAa.aa=TVEurgb60Hz480IntAa.aa=1;TVEurgb60Hz480ProgAa.sample_pattern[0][0]=3;
+ allocations=0;fail_at=2;GXRModeObj *before_aa=mode;
+ assert(dnd_graphics_configure_quality(2,2,1)==-2&&mode==before_aa&&!mode->aa&&live==2);fail_at=0;
+ assert(dnd_graphics_configure_quality(2,2,1)==0&&mode->aa&&mode->efbHeight==242&&mode->sample_pattern[0][0]==3);
+ assert(dnd_graphics_display_stat(8)==1&&dnd_graphics_display_stat(5)==242);
+ assert(dnd_graphics_configure_quality(3,2,1)<0&&mode->aa);
+ assert(dnd_graphics_configure_quality(0,0,0)==0&&!mode->aa&&mode->efbHeight==480);
+ assert(dnd_graphics_configure_quality(1,2,1)==0&&mode->aa&&mode->fbWidth==320&&mode->efbHeight==240);
+ assert(dnd_graphics_configure_quality(0,0,0)==0&&!mode->aa&&mode->fbWidth==320);
  release(xfb[0]);release(xfb[1]);assert(live==0);
  puts("Display mode combinations, DTV restrictions, standard selection, transactional allocation, scanout lifetime and widescreen-only no-op passed.");
 }

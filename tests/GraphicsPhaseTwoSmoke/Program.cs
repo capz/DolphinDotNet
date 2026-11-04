@@ -7,6 +7,12 @@ internal static class Program
     static int Main()
     {
         var device=GraphicsDevice.Default;
+        device.ConfigureDisplay(new DisplayOptions());
+        var sampler=new SamplerState(TextureMinFilter.LinearMipmapLinear,TextureMagFilter.Linear,
+            maxLod:8,lodBias:-.5f,anisotropy:TextureAnisotropy.Four,biasClamp:true);
+        device.ConfigureSampling(sampler);
+        try{new SamplerState(TextureMinFilter.Linear,TextureMagFilter.Linear,minLod:2,maxLod:1);return 17;}catch(ArgumentException){}
+        try{new SamplerState(TextureMinFilter.Linear,TextureMagFilter.Linear,lodBias:float.NaN);return 18;}catch(ArgumentException){}
         using var texture=Texture2D.Create(4,4,new byte[64]);
         var package=new byte[224];package[0]=68;package[1]=78;package[2]=84;package[3]=88;
         package[4]=2;package[8]=6;package[12]=package[16]=4;package[20]=192;package[24]=3;
@@ -31,15 +37,17 @@ internal static class Program
         using var plane=PrimitiveMeshes.Plane(2,3);using var box=PrimitiveMeshes.Box(2,3,4);using var sphere=PrimitiveMeshes.Sphere(1,8,4);
         if(plane.NativeBytes!=4*36+6*2||box.NativeBytes!=24*36+36*2||sphere.NativeBytes!=45*36+144*2)return 10;
         using var billboard=new Billboard();using var capture=new SceneCapture(device,4,4);
-        var camera=new Camera();var renderer=new Renderer();var material=new Material{Cull=CullMode.None};var transform=new Transform();
+        var camera=new Camera();var renderer=new Renderer();var material=new Material{Cull=CullMode.None,Sampler=sampler};var transform=new Transform();
         using var draw=new Draw2D(device);
         device.BeginFrame(Color32.Black);
+        try{device.ConfigureSampling(default);return 19;}catch(InvalidOperationException){}
         renderer.Begin3D(camera);renderer.DrawMesh(plane,material,transform);renderer.DrawMesh(box,material,transform);
         renderer.DrawMesh(sphere,material,transform);renderer.DrawBillboard(billboard,camera,Vector3.Zero,new Vector2(2,3),material);renderer.End3D();
         capture.Capture(new Viewport(0,0,8,8));
         try{capture.Capture(new Viewport(1,0,4,4));return 11;}catch(ArgumentException){}
         try{capture.Capture(new Viewport(0,0,12,12));return 12;}catch(InvalidOperationException){}
         draw.Begin(new Camera2D{Zoom=2});draw.DrawGeometry(geometry,new Vector2(2,3),Color32.White);
+        draw.SetSampler(sampler);
         layout.Draw(draw,new Vector2(5,5),Color32.White);empty.Draw(draw,default,Color32.White);
         draw.PushClip(0,0,0,0);draw.DrawGeometry(geometry);draw.PopClip();capture.Draw(draw,new RectF(0,0,4,4),Color32.White);draw.End();device.EndFrame();
         layout.Dispose();try{layout.Draw(draw,default,Color32.White);return 13;}catch(ObjectDisposedException){}
@@ -48,6 +56,7 @@ internal static class Program
         draw.End();device.EndFrame();
         using var borrowed=new BitmapTextLayout(font,"AB");font.Dispose();
         try{borrowed.Draw(draw,default,Color32.White);return 16;}catch(ObjectDisposedException){}
+        device.ConfigureSampling(default);
         return 0;
     }
 }

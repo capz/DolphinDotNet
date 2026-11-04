@@ -9,6 +9,7 @@
 #endif
 __attribute__((weak)) bool dnd_draw_backend_scene_active(void){return false;}
 __attribute__((weak)) void dnd_draw_backend_scene(int lit,const float *view){(void)lit;(void)view;}
+__attribute__((weak)) void dnd_draw_backend_imported_sampler(void *o,int s,int n,int l,int u,int v){(void)o;(void)s;(void)n;(void)l;(void)u;(void)v;}
 static float frame_view[16], frame_projection[16];
 static bool owns_frame;
 /* Temporary, frame-local animated J3D draw state. Never retained beyond one draw. */
@@ -261,6 +262,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
                          : (tx->linear ? GX_LINEAR : GX_NEAR),
           tx->linear ? GX_LINEAR : GX_NEAR, 0, (f32)(tx->levels - 1), 0,
           GX_FALSE, GX_FALSE, GX_ANISO_1);
+      dnd_draw_backend_imported_sampler(&tex,0,tx->levels,tx->linear,tx->wrap_s,tx->wrap_t);
       GX_LoadTexObj(&tex, GX_TEXMAP0);
       GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
     }
@@ -280,6 +282,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
       DndTexture *tx=&model->texture[mat->secondary];GXTexObj tex;
       GX_InitTexObj(&tex,tx->data,(u16)tx->width,(u16)tx->height,GX_TF_RGBA8,(u8)tx->wrap_s,(u8)tx->wrap_t,tx->levels>1);
       GX_InitTexObjLOD(&tex,tx->levels>1?(tx->linear?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):(tx->linear?GX_LINEAR:GX_NEAR),tx->linear?GX_LINEAR:GX_NEAR,0,(f32)(tx->levels-1),0,GX_FALSE,GX_FALSE,GX_ANISO_1);
+      dnd_draw_backend_imported_sampler(&tex,1,tx->levels,tx->linear,tx->wrap_s,tx->wrap_t);
       GX_LoadTexObj(&tex,GX_TEXMAP1);
       GX_SetTexCoordGen(GX_TEXCOORD1,GX_TG_MTX2x4,GX_TG_TEX0,GX_IDENTITY);
 #endif

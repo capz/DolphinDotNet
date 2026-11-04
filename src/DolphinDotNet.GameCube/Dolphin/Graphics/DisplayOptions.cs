@@ -7,6 +7,9 @@ public enum CanvasScaleMode { Display=0,Fit=1,Stretch=2 }
 public sealed class DisplayOptions
 {
     public GraphicsResolution Resolution {get;set;}=GraphicsResolution.Auto;
+    /// <summary>Enable GX multisample AA for the entire framebuffer. Uses RGB565/Z16
+    /// and a reduced EFB height at 480-line output. 576-line output is unsupported.</summary>
+    public bool Antialiasing {get;set;}
     public ScanMode Scan {get;set;}=ScanMode.Auto;
     /// <summary>Force anamorphic 16:9 rendering. Does not change video output.</summary>
     public bool Widescreen {get;set;}=false;
@@ -17,6 +20,7 @@ public sealed class DisplayInfo
     internal DisplayInfo(){}
     public GraphicsResolution Resolution=>(GraphicsResolution)NativeGraphics.DeviceDisplayStat(0);
     public ScanMode Scan=>(ScanMode)NativeGraphics.DeviceDisplayStat(1);
+    public bool Antialiasing=>NativeGraphics.DeviceDisplayStat(8)>0;
     public bool Widescreen=>NativeGraphics.DeviceDisplayStat(7)!=0;
     public float AspectRatio=>Widescreen?16f/9f:4f/3f;
     public Vector2 OutputSize=>new Vector2(NativeGraphics.DeviceDisplayStat(2),NativeGraphics.DeviceDisplayStat(3));
@@ -30,7 +34,7 @@ public sealed partial class GraphicsDevice
     {
         if(options==null)throw new ArgumentNullException("options");
         if((int)options.Resolution<0||(int)options.Resolution>3||(int)options.Scan<0||(int)options.Scan>2)throw new ArgumentOutOfRangeException("options");
-        int result=NativeGraphics.DeviceConfigureDisplay((int)options.Resolution,(int)options.Scan,options.Widescreen?1:0);
+        int result=NativeGraphics.DeviceConfigureQuality((int)options.Resolution,(int)options.Scan,options.Widescreen?1:0,options.Antialiasing?1:0);
         if(result==-2)throw new OutOfMemoryException("Replacement display buffers could not be allocated; the current display is unchanged.");
         Check(result,"Display configuration requires an idle SDK device and a supported resolution/scan combination and cable.");
     }

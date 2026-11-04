@@ -33,9 +33,25 @@ static int select_display_mode(int resolution,int scan,GXRModeObj *selected) {
     }
     return 0;
 }
-int dnd_graphics_configure_display(int resolution,int scan) {
+static int configure_display_mode(int resolution,int scan,int aa) {
     dnd_graphics_init();if(!mode||dnd_exception_pending())return -1;
     GXRModeObj next;if(select_display_mode(resolution,scan,&next)<0)return -1;
+    if(aa>=0){
+        if(next.xfbHeight>480&&aa)return -1;
+        if(aa){
+            unsigned standard=next.viTVMode>>2;
+            bool progressive=(next.viTVMode&3)!=VI_INTERLACE;
+            GXRModeObj samples=standard==VI_MPAL?(progressive?TVMpal480ProgAa:TVMpal480IntAa):
+                standard==VI_PAL||standard==VI_EURGB60?(progressive?TVEurgb60Hz480ProgAa:TVEurgb60Hz480IntAa):
+                (progressive?TVNtsc480ProgAa:TVNtsc480IntAa);
+            if(next.xfbHeight==480)next=samples;
+            else {next.aa=1;memcpy(next.sample_pattern,samples.sample_pattern,sizeof next.sample_pattern);}
+        }else if(next.aa){
+            /* Auto resolves from the current AA mode to the normal full-height mode. */
+            int resolved=next.fbWidth==320?1:next.xfbHeight==576?3:2;
+            if(select_display_mode(resolved,scan?scan:((next.viTVMode&3)==VI_INTERLACE?1:2),&next)<0)return -1;
+        }
+    }
     if(!memcmp(mode,&next,sizeof next))return 0;
     /* Allocate both replacements first. An allocation failure cannot destroy
      * the current mode or scanout buffers. */
@@ -57,9 +73,12 @@ int dnd_graphics_configure_display(int resolution,int scan) {
     dnd_draw_backend_invalidate_cache();dnd_performance_clear_invalidated();
     return 0;
 }
+int dnd_graphics_configure_display(int resolution,int scan){return configure_display_mode(resolution,scan,-1);}
+int dnd_graphics_configure_quality(int resolution,int scan,int aa){return configure_display_mode(resolution,scan,aa);}
 int dnd_graphics_display_stat(int kind){
     dnd_graphics_init();if(!mode)return -1;
     switch(kind){
+        case 8:return mode->aa!=0;
         case 0:return mode->fbWidth==320&&mode->xfbHeight==240?1:mode->fbWidth==640&&mode->xfbHeight==480?2:mode->fbWidth==640&&mode->xfbHeight==576?3:0;
         case 1:return (mode->viTVMode&3)==VI_INTERLACE?1:2;
         case 2:return mode->fbWidth;case 3:return mode->xfbHeight;

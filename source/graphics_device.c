@@ -10,6 +10,7 @@
 __attribute__((weak)) void dnd_draw_backend_invalidate_cache(void){}
 __attribute__((weak)) void dnd_draw_backend_overlay_shutdown(void){}
 __attribute__((weak)) int dnd_graphics_configure_display(int resolution,int scan){return resolution==0&&scan==0?0:-1;}
+__attribute__((weak)) int dnd_graphics_configure_quality(int r,int s,int aa){return aa?-1:dnd_graphics_configure_display(r,s);}
 /* Device dimensions also exist in model-only hosts without GX video symbols. */
 __attribute__((weak)) int dnd_graphics_display_stat(int kind){return kind==0?2:kind==1?1:kind==2||kind==4?dnd_device_width():kind==3||kind==5?dnd_device_height():kind==6?59940:-1;}
 #endif
@@ -145,6 +146,16 @@ int dnd_device_configure_display(int resolution,int scan,int wide){
     int r=dnd_graphics_configure_display(resolution,scan);if(r<0)return r;
 #else
     if(resolution||scan)return -1;
+#endif
+    widescreen=wide!=0;return 0;
+}
+int dnd_device_configure_quality(int resolution,int scan,int wide,int aa){
+    dnd_async_require_application_thread();
+    if(active||pass||raw_depth||external||resolution<0||resolution>3||scan<0||scan>2||(wide!=0&&wide!=1)||(aa!=0&&aa!=1))return -1;
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_GRAPHICS_TEST)
+    int result=dnd_graphics_configure_quality(resolution,scan,aa);if(result<0)return result;
+#else
+    if(resolution||scan||aa)return -1;
 #endif
     widescreen=wide!=0;return 0;
 }

@@ -18,7 +18,7 @@ bool dnd_draw_backend_mesh(const DndDrawVertex *v,const uint16_t *i,int n,uint32
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)m;(void)w;assert(n==6&&primitive==0x90&&t);draws++;}
 static DndArray *array(unsigned n,unsigned size){DndArray *a=calloc(1,sizeof(*a)+n*size);assert(a);a->length=n;a->element_size=size;return a;}
 int main(void){
- DndArray *v=array(3,16),*ids=array(2,4),*matrices=array(2,sizeof(DndArray*)),*m0=array(16,4),*m1=array(16,4),*rgba=array(64,1),*vertices=array(48,4),*colors=array(2,4),*style=array(20,4);
+ DndArray *v=array(3,16),*ids=array(2,4),*matrices=array(2,sizeof(DndArray*)),*m0=array(16,4),*m1=array(16,4),*rgba=array(64,1),*vertices=array(48,4),*colors=array(2,4),*style=array(40,4);
  for(int i=0;i<3;i++){uint32_t white=0xffffffff;memcpy(v->data+i*16+12,&white,4);}
  int mesh=dnd_mesh_create(v,NULL,0,0),tex=dnd_texture_create(4,4,rgba,0);assert(mesh&&tex);int *tokens=(int*)ids->data;tokens[0]=tokens[1]=mesh;
  matrices->elements_are_references=true;DndArray **rows=(DndArray**)matrices->data;rows[0]=m0;rows[1]=m1;for(int i=0;i<2;i++)for(int j=0;j<16;j++)((float*)rows[i]->data)[j]=j%5==0?1:0;float *w=(float*)m1->data;w[12]=2;

@@ -645,12 +645,13 @@ int dnd_canvas_sprites(int token,DndArray *textures,DndArray *a,DndArray *colors
 #include "dnd_render_state.h"
 __attribute__((weak)) void dnd_draw_backend_options(const float *p,int scene){(void)p;(void)scene;}
 static int render_options(DndArray *a,int scene) {
-    if(dnd_device_pass()!=1&&dnd_device_pass()!=2)return -1;
+    if(scene==2?dnd_device_active():dnd_device_pass()!=1&&dnd_device_pass()!=2)return -1;
     const float *p=NULL;
-    if(a){if(a->element_size!=4||a->elements_are_references||a->length!=(scene?136u:20u))return -1;
-        p=(const float*)a->data;if(scene?!dnd_render_scene_valid(p):!dnd_render_style_valid(p))return -1;}
+    if(a){if(a->element_size!=4||a->elements_are_references||a->length!=(scene==1?136u:40u))return -1;
+        p=(const float*)a->data;if(scene==1?!dnd_render_scene_valid(p):!dnd_render_style_valid(p))return -1;}
     dnd_draw_backend_options(p,scene);return 0;
 }
+int dnd_render_defaults(DndArray *a){return render_options(a,2);}
 int dnd_render_scene(DndArray *a){return render_options(a,1);}
 int dnd_render_material(DndArray *a){return render_options(a,0);}
 int dnd_mesh_draw_many(DndArray *a,DndArray *w,int count,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect){
