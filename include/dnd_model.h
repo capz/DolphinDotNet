@@ -1,6 +1,9 @@
 #ifndef DND_MODEL_H
 #define DND_MODEL_H
 #include "dnd_managed.h"
+/* Diagnostic A/B control: -1 queries, 0/1 selects outside active frames.
+ * This changes submission only; packages and instances stay unchanged. */
+int dnd_model_indexed_path(int enabled);
 int dnd_model_trs(DndArray *values, DndArray *matrix);
 int dnd_model_multiply_arrays(DndArray *a, DndArray *b, DndArray *out);
 int dnd_model_position(DndArray *values, DndArray *parent, float x, float y,

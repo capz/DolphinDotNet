@@ -17,6 +17,9 @@ typedef struct {
   unsigned vertices, indices;
   float center[3];
   const unsigned char *data, *index;
+  /* Validated once while publishing/restoring immutable package geometry. */
+  bool uniform_color, unit_normals; /* unit_normals also permits zero normals. */
+  float color[4];
 } DndMesh;
 typedef struct {
   int count;
