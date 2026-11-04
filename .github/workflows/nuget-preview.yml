@@ -1,5 +1,7 @@
 name: NuGet preview
 on:
+  push:
+    branches: [main]
   pull_request:
     paths:
       - 'sdk/**'
@@ -16,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish tested preview packages to NuGet (requires protected environment approval)
+        description: Publish tested preview packages to NuGet from main
         type: boolean
         default: false
 permissions:
@@ -42,7 +44,7 @@ jobs:
           path: out/packages/*.nupkg
           if-no-files-found: error
   publish:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish))
     needs: verify
     runs-on: macos-latest
     environment: nuget-preview
