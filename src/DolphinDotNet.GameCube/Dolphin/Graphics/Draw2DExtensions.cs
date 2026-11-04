@@ -48,6 +48,17 @@ public sealed partial class Draw2D
     }
     private void SpriteVertex(int sprite,int index,float x,float y,float u,float v)
     {if(cameraActive){float px=x;x=cameraMatrix[0]*px+cameraMatrix[2]*y+cameraMatrix[4];y=cameraMatrix[1]*px+cameraMatrix[3]*y+cameraMatrix[5];}int at=sprite*24+index*4;spriteVertices[at]=x;spriteVertices[at+1]=y;spriteVertices[at+2]=u;spriteVertices[at+3]=v;}
+    /// <summary>Ordered packed quads for custom layout engines. Each quad has
+    /// six XYUV vertices (24 floats); UVs are normalized. Uses SpriteCapacity,
+    /// validates the complete range natively, and borrows arrays for this call.</summary>
+    public void DrawTexturedQuads(Texture2D[] textures,float[] vertices,int count,Color32 color)
+    {
+        Require();if(textures==null||vertices==null)throw new ArgumentNullException();
+        if(count<0||count>spriteTextures.Length||count>textures.Length||count>vertices.Length/24)throw new ArgumentOutOfRangeException("count");
+        for(int i=0;i<count;i++){var texture=textures[i];if(texture==null)throw new ArgumentException("Missing quad texture");texture.Check();spriteTextures[i]=texture.Token;spriteColors[i]=unchecked((int)color.Packed);}
+        if(cameraActive)for(int i=0;i<count;i++)for(int v=0;v<6;v++){int at=i*24+v*4;SpriteVertex(i,v,vertices[at],vertices[at+1],vertices[at+2],vertices[at+3]);}
+        if(effect!=null)effect.Check();GraphicsDevice.Check(NativeGraphics.CanvasSprites(token,spriteTextures,cameraActive?spriteVertices:vertices,spriteColors,count),"Invalid packed quad coordinates, texture or effect.");
+    }
     private static void ValidateSprite(SpriteDraw d)
     {if(d.Region.Texture==null)throw new ArgumentException("Missing texture region.");d.Region.Texture.Check();Rectangle(d.Destination);GraphicsMath.Finite(d.Destination.X);GraphicsMath.Finite(d.Destination.Y);GraphicsMath.Finite(d.Destination.Width);GraphicsMath.Finite(d.Destination.Height);GraphicsMath.Finite(d.Destination.X+d.Destination.Width);GraphicsMath.Finite(d.Destination.Y+d.Destination.Height);GraphicsMath.Finite(d.RotationDegrees);GraphicsMath.Finite(d.Origin.X);GraphicsMath.Finite(d.Origin.Y);if((int)d.Flip<0||(int)d.Flip>3)throw new ArgumentException("Invalid sprite flip.");}
 }

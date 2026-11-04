@@ -17,6 +17,19 @@ static unsigned animated_material_count;
 static const float *animated_mesh_visibility;
 #define DND_ANIM_CHANNELS 12
 static bool indexed_models_enabled=true;
+static bool model_state_cache_enabled=true,model_batch_active;
+static bool model_batch_light_ready,model_batch_vertex_ready;
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
+static const DndModel *batch_model;
+static const DndMaterial *batch_material;
+static const DndMesh *batch_mesh;
+static const float *batch_skin;
+#endif
+int dnd_model_state_cache(int enabled){
+  if(enabled==-1)return model_state_cache_enabled?1:0;
+  if((enabled!=0&&enabled!=1)||dnd_device_active()||dnd_model_frame_active)return -1;
+  model_state_cache_enabled=enabled!=0;return enabled;
+}
 int dnd_model_indexed_path(int enabled){
   if(enabled==-1)return indexed_models_enabled?1:0;
   if((enabled!=0&&enabled!=1)||dnd_device_active())return -1;
@@ -131,6 +144,7 @@ int dnd_model_draw(int token, DndArray *transform) {
  * application-executor scratch storage; never allocate or mutate model assets. */
 int dnd_model_draw_material(int token,DndArray *transform,int tex,int secondary,
     uint32_t color,int flags,float cutoff,int effect_token) {
+  dnd_performance_drawing_api();
   DndInstance *in=dnd_instance_find(token);float world[16];DndDrawTexture base,extra;
   const DndDrawEffect *effect;
   if(!in||!in->model->ready||!dnd_model_frame_active||!matrix_array(transform,world)||
@@ -172,6 +186,7 @@ int dnd_model_draw_material(int token,DndArray *transform,int tex,int secondary,
 }
 static int draw_model_selected(DndInstance *in,const float world[16],const DndDrawEffect *effect,int filter,int only);
 int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {
+  dnd_performance_drawing_api();
   DndInstance *in = dnd_instance_find(token);
   float world[16];
   if (!in || !in->model->ready || !dnd_model_frame_active ||
@@ -209,7 +224,6 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     dnd_model_multiply(mv, frame_view, object);
     if (!dnd_model_inverse(normal, mv))
       return -1;
-    dnd_performance_add_triangles(mesh->indices / 3);
     DndMaterial *mat = &model->material[mesh->material], animated_copy;
     const float *anim = NULL;
     if (animated_material_channels && (unsigned)mesh->material < animated_material_count) {
@@ -220,8 +234,11 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
       if (anim[11] >= 0) animated_copy.texture = (int)anim[11];
       mat = &animated_copy;
     }
+    dnd_performance_add_triangles(mesh->indices / 3);
+    unsigned bindings=0;
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
-    dnd_draw_backend_restore();
+    bool reuse=model_batch_active&&anim==NULL&&batch_model==model&&batch_material==mat;
+    if(!reuse){dnd_draw_backend_restore();dnd_performance_material();}
     Mtx matrix;
     for (int r = 0; r < 3; r++)
       for (int c = 0; c < 4; c++)
@@ -235,6 +252,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     GX_SetCullMode(mat->two          ? GX_CULL_NONE
                    : determinant < 0 ? GX_CULL_FRONT
                                      : GX_CULL_BACK);
+    if(!reuse){
     GX_SetZMode(GX_TRUE, GX_LEQUAL, (mat->mode & 4) ? GX_FALSE : GX_TRUE);
     GX_SetBlendMode((mat->mode & 4) ? GX_BM_BLEND : GX_BM_NONE,
                     (mat->mode & 16)  ? (mat->mode >> 5) & 7
@@ -247,10 +265,6 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
                     GX_LO_CLEAR);
     GX_SetAlphaCompare(mat->mode & 1 ? GX_GEQUAL : GX_ALWAYS,
                        (u8)(mat->cutoff * 255), GX_AOP_AND, GX_ALWAYS, 0);
-    GX_ClearVtxDesc();
-    GX_SetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GX_SetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
     GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
     GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
     GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
@@ -271,7 +285,9 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
           tx->linear ? GX_LINEAR : GX_NEAR, 0, (f32)(tx->levels - 1), 0,
           GX_FALSE, GX_FALSE, GX_ANISO_1);
       GX_LoadTexObj(&tex, GX_TEXMAP0);
+      bindings++;
       GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
+    }
     }
 #endif
     DndDrawEffect imported={0};
@@ -286,17 +302,29 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
       if(mat->combiner==2)imported.stages[2]=(DndTevStage){15,0,12,2,0,0,0,0};
       selected=&imported;
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
-      DndTexture *tx=&model->texture[mat->secondary];GXTexObj tex;
+      if(!reuse){DndTexture *tx=&model->texture[mat->secondary];GXTexObj tex;
       GX_InitTexObj(&tex,tx->data,(u16)tx->width,(u16)tx->height,GX_TF_RGBA8,(u8)tx->wrap_s,(u8)tx->wrap_t,tx->levels>1);
       GX_InitTexObjLOD(&tex,tx->levels>1?(tx->linear?GX_LIN_MIP_LIN:GX_NEAR_MIP_NEAR):(tx->linear?GX_LINEAR:GX_NEAR),tx->linear?GX_LINEAR:GX_NEAR,0,(f32)(tx->levels-1),0,GX_FALSE,GX_FALSE,GX_ANISO_1);
       GX_LoadTexObj(&tex,GX_TEXMAP1);
+      bindings++;
       GX_SetTexCoordGen(GX_TEXCOORD1,GX_TG_MTX2x4,GX_TG_TEX0,GX_IDENTITY);
+      }
 #endif
     }
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
+    if(!reuse)dnd_draw_backend_tev(selected, mat->texture >= 0);
+    batch_model=model;batch_material=anim==NULL?mat:NULL;
+#else
     dnd_draw_backend_tev(selected, mat->texture >= 0);
+    (void)bindings;
+#endif
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     bool custom_scene=dnd_draw_backend_scene_active();
-    if(indexed_model(mesh,mat,normal,custom_scene,anim!=NULL,mesh->skin>=0?in->vertices[mi]:NULL))continue;
+    if(indexed_model(mesh,mat,normal,custom_scene,anim!=NULL,mesh->skin>=0?in->vertices[mi]:NULL,bindings))continue;
+    // A preceding mesh may have used indexed/register-color descriptors.
+    GX_ClearVtxDesc();GX_SetVtxDesc(GX_VA_POS,GX_DIRECT);GX_SetVtxDesc(GX_VA_CLR0,GX_DIRECT);GX_SetVtxDesc(GX_VA_TEX0,GX_DIRECT);
+    model_batch_vertex_ready=false;
+    GX_SetChanCtrl(GX_COLOR0A0,GX_DISABLE,GX_SRC_REG,GX_SRC_VTX,GX_LIGHTNULL,GX_DF_NONE,GX_AF_NONE);
     if(custom_scene){
       if(!(mat->mode&2)){Mtx n;for(int r=0;r<3;r++)for(int c=0;c<4;c++)n[r][c]=c<3?normal[r*4+c]:0;GX_LoadNrmMtxImm(n,GX_PNMTX0);GX_SetVtxDesc(GX_VA_NRM,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);}
       dnd_draw_backend_scene(!(mat->mode&2),frame_view);
@@ -306,6 +334,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
       if (count > 65535)
         count = 65535;
       GX_Begin(GX_TRIANGLES, GX_VTXFMT0, (u16)count);
+      dnd_performance_add_draw(first==0?bindings:0);
       for (unsigned j = 0; j < count; j++) {
         unsigned vertex = dnd_model_u32(mesh->index + (first + j) * 4);
         const unsigned char *src = mesh->data + vertex * 80;
@@ -371,6 +400,7 @@ int dnd_model_draw_animated_shapes(int token,DndArray *transform,DndArray *chann
   return result;
 }
 int dnd_model_draw_animated(int token,DndArray *transform,DndArray *channels) {
+  dnd_performance_drawing_api();
   DndInstance *in=dnd_instance_find(token);
   float world[16];
   if(!in||!in->model->ready||!dnd_model_frame_active||
@@ -401,7 +431,7 @@ int dnd_model_draw_animated(int token,DndArray *transform,DndArray *channels) {
  * bounded and application-executor-owned; no model handles or pointers survive
  * this call. Opaque meshes from all instances precede the global alpha pass. */
 typedef struct {unsigned object,mesh,sequence;float depth;} ModelSubmission;
-static ModelSubmission alpha_submissions[4096];
+static ModelSubmission alpha_submissions[4096],opaque_submissions[4096];
 static bool submission_later(ModelSubmission a,ModelSubmission b){
   return a.depth>b.depth||(a.depth==b.depth&&a.sequence>b.sequence);
 }
@@ -411,11 +441,26 @@ static void submission_sift(unsigned count,unsigned root){
     if(!submission_later(alpha_submissions[child],alpha_submissions[root]))return;
     ModelSubmission temp=alpha_submissions[root];alpha_submissions[root]=alpha_submissions[child];alpha_submissions[child]=temp;root=child;}
 }
+static bool opaque_later(ModelSubmission a,ModelSubmission b,const int *ids){
+  const DndModel *ma=dnd_instance_find(ids[a.object])->model,*mb=dnd_instance_find(ids[b.object])->model;
+  if(ma!=mb)return (uintptr_t)ma>(uintptr_t)mb;
+  int am=ma->mesh[a.mesh].material,bm=mb->mesh[b.mesh].material;
+  if(am!=bm)return am>bm;
+  if(a.mesh!=b.mesh)return a.mesh>b.mesh;
+  return a.sequence>b.sequence;
+}
+static void opaque_sift(unsigned count,unsigned root,const int *ids){
+  for(;;){unsigned child=root*2+1;if(child>=count)return;
+    if(child+1<count&&opaque_later(opaque_submissions[child+1],opaque_submissions[child],ids))child++;
+    if(!opaque_later(opaque_submissions[child],opaque_submissions[root],ids))return;
+    ModelSubmission temp=opaque_submissions[root];opaque_submissions[root]=opaque_submissions[child];opaque_submissions[child]=temp;root=child;}
+}
 int dnd_model_draw_models(DndArray *tokens,DndArray *matrices,int count){
+  dnd_performance_drawing_api();
   if(!dnd_model_frame_active||count<0||count>DND_INSTANCE_SLOTS||!tokens||!matrices||
      tokens->element_size!=4||tokens->elements_are_references||tokens->length<(unsigned)count||
      matrices->element_size!=4||matrices->elements_are_references||matrices->length<(unsigned)count*16)return -1;
-  int *ids=(int*)tokens->data;float *worlds=(float*)matrices->data;unsigned alpha_count=0,total=0;
+  int *ids=(int*)tokens->data;float *worlds=(float*)matrices->data;unsigned alpha_count=0,opaque_count=0,total=0;
   // All validation precedes sorting, accounting or any GX submissions.
   for(int i=0;i<count;i++){
     if(!ids[i])continue;
@@ -431,12 +476,21 @@ int dnd_model_draw_models(DndArray *tokens,DndArray *matrices,int count){
         float depth=mv[2]*mesh->center[0]+mv[6]*mesh->center[1]+mv[10]*mesh->center[2]+mv[14];
         if(!isfinite(depth))return -1;
         alpha_submissions[alpha_count]=(ModelSubmission){(unsigned)i,j,alpha_count,depth};alpha_count++;
-      }
+      }else{opaque_submissions[opaque_count]=(ModelSubmission){(unsigned)i,j,opaque_count,0};opaque_count++;}
     }
   }
   for(unsigned i=alpha_count/2;i>0;i--)submission_sift(alpha_count,i-1);
   for(unsigned end=alpha_count;end>1;end--){ModelSubmission t=alpha_submissions[0];alpha_submissions[0]=alpha_submissions[end-1];alpha_submissions[end-1]=t;submission_sift(end-1,0);}
-  for(int i=0;i<count;i++)if(ids[i]&&draw_model_selected(dnd_instance_find(ids[i]),worlds+i*16,NULL,1,-1)<0)return -1;
+  if(model_state_cache_enabled){
+    for(unsigned i=opaque_count/2;i>0;i--)opaque_sift(opaque_count,i-1,ids);
+    for(unsigned end=opaque_count;end>1;end--){ModelSubmission t=opaque_submissions[0];opaque_submissions[0]=opaque_submissions[end-1];opaque_submissions[end-1]=t;opaque_sift(end-1,0,ids);}
+    model_batch_active=true;model_batch_light_ready=model_batch_vertex_ready=false;
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
+    batch_model=NULL;batch_material=NULL;
+#endif
+    for(unsigned i=0;i<opaque_count;i++){ModelSubmission s=opaque_submissions[i];if(draw_model_selected(dnd_instance_find(ids[s.object]),worlds+s.object*16,NULL,0,(int)s.mesh)<0){model_batch_active=false;return -1;}}
+    model_batch_active=false;
+  }else for(int i=0;i<count;i++)if(ids[i]&&draw_model_selected(dnd_instance_find(ids[i]),worlds+i*16,NULL,1,-1)<0)return -1;
   for(unsigned i=0;i<alpha_count;i++){
     ModelSubmission s=alpha_submissions[i];
     if(draw_model_selected(dnd_instance_find(ids[s.object]),worlds+s.object*16,NULL,0,(int)s.mesh)<0)return -1;

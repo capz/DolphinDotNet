@@ -14,6 +14,7 @@ int dnd_raw_depth(void){return 0;}
 void dnd_draw_backend_wait(void){}
 void dnd_draw_backend_2d(int w,int h){assert(w==640&&h==480);}
 void dnd_performance_add_triangles(uint32_t n){assert(n>0);}
+void dnd_performance_drawing_api(void){}
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const DndDrawTexture *t,const DndDrawMaterial *m,const float *world){assert(n&&primitive==0x90&&!t&&m&&world);assert(used+n<=48);memcpy(emitted+used,v,n*sizeof(*v));used+=n;draws++;}
 void dnd_exception_throw(DndExceptionKind k,const char *m){(void)k;(void)m;abort();}
 static void reset(void){draws=used=0;memset(emitted,0,sizeof emitted);}

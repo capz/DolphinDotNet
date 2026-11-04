@@ -61,6 +61,8 @@ int dnd_model_draw(int token, DndArray *transform);
 int dnd_model_draw_effect(int token,DndArray *transform,int effect);
 /* All opaque, then global depth-sorted translucent submeshes. Max 128 objects / 4096 meshes. */
 int dnd_model_draw_models(DndArray *tokens,DndArray *matrices,int count);
+/* Diagnostic A/B control, outside frames; -1 queries. Enabled by default. */
+int dnd_model_state_cache(int enabled);
 /* Optional opt-in per-material JSystem animated rendering. */
 int dnd_model_draw_animated(int token, DndArray *transform, DndArray *channels);
 int dnd_model_draw_animated_shapes(int token,DndArray *transform,DndArray *channels,DndArray *mesh_visibility);

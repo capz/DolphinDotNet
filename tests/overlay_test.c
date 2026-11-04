@@ -90,6 +90,10 @@ int main(void) {
   assert(dnd_performance_render_stat(4)==16000);
   dnd_performance_begin_frame();
   assert(dnd_performance_render_stat(3)==0 && dnd_performance_render_stat(4)==0);
+  dnd_performance_drawing_api();dnd_performance_drawing_api();dnd_performance_material();
+  assert(dnd_performance_render_stat(8)==2&&dnd_performance_render_stat(9)==1);
+  dnd_performance_begin_frame();
+  assert(dnd_performance_render_stat(8)==0&&dnd_performance_render_stat(9)==0);
 
   dnd_performance_add_triangles(10);
   dnd_performance_add_triangles(12);

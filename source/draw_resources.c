@@ -386,6 +386,7 @@ int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int fl
     return dnd_mesh_draw_material(token,tex,0,world,color,flags,cutoff,effect);
 }
 int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint32_t color,int flags,float cutoff,int effect) {
+    dnd_performance_drawing_api();
     Resource *r=find(token,MESH);DndDrawTexture tx,extra;float transform[16];
     if(dnd_device_pass()!=1||!r||!texture(tex,&tx)||!matrix(world,transform)||flags<0||flags>255||(flags&192)==192||!texture(secondary,&extra)||!isfinite(cutoff)||cutoff<0||cutoff>1)return -1;
     /* Reflection coordinates require authored normals, not the fallback +Z used
@@ -401,6 +402,7 @@ int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint3
  * preserves the existing staging limit, and keeps triangle boundaries intact. */
 int dnd_mesh_draw_batch(DndArray *mesh_tokens,int count,int tex,int secondary,DndArray *world,
                         uint32_t color,int flags,float cutoff,int effect) {
+    dnd_performance_drawing_api();
     DndDrawTexture tx,extra;float transform[16];
     if(dnd_device_pass()!=1 || !mesh_tokens || mesh_tokens->elements_are_references ||
        mesh_tokens->element_size!=4 || count<2 || count>128 ||
@@ -482,6 +484,7 @@ int dnd_canvas_flush(int token) {
     return 0;
 }
 int dnd_canvas_vertices(int token,int tex,DndArray *a,int count,uint32_t color) {
+    dnd_performance_drawing_api();
     Resource *r=find(token,CANVAS);DndDrawTexture tx;
     if(!r||token!=active_canvas||dnd_device_pass()!=2||!a||a->element_size!=4||a->elements_are_references||count<0||count>r->capacity||count%3||a->length<(uint32_t)count*4||!texture(tex,&tx))return -1;
     Resource *fx=r->effect?find(r->effect,EFFECT):NULL;
@@ -494,6 +497,7 @@ int dnd_canvas_vertices(int token,int tex,DndArray *a,int count,uint32_t color) 
     r->count+=count;return 0;
 }
 int dnd_canvas_rectangle(int token,float x,float y,float w,float h,uint32_t color) {
+    dnd_performance_drawing_api();
     Resource *r=find(token,CANVAS);
     if(!r||token!=active_canvas||dnd_device_pass()!=2||!isfinite(x)||!isfinite(y)||!isfinite(w)||!isfinite(h)||w<0||h<0||!isfinite(x+w)||!isfinite(y+h))return -1;
     if(w==0||h==0||canvas_empty_clip)return 0;
@@ -624,6 +628,7 @@ int dnd_canvas_viewport(int token,int x,int y,int w,int h) {
     dnd_draw_backend_viewport(x,y,w,h);dnd_draw_backend_scissor(x,y,w,h);return 0;
 }
 int dnd_canvas_sprites(int token,DndArray *textures,DndArray *a,DndArray *colors,int count) {
+    dnd_performance_drawing_api();
     Resource *r=find(token,CANVAS);DndDrawTexture tx;
     if(!r||token!=active_canvas||dnd_device_pass()!=2||count<0||count>128||
        !textures||!colors||!a||textures->element_size!=4||colors->element_size!=4||a->element_size!=4||
@@ -654,6 +659,7 @@ static int render_options(DndArray *a,int scene) {
 int dnd_render_scene(DndArray *a){return render_options(a,1);}
 int dnd_render_material(DndArray *a){return render_options(a,0);}
 int dnd_mesh_draw_many(DndArray *a,DndArray *w,int count,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect){
+    dnd_performance_drawing_api();
     DndDrawTexture tx,extra;
     if(dnd_device_pass()!=1||!a||!w||a->element_size!=4||w->element_size!=sizeof(DndArray*)||a->elements_are_references||!w->elements_are_references||count<0||count>128||a->length<(unsigned)count||w->length<(unsigned)count||flags<0||flags>255||(flags&192)==192||!isfinite(cutoff)||cutoff<0||cutoff>1||!texture(tex,&tx)||!texture(secondary,&extra))return -1;
     Resource *fx=effect?find(effect,EFFECT):NULL;
@@ -673,6 +679,7 @@ int dnd_mesh_draw_many(DndArray *a,DndArray *w,int count,int tex,int secondary,u
 /* Retained 2D triangles reside in an immutable mesh resource. Flush painter
  * order, then consume native geometry directly without managed vertex staging. */
 int dnd_canvas_geometry(int token,int mesh,int tex,DndArray *world,uint32_t color){
+    dnd_performance_drawing_api();
     Resource *canvas=find(token,CANVAS),*geometry=find(mesh,MESH);
     DndDrawTexture tx;float transform[16];
     if(!canvas||token!=active_canvas||dnd_device_pass()!=2||!geometry||geometry->indices||

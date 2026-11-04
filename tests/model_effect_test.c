@@ -39,7 +39,7 @@ typedef struct {
   Stage stages[16]; GXColor colors[4],konst[4]; GXTexObj texture,secondary;
   float position[9],uv[6],world_x; GXColor vertex[3];
 } Draw;
-static Draw state,record[16];static int draws,restores,position_index,color_index,uv_index;
+static Draw state,record[16];static int draws,restores,position_index,color_index,uv_index,texture_loads,light_loads,vertex_invalidations;
 static const unsigned char *indexed_arrays[32];static int indexed_stride[32],indexed_positions,indexed_normals,indexed_uvs,skin_normal_reads;
 static GXColor indexed_tint;static Mtx indexed_normal;
 void GX_SetChanMatColor(int channel,GXColor c){assert(channel==GX_COLOR0A0);indexed_tint=c;}
@@ -47,10 +47,10 @@ void GX_SetChanAmbColor(int channel,GXColor c){assert(channel==GX_COLOR0A0&&c.r=
 void GX_InitLightPos(GXLightObj *p,float x,float y,float z){(void)p;assert(x==0&&y==0&&z==1000000);}
 void GX_InitLightColor(GXLightObj *p,GXColor c){(void)p;assert(c.r==191&&c.g==191&&c.b==191);}
 void GX_InitLightAttn(GXLightObj *p,float a,float b,float c,float d,float e,float f){(void)p;assert(a==1&&b==0&&c==0&&d==1&&e==0&&f==0);}
-void GX_LoadLightObj(GXLightObj *p,int slot){(void)p;assert(slot==GX_LIGHT0);}
+void GX_LoadLightObj(GXLightObj *p,int slot){(void)p;assert(slot==GX_LIGHT0);light_loads++;}
 void GX_SetArray(int attribute,void *p,int stride){assert(attribute>=0&&attribute<32&&(stride==80||stride==24));indexed_arrays[attribute]=p;indexed_stride[attribute]=stride;}
 static float indexed_float(int attribute,u16 index,int component){const unsigned char *p=indexed_arrays[attribute]+index*indexed_stride[attribute]+component*4;float value;if(indexed_stride[attribute]==24){memcpy(&value,p,4);return value;}return dnd_model_f32(p);}
-void GX_InvVtxCache(void){}
+void GX_InvVtxCache(void){vertex_invalidations++;}
 void GX_Position1x16(u16 index){indexed_positions++;GX_Position3f32(indexed_float(GX_VA_POS,index,0),indexed_float(GX_VA_POS,index,1),indexed_float(GX_VA_POS,index,2));state.vertex[color_index++]=indexed_tint;}
 void GX_Normal1x16(u16 index){indexed_normals++;if(indexed_stride[GX_VA_NRM]==24)skin_normal_reads++;float normal[3];for(int i=0;i<3;i++)normal[i]=indexed_float(GX_VA_NRM,index,i);float nz=0;for(int i=0;i<3;i++)nz+=indexed_normal[2][i]*normal[i];float shade=(64+191*fmaxf(0,nz))/255;GXColor *c=&state.vertex[color_index-1];c->r=(u8)fminf(255,c->r*shade);c->g=(u8)fminf(255,c->g*shade);c->b=(u8)fminf(255,c->b*shade);}
 void GX_TexCoord1x16(u16 index){const unsigned char *p=indexed_arrays[GX_VA_TEX0]+index*indexed_stride[GX_VA_TEX0];indexed_uvs++;GX_TexCoord2f32(dnd_model_f32(p),dnd_model_f32(p+4));}
@@ -71,7 +71,7 @@ void GX_SetTevAlphaOp(int s,int op,int bias,int scale,int clamp,int dest){(void)
 void GX_SetNumTexGens(int n){state.texgens=n;}
 void GX_InitTexObj(GXTexObj *t,void *p,u16 w,u16 h,int f,int s,int v,int m){*t=(GXTexObj){.data=p,.width=w,.height=h,.format=f,.wrap_s=s,.wrap_t=v,.mips=m};}
 void GX_InitTexObjLOD(GXTexObj *t,int min,int mag,float lo,float hi,float bias,int clamp,int edge,int aniso){assert(!lo&&!bias&&!clamp&&!edge&&!aniso);t->min_filter=min;t->mag_filter=mag;t->max_lod=hi;}
-void GX_LoadTexObj(GXTexObj *t,int slot){assert((slot==0||slot==1)&&state.count==-1);if(slot==0)state.texture=*t;else state.secondary=*t;}
+void GX_LoadTexObj(GXTexObj *t,int slot){assert((slot==0||slot==1)&&state.count==-1);texture_loads++;if(slot==0)state.texture=*t;else state.secondary=*t;}
 void GX_SetCullMode(int c){state.cull=c;}
 void GX_SetZMode(int e,int c,int w){assert(e&&c==GX_LEQUAL);state.zwrite=w;}
 void GX_SetBlendMode(int m,int s,int d,int op){assert(!op);state.blend=m;state.src=s;state.dst=d;}
@@ -314,9 +314,44 @@ int main(void) {
  assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions);meshes[0].uniform_color=meshes[1].uniform_color=true;meshes[2].vertices=3;
  custom_scene_active=true;old_positions=indexed_positions;assert(dnd_model_draw(123,world)==0&&indexed_positions==old_positions);custom_scene_active=false;
  assert(dnd_model_frame_end()==0);
+ // Compare the production opaque batch against the original object order.
+ // Every emitted geometry/material/alpha value must survive grouping, while
+ // actual GX loads and primitive counters report the reduced work exactly.
+ assert(dnd_model_state_cache(-1)==1&&dnd_model_state_cache(2)<0&&dnd_model_state_cache(0)==0);
+ memcpy(materials,original_materials,sizeof(materials));for(int i=0;i<3;i++)materials[i].mode&=~4;
+ DndArray *batch_ids=calloc(1,sizeof(*batch_ids)+8),*batch_worlds=calloc(1,sizeof(*batch_worlds)+128);
+ assert(batch_ids&&batch_worlds);batch_ids->element_size=batch_worlds->element_size=4;batch_ids->length=2;batch_worlds->length=32;
+ ((int*)batch_ids->data)[0]=123;((int*)batch_ids->data)[1]=124;
+ memcpy(batch_worlds->data,world->data,64);memcpy(batch_worlds->data+64,world->data,64);((float*)batch_worlds->data)[28]=100;
+ Draw legacy_batch[6];assert(dnd_model_frame_begin(camera,camera)==0);before=draws;
+ int original_loads=texture_loads;assert(dnd_model_draw_models(batch_ids,batch_worlds,2)==0);
+ for(int i=0;i<6;i++)legacy_batch[i]=record[(before+i)%16];
+ assert(texture_loads-original_loads==6);
+ assert(dnd_model_frame_end()==0&&dnd_model_state_cache(1)==1);
+ assert(dnd_model_frame_begin(camera,camera)==0&&dnd_model_state_cache(0)<0);
+ before=draws;restore_before=restores;original_loads=texture_loads;
+ int old_lights=light_loads,old_invalidations=vertex_invalidations;old_allocations=allocations;
+ uint32_t old_submissions=dnd_performance_stats()->draw_submissions,old_bindings=dnd_performance_stats()->texture_binds;
+ assert(dnd_model_draw_models(batch_ids,batch_worlds,2)==0&&draws==before+6&&allocations==old_allocations);
+ int permutation[]={0,3,1,4,2,5};for(int i=0;i<6;i++)assert_geometry_equal(legacy_batch[permutation[i]],record[(before+i)%16]);
+ assert(restores-restore_before==3&&texture_loads-original_loads==3&&light_loads-old_lights==1&&vertex_invalidations-old_invalidations==3);
+ assert(dnd_performance_stats()->draw_submissions-old_submissions==6&&dnd_performance_stats()->texture_binds-old_bindings==3);
+ assert(dnd_model_frame_end()==0);
+ // Reused two-texture multiply/emission materials retain their TEV and alpha.
+ for(int i=0;i<2;i++){materials[i].combiner=i+1;materials[i].secondary=0;}
+ assert(dnd_model_state_cache(0)==0&&dnd_model_frame_begin(camera,camera)==0);before=draws;
+ assert(dnd_model_draw_models(batch_ids,batch_worlds,2)==0);for(int i=0;i<6;i++)legacy_batch[i]=record[(before+i)%16];
+ assert(dnd_model_frame_end()==0&&dnd_model_state_cache(1)==1&&dnd_model_frame_begin(camera,camera)==0);
+ before=draws;original_loads=texture_loads;old_bindings=dnd_performance_stats()->texture_binds;
+ uint32_t old_api=dnd_performance_stats()->drawing_api_calls,old_changes=dnd_performance_stats()->material_changes;
+ assert(dnd_model_draw_models(batch_ids,batch_worlds,2)==0);
+ for(int i=0;i<6;i++){Draw a=legacy_batch[permutation[i]],b=record[(before+i)%16];assert_geometry_equal(a,b);assert(a.count==b.count&&!memcmp(a.stages,b.stages,sizeof(a.stages)));}
+ assert(texture_loads-original_loads==5&&dnd_performance_stats()->texture_binds-old_bindings==5);
+ assert(dnd_performance_stats()->drawing_api_calls-old_api==1&&dnd_performance_stats()->material_changes-old_changes==3);
+ assert(dnd_model_frame_end()==0);free(batch_ids);free(batch_worlds);memcpy(materials,original_materials,sizeof(materials));
  assert(dnd_draw_release(short_effect)==0&&dnd_draw_release(textured)==0&&dnd_draw_release(replacement)==0&&dnd_draw_release(wrong)==0);
  assert(dnd_draw_total_bytes()==0&&dnd_draw_live()==0);
- assert(indirect_resets>=draws);
+ assert(indirect_resets>=restores);
  dnd_instances[0]=dnd_instances[1]=NULL;free(world);free(camera);
  puts("Model GX effect selection, alpha, geometry, preflight and lifetime passed.");return 0;
 }

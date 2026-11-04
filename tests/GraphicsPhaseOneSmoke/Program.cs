@@ -36,8 +36,14 @@ internal static class Program
         var invalidSprite=sprites[0];invalidSprite.Flip=(SpriteFlip)4;var invalidSprites=new[]{sprites[0],invalidSprite};
         try{draw.DrawSprites(invalidSprites,0,2);return 26;}catch(ArgumentException){}
         if(draw.DrawCalls!=0)return 27;
-        draw.PushClip(0,0,100,100);draw.PushClip(200,200,10,10);draw.DrawSprites(sprites,0,1);draw.PopClip();draw.DrawSprites(sprites,0,1);draw.PopClip();draw.End();device.EndFrame();
-        device.BeginFrame(Color32.Black);renderer.Begin3D(camera);renderer.DrawMesh(mesh,new Material(),transform);renderer.End3D();draw.Begin();draw.FillRectangle(new RectF(1,2,3,4),Color32.White);draw.End();device.EndFrame();
+        var packed=new float[]{10,10,0,0,30,10,1,0,30,30,1,1,10,10,0,0,30,30,1,1,10,30,0,1};var pages=new[]{texture};
+        try{draw.DrawTexturedQuads(pages,packed,2,Color32.White);return 28;}catch(ArgumentOutOfRangeException){}
+        var badPages=new Texture2D[]{texture,null!};var twoQuads=new float[48];Array.Copy(packed,0,twoQuads,0,24);Array.Copy(packed,0,twoQuads,24,24);
+        try{draw.DrawTexturedQuads(badPages,twoQuads,2,Color32.White);return 29;}catch(ArgumentException){}
+        float saved=packed[23];packed[23]=float.NaN;try{draw.DrawTexturedQuads(pages,packed,1,Color32.White);return 30;}catch(InvalidOperationException){}packed[23]=saved;
+        draw.Flush();if(draw.DrawCalls!=0)return 31;
+        draw.PushClip(0,0,100,100);draw.PushClip(200,200,10,10);draw.DrawSprites(sprites,0,1);draw.DrawTexturedQuads(pages,packed,1,Color32.White);draw.PopClip();draw.DrawSprites(sprites,0,1);draw.DrawTexturedQuads(pages,packed,1,Color32.White);draw.PopClip();draw.End();device.EndFrame();
+        device.BeginFrame(Color32.Black);renderer.Begin3D(camera);renderer.DrawMesh(mesh,new Material(),transform);renderer.End3D();draw.Begin();draw.DrawTexturedQuads(pages,packed,1,Color32.White);draw.FillRectangle(new RectF(1,2,3,4),Color32.White);draw.End();device.EndFrame();
         return 0;
     }
 }
