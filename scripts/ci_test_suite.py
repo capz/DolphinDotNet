@@ -22,6 +22,7 @@ def aot(project,output):
 def main(area):
     if area=="native":
         run("python3","-m","unittest","discover","-s","tests","-p","test_ci_native.py")
+        run("python3","-m","unittest","discover","-s","tests","-p","test_video_blanking.py")
         run("python3","-m","unittest","discover","-s","tests","-p","test_debug_hardware_automation.py")
         run("python3","-m","unittest","discover","-s","tests","-p","test_hardware_asset_corpus.py")
         run("python3","-m","unittest","discover","-s","tests","-p","test_hardware_asset_compatibility.py")

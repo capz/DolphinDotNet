@@ -124,17 +124,17 @@ internal static class GameCubeBundle
         File.Copy(Path.Combine(root,"scripts","build_tls.py"),Path.Combine(directory,"scripts","build_tls.py"),true);
         if (platform == "gamecube")
         {
-            // Standalone DOLs require the same verified EXI correction as the
-            // repository's primary GameCube Makefile; stock libogc2 hangs in
-            // EXI_Sync in Dolphin's default hardware configuration.
+            // Every GameCube bundle uses the repository's verified EXI and
+            // VIDEO corrections, including apps using raw VIDEO bindings.
             Directory.CreateDirectory(Path.Combine(directory, "vendor", "libogc2"));
-            foreach (var file in new[] { "build_exi_overlay.sh", "verify_exi_source.py" })
+            foreach (var file in new[] { "build_exi_overlay.sh", "verify_exi_source.py", "verify_video_source.py" })
                 // Existing Windows checkouts and packaged compilers can still
                 // contain CRLF even with the repository's LF checkout rule.
                 File.WriteAllText(Path.Combine(directory, "scripts", file),
                     File.ReadAllText(Path.Combine(root, "scripts", file)).ReplaceLineEndings("\n"));
-            File.Copy(Path.Combine(root, "vendor", "libogc2", "exi.c"),
-                Path.Combine(directory, "vendor", "libogc2", "exi.c"), true);
+            foreach (var file in new[] { "exi.c", "video.c" })
+                File.Copy(Path.Combine(root, "vendor", "libogc2", file),
+                    Path.Combine(directory, "vendor", "libogc2", file), true);
         }
 
         var entry = compilation.ValueMethods.Single(m => m.Key == compilation.Entry);
@@ -348,8 +348,8 @@ internal static class GameCubeBundle
         builder.AppendLine("export DOL_VALIDATOR := $(CURDIR)/scripts/dol_sections.py");
         if (platform == "gamecube")
         {
-            builder.AppendLine("EXI_OVERLAY := $(CURDIR)/build/exi-overlay/libogc.a");
-            builder.AppendLine("$(EXI_OVERLAY): scripts/build_exi_overlay.sh scripts/verify_exi_source.py vendor/libogc2/exi.c");
+            builder.AppendLine("export EXI_OVERLAY := $(CURDIR)/build/exi-overlay/libogc.a");
+            builder.AppendLine("$(EXI_OVERLAY): scripts/build_exi_overlay.sh scripts/verify_exi_source.py scripts/verify_video_source.py vendor/libogc2/exi.c vendor/libogc2/video.c");
             builder.AppendLine("\t@bash scripts/build_exi_overlay.sh");
         }
         if(usesNetworking){
@@ -388,7 +388,7 @@ internal static class GameCubeBundle
             if (debugSymbols)
                 builder.AppendLine("\tpython3 \"$(dir $(OUTPUT))scripts/dnd_debug_addresses.py\" --elf $(OUTPUT).elf --source-map \"$(dir $(OUTPUT))dnd-il-debug.json\" --output $(OUTPUT).dnd-addresses.json --readelf \"$(DEVKITPPC)/bin/powerpc-eabi-readelf\"");
         }
-        builder.AppendLine("$(OUTPUT).elf: $(OFILES) .dnd-native-flags");
+        builder.AppendLine("$(OUTPUT).elf: $(OFILES) .dnd-native-flags" + (platform == "gamecube" ? " $(EXI_OVERLAY)" : ""));
         builder.AppendLine("\t$(CC) $(OFILES) $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@");
         builder.AppendLine("-include $(DEPENDS)");
         builder.AppendLine("endif");

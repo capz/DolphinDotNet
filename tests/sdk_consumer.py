@@ -41,7 +41,10 @@ def main():
         import xml.etree.ElementTree as ET
         metadata = ET.fromstring(archive.read('DolphinDotNet.Sdk.nuspec'))
         version = next(e.text for e in metadata.iter() if e.tag.endswith('}version') or e.tag == 'version')
-        for required in ('Sdk/Sdk.props', 'tools/compiler/native/source/main.c', 'tools/build/DolphinDotNet.Build.dll', 'tools/debugger/DolphinDotNet.DebugAdapter.dll'):
+        for required in ('Sdk/Sdk.props', 'tools/compiler/native/source/main.c',
+                         'tools/compiler/native/vendor/libogc2/video.c',
+                         'tools/compiler/native/scripts/verify_video_source.py',
+                         'tools/build/DolphinDotNet.Build.dll', 'tools/debugger/DolphinDotNet.DebugAdapter.dll'):
             assert required in archive.namelist(), required
     env = os.environ.copy()
     env.update(NUGET_PACKAGES=str(work / 'packages'), DOTNET_CLI_HOME=str(work / 'cli'), DOTNET_CLI_TELEMETRY_OPTOUT='1')

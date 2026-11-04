@@ -26,6 +26,7 @@ CXXFLAGS += -DDND_DEBUG_AUTOMATION
 LDFLAGS += -Wl,--undefined=dnd_automation_mailbox -Wl,--undefined=dnd_automation_frame_boundary -Wl,--undefined=dnd_asset_corpus_report -Wl,--undefined=dnd_jsystem_fixture
 endif
 ifneq ($(BUILD),$(notdir $(CURDIR)))
+.DEFAULT_GOAL := all
 export DOL_SECTIONS := $(CURDIR)/scripts/dol_sections.py
 export OUTPUT := $(CURDIR)/$(TARGET)
 export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
@@ -35,7 +36,10 @@ export OFILES := $(CFILES:.c=.o)
 export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) $(foreach dir,$(LIBDIRS),-I$(dir)/include) -I$(CURDIR)/$(BUILD)
 export LIBPATHS := $(LIBPATHS_EXTRA) $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 .PHONY: all clean
-all: $(BUILD)
+export EXI_OVERLAY := $(CURDIR)/build/exi-overlay/libogc.a
+$(EXI_OVERLAY): scripts/build_exi_overlay.sh scripts/verify_exi_source.py scripts/verify_video_source.py vendor/libogc2/exi.c vendor/libogc2/video.c
+	@bash scripts/build_exi_overlay.sh
+all: $(EXI_OVERLAY) $(BUILD)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 $(BUILD):
 	@mkdir -p $@
@@ -46,7 +50,7 @@ DEPENDS := $(OFILES:.o=.d)
 $(OUTPUT).dol: $(OUTPUT).elf $(DOL_SECTIONS)
 	elf2dol "$<" "$@"
 	$(PYTHON) "$(DOL_SECTIONS)" --pad "$@"
-$(OUTPUT).elf: $(OFILES)
-	$(CC) $^ $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@
+$(OUTPUT).elf: $(OFILES) $(EXI_OVERLAY)
+	$(CC) $(OFILES) $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@
 -include $(DEPENDS)
 endif

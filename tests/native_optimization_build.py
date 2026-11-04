@@ -27,9 +27,11 @@ def verify(makefile):
         (devkit/'libogc2/gamecube_rules').write_text(f'CC := {wrapper}\n%.o: %.c\n\t$(CC) $(CFLAGS) -MMD -MP -c $< -o $@\n')
         shutil.copyfile(makefile,bundle/'Makefile')
         (bundle/'source/probe.c').write_text('int main(void){return 0;}\n')
-        for name in ('build_exi_overlay.sh','verify_exi_source.py','dol_sections.py'):
+        for name in ('build_exi_overlay.sh','verify_exi_source.py','verify_video_source.py','dol_sections.py'):
             (bundle/'scripts'/name).write_text('')
+        (bundle/'scripts/build_exi_overlay.sh').write_text('touch build/exi-overlay/libogc.a build/overlay-rebuilt\n')
         (bundle/'vendor/libogc2/exi.c').write_text('')
+        (bundle/'vendor/libogc2/video.c').write_text('')
         overlay=bundle/'build/exi-overlay';overlay.mkdir(parents=True)
         (overlay/'libogc.a').write_bytes(b'')
         converter=root/'elf2dol'
@@ -47,7 +49,14 @@ def verify(makefile):
         assert run(1)==second, 'Unchanged optimized build was not reused'
         time.sleep(1.1)
         third=run(0);assert len(third)==6 and all('-flto' not in c for c in third[4:])
+        time.sleep(1.1)
+        (bundle/'vendor/libogc2/video.c').touch()
+        fourth=run(0)
+        assert (bundle/'build/overlay-rebuilt').exists(), 'VIDEO source change did not rebuild libogc'
+        assert len(fourth)==7 and '-c' not in fourth[-1], 'Corrected archive did not relink the existing app'
+        assert run(0)==fourth, 'Unchanged corrected archive caused a redundant rebuild'
         print('Native flag switching rebuilds objects and relinks; unchanged builds are reused.')
+        print('VIDEO correction changes rebuild the archive and relink an existing app.')
 
 
 if __name__=='__main__':verify(Path(sys.argv[1]))
