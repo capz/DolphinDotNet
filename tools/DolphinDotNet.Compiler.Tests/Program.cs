@@ -30,6 +30,9 @@ Run(helloHost, "");
 var normalBundle = Path.Combine(tempDirectory, "normal-bundle");
 Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{normalBundle}\"");
 var normalMake = File.ReadAllText(Path.Combine(normalBundle, "Makefile"));
+foreach (var dependency in new[] { "scripts/verify_video_source.py", "vendor/libogc2/video.c" })
+    if (!File.Exists(Path.Combine(normalBundle, dependency)) || !normalMake.Contains(dependency, StringComparison.Ordinal))
+        throw new Exception("GameCube bundle is missing the mandatory VIDEO correction: " + dependency);
 if(!normalMake.Contains("DND_LTO ?= 1",StringComparison.Ordinal))
     throw new Exception("GameCube release optimization is not enabled.");
 Run("python3",$"\"{Path.Combine(root,"tests/native_optimization_build.py")}\" \"{Path.Combine(normalBundle,"Makefile")}\"");

@@ -86,6 +86,8 @@ def main() -> int:
     parser.add_argument("--logs", type=Path, default=Path("dolphin-smoke"))
     parser.add_argument("--cpu-core", choices=[0, 1], type=int, default=0,
                         help="Dolphin CPU core (0=interpreter, 1=JIT64)")
+    parser.add_argument("--component-cable", action="store_true",
+                        help="Advertise component output for progressive video-mode tests")
     parser.add_argument("--gdb-port", type=int, default=0,
                         help="Capture guest PC/LR through Dolphin GDB stub")
     parser.add_argument("--elf", type=Path, help="Matching symbol-bearing ELF")
@@ -162,6 +164,8 @@ def main() -> int:
     environment["DOLPHIN_EMU_USERPATH"] = str(user)
     environment["SDL_AUDIODRIVER"] = "dummy"
     command = ["xvfb-run", "-a", args.binary, "--exec", str(args.dol.resolve())]
+    if args.component_cable:
+        command += ["-C", "SYSCONF.IPL.PGS=True"]
     print("Launching:", " ".join(command), flush=True)
     guest_state = []
     probe_finished=threading.Event()

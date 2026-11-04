@@ -325,6 +325,11 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
     assert result.returncode == 0, result.stdout
     emitted_shell = (bundle / "scripts/build_exi_overlay.sh").read_bytes()
     assert emitted_shell == shell_lf.encode() and b'\r' not in emitted_shell
+    for path in ('scripts/verify_video_source.py', 'vendor/libogc2/video.c'):
+        original = packaged_compiler / 'native' / path
+        expected = original.read_text().encode() if path.startswith('scripts/') else original.read_bytes()
+        assert (bundle / path).read_bytes() == expected
+        assert path in (bundle / 'Makefile').read_text()
     if os.name != "nt":
         header = b'\n'.join(emitted_shell.split(b'\n')[:2]).decode()
         result = subprocess.run(['bash', '-c', header], capture_output=True, text=True, timeout=10)

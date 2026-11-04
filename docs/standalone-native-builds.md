@@ -13,13 +13,40 @@ The **default is GameCube**; `--platform gamecube` produces exactly the same Mak
 The bundle contains generated managed C, copied native runtime sources and headers,
 `scripts/dol_sections.py`, a devkitPPC Makefile, and `DEPENDENCIES.txt`.
 
-**GameCube bundles also contain the verified EXI source correction and build
+**GameCube bundles also contain the verified EXI and VIDEO source corrections and build
 scripts**. The first `make` clones the pinned libogc2 upstream source
-(requires `git` and network access), verifies the single EXI register correction,
+(requires `git` and network access), verifies both corrections,
 and builds a local `build/exi-overlay/libogc.a` used *before* the SDK library.
-Without this step, stock libogc2 can hang at `EXI_Sync` in Dolphin. Subsequent
-builds reuse the generated overlay. This applies equally to standalone games,
-AudioDemo and the Pong sample.
+This fixes the EXI polling register and a 576p blanking overflow that can hang
+resolution/scan changes in `VIDEO_WaitVSync`. The archive replaces both `exi.o`
+and `video.o`; the installed toolchain is unchanged. The historical script and
+archive names are retained for compatibility. Subsequent builds reuse the overlay
+and rebuild it when either correction changes.
+
+This applies to every generated GameCube app, including raw `VIDEO_*` use, and
+the repository Makefile. The NuGet SDK includes the corrected sources and verifier.
+Existing apps must update the SDK and rebuild their native DOL to receive the fix;
+already-built executables and older packages are not changed.
+
+At 576p, the original black timing placed 1218 half-lines in a 10-bit pre-blanking
+field, truncating it to 194. Sharing the blank interval between the pre/post fields
+keeps both within range and preserves field length. See the native regression in
+`tests/display_switch_gamecube.c`: it holds output black before the first frame,
+then exercises 480p/576p and 576i/576p changes. Build and run it with:
+
+```sh
+bash scripts/build_exi_overlay.sh
+bash tests/build_display_switch.sh out/display-switch
+python3 scripts/dolphin_smoke.py out/display-switch/display-switch.dol \
+  --elf out/display-switch/display-switch.elf --gdb-port 2169 --seconds 60 --component-cable \
+  --expect-word dnd_video_test_result=1 --expect-word dnd_video_test_phase=7 \
+  --expect-word dnd_video_test_frames=16 --memory-after-symbol dnd_video_test_complete \
+  --logs out/display-switch/dolphin
+```
+
+The host CI also compiles the actual vendored vertical-register function and
+checks blank/unblank timing and register bounds for standard and cropped modes.
+Emulator acceptance does not establish physical console/cable/display behavior.
 
 ## Platform contract
 
