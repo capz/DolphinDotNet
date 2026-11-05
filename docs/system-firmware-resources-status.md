@@ -8,7 +8,7 @@ remain unperformed and are tracked under Phase 7. No Nintendo data is included.
 | Phase | Implemented | Remaining acceptance work |
 | --- | --- | --- |
 | 1 | Bounded EXI ROM reader, explicit file fallback and source metadata, owned loading, cipher/encoding evidence, cancellation, AOT console/file tests | Real regional dump and physical-console validation under Phase 7 |
-| 2 | Yay0 inventory, separate bounded streams, output/work/count budgets, overlap rejection, detached extraction, unsupported BMD1 metadata | Named intro resources, original audio descriptors, regional layout validation, BMD1 structural inspection |
+| 2 | Bounded Yay0/FST/WSYS inventories; J3D1 section inspection; strict TEX1/BTI profiles for named intro resources; metadata-linked stereo extraction | Real-ROM regional compatibility and any non-FST archive layout remain unverified |
 | 3 | Validated BTI extraction relative to each header, existing Texture2D adapter, SystemFont facade preserving IplFont | Validated named NTSC/PAL layouts, console rendering, measured cache/performance budgets |
 | 4 | Existing audio pipeline researched; unchanged | Validated WSYS/AW discovery, stereo memory-backed compressed playback and tests |
 | 5 | J3D1bmd1 resources explicitly marked unsupported | Original geometry/material importer and fidelity comparisons |
@@ -145,3 +145,37 @@ Phase 1 continuation verification:
   the bridge after a transaction. Source metadata and pre-cancel behavior pass.
 - `source/system_firmware.c` compiles with pinned devkitPro/libogc2, O2/Werror.
 - Managed synthetic firmware/source/fallback tests pass.
+
+Phase 2 continuation:
+
+- `InspectModel` validates J3D1 file/chunk extents and duplicate sections without
+  claiming geometry semantics. `GetTextures` validates a TEX1 table and every
+  header-relative image/palette/mip range within the section.
+- `GetTexture(SystemTexture)` resolves all six intro texture names using profile
+  size/relative-header hints **plus** valid J3D1 sections, TEX1 membership and
+  complete BTI validation. Three logo faces are validated together. Duplicate
+  candidates and unknown layouts fail. No absolute ROM asset offsets are used.
+- Strict embedded-FST discovery validates bounded names, hierarchy, file ranges
+  and independent structured files. WSYS inventories validate banks, archive
+  names, wave counts, codecs, sample rates, durations and loop ranges.
+- Stereo discovery requires a unique metadata-compatible pair, a uniquely named
+  AW file in the validated table and disjoint in-bounds channel extents. Original
+  compressed channels are losslessly interleaved into the existing AFC container.
+  It does not use the right-channel sample signature or a fixed AW base.
+- FST presence in actual IPL revisions is **unverified**. This is a strict
+  supported layout, not a claim that filename strings prove a filesystem.
+  Non-FST archive locations remain explicitly unsupported; standalone WSYS/AW
+  inspection and metadata-selected stereo extraction are also available.
+- Original synthetic fixtures cover 14/31-record families, all six named texture
+  profiles, overlapping relative BTI headers, malformed model/texture/WSYS
+  ranges, valid and ambiguous FST tables, stereo pairing and disposal.
+- Expanded console/file AOT fixture passes named environment extraction,
+  embedded-FST inventory, WSYS and stereo metadata under forced GC: 513 reads,
+  260 collections, 2,102,048 bytes occupied at completion, no file handles.
+- The catalog caches immutable texture metadata only; it never caches a ROM,
+  decoded model blob or shared GX handle. Returned metadata arrays are detached.
+
+The file-table research lead is documented at
+https://www.hcs64.com/mboard/forum.php?showthread=46117; its author did not locate
+or validate the table root. No downloadable firmware from that thread was used.
+No original geometry, textures or sounds were obtained from external dumps.

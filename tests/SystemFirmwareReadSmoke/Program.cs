@@ -8,11 +8,12 @@ internal static class Program
     {
         using(var image=SystemFirmware.ReadConsole())
         using(var catalog=image.CreateCatalog())
-            if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=2)return 1;
+            if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=3||catalog.Files==null||catalog.Files.Count!=3||
+               catalog.GetTexture(SystemTexture.Environment).HeaderOffset!=8448||catalog.GetStartupAudio().SampleRate!=32000||catalog.WaveSystemCount!=1)return 1;
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 2;
         using(var image=SystemFirmware.Open("sd:/firmware-synthetic.bin"))
         using(var catalog=image.CreateCatalog())
-            if(image.Source!=FirmwareSource.ExplicitFile||catalog.Count!=2||catalog.Extract(0)[0]!=65)return 3;
+            if(image.Source!=FirmwareSource.ExplicitFile||catalog.Count!=3||catalog.Extract(0)[0]!=65)return 3;
         using(var cancellation=new CancellationTokenSource())
         {
             cancellation.Cancel();

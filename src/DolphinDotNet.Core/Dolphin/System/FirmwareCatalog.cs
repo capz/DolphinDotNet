@@ -32,15 +32,28 @@ public sealed class FirmwareCatalog : IDisposable
     public const int MaximumResources=128;
     private readonly FirmwareResource[] resources;
     private byte[][]? records;
+    private readonly FirmwareStereoAudio? startupAudio;
+    private readonly FirmwareTextureInfo[]?[] textureCache;
+    private readonly FirmwareWaveSystemInfo[] waveSystems;
+    public int WaveSystemCount=>waveSystems.Length;
+    public FirmwareWaveSystemInfo GetWaveSystem(int index)=>waveSystems[index];
+    public FirmwareFileTable? Files {get;}
     public int Count=>resources.Length;
     public FirmwareResource this[int index]=>resources[index];
-    private FirmwareCatalog(FirmwareResource[] metadata,byte[][] compressed){resources=metadata;records=compressed;}
+    private FirmwareCatalog(FirmwareResource[] metadata,byte[][] compressed,FirmwareFileTable? files,FirmwareStereoAudio? audio,FirmwareWaveSystemInfo[] waves)
+    {resources=metadata;records=compressed;Files=files;startupAudio=audio;waveSystems=waves;textureCache=new FirmwareTextureInfo[metadata.Length][];}
+    public FirmwareStereoAudio GetStartupAudio()
+    {
+        if(records==null)throw new ObjectDisposedException(nameof(FirmwareCatalog));
+        if(startupAudio==null)throw new NotSupportedException("No unique validated firmware file-table/WSYS stereo layout.");
+        return startupAudio;
+    }
     internal static bool HasEvidence(byte[] data,CancellationToken cancellation)
     {
-        try { using(var catalog=Scan(data,cancellation))return catalog.Count>=2; }
+        try { using(var catalog=Scan(data,cancellation,false))return catalog.Count>=2; }
         catch(InvalidDataException){return false;}
     }
-    internal static FirmwareCatalog Scan(byte[] data,CancellationToken cancellation)
+    internal static FirmwareCatalog Scan(byte[] data,CancellationToken cancellation,bool includeMetadata=true)
     {
         var metadata=new List<FirmwareResource>();var compressed=new List<byte[]>();
         int previousEnd=0,total=0,work=0;
@@ -63,13 +76,77 @@ public sealed class FirmwareCatalog : IDisposable
             metadata.Add(new FirmwareResource(at,used,decoded));compressed.Add(record);
             previousEnd=at+used;total+=used;
         }
-        return new FirmwareCatalog(metadata.ToArray(),compressed.ToArray());
+        var files=includeMetadata?FirmwareFileTable.Inspect(data,cancellation):null;
+        var audio=FirmwareStereoAudio.Discover(data,files);
+        if(audio!=null&&audio.CompressedBytes>MaximumDecodedBytes-total)throw new InvalidDataException("Firmware catalog retention budget exceeded.");
+        return new FirmwareCatalog(metadata.ToArray(),compressed.ToArray(),files,audio,includeMetadata?FirmwareWaveSystemInfo.Scan(data,cancellation):new FirmwareWaveSystemInfo[0]);
     }
     public byte[] Extract(int index,CancellationToken cancellationToken=default)
     {
         var source=records;if(source==null)throw new ObjectDisposedException(nameof(FirmwareCatalog));
         if(index<0||index>=source.Length)throw new ArgumentOutOfRangeException(nameof(index));
         int used;return Decode(source[index],0,source[index].Length,out used,cancellationToken);
+    }
+    /// <summary>Inspect original J3D1 sections without claiming rendering support.</summary>
+    public FirmwareModelInfo InspectModel(int index)=>FirmwareModelInfo.Inspect(Extract(index));
+    public FirmwareTextureInfo[] GetTextures(int index)
+    {
+        if(records==null)throw new ObjectDisposedException(nameof(FirmwareCatalog));
+        if(index<0||index>=Count)throw new ArgumentOutOfRangeException(nameof(index));
+        var cached=textureCache[index];
+        if(cached==null)
+        {
+            var decoded=Extract(index);
+            if(resources[index].Kind==FirmwareResourceKind.UnsupportedModel)
+                cached=FirmwareModelInfo.Inspect(decoded).ReadTextures(decoded,index);
+            else
+            {
+                var bti=FirmwareTextures.Extract(decoded,0);
+                cached=new[]{new FirmwareTextureInfo(index,0,Dolphin.Formats.BtiTexture.Read(bti))};
+            }
+            textureCache[index]=cached;
+        }
+        // Cache immutable metadata, never model/ROM payloads or shared GX handles.
+        var copy=new FirmwareTextureInfo[cached.Length];Array.Copy(cached,copy,copy.Length);return copy;
+    }
+    /// <summary>Resolve a named intro texture. Published output sizes and header
+    /// positions are only profile hints: J3D1 section structure, TEX1 membership,
+    /// all BTI ranges and every logo face are independently checked. Multiple
+    /// matching records are rejected. Unrecognized revisions fail explicitly.</summary>
+    public FirmwareTextureInfo GetTexture(SystemTexture name)
+    {
+        if(records==null)throw new ObjectDisposedException(nameof(FirmwareCatalog));
+        if(name<SystemTexture.Environment||name>SystemTexture.Wordmark)
+            throw new ArgumentOutOfRangeException(nameof(name));
+        int size=name==SystemTexture.Environment?0x6140:name==SystemTexture.Tiles?0x1020:
+            name==SystemTexture.Wordmark?0x64a0:0x16f60;
+        int header=name==SystemTexture.Environment?8448:name==SystemTexture.Tiles?0:
+            name==SystemTexture.Wordmark?11616:name==SystemTexture.LogoTop?5056:
+            name==SystemTexture.LogoLeft?5088:5120;
+        FirmwareTextureInfo? found=null;
+        for(int i=0;i<Count;i++)
+        {
+            if(resources[i].DecodedBytes!=size)continue;
+            FirmwareTextureInfo[] textures;
+            try{textures=GetTextures(i);}
+            catch(InvalidDataException){continue;}
+            catch(NotSupportedException){continue;}
+            bool logo=name>=SystemTexture.LogoTop&&name<=SystemTexture.LogoRight;
+            if(logo)
+            {
+                int faces=0;
+                for(int j=0;j<textures.Length;j++)
+                    if(textures[j].HeaderOffset==5056||textures[j].HeaderOffset==5088||textures[j].HeaderOffset==5120)faces++;
+                if(faces!=3)continue;
+            }
+            for(int j=0;j<textures.Length;j++)if(textures[j].HeaderOffset==header)
+            {
+                if(found!=null)throw new InvalidDataException("Multiple validated candidates for named firmware texture.");
+                found=textures[j];
+            }
+        }
+        if(found==null)throw new NotSupportedException("No validated layout for requested firmware texture in this revision.");
+        return found;
     }
     /// <summary>Decode a standalone Yay0 record with disjoint mask/link/literal streams.
     /// Rejects backreferences preceding output and runs crossing declared output size.</summary>
@@ -113,5 +190,5 @@ public sealed class FirmwareCatalog : IDisposable
         used=Math.Max(mask,Math.Max(links,literal));return output;
     }
     private static uint U32Bits(byte[] d,int a)=>((uint)d[a]<<24)|((uint)d[a+1]<<16)|((uint)d[a+2]<<8)|d[a+3];
-    public void Dispose(){var data=records;if(data==null)return;foreach(var record in data)Array.Clear(record,0,record.Length);records=null;}
+    public void Dispose(){var data=records;if(data==null)return;foreach(var record in data)Array.Clear(record,0,record.Length);startupAudio?.Release();Array.Clear(textureCache,0,textureCache.Length);records=null;}
 }

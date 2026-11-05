@@ -111,6 +111,7 @@ public sealed class FirmwareImage : IDisposable
         }
     }
     internal byte[] Data { get { if(bytes==null)throw new ObjectDisposedException(nameof(FirmwareImage)); return bytes; } }
+    public FirmwareFileTable? InspectFileTable(CancellationToken cancellationToken=default)=>FirmwareFileTable.Inspect(Data,cancellationToken);
     public FirmwareCatalog CreateCatalog(CancellationToken cancellationToken=default)=>FirmwareCatalog.Scan(Data,cancellationToken);
     public byte[] ReadRange(int offset,int count)
     {
