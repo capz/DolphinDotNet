@@ -88,6 +88,7 @@ def main(area):
     elif area=="assets":
         test("tests/GameCubeFormatsTests")
         test("tests/SystemFirmwareTests")
+        run("python3","tests/system_firmware_aot.py")
         test("tests/JSystemFixtureHostTests")
         run("python3","-m","unittest","discover","-s","tests","-p","test_jsystem_hardware_regression.py")
         test("tests/HardwareAssetCompatibilityPolicyTests")

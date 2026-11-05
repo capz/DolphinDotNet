@@ -1,11 +1,13 @@
 # Firmware resource implementation status
 
-This branch is **incomplete** against `system-firmware-resources-plan.md`. None
-of the seven phases is claimed complete. No Nintendo data is included.
+This branch is **incomplete** against `system-firmware-resources-plan.md`.
+Phase 1 implementation is complete with synthetic bus, managed, AOT and native
+cross-compile validation. Physical-console and real regional-dump verification
+remain unperformed and are tracked under Phase 7. No Nintendo data is included.
 
 | Phase | Implemented | Remaining acceptance work |
 | --- | --- | --- |
-| 1 | Explicit file loading, exact size and revision checks, bounded reads, cancellation, cipher, encoding evidence, owned image disposal | Bounded native console reader, source detection, real revision coverage, end-to-end AOT file path |
+| 1 | Bounded EXI ROM reader, explicit file fallback and source metadata, owned loading, cipher/encoding evidence, cancellation, AOT console/file tests | Real regional dump and physical-console validation under Phase 7 |
 | 2 | Yay0 inventory, separate bounded streams, output/work/count budgets, overlap rejection, detached extraction, unsupported BMD1 metadata | Named intro resources, original audio descriptors, regional layout validation, BMD1 structural inspection |
 | 3 | Validated BTI extraction relative to each header, existing Texture2D adapter, SystemFont facade preserving IplFont | Validated named NTSC/PAL layouts, console rendering, measured cache/performance budgets |
 | 4 | Existing audio pipeline researched; unchanged | Validated WSYS/AW discovery, stereo memory-backed compressed playback and tests |
@@ -46,10 +48,15 @@ Pinned libogc2 source revision:
 `094b250f1e978d37789f18ffc2d3c9c2325062f8`, `libogc/system.c`.
 The symbol is `void __SYS_ReadROM(void *buf, u32 len, u32 offset)`.
 It divides reads at 1024-byte boundaries and retries `__read_rom` indefinitely.
-The latter acquires EXI channel 0/device 1, selects 32 MHz, sends `offset << 6`,
-and performs DMA. Calling that wrapper directly cannot satisfy the no-indefinite-
-polling contract. No wrapper has been added that misleadingly promises a timeout
-around this synchronous call. A safe console implementation remains required.
+The new reader does not call that wrapper. It uses the confirmed EXI channel
+0/device 1, 32 MHz and `offset << 6` command through immediate transfers, holding
+normal libogc bus arbitration. Each read is capped at 4096 bytes, 20 ms and 4096
+polls per transfer, with deselect/unlock cleanup. No DMA pointers or firmware
+writes are involved. Cancellation is observed between 4 KiB transactions.
+`SystemFirmware.Open(explicitFallbackPath)` selects console ROM first and only
+then the supplied fallback; `FirmwareImage.Source` distinguishes memory, file
+and EXI acquisition without claiming that an emulated bus is physical hardware.
+The fallback path must be on a volume mounted by the caller.
 
 GC-anim-Wii's `source/main.c` identifies these decompressed slices:
 
@@ -127,3 +134,14 @@ The harness first needed the LTO-renamed console symbol; correcting that name
 did not produce successful memory proof. Physical hardware was not available.
 Revision text validation accepts CR/LF/tab inside the bounded ASCII header;
 the synthetic multiline-header regression passes.
+
+Phase 1 continuation verification:
+
+- Synthetic EXI bus test passes for range limits, unaligned/tail reads, busy and
+  select-failure paths, finite timeout, guard bytes and cleanup.
+- `tests/system_firmware_aot.py` passes console acquisition and explicit mounted
+  file fallback under forced GC: 513 bridge calls, 93 collections, 2,102,048
+  bytes occupied at completion, zero file handles. No ROM bytes are retained by
+  the bridge after a transaction. Source metadata and pre-cancel behavior pass.
+- `source/system_firmware.c` compiles with pinned devkitPro/libogc2, O2/Werror.
+- Managed synthetic firmware/source/fallback tests pass.

@@ -6,6 +6,9 @@ namespace Dolphin.System;
 
 /// <summary>Encoding of the encrypted portion of an IPL firmware dump.</summary>
 public enum FirmwareEncoding { Auto, Scrambled, Descrambled }
+/// <summary>How the bytes were obtained. ConsoleRom does not claim physical
+/// hardware: emulator ROM implementations use the same EXI interface.</summary>
+public enum FirmwareSource { Memory, ExplicitFile, ConsoleRom }
 
 /// <summary>Owned, read-only, exactly 2 MiB firmware image. Dispose as soon as
 /// resources have been extracted. Never writes a copy to storage.</summary>
@@ -15,8 +18,9 @@ public sealed class FirmwareImage : IDisposable
     private byte[]? bytes;
     public string Revision { get; }
     public FirmwareEncoding Encoding { get; }
-    private FirmwareImage(byte[] data, string revision, FirmwareEncoding encoding)
-    { bytes=data; Revision=revision; Encoding=encoding; }
+    public FirmwareSource Source { get; }
+    private FirmwareImage(byte[] data, string revision, FirmwareEncoding encoding,FirmwareSource source)
+    { bytes=data; Revision=revision; Encoding=encoding; Source=source; }
 
     /// <summary>Load an explicitly supplied IPL dump. No implicit filename search.
     /// Cancellation is observed between bounded reads and during descrambling.</summary>
@@ -38,7 +42,7 @@ public sealed class FirmwareImage : IDisposable
                     if(n==0)throw new EndOfStreamException();
                     at+=n;
                 }
-                return Take(data,encoding,cancellationToken);
+                return Take(data,encoding,cancellationToken,FirmwareSource.ExplicitFile);
             }
             catch { Array.Clear(data,0,data.Length); throw; }
         }
@@ -53,7 +57,7 @@ public sealed class FirmwareImage : IDisposable
         try { return Take(owned,encoding,cancellationToken); }
         catch { Array.Clear(owned,0,owned.Length); throw; }
     }
-    private static FirmwareImage Take(byte[] data,FirmwareEncoding encoding,CancellationToken cancellation)
+    internal static FirmwareImage Take(byte[] data,FirmwareEncoding encoding,CancellationToken cancellation,FirmwareSource source=FirmwareSource.Memory)
     {
         if(encoding<FirmwareEncoding.Auto||encoding>FirmwareEncoding.Descrambled)
             throw new ArgumentOutOfRangeException(nameof(encoding));
@@ -78,7 +82,7 @@ public sealed class FirmwareImage : IDisposable
             if(plain)Transform(data,cancellation);
             encoding=encrypted?FirmwareEncoding.Scrambled:FirmwareEncoding.Descrambled;
         }
-        return new FirmwareImage(data,revision,encoding);
+        return new FirmwareImage(data,revision,encoding,source);
     }
     /// <summary>Apply the IPL stream cipher in place to the encrypted region only.
     /// Symmetric: applying twice restores the input. Header and font region are untouched.</summary>

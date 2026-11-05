@@ -2,7 +2,8 @@ using Dolphin.System;
 using System.Text;
 static void Check(bool value){if(!value)throw new Exception("Assertion failed");}
 static void Reject(Action action){try{action();}catch(InvalidDataException){return;}throw new Exception("Accepted malformed input");}
-static byte[] Literal(byte[] value){var r=new byte[20+value.Length];Encoding.ASCII.GetBytes("Yay0").CopyTo(r,0);r[7]=(byte)value.Length;r[11]=20;r[15]=20;for(int i=16;i<20;i++)r[i]=255;value.CopyTo(r,20);return r;}
+static void Big(byte[] data,int at,int value){data[at]=(byte)(value>>24);data[at+1]=(byte)(value>>16);data[at+2]=(byte)(value>>8);data[at+3]=(byte)value;}
+static byte[] Literal(byte[] value){int table=16+(value.Length+31)/32*4;var r=new byte[table+value.Length];Encoding.ASCII.GetBytes("Yay0").CopyTo(r,0);Big(r,4,value.Length);Big(r,8,table);Big(r,12,table);for(int i=16;i<table;i++)r[i]=255;value.CopyTo(r,table);return r;}
 var payload=Literal(Encoding.ASCII.GetBytes("J3D1bmd1synthetic"));
 Check(FirmwareCatalog.Decompress(payload).SequenceEqual(Encoding.ASCII.GetBytes("J3D1bmd1synthetic")));
 for(int i=0;i<payload.Length;i++)Reject(()=>FirmwareCatalog.Decompress(payload.Take(i).ToArray()));
@@ -12,7 +13,7 @@ var rom=new byte[FirmwareImage.ImageBytes];Encoding.ASCII.GetBytes("Nintendo Gam
 payload.CopyTo(rom,0x1000);payload.CopyTo(rom,0x2000);rom[0x1aff00]=123;
 using(var firmware=FirmwareImage.Read(rom))
 {
-    Check(firmware.Encoding==FirmwareEncoding.Descrambled);
+    Check(firmware.Encoding==FirmwareEncoding.Descrambled);Check(firmware.Source==FirmwareSource.Memory);
     var catalog=firmware.CreateCatalog();firmware.Dispose();Check(catalog.Count==2);
     Check(catalog[0].Kind==FirmwareResourceKind.UnsupportedModel);Check(catalog.Extract(0).Length==17);catalog.Dispose();
     try{catalog.Extract(0);throw new Exception();}catch(ObjectDisposedException){}
@@ -41,4 +42,15 @@ Check(FirmwareTextures.Extract(pair,0).SequenceEqual(FirmwareTextures.Extract(pa
 var path=Path.GetTempFileName();
 try { global::System.IO.File.WriteAllBytes(path,new byte[20]);Reject(()=>FirmwareImage.Load(path)); }
 finally { global::System.IO.File.Delete(path); }
+path=Path.GetTempFileName();
+try {
+    global::System.IO.File.WriteAllBytes(path,original);
+    using(var file=FirmwareImage.Load(path))Check(file.Source==FirmwareSource.ExplicitFile);
+    using(var fallback=SystemFirmware.Open(path))Check(fallback.Source==FirmwareSource.ExplicitFile);
+    using(var cancellation=new CancellationTokenSource()){
+        cancellation.Cancel();
+        try{SystemFirmware.Open(path,cancellation.Token);throw new Exception("Cancellation ignored");}
+        catch(OperationCanceledException){}
+    }
+} finally {global::System.IO.File.Delete(path);}
 Console.WriteLine("System firmware synthetic tests passed");

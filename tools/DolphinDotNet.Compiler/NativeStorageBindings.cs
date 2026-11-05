@@ -5,6 +5,7 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["FirmwareRead"]=("dnd_firmware_read","aii",false),
         ["ModelDrawEffect"]=("dnd_model_draw_effect","iai",false),
         ["Publish"]=("dnd_corpus_publish","iiiis",false),
         ["Finish"]=("dnd_corpus_finish","iiii",false),
