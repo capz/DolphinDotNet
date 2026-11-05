@@ -86,6 +86,7 @@ def main(area):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="assets":
         test("tests/GameCubeFormatsTests")
+        test("tests/SystemFirmwareTests")
         test("tests/JSystemFixtureHostTests")
         run("python3","-m","unittest","discover","-s","tests","-p","test_jsystem_hardware_regression.py")
         test("tests/HardwareAssetCompatibilityPolicyTests")
