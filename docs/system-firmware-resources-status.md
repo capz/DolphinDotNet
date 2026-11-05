@@ -10,7 +10,7 @@ remain unperformed and are tracked under Phase 7. No Nintendo data is included.
 | 1 | Bounded EXI ROM reader, explicit file fallback and source metadata, owned loading, cipher/encoding evidence, cancellation, AOT console/file tests | Real regional dump and physical-console validation under Phase 7 |
 | 2 | Bounded Yay0/FST/WSYS inventories; J3D1 section inspection; strict TEX1/BTI profiles for named intro resources; metadata-linked stereo extraction | Real-ROM regional compatibility and any non-FST archive layout remain unverified |
 | 3 | Named texture publication via existing Texture2D; metadata-only caching; native allocation/disposal fixture; SystemFont/IplFont compatibility checks | Real regional texture captures and physical rendering comparisons |
-| 4 | Existing audio pipeline researched; unchanged | Validated WSYS/AW discovery, stereo memory-backed compressed playback and tests |
+| 4 | Lossless metadata-selected stereo AFC packaging; native memory-backed compressed Sound/Music; cancellation, loop and ownership tests | Real regional archive mapping, physical stereo playback and capture remain unverified |
 | 5 | J3D1bmd1 resources explicitly marked unsupported | Original geometry/material importer and fidelity comparisons |
 | 6 | No implementation | Native startup sequence, deterministic captures and physical comparison |
 | 7 | Synthetic tests wired into the assets CI domain; cipher AOT smoke fixture | All-phase integration and physical/emulated regional validation |
@@ -208,3 +208,35 @@ A malformed shared-image table is rejected by the work-budget regression.
 Host warm-cache timings varied from 0.029 to 0.304 ms per 100 lookups across runs;
 allocated bytes remained 3,200. The variation is not a console timing estimate.
 The SystemFont/IplFont smoke compiles through AOT (257 reachable methods).
+
+Phase 4 continuation:
+
+- `Sound.FromEncoded` and `Music.FromEncoded` copy compressed input (and optional
+  paired-bank data) into owned native memory. Parsing and complete validation use
+  the existing codecs and bounded `AudioStep` slices. No files are opened and no
+  managed pointers survive the copy. Cancellation disposes native state.
+- `SystemResources.CreateStartupSound/Music` preserve two channels, original
+  sample rate and sample count. The startup profile uses WSYS/FST metadata and
+  original compressed AFC channels; there is no PCM8 or mono conversion.
+- Existing audio container, known vector, custom-loop, independent voice and
+  cleanup tests pass with memory sources as well as file sources. A separate
+  predictor-zero vector verifies +1 left and -2 right at 32 kHz.
+- The expanded AOT fixture passes memory-backed Sound/Music playback, loops,
+  simultaneous-source lifetime isolation, post-image/catalog-disposal playback,
+  malformed-source cleanup and pre-cancellation. Its deterministic backend checks
+  actual decoded stereo samples. All voices and clip tokens are retired and no
+  files or graphics handles remain. Final run: 1,025 console bridge calls,
+  330 forced-GC collections, 2,102,048 heap bytes occupied at completion.
+- AOT validation found missing native mappings for InvalidDataException and
+  EndOfStreamException. Both now preserve their CLR identities/inheritance, and
+  explicit invalid-console fallback is caught separately from IOException.
+  Malformed Yay0 markers, typed malformed-audio catches, invalid console data,
+  inaccessible console data and EOF inheritance are tested through AOT.
+- Audio native tests pass AddressSanitizer/UBSan with leak detection disabled
+  because LeakSanitizer cannot run under the environment's tracing. Explicit
+  voice/clip/file lifetime assertions pass. Native runtime/core BCL tests pass.
+
+Real IPL startup archive association is still only supported for the strict
+validated FST/WSYS layout described above. No real dump has been supplied, so
+that association and original J3D1 geometry cannot yet be confirmed. There is no
+claim of physical audio or original-animation fidelity.

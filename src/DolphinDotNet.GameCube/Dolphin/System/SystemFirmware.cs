@@ -21,6 +21,7 @@ public static class SystemFirmware
     public static FirmwareImage Open(string? fallbackPath=null,CancellationToken cancellationToken=default)
     {
         try { return ReadConsole(cancellationToken); }
+        catch(InvalidDataException) { if(fallbackPath==null)throw; }
         catch(IOException) { if(fallbackPath==null)throw; }
         catch(NotSupportedException) { if(fallbackPath==null)throw; }
         return FirmwareImage.Load(fallbackPath!,FirmwareEncoding.Auto,cancellationToken);

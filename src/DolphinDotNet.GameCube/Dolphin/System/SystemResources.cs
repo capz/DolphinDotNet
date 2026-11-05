@@ -1,10 +1,27 @@
 using Dolphin.Graphics;
+using System.Threading;
 namespace Dolphin.System;
 
-/// <summary>Native graphics publication for extracted IPL firmware resources.
-/// Call on the graphics application executor between frames. Caller owns the texture.</summary>
+/// <summary>Adapters from extracted IPL firmware assets to the existing native
+/// graphics and audio resources. Returned resources are owned by the caller.</summary>
 public static class SystemResources
 {
+    /// <summary>Lossless compressed stereo source. May validate on the background
+    /// executor; playback must use the application executor. Cancellation releases native state.</summary>
+    public static Dolphin.Audio.Sound CreateStartupSound(FirmwareCatalog catalog,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
+        cancellationToken.ThrowIfCancellationRequested();
+        return Dolphin.Audio.Sound.FromEncoded(catalog.GetStartupAudio().ExtractAfc(),Dolphin.Audio.AudioFormat.Afc,nativeBudgetBytes:nativeBudgetBytes,cancellationToken:cancellationToken);
+    }
+    /// <summary>The same original compressed stereo source through Music's normal lifetime.</summary>
+    public static Dolphin.Audio.Music CreateStartupMusic(FirmwareCatalog catalog,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
+        cancellationToken.ThrowIfCancellationRequested();
+        return Dolphin.Audio.Music.FromEncoded(catalog.GetStartupAudio().ExtractAfc(),Dolphin.Audio.AudioFormat.Afc,nativeBudgetBytes:nativeBudgetBytes,cancellationToken:cancellationToken);
+    }
+    /// <summary>Publish a caller-owned texture on the graphics executor between frames.</summary>
     public static Texture2D CreateTexture(FirmwareCatalog catalog,SystemTexture name,bool linear=false)
     {
         if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));

@@ -18,6 +18,7 @@ def main():
         for offset in (0x1000,0x2000):
             image[offset:offset+24]=b'Yay0'+(4).to_bytes(4,'big')+(20).to_bytes(4,'big')*2+bytes([240,0,0,0])+b'ABCD'
         def big(data,at,value):struct.pack_into('>I',data,at,value)
+        image[0x7000:0x7010]=b'Yay0'+struct.pack('>III',4,0xffffffff,16) # malformed marker must be ignored through typed AOT catches
         # Original structural TEX1 and standalone WSYS/AW/FST fixtures.
         model=bytearray(0x6140);model[:8]=b'J3D1bmd1';big(model,8,len(model));big(model,12,2)
         model[32:36]=b'INF1';big(model,36,8416-32)
@@ -41,6 +42,6 @@ def main():
         generated=work/'firmware.c'
         run('dotnet',ROOT/'tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll','--aot',ROOT/'tests/SystemFirmwareReadSmoke/bin/Release/net8.0/SystemFirmwareReadSmoke.dll',generated)
         run(os.environ.get('CC','cc'),'-pthread','-O1','-std=c11','-Wall','-Wextra','-Werror','-Wno-unused-function','-Iinclude',generated,'tests/system_firmware_read_host.c',
-            'source/draw_resources.c','source/graphics_device.c','source/graphics_gx.c','source/performance.c','source/managed_runtime.c','source/async_runtime.c','source/text.c','source/numeric.c','source/storage.c','source/contiguous_write.c','source/file_optimize.c','-lm','-o',work/'read-host')
+            'source/audio.c','source/draw_resources.c','source/graphics_device.c','source/graphics_gx.c','source/performance.c','source/managed_runtime.c','source/async_runtime.c','source/text.c','source/numeric.c','source/storage.c','source/contiguous_write.c','source/file_optimize.c','-lm','-o',work/'read-host')
         run(work/'read-host',work,path)
 if __name__=='__main__':main()

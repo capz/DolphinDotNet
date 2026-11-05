@@ -1,6 +1,8 @@
 using Dolphin.System;
 using Dolphin.Storage;
 using Dolphin.Graphics;
+using Dolphin.Audio;
+using Dolphin.Diagnostics;
 using System;
 using System.Threading;
 internal static class Program
@@ -20,7 +22,35 @@ internal static class Program
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 2;
         using(var image=SystemFirmware.Open("sd:/firmware-synthetic.bin"))
         using(var catalog=image.CreateCatalog())
+        {
             if(image.Source!=FirmwareSource.ExplicitFile||catalog.Count!=3||catalog.Extract(0)[0]!=65)return 3;
+            DebugOverlay.WriteLine("FIRMWARE AUDIO BEGIN");
+            using(var sound=SystemResources.CreateStartupSound(catalog))
+            {
+                DebugOverlay.WriteLine("FIRMWARE AUDIO VALIDATED");
+                if(sound.Channels!=2||sound.SampleRate!=32000||sound.SampleCount!=174080)return 7;
+                DebugOverlay.WriteLine("FIRMWARE AUDIO PLAY");
+                var channel=sound.Play();if(!channel.IsPlaying)return 8;channel.Stop();
+                var second=sound.PlayLoop(3,20);if(!second.IsPlaying)return 9;
+                using(var music=SystemResources.CreateStartupMusic(catalog))
+                {
+                    image.Dispose();catalog.Dispose();
+                    music.Play();if(!music.IsPlaying)return 10;music.Stop();
+                }
+                if(!second.IsPlaying)return 13;
+            }
+            DebugOverlay.WriteLine("FIRMWARE AUDIO DISPOSED");
+            try{Sound.FromEncoded(new byte[32],AudioFormat.Afc);return 11;}catch(global::System.IO.InvalidDataException){}
+            using(var canceled=new CancellationTokenSource())
+            {
+                canceled.Cancel();
+                try{SystemResources.CreateStartupSound(catalog,canceled.Token);return 12;}catch(OperationCanceledException){}
+            }
+        }
+        using(var fallback=SystemFirmware.Open("sd:/firmware-synthetic.bin"))
+            if(fallback.Source!=FirmwareSource.ExplicitFile)return 14;
+        try{throw new global::System.IO.EndOfStreamException("synthetic short read");}
+        catch(global::System.IO.IOException){}
         using(var cancellation=new CancellationTokenSource())
         {
             cancellation.Cancel();

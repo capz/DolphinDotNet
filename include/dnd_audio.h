@@ -11,6 +11,9 @@ int dnd_audio_init(void);
 int dnd_audio_begin(DndString *path);
 int dnd_audio_begin_source(DndString *path, DndString *data_path, int format,
                              int entry, int budget);
+/* Copy compressed input to owned native RAM; no filesystem operations. Parsing
+ * and validation continue through dnd_audio_step's bounded decoder slices. */
+int dnd_audio_begin_memory(DndArray *header,DndArray *body,int format,int entry,int budget);
 /* Copy mono 8-bit unsigned PCM out of movable managed memory into aligned DSP
  * RAM. */
 int dnd_audio_create_pcm8(DndArray *samples, int sample_rate);

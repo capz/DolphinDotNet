@@ -226,6 +226,31 @@ int dnd_audio_begin_source(DndString *path, DndString *body, int format,
   }
   return c->token;
 }
+int dnd_audio_begin_memory(DndArray *header,DndArray *body,int format,int entry,int budget) {
+  if (!header || header->elements_are_references || header->element_size != 1 ||
+      !header->length || (body && (body->elements_are_references || body->element_size != 1)) ||
+      format < 0 || format > 12 || entry < 0 || entry > 65535 ||
+      budget < 1024 || budget > MAX_PCM_BYTES || next_clip == INT_MAX)
+    return 0;
+  unsigned head=header->length,extra=body?body->length:0;
+  unsigned overhead=(unsigned)sizeof(DndAudioDecoder)+64;
+  if (head>(unsigned)budget || extra>(unsigned)budget-head ||
+      overhead>(unsigned)budget-head-extra)return 0;
+  dnd_audio_init();
+  Clip *c=NULL;
+  for(int i=0;i<CLIPS;i++)if(!clips[i].token){c=&clips[i];break;}
+  if(!c)return 0;
+  memset(c,0,sizeof(*c));
+  c->token=next_clip++;c->encoded=1;c->input_index=2;
+  c->requested_format=(unsigned)format;c->entry=(unsigned)entry;c->budget=(unsigned)budget;
+  c->input_size[0]=head;c->input_size[1]=extra;
+  c->input[0]=malloc(head);
+  if(extra)c->input[1]=malloc(extra);
+  if(!c->input[0]||(extra&&!c->input[1])){dnd_audio_dispose(c->token);return 0;}
+  memcpy(c->input[0],header->data,head);
+  if(extra)memcpy(c->input[1],body->data,extra);
+  return c->token;
+}
 static int audio_encoded_step(Clip *c) {
   if (c->input_index < 2) {
     unsigned i = (unsigned)c->input_index;

@@ -113,3 +113,9 @@ with wave.open(str(out/'tone.wav'),'wb') as w:
 
 p=hps();h(p,36,1024);h(p,142,10);h(p,190,20);p[160]=0x10;p[208]=0x10;save('history.hps',p)
 p=adx(3);h(p,16,0);save('zero-cutoff.adx',p)
+
+# Independent stereo AFC vector: predictor zero and unit scale produce +1 left,
+# -2 right, at the original startup sample rate; no original sound bytes.
+p=bytearray(afc());h(p,8,32000)
+for frame in range(4):p[32+frame*9]=0;p[33+frame*9:41+frame*9]=bytes([0x11 if frame%2==0 else 0xee])*8
+save('stereo.afc',p)
