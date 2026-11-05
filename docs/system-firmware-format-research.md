@@ -132,3 +132,9 @@ optional per-instance opacity control preserves RGB, activates material alpha, a
 registers, and selects sorted alpha blending while fading. Reset restores original state;
 ordinary authored rendering keeps the imported program and raster settings.
 Emulator captures caught both the framing and fade issues during acceptance.
+
+Unclamped authored alpha must be clamped before multiplying by the animation
+opacity, matching final framebuffer blending. The optional compositor adds that
+clamp stage when needed and leaves authored RGB/TEV registers untouched. Original
+Nintendo letter joints rest at approximately -90 degrees; the rendition rotates
+them toward zero for the final readable wordmark.

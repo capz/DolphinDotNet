@@ -33,7 +33,7 @@ void *__real_realloc(void *data,size_t size);
 void *__wrap_malloc(size_t size){allocations++;return __real_malloc(size);}
 void *__wrap_calloc(size_t count,size_t size){allocations++;return __real_calloc(count,size);}
 void *__wrap_realloc(void *data,size_t size){allocations++;return __real_realloc(data,size);}
-typedef struct {int a,b,c,d,op,dest,coord,tex,raster,konst,alpha[4],direct,swap;} Stage;
+typedef struct {int a,b,c,d,op,dest,coord,tex,raster,konst,alpha[4],alpha_clamp,direct,swap;} Stage;
 typedef struct {
   int count,texgens,cull,zwrite,blend,src,dst,compare,cutoff;
   Stage stages[16]; GXColor colors[4],konst[4]; GXTexObj texture,secondary;
@@ -71,11 +71,11 @@ void GX_LoadTexMtxImm(Mtx matrix,int slot,int projection){assert(slot==30&&proje
 void GX_SetTevKColor(int s,GXColor c){state.konst[s]=c;}
 void GX_SetTevOrder(int s,int c,int t,int r){state.stages[s].coord=c;state.stages[s].tex=t;state.stages[s].raster=r;}
 void GX_SetTevKColorSel(int s,int k){state.stages[s].konst=k;}
-void GX_SetTevKAlphaSel(int s,int k){(void)s;assert(k==GX_TEV_KASEL_1||(authored_test&&s==1&&k==GX_TEV_KASEL_K3_A));}
+void GX_SetTevKAlphaSel(int s,int k){(void)s;assert(k==GX_TEV_KASEL_1||(authored_test&&s>=1&&s<=2&&k==GX_TEV_KASEL_K3_A));}
 void GX_SetTevColorIn(int s,int a,int b,int c,int d){Stage *p=&state.stages[s];p->a=a;p->b=b;p->c=c;p->d=d;}
 void GX_SetTevColorOp(int s,int op,int bias,int scale,int clamp,int dest){if(!authored_test)assert(!bias&&!scale&&clamp);state.stages[s].op=op;state.stages[s].dest=dest;int values[]={op,bias,scale,clamp,dest};memcpy(authored_rgb_op,values,sizeof(values));}
 void GX_SetTevAlphaIn(int s,int a,int b,int c,int d){int *p=state.stages[s].alpha;p[0]=a;p[1]=b;p[2]=c;p[3]=d;}
-void GX_SetTevAlphaOp(int s,int op,int bias,int scale,int clamp,int dest){(void)s;if(!authored_test)assert(!op&&!bias&&!scale&&clamp&&!dest);int values[]={op,bias,scale,clamp,dest};memcpy(authored_alpha_op,values,sizeof(values));}
+void GX_SetTevAlphaOp(int s,int op,int bias,int scale,int clamp,int dest){state.stages[s].alpha_clamp=clamp;if(!authored_test)assert(!op&&!bias&&!scale&&clamp&&!dest);int values[]={op,bias,scale,clamp,dest};memcpy(authored_alpha_op,values,sizeof(values));}
 void GX_SetNumTexGens(int n){state.texgens=n;}
 void GX_InitTexObj(GXTexObj *t,void *p,u16 w,u16 h,int f,int s,int v,int m){
  /* Host ABI padding is not GX state. Vary it to catch raw-struct comparisons. */
@@ -90,8 +90,8 @@ void GX_SetZMode(int e,int c,int w){assert(e&&c==GX_LEQUAL);state.zwrite=w;}
 void GX_SetBlendMode(int m,int s,int d,int op){if(!authored_test)assert(!op);state.blend=m;state.src=s;state.dst=d;}
 void GX_SetAlphaCompare(int c,int cutoff,int op,int other,int ref){if(!authored_test)assert(!op&&other==GX_ALWAYS&&!ref);state.compare=c;state.cutoff=cutoff;}
 void GX_Begin(int p,int f,u16 n){assert(p==GX_TRIANGLES&&f==0&&n==3&&state.count>0);position_index=color_index=uv_index=0;
- for(int i=0;i<state.count;i++){Stage *s=&state.stages[i];assert(s->direct==1&&s->swap==1&&(s->raster==GX_COLOR0A0||(authored_test&&i==1&&s->raster==GX_COLORNULL)));
- if(authored_test&&i==1){assert(s->coord==GX_TEXCOORDNULL&&s->tex==GX_TEXMAP_NULL);}
+ for(int i=0;i<state.count;i++){Stage *s=&state.stages[i];assert(s->direct==1&&s->swap==1&&(s->raster==GX_COLOR0A0||(authored_test&&i>0&&s->raster==GX_COLORNULL)));
+ if(authored_test&&i>0){assert(s->coord==GX_TEXCOORDNULL&&s->tex==GX_TEXMAP_NULL);}
  else if(s->tex==GX_TEXMAP1)assert(state.texgens==2&&s->coord==GX_TEXCOORD1);else {assert(s->coord==(state.texture.data?GX_TEXCOORD0:GX_TEXCOORDNULL));assert(s->tex==(state.texture.data?GX_TEXMAP0:GX_TEXMAP_NULL));}
  if(!authored_test){assert(s->alpha[0]==GX_CA_ZERO&&s->alpha[1]==(state.texture.data?GX_CA_TEXA:GX_CA_ZERO));
  assert(s->alpha[2]==(state.texture.data?GX_CA_RASA:GX_CA_ZERO)&&s->alpha[3]==(state.texture.data?GX_CA_ZERO:GX_CA_RASA));}}}

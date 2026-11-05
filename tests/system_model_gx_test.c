@@ -36,6 +36,10 @@ int main(int argc,char **argv) {
   assert(!strcmp(model->node[0].name,"boot_demo_base_cube"));
   /* A second generated profile is opaque at rest. Fading must promote it to
    * sorted alpha blending without replacing its RGB program or shared model. */
+  unsigned stage=mat+dnd_model_u32(source->data+mat+68);assert(stage+20<=source->length);
+  source->data[stage+16]=1;source->data[stage+17]=0;
+  int unclamped=dnd_model_j3d_memory(source,1024*1024);assert(unclamped);
+  source->data[stage+16]=0;source->data[stage+17]=1;
   unsigned blend=mat+dnd_model_u32(source->data+mat+80);assert(blend<source->length);
   source->data[blend]=0;source->data[mat+100]=1;
   int opaque=dnd_model_j3d_memory(source,1024*1024);assert(opaque);
@@ -85,6 +89,14 @@ int main(int argc,char **argv) {
   assert(record[4].stages[1].alpha[3]==GX_CA_KONST);
   assert(!dnd_model_frame_end());for(int slot=0;slot<4;slot++)assert(!dnd_model_color(instance,0,slot,NULL));
   assert(!dnd_model_instance_dispose(fading)&&!dnd_model_dispose(opaque));
+  int hdr=dnd_model_instance(unclamped,1024*1024);assert(hdr);
+  assert(!dnd_model_opacity(hdr,0,.25f));
+  assert(!dnd_model_frame_begin(camera,camera));assert(!dnd_model_draw(hdr,world));
+  assert(record[5].count==3&&record[5].stages[0].alpha_clamp==0);
+  assert(record[5].stages[1].alpha_clamp==1&&record[5].stages[1].alpha[3]==GX_CA_APREV);
+  assert(record[5].stages[2].alpha[1]==GX_CA_APREV&&record[5].stages[2].alpha[2]==GX_CA_KONST);
+  assert(record[5].konst[3].a==63&&authored_colors[1].a==255);
+  assert(!dnd_model_frame_end());assert(!dnd_model_instance_dispose(hdr)&&!dnd_model_dispose(unclamped));
   DndAuthoredMaterial *authored=model->authored;
   DndArray *snapshot=calloc(1,sizeof(*snapshot)+model->length);assert(snapshot);
   snapshot->element_size=1;snapshot->length=model->length;
@@ -93,7 +105,7 @@ int main(int argc,char **argv) {
   assert(!dnd_model_restore_begin(token));assert(!dnd_model_copy(token,0,snapshot,(int)snapshot->length,1));
   assert(!dnd_model_restore_end(token,1)&&model->ready&&model->authored==authored);
   assert(!dnd_model_frame_begin(camera,camera));assert(!dnd_model_draw(instance,world));
-  assert(indexed_tint.a==128&&authored_colors[1].r==-12&&record[5].position[0]==-1);
+  assert(indexed_tint.a==128&&authored_colors[1].r==-12&&record[6].position[0]==-1);
   assert(!dnd_model_frame_end());free(snapshot);
   assert(dnd_model_instance_dispose(instance)==0&&dnd_model_dispose(token)==0);
   free(world);free(camera);assert(!dnd_model_live_handles()&&!dnd_draw_live());

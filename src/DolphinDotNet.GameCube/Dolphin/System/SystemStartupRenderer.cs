@@ -113,7 +113,7 @@ public sealed class SystemStartupRenderer : IDisposable
         for(int i=0;i<13;i++)
         {
             float p=sequence.LetterProgress(i);
-            instances[4]!.SetNodeOffset(letterNodes[i],new Vector3(0,(1-p)*45,0),Rotation((1-p)*-96,0,0),new Vector3(1,1,1));
+            instances[4]!.SetNodeOffset(letterNodes[i],new Vector3(0,(1-p)*45,0),Rotation(i<8?p*90:(1-p)*-96,0,0),new Vector3(1,1,1));
         }
     }
     private void SetOpacity(int index,float alpha)
