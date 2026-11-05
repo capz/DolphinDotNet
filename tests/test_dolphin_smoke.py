@@ -106,6 +106,38 @@ class GuestEntryTests(unittest.TestCase):
 
 
 class GuestMemoryTests(unittest.TestCase):
+    def test_large_guest_buffer_uses_bounded_reads_and_matches_across_chunks(self):
+        class FakeSocket:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def sendall(self, data): pass
+        data = bytearray(300)
+        marker = b"across-packet-boundary"
+        data[120:120 + len(marker)] = marker
+        watch = MemoryExpectation("console", 0x80070000, len(data), marker)
+        replies = ["OK", "T0540:80004000;01:00000000;",
+                   data[:128].hex(), data[128:256].hex(), data[256:].hex(), "OK"]
+        with patch("dolphin_gdb_probe.socket.create_connection", return_value=FakeSocket()), \
+             patch("dolphin_gdb_probe._reply", side_effect=replies), \
+             patch("dolphin_gdb_probe._send") as send:
+            result = probe_memory(2161, [watch], seconds=5, stop_symbol=("done", 0x80004000))
+        self.assertTrue(result.success, result.message)
+        reads = [call.args[1] for call in send.call_args_list if call.args[1].startswith("m")]
+        self.assertEqual(reads, ["m80070000,80", "m80070080,80", "m80070100,2c"])
+
+    def test_resolves_unique_lto_private_symbol_without_guessing_duplicates(self):
+        with TemporaryDirectory() as folder:
+            elf = Path(folder) / "test.elf"
+            elf.touch()
+            table = " 1: 8006fcb0 790 OBJECT LOCAL DEFAULT 11 lines.lto_priv.0\n"
+            with patch("dolphin_gdb_probe.subprocess.run", return_value=SimpleNamespace(stdout=table)):
+                watch = resolve_memory_expectations(elf, [], ["lines=complete"])[0]
+                self.assertEqual(watch.address, 0x8006fcb0)
+            table += " 2: 80071000 790 OBJECT LOCAL DEFAULT 11 lines.lto_priv.1\n"
+            with patch("dolphin_gdb_probe.subprocess.run", return_value=SimpleNamespace(stdout=table)):
+                with self.assertRaises(ValueError):
+                    resolve_memory_expectations(elf, [], ["lines=complete"])
+
     def test_completion_breakpoint_checks_actual_guest_result(self):
         class FakeSocket:
             def __enter__(self): return self

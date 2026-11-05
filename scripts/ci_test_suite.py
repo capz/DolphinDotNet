@@ -72,6 +72,14 @@ def main(area):
     elif area=="audio":
         test("tests/AudioAssetTests")
         build("tests/AudioFormatsSmoke/AudioFormatsSmoke.csproj")
+        with tempfile.TemporaryDirectory() as tmp:
+            run("python3","tests/generate_audio_fixtures.py",tmp)
+            for source in ("audio_native_test","audio_formats_test"):
+                binary=Path(tmp)/source
+                run("cc","-D_DARWIN_C_SOURCE","-std=c11","-O1","-Wall","-Wextra","-Werror","-Iinclude",
+                    "tests/"+source+".c","source/audio.c","-lm","-o",binary)
+                if source=="audio_formats_test":run(binary,tmp)
+                else:run(binary)
     elif area=="graphics":
         run("python3","scripts/ci_display.py") # DisplayConfigurationSmoke
         run("python3","scripts/ci_graphics_phase_one.py")
@@ -89,6 +97,7 @@ def main(area):
         test("tests/GameCubeFormatsTests")
         test("tests/SystemFirmwareTests")
         run("python3","tests/system_firmware_aot.py")
+        run("python3","tests/system_firmware_inventory.py")
         test("tests/JSystemFixtureHostTests")
         run("python3","-m","unittest","discover","-s","tests","-p","test_jsystem_hardware_regression.py")
         test("tests/HardwareAssetCompatibilityPolicyTests")

@@ -2,11 +2,24 @@
 #include "dnd_audio_codec.h"
 #include "dnd_storage.h"
 #include <limits.h>
+#if !defined(__APPLE__)
 #include <malloc.h>
+#endif
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* Darwin has posix_memalign but no memalign/malloc.h; GameCube/newlib keeps
+ * the established allocator. Encoded sources use ordinary CPU-owned malloc. */
+#if defined(__APPLE__)
+static void *audio_memalign(size_t alignment,size_t bytes) {
+  void *result=NULL;
+  return posix_memalign(&result,alignment,bytes)==0?result:NULL;
+}
+#else
+#define audio_memalign memalign
+#endif
 
 enum { CLIPS = 16, VOICES = 32, MAX_PCM_BYTES = 16 * 1024 * 1024 };
 typedef struct {
@@ -119,7 +132,7 @@ static int prepare_wav(Clip *c, int64_t total, unsigned budget) {
   size_t aligned = ((size_t)size + 31u) & ~(size_t)31u;
   if (aligned > budget)
     return 0;
-  c->pcm = memalign(32, aligned);
+  c->pcm = audio_memalign(32, aligned);
   if (!c->pcm)
     return 0;
   memset(c->pcm, 0, aligned);
@@ -319,7 +332,7 @@ int dnd_audio_create_pcm8(DndArray *samples, int rate) {
   if (slot < 0)
     return 0;
   size_t aligned = ((size_t)size + 31u) & ~(size_t)31u;
-  uint8_t *pcm = memalign(32, aligned);
+  uint8_t *pcm = audio_memalign(32, aligned);
   if (!pcm)
     return 0;
   /* AESND reads native memory asynchronously: never retain a managed pointer.

@@ -39,6 +39,11 @@ def main():
             struct.pack_into('>III',image,table+12*index,*values)
         names=b'\0Banks\0ipl.ws\0ipl_0.aw\0cube.bin\0';image[table+60:table+60+len(names)]=names
         path=sd/'firmware-synthetic.bin';path.write_bytes(image)
+        bundle=work/'bundle'
+        compiler=ROOT/'tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll'
+        assembly=ROOT/'tests/SystemFirmwareReadSmoke/bin/Release/net8.0/SystemFirmwareReadSmoke.dll'
+        run('dotnet',compiler,'--bundle',assembly,bundle)
+        assert 'DND_MANAGED_HEAP_BYTES ?= 8388608' in (bundle/'Makefile').read_text()
         generated=work/'firmware.c'
         run('dotnet',ROOT/'tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll','--aot',ROOT/'tests/SystemFirmwareReadSmoke/bin/Release/net8.0/SystemFirmwareReadSmoke.dll',generated)
         run(os.environ.get('CC','cc'),'-pthread','-O1','-std=c11','-Wall','-Wextra','-Werror','-Wno-unused-function','-Iinclude',generated,'tests/system_firmware_read_host.c',

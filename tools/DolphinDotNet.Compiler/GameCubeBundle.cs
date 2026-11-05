@@ -248,10 +248,11 @@ internal static class GameCubeBundle
             File.Copy(Path.Combine(root, "source", name + ".c"),
                 Path.Combine(directory, "source", name + ".c"), true);
 
-        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null, gdbUsb is not null, debugSymbols, sampleControls));
+        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null, gdbUsb is not null, debugSymbols, sampleControls, reachable.Contains("Dolphin.System.FirmwareImage", StringComparer.Ordinal)));
         var report = new StringBuilder();
         report.AppendLine("DolphinDotNet AOT Native Dependencies");
         report.AppendLine("Target: " + platform);
+        report.AppendLine("Managed heap default bytes: " + (platform == "gamecube" && reachable.Contains("Dolphin.System.FirmwareImage", StringComparer.Ordinal) ? "8388608 (firmware)" : "262144"));
         report.AppendLine("Assembly: " + Path.GetFileName(assembly));
         report.AppendLine("Managed source symbols: " + (debugSymbols ? "enabled" : "disabled"));
         report.AppendLine("GDB debugger: " + (gdbTcp is not null ? $"TCP {gdbTcp.Ip}:{gdbTcp.Port}" : gdbUsb is not null ? $"USB Gecko EXI channel {gdbUsb.Channel}" : "disabled"));
@@ -291,7 +292,7 @@ internal static class GameCubeBundle
         throw new DirectoryNotFoundException("The DolphinDotNet repository's native sources are required to emit a self-contained build directory.");
     }
 
-    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool gdbUsb, bool debugSymbols, bool sampleControls)
+    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool gdbUsb, bool debugSymbols, bool sampleControls, bool firmwareHeap)
     {
         var isWiiU = platform == "wiiu";
         var overlayTelemetry = debugSymbols && platform == "gamecube";
@@ -328,7 +329,7 @@ internal static class GameCubeBundle
             (sampleControls ? " -DDND_SAMPLE_CONTROLS" : "") + (usesNetworking ? " -DDND_TLS" : ""));
         if (!isWiiU)
         {
-            builder.AppendLine("DND_MANAGED_HEAP_BYTES ?= 262144");
+            builder.AppendLine("DND_MANAGED_HEAP_BYTES ?= " + (firmwareHeap ? "8388608" : "262144"));
             builder.AppendLine("CFLAGS += -DDND_MANAGED_HEAP_BYTES=$(DND_MANAGED_HEAP_BYTES)");
         }
         // Keep the reporting slot even when the app has not enabled/drawn the overlay yet.
