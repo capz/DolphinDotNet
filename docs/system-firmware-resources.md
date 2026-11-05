@@ -122,7 +122,9 @@ private-symbol aliases. Completion/bytes must match; boot logs alone are insuffi
 Original J3D1 geometry/material semantics and the startup renderer are not
 implemented. The supplied Wii reference uses ripped geometry and cannot establish
 those semantics. A user-supplied dump is needed for original-format research and
-regional comparisons; no ripped mesh or flat approximation is substituted.
+regional comparisons; online NTSC/PAL research inputs are now available outside
+the checkout, with provenance in [format research](system-firmware-format-research.md).
+No ripped mesh or flat approximation is substituted.
 Physical hardware validation has not been performed. See
 [the status and evidence table](system-firmware-resources-status.md).
 

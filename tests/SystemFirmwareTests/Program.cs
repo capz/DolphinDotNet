@@ -37,6 +37,18 @@ using(var firmware=FirmwareImage.Read(rom))
     try{catalog.Extract(0);throw new Exception();}catch(ObjectDisposedException){}
 }
 var original=(byte[])rom.Clone();FirmwareImage.Transform(rom);Check(rom[0x1aff00]==123);Check(rom.Take(256).SequenceEqual(original.Take(256)));
+// Generated publisher/revision headers exercise both retail header families
+// without including bytes taken from a firmware dump.
+foreach(var suffix in new[]{"", "NTSC Revision 9.9", "PAL  Revision 9.9"})
+{
+    var retail=(byte[])original.Clone();Array.Clear(retail,0,256);
+    Encoding.ASCII.GetBytes("(C) 2099 Nintendo. Synthetic.(C) 2099 ArtX Inc. Synthetic."+suffix).CopyTo(retail,0);
+    using var retailImage=FirmwareImage.Read(retail);
+    Check(retailImage.Encoding==FirmwareEncoding.Descrambled&&retailImage.Revision.EndsWith(suffix));
+    FirmwareImage.Transform(retail);
+    using var encryptedRetail=FirmwareImage.Read(retail);
+    Check(encryptedRetail.Encoding==FirmwareEncoding.Scrambled);
+}
 using(var scrambled=FirmwareImage.Read(rom)){Check(scrambled.Encoding==FirmwareEncoding.Scrambled);Check(scrambled.CreateCatalog().Count==2);}
 FirmwareImage.Transform(rom);Check(rom.SequenceEqual(original));
 Reject(()=>FirmwareImage.Read(new byte[12]));Reject(()=>FirmwareImage.Read(new byte[FirmwareImage.ImageBytes]));

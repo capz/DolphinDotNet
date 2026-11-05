@@ -13,7 +13,7 @@ def main():
     run('dotnet','build','tests/SystemFirmwareReadSmoke','-c','Release','-p:NuGetAudit=false')
     with tempfile.TemporaryDirectory() as tmp:
         work=Path(tmp);sd=work/'sd';sd.mkdir()
-        image=bytearray(0x200000);header=b'Nintendo GameCube IPL\r\nSynthetic fixture'
+        image=bytearray(0x200000);header=b'(C) 2099 Nintendo. Generated fixture.(C) 2099 ArtX Inc. Generated fixture.NTSC Revision 9.9'
         image[:len(header)]=header
         for offset in (0x1000,0x2000):
             image[offset:offset+24]=b'Yay0'+(4).to_bytes(4,'big')+(20).to_bytes(4,'big')*2+bytes([240,0,0,0])+b'ABCD'

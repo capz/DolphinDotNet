@@ -148,14 +148,15 @@ Host warm-cache measurements for 100 named lookups ranged from 0.029 to 0.304 ms
 across runs, allocating 3,200 bytes in both 14- and 31-record fixtures. These are
 host observations, not console performance predictions.
 
-## Required input for remaining work
+## Research inputs for remaining work
 
-A user-supplied original firmware dump (preferably NTSC and PAL) or an accessible
-console is needed to research/verify original J3D1 geometry/material layouts and
-actual resource association. The supplied Wii reference explicitly lacks that
-parser and uses ripped geometry. Reinterpreting J3D2 or using those meshes would
-violate the contract. The missing-input question remains pending; no dump or
-physical connection has been provided in this session.
+At the user's request, online NTSC 1.0, NTSC 1.2 and PAL 1.2 research inputs were
+obtained outside Git and checked against published sizes/hashes. Real-source
+research is now unblocked. See [format research](system-firmware-format-research.md)
+for provenance, the retail-header correction, successful six-texture extraction
+in all three inputs, and model/audio observations being investigated. The Wii
+reference still lacks an original geometry parser. Physical-console access
+remains unavailable; no physical validation is claimed.
 
 See [the API and diagnostics guide](system-firmware-resources.md). Use
 `dnd-assets firmware inspect INPUT` for metadata-only reporting; original asset

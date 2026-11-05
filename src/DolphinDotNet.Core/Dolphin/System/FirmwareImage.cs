@@ -67,7 +67,13 @@ public sealed class FirmwareImage : IDisposable
         { if((data[end]<32&&data[end]!=9&&data[end]!=10&&data[end]!=13)||data[end]>126)throw new InvalidDataException("Invalid firmware revision header."); end++; }
         if(end<8||end==0x100)throw new InvalidDataException("Missing firmware revision header.");
         string revision=global::System.Text.Encoding.ASCII.GetString(data,0,end);
-        if(!revision.StartsWith("Nintendo GameCube IPL",StringComparison.Ordinal))
+        // Retail headers carry publisher/copyright text, with a revision suffix
+        // on later images. Early images have no NTSC/PAL suffix. The descriptive
+        // prefix is also accepted for original, generated test images; neither
+        // header form substitutes for the independent encoding evidence below.
+        bool retailHeader=revision.StartsWith("(C) ",StringComparison.Ordinal)&&
+            revision.Contains("Nintendo.")&&revision.Contains("ArtX Inc.");
+        if(!retailHeader&&!revision.StartsWith("Nintendo GameCube IPL",StringComparison.Ordinal))
             throw new NotSupportedException("Unrecognized firmware source.");
         cancellation.ThrowIfCancellationRequested();
         if(encoding==FirmwareEncoding.Scrambled)Transform(data,cancellation);
