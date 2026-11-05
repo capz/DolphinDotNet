@@ -20,7 +20,7 @@ def main():
         def big(data,at,value):struct.pack_into('>I',data,at,value)
         image[0x7000:0x7010]=b'Yay0'+struct.pack('>III',4,0xffffffff,16) # malformed marker must be ignored through typed AOT catches
         # Original structural TEX1 and standalone WSYS/AW/FST fixtures.
-        model=bytearray(0x6140);model[:8]=b'J3D1bmd1';big(model,8,len(model));big(model,12,2)
+        model=bytearray(0x6140);model[:8]=b'J3D1bmd1';big(model,8,len(model)-128);big(model,12,2)
         model[32:36]=b'INF1';big(model,36,8416-32)
         model[8416:8420]=b'TEX1';big(model,8420,len(model)-8416);model[8425]=1;big(model,8428,32)
         model[8451]=8;model[8453]=8;model[8472]=1;big(model,8476,32)
@@ -28,7 +28,8 @@ def main():
         image[0x12000:0x12000+len(encoded)]=encoded
         descriptor=bytearray(320);descriptor[:4]=b'WSYS';big(descriptor,4,320);big(descriptor,16,32)
         descriptor[32:36]=b'WINF';big(descriptor,36,1);big(descriptor,40,64);descriptor[64:72]=b'ipl_0.aw'
-        big(descriptor,176,2);big(descriptor,180,192);big(descriptor,184,232)
+        # Compact WSYS bank family; desktop fixtures also cover extended names.
+        big(descriptor,132,2);big(descriptor,136,192);big(descriptor,140,232)
         for channel in range(2):
             wave=192+channel*40;big(descriptor,wave+4,0x46fa0000);big(descriptor,wave+8,channel*97920)
             big(descriptor,wave+12,97920);big(descriptor,wave+24,174080);big(descriptor,wave+28,174080)

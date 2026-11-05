@@ -87,6 +87,10 @@ try {
 // catalog families. All model/texture bytes are generated original fixtures.
 var model=Model(0x16f60,5056,3);var info=FirmwareModelInfo.Inspect(model);
 Check(info.SectionCount==2&&info.ReadTextures(model).Length==3);
+var staleLength=(byte[])model.Clone();Big(staleLength,8,staleLength.Length-128);
+Check(FirmwareModelInfo.Inspect(staleLength).ReadTextures(staleLength).Length==3);
+var trailingModel=new byte[model.Length+32];model.CopyTo(trailingModel,0);
+Reject(()=>FirmwareModelInfo.Inspect(trailingModel));
 var excessive=Model(0x16f60,5056,5);
 for(int i=0;i<5;i++){int h=5056+i*32;excessive[h+2]=4;excessive[h+3]=0;excessive[h+4]=4;excessive[h+5]=0;}
 try{FirmwareModelInfo.Inspect(excessive).ReadTextures(excessive);throw new Exception("Texture work budget ignored");}
@@ -121,6 +125,11 @@ foreach(int regionalCount in new[]{14,31})
     }
 }
 var descriptor=WaveSystem(16);var archive=new byte[18];
+// Generate the compact WSYS bank layout independently of any original samples.
+var compactDescriptor=WaveSystem(16);Big(compactDescriptor,64+68,2);
+Big(compactDescriptor,64+72,192);Big(compactDescriptor,64+76,232);
+Big(compactDescriptor,64+112,0);
+Check(FirmwareWaveSystem.Inspect(compactDescriptor).Length==2);
 for(int i=1;i<9;i++){archive[i]=0x11;archive[i+9]=0xee;}
 // Non-looping WSYS descriptors may use ignored sentinel loop coordinates.
 Big(descriptor,192+20,-1);Big(descriptor,192+24,-1);

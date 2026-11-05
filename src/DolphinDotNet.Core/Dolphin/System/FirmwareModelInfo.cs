@@ -36,9 +36,12 @@ public sealed class FirmwareModelInfo
         var chunks=new FirmwareSection[count];int offset=32;
         for(int i=0;i<count;i++)
         {
-            if(offset>length-8)throw new InvalidDataException("Truncated J3D1 section header.");
+            // Some original J3D1 files retain a stale, smaller file-size field.
+            // The Yay0 output is the enclosing extent: every bounded section
+            // must cover it exactly, regardless of that informational field.
+            if(offset>data.Length-8)throw new InvalidDataException("Truncated J3D1 section header.");
             int size=AssetInt(U32(data,offset+4));
-            if(size<8||size>length-offset)throw new InvalidDataException("J3D1 section exceeds declared model.");
+            if(size<8||size>data.Length-offset)throw new InvalidDataException("J3D1 section exceeds decoded model.");
             for(int j=0;j<4;j++)if(data[offset+j]<32||data[offset+j]>126)
                 throw new InvalidDataException("Invalid J3D1 section identifier.");
             string tag=Ascii(data,offset,4);
@@ -46,7 +49,7 @@ public sealed class FirmwareModelInfo
                 throw new InvalidDataException("Ambiguous duplicate J3D1 section.");
             chunks[i]=new FirmwareSection(tag,offset,size);offset+=size;
         }
-        if(offset!=length)throw new InvalidDataException("J3D1 sections do not cover declared length.");
+        if(offset!=data.Length)throw new InvalidDataException("J3D1 sections do not cover the decoded record.");
         return new FirmwareModelInfo(length,chunks);
     }
     /// <summary>Read a structurally valid TEX1 header table. Every BTI is validated

@@ -52,11 +52,16 @@ EVP1, DRW1, JNT1, SHP1, MAT1 and TEX1. This observation does not establish that
 each field shares its J3D2 semantics. Two models have stale declared file lengths
 that are smaller than the sum of the bounded sections; section coverage must be
 validated against the decoded record rather than trusting that stale field.
+The production inspector now validates complete section coverage for all nine
+models in all three inputs, including those stale size fields.
 
 The NTSC 1.2 and PAL 1.2 startup WSYS descriptors report 174,067 samples per
 channel at 32 kHz, using 97,920 encoded AFC bytes each. The provisional synthetic
 profile incorrectly equated the last encoded frame's capacity (174,080 samples)
-with the actual sample count. The earlier WSYS family also needs separate
-qualification. Archive association and original material/animation semantics
+with the actual sample count. WSYS bank layouts differ: the early input uses
+68-byte names and 36-byte descriptors, while later inputs use 112-byte names and
+44-byte descriptors. The production inspector resolves these from bounded tables
+and rejects ambiguous layouts. All three now enumerate twelve wave descriptors.
+Archive association and original material/animation semantics
 remain active research; no right-channel magic or fixed ROM offset is accepted
 as proof of an AW mapping.

@@ -38,24 +38,31 @@ public static class FirmwareWaveSystem
             throw new InvalidDataException("Invalid WSYS extent or WINF table.");
         int banks=AssetInt(U32(data,winf+4));
         if(banks<1||banks>256||banks>(size-winf-8)/4)throw new InvalidDataException("Invalid WSYS bank count.");
+        // Early IPL WSYS uses 68-byte bank names and 36-byte descriptors;
+        // later images use 112-byte names and 44-byte descriptors. Resolve the
+        // layout from all bounded tables, not a region label or first wave.
+        bool compact=BankLayout(data,size,winf,banks,68,36,cancellationToken);
+        bool extended=BankLayout(data,size,winf,banks,112,44,cancellationToken);
+        if(compact==extended)throw new InvalidDataException("Ambiguous or invalid WSYS bank layout.");
+        int nameBytes=compact?68:112,descriptorBytes=compact?36:44;
         var waves=new List<FirmwareWave>();
         for(int b=0;b<banks;b++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             int bank=AssetInt(U32(data,winf+8+b*4));
-            if(bank<24||bank>size-116)throw new InvalidDataException("WSYS bank outside descriptor.");
+            if(bank<24||bank>size-nameBytes-4)throw new InvalidDataException("WSYS bank outside descriptor.");
             int end=bank;
-            while(end<bank+112&&data[end]!=0){if(data[end]<32||data[end]>126)throw new InvalidDataException("Invalid AW archive name.");end++;}
-            if(end==bank||end==bank+112)throw new InvalidDataException("Unterminated AW archive name.");
+            while(end<bank+nameBytes&&data[end]!=0){if(data[end]<32||data[end]>126)throw new InvalidDataException("Invalid AW archive name.");end++;}
+            if(end==bank||end==bank+nameBytes)throw new InvalidDataException("Unterminated AW archive name.");
             string name=Ascii(data,bank,end-bank);
-            int count=AssetInt(U32(data,bank+112));
-            if(count<1||count>4096||count>(size-bank-116)/4||count>8192-waves.Count)
+            int count=AssetInt(U32(data,bank+nameBytes));
+            if(count<1||count>4096||count>(size-bank-nameBytes-4)/4||count>8192-waves.Count)
                 throw new InvalidDataException("WSYS wave count exceeds budget.");
             for(int w=0;w<count;w++)
             {
                 if((w&63)==0)cancellationToken.ThrowIfCancellationRequested();
-                int at=AssetInt(U32(data,bank+116+w*4));
-                if(at<24||at>size-40)throw new InvalidDataException("WSYS wave descriptor outside extent.");
+                int at=AssetInt(U32(data,bank+nameBytes+4+w*4));
+                if(at<24||at>size-descriptorBytes)throw new InvalidDataException("WSYS wave descriptor outside extent.");
                 int codec=data[at+1];float rate=F32(data,at+4);
                 if(codec>3||float.IsNaN(rate)||float.IsInfinity(rate)||rate<5000||rate>48000||rate!=(int)rate)
                     throw new NotSupportedException("Unsupported WSYS codec or sample rate.");
@@ -70,6 +77,34 @@ public static class FirmwareWaveSystem
             }
         }
         return waves.ToArray();
+    }
+    private static bool BankLayout(byte[] data,int size,int winf,int banks,int nameBytes,int descriptorBytes,CancellationToken cancellation)
+    {
+        try
+        {
+            int total=0;
+            for(int b=0;b<banks;b++)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                int bank=AssetInt(U32(data,winf+8+b*4));
+                if(bank<24||bank>size-nameBytes-4)return false;
+                int end=bank;
+                while(end<bank+nameBytes&&data[end]!=0)
+                {if(data[end]<32||data[end]>126)return false;end++;}
+                if(end==bank||end==bank+nameBytes)return false;
+                int count=AssetInt(U32(data,bank+nameBytes));
+                if(count<1||count>4096||count>(size-bank-nameBytes-4)/4||count>8192-total)return false;
+                total+=count;
+                for(int w=0;w<count;w++)
+                {
+                    if((w&63)==0)cancellation.ThrowIfCancellationRequested();
+                    int at=AssetInt(U32(data,bank+nameBytes+4+w*4));
+                    if(at<24||at>size-descriptorBytes)return false;
+                }
+            }
+            return true;
+        }
+        catch(InvalidDataException){return false;}
     }
 }
 
