@@ -69,7 +69,12 @@ void GX_SetTevColorOp(int s,int op,int bias,int scale,int clamp,int dest){assert
 void GX_SetTevAlphaIn(int s,int a,int b,int c,int d){int *p=state.stages[s].alpha;p[0]=a;p[1]=b;p[2]=c;p[3]=d;}
 void GX_SetTevAlphaOp(int s,int op,int bias,int scale,int clamp,int dest){(void)s;assert(!op&&!bias&&!scale&&clamp&&!dest);}
 void GX_SetNumTexGens(int n){state.texgens=n;}
-void GX_InitTexObj(GXTexObj *t,void *p,u16 w,u16 h,int f,int s,int v,int m){*t=(GXTexObj){.data=p,.width=w,.height=h,.format=f,.wrap_s=s,.wrap_t=v,.mips=m};}
+void GX_InitTexObj(GXTexObj *t,void *p,u16 w,u16 h,int f,int s,int v,int m){
+ /* Host ABI padding is not GX state. Vary it to catch raw-struct comparisons. */
+ static unsigned char padding_pattern;memset(t,++padding_pattern,sizeof(*t));
+ t->data=p;t->width=w;t->height=h;t->format=f;t->wrap_s=s;t->wrap_t=v;t->mips=m;
+ t->min_filter=t->mag_filter=0;t->max_lod=0;
+}
 void GX_InitTexObjLOD(GXTexObj *t,int min,int mag,float lo,float hi,float bias,int clamp,int edge,int aniso){assert(!lo&&!bias&&!clamp&&!edge&&!aniso);t->min_filter=min;t->mag_filter=mag;t->max_lod=hi;}
 void GX_LoadTexObj(GXTexObj *t,int slot){assert((slot==0||slot==1)&&state.count==-1);texture_loads++;if(slot==0)state.texture=*t;else state.secondary=*t;}
 void GX_SetCullMode(int c){state.cull=c;}
@@ -123,12 +128,37 @@ static DndArray *identity(void) {
  DndArray *a=calloc(1,sizeof(*a)+64);assert(a);a->element_size=4;a->length=16;
  float *m=(float*)a->data;m[0]=m[5]=m[10]=m[15]=1;return a;
 }
+/* Compare recorded GX values, never unspecified C ABI padding. */
+static void assert_texture_equal(GXTexObj a,GXTexObj b) {
+ assert(a.data==b.data&&a.width==b.width&&a.height==b.height&&a.format==b.format);
+ assert(a.wrap_s==b.wrap_s&&a.wrap_t==b.wrap_t&&a.mips==b.mips);
+ assert(a.min_filter==b.min_filter&&a.mag_filter==b.mag_filter);
+ assert(!memcmp(&a.max_lod,&b.max_lod,sizeof(a.max_lod)));
+}
+static void assert_stage_equal(Stage a,Stage b) {
+ assert(a.a==b.a&&a.b==b.b&&a.c==b.c&&a.d==b.d&&a.op==b.op&&a.dest==b.dest);
+ assert(a.coord==b.coord&&a.tex==b.tex&&a.raster==b.raster&&a.konst==b.konst);
+ assert(!memcmp(a.alpha,b.alpha,sizeof(a.alpha))&&a.direct==b.direct&&a.swap==b.swap);
+}
+static void assert_color_equal(GXColor a,GXColor b) {
+ assert(a.r==b.r&&a.g==b.g&&a.b==b.b&&a.a==b.a);
+}
+static void assert_draw_equal(Draw a,Draw b) {
+ assert(a.count==b.count&&a.texgens==b.texgens&&a.cull==b.cull&&a.zwrite==b.zwrite);
+ assert(a.blend==b.blend&&a.src==b.src&&a.dst==b.dst&&a.compare==b.compare&&a.cutoff==b.cutoff);
+ for(int i=0;i<16;i++)assert_stage_equal(a.stages[i],b.stages[i]);
+ for(int i=0;i<4;i++){assert_color_equal(a.colors[i],b.colors[i]);assert_color_equal(a.konst[i],b.konst[i]);}
+ assert_texture_equal(a.texture,b.texture);assert_texture_equal(a.secondary,b.secondary);
+ assert(!memcmp(a.position,b.position,sizeof(a.position))&&!memcmp(a.uv,b.uv,sizeof(a.uv)));
+ assert(!memcmp(&a.world_x,&b.world_x,sizeof(a.world_x)));
+ for(int i=0;i<3;i++)assert_color_equal(a.vertex[i],b.vertex[i]);
+}
 static void assert_geometry_equal(Draw a,Draw b) {
  /* Compare every non-combiner property including the actual emitted vertices. */
  a.count=b.count=0;memset(a.stages,0,sizeof(a.stages));memset(b.stages,0,sizeof(b.stages));
  memset(a.colors,0,sizeof(a.colors));memset(b.colors,0,sizeof(b.colors));
  memset(a.konst,0,sizeof(a.konst));memset(b.konst,0,sizeof(b.konst));
- assert(!memcmp(&a,&b,sizeof(a)));
+ assert_draw_equal(a,b);
 }
 int main(void) {
  assert(dnd_model_indexed_path(-1)==1&&dnd_model_indexed_path(0)==0&&dnd_model_indexed_path(1)==1&&dnd_model_indexed_path(2)<0);
@@ -189,12 +219,12 @@ int main(void) {
  assert(baseline[0].texture.wrap_s==1&&baseline[0].texture.wrap_t==2&&baseline[0].texture.max_lod==1);
  assert(baseline[0].texture.min_filter==GX_LIN_MIP_LIN&&baseline[0].texture.mips);
  assert(dnd_model_draw_effect(123,world,0)==0);
- for(int i=0;i<3;i++)assert(!memcmp(&baseline[i],&record[3+i],sizeof(Draw)));
+ for(int i=0;i<3;i++)assert_draw_equal(baseline[i],record[3+i]);
  int before=draws;
  assert(dnd_model_draw_effect(124,world,long_effect)==0);
  for(int i=0;i<3;i++){Draw *r=&record[(before+i)%16];assert(r->count==7);assert_geometry_equal(baseline[i],*r);assert(r->konst[0].r==17);}
  before=draws;assert(dnd_model_draw(123,world)==0);
- for(int i=0;i<3;i++)assert(!memcmp(&baseline[i],&record[(before+i)%16],sizeof(Draw)));
+ for(int i=0;i<3;i++)assert_draw_equal(baseline[i],record[(before+i)%16]);
  before=draws;assert(dnd_model_draw_effect(123,world,short_effect)==0);
  for(int i=0;i<3;i++){assert(record[(before+i)%16].count==2);assert_geometry_equal(baseline[i],record[(before+i)%16]);}
  assert(dnd_model_draw_effect(123,world,textured)==0); // ignores unused untextured material
@@ -345,7 +375,7 @@ int main(void) {
  before=draws;original_loads=texture_loads;old_bindings=dnd_performance_stats()->texture_binds;
  uint32_t old_api=dnd_performance_stats()->drawing_api_calls,old_changes=dnd_performance_stats()->material_changes;
  assert(dnd_model_draw_models(batch_ids,batch_worlds,2)==0);
- for(int i=0;i<6;i++){Draw a=legacy_batch[permutation[i]],b=record[(before+i)%16];assert_geometry_equal(a,b);assert(a.count==b.count&&!memcmp(a.stages,b.stages,sizeof(a.stages)));}
+ for(int i=0;i<6;i++){Draw a=legacy_batch[permutation[i]],b=record[(before+i)%16];assert_geometry_equal(a,b);assert(a.count==b.count);for(int j=0;j<16;j++)assert_stage_equal(a.stages[j],b.stages[j]);}
  assert(texture_loads-original_loads==5&&dnd_performance_stats()->texture_binds-old_bindings==5);
  assert(dnd_performance_stats()->drawing_api_calls-old_api==1&&dnd_performance_stats()->material_changes-old_changes==3);
  assert(dnd_model_frame_end()==0);free(batch_ids);free(batch_worlds);memcpy(materials,original_materials,sizeof(materials));
