@@ -77,7 +77,7 @@ public sealed class FirmwareCatalog : IDisposable
             previousEnd=at+used;total+=used;
         }
         var files=includeMetadata?FirmwareFileTable.Inspect(data,cancellation):null;
-        var audio=FirmwareStereoAudio.Discover(data,files);
+        var audio=FirmwareStereoAudio.Discover(data,files,cancellation);
         if(audio!=null&&audio.CompressedBytes>MaximumDecodedBytes-total)throw new InvalidDataException("Firmware catalog retention budget exceeded.");
         return new FirmwareCatalog(metadata.ToArray(),compressed.ToArray(),files,audio,includeMetadata?FirmwareWaveSystemInfo.Scan(data,cancellation):new FirmwareWaveSystemInfo[0]);
     }
@@ -102,7 +102,7 @@ public sealed class FirmwareCatalog : IDisposable
             else
             {
                 var bti=FirmwareTextures.Extract(decoded,0);
-                cached=new[]{new FirmwareTextureInfo(index,0,Dolphin.Formats.BtiTexture.Read(bti))};
+                cached=new[]{FirmwareTextureInfo.FromHeader(index,0,bti)};
             }
             textureCache[index]=cached;
         }

@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "dnd_managed.h"
 #include "dnd_storage.h"
+#include "dnd_draw.h"
 #include "dnd_system_firmware.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +25,7 @@ int main(int argc,char **argv)
     static unsigned char memory[8*1024*1024];DndManagedHeap heap;
     dnd_managed_heap_init(&heap,memory,sizeof(memory));dnd_gc_set_stress(true);
     intptr_t result=dnd_aot_entry(&heap);
-    if(result||dnd_exception_pending()||dnd_fs_open_handles()){
+    if(result||dnd_exception_pending()||dnd_fs_open_handles()||dnd_draw_live()){
         fprintf(stderr,"Firmware read stage=%ld error=%s handles=%d\n",(long)result,dnd_exception_message(),dnd_fs_open_handles());return 1;
     }
     printf("Firmware console/file AOT passed; reads=%u collections=%zu heap=%zu\n",calls,heap.collections,heap.used);

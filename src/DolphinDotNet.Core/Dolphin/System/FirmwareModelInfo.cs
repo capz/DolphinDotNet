@@ -65,6 +65,18 @@ public sealed class FirmwareModelInfo
         int count=U16(data,texture.Offset+8),table=AssetInt(U32(data,texture.Offset+12));
         if(count<1||count>256||table<20||table>texture.Length||count>(texture.Length-table)/32)
             throw new InvalidDataException("Invalid TEX1 BTI table.");
+        long texels=0;
+        for(int i=0;i<count;i++)
+        {
+            int at=texture.Offset+table+i*32;
+            int width=U16(data,at+2),height=U16(data,at+4),mips=Math.Max(1,(int)data[at+24]);
+            if(width<1||height<1||width>1024||height>1024||mips>11)
+                throw new InvalidDataException("Invalid TEX1 image dimensions or mips.");
+            for(int level=0;level<mips;level++)
+            {texels+=(long)width*height;width=Math.Max(1,width/2);height=Math.Max(1,height/2);}
+            if(texels>2L*FirmwareCatalog.MaximumDecodedBytes)
+                throw new InvalidDataException("TEX1 decoding work budget exceeded.");
+        }
         var section=new byte[texture.Length];Array.Copy(data,texture.Offset,section,0,section.Length);
         var result=new FirmwareTextureInfo[count];
         for(int i=0;i<count;i++)
@@ -72,8 +84,7 @@ public sealed class FirmwareModelInfo
             int at=table+i*32;
             // Extract copies only actual texture/palette bytes and validates all mips.
             var bti=FirmwareTextures.Extract(section,at);
-            var image=BtiTexture.Read(bti);
-            result[i]=new FirmwareTextureInfo(resourceIndex,texture.Offset+at,image);
+            result[i]=FirmwareTextureInfo.FromHeader(resourceIndex,texture.Offset+at,bti);
         }
         return result;
     }
@@ -88,8 +99,10 @@ public sealed class FirmwareTextureInfo
     public int Height {get;}
     public int ImageFormat {get;}
     public int MipCount {get;}
-    internal FirmwareTextureInfo(int resource,int header,BtiTexture image)
-    {ResourceIndex=resource;HeaderOffset=header;Width=image.Width;Height=image.Height;ImageFormat=image.ImageFormat;MipCount=image.MipCount;}
+    private FirmwareTextureInfo(int resource,int header,int width,int height,int format,int mips)
+    {ResourceIndex=resource;HeaderOffset=header;Width=width;Height=height;ImageFormat=format;MipCount=mips;}
+    internal static FirmwareTextureInfo FromHeader(int resource,int header,byte[] bti)
+        =>new FirmwareTextureInfo(resource,header,U16(bti,2),U16(bti,4),bti[0],Math.Max(1,(int)bti[24]));
 }
 
 public enum SystemTexture { Environment, Tiles, LogoTop, LogoLeft, LogoRight, Wordmark }

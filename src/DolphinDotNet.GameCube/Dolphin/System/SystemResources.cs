@@ -5,6 +5,12 @@ namespace Dolphin.System;
 /// Call on the graphics application executor between frames. Caller owns the texture.</summary>
 public static class SystemResources
 {
+    public static Texture2D CreateTexture(FirmwareCatalog catalog,SystemTexture name,bool linear=false)
+    {
+        if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
+        var texture=catalog.GetTexture(name);
+        return CreateTexture(catalog,texture.ResourceIndex,texture.HeaderOffset,linear);
+    }
     public static Texture2D CreateTexture(FirmwareCatalog catalog,int resourceIndex,int headerOffset,bool linear=false)
     {
         if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));

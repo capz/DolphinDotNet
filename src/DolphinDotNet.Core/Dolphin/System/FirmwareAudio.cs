@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using static Dolphin.Formats.GameCubeBinary;
 
 namespace Dolphin.System;
@@ -27,8 +28,9 @@ public static class FirmwareWaveSystem
     /// <summary>Inspect a standalone WSYS. Counts and pointers are bounded by
     /// its declared extent, not by unrelated trailing ROM data. No AFC decoding
     /// is duplicated here; playback uses the existing native decoder.</summary>
-    public static FirmwareWave[] Inspect(byte[] data)
+    public static FirmwareWave[] Inspect(byte[] data,CancellationToken cancellationToken=default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         Check(data,0,32);
         if(!FirmwareResource.Match(data,0,"WSYS"))throw new NotSupportedException("Expected WSYS descriptor.");
         int size=AssetInt(U32(data,4)),winf=AssetInt(U32(data,16));
@@ -39,6 +41,7 @@ public static class FirmwareWaveSystem
         var waves=new List<FirmwareWave>();
         for(int b=0;b<banks;b++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             int bank=AssetInt(U32(data,winf+8+b*4));
             if(bank<24||bank>size-116)throw new InvalidDataException("WSYS bank outside descriptor.");
             int end=bank;
@@ -50,6 +53,7 @@ public static class FirmwareWaveSystem
                 throw new InvalidDataException("WSYS wave count exceeds budget.");
             for(int w=0;w<count;w++)
             {
+                if((w&63)==0)cancellationToken.ThrowIfCancellationRequested();
                 int at=AssetInt(U32(data,bank+116+w*4));
                 if(at<24||at>size-40)throw new InvalidDataException("WSYS wave descriptor outside extent.");
                 int codec=data[at+1];float rate=F32(data,at+4);
@@ -57,7 +61,7 @@ public static class FirmwareWaveSystem
                     throw new NotSupportedException("Unsupported WSYS codec or sample rate.");
                 int offset=AssetInt(U32(data,at+8)),bytes=AssetInt(U32(data,at+12)),samples=AssetInt(U32(data,at+28));
                 uint loop=U32(data,at+16);
-                int start=AssetInt(U32(data,at+20)),stop=AssetInt(U32(data,at+24));
+                int start=loop!=0?AssetInt(U32(data,at+20)):0,stop=loop!=0?AssetInt(U32(data,at+24)):samples;
                 int spf=codec<2?16:1,frameBytes=codec==0?9:codec==1?5:codec==2?1:2;
                 if(samples<1||samples>int.MaxValue/4||bytes<1||bytes>FirmwareCatalog.MaximumDecodedBytes||
                    ((long)samples+spf-1)/spf*frameBytes>bytes||loop!=0&&loop!=uint.MaxValue||
@@ -88,11 +92,11 @@ public sealed class FirmwareStereoAudio
     /// <summary>Combine two metadata-selected AFC channels in original archive
     /// order. It rejects overlaps, unequal formats/rates/durations or loops.
     /// Interleaving is lossless and reuses the native AFC reader unchanged.</summary>
-    public static FirmwareStereoAudio Read(byte[] waveSystem,byte[] archive,int leftIndex,int rightIndex)
+    public static FirmwareStereoAudio Read(byte[] waveSystem,byte[] archive,int leftIndex,int rightIndex,CancellationToken cancellationToken=default)
     {
         if(archive==null)throw new ArgumentNullException(nameof(archive));
         if(archive.Length>FirmwareCatalog.MaximumDecodedBytes)throw new InvalidDataException("AW exceeds firmware budget.");
-        var waves=FirmwareWaveSystem.Inspect(waveSystem);
+        var waves=FirmwareWaveSystem.Inspect(waveSystem,cancellationToken);
         if(leftIndex<0||rightIndex<0||leftIndex>=waves.Length||rightIndex>=waves.Length||leftIndex==rightIndex)
             throw new ArgumentOutOfRangeException(nameof(leftIndex));
         var left=waves[leftIndex];var right=waves[rightIndex];
@@ -112,18 +116,19 @@ public sealed class FirmwareStereoAudio
         // cannot represent an earlier exclusive loop end without losing frames.
         if(left.HasLoop&&left.LoopEnd!=left.SampleCount)throw new NotSupportedException("AFC container cannot preserve this loop end.");
         for(int f=0;f<frames;f++)
-        {Array.Copy(archive,left.Offset+f*9,packet,32+f*18,9);Array.Copy(archive,right.Offset+f*9,packet,41+f*18,9);}
+        {if((f&255)==0)cancellationToken.ThrowIfCancellationRequested();Array.Copy(archive,left.Offset+f*9,packet,32+f*18,9);Array.Copy(archive,right.Offset+f*9,packet,41+f*18,9);}
         return new FirmwareStereoAudio(packet,left,right);
     }
-    internal static FirmwareStereoAudio? Discover(byte[] image,FirmwareFileTable? table)
+    internal static FirmwareStereoAudio? Discover(byte[] image,FirmwareFileTable? table,CancellationToken cancellation)
     {
         if(table==null)return null;
         FirmwareStereoAudio? found=null;int work=8192,pairs=0;
         for(int file=0;file<table.Count;file++)
         {
+            cancellation.ThrowIfCancellationRequested();
             var entry=table[file];if(!FirmwareResource.Match(image,entry.Offset,"WSYS"))continue;
             var descriptor=table.Extract(image,file);FirmwareWave[] waves;
-            try{waves=FirmwareWaveSystem.Inspect(descriptor);}catch(InvalidDataException){continue;}catch(NotSupportedException){continue;}
+            try{waves=FirmwareWaveSystem.Inspect(descriptor,cancellation);}catch(InvalidDataException){continue;}catch(NotSupportedException){continue;}
             work-=waves.Length;if(work<0)throw new InvalidDataException("Firmware wave discovery budget exceeded.");
             int eligible=0;
             foreach(var wave in waves)if(wave.Codec==0&&wave.SampleRate==32000&&wave.SampleCount==174080)eligible++;
@@ -140,11 +145,11 @@ public sealed class FirmwareStereoAudio
                     if(right.Codec!=0||right.ArchiveName!=left.ArchiveName||right.SampleRate!=left.SampleRate||right.SampleCount!=left.SampleCount)continue;
                     if(++pairs>32)throw new InvalidDataException("Startup audio candidate budget exceeded.");
                     int archiveIndex=-1;
-                    for(int j=0;j<table.Count;j++)if(table[j].Path==left.ArchiveName||Leaf(table[j].Path)==left.ArchiveName)
+                    for(int j=0;j<table.Count;j++)if(table[j].Path==left.ArchiveName||Leaf(table[j].Path)==Leaf(left.ArchiveName))
                     {if(archiveIndex>=0)throw new InvalidDataException("Ambiguous AW archive mapping.");archiveIndex=j;}
                     if(archiveIndex<0)continue;
                     var archive=table.Extract(image,archiveIndex);FirmwareStereoAudio pair;
-                    try{pair=left.Offset<right.Offset?Read(descriptor,archive,first,second):Read(descriptor,archive,second,first);}
+                    try{pair=left.Offset<right.Offset?Read(descriptor,archive,first,second,cancellation):Read(descriptor,archive,second,first,cancellation);}
                     catch(InvalidDataException){continue;}catch(NotSupportedException){continue;}
                     if(found!=null)throw new InvalidDataException("Ambiguous startup stereo wave pair.");found=pair;
                 }
@@ -179,7 +184,7 @@ public sealed class FirmwareWaveSystemInfo
             if(size>16*FirmwareCatalog.MaximumDecodedBytes-work)throw new InvalidDataException("WSYS scan work budget exceeded.");
             work+=(int)size;
             var bytes=new byte[(int)size];Array.Copy(image,at,bytes,0,bytes.Length);FirmwareWave[] entries;
-            try{entries=FirmwareWaveSystem.Inspect(bytes);}
+            try{entries=FirmwareWaveSystem.Inspect(bytes,cancellation);}
             catch(InvalidDataException){continue;}catch(NotSupportedException){continue;}
             if(result.Count==128||entries.Length>8192-totalWaves)throw new InvalidDataException("WSYS metadata budget exceeded.");
             totalWaves+=entries.Length;result.Add(new FirmwareWaveSystemInfo(at,(int)size,entries));

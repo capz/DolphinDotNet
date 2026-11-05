@@ -9,7 +9,7 @@ remain unperformed and are tracked under Phase 7. No Nintendo data is included.
 | --- | --- | --- |
 | 1 | Bounded EXI ROM reader, explicit file fallback and source metadata, owned loading, cipher/encoding evidence, cancellation, AOT console/file tests | Real regional dump and physical-console validation under Phase 7 |
 | 2 | Bounded Yay0/FST/WSYS inventories; J3D1 section inspection; strict TEX1/BTI profiles for named intro resources; metadata-linked stereo extraction | Real-ROM regional compatibility and any non-FST archive layout remain unverified |
-| 3 | Validated BTI extraction relative to each header, existing Texture2D adapter, SystemFont facade preserving IplFont | Validated named NTSC/PAL layouts, console rendering, measured cache/performance budgets |
+| 3 | Named texture publication via existing Texture2D; metadata-only caching; native allocation/disposal fixture; SystemFont/IplFont compatibility checks | Real regional texture captures and physical rendering comparisons |
 | 4 | Existing audio pipeline researched; unchanged | Validated WSYS/AW discovery, stereo memory-backed compressed playback and tests |
 | 5 | J3D1bmd1 resources explicitly marked unsupported | Original geometry/material importer and fidelity comparisons |
 | 6 | No implementation | Native startup sequence, deterministic captures and physical comparison |
@@ -179,3 +179,32 @@ The file-table research lead is documented at
 https://www.hcs64.com/mboard/forum.php?showthread=46117; its author did not locate
 or validate the table root. No downloadable firmware from that thread was used.
 No original geometry, textures or sounds were obtained from external dumps.
+
+Phase 3 continuation:
+
+- `SystemResources.CreateTexture(catalog, SystemTexture)` resolves the validated
+  profile and returns a fresh existing `Texture2D`, with unchanged native GX
+  sampler, palette/mip conversion, alpha, cache flush and executor rules. The
+  caller owns/disposes each texture; no shared graphics objects are cached.
+- The forced-GC console/file AOT fixture now creates a native 8x8 I4 texture from
+  the named environment profile and checks dimensions, mip count, native bytes
+  and restoration of graphics allocation totals after disposal. It passes with
+  zero live draw handles (513 reads; 275 collections; final heap 2,102,048 bytes).
+- Existing firmware-font provider tests pass, including cache lifetime,
+  proportional metrics, failure paths and I4/IA8 swizzles. The font smoke fixture
+  also checks SystemFont measurements against the unchanged IplFont API.
+- Host synthetic warm-cache measurement: 100 named environment lookups took
+  0.029 ms for 14 records and 0.051 ms for 31 records, allocating 3,200 managed
+  bytes in either case. These are one host run, not console performance claims.
+- Non-looping WSYS sentinel coordinates are ignored rather than interpreted as
+  active loop ranges. Named archive resolution accepts a unique basename match
+  and still rejects ambiguous mappings.
+
+The final Phase 3 AOT rerun passes after adding a preflight TEX1 decoding-work
+budget (4,194,304 texels across all mip chains, before allocating decode output)
+and removing redundant RGBA decoding just to obtain metadata. WSYS inspection
+and stereo interleaving now observe cancellation within their bounded loops.
+A malformed shared-image table is rejected by the work-budget regression.
+Host warm-cache timings varied from 0.029 to 0.304 ms per 100 lookups across runs;
+allocated bytes remained 3,200. The variation is not a console timing estimate.
+The SystemFont/IplFont smoke compiles through AOT (257 reachable methods).
