@@ -11,13 +11,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Avoid waiting on abandoned ARM64 always() jobs during the runner migration.
+  group: ci-intel-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   changes:
     name: Select relevant framework checks
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     outputs:
       matrix: ${{ steps.select.outputs.matrix }}
       framework: ${{ steps.select.outputs.framework }}
@@ -41,7 +42,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.framework == 'true'
     name: Framework / ${{ matrix.area }}
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -64,7 +65,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.debugger == 'true'
     name: Host debugger compatibility
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +84,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, macos-15-intel]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -105,7 +106,7 @@ jobs:
     name: CI result
     if: always()
     needs: [changes, framework-tests, debugger-protocol, ide-workflow]
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     steps:
       - name: Require every selected area to pass
         env:

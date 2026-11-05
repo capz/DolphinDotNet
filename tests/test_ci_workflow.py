@@ -92,8 +92,9 @@ class WorkflowCoverageTests(unittest.TestCase):
         self.assertNotIn("id-token: write",job("verify",PREVIEW))
         self.assertIn("actions/download-artifact@v4",publish)
 
-    def test_host_runners_unchanged(self):
+    def test_host_runners_use_macos_intel_and_windows(self):
         self.assertNotIn("ubuntu",WORKFLOW.lower())
-        self.assertIn("os: [windows-latest, macos-latest]",WORKFLOW)
+        self.assertNotIn("macos-latest",WORKFLOW+PREVIEW)
+        self.assertIn("os: [windows-latest, macos-15-intel]",WORKFLOW)
         self.assertNotIn("DndBuildBackend=Docker",WORKFLOW)
 if __name__=="__main__":unittest.main()

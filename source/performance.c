@@ -54,7 +54,10 @@ void dnd_performance_begin_frame(void) {
   stats.triangles = 0;
   stats.draw_submissions = 0;
   stats.texture_binds = 0;
+  stats.drawing_api_calls=stats.material_changes=0;
 }
+void dnd_performance_drawing_api(void){if(stats.drawing_api_calls!=UINT32_MAX)stats.drawing_api_calls++;}
+void dnd_performance_material(void){if(stats.material_changes!=UINT32_MAX)stats.material_changes++;}
 void dnd_performance_add_draw(uint32_t binds) {
   if(stats.draw_submissions != UINT32_MAX)stats.draw_submissions++;
   stats.texture_binds = binds > UINT32_MAX - stats.texture_binds
@@ -73,6 +76,8 @@ int dnd_performance_render_stat(int kind) {
     case 5:return stats.begin_copy_us>INT32_MAX?INT32_MAX:(int)stats.begin_copy_us;
     case 6:return stats.gate_reacquire_us>INT32_MAX?INT32_MAX:(int)stats.gate_reacquire_us;
     case 7:return (int)stats.begin_copy_issued;
+    case 8:return stats.drawing_api_calls>INT32_MAX?INT32_MAX:(int)stats.drawing_api_calls;
+    case 9:return stats.material_changes>INT32_MAX?INT32_MAX:(int)stats.material_changes;
     default:return -1;
   }
 }

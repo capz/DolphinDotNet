@@ -8,6 +8,13 @@ namespace DolphinDotNet.Assets;
 public sealed class ImportOptions
 {
     public int TextureLimit { get; set; } = 256;
+    /// <summary>Total mip levels including the base; zero retains the full chain.</summary>
+    public int MaximumMipLevels { get; set; }
+    internal int MipLevels(int width,int height)
+    {
+        int levels=1;for(int n=Math.Min(width,height);n>4;n/=2)levels++;
+        return MaximumMipLevels==0?levels:Math.Min(levels,MaximumMipLevels);
+    }
     public string Assimp { get; set; } = "assimp";
     public bool ApproximateMaterials { get; set; }
     public bool CompileGxMaterials { get; set; }
@@ -19,6 +26,7 @@ public static class ModelConverter
     {
         options??=new();
         if(options.TextureLimit<4||options.TextureLimit>1024||(options.TextureLimit&(options.TextureLimit-1))!=0)throw new ArgumentException("Texture limit must be a power of two from 4 to 1024.");
+        if(options.MaximumMipLevels<0||options.MaximumMipLevels>9)throw new ArgumentException("Maximum mip levels must be 0 (full chain) or 1..9, including the base.");
         if(options.BakeNeutralStudio&&(options.CompileGxMaterials||options.ApproximateMaterials))throw new ArgumentException("Neutral studio baking is separate from GX mapping/approximation.");
         input=Path.GetFullPath(input);output=Path.GetFullPath(output);string ext=Path.GetExtension(input).ToLowerInvariant();string? temp=null;
         try
@@ -37,6 +45,7 @@ public static class ModelConverter
             }
             else if(ext is ".gj" or ".xj")
             {
+                if(options.MaximumMipLevels!=0)throw new NotSupportedException("Mip-level limits apply to glTF/GLB and Assimp imports, not direct PSO packages.");
                 if(options.BakeNeutralStudio)throw new InvalidDataException("Studio baking requires a static glTF/GLB or Assimp scene with UV0.");
                 var native=PsoGjImport.Convert(input,options.ApproximateMaterials);
                 Directory.CreateDirectory(Path.GetDirectoryName(output)!);

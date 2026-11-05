@@ -18,6 +18,7 @@ void dnd_draw_backend_wait(void){}
 void dnd_draw_backend_flush(void *p,int n,int i){(void)p;(void)n;(void)i;}
 void dnd_draw_backend_2d(int w,int h){assert(w==640&&h==480);}
 void dnd_performance_add_triangles(uint32_t n){assert(n>0);}
+void dnd_performance_drawing_api(void){}
 void dnd_exception_throw(DndExceptionKind k,const char *m){(void)k;(void)m;abort();}
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){
     (void)t;(void)m;(void)w;assert(v&&primitive==0x90&&submissions<8);counts[submissions++]=n;
