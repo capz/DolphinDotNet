@@ -45,7 +45,7 @@ public class HashSet<T> : ISet<T>, IReadOnlyCollection<T>
         private Dictionary<T,byte>.Enumerator inner;
         internal Enumerator(Dictionary<T,byte> items){inner=items.GetEnumerator();}
         public T Current=>inner.Current.Key;
-        object IEnumerator.Current=>((IEnumerator)inner).Current is System.Collections.Generic.KeyValuePair<T,byte> pair?pair.Key:default!;
+        object IEnumerator.Current=>((IEnumerator)inner).Current is global::System.Collections.Generic.KeyValuePair<T,byte> pair?pair.Key:default!;
         public bool MoveNext()=>inner.MoveNext();
         public void Reset()=>inner.Reset();
         public void Dispose(){}

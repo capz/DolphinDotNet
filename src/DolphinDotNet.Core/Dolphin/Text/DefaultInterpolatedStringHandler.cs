@@ -3,9 +3,9 @@ namespace Dolphin.Text;
 public struct DefaultInterpolatedStringHandler
 {
     private StringBuilder builder;
-    private System.IFormatProvider? provider;
+    private global::System.IFormatProvider? provider;
     public DefaultInterpolatedStringHandler(int literalLength,int formattedCount):this(literalLength,formattedCount,null){}
-    public DefaultInterpolatedStringHandler(int literalLength,int formattedCount,System.IFormatProvider? provider){Formatter.Provider(provider);builder=new StringBuilder(literalLength);this.provider=provider;}
+    public DefaultInterpolatedStringHandler(int literalLength,int formattedCount,global::System.IFormatProvider? provider){Formatter.Provider(provider);builder=new StringBuilder(literalLength);this.provider=provider;}
     public void AppendLiteral(string value)=>builder.Append(value);
     public void AppendFormatted<T>(T value)=>builder.Append(Formatter.Value(value,null,provider));
     public void AppendFormatted<T>(T value,string? format)=>builder.Append(Formatter.Value(value,format,provider));

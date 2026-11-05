@@ -75,7 +75,7 @@ for index,f in enumerate(schema['functions']):
   call_args.append(n+'.Value' if k[2]=='p' else n+'.Packed' if k[2] in ('c','h') else n)
   record_args.append('raw_float(a'+str(i)+')' if k[2]=='f' else '(uint64_t)a'+str(i))
  native_cs_ret='ulong' if kr[2]=='p' else kr[0]
- cs.append(f'    internal static {native_cs_ret} {op}({", ".join(native_args)}) => throw new System.PlatformNotSupportedException("Requires DolphinDotNet AOT.");')
+ cs.append(f'    internal static {native_cs_ret} {op}({", ".join(native_args)}) => throw new global::System.PlatformNotSupportedException("Requires DolphinDotNet AOT.");')
  invocation=f'NativeGX.{op}({", ".join(call_args)})'
  if kr[2]=='p':invocation='NativeAddress.Borrow('+invocation+')'
  classes[f['class']].append(f'    public static {kr[0]} {name}({", ".join(public_args)}) => {invocation};')

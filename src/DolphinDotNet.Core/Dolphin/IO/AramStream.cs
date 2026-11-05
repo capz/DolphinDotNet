@@ -9,7 +9,7 @@ namespace Dolphin.IO;
 
 /// <summary>Seekable, fixed-capacity stream backed by GameCube auxiliary RAM.
 /// The stream owns its ARAM allocation; access is serialized and serialized by the runtime execution gate.</summary>
-public sealed class AramStream : System.IO.Stream, IDisposable
+public sealed class AramStream : global::System.IO.Stream, IDisposable
 {
     private readonly AramBuffer buffer;
     private readonly bool writable;
@@ -156,7 +156,7 @@ public sealed class AramStream : System.IO.Stream, IDisposable
     public override void Flush() { CheckIdle(); }
 
     // Keep an explicit IDisposable entry point for AOT's Stream facade while
-    // also honoring System.IO.Stream disposal through its protected hook.
+    // also honoring global::System.IO.Stream disposal through its protected hook.
     public new void Dispose()
     {
         if (disposed) return;

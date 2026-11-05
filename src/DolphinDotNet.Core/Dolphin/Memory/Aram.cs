@@ -75,7 +75,7 @@ internal sealed class TransferWork
             if(pending)
             {
                 var result=NativeAram.AramPoll(array,arrayOffset+position);
-                if(result<0)throw new System.IO.IOException("ARAM transfer failed.");
+                if(result<0)throw new global::System.IO.IOException("ARAM transfer failed.");
                 if(result==0)return false;
                 pending=false;position+=chunk;
             }
@@ -84,7 +84,7 @@ internal sealed class TransferWork
             chunk=count-position;if(chunk>4096)chunk=4096;
             int status=NativeAram.AramBegin(token,offset+position,array,arrayOffset+position,chunk,write?1:0);
             if(status==-16)return false; // ARQ is busy with another native or managed transfer.
-            if(status<0)throw new System.IO.IOException("ARAM transfer could not start.");
+            if(status<0)throw new global::System.IO.IOException("ARAM transfer could not start.");
             pending=true;return false;
         }
         catch(Exception error){NativeAram.AramRelease(token);Completion.SetException(error);return true;}

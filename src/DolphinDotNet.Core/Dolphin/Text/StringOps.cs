@@ -5,7 +5,7 @@ namespace Dolphin.Text;
 public enum StringComparison { CurrentCulture, CurrentCultureIgnoreCase, InvariantCulture, InvariantCultureIgnoreCase, Ordinal, OrdinalIgnoreCase }
 [Flags] public enum StringSplitOptions { None=0, RemoveEmptyEntries=1, TrimEntries=2 }
 
-// Instance System.String calls are lowered to static methods with a receiver.
+// Instance global::System.String calls are lowered to static methods with a receiver.
 public static class StringOps
 {
     public static CharEnumerator GetEnumerator(string value){Receiver(value);return new CharEnumerator(value); }
@@ -134,8 +134,8 @@ public static class StringOps
     public static int Compare(string? a,int indexA,string? b,int indexB,int length,StringComparison comparison)
     {
         if(length<0||indexA<0||indexB<0||indexA>(a==null?0:a.Length)||indexB>(b==null?0:b.Length))throw new ArgumentOutOfRangeException();
-        string? left=a==null?null:a.Substring(indexA,System.Math.Min(length,a.Length-indexA));
-        string? right=b==null?null:b.Substring(indexB,System.Math.Min(length,b.Length-indexB));
+        string? left=a==null?null:a.Substring(indexA,global::System.Math.Min(length,a.Length-indexA));
+        string? right=b==null?null:b.Substring(indexB,global::System.Math.Min(length,b.Length-indexB));
         return Compare(left,right,comparison);
     }
     public static int CompareOrdinal(string? a,int indexA,string? b,int indexB,int length)=>Compare(a,indexA,b,indexB,length,StringComparison.Ordinal);

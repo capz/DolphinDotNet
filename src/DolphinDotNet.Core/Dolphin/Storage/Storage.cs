@@ -85,7 +85,7 @@ public static class Storage
     public static IEnumerable<string> EnumerateDirectories(StorageDevice device,string path)=>IO.Directory.EnumerateDirectories(GetPath(device,path));
     public static string[] GetFiles(StorageDevice device,string path)=>IO.Directory.GetFiles(GetPath(device,path));
     public static string[] GetDirectories(StorageDevice device,string path)=>IO.Directory.GetDirectories(GetPath(device,path));
-    public static IO.FileStream Open(StorageDevice device,string path,System.IO.FileMode mode,System.IO.FileAccess access,System.IO.FileShare share)=>IO.File.Open(GetPath(device,path),mode,access,share);
+    public static IO.FileStream Open(StorageDevice device,string path,global::System.IO.FileMode mode,global::System.IO.FileAccess access,global::System.IO.FileShare share)=>IO.File.Open(GetPath(device,path),mode,access,share);
     public static void DeleteFile(StorageDevice device,string path)=>IO.File.Delete(GetPath(device,path));
     public static void DeleteDirectory(StorageDevice device,string path,bool recursive)=>IO.Directory.Delete(GetPath(device,path),recursive);
 }
@@ -118,7 +118,7 @@ public sealed class MemoryCard : IDisposable
     public static MemoryCard Mount(StorageDevice device,MemoryCardIdentity identity)
     {
         if(identity==null)throw new ArgumentNullException("identity");
-        if(!NativeStorage.CardMount((int)device,identity.GameCode,identity.CompanyCode))throw new System.IO.IOException("Memory card unavailable.");
+        if(!NativeStorage.CardMount((int)device,identity.GameCode,identity.CompanyCode))throw new global::System.IO.IOException("Memory card unavailable.");
         return new MemoryCard(device);
     }
     private void Check(){if(disposed)throw new ObjectDisposedException("MemoryCard");}
