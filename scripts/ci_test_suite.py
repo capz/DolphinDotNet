@@ -116,7 +116,7 @@ def main(area):
         # Hardware/emulator execution belongs in independent console acceptance.
         build("tools/DolphinDotNet.Compiler")
         with tempfile.TemporaryDirectory() as tmp:
-            for p in ("JSystemHardwareFixture","HelloGameCube","GraphicsSmoke","IplFontSmoke","AramSmoke","NetworkSmoke",
+            for p in ("JSystemHardwareFixture","SystemFirmwareHardwareSmoke","HelloGameCube","GraphicsSmoke","IplFontSmoke","AramSmoke","NetworkSmoke",
                       "ControllerDolphinSmoke","DolLauncherSmoke",
                       "DebuggerStackSmoke","DebuggerInspectionSmoke","RetailAssetCorpus","HardwareAssetCompatibility"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))

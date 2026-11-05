@@ -69,9 +69,20 @@ LTO private-symbol aliases, with strict byte matching. An earlier graphics run
 also hit GCC's existing Array.Clone root-registration warning; the scoped-root
 fix passed subsequent standard/O3-LTO runtime and complete graphics runs.
 
-Remote CI is triggered/dispatched on the existing draft PR. Its current result
-must be checked separately; no green remote pipeline is asserted here. No merge
-is authorized. Physical-console testing has not occurred.
+The CI coverage gate now recognizes SystemFirmwareReadSmoke through its AOT
+runner. Selection/workflow/model scheduling/debugger dependency checks pass
+locally. NuGet preview passed for c18c8d3; the main workflow is pending. GitHub
+annotations report macOS ARM64 runner capacity constraints. No green main
+pipeline is asserted here. No merge is authorized. Physical-console testing
+has not occurred.
+
+`SystemFirmwareHardwareSmoke` now supplies separate EXI-only and explicitly
+selected file builds, six deterministic texture views, stereo playback, source/
+revision/inventory diagnostics, cleanup and a script for the existing frame
+capture runner. Both source variants passed managed/AOT/host-C compilation.
+The EXI variant also passed the pinned devkitPro cross-build with debug automation.
+Actual-source rendering/audio acceptance remains unperformed; this fixture does
+not implement or validate original models/animation.
 
 ## Supported layout and fidelity limits
 

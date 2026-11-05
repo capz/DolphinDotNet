@@ -125,3 +125,40 @@ those semantics. A user-supplied dump is needed for original-format research and
 regional comparisons; no ripped mesh or flat approximation is substituted.
 Physical hardware validation has not been performed. See
 [the status and evidence table](system-firmware-resources-status.md).
+
+## Console acceptance fixture
+
+`tests/SystemFirmwareHardwareSmoke` contains no bundled firmware. The default
+build reads only EXI, so an absent or invalid console source fails rather than
+being hidden by file fallback. A second build with
+`-p:DefineConstants=FIRMWARE_EXPLICIT_FILE` mounts SD2SP2 and reads the explicitly
+selected `sd:/ipl.bin` test path, without trying EXI. Build each into a separate
+output directory and retain its matching ELF/DOL. Use the repository's normal
+GameCube build/launch configuration, with Debug automation enabled as described
+in [hardware-debug-automation.md](hardware-debug-automation.md).
+
+The fixture records source, revision and inventory counts in the existing debug
+log, disposes the full image, then presents Environment on black. A cycles
+through Tiles, LogoTop, LogoLeft, LogoRight and Wordmark. START creates/plays the
+existing stereo Sound; B exits and disposes resources. Unknown layouts report
+`FIRMWARE HARDWARE FAIL`. The fixture does not interpret models or animate them.
+
+After launching on the console with the debugger stub, capture the sequence:
+
+```sh
+python3 scripts/debug_hardware_automation.py --elf /path/to/fixture.elf \
+  --serial /dev/ttyUSB0 \
+  --script tests/SystemFirmwareHardwareSmoke/captures.json \
+  --output /tmp/firmware-console-captures
+```
+
+Use the matching transport/port for the actual rig. Captures contain original
+texture pixels and must stay outside commits. Record the actual region/revision,
+physical vs emulated target, source result and stereo output separately. The
+frame runner verifies transport/frame acknowledgements, not audio fidelity or
+texture identity: inspect the images against the same firmware's original IPL
+output, listen to or record both audio channels, and preserve errors. Golden
+hashes can be added locally after that comparison; none are fabricated here.
+The 360-frame final step allows the nominal 5.44-second sound to finish at both
+50 and 60 Hz during uninterrupted playback. Debugger capture pauses can interrupt
+audible playback; use a separate uninterrupted run for sound comparison.

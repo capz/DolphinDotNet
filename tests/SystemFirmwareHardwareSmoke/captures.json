@@ -1,0 +1,15 @@
+[
+  {"buttons": [], "frames": 2, "capture": "environment.png"},
+  {"buttons": ["A"], "polls": 1, "frames": 1, "capture": "tiles.png"},
+  {"buttons": [], "frames": 1, "capture": "tiles-stable.png"},
+  {"buttons": ["A"], "polls": 1, "frames": 1, "capture": "logo-top.png"},
+  {"buttons": [], "frames": 1, "capture": "logo-top-stable.png"},
+  {"buttons": ["A"], "polls": 1, "frames": 1, "capture": "logo-left.png"},
+  {"buttons": [], "frames": 1, "capture": "logo-left-stable.png"},
+  {"buttons": ["A"], "polls": 1, "frames": 1, "capture": "logo-right.png"},
+  {"buttons": [], "frames": 1, "capture": "logo-right-stable.png"},
+  {"buttons": ["A"], "polls": 1, "frames": 1, "capture": "wordmark.png"},
+  {"buttons": [], "frames": 1, "capture": "wordmark-stable.png"},
+  {"buttons": ["START"], "polls": 1, "frames": 1, "capture": "audio-start.png"},
+  {"buttons": [], "frames": 360, "capture": "audio-complete.png"}
+]
