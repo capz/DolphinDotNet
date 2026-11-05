@@ -79,7 +79,10 @@ int main(int argc,char **argv) {
   assert(!dnd_model_opacity(fading,0,.25f));assert(dnd_model_opacity(fading,0,2)<0);
   assert(!dnd_model_frame_begin(camera,camera));assert(!dnd_model_draw(fading,world));
   assert(record[4].blend==GX_BM_BLEND&&record[4].zwrite==0);
-  assert(indexed_tint.a==63&&authored_colors[1].a==63&&authored_colors[1].r==-12);
+  assert(indexed_tint.a==255&&authored_colors[1].a==255&&authored_colors[1].r==-12);
+  assert(record[4].count==2&&record[4].konst[3].a==63);
+  assert(record[4].stages[0].b==2&&record[4].stages[1].d==GX_CC_CPREV);
+  assert(record[4].stages[1].alpha[3]==GX_CA_KONST);
   assert(!dnd_model_frame_end());for(int slot=0;slot<4;slot++)assert(!dnd_model_color(instance,0,slot,NULL));
   assert(!dnd_model_instance_dispose(fading)&&!dnd_model_dispose(opaque));
   DndAuthoredMaterial *authored=model->authored;

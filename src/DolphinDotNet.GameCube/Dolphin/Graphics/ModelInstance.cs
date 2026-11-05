@@ -34,7 +34,7 @@ public sealed class ModelInstance : IDisposable
         if(NativeModel.ModelColor(Token,material,slot,colorScratch)<0)throw new ArgumentException("Invalid authored color, active frame or exhausted instance budget.");
     }
     /// <summary>Animate an authored material's opacity: preserve RGB, set
-    /// material alpha, scale original TEV alphas and enable sorted alpha blending
+    /// material alpha, append an alpha-only opacity stage and enable sorted alpha blending
     /// below full opacity. ResetMaterialColors restores authored state.</summary>
     public void SetOpacity(int material,float opacity)
     {Check();if(NativeModel.ModelOpacity(Token,material,opacity)<0)throw new ArgumentException("Invalid authored opacity, active frame or exhausted instance budget.");}

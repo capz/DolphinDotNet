@@ -56,4 +56,18 @@ static void authored_model_material(const DndAuthoredMaterial *m,const DndMateri
   GX_SetTevColorOp(0,rgb->operation,rgb->bias,rgb->scale,rgb->clamp,rgb->output);
   GX_SetTevAlphaIn(0,alpha->input[0],alpha->input[1],alpha->input[2],alpha->input[3]);
   GX_SetTevAlphaOp(0,alpha->operation,alpha->bias,alpha->scale,alpha->clamp,alpha->output);
+  if(fading) {
+    /* Keep stage zero and every authored RGB/TEV register unchanged. Opaque
+     * source alpha is immaterial; translucent sources retain their alpha mask. */
+    GX_SetNumTevStages(2);GX_SetTevDirect(1);GX_SetTevSwapMode(1,GX_TEV_SWAP0,GX_TEV_SWAP0);
+    GX_SetTevOrder(1,GX_TEXCOORDNULL,GX_TEXMAP_NULL,GX_COLORNULL);
+    GX_SetTevKColor(GX_KCOLOR3,(GXColor){0,0,0,(u8)instance->colors[material_index*16+3]});
+    GX_SetTevKAlphaSel(1,GX_TEV_KASEL_K3_A);
+    GX_SetTevColorIn(1,GX_CC_ZERO,GX_CC_ZERO,GX_CC_ZERO,GX_CC_CPREV);
+    GX_SetTevColorOp(1,GX_TEV_ADD,GX_TB_ZERO,GX_CS_SCALE_1,GX_TRUE,GX_TEVPREV);
+    GX_SetTevAlphaIn(1,GX_CA_ZERO,m->blend[0]?GX_CA_APREV:GX_CA_ZERO,
+                     GX_CA_KONST,m->blend[0]?GX_CA_ZERO:GX_CA_KONST);
+    GX_SetTevAlphaOp(1,GX_TEV_ADD,GX_TB_ZERO,GX_CS_SCALE_1,GX_TRUE,GX_TEVPREV);
+  }
+
 }

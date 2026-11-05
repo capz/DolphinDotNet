@@ -128,7 +128,7 @@ startup placement accounts for that original joint offset.
 
 Some original materials source alpha from signed TEV registers and use opaque
 blend state. Material alpha alone therefore cannot animate all meshes. The
-optional per-instance opacity control preserves RGB, updates material/TEV alpha
-and selects sorted alpha blending while fading. Reset restores original state;
+optional per-instance opacity control preserves RGB, activates material alpha, appends an alpha-only stage without changing RGB/TEV
+registers, and selects sorted alpha blending while fading. Reset restores original state;
 ordinary authored rendering keeps the imported program and raster settings.
 Emulator captures caught both the framing and fade issues during acceptance.

@@ -231,6 +231,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     if(in->color_set&&in->color_set[(unsigned)mesh->material*4]) {
       animated_copy=*mat;mat=&animated_copy;
       for(unsigned c=0;c<4;c++)mat->color[c]=in->colors[(unsigned)mesh->material*16+c]/255.f;
+      if(in->color_set[(unsigned)mesh->material*4]&2)mat->color[3]=1;
     }
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     const DndAuthoredMaterial *authored=!effect&&model->authored?&model->authored[mesh->material]:NULL;

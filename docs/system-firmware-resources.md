@@ -176,9 +176,10 @@ firmware tracks or a claim of pixel-identical physical IPL behavior. Original
 geometry and authored MAT1 programs are imported; no ripped Wii meshes are used.
 `ModelInstance.SetNodeOffset`, `SetMaterialColor`, `SetTevColor` and `SetOpacity` provide bounded,
 private native controls; reset methods restore the sampled/authored values.
-`SetOpacity` preserves RGB, drives material and original TEV alpha sources, and
+`SetOpacity` preserves RGB, uses an alpha-only GX stage without changing authored TEV registers, and
 uses sorted alpha blending below full opacity even for an authored opaque mesh.
-Startup preparation rejects the background executor before any blocking import;
+The opacity profile requires PREV outputs and unconditional original alpha comparison;
+unsupported controls fail explicitly. Startup preparation rejects the background executor before any blocking import;
 use the application executor between frames.
 Physical hardware validation has not been performed. See [status](system-firmware-resources-status.md).
 

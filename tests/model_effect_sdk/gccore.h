@@ -140,3 +140,15 @@ void GX_SetTevColorOp(int stage,int op,int bias,int scale,int clamp,int destinat
 void GX_SetTevAlphaIn(int stage,int a,int b,int c,int d);
 void GX_SetTevAlphaOp(int stage,int op,int bias,int scale,int clamp,int destination);
 #endif
+
+#define GX_KCOLOR3 3
+
+#define GX_TEV_KASEL_K3_A 31
+
+#define GX_COLORNULL 255
+
+#define GX_CC_CPREV 0
+
+#define GX_CA_APREV 0
+
+#define GX_CA_KONST 6

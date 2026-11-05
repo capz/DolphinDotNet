@@ -482,14 +482,12 @@ int dnd_model_opacity(int token,int material,float opacity) {
   DndInstance *in=dnd_instance_find(token);
   if(!in||!in->model->ready||dnd_device_active()||!in->model->authored||
      material<0||(unsigned)material>=in->model->materials||!isfinite(opacity)||opacity<0||opacity>1)return -1;
+  const DndAuthoredMaterial *program=&in->model->authored[material];
+  if(program->rgb.output||program->opacity.output||program->alpha[0]!=7||program->alpha[3]!=7||program->alpha[2]>1)return -1;
   if(!instance_colors(in))return -2;
-  for(unsigned slot=0;slot<4;slot++) {
-    unsigned index=(unsigned)material*4+slot;float *value=in->colors+index*4;
-    if(!in->color_set[index])for(unsigned c=0;c<3;c++)
-      value[c]=slot?in->model->authored[material].colors[slot-1][c]:in->model->material[material].color[c]*255;
-    value[3]=opacity*(slot?in->model->authored[material].colors[slot-1][3]:255);
-    in->color_set[index]=(unsigned char)(slot?1:3);
-  }
+  unsigned index=(unsigned)material*4;float *value=in->colors+index*4;
+  if(!in->color_set[index])for(unsigned c=0;c<3;c++)value[c]=in->model->material[material].color[c]*255;
+  value[3]=opacity*255;in->color_set[index]=3;
   return 0;
 }
 int dnd_model_color(int token,int material,int slot,DndArray *values) {
