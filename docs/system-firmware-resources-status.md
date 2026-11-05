@@ -91,9 +91,13 @@ Local validation on 2026-11-05:
   GC passed (42 collections; 4,195,408 bytes occupied at completion in an 8 MiB
   heap). This is a final occupancy reading, not peak memory or a hardware result.
 
-Broader compiler and graphics suites, pinned devkitPro cross-build and remote
-CI were launched; their final results must be checked separately. NuGet audit
-requests produced NU1900 connectivity warnings in some local builds.
+Final local results: `python3 scripts/ci_test_suite.py compiler` passed;
+the compiler integration runner passed again after the heap-budget changes;
+`python3 scripts/ci_test_suite.py graphics` passed on retry after the GC-root fix,
+including model native tests, production GX recordings and ModelSmoke under GC
+stress. The pinned devkitPro cross-build passed. Remote CI was dispatched and
+remains pending/queued; it is not reported green. NuGet audit requests produced
+NU1900 connectivity warnings in some local builds.
 
 The historical native managed heap is 256 KiB. Firmware workloads need an
 explicit larger heap; the native Makefile and generated GameCube Makefiles now
@@ -112,8 +116,8 @@ GCC's `-Werror=dangling-pointer` diagnostic in existing `dnd_array_clone` root
 registration. Clone now uses a scoped active GC frame, matching other native
 array helpers. GCC O1/Werror compilation, managed runtime/core BCL tests in
 standard and O3/LTO modes, and the firmware forced-GC host fixture pass after
-this change. The full graphics suite was restarted; do not mistake the initial
-run for a pass.
+this change. The full graphics suite passed on retry; the initial
+run remains a recorded failure.
 
 The synthetic fixture was also cross-built with an explicit 8 MiB native heap.
 An emulated DOL boot was observed, but the GDB console-buffer read returned an
