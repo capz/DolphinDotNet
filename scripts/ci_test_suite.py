@@ -96,6 +96,8 @@ def main(area):
     elif area=="assets":
         test("tests/GameCubeFormatsTests")
         test("tests/SystemFirmwareTests")
+        # SystemFirmwareReadSmoke: execute the generated C against the synthetic
+        # console/file bridge; building the managed fixture alone misses the ABI.
         run("python3","tests/system_firmware_aot.py")
         run("python3","tests/system_firmware_inventory.py")
         test("tests/JSystemFixtureHostTests")
