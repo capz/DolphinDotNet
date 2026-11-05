@@ -142,8 +142,38 @@ validate geometry; the native import is authoritative. See
 [format qualification](system-firmware-format-research.md) for tested profiles
 and unverified lighting/render-comparison semantics.
 
-The startup controller is the next implementation phase. Physical hardware
-validation has not been performed. See [status](system-firmware-resources-status.md).
+## Optional startup rendition
+
+`SystemStartupSequence` is an elapsed-time controller with `Update`, `Seek` and
+`Restart`. It has no graphics, audio, storage or boot/reset side effects. The
+same elapsed time selects the same curves at 50/60 Hz, including after a seek.
+
+Prepare `SystemStartupRenderer.Load(catalog, token)` between application frames.
+It uses five original startup models, their embedded textures and the extracted
+tile texture through the existing `Renderer`/GX pipeline. It retains no catalog.
+Use `Update(deltaSeconds)` or `Seek(seconds)` between frames, then call `Draw()`
+inside a device frame. It owns its models, instances, tile mesh and texture;
+dispose between frames. `NativeBytes` reports retained native resource bytes.
+Start an ordinary startup `Sound` explicitly when playback is desired.
+
+```csharp
+using var startup = SystemStartupRenderer.Load(catalog, cancellationToken);
+catalog.Dispose();
+startup.Seek(4.2); // Deterministic letter-stage capture.
+device.BeginFrame(Color32.Black);
+startup.Draw();
+device.EndFrame();
+```
+
+The rendition includes drop/rolling-cube motion, fifteen fading tiles, translucent
+cubes, camera movement, normal-projected environment materials, the original
+three-face logo and joint-driven wordmark reveal, hold and fade. Animation curves,
+tile layout, camera framing and headlight are reconstructed. They are not original
+firmware tracks or a claim of pixel-identical physical IPL behavior. Original
+geometry and authored MAT1 programs are imported; no ripped Wii meshes are used.
+`ModelInstance.SetNodeOffset`, `SetMaterialColor` and `SetTevColor` provide bounded,
+private native controls; reset methods restore the sampled/authored values.
+Physical hardware validation has not been performed. See [status](system-firmware-resources-status.md).
 
 ## Console acceptance fixture
 
@@ -160,7 +190,9 @@ The fixture records source, revision and inventory counts in the existing debug
 log, disposes the full image, then presents Environment on black. A cycles
 through Tiles, LogoTop, LogoLeft, LogoRight and Wordmark. START creates/plays the
 existing stereo Sound; B exits and disposes resources. Unknown layouts report
-`FIRMWARE HARDWARE FAIL`. The fixture does not interpret models or animate them.
+`FIRMWARE HARDWARE FAIL`. A continues through nine original model views and seven fixed animation times.
+X toggles elapsed-time animation in those views; the fixed snapshots remain
+independent of display rate until playback is enabled.
 
 After launching on the console with the debugger stub, capture the sequence:
 

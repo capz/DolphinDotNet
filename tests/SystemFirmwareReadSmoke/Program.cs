@@ -22,7 +22,14 @@ internal static class Program
             {
                 if(model.NodeCount!=1||model.MeshCount!=1||model.MaterialCount!=1||model.GetNodeName(0)!="boot_demo_base_cube")return 15;
                 using(var instance=model.CreateInstance())
-                {var transform=new float[16];instance.GetNodeTransform(0,transform);if(transform[15]!=1)return 16;}
+                {
+                    var transform=new float[16];instance.GetNodeTransform(0,transform);if(transform[15]!=1)return 16;
+                    instance.SetNodeOffset(0,new Vector3(2,3,4),Quaternion.Identity,new Vector3(1,1,1));
+                    instance.GetNodeTransform(0,transform);if(transform[12]!=2||transform[13]!=3)return 17;
+                    instance.SetMaterialColor(0,new Color32(1,2,3,4));instance.SetTevColor(0,0,-12,20,40,200);
+                    instance.ResetMaterialColors(0);instance.ResetNodeOffset(0);
+                    instance.GetNodeTransform(0,transform);if(transform[12]!=0)return 18;
+                }
             }
         }
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 2;

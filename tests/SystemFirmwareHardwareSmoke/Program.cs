@@ -6,10 +6,11 @@ using Dolphin.Graphics;
 using Dolphin.Input;
 using Dolphin.Storage;
 using Dolphin.System;
+using Dolphin.Timing;
 
 /// <summary>Original-firmware acceptance fixture. No firmware or extracted assets
 /// are packaged. Each frame presents only the selected texture, using the existing
-/// debugger automation frame boundary. A selects the next texture, START plays
+/// debugger automation frame boundary. A selects textures/models/animation snapshots; X animates; START plays
 /// the stereo source, and B exits and releases all resources.</summary>
 internal static class Program
 {
@@ -44,6 +45,11 @@ internal static class Program
                 Width=640,Height=480,VertexCapacity=6
             });
             Texture2D? texture=null;
+            Model? model=null;ModelInstance? instance=null;SystemStartupRenderer? startup=null;
+            var renderer=new Renderer(device);var camera=new Camera(40,0,1,2000);
+            camera.LookAt(new Vector3(300,200,500),new Vector3(0,0,0),new Vector3(0,1,0));
+            var transform=new Transform();var clock=new FrameClock();bool playing=false;
+            var times=new double[]{0,.8,2,3.4,4.2,5,6.2};
             Sound? sound=null;
             SoundChannel? voice=null;
             try
@@ -59,12 +65,29 @@ internal static class Program
                     if(pad.B.WasPressed)break;
                     if(pad.A.WasPressed)
                     {
-                        // Publication/disposal occurs between complete frames.
-                        texture.Dispose();texture=null;
-                        selected=(selected+1)%6;
-                        texture=SystemResources.CreateTexture(catalog,(SystemTexture)selected);
-                        DebugOverlay.WriteLine("FIRMWARE TEXTURE "+selected+" READY");
+                        texture?.Dispose();texture=null;instance?.Dispose();instance=null;model?.Dispose();model=null;
+                        selected=(selected+1)%22;playing=false;
+                        if(selected<6)
+                        {
+                            startup?.Dispose();startup=null;
+                            texture=SystemResources.CreateTexture(catalog,(SystemTexture)selected);
+                            DebugOverlay.WriteLine("FIRMWARE TEXTURE "+selected+" READY");
+                        }
+                        else if(selected<15)
+                        {
+                            model=SystemResources.CreateModelAsync(catalog,(SystemModel)(selected-6)).Result;
+                            instance=model.CreateInstance();
+                            DebugOverlay.WriteLine("FIRMWARE MODEL "+(selected-6)+" READY "+model.NativeBytes);
+                        }
+                        else
+                        {
+                            if(startup==null)startup=SystemStartupRenderer.Load(catalog);
+                            startup.Seek(times[selected-15]);
+                            DebugOverlay.WriteLine("FIRMWARE ANIMATION "+(selected-15)+" READY "+startup.NativeBytes);
+                        }
                     }
+                    if(pad.X.WasPressed&&startup!=null){playing=!playing;clock.Reset();}
+                    float delta=clock.Tick();if(playing&&startup!=null)startup.Update(delta);
                     if(pad.Start.WasPressed)
                     {
                         voice?.Dispose();voice=null;
@@ -78,19 +101,23 @@ internal static class Program
                         DebugOverlay.WriteLine("FIRMWARE AUDIO STARTED");
                     }
                     device.BeginFrame(Color32.Black);
-                    batch.Begin();
-                    // Fixed presentation independent of frame rate. This is a
-                    // texture acceptance image, not a startup reconstruction.
-                    float scale=Math.Min(540f/texture.Width,400f/texture.Height);
-                    float width=texture.Width*scale,height=texture.Height*scale;
-                    batch.DrawTexture(texture,new RectF((640-width)/2,(480-height)/2,width,height),Color32.White);
-                    batch.End();
+                    if(texture!=null)
+                    {
+                        batch.Begin();
+                        float scale=Math.Min(540f/texture.Width,400f/texture.Height);
+                        float width=texture.Width*scale,height=texture.Height*scale;
+                        batch.DrawTexture(texture,new RectF((640-width)/2,(480-height)/2,width,height),Color32.White);
+                        batch.End();
+                    }
+                    else if(instance!=null)
+                    {renderer.Begin3D(camera);renderer.DrawModel(instance,transform);renderer.End3D();}
+                    else startup?.Draw();
                     device.EndFrame();
                 }
             }
             finally
             {
-                voice?.Dispose();sound?.Dispose();texture?.Dispose();
+                voice?.Dispose();sound?.Dispose();texture?.Dispose();instance?.Dispose();model?.Dispose();startup?.Dispose();
             }
             DebugOverlay.WriteLine("FIRMWARE HARDWARE RESOURCES RELEASED");
             return 0;

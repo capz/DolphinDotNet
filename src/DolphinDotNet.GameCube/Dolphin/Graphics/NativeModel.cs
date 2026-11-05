@@ -33,6 +33,8 @@ internal static class NativeModel
     internal static int ModelInstanceDispose(int token)=>throw Unsupported();
     internal static int ModelPlay(int token,int clip,int loop,float fade)=>throw Unsupported();
     internal static int ModelControl(int token,int op,float value)=>throw Unsupported();
+    internal static int ModelNodeOffset(int token,int node,float[]? values)=>throw Unsupported();
+    internal static int ModelColor(int token,int material,int slot,float[]? values)=>throw Unsupported();
     internal static int ModelNodeMatrix(int token,int node,float[] matrix)=>throw Unsupported();
     internal static int ModelDraw(int token,float[] matrix)=>throw Unsupported();
     internal static int ModelDrawModels(int[] tokens,float[] matrices,int count)=>throw Unsupported();

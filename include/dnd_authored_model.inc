@@ -1,7 +1,7 @@
 /* Authored material state inside the existing model draw path. Geometry still
  * comes from validated triangles; no source GX command stream is submitted. */
 static void authored_model_material(const DndAuthoredMaterial *m,const DndMaterial *material,
-                                    const float normal[16],bool custom_scene) {
+                                    const float normal[16],bool custom_scene,const DndInstance *instance,unsigned material_index) {
   GX_SetCullMode(m->cull);
   GX_SetZMode(m->depth[0],m->depth[1],m->depth[2]);
   GX_SetZCompLoc(m->depth_location);GX_SetDither(m->dither);
@@ -38,7 +38,12 @@ static void authored_model_material(const DndAuthoredMaterial *m,const DndMateri
   GX_SetTevOrder(0,m->texgens?m->order[0]:GX_TEXCOORDNULL,
                  material->texture>=0?m->order[1]:GX_TEXMAP_NULL,m->order[2]);
   for(unsigned reg=0;reg<3;reg++) {
-    const int16_t *c=m->colors[reg];GX_SetTevColorS10((u8)(reg+1),(GXColorS10){c[0],c[1],c[2],c[3]});
+    const int16_t *c=m->colors[reg];GXColorS10 color={c[0],c[1],c[2],c[3]};
+    unsigned index=material_index*4+reg+1;
+    if(instance->color_set&&instance->color_set[index]) {
+      const float *v=instance->colors+index*4;color=(GXColorS10){(int16_t)v[0],(int16_t)v[1],(int16_t)v[2],(int16_t)v[3]};
+    }
+    GX_SetTevColorS10((u8)(reg+1),color);
   }
   const DndAuthoredTev *rgb=&m->rgb,*alpha=&m->opacity;
   GX_SetTevColorIn(0,rgb->input[0],rgb->input[1],rgb->input[2],rgb->input[3]);

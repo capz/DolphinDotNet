@@ -199,3 +199,18 @@ using(var catalog=firmware.CreateCatalog())
 Array.Copy(filesystemImage,tableAt,filesystemImage,0x5000,92);
 Reject(()=>FirmwareFileTable.Inspect(filesystemImage));
 Console.WriteLine("System firmware synthetic tests passed");
+
+// Equal elapsed time produces equal sequence state at 50/60 Hz, and seeking
+// across boundaries/restarting never depends on prior updates.
+var fifty=new SystemStartupSequence();var sixty=new SystemStartupSequence();
+for(int i=0;i<250;i++)fifty.Update(1d/50);
+for(int i=0;i<300;i++)sixty.Update(1d/60);
+Check(Math.Abs(fifty.ElapsedSeconds-sixty.ElapsedSeconds)<1e-10&&fifty.Stage==sixty.Stage);
+Check(Math.Abs(fifty.LetterProgress(12)-sixty.LetterProgress(12))<1e-6);
+fifty.Seek(2);float sampledTile=fifty.TileOpacity(5),travel=fifty.TraceProgress;
+fifty.Seek(6.4);Check(fifty.IsComplete&&fifty.Opacity==0);fifty.Seek(2);
+Check(fifty.TileOpacity(5)==sampledTile&&fifty.TraceProgress==travel&&!fifty.IsComplete);
+fifty.Restart();Check(fifty.ElapsedSeconds==0&&fifty.Stage==SystemStartupStage.Drop);
+foreach(double value in new[]{-1d,double.NaN,double.PositiveInfinity})
+{try{fifty.Seek(value);throw new Exception("Invalid time accepted");}catch(ArgumentOutOfRangeException){}}
+Console.WriteLine("Startup elapsed-time PAL/NTSC progression, seek, fade and restart passed.");

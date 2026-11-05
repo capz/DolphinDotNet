@@ -63,7 +63,9 @@ typedef struct {
   float time, next_time, speed, fade, elapsed;
   DndModel *model;
   unsigned budget, bytes;
-  DndPose *pose, *other;
+  DndPose *pose, *other, *offset;
+  unsigned char *offset_set, *color_set;
+  float *colors;
   float *global;
   unsigned char *done;
   float **vertices;

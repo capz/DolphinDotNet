@@ -227,6 +227,10 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     if (!dnd_model_inverse(normal, mv))
       return -1;
     DndMaterial *mat = &model->material[mesh->material], animated_copy;
+    if(in->color_set&&in->color_set[(unsigned)mesh->material*4]) {
+      animated_copy=*mat;mat=&animated_copy;
+      for(unsigned c=0;c<4;c++)mat->color[c]=in->colors[(unsigned)mesh->material*16+c]/255.f;
+    }
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     const DndAuthoredMaterial *authored=!effect&&model->authored?&model->authored[mesh->material]:NULL;
 #endif
@@ -340,7 +344,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
       // Authored lighting replaces the ordinary indexed headlight.
       model_batch_light_ready=false;
       if(custom_scene)dnd_draw_backend_scene(authored->channel[0][0]||authored->channel[1][0],frame_view);
-      authored_model_material(authored,mat,normal,custom_scene);
+      authored_model_material(authored,mat,normal,custom_scene,in,(unsigned)mesh->material);
     }
     for (unsigned first = 0; first < mesh->indices;) {
       unsigned count = mesh->indices - first;

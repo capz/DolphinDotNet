@@ -3,8 +3,9 @@
 The seven-phase contract is **not complete**. Phase 1 software access is
 implemented; Phases 2–4 have strict supported-layout implementations and tests.
 Original J3D1 geometry/material interpretation (Phase 5) is implemented for the
-qualified original profile; the startup renderer (Phase 6) is in progress. Integration work for Phase 7 is present, but
-original model/animation compatibility and physical-console validation are unperformed.
+qualified original profile; the optional startup rendition (Phase 6) is implemented. Integration work for Phase 7 is present, but
+regional model import qualification is complete; emulated captures and physical-console
+validation remain separate acceptance checks.
 No Nintendo firmware or extracted proprietary assets are included.
 
 | Phase | Implemented | Remaining acceptance work |
@@ -14,7 +15,7 @@ No Nintendo firmware or extracted proprietary assets are included.
 | 3 | Named caller-owned Texture2D resources; metadata-only cache; SystemFont/IplFont compatibility; native allocation/disposal tests | Original NTSC/PAL render captures and comparisons |
 | 4 | Original adjacent WSYS/AW association in NTSC 1.0/1.2 and PAL 1.2; exact sample counts; native memory-backed Sound/Music; bit-identical reference decoding; lifetime tests | Physical stereo output |
 | 5 | All 27 original regional model imports; shared validated geometry/hierarchy, separate MAT1 TEV/projection/raster state, embedded textures; generated GX-state and malformed/lifetime tests | Physical/emulated frame comparisons and original lighting qualification |
-| 6 | No renderer/controller implementation | Original startup sequence using the Phase 5 models and deterministic captures |
+| 6 | Elapsed-time controller; five original models, fifteen tiles, camera/cube/logo/joint-letter stages, transparency/color/projection; bounded per-instance controls; deterministic fixture snapshots | Reconstructed curves/camera/tile layout and headlight differ from unmeasured physical IPL behavior; console comparisons pending |
 | 7 | AOT/native bindings, heap selection, metadata CLI, regression integration, emulator completion proof and API guide | Phase 5/6 integration, actual regional dumps, physical validation and final remote CI confirmation |
 
 ## Current validation — 2026-11-05
@@ -161,3 +162,13 @@ remains unavailable; no physical validation is claimed.
 See [the API and diagnostics guide](system-firmware-resources.md). Use
 `dnd-assets firmware inspect INPUT` for metadata-only reporting; original asset
 payloads and captures must not be committed.
+
+### Phase 6 implementation checks
+
+Local full graphics suite passed, including existing ModelSmoke/ARAM with forced
+GC, generated original J3D1 GX-state recording and independent instance overrides.
+The expanded firmware AOT bridge passed with 1,025 reads, 439 forced collections,
+2,104,416 bytes occupied at exit and no live model/draw/file/audio handles.
+Elapsed-time progression and seeking/restart/fade pass at matching 50/60 Hz times.
+The texture/model/animation fixture cross-builds with the pinned devkitPro/libogc2
+image and produces aligned DOL/ELF outputs. These are not physical-console results.
