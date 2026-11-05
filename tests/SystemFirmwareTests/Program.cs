@@ -214,3 +214,11 @@ fifty.Restart();Check(fifty.ElapsedSeconds==0&&fifty.Stage==SystemStartupStage.D
 foreach(double value in new[]{-1d,double.NaN,double.PositiveInfinity})
 {try{fifty.Seek(value);throw new Exception("Invalid time accepted");}catch(ArgumentOutOfRangeException){}}
 Console.WriteLine("Startup elapsed-time PAL/NTSC progression, seek, fade and restart passed.");
+
+using(var source=FirmwareImage.Read(AdjacentAudioImage(false)))
+using(var catalog=source.CreateCatalog())
+using(var canceled=new CancellationTokenSource())
+{
+    canceled.Cancel();try{catalog.GetModelIndex(SystemModel.BaseCube,canceled.Token);throw new Exception("Named model cancellation ignored");}
+    catch(OperationCanceledException){}
+}

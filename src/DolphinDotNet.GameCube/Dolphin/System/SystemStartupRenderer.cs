@@ -35,6 +35,7 @@ public sealed class SystemStartupRenderer : IDisposable
     public static SystemStartupRenderer Load(FirmwareCatalog catalog,CancellationToken cancellationToken=default,int nativeModelBudgetBytes=2*1024*1024)
     {
         if(catalog==null)throw new ArgumentNullException(nameof(catalog));
+        CheckApplication();
         var device=GraphicsDevice.Default;
         if(device.IsFrameActive)throw new InvalidOperationException("Prepare startup resources between frames.");
         var result=new SystemStartupRenderer(device);
@@ -68,18 +69,21 @@ public sealed class SystemStartupRenderer : IDisposable
         }
         catch{result.Dispose();throw;}
     }
+    /// <summary>Sum of per-resource native budget charges. Shared model textures
+    /// can be charged more than once; this is not a unique-allocation peak.</summary>
     public int NativeBytes
     {
         get{Check();int bytes=(quad?.NativeBytes??0)+(tiles?.NativeBytes??0);for(int i=0;i<5;i++)bytes+=models[i]!.NativeBytes+instances[i]!.NativeBytes;return bytes;}
     }
-    private void Check(){if(disposed)throw new ObjectDisposedException(nameof(SystemStartupRenderer));}
+    private static void CheckApplication(){if(!Dolphin.Threading.Tasks.Scheduler.IsApplicationThread)throw new InvalidOperationException("Use the application executor for startup preparation and rendering.");}
+    private void Check(){if(disposed)throw new ObjectDisposedException(nameof(SystemStartupRenderer));CheckApplication();}
     public void Update(double deltaSeconds){Check();if(device.IsFrameActive)throw new InvalidOperationException("Update between frames.");sequence.Update(deltaSeconds);ApplyPose();}
     public void Seek(double seconds){Check();if(device.IsFrameActive)throw new InvalidOperationException("Seek between frames.");sequence.Seek(seconds);ApplyPose();}
     private static Quaternion Rotation(float x,float y,float z)
     {
         double hx=x*Math.PI/360,hy=y*Math.PI/360,hz=z*Math.PI/360;
         double a=Math.Sin(hx),b=Math.Cos(hx),c=Math.Sin(hy),d=Math.Cos(hy),e=Math.Sin(hz),f=Math.Cos(hz);
-        return new Quaternion((float)(a*d*f-b*c*e),(float)(b*c*f+a*d*e),(float)(b*d*e-a*c*f),(float)(b*d*f+a*c*e));
+        return new Quaternion((float)(a*d*f+b*c*e),(float)(b*c*f-a*d*e),(float)(b*d*e+a*c*f),(float)(b*d*f-a*c*e));
     }
     private void ApplyPose()
     {
@@ -87,9 +91,10 @@ public sealed class SystemStartupRenderer : IDisposable
         camera.LookAt(new Vector3(7*(1-progress),6*(1-progress),11+2*progress),new Vector3(0,-.6f,0),new Vector3(0,1,0));
         transforms[0].LocalScale=new Vector3(.01754f,.01754f,.01754f);
         transforms[1].LocalScale=new Vector3(.02387f,.02387f,.02387f);
-        transforms[3].LocalScale=new Vector3(.02506f,.02506f,.02506f);
+        transforms[3].LocalScale=new Vector3(.02f,.02f,.02f);
+        transforms[3].LocalPosition=new Vector3(0,.5f,0);
         transforms[3].LocalRotation=Rotation(30*progress,-45*progress,0);
-        transforms[4].LocalScale=new Vector3(.02f,.02f,.02f);transforms[4].LocalPosition=new Vector3(-.2375f,-3.25f,0);
+        transforms[4].LocalScale=new Vector3(.02f,.02f,.02f);transforms[4].LocalPosition=new Vector3(-.2375f,.25f,0);
         float travel=sequence.TraceProgress;int step=Math.Min(14,(int)travel);float u=Math.Min(1,travel-step);int next=Math.Min(14,step+1);
         float x=path[step*3]+(path[next*3]-path[step*3])*u;
         float y=path[step*3+1]+(path[next*3+1]-path[step*3+1])*u;
@@ -103,8 +108,7 @@ public sealed class SystemStartupRenderer : IDisposable
         // is zero. Preserve their authored gray/white channel colors.
         for(int i=0;i<models[4]!.MaterialCount;i++)
         {
-            byte shade=(byte)(i<8?102:i==8||i>=17?255:51);
-            instances[4]!.SetMaterialColor(i,new Color32(shade,shade,shade,(byte)(255*sequence.Opacity*sequence.LetterProgress(i<8?i:8))));
+            instances[4]!.SetOpacity(i,sequence.Opacity*sequence.LetterProgress(i<8?i:8));
         }
         for(int i=0;i<13;i++)
         {
@@ -113,7 +117,7 @@ public sealed class SystemStartupRenderer : IDisposable
         }
     }
     private void SetOpacity(int index,float alpha)
-    {for(int i=0;i<models[index]!.MaterialCount;i++)instances[index]!.SetMaterialColor(i,new Color32(255,255,255,(byte)(alpha*255)));}
+    {for(int i=0;i<models[index]!.MaterialCount;i++)instances[index]!.SetOpacity(i,alpha);}
     /// <summary>Draw inside an application-owned device frame. Does not begin,
     /// clear or present that frame. Call Seek/Update before BeginFrame.</summary>
     public void Draw()
@@ -138,7 +142,7 @@ public sealed class SystemStartupRenderer : IDisposable
     }
     public void Dispose()
     {
-        if(disposed)return;if(device.IsFrameActive)throw new InvalidOperationException("Dispose startup resources between frames.");
+        if(disposed)return;CheckApplication();if(device.IsFrameActive)throw new InvalidOperationException("Dispose startup resources between frames.");
         for(int i=0;i<5;i++){instances[i]?.Dispose();models[i]?.Dispose();}
         quad?.Dispose();tiles?.Dispose();disposed=true;
     }

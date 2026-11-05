@@ -36,6 +36,7 @@ int dnd_model_begin_fzero(DndString *path, DndString *textures, int selection,
 int dnd_model_begin_bytes(DndArray *data, int budget);
 /* Owned memory source; validated J3D1/MAT1 or the existing J3D2 profile. */
 int dnd_model_node_offset(int token,int node,DndArray *values);
+int dnd_model_opacity(int token,int material,float opacity);
 int dnd_model_color(int token,int material,int slot,DndArray *values);
 int dnd_model_j3d_memory(DndArray *data,int budget);
 int dnd_model_step(int token);

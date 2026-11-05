@@ -107,10 +107,11 @@ texels across mips. EXI transfers are at most 4 KiB, with a 20 ms deadline and a
 finite poll cap. Native graphics/audio/model allocations have independent bounded
 budgets and share MEM1 with the managed heap. No physical peak is claimed.
 
-Measured original model native retention is approximately 152–375 KiB per model
+Measured original model native retention is approximately 149–367 KiB per model
 before instances; startup uses five models. `Model.NativeBytes`,
 `ModelInstance.NativeBytes` and `SystemStartupRenderer.NativeBytes` report actual
-retention. Host warm-cache lookup measurements are approximately 0.02–0.04 ms per
+per-resource budget charges (shared textures can be counted multiple times),
+not unique physical memory or peak usage. Host warm-cache lookup measurements are approximately 0.02–0.04 ms per
 100 lookups with 3,200 allocated bytes; they are not console latency predictions.
 
 Use [the API guide](system-firmware-resources.md),

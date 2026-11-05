@@ -314,7 +314,7 @@ int dnd_model_instance(int token, int budget) {
   in->done = dnd_model_alloc(m->nodes, &in->bytes, in->budget);
   in->vertices =
       dnd_model_alloc(m->meshes * sizeof(float *), &in->bytes, in->budget);
-  bool blended = false;
+  bool blended = m->authored!=NULL;
   for (unsigned i = 0; i < m->materials; i++) blended |= (m->material[i].mode & 4) != 0;
   if (blended) {
     in->draw_order = dnd_model_alloc(m->meshes * sizeof(unsigned), &in->bytes, in->budget);
@@ -469,6 +469,29 @@ int dnd_model_instance_bytes(int token) {
 
 /* Per-instance absolute colors and relative local poses. Owned native buffers;
  * no managed pointers survive the call, and changes require a frame boundary. */
+static bool instance_colors(DndInstance *in) {
+  if(!in->colors){
+    float *colors=dnd_model_alloc(in->model->materials*64,&in->bytes,in->budget);
+    unsigned char *set=dnd_model_alloc(in->model->materials*4,&in->bytes,in->budget);
+    if(!colors||!set){dnd_model_free(colors,&in->bytes);dnd_model_free(set,&in->bytes);return false;}
+    in->colors=colors;in->color_set=set;
+  }
+  return true;
+}
+int dnd_model_opacity(int token,int material,float opacity) {
+  DndInstance *in=dnd_instance_find(token);
+  if(!in||!in->model->ready||dnd_device_active()||!in->model->authored||
+     material<0||(unsigned)material>=in->model->materials||!isfinite(opacity)||opacity<0||opacity>1)return -1;
+  if(!instance_colors(in))return -2;
+  for(unsigned slot=0;slot<4;slot++) {
+    unsigned index=(unsigned)material*4+slot;float *value=in->colors+index*4;
+    if(!in->color_set[index])for(unsigned c=0;c<3;c++)
+      value[c]=slot?in->model->authored[material].colors[slot-1][c]:in->model->material[material].color[c]*255;
+    value[3]=opacity*(slot?in->model->authored[material].colors[slot-1][3]:255);
+    in->color_set[index]=(unsigned char)(slot?1:3);
+  }
+  return 0;
+}
 int dnd_model_color(int token,int material,int slot,DndArray *values) {
   DndInstance *in=dnd_instance_find(token);
   if(!in||!in->model->ready||dnd_device_active()||!in->model->authored||
@@ -478,12 +501,7 @@ int dnd_model_color(int token,int material,int slot,DndArray *values) {
   if(values->element_size!=4||values->elements_are_references||values->length!=4)return -1;
   float copy[4];memcpy(copy,values->data,16);
   for(unsigned i=0;i<4;i++)if(!isfinite(copy[i])||copy[i]<(slot?-1024:0)||copy[i]>(slot?1023:255))return -1;
-  if(!in->colors){
-    float *colors=dnd_model_alloc(in->model->materials*64,&in->bytes,in->budget);
-    unsigned char *set=dnd_model_alloc(in->model->materials*4,&in->bytes,in->budget);
-    if(!colors||!set){dnd_model_free(colors,&in->bytes);dnd_model_free(set,&in->bytes);return -2;}
-    in->colors=colors;in->color_set=set;
-  }
+  if(!instance_colors(in))return -2;
   memcpy(in->colors+index*4,copy,16);in->color_set[index]=1;return 0;
 }
 int dnd_model_node_offset(int token,int node,DndArray *values) {

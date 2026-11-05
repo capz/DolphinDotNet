@@ -15,6 +15,9 @@ class FirmwareCaptureChecks(unittest.TestCase):
         records=self.fixtures()
         for record in records:record['sha256']='a'*64
         with self.assertRaisesRegex(ValueError,'not distinct'):check(records)
+    def test_tev_alpha_fade_regression_rejected(self):
+        records=self.fixtures();records[-1]['sha256']=records[-2]['sha256']
+        with self.assertRaisesRegex(ValueError,'Fade did not change'):check(records)
     def test_missing_original_stage_rejected(self):
         with self.assertRaisesRegex(ValueError,'Missing capture: fade'):check(self.fixtures()[:-1])
 

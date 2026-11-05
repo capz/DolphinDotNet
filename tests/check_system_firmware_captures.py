@@ -22,6 +22,8 @@ def check(records):
         raise ValueError('Texture captures are not distinct; check real XFB RAM copies.')
     if len({images[n+'.png'] for n in animation})<5:
         raise ValueError('Animation captures do not show enough distinct stages.')
+    if images['hold.png']==images['fade.png']:
+        raise ValueError('Fade did not change the held image.')
     for record in records:
         if record['width'] not in (640,):raise ValueError('Unexpected fixture width')
         if record['height'] not in (480,528,576):raise ValueError('Unexpected fixture height')

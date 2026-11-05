@@ -7,6 +7,12 @@ static void authored_model_material(const DndAuthoredMaterial *m,const DndMateri
   GX_SetZCompLoc(m->depth_location);GX_SetDither(m->dither);
   GX_SetBlendMode(m->blend[0],m->blend[1],m->blend[2],m->blend[3]);
   GX_SetAlphaCompare(m->alpha[0],m->alpha[1],m->alpha[2],m->alpha[3],m->alpha[4]);
+  bool fading=instance->color_set&&(instance->color_set[material_index*4]&2)&&instance->colors[material_index*16+3]<255;
+  if(fading) {
+    GX_SetBlendMode(GX_BM_BLEND,GX_BL_SRCALPHA,GX_BL_INVSRCALPHA,0);
+    GX_SetZMode(m->depth[0],m->depth[1],GX_FALSE);
+    GX_SetAlphaCompare(GX_ALWAYS,0,0,GX_ALWAYS,0);
+  }
   GXColor tint;
   u8 *channels=(u8*)&tint;
   for(unsigned c=0;c<4;c++)channels[c]=(u8)(fminf(1,fmaxf(0,material->color[c]))*255);

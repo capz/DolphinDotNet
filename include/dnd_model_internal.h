@@ -73,6 +73,10 @@ typedef struct {
   unsigned *draw_order;
   float *draw_depth;
 } DndInstance;
+static inline bool dnd_model_translucent(const DndInstance *in,unsigned material) {
+  return (in->model->material[material].mode&4)||
+    (in->color_set&&(in->color_set[material*4]&2)&&in->colors[material*16+3]<255);
+}
 extern DndModel *dnd_models[DND_MODEL_SLOTS];
 extern DndInstance *dnd_instances[DND_INSTANCE_SLOTS];
 extern bool dnd_model_frame_active;

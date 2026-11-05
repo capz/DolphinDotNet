@@ -110,12 +110,12 @@ static void sort_material_draws(DndInstance *in, const float world[16],
   DndModel *m = in->model;
   unsigned opaque = 0;
   for (unsigned i = 0; i < m->meshes; i++)
-    if (!(override_blend<0?(m->material[m->mesh[i].material].mode & 4):override_blend))
+    if (!(override_blend<0?dnd_model_translucent(in,(unsigned)m->mesh[i].material):override_blend))
       in->draw_order[opaque++] = i;
   unsigned count = 0;
   for (unsigned i = 0; i < m->meshes; i++) {
     DndMesh *mesh = &m->mesh[i];
-    if (!(override_blend<0?(m->material[mesh->material].mode & 4):override_blend))
+    if (!(override_blend<0?dnd_model_translucent(in,(unsigned)mesh->material):override_blend))
       continue;
     float object[16], mv[16];
     if (mesh->skin < 0)
@@ -195,6 +195,7 @@ int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {
       !matrix_array(transform, world))
     return -1;
   DndModel *model = in->model;
+  if(model->authored&&effect_token)return -4; /* RGB-only replacement cannot preserve arbitrary MAT1 alpha. */
   const DndDrawEffect *effect;
   if (dnd_effect_resolve(effect_token, &effect) < 0)
     return -2;
@@ -212,7 +213,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
   for (unsigned draw = 0; draw < (only>=0?1:model->meshes); draw++) {
     unsigned mi = only>=0?(unsigned)only:in->draw_order ? in->draw_order[draw] : draw;
     if (animated_mesh_visibility && animated_mesh_visibility[mi] < 0.5f)continue;
-    bool translucent=(model->material[model->mesh[mi].material].mode&4)!=0;
+    bool translucent=dnd_model_translucent(in,(unsigned)model->mesh[mi].material);
     if((filter==1&&translucent)||(filter==2&&!translucent))continue;
     DndMesh *mesh = &model->mesh[mi];
     float object[16], mv[16], normal[16];
@@ -489,7 +490,7 @@ int dnd_model_draw_models(DndArray *tokens,DndArray *matrices,int count){
       if(mesh->skin<0)dnd_model_multiply(object,world,in->global+(unsigned)mesh->node*16);
       else {if(!in->vertices[j])return -1;memcpy(object,world,64);}
       dnd_model_multiply(mv,frame_view,object);if(!dnd_model_inverse(inverse,mv))return -1;
-      if(model->material[mesh->material].mode&4){
+      if(dnd_model_translucent(in,(unsigned)mesh->material)){
         float depth=mv[2]*mesh->center[0]+mv[6]*mesh->center[1]+mv[10]*mesh->center[2]+mv[14];
         if(!isfinite(depth))return -1;
         alpha_submissions[alpha_count]=(ModelSubmission){(unsigned)i,j,alpha_count,depth};alpha_count++;

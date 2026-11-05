@@ -17,7 +17,7 @@ public static class SystemResources
     public static global::System.Threading.Tasks.Task<Model> CreateModelAsync(FirmwareCatalog catalog,SystemModel name,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
     {
         if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
-        return CreateModelAsync(catalog,catalog.GetModelIndex(name),cancellationToken,nativeBudgetBytes);
+        return CreateModelAsync(catalog,catalog.GetModelIndex(name,cancellationToken),cancellationToken,nativeBudgetBytes);
     }
     /// <summary>Lossless compressed stereo source. May validate on the background
     /// executor; playback must use the application executor. Cancellation releases native state.</summary>

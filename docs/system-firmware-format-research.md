@@ -118,3 +118,17 @@ Default lighting is a white headlight when the material requests lighting;
 applications can supply existing scene lighting. Physical IPL light positions
 and pixel-identical console rendering remain unverified. These are rendering
 comparison limits, not geometry replacements. No ripped reference meshes are used.
+
+## Evaluated geometry and animated opacity
+
+Original rigid DRW1 bindings use the shared skin/palette path. Bounds for framing
+must be measured after palette evaluation: the wordmark's evaluated Y range is
+approximately -177.388 to -123.5, rather than its raw vertex-array bounds. The
+startup placement accounts for that original joint offset.
+
+Some original materials source alpha from signed TEV registers and use opaque
+blend state. Material alpha alone therefore cannot animate all meshes. The
+optional per-instance opacity control preserves RGB, updates material/TEV alpha
+and selects sorted alpha blending while fading. Reset restores original state;
+ordinary authored rendering keeps the imported program and raster settings.
+Emulator captures caught both the framing and fade issues during acceptance.

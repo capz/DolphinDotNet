@@ -117,21 +117,23 @@ public sealed class FirmwareCatalog : IDisposable
     }
     /// <summary>Identify original startup/menu models by bounded JNT1 names.
     /// Multiple matching resources fail; this does not replace native validation.</summary>
-    public int GetModelIndex(SystemModel name)
+    public int GetModelIndex(SystemModel name,CancellationToken cancellationToken=default)
     {
         if(records==null)throw new ObjectDisposedException(nameof(FirmwareCatalog));
         if(name<SystemModel.BaseCube||name>SystemModel.MemoryCube)throw new ArgumentOutOfRangeException(nameof(name));
         string root=name==SystemModel.BaseCube?"boot_demo_base_cube":name==SystemModel.CoverCube?"boot_demo_cover_cube":
             name==SystemModel.Logo?"boot_demo_mark":name==SystemModel.Wordmark?"root":name==SystemModel.SmallCube?"s_cube":
             name==SystemModel.MenuCube?"basecube":name==SystemModel.MenuIcon0?"i_cube0":name==SystemModel.MenuIcon1?"i_cube1":"cube_in_manu";
+        cancellationToken.ThrowIfCancellationRequested();
         int found=-1;
         for(int i=0;i<Count;i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if(resources[i].Kind!=FirmwareResourceKind.Model)continue;
             var names=modelNamesCache[i];
             if(names==null)
             {
-                var data=Extract(i);
+                var data=Extract(i,cancellationToken);
                 try{names=FirmwareModelInfo.Inspect(data).ReadNodeNames(data);}
                 catch(InvalidDataException){continue;}catch(NotSupportedException){continue;}
                 modelNamesCache[i]=names;

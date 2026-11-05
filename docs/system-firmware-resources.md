@@ -137,7 +137,9 @@ existing model rules. Image/catalog lifetimes are independent after extraction.
 
 The J3D1/MAT1 profile preserves original topology, joints, attributes, embedded
 textures, signed TEV colors, RGB/alpha operations, projection and raster state.
-Unseen material profiles fail explicitly. Structural inspection alone does not
+Unseen material profiles fail explicitly. RGB-only effect overrides on MAT1 are
+unsupported; use DrawModelWithMaterial to explicitly replace the complete material.
+Structural inspection alone does not
 validate geometry; the native import is authoritative. See
 [format qualification](system-firmware-format-research.md) for tested profiles
 and unverified lighting/render-comparison semantics.
@@ -153,7 +155,8 @@ It uses five original startup models, their embedded textures and the extracted
 tile texture through the existing `Renderer`/GX pipeline. It retains no catalog.
 Use `Update(deltaSeconds)` or `Seek(seconds)` between frames, then call `Draw()`
 inside a device frame. It owns its models, instances, tile mesh and texture;
-dispose between frames. `NativeBytes` reports retained native resource bytes.
+dispose between frames. `NativeBytes` reports per-resource native budget charges; shared model textures
+can be counted more than once. It is not a peak-memory measurement.
 Start an ordinary startup `Sound` explicitly when playback is desired.
 
 ```csharp
@@ -171,8 +174,12 @@ three-face logo and joint-driven wordmark reveal, hold and fade. Animation curve
 tile layout, camera framing and headlight are reconstructed. They are not original
 firmware tracks or a claim of pixel-identical physical IPL behavior. Original
 geometry and authored MAT1 programs are imported; no ripped Wii meshes are used.
-`ModelInstance.SetNodeOffset`, `SetMaterialColor` and `SetTevColor` provide bounded,
+`ModelInstance.SetNodeOffset`, `SetMaterialColor`, `SetTevColor` and `SetOpacity` provide bounded,
 private native controls; reset methods restore the sampled/authored values.
+`SetOpacity` preserves RGB, drives material and original TEV alpha sources, and
+uses sorted alpha blending below full opacity even for an authored opaque mesh.
+Startup preparation rejects the background executor before any blocking import;
+use the application executor between frames.
 Physical hardware validation has not been performed. See [status](system-firmware-resources-status.md).
 
 ## Console acceptance fixture
