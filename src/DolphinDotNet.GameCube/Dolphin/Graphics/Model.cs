@@ -124,6 +124,18 @@ public sealed class Model : IDisposable
         var work=new LoadWork(path,nativeBudgetBytes,cancellationToken,6,allowMaterialApproximation,motion:animationPath,fps:animationFramesPerSecond);
         Task.Run(work.Step);return work.Completion.Task;
     }
+    /// <summary>Import an owned snapshot of a bounded J3D buffer on the background
+    /// executor, without temporary files. Original J3D1/MAT1 retains its authored
+    /// GX material profile; the existing strict J3D2 profile is also supported.</summary>
+    public static Task<Model> LoadJ3dAsync(byte[] data,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(data==null)throw new ArgumentNullException(nameof(data));
+        if(data.Length<32||data.Length>2*1024*1024)throw new global::System.IO.InvalidDataException("J3D memory source exceeds its input bounds.");
+        if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)throw new ArgumentOutOfRangeException(nameof(nativeBudgetBytes));
+        cancellationToken.ThrowIfCancellationRequested();
+        var work=new MemoryJ3dWork((byte[])data.Clone(),nativeBudgetBytes,cancellationToken);
+        Task.Run(work.Step);return work.Completion.Task;
+    }
     /// <summary>Load original GameCube Resident Evil 4 BIN geometry, TPL textures
     /// and optional forward-kinematic FCV motion in the background. Accepts raw
     /// files, bare DAT bodies and uncompressed DRS/DAS containers; #N selects a
@@ -229,6 +241,30 @@ public sealed class Model : IDisposable
         internal void Step(){try{cancellation.ThrowIfCancellationRequested();if(token==0){token=format==10?NativeModel.ModelBeginPsoEpisode3(path,textures,motion,fps,eulerKeyBytes,budget,approximate?1:0):format>=6&&format<=9?NativeModel.ModelBeginFormat(path,textures,motion,fps,format,budget,(approximate?1:0)|(format==8&&staticSnapshot?2:0)):format==5?NativeModel.ModelBeginFzero(path,textures,selection,budget,(approximate?1:0)|(staticSnapshot?2:0)):format==1?NativeModel.ModelBeginScene(path,0,60,budget,approximate?1:0):format==2?NativeModel.ModelBeginGlb(path,budget,approximate?1:0):format==3?NativeModel.ModelBeginPso(path,textures,motion,fps,eulerKeyBytes,budget):format==4?NativeModel.ModelBeginScene(path,1,fps,budget,approximate?1:0):NativeModel.ModelBegin(path,budget);
                 if(token==0)throw new global::System.IO.IOException("Model input, native budget or handle limit is invalid.");}
                 int result=format!=0?1:NativeModel.ModelStep(token);if(result<0)throw new global::System.IO.IOException("Invalid or truncated model package, or insufficient native memory.");if(result==0){Task.Run(Step);return;}cancellation.ThrowIfCancellationRequested();var model=new Model(token);token=0;Completion.SetResult(model);}catch(Exception error){if(token!=0){try{NativeModel.ModelDispose(token);}catch(Exception closeError){error=closeError;}token=0;}Completion.SetException(error);}}
+    }
+    private sealed class MemoryJ3dWork
+    {
+        private byte[]? data;private readonly int budget;private readonly CancellationToken cancellation;
+        internal readonly TaskCompletionSource<Model> Completion=new TaskCompletionSource<Model>();
+        internal MemoryJ3dWork(byte[] data,int budget,CancellationToken cancellation){this.data=data;this.budget=budget;this.cancellation=cancellation;}
+        internal void Step()
+        {
+            int token=0;
+            try
+            {
+                cancellation.ThrowIfCancellationRequested();
+                token=NativeModel.ModelJ3dMemory(data!,budget);
+                if(token==0)throw new global::System.IO.InvalidDataException("Unsupported or malformed J3D source, or insufficient native budget.");
+                cancellation.ThrowIfCancellationRequested();
+                var model=new Model(token);token=0;Completion.SetResult(model);
+            }
+            catch(Exception error)
+            {
+                if(token!=0)NativeModel.ModelDispose(token);
+                Completion.SetException(error);
+            }
+            finally{data=null;}
+        }
     }
     private sealed class ResidencyWork
     {

@@ -5,6 +5,7 @@ import struct
 from pathlib import Path
 import subprocess
 import tempfile
+from generate_system_model_fixture import build_model
 ROOT=Path(__file__).resolve().parents[1]
 def run(*args):
     subprocess.run(list(map(str,args)),cwd=ROOT,check=True)
@@ -26,6 +27,9 @@ def main():
         model[8451]=8;model[8453]=8;model[8472]=1;big(model,8476,32)
         masks=bytes([255])*(((len(model)+31)//32)*4);encoded=b'Yay0'+struct.pack('>III',len(model),16+len(masks),16+len(masks))+masks+model
         image[0x12000:0x12000+len(encoded)]=encoded
+        geometry=build_model();masks=bytes([255])*(((len(geometry)+31)//32)*4)
+        encoded=b'Yay0'+struct.pack('>III',len(geometry),16+len(masks),16+len(masks))+masks+geometry
+        image[0x19000:0x19000+len(encoded)]=encoded
         descriptor=bytearray(1024);descriptor[:4]=b'WSYS';big(descriptor,4,len(descriptor));big(descriptor,16,32)
         descriptor[32:36]=b'WINF';big(descriptor,36,1);big(descriptor,40,64);descriptor[64:72]=b'ipl_0.aw'
         # Compact WSYS bank family; desktop fixtures also cover extended names.
@@ -47,6 +51,6 @@ def main():
         generated=work/'firmware.c'
         run('dotnet',ROOT/'tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll','--aot',ROOT/'tests/SystemFirmwareReadSmoke/bin/Release/net8.0/SystemFirmwareReadSmoke.dll',generated)
         run(os.environ.get('CC','cc'),'-pthread','-O1','-std=c11','-Wall','-Wextra','-Werror','-Wno-unused-function','-Iinclude',generated,'tests/system_firmware_read_host.c',
-            'source/audio.c','source/draw_resources.c','source/graphics_device.c','source/graphics_gx.c','source/performance.c','source/managed_runtime.c','source/async_runtime.c','source/text.c','source/numeric.c','source/storage.c','source/contiguous_write.c','source/file_optimize.c','-lm','-o',work/'read-host')
+            *sorted(str(p.relative_to(ROOT)) for p in (ROOT/'source').glob('model*.c')),'source/aram.c','source/audio.c','source/draw_resources.c','source/graphics_device.c','source/graphics_gx.c','source/performance.c','source/managed_runtime.c','source/async_runtime.c','source/text.c','source/numeric.c','source/storage.c','source/contiguous_write.c','source/file_optimize.c','-lm','-o',work/'read-host')
         run(work/'read-host',work,path)
 if __name__=='__main__':main()

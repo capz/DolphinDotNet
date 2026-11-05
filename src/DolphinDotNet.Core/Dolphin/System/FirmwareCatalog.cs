@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace Dolphin.System;
 
-public enum FirmwareResourceKind { Unknown, Texture, UnsupportedModel }
+public enum FirmwareResourceKind { Unknown, Texture, Model }
 
 /// <summary>Validated resource metadata, independent of the firmware image lifetime.
 /// BMD1 recognition is metadata only, not a claim of rendering support.</summary>
@@ -18,7 +18,7 @@ public sealed class FirmwareResource
     internal FirmwareResource(int offset,int compressed,byte[] decoded)
     {
         Offset=offset;CompressedBytes=compressed;DecodedBytes=decoded.Length;
-        Kind=decoded.Length>=8&&Match(decoded,0,"J3D1bmd1")?FirmwareResourceKind.UnsupportedModel:FirmwareResourceKind.Unknown;
+        Kind=decoded.Length>=8&&Match(decoded,0,"J3D1bmd1")?FirmwareResourceKind.Model:FirmwareResourceKind.Unknown;
     }
     internal static bool Match(byte[] d,int at,string s)
     {if(at<0||at>d.Length-s.Length)return false;for(int i=0;i<s.Length;i++)if(d[at+i]!=s[i])return false;return true;}
@@ -34,6 +34,7 @@ public sealed class FirmwareCatalog : IDisposable
     private byte[][]? records;
     private readonly FirmwareStereoAudio? startupAudio;
     private readonly FirmwareTextureInfo[]?[] textureCache;
+    private readonly string[]?[] modelNamesCache;
     private readonly FirmwareWaveSystemInfo[] waveSystems;
     public int WaveSystemCount=>waveSystems.Length;
     public FirmwareWaveSystemInfo GetWaveSystem(int index)=>waveSystems[index];
@@ -41,7 +42,7 @@ public sealed class FirmwareCatalog : IDisposable
     public int Count=>resources.Length;
     public FirmwareResource this[int index]=>resources[index];
     private FirmwareCatalog(FirmwareResource[] metadata,byte[][] compressed,FirmwareFileTable? files,FirmwareStereoAudio? audio,FirmwareWaveSystemInfo[] waves)
-    {resources=metadata;records=compressed;Files=files;startupAudio=audio;waveSystems=waves;textureCache=new FirmwareTextureInfo[metadata.Length][];}
+    {resources=metadata;records=compressed;Files=files;startupAudio=audio;waveSystems=waves;textureCache=new FirmwareTextureInfo[metadata.Length][];modelNamesCache=new string[metadata.Length][];}
     public FirmwareStereoAudio GetStartupAudio()
     {
         if(records==null)throw new ObjectDisposedException(nameof(FirmwareCatalog));
@@ -102,7 +103,7 @@ public sealed class FirmwareCatalog : IDisposable
         if(cached==null)
         {
             var decoded=Extract(index);
-            if(resources[index].Kind==FirmwareResourceKind.UnsupportedModel)
+            if(resources[index].Kind==FirmwareResourceKind.Model)
                 cached=FirmwareModelInfo.Inspect(decoded).ReadTextures(decoded,index);
             else
             {
@@ -113,6 +114,34 @@ public sealed class FirmwareCatalog : IDisposable
         }
         // Cache immutable metadata, never model/ROM payloads or shared GX handles.
         var copy=new FirmwareTextureInfo[cached.Length];Array.Copy(cached,copy,copy.Length);return copy;
+    }
+    /// <summary>Identify original startup/menu models by bounded JNT1 names.
+    /// Multiple matching resources fail; this does not replace native validation.</summary>
+    public int GetModelIndex(SystemModel name)
+    {
+        if(records==null)throw new ObjectDisposedException(nameof(FirmwareCatalog));
+        if(name<SystemModel.BaseCube||name>SystemModel.MemoryCube)throw new ArgumentOutOfRangeException(nameof(name));
+        string root=name==SystemModel.BaseCube?"boot_demo_base_cube":name==SystemModel.CoverCube?"boot_demo_cover_cube":
+            name==SystemModel.Logo?"boot_demo_mark":name==SystemModel.Wordmark?"root":name==SystemModel.SmallCube?"s_cube":
+            name==SystemModel.MenuCube?"basecube":name==SystemModel.MenuIcon0?"i_cube0":name==SystemModel.MenuIcon1?"i_cube1":"cube_in_manu";
+        int found=-1;
+        for(int i=0;i<Count;i++)
+        {
+            if(resources[i].Kind!=FirmwareResourceKind.Model)continue;
+            var names=modelNamesCache[i];
+            if(names==null)
+            {
+                var data=Extract(i);
+                try{names=FirmwareModelInfo.Inspect(data).ReadNodeNames(data);}
+                catch(InvalidDataException){continue;}catch(NotSupportedException){continue;}
+                modelNamesCache[i]=names;
+            }
+            if(names.Length==0||names[0]!=root)continue;
+            if(name==SystemModel.Wordmark&&(names.Length<3||names[1]!="logotype_null"||names[2]!="nintendo_null"))continue;
+            if(found>=0)throw new InvalidDataException("Ambiguous named firmware model.");found=i;
+        }
+        if(found<0)throw new NotSupportedException("No validated identity for requested firmware model.");
+        return found;
     }
     /// <summary>Resolve a named intro texture. Published output sizes and header
     /// positions are only profile hints: J3D1 section structure, TEX1 membership,
@@ -195,5 +224,5 @@ public sealed class FirmwareCatalog : IDisposable
         used=Math.Max(mask,Math.Max(links,literal));return output;
     }
     private static uint U32Bits(byte[] d,int a)=>((uint)d[a]<<24)|((uint)d[a+1]<<16)|((uint)d[a+2]<<8)|d[a+3];
-    public void Dispose(){var data=records;if(data==null)return;foreach(var record in data)Array.Clear(record,0,record.Length);startupAudio?.Release();Array.Clear(textureCache,0,textureCache.Length);records=null;}
+    public void Dispose(){var data=records;if(data==null)return;foreach(var record in data)Array.Clear(record,0,record.Length);startupAudio?.Release();Array.Clear(textureCache,0,textureCache.Length);Array.Clear(modelNamesCache,0,modelNamesCache.Length);records=null;}
 }

@@ -5,6 +5,11 @@
 typedef uint8_t u8;typedef uint16_t u16;typedef uint32_t u32;typedef float f32;
 typedef float Mtx[3][4];typedef float Mtx44[4][4];
 typedef struct {u8 r,g,b,a;} GXColor;
+typedef struct {int16_t r,g,b,a;} GXColorS10;
+void GX_SetTevColorS10(int slot,GXColorS10 color);
+void GX_SetZCompLoc(int location);
+void GX_SetDither(int enabled);
+void GX_LoadTexMtxImm(Mtx matrix,int slot,int projection);
 typedef struct {int unused;} GXLightObj;
 #define GX_INDEX16 3
 void GX_SetChanMatColor(int channel,GXColor color);

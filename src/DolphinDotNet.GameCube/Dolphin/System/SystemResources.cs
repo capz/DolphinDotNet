@@ -6,6 +6,19 @@ namespace Dolphin.System;
 /// graphics and audio resources. Returned resources are owned by the caller.</summary>
 public static class SystemResources
 {
+    /// <summary>Import original model geometry/materials through the existing
+    /// background model pipeline. The model owns its native data independently
+    /// of the catalog. Unknown material profiles fail without approximation.</summary>
+    public static global::System.Threading.Tasks.Task<Model> CreateModelAsync(FirmwareCatalog catalog,int resourceIndex,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
+        return Model.LoadJ3dAsync(catalog.Extract(resourceIndex,cancellationToken),cancellationToken,nativeBudgetBytes);
+    }
+    public static global::System.Threading.Tasks.Task<Model> CreateModelAsync(FirmwareCatalog catalog,SystemModel name,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
+        return CreateModelAsync(catalog,catalog.GetModelIndex(name),cancellationToken,nativeBudgetBytes);
+    }
     /// <summary>Lossless compressed stereo source. May validate on the background
     /// executor; playback must use the application executor. Cancellation releases native state.</summary>
     public static Dolphin.Audio.Sound CreateStartupSound(FirmwareCatalog catalog,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)

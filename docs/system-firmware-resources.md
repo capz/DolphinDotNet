@@ -54,7 +54,7 @@ ambiguous layouts throw rather than choosing a plausible slice.
 `GetTexture(SystemTexture)` resolves Environment, Tiles, LogoTop, LogoLeft,
 LogoRight and Wordmark using size/relative-position hints backed by model/TEX1
 structure and complete BTI validation. Both 14- and 31-record families are tested
-synthetically. Actual regional compatibility is unverified without real dumps.
+synthetically. All six profiles resolve in NTSC 1.0/1.2 and PAL 1.2 research inputs.
 
 `SystemResources.CreateTexture` returns the existing `Texture2D`: native formats,
 indexed palettes, alpha, mip conversion, sampler state and GPU cache/lifetime
@@ -126,16 +126,24 @@ reliable memory replies in this environment. `dolphin_smoke.py` supports
 `--memory-after-symbol`; its memory probe handles bounded reads and unique LTO
 private-symbol aliases. Completion/bytes must match; boot logs alone are insufficient.
 
-## Remaining implementation
+## Original models
 
-Original J3D1 geometry/material semantics and the startup renderer are not
-implemented. The supplied Wii reference uses ripped geometry and cannot establish
-those semantics. A user-supplied dump is needed for original-format research and
-regional comparisons; online NTSC/PAL research inputs are now available outside
-the checkout, with provenance in [format research](system-firmware-format-research.md).
-No ripped mesh or flat approximation is substituted.
-Physical hardware validation has not been performed. See
-[the status and evidence table](system-firmware-resources-status.md).
+`catalog.GetModelIndex(SystemModel)` resolves nine startup/menu model identities.
+`SystemResources.CreateModelAsync(catalog, name, token, nativeBudgetBytes)` extracts
+an owned snapshot and imports it on the existing service executor. It returns
+an ordinary `Model`; instances, transforms, rendering, ARAM and disposal follow
+existing model rules. Image/catalog lifetimes are independent after extraction.
+`Model.LoadJ3dAsync(byte[])` also supports an explicit owned buffer without files.
+
+The J3D1/MAT1 profile preserves original topology, joints, attributes, embedded
+textures, signed TEV colors, RGB/alpha operations, projection and raster state.
+Unseen material profiles fail explicitly. Structural inspection alone does not
+validate geometry; the native import is authoritative. See
+[format qualification](system-firmware-format-research.md) for tested profiles
+and unverified lighting/render-comparison semantics.
+
+The startup controller is the next implementation phase. Physical hardware
+validation has not been performed. See [status](system-firmware-resources-status.md).
 
 ## Console acceptance fixture
 

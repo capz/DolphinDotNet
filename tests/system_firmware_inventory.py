@@ -18,7 +18,7 @@ def main():
         result=subprocess.run(['dotnet',str(tool),'firmware','inspect',str(path)],cwd=ROOT,check=True,capture_output=True,text=True)
         report=json.loads(result.stdout)
         assert report['resourceCount']==2 and report['source']=='ExplicitFile'
-        assert report['encoding']=='Descrambled' and report['geometrySupported'] is False
+        assert report['encoding']=='Descrambled' and report['geometryValidation']=='NativeImportRequired'
         assert [entry['offset'] for entry in report['resources']]==[0x1000,0x2000]
         assert report['files']==[] and 'unsupported' in report['startupAudio']
         assert all('unsupported' in profile for profile in report['textures'].values())

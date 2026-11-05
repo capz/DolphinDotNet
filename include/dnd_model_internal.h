@@ -1,6 +1,7 @@
 #ifndef DND_MODEL_INTERNAL_H
 #define DND_MODEL_INTERNAL_H
 #include "dnd_model.h"
+#include "dnd_model_material.h"
 #define DND_MODEL_SLOTS 64
 #define DND_INSTANCE_SLOTS 128
 #define DND_MODEL_LIMIT (16u * 1024u * 1024u)
@@ -53,6 +54,8 @@ typedef struct {
   DndTexture *texture;
   DndSkin *skin;
   DndClip *clip;
+  DndAuthoredMaterial *authored;
+  unsigned authored_count;
 } DndModel;
 typedef struct {
   int token, clip, next;
@@ -78,6 +81,8 @@ void *dnd_model_alloc(unsigned size, unsigned *used, unsigned budget);
 void dnd_model_free(void *p, unsigned *used);
 DndModel *dnd_model_find(int token, bool closed);
 int dnd_model_begin_data(const unsigned char *bytes, unsigned length, int budget);
+int dnd_model_begin_authored_data(const unsigned char *bytes,unsigned length,int budget,
+                                 const DndAuthoredMaterial *materials,unsigned count);
 DndInstance *dnd_instance_find(int token);
 void dnd_model_release(DndModel *model);
 void dnd_model_identity(float m[16]);

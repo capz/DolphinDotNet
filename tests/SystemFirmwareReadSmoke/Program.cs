@@ -12,18 +12,24 @@ internal static class Program
         using(var image=SystemFirmware.ReadConsole())
         using(var catalog=image.CreateCatalog())
         {
-            if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=3||catalog.Files!=null||catalog.GetStartupAudio().Layout!=FirmwareAudioLayout.AdjacentWaveArchive||
+            if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=4||catalog.Files!=null||catalog.GetStartupAudio().Layout!=FirmwareAudioLayout.AdjacentWaveArchive||
                catalog.GetTexture(SystemTexture.Environment).HeaderOffset!=8448||catalog.GetStartupAudio().SampleRate!=32000||catalog.WaveSystemCount!=1)return 1;
             var device=GraphicsDevice.Default;int before=device.NativeBytes;
             using(var texture=SystemResources.CreateTexture(catalog,SystemTexture.Environment))
                 if(texture.Width!=8||texture.Height!=8||texture.MipLevels!=1||texture.NativeBytes<=0)return 5;
             if(device.NativeBytes!=before)return 6;
+            using(var model=SystemResources.CreateModelAsync(catalog,SystemModel.BaseCube).Result)
+            {
+                if(model.NodeCount!=1||model.MeshCount!=1||model.MaterialCount!=1||model.GetNodeName(0)!="boot_demo_base_cube")return 15;
+                using(var instance=model.CreateInstance())
+                {var transform=new float[16];instance.GetNodeTransform(0,transform);if(transform[15]!=1)return 16;}
+            }
         }
         if(!Storage.Mount(StorageDevice.SdSerialPort2))return 2;
         using(var image=SystemFirmware.Open("sd:/firmware-synthetic.bin"))
         using(var catalog=image.CreateCatalog())
         {
-            if(image.Source!=FirmwareSource.ExplicitFile||catalog.Count!=3||catalog.Extract(0)[0]!=65)return 3;
+            if(image.Source!=FirmwareSource.ExplicitFile||catalog.Count!=4||catalog.Extract(0)[0]!=65)return 3;
             DebugOverlay.WriteLine("FIRMWARE AUDIO BEGIN");
             using(var sound=SystemResources.CreateStartupSound(catalog))
             {

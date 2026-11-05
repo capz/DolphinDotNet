@@ -5,6 +5,8 @@ typedef struct {
   ImportBuffer section[6];
   unsigned nodes, meshes, materials, textures, skins;
   int approximate;
+  DndAuthoredMaterial *authored;
+  unsigned authored_count;
 } GcImport;
 typedef struct {
   unsigned char *file, *unpacked, *member;
@@ -257,6 +259,7 @@ static void gc_asset_free(GcAsset *a, ImportMemory *m) {
 static void gc_init(GcImport *c, int budget, int approximate, int executor) {
   c->memory = (ImportMemory){0, (unsigned)budget, 0, executor};
   c->approximate = approximate;
+  c->authored=NULL;c->authored_count=0;
   for (unsigned i = 0; i < 6; i++) {
     c->section[i].memory = &c->memory;
     number(&c->section[i], 0);
@@ -265,6 +268,7 @@ static void gc_init(GcImport *c, int budget, int approximate, int executor) {
 static void gc_free(GcImport *c) {
   for (unsigned i = 0; i < 6; i++)
     imp_free(&c->memory, c->section[i].data);
+  imp_free(&c->memory,c->authored);c->authored=NULL;c->authored_count=0;
 }
 static int gc_publish(GcImport *c, int budget) {
   if (c->memory.failed || !c->nodes || !c->meshes || !c->materials)
@@ -273,7 +277,7 @@ static int gc_publish(GcImport *c, int budget) {
                         c->skins};
   for (unsigned i = 0; i < 5; i++)
     put32(c->section[i].data, counts[i]);
-  return scene_publish(&c->memory, c->section, budget);
+  return scene_publish_authored(&c->memory,c->section,budget,c->authored,c->authored_count);
 }
 static void gc_emit(ImportBuffer *b, const GcVertex *v) {
   floats(b, v->p, 3);
@@ -363,7 +367,9 @@ static int gc_texture(GcImport *c, PsoReader r, unsigned offset,
                       unsigned ws, unsigned wt, unsigned min_filter,
                       unsigned mag_filter, unsigned palette,
                       unsigned palette_count, unsigned palette_format) {
-  if (!w || !h || w > 1024 || h > 1024 || (w & (w - 1)) || (h & (h - 1)) ||
+  if (!w || !h || w > 1024 || h > 1024 ||
+      (((w & (w - 1)) || (h & (h - 1)))&&
+       !(c->authored&&levels==1&&!(w&3)&&!(h&3))) ||
       !levels || levels > 11 || ws > 2 || wt > 2 || min_filter > 5 ||
       mag_filter > 1 ||
       !((format <= 6) || format == 8 || format == 9 || format == 10 ||

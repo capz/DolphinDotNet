@@ -54,6 +54,17 @@ def main(fixtures):
     run(cc, *flags, *objects, dead_strip, "-lm", "-o", recording)
     run(recording)
 
+    # Independently generated J3D1/MAT1: source ownership, bounds and actual GX state.
+    system_fixture=work / "system-model.bmd"
+    run(sys.executable,"tests/generate_system_model_fixture.py",system_fixture)
+    system_recording=work / "system-model-recording"
+    run(cc,*gxflags,"tests/system_model_gx_test.c","source/model_source.c",
+        "source/model.c","source/model_animation.c","source/model_transform.c",
+        "source/model_graphics.c",*common,"source/storage.c","source/contiguous_write.c",
+        "source/file_optimize.c","source/graphics_device.c","source/draw_resources.c",
+        "source/performance.c",dead_strip,"-lm","-o",system_recording)
+    run(system_recording,system_fixture)
+
     run("dotnet", "build", "tools/DolphinDotNet.Compiler", "-c", "Release", "-p:DndBuildNative=false")
     run("dotnet", "build", "tests/ModelSmoke", "-c", "Release", "-p:DndBuildNative=false")
     generated = work / "model-smoke.c"

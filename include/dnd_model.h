@@ -34,6 +34,8 @@ int dnd_model_begin_fzero(DndString *path, DndString *textures, int selection,
                           int budget, int options);
 /* Runtime load of an already-compiled model from memory. */
 int dnd_model_begin_bytes(DndArray *data, int budget);
+/* Owned memory source; validated J3D1/MAT1 or the existing J3D2 profile. */
+int dnd_model_j3d_memory(DndArray *data,int budget);
 int dnd_model_step(int token);
 int dnd_model_dispose(int token);
 int dnd_model_stat(int token,

@@ -4,6 +4,7 @@
 #include "dnd_draw.h"
 #include "dnd_audio.h"
 #include "dnd_audio_codec.h"
+#include "dnd_model.h"
 #include <assert.h>
 #include "dnd_system_firmware.h"
 #include <stdio.h>
@@ -48,7 +49,7 @@ int main(int argc,char **argv)
     static unsigned char memory[8*1024*1024];DndManagedHeap heap;
     dnd_managed_heap_init(&heap,memory,sizeof(memory));dnd_gc_set_stress(true);
     intptr_t result=dnd_aot_entry(&heap);
-    if(result||dnd_exception_pending()||dnd_fs_open_handles()||dnd_draw_live()){
+    if(result||dnd_exception_pending()||dnd_fs_open_handles()||dnd_draw_live()||dnd_model_live_handles()){
         fprintf(stderr,"Firmware read stage=%ld error=%s handles=%d\n",(long)result,dnd_exception_message(),dnd_fs_open_handles());
         if(dnd_exception_pending()){
             DndObject *error=dnd_exception_object();

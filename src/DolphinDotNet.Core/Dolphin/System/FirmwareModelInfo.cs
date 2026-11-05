@@ -91,6 +91,34 @@ public sealed class FirmwareModelInfo
         }
         return result;
     }
+    /// <summary>Read bounded joint names/remaps for resource identification.
+    /// Geometry and material validation still occurs in the native importer.</summary>
+    public string[] ReadNodeNames(byte[] data)
+    {
+        var model=Inspect(data);FirmwareSection? joints=null;
+        for(int i=0;i<model.SectionCount;i++)if(model[i].Tag=="JNT1")joints=model[i];
+        if(joints==null)throw new NotSupportedException("Model has no JNT1 section.");
+        if(joints.Length<24)throw new InvalidDataException("Truncated JNT1 header.");
+        int at=joints.Offset,count=U16(data,at+8),table=AssetInt(U32(data,at+12)),remap=AssetInt(U32(data,at+16)),names=AssetInt(U32(data,at+20));
+        if(count<1||count>1024||table<24||table>joints.Length||remap<24||remap>joints.Length-count*2||
+           names<24||names>joints.Length-4-count*4||U16(data,at+names)!=count)
+            throw new InvalidDataException("Invalid JNT1 tables.");
+        var result=new string[count];
+        for(int i=0;i<count;i++)
+        {
+            int index=U16(data,at+remap+i*2);
+            if(index>=count||index>(joints.Length-table)/64||table+index*64>joints.Length-64)
+                throw new InvalidDataException("JNT1 joint outside section.");
+            int offset=U16(data,at+names+6+i*4);
+            if(offset<4+count*4||offset>=joints.Length-names)throw new InvalidDataException("JNT1 name outside table.");
+            int first=at+names+offset,end=first;
+            while(end<at+joints.Length&&end-first<64&&data[end]!=0)
+            {if(data[end]<32||data[end]>126)throw new InvalidDataException("Unsupported JNT1 name encoding.");end++;}
+            if(end==first||end==at+joints.Length||end-first==64)throw new InvalidDataException("Invalid JNT1 name.");
+            result[i]=Ascii(data,first,end-first);
+        }
+        return result;
+    }
 }
 
 /// <summary>Validated texture metadata referring to a decompressed catalog record.</summary>
@@ -109,3 +137,4 @@ public sealed class FirmwareTextureInfo
 }
 
 public enum SystemTexture { Environment, Tiles, LogoTop, LogoLeft, LogoRight, Wordmark }
+public enum SystemModel { BaseCube, CoverCube, Logo, Wordmark, SmallCube, MenuCube, MenuIcon0, MenuIcon1, MemoryCube }

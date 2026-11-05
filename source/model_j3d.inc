@@ -15,7 +15,9 @@ typedef struct {
 
 static PsoReader j3d_chunk(PsoReader r, const char *magic, const char *chunk) {
   PsoReader found = {NULL, 0, r.memory};
-  if (r.size < 32 || memcmp(r.data, magic, 8) || pso_u32(r, 8) != r.size)
+  if (r.size < 32 || memcmp(r.data, magic, 8) ||
+      pso_u32(r,8)<32 || pso_u32(r,8)>r.size ||
+      (memcmp(magic,"J3D1bmd1",8)&&pso_u32(r,8)!=r.size))
     return found;
   unsigned count = pso_u32(r, 12), at = 32;
   if (!count || count > 64)
@@ -750,27 +752,38 @@ done:
   imp_free(&c->gc.memory, tracks.data);
   return ok;
 }
-static int import_j3d(const char *path, const char *animation_path, float fps,
-                      int budget, int approximate, int executor) {
+#include "model_j3d1.inc"
+static int import_j3d(const char *path,const char *animation_path,float fps,
+                      int budget,int approximate,int executor,const unsigned char *data,unsigned length) {
   J3dImport c = {0};
   gc_init(&c.gc, budget, approximate, executor);
   GcAsset model = {0}, animation = {0};
   int token = 0;
-  if (!gc_asset(&model, path, &c.gc.memory, 0) || model.view.size < 32)
-    goto done;
+  if(data) {
+    model.view=(PsoReader){data,length,&c.gc.memory};
+    if(!gc_unpack(&model.view,&model.unpacked))goto done;
+  } else if(!gc_asset(&model,path,&c.gc.memory,0))goto done;
+  if(model.view.size<32)goto done;
+  int early=!memcmp(model.view.data,"J3D1bmd1",8);
   const char *magic =
-      !memcmp(model.view.data, "J3D2bdl4", 8) ? "J3D2bdl4" : "J3D2bmd3";
+      early?"J3D1bmd1":!memcmp(model.view.data, "J3D2bdl4", 8) ? "J3D2bdl4" : "J3D2bmd3";
   c.inf = j3d_chunk(model.view, magic, "INF1");
   c.vtx = j3d_chunk(model.view, magic, "VTX1");
   c.evp = j3d_chunk(model.view, magic, "EVP1");
   c.drw = j3d_chunk(model.view, magic, "DRW1");
   c.jnt = j3d_chunk(model.view, magic, "JNT1");
   c.shp = j3d_chunk(model.view, magic, "SHP1");
-  c.mat = j3d_chunk(model.view, magic, "MAT3");
+  c.mat = j3d_chunk(model.view, magic, early?"MAT1":"MAT3");
   c.tex = j3d_chunk(model.view, magic, "TEX1");
-  if (!c.inf.data || !c.vtx.data || !c.drw.data || !c.jnt.data || !c.shp.data ||
-      !c.mat.data || !j3d_hierarchy(&c) || !j3d_joints(&c) || !j3d_arrays(&c) ||
-      !j3d_textures(&c) || !j3d_materials(&c) || !j3d_shapes(&c))
+  if (!c.inf.data || !c.vtx.data || !c.drw.data || !c.jnt.data || !c.shp.data || !c.mat.data)goto done;
+  if(early) {
+    c.gc.authored_count=pso_u16(c.mat,8);
+    if(!c.gc.authored_count||c.gc.authored_count>4096)goto done;
+    c.gc.authored=imp_alloc(&c.gc.memory,c.gc.authored_count*sizeof(*c.gc.authored));
+    if(!c.gc.authored)goto done;
+  }
+  if (!j3d_hierarchy(&c) || !j3d_joints(&c) || !j3d_arrays(&c) ||
+      !j3d_textures(&c) || !(early?j3d1_materials(&c):j3d_materials(&c)) || !j3d_shapes(&c))
     goto done;
   if (animation_path &&
       (!gc_asset(&animation, animation_path, &c.gc.memory, 1) ||

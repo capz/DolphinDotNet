@@ -198,6 +198,7 @@ internal static class NativeStorageBindings
         ["ModelName"]=("dnd_model_name","iii",true),["ModelDuration"]=("dnd_model_duration","ii",false),["ModelCopy"]=("dnd_model_copy","iiaii",false),
         ["ModelBeginFzero"]=("dnd_model_begin_fzero","ssiii",false),
         ["ModelBeginFormat"]=("dnd_model_begin_format","sssfiii",false),
+        ["ModelJ3dMemory"]=("dnd_model_j3d_memory","ai",false),
         ["ModelBeginPsoEpisode3"]=("dnd_model_begin_pso_ep3","sssfiii",false),
         ["ModelBeginPso"]=("dnd_model_begin_pso","sssfii",false),
         ["ModelBeginScene"]=("dnd_model_begin_scene","sifii",false),

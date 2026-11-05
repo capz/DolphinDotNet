@@ -38,6 +38,7 @@ int dnd_model_indexed_path(int enabled){
 }
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
 #include "dnd_indexed_model.inc"
+#include "dnd_authored_model.inc"
 #endif
 
 static bool matrix_array(DndArray *a, float out[16]) {
@@ -226,6 +227,9 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     if (!dnd_model_inverse(normal, mv))
       return -1;
     DndMaterial *mat = &model->material[mesh->material], animated_copy;
+#if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
+    const DndAuthoredMaterial *authored=!effect&&model->authored?&model->authored[mesh->material]:NULL;
+#endif
     const float *anim = NULL;
     if (animated_material_channels && (unsigned)mesh->material < animated_material_count) {
       anim = animated_material_channels + (unsigned)mesh->material * DND_ANIM_CHANNELS;
@@ -238,7 +242,7 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     dnd_performance_add_triangles(mesh->indices / 3);
     unsigned bindings=0;
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
-    bool reuse=model_batch_active&&anim==NULL&&batch_model==model&&batch_material==mat;
+    bool reuse=!authored&&model_batch_active&&anim==NULL&&batch_model==model&&batch_material==mat;
     if(!reuse){dnd_draw_backend_restore();dnd_performance_material();}
     Mtx matrix;
     for (int r = 0; r < 3; r++)
@@ -316,14 +320,14 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     }
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     if(!reuse)dnd_draw_backend_tev(selected, mat->texture >= 0);
-    batch_model=model;batch_material=anim==NULL?mat:NULL;
+    batch_model=authored?NULL:model;batch_material=!authored&&anim==NULL?mat:NULL;
 #else
     dnd_draw_backend_tev(selected, mat->texture >= 0);
     (void)bindings;
 #endif
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     bool custom_scene=dnd_draw_backend_scene_active();
-    if(indexed_model(mesh,mat,normal,custom_scene,anim!=NULL,mesh->skin>=0?in->vertices[mi]:NULL,bindings))continue;
+    if(!authored&&indexed_model(mesh,mat,normal,custom_scene,anim!=NULL,mesh->skin>=0?in->vertices[mi]:NULL,bindings))continue;
     // A preceding mesh may have used indexed/register-color descriptors.
     GX_ClearVtxDesc();GX_SetVtxDesc(GX_VA_POS,GX_DIRECT);GX_SetVtxDesc(GX_VA_CLR0,GX_DIRECT);GX_SetVtxDesc(GX_VA_TEX0,GX_DIRECT);
     model_batch_vertex_ready=false;
@@ -331,6 +335,12 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
     if(custom_scene){
       if(!(mat->mode&2)){Mtx n;for(int r=0;r<3;r++)for(int c=0;c<4;c++)n[r][c]=c<3?normal[r*4+c]:0;GX_LoadNrmMtxImm(n,GX_PNMTX0);GX_SetVtxDesc(GX_VA_NRM,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);}
       dnd_draw_backend_scene(!(mat->mode&2),frame_view);
+    }
+    if(authored) {
+      // Authored lighting replaces the ordinary indexed headlight.
+      model_batch_light_ready=false;
+      if(custom_scene)dnd_draw_backend_scene(authored->channel[0][0]||authored->channel[1][0],frame_view);
+      authored_model_material(authored,mat,normal,custom_scene);
     }
     for (unsigned first = 0; first < mesh->indices;) {
       unsigned count = mesh->indices - first;
@@ -358,12 +368,12 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
         }
         u8 color[4];
         for (int c = 0; c < 4; c++) {
-          float value = dnd_model_f32(src + 32 + c * 4) * mat->color[c] *
+          float value = dnd_model_f32(src + 32 + c * 4) * (authored?(anim?anim[c+1]:1):mat->color[c]) *
                         (c < 3 ? shade : 1);
           color[c] = (u8)(fminf(1, fmaxf(0, value)) * 255);
         }
         GX_Position3f32(v[0], v[1], v[2]);
-        if(custom_scene&&!(mat->mode&2))GX_Normal3f32(v[3],v[4],v[5]);
+        if(authored||(custom_scene&&!(mat->mode&2)))GX_Normal3f32(v[3],v[4],v[5]);
         GX_Color4u8(color[0], color[1], color[2], color[3]);
         float tex_u=dnd_model_f32(src+24),tex_v=dnd_model_f32(src+28);
         if(anim) {

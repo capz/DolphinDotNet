@@ -53,7 +53,7 @@ using(var firmware=FirmwareImage.Read(rom))
 {
     Check(firmware.Encoding==FirmwareEncoding.Descrambled);Check(firmware.Source==FirmwareSource.Memory);
     var catalog=firmware.CreateCatalog();firmware.Dispose();Check(catalog.Count==2);
-    Check(catalog[0].Kind==FirmwareResourceKind.UnsupportedModel);Check(catalog.Extract(0).Length==17);catalog.Dispose();
+    Check(catalog[0].Kind==FirmwareResourceKind.Model);Check(catalog.Extract(0).Length==17);catalog.Dispose();
     try{catalog.Extract(0);throw new Exception();}catch(ObjectDisposedException){}
 }
 var original=(byte[])rom.Clone();FirmwareImage.Transform(rom);Check(rom[0x1aff00]==123);Check(rom.Take(256).SequenceEqual(original.Take(256)));

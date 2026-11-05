@@ -144,6 +144,7 @@ void dnd_model_release(DndModel *m) {
   dnd_model_free(m->texture, &m->bytes);
   dnd_model_free(m->skin, &m->bytes);
   dnd_model_free(m->clip, &m->bytes);
+  dnd_model_free(m->authored, &m->bytes);
   free(m);
   if (file)
     dnd_fs_close(file);
@@ -220,6 +221,9 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
   }
   if (!counts[0] || !counts[1] || !counts[2])
     return false;
+  if(m->authored_count&&(!m->authored||m->authored_count!=counts[2]))return false;
+  for(unsigned i=0;i<m->authored_count;i++)
+    if(!dnd_authored_material_valid(&m->authored[i]))return false;
   if (restoring) {
     if (counts[0] != m->nodes || counts[1] != m->meshes ||
         counts[2] != m->materials || counts[3] != m->textures ||
@@ -306,7 +310,8 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
     t->linear = (int)number(&r[3]);
     t->size = number(&r[3]);
     if (t->width < 4 || t->height < 4 || t->width > 1024 || t->height > 1024 ||
-        (t->width & (t->width - 1)) || (t->height & (t->height - 1)) ||
+        (((t->width & (t->width - 1)) || (t->height & (t->height - 1)))&&
+         !(m->authored_count&&t->levels==1&&!(t->width&3)&&!(t->height&3))) ||
         t->levels < 1 || t->levels > 9 || t->wrap_s < 0 || t->wrap_s > 2 ||
         t->wrap_t < 0 || t->wrap_t > 2 || t->linear < 0 || t->linear > 1)
       return false;
@@ -445,10 +450,11 @@ static bool validate(DndModel *m, unsigned char *package, bool restoring) {
 }
 /* Create a resident model from caller-owned memory (validated, copied first).
  * Also used by the direct console OBJ importer. */
-int dnd_model_begin_data(const unsigned char *data, unsigned length, int budget) {
+int dnd_model_begin_authored_data(const unsigned char *data,unsigned length,int budget,
+                                 const DndAuthoredMaterial *materials,unsigned count) {
   if (!data || length < 160 || length > DND_MODEL_LIMIT ||
       budget < 1024 || budget > (int)DND_MODEL_LIMIT ||
-      next_token == INT_MAX)
+      next_token == INT_MAX || count>4097 || (count&&!materials))
     return 0;
   int slot = -1;
   for (int i = 0; i < DND_MODEL_SLOTS; i++)
@@ -465,6 +471,11 @@ int dnd_model_begin_data(const unsigned char *data, unsigned length, int budget)
   if (!m->package) {free(m); return 0;}
   memcpy(m->package, data, length);
   dnd_models[slot] = m;
+  if(count) {
+    m->authored=dnd_model_alloc(count*sizeof(*materials),&m->bytes,m->budget);
+    if(!m->authored){dnd_model_dispose(m->token);return 0;}
+    memcpy(m->authored,materials,count*sizeof(*materials));m->authored_count=count;
+  }
   if (!validate(m, m->package, false)) {
     dnd_model_dispose(m->token);
     return 0;
@@ -472,6 +483,9 @@ int dnd_model_begin_data(const unsigned char *data, unsigned length, int budget)
   m->hash = dnd_model_hash(m->package, m->length);
   m->ready = true;
   return m->token;
+}
+int dnd_model_begin_data(const unsigned char *data,unsigned length,int budget) {
+  return dnd_model_begin_authored_data(data,length,budget,NULL,0);
 }
 int dnd_model_begin_bytes(DndArray *data, int budget) {
   if (!data || data->element_size != 1 || data->elements_are_references)

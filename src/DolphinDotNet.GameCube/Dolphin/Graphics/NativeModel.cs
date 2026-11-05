@@ -18,6 +18,7 @@ internal static class NativeModel
     internal static int ModelBeginFormat(string path,string? textures,string? motion,float fps,int format,int budget,int approximate)=>throw Unsupported();
     internal static int ModelBeginPsoEpisode3(string path,string? textures,string? motion,float fps,int eulerKeyBytes,int budget,int approximate)=>throw Unsupported();
     internal static int ModelBeginBytes(byte[] data,int budget)=>throw Unsupported();
+    internal static int ModelJ3dMemory(byte[] data,int budget)=>throw Unsupported();
     internal static int ModelStep(int token)=>throw Unsupported();
     internal static int ModelDispose(int token)=>throw Unsupported();
     internal static int ModelStat(int token,int kind)=>throw Unsupported();

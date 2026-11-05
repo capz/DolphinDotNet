@@ -93,3 +93,28 @@ Generated fixtures cover both bank layouts, stale wrappers, partial final AFC
 frames, malformed/overlapping/ambiguous sources, cancellation, native ownership
 and AOT Sound/Music playback. Original material/animation semantics remain under
 investigation.
+
+## Original model import qualification (Phase 5)
+
+All nine models in each of NTSC 1.0, NTSC 1.2 and PAL 1.2 pass the native
+J3D1 importer (27 imports). Original hierarchy, rigid matrices, attributes,
+validated GX primitive topology and embedded textures use the existing model
+pipeline. The MAT1 layout is separate from MAT3: 100-byte header, 152-byte
+records and 52-byte precomputed texture matrices. Signed TEV registers and
+independent RGB/alpha operations, channel controls, alpha comparison, blend,
+cull, depth location/write, dither and normal/UV texture generation are retained.
+Aligned non-power-of-two original textures retain their dimensions.
+
+The qualified profile has one channel, one TEV stage and at most one texture
+generator. Unknown stages, fog, NBT and PREV initializers fail explicitly.
+No source display list is submitted to GX. New generated geometry tests record
+production GX state, reject malformed tables/opcodes/truncation/budgets and
+prove independent source/native lifetimes. The nine named models include the
+menu cube, both menu icons and memory cube; bounded JNT1 identities select them
+without ROM offsets. Metadata CLI schema 2 reports NativeImportRequired rather
+than interpreting structural recognition as semantic validation.
+
+Default lighting is a white headlight when the material requests lighting;
+applications can supply existing scene lighting. Physical IPL light positions
+and pixel-identical console rendering remain unverified. These are rendering
+comparison limits, not geometry replacements. No ripped reference meshes are used.
