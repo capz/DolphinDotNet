@@ -4,7 +4,7 @@
  * Keep the direct path for animated UV/color channels, nonuniform
  * colors, non-unit normals and lit nonuniform/sheared transforms. */
 static bool indexed_model(const DndMesh *mesh,const DndMaterial *material,
-                          const float normal[16],bool custom_scene,bool animated,const float *skin) {
+                          const float normal[16],bool custom_scene,bool animated,const float *skin,unsigned bindings) {
 #if !defined(DND_INDEXED_MODELS) || DND_INDEXED_MODELS
   bool lit=!(material->mode&2);
   if(!indexed_models_enabled||(mesh->skin>=0&&!skin)||mesh->vertices>65536||!mesh->uniform_color||animated||custom_scene)return false;
@@ -26,6 +26,8 @@ static bool indexed_model(const DndMesh *mesh,const DndMaterial *material,
     scale=1/sqrtf(length[0]);
   }
   GXColor tint;
+  // The ordinary mesh backend must not reuse cache assumptions across models.
+  dnd_draw_backend_mesh_changed();
   u8 *channels=(u8*)&tint;
   for(int c=0;c<4;c++)channels[c]=(u8)(mesh->color[c]*material->color[c]*255);
   GX_SetChanMatColor(GX_COLOR0A0,tint);
@@ -35,15 +37,18 @@ static bool indexed_model(const DndMesh *mesh,const DndMaterial *material,
     GX_LoadNrmMtxImm(matrix,GX_PNMTX0);
     /* Equivalent camera-space diffuse headlight, within GX's 8-bit lighting
      * precision. RGB ambient/diffuse sum to 255; alpha is never lit. */
+    if(!model_batch_active||!model_batch_light_ready){
     GXLightObj light={0};GX_InitLightPos(&light,0,0,1000000);
     GX_InitLightColor(&light,(GXColor){191,191,191,255});
     GX_InitLightAttn(&light,1,0,0,1,0,0);GX_LoadLightObj(&light,GX_LIGHT0);
     GX_SetChanAmbColor(GX_COLOR0A0,(GXColor){64,64,64,255});
+    model_batch_light_ready=true;
+    }
   }
   GX_SetChanCtrl(GX_COLOR0,lit?GX_ENABLE:GX_DISABLE,GX_SRC_REG,GX_SRC_REG,
                  lit?GX_LIGHT0:GX_LIGHTNULL,lit?GX_DF_CLAMP:GX_DF_NONE,GX_AF_NONE);
   GX_SetChanCtrl(GX_ALPHA0,GX_DISABLE,GX_SRC_REG,GX_SRC_REG,GX_LIGHTNULL,GX_DF_NONE,GX_AF_NONE);
-  GX_ClearVtxDesc();GX_InvVtxCache();
+  GX_ClearVtxDesc();if(!model_batch_active||!model_batch_vertex_ready||batch_mesh!=mesh||batch_skin!=skin){GX_InvVtxCache();model_batch_vertex_ready=true;batch_mesh=mesh;batch_skin=skin;}
   GX_SetVtxDesc(GX_VA_POS,GX_INDEX16);GX_SetArray(GX_VA_POS,skin?(void*)skin:(void*)mesh->data,skin?24:80);
   if(lit){GX_SetVtxDesc(GX_VA_NRM,GX_INDEX16);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);GX_SetArray(GX_VA_NRM,skin?(void*)(skin+3):(void*)(mesh->data+12),skin?24:80);}
   bool textured=material->texture>=0||material->combiner;
@@ -51,6 +56,7 @@ static bool indexed_model(const DndMesh *mesh,const DndMaterial *material,
   for(unsigned first=0;first<mesh->indices;){
     unsigned count=mesh->indices-first;if(count>65535)count=65535;
     GX_Begin(GX_TRIANGLES,GX_VTXFMT0,(u16)count);
+    dnd_performance_add_draw(first==0?bindings:0);
     for(unsigned j=0;j<count;j++){
       u16 index=(u16)dnd_model_u32(mesh->index+(first+j)*4);
       GX_Position1x16(index);if(lit)GX_Normal1x16(index);if(textured)GX_TexCoord1x16(index);
@@ -59,6 +65,6 @@ static bool indexed_model(const DndMesh *mesh,const DndMaterial *material,
   }
   return true;
 #else
-  (void)mesh;(void)material;(void)normal;(void)custom_scene;(void)animated;(void)skin;return false;
+  (void)mesh;(void)material;(void)normal;(void)custom_scene;(void)animated;(void)skin;(void)bindings;return false;
 #endif
 }

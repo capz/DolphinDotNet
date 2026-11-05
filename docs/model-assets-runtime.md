@@ -18,6 +18,22 @@ The supported shading subset is unlit or simple diffuse lighting, vertex colors,
 
 Textures are decoded offline, resized to bounded power-of-two dimensions, mipmapped down to 4 pixels on the shorter dimension, and encoded as GX-tiled RGBA8. Wrapping and nearest/linear magnification are preserved; minification uses the generated mip chain. Identical texture records and material records are deduplicated in the package. A native immutable texture cache additionally shares identical pixel payloads across loaded models.
 
+For glTF/GLB and Assimp imports, `--mip-levels N` (`ImportOptions.MaximumMipLevels`)
+caps the total number of levels, including the base image. Zero (the default)
+retains the full chain; one emits only the base; two emits base plus half-size,
+subject to the existing minimum dimension of four pixels. The supported range
+is 0 through 9. The limit applies to source textures and generated material maps,
+including GX, approximation and studio-baking paths. Direct PSO GJ/XJ imports
+reject a nonzero limit rather than silently ignoring it. For example:
+
+```sh
+dnd-assets model player.glb player.dndmodel --texture-limit 128 --mip-levels 2
+```
+
+The existing DNMD mip-count field and native sampler already support shortened
+chains; no package version or runtime API change is required. Font/UI atlases
+should normally remain base-only unless authored with suitable mip gutters.
+
 Each conversion writes a `.deps.json` manifest with SHA-256 hashes of source files, buffers, MTLs and external textures. The included MSBuild target runs conversion before builds (including dependency changes):
 
 ```xml

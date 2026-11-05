@@ -74,11 +74,11 @@ internal sealed partial class GltfImport
 
     private static byte Clamp255(float v)=>(byte)Math.Clamp((int)MathF.Round(v*255),0,255);
 
-    private static byte[] PackedTexture(RasterImage bitmap,(int wrapS,int wrapT,int linear) sampler)
+    private byte[] PackedTexture(RasterImage bitmap,(int wrapS,int wrapT,int linear) sampler)
     {
         using var writer=new BigWriter();
         int w=bitmap.Width,h=bitmap.Height;
-        int levels=1;for(int n=Math.Min(w,h);n>4;n/=2)levels++;
+        int levels=options.MipLevels(w,h);
         writer.I(w);writer.I(h);writer.I(levels);
         writer.I(sampler.wrapS);writer.I(sampler.wrapT);writer.I(sampler.linear);
         var pixels=new List<byte>();
