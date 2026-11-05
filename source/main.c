@@ -15,7 +15,15 @@
 extern void dnd_gdb_init(void);
 #endif
 
-static uint8_t managed_heap_memory[256 * 1024];
+/* Native builds may opt into a larger managed budget. Keep the historical
+ * default for applications that store bulk assets in native buffers. */
+#ifndef DND_MANAGED_HEAP_BYTES
+#define DND_MANAGED_HEAP_BYTES (256 * 1024)
+#endif
+#if DND_MANAGED_HEAP_BYTES < (256 * 1024) || DND_MANAGED_HEAP_BYTES > (16 * 1024 * 1024)
+#error DND_MANAGED_HEAP_BYTES must be between 256 KiB and 16 MiB
+#endif
+static uint8_t managed_heap_memory[DND_MANAGED_HEAP_BYTES];
 extern intptr_t dnd_aot_entry(DndManagedHeap *heap);
 
 int main(void) {

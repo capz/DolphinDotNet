@@ -18,6 +18,8 @@ LIBDIRS := $(PORTLIBS) $(LIBOGC)
 LIBPATHS_EXTRA := -L$(CURDIR)/build/exi-overlay -L$(LIBOGC)/lib
 CFLAGS := -DDND_GAMECUBE_STORAGE -g -O2 -fstack-usage -Wall -Wextra $(MACHDEP) $(INCLUDE)
 # Explicitly opt in for standalone native debug builds; release behavior is unchanged.
+DND_MANAGED_HEAP_BYTES ?= 262144
+CFLAGS += -DDND_MANAGED_HEAP_BYTES=$(DND_MANAGED_HEAP_BYTES)
 CXXFLAGS := $(CFLAGS)
 LDFLAGS := -g $(MACHDEP) -Wl,-Map,$(notdir $@).map
 ifeq ($(DND_DEBUG_AUTOMATION),1)

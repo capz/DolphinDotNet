@@ -88,9 +88,21 @@ Local validation on 2026-11-05:
 - `python3 scripts/ci_test_suite.py native`: passed both standard and O3/LTO modes.
 - Firmware synthetic smoke: AOT compilation passed (104 reachable methods,
   27 types), generated C compilation passed, native host execution under forced
-  GC passed (42 collections; 4,195,408 bytes occupied at completion in a 16 MiB
+  GC passed (42 collections; 4,195,408 bytes occupied at completion in an 8 MiB
   heap). This is a final occupancy reading, not peak memory or a hardware result.
 
 Broader compiler and graphics suites, pinned devkitPro cross-build and remote
 CI were launched; their final results must be checked separately. NuGet audit
 requests produced NU1900 connectivity warnings in some local builds.
+
+The historical native managed heap is 256 KiB. Firmware workloads need an
+explicit larger heap; the native Makefile and generated GameCube Makefiles now
+accept `make DND_MANAGED_HEAP_BYTES=8388608` (8 MiB), with native compile-time
+bounds of 256 KiB to 16 MiB. The default is unchanged. Budget this alongside
+native graphics/audio allocations in MEM1. Host firmware AOT execution is tested
+with an 8 MiB heap; the initial cross-build alone does not establish successful
+execution with the default heap. No emulated execution result is claimed.
+
+The pinned devkitPro/libogc2 Docker cross-build completed successfully and
+produced 32-byte-aligned `SystemFirmwareSmoke.dol` and its ELF. This establishes
+compilation/linking, not runtime memory sufficiency or physical verification.

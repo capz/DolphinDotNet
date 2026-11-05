@@ -326,6 +326,11 @@ internal static class GameCubeBundle
             (overlayTelemetry ? " -DDND_DEBUG_TELEMETRY" : "") +
             (overlayTelemetry ? " -DDND_DEBUG_AUTOMATION" : "") +
             (sampleControls ? " -DDND_SAMPLE_CONTROLS" : "") + (usesNetworking ? " -DDND_TLS" : ""));
+        if (!isWiiU)
+        {
+            builder.AppendLine("DND_MANAGED_HEAP_BYTES ?= 262144");
+            builder.AppendLine("CFLAGS += -DDND_MANAGED_HEAP_BYTES=$(DND_MANAGED_HEAP_BYTES)");
+        }
         // Keep the reporting slot even when the app has not enabled/drawn the overlay yet.
         builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") +
             (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry -Wl,--undefined=dnd_debugger_heartbeat -Wl,--undefined=dnd_automation_mailbox -Wl,--undefined=dnd_automation_frame_boundary -Wl,--undefined=dnd_asset_corpus_report -Wl,--undefined=dnd_jsystem_fixture -Wl,--undefined=dnd_asset_compat_record" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");
