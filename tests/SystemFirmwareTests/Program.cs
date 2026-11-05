@@ -22,6 +22,26 @@ static byte[] WaveSystem(int samples)
     for(int i=0;i<2;i++){int w=192+i*40;Big(d,w+4,0x46fa0000);Big(d,w+8,i*bytes);Big(d,w+12,bytes);Big(d,w+24,samples);Big(d,w+28,samples);}
     return d;
 }
+static byte[] AdjacentAudioImage(bool compact)
+{
+    var image=new byte[FirmwareImage.ImageBytes];Encoding.ASCII.GetBytes("Nintendo GameCube IPL synthetic adjacent audio").CopyTo(image,0);
+    Literal(new byte[]{1,2,3,4}).CopyTo(image,0x1000);Literal(new byte[]{5,6,7,8}).CopyTo(image,0x2000);
+    const int at=0x5000,size=1024,bank=64;int names=compact?68:112,recordBytes=compact?36:44;
+    Encoding.ASCII.GetBytes("WSYS").CopyTo(image,at);Big(image,at+4,size);Big(image,at+16,32);
+    Encoding.ASCII.GetBytes("WINF").CopyTo(image,at+32);Big(image,at+36,1);Big(image,at+40,bank);
+    Encoding.ASCII.GetBytes("ipl_0.aw").CopyTo(image,at+bank);Big(image,at+bank+names,12);
+    Big(image,at-24,2);int wrapper=size+(compact?128:0);Big(image,at-20,wrapper);Big(image,at-16,wrapper);
+    int offset=0;
+    for(int i=0;i<12;i++)
+    {
+        int wave=256+i*recordBytes,samples=i<2?174067:16,bytes=(samples+15)/16*9;
+        Big(image,at+bank+names+4+i*4,wave);Big(image,at+wave+4,0x46fa0000);
+        Big(image,at+wave+8,offset);Big(image,at+wave+12,bytes);Big(image,at+wave+24,samples);Big(image,at+wave+28,samples);
+        if(i<2)for(int frame=0;frame<bytes/9;frame++)for(int b=1;b<9;b++)image[at+size+offset+frame*9+b]=(byte)(i==0?0x11:0xee);
+        offset=(offset+bytes+31)&~31;
+    }
+    return image;
+}
 var payload=Literal(Encoding.ASCII.GetBytes("J3D1bmd1synthetic"));
 Check(FirmwareCatalog.Decompress(payload).SequenceEqual(Encoding.ASCII.GetBytes("J3D1bmd1synthetic")));
 for(int i=0;i<payload.Length;i++)Reject(()=>FirmwareCatalog.Decompress(payload.Take(i).ToArray()));
@@ -125,6 +145,27 @@ foreach(int regionalCount in new[]{14,31})
     }
 }
 var descriptor=WaveSystem(16);var archive=new byte[18];
+foreach(bool compact in new[]{false,true})
+{
+    var originalAudio=AdjacentAudioImage(compact);
+    using(var source=FirmwareImage.Read(originalAudio))using(var catalog=source.CreateCatalog())
+    {
+        var sound=catalog.GetStartupAudio();Check(sound.Layout==FirmwareAudioLayout.AdjacentWaveArchive&&sound.FirmwareOffset==0x5400);
+        Check(sound.SampleCount==174067&&sound.SampleRate==32000&&sound.ExtractAfc().Length==195872&&catalog.Files==null);
+    }
+    var malformed=(byte[])originalAudio.Clone();Big(malformed,0x5000-16,0);
+    using(var source=FirmwareImage.Read(malformed))using(var catalog=source.CreateCatalog())
+    {try{catalog.GetStartupAudio();throw new Exception("Invalid audio wrapper accepted");}catch(NotSupportedException){}}
+    malformed=(byte[])originalAudio.Clone();malformed[0x5400+195840+9]=1;
+    using(var source=FirmwareImage.Read(malformed))using(var catalog=source.CreateCatalog())
+    {Check(catalog.GetStartupAudio().SampleCount==174067);}
+    malformed=(byte[])originalAudio.Clone();int second=compact?292:300;Big(malformed,0x5000+second+8,0);
+    using(var source=FirmwareImage.Read(malformed))using(var catalog=source.CreateCatalog())
+    {try{catalog.GetStartupAudio();throw new Exception("Overlapping audio waves accepted");}catch(NotSupportedException){}}
+    int length=0x5400+196200-0x4fe0;
+    Array.Copy(originalAudio,0x4fe0,originalAudio,0x80000,length);
+    using(var source=FirmwareImage.Read(originalAudio))Reject(()=>source.CreateCatalog());
+}
 // Generate the compact WSYS bank layout independently of any original samples.
 var compactDescriptor=WaveSystem(16);Big(compactDescriptor,64+68,2);
 Big(compactDescriptor,64+72,192);Big(compactDescriptor,64+76,232);

@@ -62,6 +62,34 @@ with the actual sample count. WSYS bank layouts differ: the early input uses
 68-byte names and 36-byte descriptors, while later inputs use 112-byte names and
 44-byte descriptors. The production inspector resolves these from bounded tables
 and rejects ambiguous layouts. All three now enumerate twelve wave descriptors.
-Archive association and original material/animation semantics
-remain active research; no right-channel magic or fixed ROM offset is accepted
-as proof of an AW mapping.
+## Original startup archive association
+
+The production catalog now supports the original numbered WSYS/adjacent AW
+profile. A 32-byte wrapper precedes WSYS: its first two words and final three
+words are zero, its type is 2, and its size/allocation words describe a bounded
+32-byte-aligned allocation. The early compact image retains stale wrapper size
+words; the validated WSYS extent determines the archive's aligned start.
+
+Qualification additionally requires one named `ipl_0.aw` bank, twelve compatible
+AFC entries, exact encoded-frame capacities, an ordered/disjoint 32-byte-packed
+archive layout, complete ROM bounds, and exactly two matching unlooped startup
+entries. The full archive must not overlap a cataloged compressed resource.
+Different valid source candidates are rejected as ambiguous. Unused alignment
+bytes between waves can contain nonzero build data and are not decoded.
+These are relative layout rules, not fixed ROM addresses or sample signatures.
+
+Automatic extraction succeeds in all three inputs. Their interleaved AFC packets
+are identical (SHA-256
+`f2c489994e7ffd0dcbb499808c4ab13b6d2967f4923ff0aac04d92b71ae53ee2`).
+The existing native memory-source decoder produced exactly 174,067 stereo frames,
+released all handles, and matched the independent GC-anim-Wii/wsyster reference
+decoder byte for byte. Big-endian interleaved PCM SHA-256:
+`ae3e194d404f0022daf33ec1448ae71bcbd0901d76db32619f545d96ba6d490c`.
+All three inputs produced the same PCM. Decoded sample files and external
+reference code remain outside Git. This is host decoding evidence, not physical
+stereo-output verification.
+
+Generated fixtures cover both bank layouts, stale wrappers, partial final AFC
+frames, malformed/overlapping/ambiguous sources, cancellation, native ownership
+and AOT Sound/Music playback. Original material/animation semantics remain under
+investigation.

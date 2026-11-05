@@ -4,15 +4,15 @@ The seven-phase contract is **not complete**. Phase 1 software access is
 implemented; Phases 2–4 have strict supported-layout implementations and tests.
 Original J3D1 geometry/material interpretation (Phase 5) and the startup renderer
 (Phase 6) remain unimplemented. Integration work for Phase 7 is present, but
-original regional compatibility and physical-console validation are unperformed.
+original model/animation compatibility and physical-console validation are unperformed.
 No Nintendo firmware or extracted proprietary assets are included.
 
 | Phase | Implemented | Remaining acceptance work |
 | --- | --- | --- |
 | 1 | Bounded EXI access; explicit file fallback/source metadata; ownership, cancellation, descrambling and encoding evidence; console/file AOT tests | Physical console and real revision coverage |
-| 2 | Yay0 inventory/extraction; J3D1 section inspection; TEX1/BTI profiles; strict FST/WSYS inventories; metadata-linked stereo extraction | Verify actual regional layouts, especially the currently unconfirmed FST/AW association |
+| 2 | Yay0 inventory/extraction; all nine original J3D1 section sets and six texture profiles in three original inputs; compact/extended WSYS inventories | Original geometry/material interpretation is Phase 5 |
 | 3 | Named caller-owned Texture2D resources; metadata-only cache; SystemFont/IplFont compatibility; native allocation/disposal tests | Original NTSC/PAL render captures and comparisons |
-| 4 | Lossless stereo AFC packaging; native memory-backed Sound/Music; decoder, loop, cancellation and lifetime tests | Confirm actual startup descriptors/archive mapping and physical stereo output |
+| 4 | Original adjacent WSYS/AW association in NTSC 1.0/1.2 and PAL 1.2; exact sample counts; native memory-backed Sound/Music; bit-identical reference decoding; lifetime tests | Physical stereo output |
 | 5 | Structural metadata explicitly marks models unsupported | Original geometry/topology, attributes, hierarchy/matrices, materials/TEV and embedded texture interpretation |
 | 6 | No renderer/controller implementation | Original startup sequence using the Phase 5 models and deterministic captures |
 | 7 | AOT/native bindings, heap selection, metadata CLI, regression integration, emulator completion proof and API guide | Phase 5/6 integration, actual regional dumps, physical validation and final remote CI confirmation |
@@ -93,14 +93,14 @@ candidates and unknown layouts fail. No absolute ROM texture offsets are used.
 Only immutable metadata is cached; catalogs retain no complete ROM/decoded model
 or shared GX object. Access is serialized through the existing executors.
 
-Stereo discovery currently requires a valid embedded FST with a unique named AW
-mapping, bounded WSYS descriptors, two compatible/disjoint channels and a unique
-startup-duration/rate candidate. Channels are losslessly interleaved for the
-existing native AFC decoder. It does not use a right-channel sample signature
-or a fixed AW base. **FST presence/layout in actual IPL revisions is unverified.**
-A filename string alone is not accepted as a filesystem. Non-FST mappings remain
-unsupported. Standalone WSYS/AW inspection and metadata-selected stereo extraction
-are available, but do not certify a specific real IPL layout.
+Stereo discovery now supports the numbered WSYS/adjacent AW profile qualified
+against NTSC 1.0, NTSC 1.2 and PAL 1.2. It checks the wrapper, all twelve packed
+wave extents, compatible metadata and unique startup selection, without a
+right-channel sample signature or absolute AW address. Both WSYS bank families
+are supported. The 174,067-sample stereo output matches the external reference
+decoder byte for byte on the host. Strict FST-based containers remain supported,
+but no FST is required or claimed for the original images. Full evidence is in
+[format research](system-firmware-format-research.md).
 
 J3D1 inspection validates only the file/chunk/TEX1 structures implemented here.
 It does not claim support for original vertex, matrix, material, TEV or display-
@@ -115,7 +115,7 @@ list is sent directly to GX, and no flat substitute is presented as authentic.
 | Tiles | 0x1020 / 0 | Validated standalone BTI profile |
 | Three logo faces | 0x16F60 / 5056, 5088, 5120 | All three table entries and individual relative offsets validated |
 | GAMECUBE wordmark | 0x64A0 / 11616 | Strict named TEX1/BTI profile |
-| Startup audio | Reference raw-AFC heuristic | Metadata-linked WSYS/AW stereo path for the strict supported layout; real mapping unverified |
+| Startup audio | Reference raw-AFC heuristic | Validated relative WSYS/AW profile in three original inputs; exact stereo frames and bit-identical reference PCM |
 | Cube/logo/menu geometry | Reference contains ripped models.c meshes | Original geometry unsupported; meshes not copied |
 | Startup timing/rendering | Reference manually reconstructed | Not implemented; requires original geometry work |
 

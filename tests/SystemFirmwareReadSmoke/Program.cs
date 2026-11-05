@@ -12,7 +12,7 @@ internal static class Program
         using(var image=SystemFirmware.ReadConsole())
         using(var catalog=image.CreateCatalog())
         {
-            if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=3||catalog.Files==null||catalog.Files.Count!=3||
+            if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=3||catalog.Files!=null||catalog.GetStartupAudio().Layout!=FirmwareAudioLayout.AdjacentWaveArchive||
                catalog.GetTexture(SystemTexture.Environment).HeaderOffset!=8448||catalog.GetStartupAudio().SampleRate!=32000||catalog.WaveSystemCount!=1)return 1;
             var device=GraphicsDevice.Default;int before=device.NativeBytes;
             using(var texture=SystemResources.CreateTexture(catalog,SystemTexture.Environment))
@@ -28,7 +28,7 @@ internal static class Program
             using(var sound=SystemResources.CreateStartupSound(catalog))
             {
                 DebugOverlay.WriteLine("FIRMWARE AUDIO VALIDATED");
-                if(sound.Channels!=2||sound.SampleRate!=32000||sound.SampleCount!=174080)return 7;
+                if(sound.Channels!=2||sound.SampleRate!=32000||sound.SampleCount!=174067)return 7;
                 DebugOverlay.WriteLine("FIRMWARE AUDIO PLAY");
                 var channel=sound.Play();if(!channel.IsPlaying)return 8;channel.Stop();
                 var second=sound.PlayLoop(3,20);if(!second.IsPlaying)return 9;

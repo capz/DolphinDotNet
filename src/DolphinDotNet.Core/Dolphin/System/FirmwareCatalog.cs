@@ -45,7 +45,7 @@ public sealed class FirmwareCatalog : IDisposable
     public FirmwareStereoAudio GetStartupAudio()
     {
         if(records==null)throw new ObjectDisposedException(nameof(FirmwareCatalog));
-        if(startupAudio==null)throw new NotSupportedException("No unique validated firmware file-table/WSYS stereo layout.");
+        if(startupAudio==null)throw new NotSupportedException("No unique validated firmware WSYS/stereo archive layout.");
         return startupAudio;
     }
     internal static bool HasEvidence(byte[] data,CancellationToken cancellation)
@@ -77,9 +77,14 @@ public sealed class FirmwareCatalog : IDisposable
             previousEnd=at+used;total+=used;
         }
         var files=includeMetadata?FirmwareFileTable.Inspect(data,cancellation):null;
-        var audio=FirmwareStereoAudio.Discover(data,files,cancellation);
+        var waves=includeMetadata?FirmwareWaveSystemInfo.Scan(data,cancellation):new FirmwareWaveSystemInfo[0];
+        var audio=includeMetadata?FirmwareStereoAudio.Discover(data,files,waves,cancellation):null;
+        if(audio!=null&&audio.FirmwareOffset>=0)
+            foreach(var record in metadata)
+                if(audio.FirmwareOffset<record.Offset+record.CompressedBytes&&record.Offset<audio.FirmwareOffset+audio.ArchiveBytes)
+                {audio.Release();throw new InvalidDataException("Firmware audio archive overlaps a compressed resource.");}
         if(audio!=null&&audio.CompressedBytes>MaximumDecodedBytes-total)throw new InvalidDataException("Firmware catalog retention budget exceeded.");
-        return new FirmwareCatalog(metadata.ToArray(),compressed.ToArray(),files,audio,includeMetadata?FirmwareWaveSystemInfo.Scan(data,cancellation):new FirmwareWaveSystemInfo[0]);
+        return new FirmwareCatalog(metadata.ToArray(),compressed.ToArray(),files,audio,waves);
     }
     public byte[] Extract(int index,CancellationToken cancellationToken=default)
     {

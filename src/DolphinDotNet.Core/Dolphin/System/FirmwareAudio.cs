@@ -108,6 +108,9 @@ public static class FirmwareWaveSystem
     }
 }
 
+/// <summary>Validated association between a descriptor and its sample archive.</summary>
+public enum FirmwareAudioLayout { ExplicitPair, FileTable, AdjacentWaveArchive }
+
 /// <summary>Owned original stereo AFC channels with validated WSYS metadata.
 /// The packet retains compressed samples, never a full ROM or temporary file.</summary>
 public sealed class FirmwareStereoAudio
@@ -119,6 +122,10 @@ public sealed class FirmwareStereoAudio
     public bool HasLoop {get;}
     public int LeftArchiveOffset {get;}
     public int RightArchiveOffset {get;}
+    public FirmwareAudioLayout Layout {get;private set;}
+    /// <summary>ROM-relative AW position, or -1 for an explicitly supplied archive.</summary>
+    public int FirmwareOffset {get;private set;}=-1;
+    public int ArchiveBytes {get;private set;}
     public int CompressedBytes=>packet==null?0:packet.Length;
     private FirmwareStereoAudio(byte[] bytes,FirmwareWave left,FirmwareWave right)
     {packet=bytes;SampleRate=left.SampleRate;SampleCount=left.SampleCount;HasLoop=left.HasLoop;LeftArchiveOffset=left.Offset;RightArchiveOffset=right.Offset;}
@@ -152,13 +159,15 @@ public sealed class FirmwareStereoAudio
         if(left.HasLoop&&left.LoopEnd!=left.SampleCount)throw new NotSupportedException("AFC container cannot preserve this loop end.");
         for(int f=0;f<frames;f++)
         {if((f&255)==0)cancellationToken.ThrowIfCancellationRequested();Array.Copy(archive,left.Offset+f*9,packet,32+f*18,9);Array.Copy(archive,right.Offset+f*9,packet,41+f*18,9);}
-        return new FirmwareStereoAudio(packet,left,right);
+        return new FirmwareStereoAudio(packet,left,right){ArchiveBytes=archive.Length};
     }
-    internal static FirmwareStereoAudio? Discover(byte[] image,FirmwareFileTable? table,CancellationToken cancellation)
+    private static bool StartupWave(FirmwareWave wave)
+        =>wave.Codec==0&&wave.SampleRate==32000&&!wave.HasLoop&&
+          wave.SampleCount>174064&&wave.SampleCount<=174080;
+    internal static FirmwareStereoAudio? Discover(byte[] image,FirmwareFileTable? table,FirmwareWaveSystemInfo[] systems,CancellationToken cancellation)
     {
-        if(table==null)return null;
         FirmwareStereoAudio? found=null;int work=8192,pairs=0;
-        for(int file=0;file<table.Count;file++)
+        for(int file=0;table!=null&&file<table.Count;file++)
         {
             cancellation.ThrowIfCancellationRequested();
             var entry=table[file];if(!FirmwareResource.Match(image,entry.Offset,"WSYS"))continue;
@@ -166,14 +175,14 @@ public sealed class FirmwareStereoAudio
             try{waves=FirmwareWaveSystem.Inspect(descriptor,cancellation);}catch(InvalidDataException){continue;}catch(NotSupportedException){continue;}
             work-=waves.Length;if(work<0)throw new InvalidDataException("Firmware wave discovery budget exceeded.");
             int eligible=0;
-            foreach(var wave in waves)if(wave.Codec==0&&wave.SampleRate==32000&&wave.SampleCount==174080)eligible++;
+            foreach(var wave in waves)if(StartupWave(wave))eligible++;
             if(eligible>64)throw new InvalidDataException("Too many candidate startup waves.");
             for(int first=0;first<waves.Length;first++)
             {
                 var left=waves[first];
                 // Startup duration/rate are profile hints, backed by descriptor,
                 // named archive resolution, disjoint ranges and a unique pair.
-                if(left.Codec!=0||left.SampleRate!=32000||left.SampleCount!=174080)continue;
+                if(!StartupWave(left))continue;
                 for(int second=first+1;second<waves.Length;second++)
                 {
                     var right=waves[second];
@@ -186,11 +195,70 @@ public sealed class FirmwareStereoAudio
                     var archive=table.Extract(image,archiveIndex);FirmwareStereoAudio pair;
                     try{pair=left.Offset<right.Offset?Read(descriptor,archive,first,second,cancellation):Read(descriptor,archive,second,first,cancellation);}
                     catch(InvalidDataException){continue;}catch(NotSupportedException){continue;}
-                    if(found!=null)throw new InvalidDataException("Ambiguous startup stereo wave pair.");found=pair;
+                    pair.Layout=FirmwareAudioLayout.FileTable;
+                    pair.FirmwareOffset=table[archiveIndex].Offset;
+                    if(found!=null){found.Release();pair.Release();throw new InvalidDataException("Ambiguous startup stereo wave pair.");}found=pair;
                 }
             }
         }
+        foreach(var system in systems)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            var candidate=ReadAdjacentArchive(image,system,cancellation);
+            if(candidate==null)continue;
+            if(found!=null)
+            {
+                bool same=found.FirmwareOffset==candidate.FirmwareOffset&&found.ArchiveBytes==candidate.ArchiveBytes&&
+                    found.SampleRate==candidate.SampleRate&&found.SampleCount==candidate.SampleCount&&
+                    found.LeftArchiveOffset==candidate.LeftArchiveOffset&&found.RightArchiveOffset==candidate.RightArchiveOffset;
+                candidate.Release();
+                if(same)continue;
+                found.Release();throw new InvalidDataException("Ambiguous original startup archive mapping.");
+            }
+            found=candidate;
+        }
         return found;
+    }
+    private static FirmwareStereoAudio? ReadAdjacentArchive(byte[] image,FirmwareWaveSystemInfo system,CancellationToken cancellation)
+    {
+        // Original IPL profile: a numbered WSYS record followed by its single
+        // packed AW bank. Verified in both 14-record NTSC and 31-record PAL
+        // layouts. No ROM address or compressed-sample signature is a locator.
+        if(system.Count!=12||system.Offset<32)return null;
+        int header=system.Offset-32;
+        if(U32(image,header)!=0||U32(image,header+4)!=0||U32(image,header+8)!=2||
+           U32(image,header+20)!=0||U32(image,header+24)!=0||U32(image,header+28)!=0)return null;
+        uint declared=U32(image,header+12),allocated=U32(image,header+16);
+        // The early compact bank retains the later wrapper's stale size. Its
+        // own bounded WSYS extent determines the next record, not that field.
+        if(declared<(uint)system.Length||declared>FirmwareCatalog.MaximumDecodedBytes||
+           allocated!=((declared+31)&~31u))return null;
+        int archiveAt=(system.Offset+system.Length+31)&~31;
+        if(archiveAt>0x1aff00)return null;
+        int next=0,extent=0,startup=0;
+        string archiveName=system[0].ArchiveName;
+        if(Leaf(archiveName)!="ipl_0.aw")return null;
+        for(int i=0;i<system.Count;i++)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            var wave=system[i];
+            if(wave.ArchiveName!=archiveName||wave.Codec!=0||wave.Offset!=next||
+               wave.EncodedBytes!=((long)wave.SampleCount+15)/16*9||
+               wave.Offset>FirmwareCatalog.MaximumDecodedBytes-wave.EncodedBytes)return null;
+            extent=wave.Offset+wave.EncodedBytes;next=(extent+31)&~31;
+            if(StartupWave(wave))startup++;
+        }
+        if(startup!=2||!StartupWave(system[0])||!StartupWave(system[1])||
+           extent>0x1aff00-archiveAt)return null;
+        // The descriptor's alignment fill is zero in this profile. Padding
+        // between AW waves is unspecified and can contain nonzero build data;
+        // the decoder reads only each metadata-defined wave extent.
+        for(int i=system.Offset+system.Length;i<archiveAt;i++)if(image[i]!=0)return null;
+        var descriptor=new byte[system.Length];Array.Copy(image,system.Offset,descriptor,0,descriptor.Length);
+        var archive=new byte[extent];Array.Copy(image,archiveAt,archive,0,extent);
+        var result=Read(descriptor,archive,0,1,cancellation);
+        result.Layout=FirmwareAudioLayout.AdjacentWaveArchive;result.FirmwareOffset=archiveAt;
+        return result;
     }
     private static string Leaf(string path){int at=path.LastIndexOf('/');return at<0?path:path.Substring(at+1);}
     private static void Write32(byte[] d,int a,int n){d[a]=(byte)(n>>24);d[a+1]=(byte)(n>>16);d[a+2]=(byte)(n>>8);d[a+3]=(byte)n;}

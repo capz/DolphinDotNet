@@ -70,11 +70,20 @@ interleaves compatible, non-overlapping original AFC channels into the existing
 AFC container. It preserves sample count, sample rate and representable loops;
 incompatible/unknown layouts fail explicitly.
 
-Automatic `catalog.GetStartupAudio()` resolution currently requires a strict
-validated embedded FST, named WSYS/AW mapping, compatible metadata and one unique
-startup pair. The actual IPL file-table layout is unverified. Non-FST locations
-are unsupported; the implementation does not guess from a right-channel sample
-signature or fixed absolute ROM offsets.
+Automatic `catalog.GetStartupAudio()` resolution supports the original numbered
+WSYS/adjacent AW layout, qualified against NTSC 1.0, NTSC 1.2 and PAL 1.2. It
+validates the record wrapper, both WSYS bank layouts, all twelve packed wave
+extents, the archive name and one unique compatible startup pair. Alignment fill
+between waves is not sample data and may be nonzero. A strict embedded FST/named
+archive mapping remains available for explicit supported containers; an actual
+FST is not required for the original images. No right-channel sample signature
+or absolute ROM address is a locator.
+
+The original startup metadata reports 174,067 samples per channel at 32 kHz;
+the final AFC frame is only partly used. That exact count is preserved. `Layout`,
+`FirmwareOffset` and `ArchiveBytes` report how the source was associated; explicit
+standalone archives have no ROM offset. See the
+[format evidence](system-firmware-format-research.md).
 
 `Sound.FromEncoded` and `Music.FromEncoded` accept resident compressed data and
 optional paired-bank data, copy it into native ownership, and reuse the existing

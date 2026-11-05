@@ -28,7 +28,7 @@ int dnd_audio_backend_play(unsigned slot,const void *data,unsigned size,unsigned
 {(void)slot;(void)data;(void)size;(void)format;(void)rate;(void)loop;(void)volume;(void)pitch;assert(0);return 0;}
 int dnd_audio_backend_play_encoded(unsigned slot,const DndAudioSource *source,bool loop,unsigned start,unsigned end,float volume,float pitch)
 {
-    assert(slot<32&&source->channels==2&&source->rate==32000&&source->samples==174080);
+    assert(slot<32&&source->channels==2&&source->rate==32000&&source->samples==174067);
     assert(volume==1&&pitch==1);
     DndAudioDecoder decoder;dnd_audio_decoder_init(&decoder,source,loop);
     uint8_t pcm[4];assert(dnd_audio_decode(&decoder,pcm,1)==1);

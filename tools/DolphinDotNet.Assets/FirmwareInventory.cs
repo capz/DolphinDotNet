@@ -37,7 +37,7 @@ internal static class FirmwareInventory
             {textures[name.ToString()]=new {unsupported=error.Message};}
         }
         object audio;
-        try {var source=catalog.GetStartupAudio();audio=new {channels=2,rate=source.SampleRate,samples=source.SampleCount,duration=source.DurationSeconds,compressedBytes=source.CompressedBytes};}
+        try {var source=catalog.GetStartupAudio();audio=new {channels=2,rate=source.SampleRate,samples=source.SampleCount,duration=source.DurationSeconds,compressedBytes=source.CompressedBytes,layout=source.Layout.ToString(),archiveOffset=source.FirmwareOffset,archiveBytes=source.ArchiveBytes};}
         catch(NotSupportedException error){audio=new {unsupported=error.Message};}
         var files=catalog.Files;
         Console.WriteLine(JsonSerializer.Serialize(new {
