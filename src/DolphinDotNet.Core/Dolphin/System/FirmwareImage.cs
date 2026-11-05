@@ -60,7 +60,7 @@ public sealed class FirmwareImage : IDisposable
         // The unencrypted revision text must terminate inside the 0x100-byte header.
         int end=0;
         while(end<0x100&&data[end]!=0)
-        { if(data[end]<32||data[end]>126)throw new InvalidDataException("Invalid firmware revision header."); end++; }
+        { if((data[end]<32&&data[end]!=9&&data[end]!=10&&data[end]!=13)||data[end]>126)throw new InvalidDataException("Invalid firmware revision header."); end++; }
         if(end<8||end==0x100)throw new InvalidDataException("Missing firmware revision header.");
         string revision=global::System.Text.Encoding.ASCII.GetString(data,0,end);
         if(!revision.StartsWith("Nintendo GameCube IPL",StringComparison.Ordinal))

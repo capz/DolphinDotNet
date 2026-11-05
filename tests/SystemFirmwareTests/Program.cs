@@ -8,7 +8,7 @@ Check(FirmwareCatalog.Decompress(payload).SequenceEqual(Encoding.ASCII.GetBytes(
 for(int i=0;i<payload.Length;i++)Reject(()=>FirmwareCatalog.Decompress(payload.Take(i).ToArray()));
 var invalid=(byte[])payload.Clone();invalid[16]=0;Reject(()=>FirmwareCatalog.Decompress(invalid));
 invalid=(byte[])payload.Clone();invalid[11]=17;Reject(()=>FirmwareCatalog.Decompress(invalid));
-var rom=new byte[FirmwareImage.ImageBytes];Encoding.ASCII.GetBytes("Nintendo GameCube IPL synthetic").CopyTo(rom,0);
+var rom=new byte[FirmwareImage.ImageBytes];Encoding.ASCII.GetBytes("Nintendo GameCube IPL\r\nsynthetic").CopyTo(rom,0);
 payload.CopyTo(rom,0x1000);payload.CopyTo(rom,0x2000);rom[0x1aff00]=123;
 using(var firmware=FirmwareImage.Read(rom))
 {

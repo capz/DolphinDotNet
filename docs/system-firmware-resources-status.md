@@ -114,3 +114,12 @@ array helpers. GCC O1/Werror compilation, managed runtime/core BCL tests in
 standard and O3/LTO modes, and the firmware forced-GC host fixture pass after
 this change. The full graphics suite was restarted; do not mistake the initial
 run for a pass.
+
+The synthetic fixture was also cross-built with an explicit 8 MiB native heap.
+An emulated DOL boot was observed, but the GDB console-buffer read returned an
+empty response and Dolphin exited with status 141. This attempt failed to prove
+managed completion; it is not an emulated firmware/resource validation pass.
+The harness first needed the LTO-renamed console symbol; correcting that name
+did not produce successful memory proof. Physical hardware was not available.
+Revision text validation accepts CR/LF/tab inside the bounded ASCII header;
+the synthetic multiline-header regression passes.
