@@ -106,3 +106,11 @@ execution with the default heap. No emulated execution result is claimed.
 The pinned devkitPro/libogc2 Docker cross-build completed successfully and
 produced 32-byte-aligned `SystemFirmwareSmoke.dol` and its ELF. This establishes
 compilation/linking, not runtime memory sufficiency or physical verification.
+
+The first complete graphics run reached native model compilation and failed on
+GCC's `-Werror=dangling-pointer` diagnostic in existing `dnd_array_clone` root
+registration. Clone now uses a scoped active GC frame, matching other native
+array helpers. GCC O1/Werror compilation, managed runtime/core BCL tests in
+standard and O3/LTO modes, and the firmware forced-GC host fixture pass after
+this change. The full graphics suite was restarted; do not mistake the initial
+run for a pass.

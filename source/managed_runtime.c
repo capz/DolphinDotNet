@@ -473,16 +473,16 @@ DndArray *dnd_array_clone(DndManagedHeap *heap, DndArray *source) {
     size_t bytes = sizeof(DndArray) + payload;
     DndObject *root = (DndObject *)source;
     DndObject **slots[] = { &root };
-    DndRootSet roots;
-    dnd_roots_init(&roots, slots, 1);
-    dnd_root_add(&roots, &root);
-    DndGcRootRegistration registration = {0};
-    if (!dnd_gc_register_roots(&registration, &roots)) return NULL;
+    /* This root lives for one synchronous allocation, like the other native
+     * array helpers. Use the active frame stack rather than the persistent
+     * registration list (which GCC diagnoses as an escaping local address). */
+    DndGcFrame frame;
+    dnd_gc_frame_push(&frame, slots, 1);
     DndArray *copy = (DndArray *)allocate(heap, &DND_TYPE_ARRAY, bytes);
     if (copy)
         memcpy((uint8_t *)copy + sizeof(DndObject),
-            (uint8_t *)source + sizeof(DndObject), bytes - sizeof(DndObject));
-    dnd_gc_unregister_roots(&registration);
+            (uint8_t *)root + sizeof(DndObject), bytes - sizeof(DndObject));
+    dnd_gc_frame_pop(&frame);
     return copy;
 }
 
