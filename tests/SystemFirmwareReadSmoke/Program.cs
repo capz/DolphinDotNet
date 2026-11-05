@@ -13,8 +13,9 @@ internal static class Program
         using(var image=SystemFirmware.ReadConsole())
         using(var catalog=image.CreateCatalog())
         {
-            if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=4||catalog.Files!=null||catalog.GetStartupAudio().Layout!=FirmwareAudioLayout.AdjacentWaveArchive||
+            if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=6||catalog.Files!=null||catalog.GetStartupAudio().Layout!=FirmwareAudioLayout.AdjacentWaveArchive||
                catalog.GetTexture(SystemTexture.Environment).HeaderOffset!=8448||catalog.GetStartupAudio().SampleRate!=32000||catalog.WaveSystemCount!=1)return 1;
+            if(catalog[4].Offset!=0x1aff00||catalog[5].Offset!=0x1fcf00||catalog.Extract(4)[0]!=70)return 21;
             int background=global::System.Threading.Tasks.Task.Run(()=>
             {
                 try{using(var startup=SystemStartupRenderer.Load(catalog)){}return 1;}
@@ -43,7 +44,7 @@ internal static class Program
         using(var image=SystemFirmware.Open("sd:/firmware-synthetic.bin"))
         using(var catalog=image.CreateCatalog())
         {
-            if(image.Source!=FirmwareSource.ExplicitFile||catalog.Count!=4||catalog.Extract(0)[0]!=65)return 3;
+            if(image.Source!=FirmwareSource.ExplicitFile||catalog.Count!=6||catalog.Extract(0)[0]!=65)return 3;
             DebugOverlay.WriteLine("FIRMWARE AUDIO BEGIN");
             using(var sound=SystemResources.CreateStartupSound(catalog))
             {

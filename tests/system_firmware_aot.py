@@ -42,6 +42,8 @@ def main():
             offset=(offset+size+31)&~31
         image[0x20000:0x20400]=descriptor;big(image,0x1ffe8,2);big(image,0x1ffec,1152);big(image,0x1fff0,1152)
         image[0x20400:0x20400+len(archive)]=archive
+        for at,text in ((0x1aff00,b'FONT'),(0x1fcf00,b'GLYP')):
+            image[at:at+24]=b'Yay0'+struct.pack('>III',4,20,20)+bytes([240,0,0,0])+text
         path=sd/'firmware-synthetic.bin';path.write_bytes(image)
         bundle=work/'bundle'
         compiler=ROOT/'tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll'

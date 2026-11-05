@@ -57,8 +57,11 @@ public sealed class FirmwareCatalog : IDisposable
     internal static FirmwareCatalog Scan(byte[] data,CancellationToken cancellation,bool includeMetadata=true)
     {
         var metadata=new List<FirmwareResource>();var compressed=new List<byte[]>();
+        // Header/font records stay unencrypted, so they must not influence encoding
+        // evidence. The actual catalog still inventories the entire image.
+        int scanEnd=includeMetadata?data.Length:0x1aff00;
         int previousEnd=0,total=0,work=0;
-        for(int at=0x100;at<=0x1aff00-16;at++)
+        for(int at=includeMetadata?0:0x100;at<=scanEnd-16;at++)
         {
             if((at&4095)==0)cancellation.ThrowIfCancellationRequested();
             if(!FirmwareResource.Match(data,at,"Yay0"))continue;
@@ -68,7 +71,7 @@ public sealed class FirmwareCatalog : IDisposable
             if(declared<=0||declared>MaximumDecodedBytes)continue;
             if(declared>16*MaximumDecodedBytes-work)throw new InvalidDataException("Firmware decode work budget exceeded.");
             work+=declared;
-            try { decoded=Decode(data,at,0x1aff00-at,out used,cancellation); }
+            try { decoded=Decode(data,at,scanEnd-at,out used,cancellation); }
             catch(InvalidDataException){continue;}
             if(at<previousEnd)throw new InvalidDataException("Overlapping Yay0 records.");
             if(metadata.Count==MaximumResources||used>MaximumDecodedBytes-total)

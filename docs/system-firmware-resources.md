@@ -46,7 +46,8 @@ native textures and sounds have independent lifetimes.
 ## Inventory, textures and fonts
 
 Enumerate `catalog.Count` and `catalog[index]` for ROM offsets, compressed/decoded
-lengths and kinds. `InspectModel(index)` reports bounded J3D1 chunk metadata;
+lengths and kinds, including both unencrypted font records. Those font records
+are excluded only from encoding evidence. `InspectModel(index)` reports bounded J3D1 chunk metadata;
 it does **not** imply geometry rendering support. `GetTextures(index)` reports
 validated BTI header positions, dimensions, formats and mip counts. Unknown or
 ambiguous layouts throw rather than choosing a plausible slice.

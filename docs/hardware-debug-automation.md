@@ -88,3 +88,9 @@ The original-firmware fixture's external metadata can be checked with
 `python3 tests/check_system_firmware_captures.py /tmp/captures/results.json`.
 This checks distinct textures/animation stages and matching fixed-frame pairs;
 it is not a pixel comparison against a physical IPL reference.
+
+Dolphin HLE support also depends on the pinned SDK's AESND microcode. A run that
+reports unknown microcode (for example `8d527c50`) does not qualify audio output
+or DSP shutdown even when visual frames are correct. Use the target's supported
+DSP configuration or physical hardware for audio acceptance, and record visual
+qualification separately rather than treating a frame capture as sound evidence.

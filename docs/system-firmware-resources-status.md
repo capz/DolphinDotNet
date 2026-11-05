@@ -20,7 +20,8 @@ extracted proprietary assets are included. PR #152 remains draft and must not me
 Online NTSC 1.0, NTSC 1.2 and PAL 1.2 research inputs were obtained outside Git at
 the user's request. Length, CRC32, MD5 and SHA-1 match the libretro catalog;
 [format research](system-firmware-format-research.md) records provenance and hashes.
-The production CLI finds 14/14/31 Yay0 records respectively, all six named textures,
+The complete production CLI finds 16/16/33 Yay0 records respectively (14/14/31
+boot-region records plus two unencrypted fonts), all six named textures,
 all nine named models and the original exact stereo startup in each input.
 All 27 original models pass native geometry/material import and release cleanly.
 Model identities use bounded joint names, never absolute ROM addresses.
@@ -50,7 +51,7 @@ Passed locally:
   unavailable-console fallback, named model import, node/color controls, textures,
   original-length stereo Sound/Music, loops, cancellation and independent lifetimes.
   No live file/draw/model/voice/clip handles remain. Forced-GC run: 1,025 reads,
-  439 collections, 2,104,416 heap bytes occupied at exit (not peak).
+  463 collections, 2,103,816 heap bytes occupied at exit (not peak).
 - Native suite in standard and O3/LTO configurations; audio containers/vectors,
   independent voices, loops and memory ownership; CI selection/workflow scheduling.
 - New model/GX fixture under AddressSanitizer and UBSan. LeakSanitizer is disabled
@@ -68,11 +69,29 @@ conclusion from a successful local build.
 
 ## Emulated versus physical evidence
 
-Dolphin has successfully loaded the original PAL 1.2 ROM through its emulated
-EXI device. The expanded fixture reads it through the native bounded EXI driver,
-creates the catalog and reaches the native presented-frame boundary. Further
-model/animation capture results are recorded separately as they complete. Images
-and all firmware-derived artifacts stay outside Git.
+Dolphin successfully loaded the original PAL 1.2 ROM through its emulated
+EXI device. The expanded fixture reads it using the bounded native driver,
+creates its catalog and renders six textures, nine model views and seven exact
+animation times. The accepted visual run contains 43 XFB captures with matching
+fixed-frame pairs, distinct textures/stages and a different fade/hold image.
+The final wordmarks are visible and the original logo/geometry render through GX.
+Normal B exit reaches `FIRMWARE HARDWARE RESOURCES RELEASED` and `MANAGED MAIN: OK`;
+guest `dnd_models` and `dnd_instances` tables are entirely zero after disposal.
+Captures and raw firmware-derived artifacts remain outside Git.
+
+Renderer qualification used commit `dad475c` and DOL SHA-256
+`488d45c02997adea8ae2c1a3ee69926887ffd7d4ae7b2d7075dc1b697f899026`.
+The fixture reports 1,304,336 bytes of startup native budget charges after
+preparation; this includes per-model texture charges and is not a unique-memory
+peak. Bare model previews preserve authored rest alpha, so the wordmark may be
+invisible until the animation activates its materials.
+
+The visual run deliberately omits audio initiation. This Dolphin version reports
+unsupported AESND HLE microcode `8d527c50`; an audio attempt reached managed
+resource release but stalled in SDK DSP reset. An LLE attempt did not reach the
+first frame within the diagnostic deadline. No emulated audible-output or DSP
+shutdown success is claimed. Host original-data decoding and synthetic playback /
+lifetime tests passed; physical audio acceptance remains required.
 
 The earlier synthetic Dolphin/JIT completion proof also verifies guest-written
 `SYSTEM FIRMWARE CIPHER PASS` and `MANAGED MAIN: OK` buffers at
@@ -120,3 +139,10 @@ Use [the API guide](system-firmware-resources.md),
 is EXI only; `FIRMWARE_EXPLICIT_FILE` builds require the explicitly selected
 `sd:/ipl.bin`. A cycles six textures, nine models and seven exact animation times;
 X enables time progression, START plays sound and B releases resources and exits.
+
+The full remote CI run for renderer commit `dad475c` passed all nine framework
+domains, host debugger compatibility, macOS/Windows build-driver checks and the
+final gate: [run 42111830873](https://github.com/capz/DolphinDotNet/actions/runs/42111830873).
+Complete-image catalog tests additionally cover unchanged header/font records,
+font-only encoding rejection and both original font decompressions. Subsequent
+head checks are reported on the PR rather than inferred from that earlier run.

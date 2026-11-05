@@ -31,8 +31,9 @@ reader now recognizes retail headers while continuing to require independent
 decoded-record evidence for automatic encoding detection. Header tests generate
 fictional publisher/revision strings rather than copying a firmware header.
 
-The production inventory tool, after the header correction, decoded 14 records
-from each NTSC input and 31 from PAL. All six named texture profiles resolved in
+The production inventory tool decoded 14 boot-region records from each NTSC
+input and 31 from PAL. Complete-image enumeration also includes the two
+unencrypted font records: totals are 16/16/33. All six named texture profiles resolved in
 all three inputs, including per-header-relative offsets for the three faces:
 
 | Texture | Width | Height | BTI format |
@@ -138,3 +139,12 @@ opacity, matching final framebuffer blending. The optional compositor adds that
 clamp stage when needed and leaves authored RGB/TEV registers untouched. Original
 Nintendo letter joints rest at approximately -90 degrees; the rendition rotates
 them toward zero for the final readable wordmark.
+
+## Complete font-region enumeration
+
+Both original fonts are independent Yay0 records outside the cipher interval:
+decoded sizes 593,636 and 65,808 bytes. Complete catalogs enumerate them without
+transforming their bytes. Encoding evidence deliberately excludes this region,
+since unchanged font records are valid under both interpretations of the boot
+region. Synthetic font literals test enumeration and that fonts alone cannot
+establish an encoding. The existing native IplFont/SystemFont behavior is unchanged.

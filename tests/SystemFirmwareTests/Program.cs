@@ -222,3 +222,20 @@ using(var canceled=new CancellationTokenSource())
     canceled.Cancel();try{catalog.GetModelIndex(SystemModel.BaseCube,canceled.Token);throw new Exception("Named model cancellation ignored");}
     catch(OperationCanceledException){}
 }
+
+// Both unencrypted font records belong to the complete catalog, but are not
+// independent evidence for choosing how to interpret the encrypted boot region.
+var withFonts=AdjacentAudioImage(false);
+Literal(Encoding.ASCII.GetBytes("HEAD")).CopyTo(withFonts,0xc0);
+Literal(Encoding.ASCII.GetBytes("FONT")).CopyTo(withFonts,0x1aff00);
+Literal(Encoding.ASCII.GetBytes("GLYP")).CopyTo(withFonts,0x1fcf00);
+FirmwareImage.Transform(withFonts);
+using(var image=FirmwareImage.Read(withFonts))
+using(var catalog=image.CreateCatalog())
+{
+    Check(image.Encoding==FirmwareEncoding.Scrambled&&catalog.Count==5);
+    Check(catalog[0].Offset==0xc0&&catalog[3].Offset==0x1aff00&&catalog[4].Offset==0x1fcf00);
+    Check(Encoding.ASCII.GetString(catalog.Extract(3))=="FONT");
+    Check(Encoding.ASCII.GetString(catalog.Extract(4))=="GLYP");
+}
+Array.Clear(withFonts,0x100,0x1afe00);Reject(()=>FirmwareImage.Read(withFonts));
