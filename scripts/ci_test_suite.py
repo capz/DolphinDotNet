@@ -46,7 +46,8 @@ def main(area):
         with tempfile.TemporaryDirectory() as tmp:
             for p in ("AotSmoke","ControlFlowSmoke","GenericSharingSmoke"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))
-            for p,host in (("NumericSmoke","numeric_host.c"),
+            for p,host in (("SystemFirmwareSmoke","system_firmware_host.c"),
+                           ("NumericSmoke","numeric_host.c"),
                            ("StringSmoke","string_host.c"),
                            ("WishlistSmoke","wishlist_host.c"),
                            ("ExactNumberSmoke","wishlist_host.c")):
@@ -82,7 +83,7 @@ def main(area):
         with tempfile.TemporaryDirectory() as tmp:
             run("dotnet","run","--project","tests/ModelAssetTests","-c","Release","--",tmp)
             run("python3","scripts/ci_model_tests.py",tmp)
-        for p in ("GraphicsSmoke","IplFontSmoke","ModelSmoke","ModelAsyncSmoke","TevMaterialTests"):
+        for p in ("GraphicsSmoke","SystemFirmwareSmoke","IplFontSmoke","ModelSmoke","ModelAsyncSmoke","TevMaterialTests"):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="assets":
         test("tests/GameCubeFormatsTests")
