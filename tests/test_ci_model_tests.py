@@ -30,7 +30,7 @@ class ModelAcceptanceSchedulingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch.object(ci, "run") as run, patch.object(ci.sys, "platform", "darwin"):
             ci.main(tmp)
         commands = [list(map(str, call.args)) for call in run.call_args_list]
-        for name in ("model-inflate", "model-native", "model-recording", "model-smoke"):
+        for name in ("model-inflate", "model-native", "model-recording", "system-model-recording", "model-smoke"):
             self.assertTrue(any(Path(c[0]).name == name for c in commands), name)
         self.assertTrue(any(c[-1] == "--gc-stress" for c in commands))
         self.assertTrue(any("-Wl,-dead_strip" in c for c in commands))

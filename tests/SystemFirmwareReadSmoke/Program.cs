@@ -9,6 +9,7 @@ internal static class Program
 {
     private static int Main()
     {
+        var sequence=new SystemStartupSequence();sequence.Seek(4.2);if(sequence.Stage!=SystemStartupStage.Letters)return 19;
         using(var image=SystemFirmware.ReadConsole())
         using(var catalog=image.CreateCatalog())
         {

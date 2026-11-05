@@ -1,174 +1,121 @@
 # System firmware resource status
 
-The seven-phase contract is **not complete**. Phase 1 software access is
-implemented; Phases 2–4 have strict supported-layout implementations and tests.
-Original J3D1 geometry/material interpretation (Phase 5) is implemented for the
-qualified original profile; the optional startup rendition (Phase 6) is implemented. Integration work for Phase 7 is present, but
-regional model import qualification is complete; emulated captures and physical-console
-validation remain separate acceptance checks.
-No Nintendo firmware or extracted proprietary assets are included.
+Phases 1–6 have supported-profile implementations. Phase 7 integration, automated
+acceptance fixtures and documentation are implemented; the evidence below keeps
+host, compiled, emulated and physical results separate. No Nintendo firmware or
+extracted proprietary assets are included. PR #152 remains draft and must not merge.
 
-| Phase | Implemented | Remaining acceptance work |
+| Phase | Implementation | Qualification limits |
 | --- | --- | --- |
-| 1 | Bounded EXI access; explicit file fallback/source metadata; ownership, cancellation, descrambling and encoding evidence; console/file AOT tests | Physical console and real revision coverage |
-| 2 | Yay0 inventory/extraction; all nine original J3D1 section sets and six texture profiles in three original inputs; compact/extended WSYS inventories | Original geometry/material interpretation is Phase 5 |
-| 3 | Named caller-owned Texture2D resources; metadata-only cache; SystemFont/IplFont compatibility; native allocation/disposal tests | Original NTSC/PAL render captures and comparisons |
-| 4 | Original adjacent WSYS/AW association in NTSC 1.0/1.2 and PAL 1.2; exact sample counts; native memory-backed Sound/Music; bit-identical reference decoding; lifetime tests | Physical stereo output |
-| 5 | All 27 original regional model imports; shared validated geometry/hierarchy, separate MAT1 TEV/projection/raster state, embedded textures; generated GX-state and malformed/lifetime tests | Physical/emulated frame comparisons and original lighting qualification |
-| 6 | Elapsed-time controller; five original models, fifteen tiles, camera/cube/logo/joint-letter stages, transparency/color/projection; bounded per-instance controls; deterministic fixture snapshots | Reconstructed curves/camera/tile layout and headlight differ from unmeasured physical IPL behavior; console comparisons pending |
-| 7 | AOT/native bindings, heap selection, metadata CLI, regression integration, emulator completion proof and API guide | Phase 5/6 integration, actual regional dumps, physical validation and final remote CI confirmation |
+| 1 | Bounded read-only EXI; explicit file source/fallback; retail headers, revision/source metadata, descrambling and independent encoding evidence; cancellation and ownership | No physical console run |
+| 2 | Bounded Yay0 inventory/extraction, J3D1 section metadata, six named textures, nine named models and compact/extended WSYS/AW | Qualified against NTSC 1.0/1.2 and PAL 1.2; unseen or ambiguous layouts fail |
+| 3 | Existing caller-owned Texture2D/BTI pipeline, metadata-only caching, SystemFont facade and unchanged IplFont compatibility | Physical texture/font comparisons unavailable |
+| 4 | Original adjacent stereo archive association, exact 174,067 samples/channel at 32 kHz, native memory-backed Sound/Music, no temporary files | Physical stereo output unverified |
+| 5 | Original J3D1 geometry/topology, attributes, rigid matrices and hierarchy through the shared importer; separate authored MAT1 TEV/channel/projection/raster state and embedded textures | One channel/stage and at most one generator; unseen fog/NBT/multistage programs reject; original lighting unmeasured |
+| 6 | Optional elapsed-time startup controller and existing GX renderer; five original models, tiles, cube/camera motion, logo/letters, colors, transparency, projection and deterministic seek/captures | Motion curves, camera framing, tile placement and headlight are reconstructed; no pixel-identical physical IPL claim |
+| 7 | AOT bindings, firmware heap selection, metadata CLI, CI scheduling, managed/native/GC/ARAM tests, separate EXI/file acceptance builds and capture scripts | Physical validation and physical peak/latency measurements remain unavailable |
 
-## Current validation — 2026-11-05
+## Original input qualification — 2026-11-05
 
-Passed on the cloud host:
+Online NTSC 1.0, NTSC 1.2 and PAL 1.2 research inputs were obtained outside Git at
+the user's request. Length, CRC32, MD5 and SHA-1 match the libretro catalog;
+[format research](system-firmware-format-research.md) records provenance and hashes.
+The production CLI finds 14/14/31 Yay0 records respectively, all six named textures,
+all nine named models and the original exact stereo startup in each input.
+All 27 original models pass native geometry/material import and release cleanly.
+Model identities use bounded joint names, never absolute ROM addresses.
 
-- `dotnet run --project tests/SystemFirmwareTests`: synthetic cipher/reference
-  vector, exact-size/header/source checks, cancellation, malformed Yay0/J3D1/
-  TEX1/WSYS/FST inputs, 14/31-record families, all six named texture profiles,
-  overlapping header-relative BTIs, metadata cache ownership and work budgets.
-- `dotnet run --project tests/GameCubeFormatsTests`: 88 assertions.
-- `python3 tests/gcft_cli_smoke.py`: desktop archive roundtrip.
-- `python3 scripts/ci_test_suite.py native`: standard and O3/LTO modes, including
-  new synthetic EXI range/contention/timeout/cleanup tests.
-- `python3 scripts/ci_test_suite.py compiler`: compiler integration and native
-  AOT numeric/string/generic/runtime fixtures.
-- `python3 scripts/ci_test_suite.py graphics`: native model/GX recording tests,
-  ModelSmoke with forced GC, texture, effect and font smoke builds.
-- `python3 scripts/ci_test_suite.py audio`: asset conversion, WAV/PCM native
-  tests, container/vector/loop/independent-voice tests for file and memory sources.
-- `python3 tests/system_firmware_aot.py`: synthetic console acquisition,
-  malformed-console and unavailable-source fallback, mounted-file loading,
-  catalog/WSYS inventory, named texture publication, stereo Sound/Music playback,
-  custom loops, cancellation, typed malformed-source/EOF exceptions, and lifetime
-  independence after image/catalog disposal. No live file/draw/voice/clip handles
-  remain. Final host run: 1,025 bridge calls, 330 forced-GC collections and
-  2,102,048 heap bytes occupied at completion in an 8 MiB heap. This is final
-  occupancy, not peak memory.
-- `python3 tests/system_firmware_inventory.py`: metadata-only CLI and truncated
-  source checks. The CLI exports no firmware, pixel, vertex or sample payload.
-- Native audio tests under AddressSanitizer/UBSan. LeakSanitizer could not run
-  under tracing; leak detection was disabled for that run. Explicit lifetime
-  assertions passed.
-- Native runtime/core BCL regression tests and 18 Dolphin probe unit tests.
+The native AFC decoder's original output is bit-identical to the external Wii
+reference decoder: exactly 174,067 stereo frames; PCM SHA-256
+`ae3e194d404f0022daf33ec1448ae71bcbd0901d76db32619f545d96ba6d490c`.
+All three regional inputs produce the same compressed startup and PCM hashes.
+The final encoded frame has unused capacity; it does not add samples to playback.
 
-The pinned devkitPro/libogc2 Docker build passed with `system_firmware.c` and
-produced a 32-byte-aligned DOL/ELF. The firmware-reachable bundle selected an
-8 MiB heap; the ELF confirmed its actual BSS allocation.
+## Host and compiled validation
 
-**Successful emulated synthetic execution:** Dolphin/JIT, using a deterministic
-completion breakpoint at `dnd_platform_wait_forever`, reached the expected PC
-and verified both guest-written console-buffer strings:
-`SYSTEM FIRMWARE CIPHER PASS` and `MANAGED MAIN: OK`. No DOL-specific loader/PPC
-errors were reported. This proves the synthetic program, not original firmware
-acquisition, original assets, original animation fidelity or physical hardware.
-Artifacts/logs are local under `out/system-firmware-completion-proof`.
+Passed locally:
 
-Earlier asynchronous-interrupt memory probes failed with empty/extra stop
-responses. Bounded reads alone did not fix that path; the successful run uses
-`--memory-after-symbol`. The probe now supports bounded memory packets and unique
-LTO private-symbol aliases, with strict byte matching. An earlier graphics run
-also hit GCC's existing Array.Clone root-registration warning; the scoped-root
-fix passed subsequent standard/O3-LTO runtime and complete graphics runs.
+- Managed firmware tests: synthetic cipher/reference vector; retail header and
+  source errors; cancellation; malformed/overlapping Yay0, J3D1, TEX1, WSYS and FST;
+  both record families and six texture profiles; immutable metadata ownership;
+  equal-time 50/60 Hz progression, seeking, fade and restart.
+- GameCubeFormatsTests (88 assertions) and GCFT desktop archive roundtrip.
+- Full graphics domain: existing native converters, GX recording, ModelSmoke,
+  ARAM roundtrip and forced GC, texture/effect/font and display tests.
+- Generated J3D1/MAT1 fixture: validated triangles/hierarchy, signed TEV colors,
+  independent RGB/alpha operations, projection, depth/blend/cull/channel state;
+  malformed tables/opcodes/truncation, budgets, source ownership, private instance
+  pose/colors and retained authored state over unload/restore.
+- Expanded firmware AOT bridge: console and mounted-file sources, malformed and
+  unavailable-console fallback, named model import, node/color controls, textures,
+  original-length stereo Sound/Music, loops, cancellation and independent lifetimes.
+  No live file/draw/model/voice/clip handles remain. Forced-GC run: 1,025 reads,
+  439 collections, 2,104,416 heap bytes occupied at exit (not peak).
+- Native suite in standard and O3/LTO configurations; audio containers/vectors,
+  independent voices, loops and memory ownership; CI selection/workflow scheduling.
+- New model/GX fixture under AddressSanitizer and UBSan. LeakSanitizer is disabled
+  under tracing; explicit handle/lifetime assertions remain enabled.
+- Metadata CLI schema 2, all three original inventories and malformed sources.
+  Structural model metadata reports `NativeImportRequired`; it does not falsely
+  certify geometry. No CLI export contains vertices, pixels, samples or ROM bytes.
 
-The CI coverage gate now recognizes SystemFirmwareReadSmoke through its AOT
-runner. Selection/workflow/model scheduling/debugger dependency checks pass
-locally. NuGet preview passed for c18c8d3; the main workflow is pending. GitHub
-annotations report macOS ARM64 runner capacity constraints. No green main
-pipeline is asserted here. No merge is authorized. Physical-console testing
-has not occurred.
+The expanded EXI/model/animation fixture cross-builds with the pinned devkitPro /
+libogc2 image and produces aligned DOL/ELF outputs. Firmware-reachable bundles
+select an actual 8 MiB heap; ordinary programs retain 256 KiB. This is compiled
+GameCube compatibility, not physical execution. Current remote checks are linked
+from [PR #152](https://github.com/capz/DolphinDotNet/pull/152); do not infer their
+conclusion from a successful local build.
 
-`SystemFirmwareHardwareSmoke` now supplies separate EXI-only and explicitly
-selected file builds, six deterministic texture views, stereo playback, source/
-revision/inventory diagnostics, cleanup and a script for the existing frame
-capture runner. Both source variants passed managed/AOT/host-C compilation.
-The EXI variant also passed the pinned devkitPro cross-build with debug automation.
-Actual-source rendering/audio acceptance remains unperformed; this fixture does
-not implement or validate original models/animation.
+## Emulated versus physical evidence
 
-## Supported layout and fidelity limits
+Dolphin has successfully loaded the original PAL 1.2 ROM through its emulated
+EXI device. The expanded fixture reads it through the native bounded EXI driver,
+creates the catalog and reaches the native presented-frame boundary. Further
+model/animation capture results are recorded separately as they complete. Images
+and all firmware-derived artifacts stay outside Git.
 
-Named texture resolution uses the reference's decompressed-size/relative-header
-hints **plus** validated J3D1 sections, TEX1 membership and complete per-header
-BTI/palette/mip ranges. All three logo faces must validate together. Ambiguous
-candidates and unknown layouts fail. No absolute ROM texture offsets are used.
-Only immutable metadata is cached; catalogs retain no complete ROM/decoded model
-or shared GX object. Access is serialized through the existing executors.
+The earlier synthetic Dolphin/JIT completion proof also verifies guest-written
+`SYSTEM FIRMWARE CIPHER PASS` and `MANAGED MAIN: OK` buffers at
+`dnd_platform_wait_forever`. Bounded RSP reads and deterministic breakpoints are
+used; boot logs alone are insufficient evidence of managed success.
 
-Stereo discovery now supports the numbered WSYS/adjacent AW profile qualified
-against NTSC 1.0, NTSC 1.2 and PAL 1.2. It checks the wrapper, all twelve packed
-wave extents, compatible metadata and unique startup selection, without a
-right-channel sample signature or absolute AW address. Both WSYS bank families
-are supported. The 174,067-sample stereo output matches the external reference
-decoder byte for byte on the host. Strict FST-based containers remain supported,
-but no FST is required or claimed for the original images. Full evidence is in
-[format research](system-firmware-format-research.md).
-
-J3D1 inspection validates only the file/chunk/TEX1 structures implemented here.
-It does not claim support for original vertex, matrix, material, TEV or display-
-list semantics. No ripped GC-anim-Wii geometry is used, no untrusted display
-list is sent directly to GX, and no flat substitute is presented as authentic.
+No physical GameCube is connected. EXI electrical behavior/contention, real
+stereo output, physical peak memory/latency, and pixel comparisons with the
+physical IPL are **not verified**. These omissions are explicit acceptance gaps.
 
 ## Comparison with GC-anim-Wii
 
-| Resource | Reference output-size/header-position hints | Current handling |
+| Resource or behavior | DolphinDotNet result | Remaining difference |
 | --- | --- | --- |
-| Environment | 0x6140 / 8448 | Strict named TEX1/BTI profile and native Texture2D publication |
-| Tiles | 0x1020 / 0 | Validated standalone BTI profile |
-| Three logo faces | 0x16F60 / 5056, 5088, 5120 | All three table entries and individual relative offsets validated |
-| GAMECUBE wordmark | 0x64A0 / 11616 | Strict named TEX1/BTI profile |
-| Startup audio | Reference raw-AFC heuristic | Validated relative WSYS/AW profile in three original inputs; exact stereo frames and bit-identical reference PCM |
-| Cube/logo/menu geometry | Reference contains ripped models.c meshes | Original geometry unsupported; meshes not copied |
-| Startup timing/rendering | Reference manually reconstructed | Not implemented; requires original geometry work |
+| Environment (`0x6140` hint) | Validated TEX1/BTI, original cube and letter models | Scene headlight reconstructed |
+| Tiles (`0x1020` hint) | Original BTI with reconstructed procedural quads and fades | Placement/timing not decoded firmware tracks |
+| Three logo faces (`0x16f60` hint) | Header-relative BTIs and original eight-mesh logo/TEV state | Physical lighting comparison unavailable |
+| GAMECUBE/Nintendo wordmark (`0x64a0` hint) | Original 17-joint, 21-material geometry, alpha activation and joint animation | Letter timing/rotation reconstructed |
+| Startup sound | Both original AFC channels, original rate and exact duration, native compressed source | Physical output unverified |
+| Menu assets | Menu cube, two icons and memory cube imported and selectable | No menu UI implementation requested |
+| Animation/boot | Optional reusable GX rendition, seek/update without reset or implicit audio | Physical IPL curves not extracted |
 
-The reference's positions are hints, not arbitrary copy lengths or proof of
-regional compatibility. Actual-resource comparisons/captures require supplied
-dumps. Its MIT license and cipher attribution are retained in
-`docs/licenses/GC-anim-Wii-MIT.txt` and source. No GPL Dolphin Emulator code was
-copied or committed. GDB protocol behavior was inspected during diagnosis.
+The Wii project uses ripped geometry and manually tuned motion. Its geometry is
+neither imported nor embedded here. Published output sizes are profile hints,
+backed by full validation, rather than an absolute-offset asset locator.
 
-The FST research lead is
-https://www.hcs64.com/mboard/forum.php?showthread=46117; that author did not locate
-or validate the table root. No downloadable firmware from that thread was used.
+## Budgets and reproduction
 
-## Budgets and measured cache behavior
+ROM size: 2,097,152 bytes; at most 128 records; at most 2 MiB per decoded record,
+32 MiB aggregate scan work, 2 MiB retained compressed/audio data and 4,194,304 TEX1
+texels across mips. EXI transfers are at most 4 KiB, with a 20 ms deadline and a
+finite poll cap. Native graphics/audio/model allocations have independent bounded
+budgets and share MEM1 with the managed heap. No physical peak is claimed.
 
-Configured limits: 2 MiB exact ROM; 2 MiB decoded record; 128 Yay0 records;
-2 MiB retained compressed catalog payload including stereo; 32 MiB declared Yay0
-work per scan; separate bounded WSYS scan/entry/candidate limits; 4,194,304 TEX1
-texels across mip chains before decode allocation. EXI requests are at most
-4 KiB with a 20 ms deadline and finite transfer-poll cap, with cleanup on failure.
-Cancellation is observed between reads and within decompression/metadata/stereo
-loops. Native compressed audio uses caller-selected budgets up to 16 MiB.
+Measured original model native retention is approximately 152–375 KiB per model
+before instances; startup uses five models. `Model.NativeBytes`,
+`ModelInstance.NativeBytes` and `SystemStartupRenderer.NativeBytes` report actual
+retention. Host warm-cache lookup measurements are approximately 0.02–0.04 ms per
+100 lookups with 3,200 allocated bytes; they are not console latency predictions.
 
-Ordinary generated applications retain a 256 KiB managed heap; firmware-reachable
-GameCube bundles select 8 MiB automatically. `DND_MANAGED_HEAP_BYTES` permits an
-explicit 256 KiB–16 MiB override. Native graphics/audio allocations share MEM1
-with that heap. No physical peak-allocation measurement is claimed.
-
-Host warm-cache measurements for 100 named lookups ranged from 0.029 to 0.304 ms
-across runs, allocating 3,200 bytes in both 14- and 31-record fixtures. These are
-host observations, not console performance predictions.
-
-## Research inputs for remaining work
-
-At the user's request, online NTSC 1.0, NTSC 1.2 and PAL 1.2 research inputs were
-obtained outside Git and checked against published sizes/hashes. Real-source
-research is now unblocked. See [format research](system-firmware-format-research.md)
-for provenance, the retail-header correction, successful six-texture extraction
-in all three inputs, and model/audio observations being investigated. The Wii
-reference still lacks an original geometry parser. Physical-console access
-remains unavailable; no physical validation is claimed.
-
-See [the API and diagnostics guide](system-firmware-resources.md). Use
-`dnd-assets firmware inspect INPUT` for metadata-only reporting; original asset
-payloads and captures must not be committed.
-
-### Phase 6 implementation checks
-
-Local full graphics suite passed, including existing ModelSmoke/ARAM with forced
-GC, generated original J3D1 GX-state recording and independent instance overrides.
-The expanded firmware AOT bridge passed with 1,025 reads, 439 forced collections,
-2,104,416 bytes occupied at exit and no live model/draw/file/audio handles.
-Elapsed-time progression and seeking/restart/fade pass at matching 50/60 Hz times.
-The texture/model/animation fixture cross-builds with the pinned devkitPro/libogc2
-image and produces aligned DOL/ELF outputs. These are not physical-console results.
+Use [the API guide](system-firmware-resources.md),
+`dnd-assets firmware inspect INPUT`, `tests/system_firmware_aot.py` and
+`tests/SystemFirmwareHardwareSmoke/captures.json`. Default hardware fixture source
+is EXI only; `FIRMWARE_EXPLICIT_FILE` builds require the explicitly selected
+`sd:/ipl.bin`. A cycles six textures, nine models and seven exact animation times;
+X enables time progression, START plays sound and B releases resources and exits.

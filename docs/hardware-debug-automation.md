@@ -76,3 +76,15 @@ void dnd_automation_frame_boundary(void);
 Run `make -C tests debug_automation_test && tests/debug_automation_test` and `python3 -m unittest discover -s tests -p test_debug_hardware_automation.py`. The full native CI runs both and validates Debug/Release compilation.
 
 **Hardware verification is still required** for physical USB Gecko RSP memory throughput, supported XFB addresses, frame stepping and screenshot color fidelity. Dolphin/emulated tests cannot establish those console-specific facts. Do not claim the physical test rig is verified until a complete live run succeeds.
+
+For Dolphin captures using a hardware graphics backend, configure `[Hacks]`
+`XFBToTextureEnable = False` and `SkipXFBCopyToRam = False` in the isolated
+`GFX.ini`. The automation reader captures guest XFB RAM. Virtual XFB copies can
+otherwise return the same magenta placeholder for every scene despite valid frame
+metadata. Keep EFB copies to RAM enabled when inspecting those as well. Physical
+GameCube GX copies already target RAM and need no emulator setting.
+
+The original-firmware fixture's external metadata can be checked with
+`python3 tests/check_system_firmware_captures.py /tmp/captures/results.json`.
+This checks distinct textures/animation stages and matching fixed-frame pairs;
+it is not a pixel comparison against a physical IPL reference.

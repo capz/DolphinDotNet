@@ -66,6 +66,16 @@ int main(int argc,char **argv) {
   assert(!dnd_model_frame_end());assert(!dnd_model_node_offset(instance,0,NULL));
   for(int slot=0;slot<4;slot++)assert(!dnd_model_color(instance,0,slot,NULL));
   assert(!dnd_model_instance_dispose(other));free(pose);free(color);
+  DndAuthoredMaterial *authored=model->authored;
+  DndArray *snapshot=calloc(1,sizeof(*snapshot)+model->length);assert(snapshot);
+  snapshot->element_size=1;snapshot->length=model->length;
+  assert(!dnd_model_copy(token,0,snapshot,(int)snapshot->length,0));
+  assert(!dnd_model_unload(token)&&!model->ready&&model->authored==authored);
+  assert(!dnd_model_restore_begin(token));assert(!dnd_model_copy(token,0,snapshot,(int)snapshot->length,1));
+  assert(!dnd_model_restore_end(token,1)&&model->ready&&model->authored==authored);
+  assert(!dnd_model_frame_begin(camera,camera));assert(!dnd_model_draw(instance,world));
+  assert(indexed_tint.a==128&&authored_colors[1].r==-12&&record[3].position[0]==-1);
+  assert(!dnd_model_frame_end());free(snapshot);
   assert(dnd_model_instance_dispose(instance)==0&&dnd_model_dispose(token)==0);
   free(world);free(camera);assert(!dnd_model_live_handles()&&!dnd_draw_live());
   puts("Generated J3D1 geometry, signed TEV, alpha, projection and lifecycle recording passed");return 0;

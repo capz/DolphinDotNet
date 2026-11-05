@@ -110,11 +110,11 @@ public sealed class Model : IDisposable
         var work=new LoadWork(path,nativeBudgetBytes,cancellationToken,5,allowMaterialApproximation,textureArchivePath,selection:modelIndex,staticSnapshot:loadDeformedMeshesAsStatic);
         Task.Run(work.Step);return work.Completion.Task;
     }
-    /// <summary>Load Super Mario Sunshine J3D2 BMD3/BDL4 models and embedded BTI
+    /// <summary>Load original J3D1 BMD1 or Super Mario Sunshine J3D2 BMD3/BDL4 models and embedded BTI
     /// textures on the background executor. Optional BCK/BCA skeletal animation
     /// is sampled at 60 Hz into the clip "Motion". Supports Yaz0/Yay0 and RARC;
     /// append #relative/member.bmd or #relative/member.bck to select a member.
-    /// Complex TEV materials need explicit approximation. Billboard geometry,
+    /// J3D1 retains its qualified MAT1 state; complex J3D2 TEV materials need explicit approximation. Billboard geometry,
     /// scaled Maya segment compensation and material animations are unsupported.</summary>
     public static Task<Model> LoadJ3dAsync(string path,string? animationPath=null,float animationFramesPerSecond=30,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024,bool allowMaterialApproximation=false)
     {

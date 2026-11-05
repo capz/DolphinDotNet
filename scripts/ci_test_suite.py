@@ -94,6 +94,7 @@ def main(area):
         for p in ("GraphicsSmoke","SystemFirmwareSmoke","IplFontSmoke","ModelSmoke","ModelAsyncSmoke","TevMaterialTests"):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="assets":
+        run("python3","-m","unittest","discover","-s","tests","-p","test_system_firmware_captures.py")
         test("tests/GameCubeFormatsTests")
         test("tests/SystemFirmwareTests")
         # SystemFirmwareReadSmoke: execute the generated C against the synthetic
