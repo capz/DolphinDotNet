@@ -30,8 +30,8 @@ be mounted, including when loading from `dvd:/`.
 Dispose unused preparations explicitly; there is no finalizer. At most eight
 preparations may exist. `RequestLaunch` runs on the application thread and queues
 one launch, transferring ownership to bootstrap. Disposing that wrapper afterwards
-is safe. A second request fails. No argv, working directory or managed state is
-passed to the replacement.
+is safe. A second request fails. `SetArguments` can supply standard libogc argv as
+described below; no working directory or managed state is transferred.
 
 **Return successfully from Main after requesting launch.** The request does not
 terminate Main or interrupt a frame loop. Normal `using`/`finally` cleanup runs,
