@@ -3,7 +3,8 @@
 Phases 1–6 have supported-profile implementations. Phase 7 integration, automated
 acceptance fixtures and documentation are implemented; the evidence below keeps
 host, compiled, emulated and physical results separate. No Nintendo firmware or
-extracted proprietary assets are included. PR #152 remains draft and must not merge.
+extracted proprietary assets are included. PR #152 tracks review and validation;
+merging remains a separate manual action.
 
 | Phase | Implementation | Qualification limits |
 | --- | --- | --- |
@@ -43,6 +44,10 @@ Passed locally:
 - GameCubeFormatsTests (88 assertions) and GCFT desktop archive roundtrip.
 - Full graphics domain: existing native converters, GX recording, ModelSmoke,
   ARAM roundtrip and forced GC, texture/effect/font and display tests.
+- Rebase integration: retained main's mip-chain support, opaque grouping, drawing
+  telemetry and Intel CI runners. Generated GX recording covers private authored
+  instance colors in grouped draws and restores the indexed headlight across
+  ordinary/authored/ordinary submissions.
 - Generated J3D1/MAT1 fixture: validated triangles/hierarchy, signed TEV colors,
   independent RGB/alpha operations, projection, depth/blend/cull/channel state;
   malformed tables/opcodes/truncation, budgets, source ownership, private instance

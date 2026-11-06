@@ -17,6 +17,53 @@ static void rejects_byte(DndArray *source,unsigned at,unsigned char value) {
   assert(!dnd_model_j3d_memory(source,1024*1024));source->data[at]=saved;
   assert(!dnd_model_live_handles());
 }
+/* Main's grouped submission path must preserve private authored colors and
+ * restore its indexed headlight after an authored material replaces it. */
+static void mixed_batch(int token,DndArray *world,DndArray *camera) {
+  int first=dnd_model_instance(token,1024*1024),second=dnd_model_instance(token,1024*1024);
+  assert(first&&second);
+  DndArray *color=identity();color->length=4;
+  float *rgba=(float*)color->data;rgba[0]=rgba[1]=rgba[2]=255;rgba[3]=64;
+  assert(!dnd_model_color(first,0,0,color));rgba[3]=192;
+  assert(!dnd_model_color(second,0,0,color));
+  DndArray *ids=calloc(1,sizeof(*ids)+16),*worlds=calloc(1,sizeof(*worlds)+256);
+  assert(ids&&worlds);ids->element_size=worlds->element_size=4;ids->length=4;worlds->length=64;
+  for(int i=0;i<4;i++)memcpy(worlds->data+i*64,world->data,64);
+  ((int*)ids->data)[0]=first;((int*)ids->data)[1]=second;
+  assert(!dnd_model_frame_begin(camera,camera));int before=draws,old_restores=restores;
+  assert(!dnd_model_draw_models(ids,worlds,2));
+  assert(draws==before+2&&restores==old_restores+2&&indexed_tint.a==192);
+  assert(!dnd_model_frame_end());
+
+  /* Array addresses give a deterministic ordinary/authored/ordinary sort. */
+  DndInstance *original=dnd_instance_find(first);
+  DndModel models[3];DndInstance instances[3];DndMaterial materials[3];DndMesh meshes[3];
+  int slots[3];unsigned found=0;
+  for(int i=0;i<DND_INSTANCE_SLOTS&&found<3;i++)if(!dnd_instances[i])slots[found++]=i;
+  assert(found==3);
+  for(int i=0;i<3;i++) {
+    models[i]=*original->model;materials[i]=models[i].material[0];meshes[i]=models[i].mesh[0];
+    models[i].material=&materials[i];models[i].mesh=&meshes[i];
+    if(i!=1) {
+      models[i].authored=NULL;materials[i].mode&=~2;
+      meshes[i].uniform_color=meshes[i].unit_normals=true;
+      for(int c=0;c<4;c++)meshes[i].color[c]=1;
+    }
+    instances[i]=*original;instances[i].model=&models[i];instances[i].token=10001+i;
+    instances[i].color_set=NULL;instances[i].colors=NULL;
+    dnd_instances[slots[i]]=&instances[i];((int*)ids->data)[i]=instances[i].token;
+  }
+  assert(!dnd_model_frame_begin(camera,camera));before=draws;
+  int old_lights=light_loads,old_indexed=indexed_positions;
+  assert(!dnd_model_draw_models(ids,worlds,3));
+  assert(draws==before+3&&indexed_positions==old_indexed+6);
+  int authored_light=models[1].authored[0].channel[0][0]||models[1].authored[0].channel[1][0];
+  assert(light_loads==old_lights+2+authored_light);
+  assert(!dnd_model_frame_end());
+  for(int i=0;i<3;i++)dnd_instances[slots[i]]=NULL;
+  assert(!dnd_model_instance_dispose(first)&&!dnd_model_instance_dispose(second));
+  free(color);free(ids);free(worlds);
+}
 int main(int argc,char **argv) {
   assert(argc==2);FILE *f=fopen(argv[1],"rb");assert(f);
   assert(!fseek(f,0,SEEK_END));long length=ftell(f);assert(length>32);rewind(f);
@@ -88,7 +135,7 @@ int main(int argc,char **argv) {
   assert(record[4].stages[0].b==2&&record[4].stages[1].d==GX_CC_CPREV);
   assert(record[4].stages[1].alpha[3]==GX_CA_KONST);
   assert(!dnd_model_frame_end());for(int slot=0;slot<4;slot++)assert(!dnd_model_color(instance,0,slot,NULL));
-  assert(!dnd_model_instance_dispose(fading)&&!dnd_model_dispose(opaque));
+  assert(!dnd_model_instance_dispose(fading));
   int hdr=dnd_model_instance(unclamped,1024*1024);assert(hdr);
   assert(!dnd_model_opacity(hdr,0,.25f));
   assert(!dnd_model_frame_begin(camera,camera));assert(!dnd_model_draw(hdr,world));
@@ -107,6 +154,7 @@ int main(int argc,char **argv) {
   assert(!dnd_model_frame_begin(camera,camera));assert(!dnd_model_draw(instance,world));
   assert(indexed_tint.a==128&&authored_colors[1].r==-12&&record[6].position[0]==-1);
   assert(!dnd_model_frame_end());free(snapshot);
+  mixed_batch(opaque,world,camera);assert(!dnd_model_dispose(opaque));
   assert(dnd_model_instance_dispose(instance)==0&&dnd_model_dispose(token)==0);
   free(world);free(camera);assert(!dnd_model_live_handles()&&!dnd_draw_live());
   puts("Generated J3D1 geometry, signed TEV, alpha, projection and lifecycle recording passed");return 0;
