@@ -1,0 +1,14 @@
+{
+  "native_error": "System.InvalidOperationException",
+  "phase": 9,
+  "initial_mount_results": [
+    0,
+    0
+  ],
+  "environment": "Dolphin 2503 with two fresh isolated emulated memory cards; not physical hardware",
+  "dol_sha256": "dd92f13b93ccd62435d95a4438dc43eb1e77442f76d5cff75fd2fe41252a056c",
+  "result": 1,
+  "steps": 14,
+  "status": "Native card listing, copy, CRC readback, stale snapshots, move and delete passed.",
+  "passed": true
+}

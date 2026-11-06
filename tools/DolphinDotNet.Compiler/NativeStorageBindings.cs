@@ -5,6 +5,18 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["CardManagerOpen"]=("dnd_cmgr_open","i",false),
+        ["CardManagerRefresh"]=("dnd_cmgr_refresh","i",false),
+        ["CardManagerStat"]=("dnd_cmgr_stat","ii",false),
+        ["CardManagerEntry"]=("dnd_cmgr_entry","iiia",false),
+        ["CardManagerIcon"]=("dnd_cmgr_icon","iiiia",false),
+        ["CardManagerDelete"]=("dnd_cmgr_delete","iii",false),
+        ["CardManagerFormat"]=("dnd_cmgr_format","i",false),
+        ["CardManagerClose"]=("dnd_cmgr_close","i",false),
+        ["CardManagerCopyBegin"]=("dnd_cmgr_copy_begin","iiiii",false),
+        ["CardManagerCopyStep"]=("dnd_cmgr_copy_step","i",false),
+        ["CardManagerCopyAbort"]=("dnd_cmgr_copy_abort","i",false),
+
         ["FirmwareRead"]=("dnd_firmware_read","aii",false),
         ["ModelDrawEffect"]=("dnd_model_draw_effect","iai",false),
         ["Publish"]=("dnd_corpus_publish","iiiis",false),

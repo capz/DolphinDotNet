@@ -3,6 +3,18 @@ namespace Dolphin.Storage;
 // Only this bridge is replaced by compiler bindings. Application methods remain managed C#.
 internal static class NativeStorage
 {
+    internal static int CardManagerOpen(int slot)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int CardManagerRefresh(int token)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int CardManagerStat(int token,int field)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int CardManagerEntry(int token,int revision,int index,byte[] metadata)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int CardManagerIcon(int token,int revision,int index,int frame,byte[] rgba)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int CardManagerDelete(int token,int revision,int index)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int CardManagerFormat(int token)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int CardManagerClose(int token)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int CardManagerCopyBegin(int source,int revision,int index,int destination,int move)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int CardManagerCopyStep(int token)=>throw new NotSupportedException("AOT intrinsic");
+    internal static int CardManagerCopyAbort(int token)=>throw new NotSupportedException("AOT intrinsic");
+
     private static Exception Unsupported()=>new PlatformNotSupportedException("Requires DolphinDotNet AOT.");
     internal static bool MountDisc(int format)=>throw Unsupported();
     internal static bool MountDiscImage(string path)=>throw Unsupported();

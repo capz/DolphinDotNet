@@ -127,7 +127,7 @@ static void identity(int slot) {
 }
 bool dnd_gc_card_mount(int device, const char *game, const char *company) {
   int slot = device - 4;
-  if (slot < 0 || slot > 1)
+  if (slot < 0 || slot > 1 || dnd_cmgr_active(slot))
     return false;
   if (!card_initialized) {
     CARD_Init(game, company);
@@ -164,17 +164,20 @@ int dnd_gc_card_read(int device, const char *name, void *data, int capacity) {
     return length;
   }
   int length = capacity < file.len ? capacity : file.len;
-  void *block = memalign(32, 512);
+  u32 sector;
+  rc = CARD_GetSectorSize(slot, &sector);
+  if (rc < 0 || !sector || sector > 1024 * 1024) { CARD_Close(&file); return rc < 0 ? card_errno(rc) : -EIO; }
+  void *block = memalign(32, sector);
   if (!block) {
     CARD_Close(&file);
     return -ENOMEM;
   }
   int done = 0;
   while (done < length) {
-    rc = CARD_Read(&file, block, 512, (u32)done);
+    rc = CARD_Read(&file, block, sector, (u32)done);
     if (rc < 0)
       break;
-    int count = length - done < 512 ? length - done : 512;
+    int count = (u32)(length - done) < sector ? length - done : (int)sector;
     memcpy((char *)data + done, block, (size_t)count);
     done += count;
   }
@@ -317,6 +320,7 @@ int dnd_gc_card_entries(int device, char names_out[127][33]) {
   card_dir entries[127];
   s32 count = 0;
   int rc = CARD_GetDirectory(slot, entries, &count, false);
+  if (rc == CARD_ERROR_NOFILE && count == 0) rc = 0;
   if (rc < 0)
     return card_errno(rc);
   if (count < 0 || count > 127)
