@@ -1,7 +1,7 @@
 namespace Dolphin.Input;
 
 /// <summary>Physical GameCube buttons. L/R are digital clicks, not analog travel.</summary>
-[System.Flags]
+[global::System.Flags]
 public enum ControllerButton
 {
     None=0, All=0x1f7f,

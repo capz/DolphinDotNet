@@ -11,7 +11,7 @@ public static class GpuProfiler
     /// <summary>Choose the SDK bitmap console pipeline. Atlas is the default;
     /// the geometry modes remain available for controlled comparisons.</summary>
     public static OverlayGlyphMode OverlayGlyphs {
-        set {if(value<OverlayGlyphMode.Pixels||value>OverlayGlyphMode.Atlas)throw new System.ArgumentOutOfRangeException("value");
+        set {if(value<OverlayGlyphMode.Pixels||value>OverlayGlyphMode.Atlas)throw new global::System.ArgumentOutOfRangeException("value");
             Dolphin.Graphics.NativeGraphics.PerformanceCompactGlyphs((int)value);}
     }
     /// <summary>Opt-in reuse of a completed same-color EFB clear. Raw GX invalidates the proof.</summary>

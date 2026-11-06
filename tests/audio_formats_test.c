@@ -135,7 +135,22 @@ static void input(const char *root, const char *name, const char *body) {
     assert(!fclose(f));
   }
 }
+static int memory_mode;
+static int memory_start(int format,int entry,int budget) {
+  DndArray *arrays[2]={NULL,NULL};
+  for(unsigned i=0;i<2;i++)if(files[i].data){
+    arrays[i]=calloc(1,sizeof(DndArray)+files[i].size);assert(arrays[i]);
+    arrays[i]->length=files[i].size;arrays[i]->element_size=1;
+    memcpy(arrays[i]->data,files[i].data,files[i].size);
+  }
+  int token=dnd_audio_begin_memory(arrays[0],arrays[1],format,entry,budget);
+  for(unsigned i=0;i<2;i++)if(arrays[i]){
+    memset(arrays[i]->data,0,arrays[i]->length);free(arrays[i]);
+  }
+  assert(!handles);return token;
+}
 static int start(int format, int entry, int budget) {
+  if(memory_mode)return memory_start(format,entry,budget);
   return dnd_audio_begin_source((DndString *)1,
                                   files[1].data ? (DndString *)2 : NULL, format,
                                   entry, budget);
@@ -314,6 +329,24 @@ int main(int argc, char **argv) {
     snprintf(head, sizeof(head), "wave-%d.aaf", codec);
     check(root, head, 7, body, 0, codec == 1 ? 0 : codec == 2 ? 256 : 1);
   }
+  memory_mode=1;
+  check(root,"tone.afc",3,NULL,0,1);
+  check(root,"tone.adx",0,NULL,0,1);
+  check(root,"wave-0.wsys",7,"wave-0.aw",0,1);
+  check_adx_ranges(root,"loop-2-1024.adx",2,2,1);
+  input(root,"tone.afc",NULL);
+  int memory_token=start(3,0,1024*1024);assert(memory_token);
+  memset(files[0].data,0,files[0].size); /* Caller storage can change immediately. */
+  assert(complete(memory_token)==1&&!dnd_audio_dispose(memory_token));
+  input(root,"stereo.afc",NULL);
+  memory_token=start(3,0,1024*1024);assert(memory_token&&complete(memory_token)==1);
+  assert(dnd_audio_stat(memory_token,2)==32000&&dnd_audio_stat(memory_token,3)==2);
+  assert(dnd_audio_play(memory_token,0,1,1));uint8_t stereo[4];
+  assert(dnd_audio_decode(&decoder[0],stereo,1)==1);
+  assert(sample(stereo,0)==1&&sample(stereo,1)==-2);
+  assert(!dnd_audio_dispose(memory_token)&&!active[0]&&!handles);
+  input(root,"large.dsp",NULL);assert(!start(1,0,1024));
+  memory_mode=0;
   const char *bad[] = {"bad-predictor.dsp", "bad-loop.dsp",
                        "bad-block.hps",     "bad-codec.rws",
                        "encrypted.adx",     "cycle.aaf",

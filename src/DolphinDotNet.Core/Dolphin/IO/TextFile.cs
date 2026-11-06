@@ -25,14 +25,14 @@ public static partial class File
         private readonly string path;private readonly Encoding encoding;
         public Lines(string path,Encoding encoding){if(path==null)throw new ArgumentNullException("path");if(encoding==null)throw new ArgumentNullException("encoding");this.path=path;this.encoding=encoding;}
         public IEnumerator<string> GetEnumerator()=>new LineEnumerator(path,encoding);
-        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()=>GetEnumerator();
+        global::System.Collections.IEnumerator global::System.Collections.IEnumerable.GetEnumerator()=>GetEnumerator();
     }
     private sealed class LineEnumerator : IEnumerator<string>
     {
         private StreamReader? reader;private string? current;
         public LineEnumerator(string path,Encoding encoding){reader=new StreamReader(path,encoding);}
         public string Current=>current??throw new InvalidOperationException();
-        object System.Collections.IEnumerator.Current=>Current;
+        object global::System.Collections.IEnumerator.Current=>Current;
         public bool MoveNext(){if(reader==null)return false;try{current=reader.ReadLine();if(current==null)Dispose();return current!=null;}catch{Dispose();throw;}}
         public void Reset()=>throw new NotSupportedException();
         public void Dispose(){if(reader!=null){var r=reader;reader=null;current=null;r.Dispose();}}

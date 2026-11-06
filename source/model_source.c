@@ -79,16 +79,19 @@ static int64_t import_seek(ImportMemory *m, int file, int64_t offset) {
 static void import_close(ImportMemory *m, int file) {
   (void)import_io(m, 4, NULL, file, NULL, 0, 0);
 }
-static int import_publish(ImportMemory *m, const unsigned char *package,
-                          unsigned size, int budget) {
+static int import_publish_authored(ImportMemory *m,const unsigned char *package,
+                          unsigned size,int budget,const DndAuthoredMaterial *materials,unsigned count) {
   dnd_async_native_end(m->executor);
   int token = !m->failed && m->used < (unsigned)budget
-                  ? dnd_model_begin_data(package, size, budget - (int)m->used)
+                  ? dnd_model_begin_authored_data(package,size,budget-(int)m->used,materials,count)
                   : 0;
   if (token)
     dnd_model_find(token, false)->budget = (unsigned)budget;
   m->executor = dnd_async_native_begin();
   return token;
+}
+static int import_publish(ImportMemory *m,const unsigned char *package,unsigned size,int budget) {
+  return import_publish_authored(m,package,size,budget,NULL,0);
 }
 static void *imp_alloc(void *user, size_t size) {
   ImportMemory *m = user;
@@ -1007,7 +1010,8 @@ static int scene_material(ufbx_material *m, int approximate) {
   }
   return 1;
 }
-static int scene_publish(ImportMemory *m, ImportBuffer section[6], int budget) {
+static int scene_publish_authored(ImportMemory *m,ImportBuffer section[6],int budget,
+                                  const DndAuthoredMaterial *materials,unsigned count) {
   if (m->failed)
     return 0;
   unsigned total = 160, offset[6];
@@ -1034,9 +1038,12 @@ static int scene_publish(ImportMemory *m, ImportBuffer section[6], int budget) {
     imp_free(m, section[i].data);
     section[i].data = NULL;
   }
-  int token = import_publish(m, package, total, budget);
+  int token = import_publish_authored(m,package,total,budget,materials,count);
   imp_free(m, package);
   return token;
+}
+static int scene_publish(ImportMemory *m,ImportBuffer section[6],int budget) {
+  return scene_publish_authored(m,section,budget,NULL,0);
 }
 
 static int import_scene(const char *path, int fbx, float sample_rate,
@@ -2266,10 +2273,25 @@ int dnd_model_begin_format(DndString *path, DndString *textures,
       : format == 9
       ? import_melee(filename, motion ? animation : NULL, fps, budget, approximate, executor)
       : format == 6
-      ? import_j3d(filename, motion ? animation : NULL, fps, budget, approximate, executor)
+      ? import_j3d(filename,motion?animation:NULL,fps,budget,approximate,executor,NULL,0)
       : import_re4(filename, textures ? archive : NULL, motion ? animation : NULL,
                    fps, budget, approximate, executor);
   dnd_async_native_end(executor);
+  return token;
+}
+int dnd_model_j3d_memory(DndArray *data,int budget) {
+  if(!data||data->element_size!=1||data->elements_are_references||data->length<32||
+     data->length>2*1024*1024||budget<1024||budget>(int)DND_MODEL_LIMIT||
+     (dnd_async_running()&&dnd_async_context()!=1))return 0;
+  unsigned used=0,length=data->length;
+  unsigned char *copy=dnd_model_alloc(length,&used,(unsigned)budget);
+  if(!copy)return 0;
+  memcpy(copy,data->data,length);
+  int executor=dnd_async_native_begin();
+  int token=import_j3d(NULL,NULL,30,budget-(int)used,0,executor,copy,length);
+  dnd_async_native_end(executor);
+  dnd_model_free(copy,&used);
+  if(token)dnd_model_find(token,false)->budget=(unsigned)budget;
   return token;
 }
 

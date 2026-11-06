@@ -23,6 +23,30 @@ public sealed class Sound : IDisposable
         if(token==0)throw new OutOfMemoryException("No free native sound slot or insufficient audio memory.");
         return new Sound(token);
     }
+    /// <summary>Copy a compressed source into native memory and validate it in
+    /// bounded decoder slices. Paired banks accept a separate data array. No
+    /// temporary files or managed pointers are retained by playback. WAV is not
+    /// a compressed source; use Load for WAV. Cancellation disposes native state.</summary>
+    public static Sound FromEncoded(byte[] data,AudioFormat format=AudioFormat.Auto,
+        byte[]? body=null,int entryIndex=0,int nativeBudgetBytes=8*1024*1024,
+        CancellationToken cancellationToken=default)
+    {
+        if(data==null)throw new ArgumentNullException(nameof(data));
+        if(data.Length==0)throw new ArgumentException("Empty compressed audio.",nameof(data));
+        if(format==AudioFormat.Wav)throw new NotSupportedException("Memory compressed sources do not accept WAV.");
+        ValidateSource("memory",format,entryIndex,nativeBudgetBytes);
+        cancellationToken.ThrowIfCancellationRequested();Audio.Initialize();
+        int native=NativeAudio.AudioBeginMemory(data,body,(int)format,entryIndex,nativeBudgetBytes);
+        if(native==0)throw new IOException("Compressed source exceeds native budget or no audio slot is available.");
+        try
+        {
+            int status;
+            do{cancellationToken.ThrowIfCancellationRequested();status=NativeAudio.AudioStep(native);}while(status==0);
+            if(status<0)throw new InvalidDataException("Invalid or unsupported compressed audio source.");
+            cancellationToken.ThrowIfCancellationRequested();return new Sound(native);
+        }
+        catch{NativeAudio.AudioDispose(native);throw;}
+    }
     /// <summary>Load using automatic format detection with cancellation.</summary>
     public static Task<Sound> LoadAsync(string path,CancellationToken cancellation)
         =>LoadAsync(path,cancellationToken:cancellation);

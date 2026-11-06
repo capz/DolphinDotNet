@@ -224,7 +224,7 @@ internal static class GameCubeBundle
         var sources = new[] {
             "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "debug_heartbeat", "debug_automation", "asset_corpus", "asset_fixture", "asset_compat", "disc_gamecube", "fst",
             "fst_gamecube", "iso_file", "dol", "dol_gamecube", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "ipl_font", "gx_raw", "gx_guard", "input", "input_gamecube",
-            "main", "managed_runtime", "numeric", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
+            "main", "managed_runtime", "system_firmware", "numeric", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
             "model_graphics", "model_transform", "tls", "network", "network_gamecube",
             "network_gamecube_backend", "network_link_gamecube", "performance", "platform_gamecube",
             "storage", "storage_gamecube", "contiguous_write", "file_extents", "file_optimize", "stw", "system", "text", "timing", "worker"
@@ -248,10 +248,11 @@ internal static class GameCubeBundle
             File.Copy(Path.Combine(root, "source", name + ".c"),
                 Path.Combine(directory, "source", name + ".c"), true);
 
-        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null, gdbUsb is not null, debugSymbols, sampleControls));
+        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null, gdbUsb is not null, debugSymbols, sampleControls, reachable.Contains("Dolphin.System.FirmwareImage", StringComparer.Ordinal)));
         var report = new StringBuilder();
         report.AppendLine("DolphinDotNet AOT Native Dependencies");
         report.AppendLine("Target: " + platform);
+        report.AppendLine("Managed heap default bytes: " + (platform == "gamecube" && reachable.Contains("Dolphin.System.FirmwareImage", StringComparer.Ordinal) ? "8388608 (firmware)" : "262144"));
         report.AppendLine("Assembly: " + Path.GetFileName(assembly));
         report.AppendLine("Managed source symbols: " + (debugSymbols ? "enabled" : "disabled"));
         report.AppendLine("GDB debugger: " + (gdbTcp is not null ? $"TCP {gdbTcp.Ip}:{gdbTcp.Port}" : gdbUsb is not null ? $"USB Gecko EXI channel {gdbUsb.Channel}" : "disabled"));
@@ -291,7 +292,7 @@ internal static class GameCubeBundle
         throw new DirectoryNotFoundException("The DolphinDotNet repository's native sources are required to emit a self-contained build directory.");
     }
 
-    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool gdbUsb, bool debugSymbols, bool sampleControls)
+    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool gdbUsb, bool debugSymbols, bool sampleControls, bool firmwareHeap)
     {
         var isWiiU = platform == "wiiu";
         var overlayTelemetry = debugSymbols && platform == "gamecube";
@@ -326,6 +327,11 @@ internal static class GameCubeBundle
             (overlayTelemetry ? " -DDND_DEBUG_TELEMETRY" : "") +
             (overlayTelemetry ? " -DDND_DEBUG_AUTOMATION" : "") +
             (sampleControls ? " -DDND_SAMPLE_CONTROLS" : "") + (usesNetworking ? " -DDND_TLS" : ""));
+        if (!isWiiU)
+        {
+            builder.AppendLine("DND_MANAGED_HEAP_BYTES ?= " + (firmwareHeap ? "8388608" : "262144"));
+            builder.AppendLine("CFLAGS += -DDND_MANAGED_HEAP_BYTES=$(DND_MANAGED_HEAP_BYTES)");
+        }
         // Keep the reporting slot even when the app has not enabled/drawn the overlay yet.
         builder.AppendLine("LDFLAGS := " + (debugSymbols ? "-g3 -gdwarf-4" : "-g") +
             (overlayTelemetry ? " -Wl,--undefined=dnd_debugger_telemetry -Wl,--undefined=dnd_debugger_heartbeat -Wl,--undefined=dnd_automation_mailbox -Wl,--undefined=dnd_automation_frame_boundary -Wl,--undefined=dnd_asset_corpus_report -Wl,--undefined=dnd_jsystem_fixture -Wl,--undefined=dnd_asset_compat_record" : "") + " $(MACHDEP) -Wl,-Map,$(notdir $@).map");

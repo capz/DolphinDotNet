@@ -179,6 +179,9 @@ def resolve_memory_expectations(elf: Path, words: list[str],
 
     def locate(name: str) -> tuple[int, int]:
         matches = set((address, size) for symbol, address, size in objects if symbol == name)
+        if not matches:
+            matches = set((address, size) for symbol, address, size in objects
+                          if symbol.startswith(name + ".lto_priv."))
         if len(matches) != 1:
             raise ValueError(f"Expected one ELF data symbol {name!r}, found {len(matches)}")
         return next(iter(matches))
@@ -203,6 +206,23 @@ def resolve_memory_expectations(elf: Path, words: list[str],
             raise ValueError(f"Text expectation does not fit ELF buffer {name}")
         expectations.append(MemoryExpectation(f"{name}:{value}", address, size, expected))
     return expectations
+
+
+def _read_memory(conn, address: int, size: int, deadline: float) -> bytes:
+    # Older Dolphin stubs have small reply buffers. Keep each reply below
+    # 256 hex characters; join chunks before searching for a text marker so
+    # markers crossing packet boundaries still count as guest-memory proof.
+    chunks = []
+    for offset in range(0, size, 128):
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Guest memory read deadline exceeded")
+        count = min(128, size - offset)
+        _send(conn, f"m{address + offset:08x},{count:x}")
+        response = _reply(conn, deadline)
+        if len(response) != count * 2 or not re.fullmatch(r"[0-9a-fA-F]+", response):
+            raise ValueError(f"Cannot read guest memory at 0x{address + offset:08x}: {response!r}")
+        chunks.append(bytes.fromhex(response))
+    return b"".join(chunks)
 
 
 def probe_memory(port: int, expectations: list[MemoryExpectation],
@@ -235,12 +255,9 @@ def probe_memory(port: int, expectations: list[MemoryExpectation],
                     raise ValueError(f"Expected completion {name} at 0x{address:08x}, got 0x{last_pc:08x}")
                 lines.append(f"DND_GDB_COMPLETION_REACHED {name} PC=0x{last_pc:08x}")
                 for watch in expectations:
-                    _send(conn, f"m{watch.address:08x},{watch.size:x}")
-                    response = _reply(conn, deadline)
-                    if len(response) != watch.size * 2 or not re.fullmatch(r"[0-9a-fA-F]+", response):
-                        raise ValueError(f"Cannot read {watch.name}: {response!r}")
-                    if watch.expected not in bytes.fromhex(response):
-                        raise ValueError(f"Guest result {watch.name}: expected {watch.expected.hex()}, got {response}")
+                    actual = _read_memory(conn, watch.address, watch.size, deadline)
+                    if watch.expected not in actual:
+                        raise ValueError(f"Guest result {watch.name}: expected {watch.expected.hex()}, got {actual.hex()}")
                     lines.append(f"DND_GDB_MEMORY_PROOF {watch.name} at 0x{watch.address:08x}")
                 _send(conn, f"z0,{address:08x},4")
                 if _reply(conn, deadline) != "OK":
@@ -255,11 +272,7 @@ def probe_memory(port: int, expectations: list[MemoryExpectation],
                 last_pc = parse_stop_pc(stopped)
                 lines.append(f"DND_GDB_SAMPLED_PC=0x{last_pc:08x}")
                 for watch in list(missing):
-                    _send(conn, f"m{watch.address:08x},{watch.size:x}")
-                    response = _reply(conn, deadline)
-                    if len(response) != watch.size * 2 or not re.fullmatch(r"[0-9a-fA-F]+", response):
-                        raise ValueError(f"Cannot read {watch.name} at 0x{watch.address:08x}: {response!r}")
-                    actual = bytes.fromhex(response)
+                    actual = _read_memory(conn, watch.address, watch.size, deadline)
                     if watch.expected in actual:
                         lines.append(f"DND_GDB_MEMORY_PROOF {watch.name} at 0x{watch.address:08x}")
                         missing.remove(watch)

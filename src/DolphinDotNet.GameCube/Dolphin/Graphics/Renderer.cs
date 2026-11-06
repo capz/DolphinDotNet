@@ -115,6 +115,8 @@ public sealed partial class Renderer
         instance.Check();
         if (effectOverride != null) {effectOverride.Check();if(effectOverride.RequiresSecondaryTexture)throw new ArgumentException("Use DrawModelWithMaterial for two-texture effects.","effectOverride");}
         var result = NativeModel.ModelDrawEffect(instance.Token, transform, effectOverride == null ? 0 : effectOverride.Token);
+        if (result == -4)
+            throw new NotSupportedException("RGB-only effects cannot preserve authored MAT1 state; use DrawModelWithMaterial for an explicit full replacement.");
         if (result == -3)
             throw new ArgumentException("effectOverride requires a texture on every submitted mesh.", "effectOverride");
         if (result == -2)

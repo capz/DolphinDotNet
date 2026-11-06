@@ -5,6 +5,7 @@ internal static class NativeStorageBindings
     // name, native symbol, parameter types; h requests the active managed heap.
     private static readonly Dictionary<string,(string Symbol,string Types,bool Heap)> Bindings=new()
     {
+        ["FirmwareRead"]=("dnd_firmware_read","aii",false),
         ["ModelDrawEffect"]=("dnd_model_draw_effect","iai",false),
         ["Publish"]=("dnd_corpus_publish","iiiis",false),
         ["Finish"]=("dnd_corpus_finish","iiii",false),
@@ -133,6 +134,7 @@ internal static class NativeStorageBindings
         ["MeshUpdateNormal"]=("dnd_mesh_update","iaiii",false),
         ["AudioInit"]=("dnd_audio_init","",false),
         ["AudioBegin"]=("dnd_audio_begin","s",false),
+        ["AudioBeginMemory"]=("dnd_audio_begin_memory","aaiii",false),
         ["AudioBeginSource"]=("dnd_audio_begin_source","ssiii",false),
         ["AudioCreatePcm8"]=("dnd_audio_create_pcm8","ai",false),
         ["AudioStep"]=("dnd_audio_step","i",false),
@@ -196,11 +198,13 @@ internal static class NativeStorageBindings
         ["ModelName"]=("dnd_model_name","iii",true),["ModelDuration"]=("dnd_model_duration","ii",false),["ModelCopy"]=("dnd_model_copy","iiaii",false),
         ["ModelBeginFzero"]=("dnd_model_begin_fzero","ssiii",false),
         ["ModelBeginFormat"]=("dnd_model_begin_format","sssfiii",false),
+        ["ModelJ3dMemory"]=("dnd_model_j3d_memory","ai",false),
         ["ModelBeginPsoEpisode3"]=("dnd_model_begin_pso_ep3","sssfiii",false),
         ["ModelBeginPso"]=("dnd_model_begin_pso","sssfii",false),
         ["ModelBeginScene"]=("dnd_model_begin_scene","sifii",false),
         ["ModelRestoreBegin"]=("dnd_model_restore_begin","i",false),["ModelRestoreEnd"]=("dnd_model_restore_end","ii",false),["ModelUnload"]=("dnd_model_unload","i",false),
         ["ModelInstance"]=("dnd_model_instance","ii",false),["ModelInstanceBytes"]=("dnd_model_instance_bytes","i",false),["ModelInstanceDispose"]=("dnd_model_instance_dispose","i",false),["ModelPlay"]=("dnd_model_play","iiif",false),["ModelControl"]=("dnd_model_control","iif",false),
+        ["ModelNodeOffset"]=("dnd_model_node_offset","iia",false),["ModelColor"]=("dnd_model_color","iiia",false),["ModelOpacity"]=("dnd_model_opacity","iif",false),
         ["ModelNodeMatrix"]=("dnd_model_node_matrix","iia",false),["ModelDraw"]=("dnd_model_draw","ia",false),["ModelFrameBegin"]=("dnd_model_frame_begin","aa",false),["ModelFrameEnd"]=("dnd_model_frame_end","",false),
         ["AramInitialize"]=("dnd_aram_initialize","i",false),["AramAvailable"]=("dnd_aram_available","",false),["AramStat"]=("dnd_aram_stat","i",false),["AramAllocate"]=("dnd_aram_allocate","i",false),
         ["AramRetain"]=("dnd_aram_retain","i",false),["AramRelease"]=("dnd_aram_release","i",false),["AramDispose"]=("dnd_aram_dispose","i",false),["AramBegin"]=("dnd_aram_begin","iiaiii",false),["AramPoll"]=("dnd_aram_poll","ai",false),
@@ -247,7 +251,7 @@ internal static class NativeStorageBindings
         // Publication, allocation and every other texture/GX operation require
         // the application executor. Keep this list deliberately restrictive.
         bool detachedTextureCopy = call.Operation is "TextureStageArray" or "TextureStageBuffer";
-        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||(!detachedTextureCopy && call.Operation.StartsWith("Texture",StringComparison.Ordinal))||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation=="AssetCompatReport"||call.Operation is "ModelDrawModels" or "ModelDraw" or "ModelDrawEffect" or "ModelDrawMaterial" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
+        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||(!detachedTextureCopy && call.Operation.StartsWith("Texture",StringComparison.Ordinal))||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginMemory" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation=="AssetCompatReport"||call.Operation is "ModelDrawModels" or "ModelDraw" or "ModelDrawEffect" or "ModelDrawMaterial" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");
         if(call.Operation=="Publish")
             b.AppendLine("  extern void dnd_corpus_publish(int,int,int,int,DndString*);");

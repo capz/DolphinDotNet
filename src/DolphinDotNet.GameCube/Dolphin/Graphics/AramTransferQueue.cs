@@ -72,7 +72,7 @@ public static class AramTransferQueue
                 if(pending)
                 {
                     int result=NativeGraphics.AramNativePoll();
-                    if(result<0)throw new System.IO.IOException("Native ARAM DMA failed.");
+                    if(result<0)throw new global::System.IO.IOException("Native ARAM DMA failed.");
                     if(result==0)return false;
                     pending=false;position+=chunk;
                 }
@@ -86,7 +86,7 @@ public static class AramTransferQueue
                 chunk=count-position;if(chunk>ChunkSize)chunk=ChunkSize;
                 int status=NativeGraphics.AramNativeBegin(aram,aramOffset+position,buffer,bufferOffset+position,chunk,write?1:0);
                 if(status==-16)return false; // Other ARAM transfers share the same DMA channel.
-                if(status<0)throw new System.IO.IOException("Native ARAM DMA could not start.");
+                if(status<0)throw new global::System.IO.IOException("Native ARAM DMA could not start.");
                 pending=true;return false;
             }
             catch(Exception ex)

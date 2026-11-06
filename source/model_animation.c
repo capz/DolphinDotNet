@@ -210,6 +210,15 @@ int dnd_model_evaluate(DndInstance *in) {
       memcpy(in->pose[i].q, q, 16);
     }
   }
+  if(in->offset)for(unsigned i=0;i<m->nodes;i++)if(in->offset_set[i]) {
+    DndPose *p=&in->pose[i],*o=&in->offset[i];float a[4];memcpy(a,p->q,16);
+    for(unsigned j=0;j<3;j++){p->t[j]+=o->t[j];p->s[j]*=o->s[j];}
+    p->q[0]=a[3]*o->q[0]+a[0]*o->q[3]+a[1]*o->q[2]-a[2]*o->q[1];
+    p->q[1]=a[3]*o->q[1]-a[0]*o->q[2]+a[1]*o->q[3]+a[2]*o->q[0];
+    p->q[2]=a[3]*o->q[2]+a[0]*o->q[1]-a[1]*o->q[0]+a[2]*o->q[3];
+    p->q[3]=a[3]*o->q[3]-a[0]*o->q[0]-a[1]*o->q[1]-a[2]*o->q[2];
+    if(!normalize(p->q,4))return -1;
+  }
   memset(in->done, 0, m->nodes);
   for (unsigned i = 0; i < m->nodes; i++)
     global(in, i);
@@ -305,7 +314,7 @@ int dnd_model_instance(int token, int budget) {
   in->done = dnd_model_alloc(m->nodes, &in->bytes, in->budget);
   in->vertices =
       dnd_model_alloc(m->meshes * sizeof(float *), &in->bytes, in->budget);
-  bool blended = false;
+  bool blended = m->authored!=NULL;
   for (unsigned i = 0; i < m->materials; i++) blended |= (m->material[i].mode & 4) != 0;
   if (blended) {
     in->draw_order = dnd_model_alloc(m->meshes * sizeof(unsigned), &in->bytes, in->budget);
@@ -337,6 +346,8 @@ int dnd_model_instance_dispose(int token) {
   dnd_model_free(in->done, &in->bytes);
   dnd_model_free(in->draw_order, &in->bytes);
   dnd_model_free(in->draw_depth, &in->bytes);
+  dnd_model_free(in->offset,&in->bytes);dnd_model_free(in->offset_set,&in->bytes);
+  dnd_model_free(in->colors,&in->bytes);dnd_model_free(in->color_set,&in->bytes);
   free(in);
   dnd_model_release(m);
   return 0;
@@ -454,4 +465,64 @@ int dnd_model_vertex(int token, int mesh, int vertex, float out[6]) {
 int dnd_model_instance_bytes(int token) {
   DndInstance *in = dnd_instance_find(token);
   return in ? (int)in->bytes : -1;
+}
+
+/* Per-instance absolute colors and relative local poses. Owned native buffers;
+ * no managed pointers survive the call, and changes require a frame boundary. */
+static bool instance_colors(DndInstance *in) {
+  if(!in->colors){
+    float *colors=dnd_model_alloc(in->model->materials*64,&in->bytes,in->budget);
+    unsigned char *set=dnd_model_alloc(in->model->materials*4,&in->bytes,in->budget);
+    if(!colors||!set){dnd_model_free(colors,&in->bytes);dnd_model_free(set,&in->bytes);return false;}
+    in->colors=colors;in->color_set=set;
+  }
+  return true;
+}
+int dnd_model_opacity(int token,int material,float opacity) {
+  DndInstance *in=dnd_instance_find(token);
+  if(!in||!in->model->ready||dnd_device_active()||!in->model->authored||
+     material<0||(unsigned)material>=in->model->materials||!isfinite(opacity)||opacity<0||opacity>1)return -1;
+  const DndAuthoredMaterial *program=&in->model->authored[material];
+  if(program->rgb.output||program->opacity.output||program->alpha[0]!=7||program->alpha[3]!=7||program->alpha[2]>1)return -1;
+  if(!instance_colors(in))return -2;
+  unsigned index=(unsigned)material*4;float *value=in->colors+index*4;
+  if(!in->color_set[index])for(unsigned c=0;c<3;c++)value[c]=in->model->material[material].color[c]*255;
+  value[3]=opacity*255;in->color_set[index]=3;
+  return 0;
+}
+int dnd_model_color(int token,int material,int slot,DndArray *values) {
+  DndInstance *in=dnd_instance_find(token);
+  if(!in||!in->model->ready||dnd_device_active()||!in->model->authored||
+     material<0||(unsigned)material>=in->model->materials||slot<0||slot>3)return -1;
+  unsigned index=(unsigned)material*4+(unsigned)slot;
+  if(!values){if(in->color_set)in->color_set[index]=0;return 0;}
+  if(values->element_size!=4||values->elements_are_references||values->length!=4)return -1;
+  float copy[4];memcpy(copy,values->data,16);
+  for(unsigned i=0;i<4;i++)if(!isfinite(copy[i])||copy[i]<(slot?-1024:0)||copy[i]>(slot?1023:255))return -1;
+  if(!instance_colors(in))return -2;
+  memcpy(in->colors+index*4,copy,16);in->color_set[index]=1;return 0;
+}
+int dnd_model_node_offset(int token,int node,DndArray *values) {
+  DndInstance *in=dnd_instance_find(token);
+  if(!in||!in->model->ready||dnd_device_active()||node<0||(unsigned)node>=in->model->nodes)return -1;
+  DndPose value={{0,0,0},{0,0,0,1},{1,1,1}};
+  if(values){
+    if(values->element_size!=4||values->elements_are_references||values->length!=10)return -1;
+    memcpy(&value,values->data,40);
+    for(unsigned i=0;i<10;i++)if(!isfinite(((float*)&value)[i])||fabsf(((float*)&value)[i])>1000000)return -1;
+    for(unsigned i=0;i<3;i++)if(fabsf(value.s[i])<.000001f)return -1;
+    if(!normalize(value.q,4))return -1;
+  }
+  if(!in->offset&&values){
+    DndPose *offset=dnd_model_alloc(in->model->nodes*sizeof(DndPose),&in->bytes,in->budget);
+    unsigned char *set=dnd_model_alloc(in->model->nodes,&in->bytes,in->budget);
+    if(!offset||!set){dnd_model_free(offset,&in->bytes);dnd_model_free(set,&in->bytes);return -2;}
+    in->offset=offset;in->offset_set=set;
+  }
+  if(!in->offset)return 0;
+  DndPose old=in->offset[node];unsigned char old_set=in->offset_set[node];
+  in->offset[node]=value;in->offset_set[node]=values!=NULL;
+  int result=dnd_model_evaluate(in);
+  if(result<0){in->offset[node]=old;in->offset_set[node]=old_set;(void)dnd_model_evaluate(in);}
+  return result;
 }

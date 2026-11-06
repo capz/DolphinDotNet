@@ -2,7 +2,7 @@ using System.Collections.Generic;
 namespace Dolphin.Collections;
 // These two-argument contracts retain real generic signatures; they cannot be
 // reduced to the one-element synthetic array/list contracts in the compiler.
-public interface IDictionary<TKey,TValue> : ICollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>
+public interface IDictionary<TKey,TValue> : ICollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>
 {
     TValue this[TKey key] {get;set;}
     ICollection<TKey> Keys {get;}
@@ -12,7 +12,7 @@ public interface IDictionary<TKey,TValue> : ICollection<System.Collections.Gener
     bool Remove(TKey key);
     bool TryGetValue(TKey key,out TValue value);
 }
-public interface IReadOnlyDictionary<TKey,TValue> : IReadOnlyCollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>
+public interface IReadOnlyDictionary<TKey,TValue> : IReadOnlyCollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>
 {
     TValue this[TKey key] {get;}
     IEnumerable<TKey> Keys {get;}

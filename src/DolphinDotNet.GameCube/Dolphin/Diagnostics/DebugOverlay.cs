@@ -17,17 +17,17 @@ public static class DebugOverlay
     }
 
     public static void WriteLine(string text) =>
-        throw new System.PlatformNotSupportedException("DebugOverlay.WriteLine requires DolphinDotNet AOT.");
+        throw new global::System.PlatformNotSupportedException("DebugOverlay.WriteLine requires DolphinDotNet AOT.");
 }
 
 internal static class NativeDiagnostics
 {
     internal static int ConsoleVisible() =>
-        throw new System.PlatformNotSupportedException("Text diagnostics require DolphinDotNet AOT.");
+        throw new global::System.PlatformNotSupportedException("Text diagnostics require DolphinDotNet AOT.");
     internal static void ConsoleSetVisible(int visible) =>
-        throw new System.PlatformNotSupportedException("Text diagnostics require DolphinDotNet AOT.");
+        throw new global::System.PlatformNotSupportedException("Text diagnostics require DolphinDotNet AOT.");
     internal static int PerformanceVisible() =>
-        throw new System.PlatformNotSupportedException("Performance diagnostics require DolphinDotNet AOT.");
+        throw new global::System.PlatformNotSupportedException("Performance diagnostics require DolphinDotNet AOT.");
     internal static void PerformanceSetVisible(int visible) =>
-        throw new System.PlatformNotSupportedException("Performance diagnostics require DolphinDotNet AOT.");
+        throw new global::System.PlatformNotSupportedException("Performance diagnostics require DolphinDotNet AOT.");
 }

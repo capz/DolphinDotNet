@@ -12,6 +12,9 @@ public sealed class Music : IDisposable
     private Music(Sound sound){this.sound=sound;}
     public static Task<Music> LoadAsync(string path,CancellationToken cancellation)
         =>LoadAsync(path,cancellationToken:cancellation);
+    public static Music FromEncoded(byte[] data,AudioFormat format=AudioFormat.Auto,byte[]? body=null,
+        int entryIndex=0,int nativeBudgetBytes=8*1024*1024,CancellationToken cancellationToken=default)
+        =>new Music(Sound.FromEncoded(data,format,body,entryIndex,nativeBudgetBytes,cancellationToken));
     public static Music Load(string path,AudioFormat format=AudioFormat.Auto,string? dataPath=null,int entryIndex=0,int nativeBudgetBytes=8*1024*1024)
         =>new Music(Sound.Load(path,format,dataPath,entryIndex,nativeBudgetBytes));
     public static async Task<Music> LoadAsync(string path,AudioFormat format=AudioFormat.Auto,string? dataPath=null,int entryIndex=0,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)

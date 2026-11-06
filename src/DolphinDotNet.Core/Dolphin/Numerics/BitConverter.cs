@@ -4,5 +4,5 @@ namespace Dolphin.Numerics;
 public static class BitConverter
 {
     public static float Int32BitsToSingle(int value) =>
-        System.BitConverter.ToSingle(System.BitConverter.GetBytes(value), 0);
+        global::System.BitConverter.ToSingle(global::System.BitConverter.GetBytes(value), 0);
 }

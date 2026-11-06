@@ -46,7 +46,8 @@ def main(area):
         with tempfile.TemporaryDirectory() as tmp:
             for p in ("AotSmoke","ControlFlowSmoke","GenericSharingSmoke"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))
-            for p,host in (("NumericSmoke","numeric_host.c"),
+            for p,host in (("SystemFirmwareSmoke","system_firmware_host.c"),
+                           ("NumericSmoke","numeric_host.c"),
                            ("StringSmoke","string_host.c"),
                            ("WishlistSmoke","wishlist_host.c"),
                            ("ExactNumberSmoke","wishlist_host.c")):
@@ -71,6 +72,14 @@ def main(area):
     elif area=="audio":
         test("tests/AudioAssetTests")
         build("tests/AudioFormatsSmoke/AudioFormatsSmoke.csproj")
+        with tempfile.TemporaryDirectory() as tmp:
+            run("python3","tests/generate_audio_fixtures.py",tmp)
+            for source in ("audio_native_test","audio_formats_test"):
+                binary=Path(tmp)/source
+                run("cc","-D_DARWIN_C_SOURCE","-std=c11","-O1","-Wall","-Wextra","-Werror","-Iinclude",
+                    "tests/"+source+".c","source/audio.c","-lm","-o",binary)
+                if source=="audio_formats_test":run(binary,tmp)
+                else:run(binary)
     elif area=="graphics":
         run("python3","scripts/ci_display.py") # DisplayConfigurationSmoke
         run("python3","scripts/ci_graphics_phase_one.py")
@@ -82,10 +91,16 @@ def main(area):
         with tempfile.TemporaryDirectory() as tmp:
             run("dotnet","run","--project","tests/ModelAssetTests","-c","Release","--",tmp)
             run("python3","scripts/ci_model_tests.py",tmp)
-        for p in ("GraphicsSmoke","IplFontSmoke","ModelSmoke","ModelAsyncSmoke","TevMaterialTests"):
+        for p in ("GraphicsSmoke","SystemFirmwareSmoke","IplFontSmoke","ModelSmoke","ModelAsyncSmoke","TevMaterialTests"):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="assets":
+        run("python3","-m","unittest","discover","-s","tests","-p","test_system_firmware_captures.py")
         test("tests/GameCubeFormatsTests")
+        test("tests/SystemFirmwareTests")
+        # SystemFirmwareReadSmoke: execute the generated C against the synthetic
+        # console/file bridge; building the managed fixture alone misses the ABI.
+        run("python3","tests/system_firmware_aot.py")
+        run("python3","tests/system_firmware_inventory.py")
         test("tests/JSystemFixtureHostTests")
         run("python3","-m","unittest","discover","-s","tests","-p","test_jsystem_hardware_regression.py")
         test("tests/HardwareAssetCompatibilityPolicyTests")
@@ -102,7 +117,7 @@ def main(area):
         # Hardware/emulator execution belongs in independent console acceptance.
         build("tools/DolphinDotNet.Compiler")
         with tempfile.TemporaryDirectory() as tmp:
-            for p in ("JSystemHardwareFixture","HelloGameCube","GraphicsSmoke","IplFontSmoke","AramSmoke","NetworkSmoke",
+            for p in ("JSystemHardwareFixture","SystemFirmwareHardwareSmoke","HelloGameCube","GraphicsSmoke","IplFontSmoke","AramSmoke","NetworkSmoke",
                       "ControllerDolphinSmoke","DolLauncherSmoke",
                       "DebuggerStackSmoke","DebuggerInspectionSmoke","RetailAssetCorpus","HardwareAssetCompatibility"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))

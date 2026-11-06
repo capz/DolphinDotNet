@@ -11,7 +11,7 @@ public class ReadOnlyDictionary<TKey,TValue> : IDictionary<TKey,TValue>, IReadOn
     public int Count=>items.Count;
     public TValue this[TKey key]=>items[key];
     TValue IDictionary<TKey,TValue>.this[TKey key] {get=>items[key];set=>throw new NotSupportedException();}
-    bool ICollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>.IsReadOnly=>true;
+    bool ICollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>.IsReadOnly=>true;
     public KeyCollection Keys=>new KeyCollection(items.Keys);
     ICollection<TKey> IDictionary<TKey,TValue>.Keys=>Keys;
     public ValueCollection Values=>new ValueCollection(items.Values);
@@ -20,15 +20,15 @@ public class ReadOnlyDictionary<TKey,TValue> : IDictionary<TKey,TValue>, IReadOn
     IEnumerable<TValue> IReadOnlyDictionary<TKey,TValue>.Values=>Values;
     public bool ContainsKey(TKey key)=>items.ContainsKey(key);
     public bool TryGetValue(TKey key,out TValue value)=>items.TryGetValue(key,out value);
-    public IEnumerator<System.Collections.Generic.KeyValuePair<TKey,TValue>> GetEnumerator()=>items.GetEnumerator();
+    public IEnumerator<global::System.Collections.Generic.KeyValuePair<TKey,TValue>> GetEnumerator()=>items.GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator()=>GetEnumerator();
-    public void CopyTo(System.Collections.Generic.KeyValuePair<TKey,TValue>[] array,int index)=>items.CopyTo(array,index);
+    public void CopyTo(global::System.Collections.Generic.KeyValuePair<TKey,TValue>[] array,int index)=>items.CopyTo(array,index);
     void IDictionary<TKey,TValue>.Add(TKey key,TValue value){throw new NotSupportedException();}
     bool IDictionary<TKey,TValue>.Remove(TKey key){throw new NotSupportedException();}
-    void ICollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>.Add(System.Collections.Generic.KeyValuePair<TKey,TValue> pair){throw new NotSupportedException();}
-    void ICollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>.Clear(){throw new NotSupportedException();}
-    bool ICollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>.Contains(System.Collections.Generic.KeyValuePair<TKey,TValue> pair)=>items.Contains(pair);
-    bool ICollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>.Remove(System.Collections.Generic.KeyValuePair<TKey,TValue> pair){throw new NotSupportedException();}
+    void ICollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>.Add(global::System.Collections.Generic.KeyValuePair<TKey,TValue> pair){throw new NotSupportedException();}
+    void ICollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>.Clear(){throw new NotSupportedException();}
+    bool ICollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>.Contains(global::System.Collections.Generic.KeyValuePair<TKey,TValue> pair)=>items.Contains(pair);
+    bool ICollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>.Remove(global::System.Collections.Generic.KeyValuePair<TKey,TValue> pair){throw new NotSupportedException();}
     public sealed class KeyCollection : ICollection<TKey>, IReadOnlyCollection<TKey>
     {
         private readonly ICollection<TKey> source;

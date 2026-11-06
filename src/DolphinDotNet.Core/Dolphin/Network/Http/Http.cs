@@ -33,7 +33,7 @@ public sealed class HttpRequestMessage : IDisposable
 }
 public sealed class HttpResponseMessage : IDisposable
 {
-    public System.Net.HttpStatusCode StatusCode {get;internal set;}
+    public global::System.Net.HttpStatusCode StatusCode {get;internal set;}
     public string ReasonPhrase {get;internal set;}="";
     public HttpHeaders Headers {get;}=new HttpHeaders();
     public HttpContent Content {get;internal set;}=null!;
@@ -136,7 +136,7 @@ public sealed class HttpClient : IDisposable
         private static void Append(HttpHeaders source,ref string text,bool removeCredentials=false){for(int i=0;i<source.Count;i++){string name=source.Name(i);if(removeCredentials&&(name=="authorization"||name=="cookie"||name=="proxy-authorization"))continue;if(name=="host"||name=="connection"||name=="transfer-encoding"||name=="content-length"||name=="accept-encoding")throw new ArgumentException("Reserved HTTP framing header.");text=string.Concat(text,string.Concat(string.Concat(name,": "),string.Concat(source.Value(i),"\r\n")));if(text.Length>8192)throw new IOException("HTTP header limit.");}}
         private HttpResponseMessage ParseHeaders(int end)
         {
-            int p=0;string status=Line(ref p,end);if(status.Length<13||!status.StartsWith("HTTP/1.1 ")&&!status.StartsWith("HTTP/1.0 ")||status[9]<'1'||status[9]>'5'||status[10]<'0'||status[10]>'9'||status[11]<'0'||status[11]>'9'||status[12]!=' ')throw new FormatException("Invalid HTTP status.");var r=new HttpResponseMessage{StatusCode=(System.Net.HttpStatusCode)((status[9]-'0')*100+(status[10]-'0')*10+status[11]-'0'),ReasonPhrase=status.Substring(13)};
+            int p=0;string status=Line(ref p,end);if(status.Length<13||!status.StartsWith("HTTP/1.1 ")&&!status.StartsWith("HTTP/1.0 ")||status[9]<'1'||status[9]>'5'||status[10]<'0'||status[10]>'9'||status[11]<'0'||status[11]>'9'||status[12]!=' ')throw new FormatException("Invalid HTTP status.");var r=new HttpResponseMessage{StatusCode=(global::System.Net.HttpStatusCode)((status[9]-'0')*100+(status[10]-'0')*10+status[11]-'0'),ReasonPhrase=status.Substring(13)};
             while(p<end-2){string line=Line(ref p,end);int colon=HttpText.Index(line,':');if(colon<=0)throw new FormatException("Invalid HTTP header.");string name=HttpText.Lower(line.Substring(0,colon)),value=HttpText.Trim(line.Substring(colon+1));if((name=="content-length"||name=="transfer-encoding"||name=="content-encoding")&&r.Headers.Get(name)!=null)throw new FormatException("Duplicate HTTP framing header.");r.Headers.Add(name,value);}return r;
         }
         private string Line(ref int p,int end){int start=p;while(p<end-1){if(headers[p]==13&&headers[p+1]==10){int n=p-start;p+=2;return Encoding.ASCII.GetString(headers,start,n);}if(headers[p]<32&&headers[p]!=9||headers[p]>126)throw new FormatException("Invalid HTTP header byte.");p++;}throw new FormatException("HTTP line truncated.");}

@@ -16,5 +16,5 @@ public static class AssetCompatibilityProbe
 internal static class NativeAssetCompatibility
 {
     internal static void AssetCompatReport(int status,int index,int total,int kind,int scanned,string name)
-        => throw new System.PlatformNotSupportedException("The asset compatibility probe requires GameCube AOT.");
+        => throw new global::System.PlatformNotSupportedException("The asset compatibility probe requires GameCube AOT.");
 }

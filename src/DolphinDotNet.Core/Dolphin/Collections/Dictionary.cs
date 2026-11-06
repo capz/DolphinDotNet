@@ -25,12 +25,12 @@ public class Dictionary<TKey,TValue> : IDictionary<TKey,TValue>, IReadOnlyDictio
     public Dictionary(IDictionary<TKey,TValue> source):this(source,null){}
     public Dictionary(IDictionary<TKey,TValue> source,IEqualityComparer<TKey>? comparer):this(0,comparer)
     {if(source==null)throw new ArgumentNullException("source");foreach(var pair in source)Add(pair.Key,pair.Value);}
-    public Dictionary(IEnumerable<System.Collections.Generic.KeyValuePair<TKey,TValue>> source):this(source,null){}
-    public Dictionary(IEnumerable<System.Collections.Generic.KeyValuePair<TKey,TValue>> source,IEqualityComparer<TKey>? comparer):this(0,comparer)
+    public Dictionary(IEnumerable<global::System.Collections.Generic.KeyValuePair<TKey,TValue>> source):this(source,null){}
+    public Dictionary(IEnumerable<global::System.Collections.Generic.KeyValuePair<TKey,TValue>> source,IEqualityComparer<TKey>? comparer):this(0,comparer)
     {if(source==null)throw new ArgumentNullException("source");foreach(var pair in source)Add(pair.Key,pair.Value);}
     public int Count=>count;
     public IEqualityComparer<TKey> Comparer=>comparer;
-    bool ICollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>.IsReadOnly=>false;
+    bool ICollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>.IsReadOnly=>false;
     ICollection<TKey> IDictionary<TKey,TValue>.Keys=>Keys;
     ICollection<TValue> IDictionary<TKey,TValue>.Values=>Values;
     IEnumerable<TKey> IReadOnlyDictionary<TKey,TValue>.Keys=>Keys;
@@ -84,21 +84,21 @@ public class Dictionary<TKey,TValue> : IDictionary<TKey,TValue>, IReadOnlyDictio
         for(int i=0;i<used;i++)if(hashes[i]>=0){int bucket=hashes[i]%capacity;k[at]=keys[i];v[at]=values[i];h[at]=hashes[i];n[at]=b[bucket]-1;b[bucket]=++at;}
         keys=k;values=v;hashes=h;next=n;buckets=b;used=count;free=-1;version++;
     }
-    public void CopyTo(System.Collections.Generic.KeyValuePair<TKey,TValue>[] array,int index){CheckCopy(array,index,count);for(int i=0;i<used;i++)if(hashes[i]>=0)array[index++]=new System.Collections.Generic.KeyValuePair<TKey,TValue>(keys[i],values[i]);}
+    public void CopyTo(global::System.Collections.Generic.KeyValuePair<TKey,TValue>[] array,int index){CheckCopy(array,index,count);for(int i=0;i<used;i++)if(hashes[i]>=0)array[index++]=new global::System.Collections.Generic.KeyValuePair<TKey,TValue>(keys[i],values[i]);}
     internal static void CheckCopy<T>(T[] array,int index,int length){if(array==null)throw new ArgumentNullException("array");if(index<0)throw new ArgumentOutOfRangeException("index");if(index>array.Length-length)throw new ArgumentException("Destination is too small.");}
-    void ICollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>.Add(System.Collections.Generic.KeyValuePair<TKey,TValue> pair)=>Add(pair.Key,pair.Value);
-    bool ICollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>.Contains(System.Collections.Generic.KeyValuePair<TKey,TValue> pair){int i=Find(pair.Key);return i>=0&&EqualityComparer<TValue>.Default.Equals(values[i],pair.Value);}
-    bool ICollection<System.Collections.Generic.KeyValuePair<TKey,TValue>>.Remove(System.Collections.Generic.KeyValuePair<TKey,TValue> pair){int i=Find(pair.Key);return i>=0&&EqualityComparer<TValue>.Default.Equals(values[i],pair.Value)&&Remove(pair.Key);}
+    void ICollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>.Add(global::System.Collections.Generic.KeyValuePair<TKey,TValue> pair)=>Add(pair.Key,pair.Value);
+    bool ICollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>.Contains(global::System.Collections.Generic.KeyValuePair<TKey,TValue> pair){int i=Find(pair.Key);return i>=0&&EqualityComparer<TValue>.Default.Equals(values[i],pair.Value);}
+    bool ICollection<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>.Remove(global::System.Collections.Generic.KeyValuePair<TKey,TValue> pair){int i=Find(pair.Key);return i>=0&&EqualityComparer<TValue>.Default.Equals(values[i],pair.Value)&&Remove(pair.Key);}
     public Enumerator GetEnumerator()=>new Enumerator(this);
-    IEnumerator<System.Collections.Generic.KeyValuePair<TKey,TValue>> IEnumerable<System.Collections.Generic.KeyValuePair<TKey,TValue>>.GetEnumerator()=>GetEnumerator();
+    IEnumerator<global::System.Collections.Generic.KeyValuePair<TKey,TValue>> IEnumerable<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>.GetEnumerator()=>GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator()=>GetEnumerator();
-    public struct Enumerator : IEnumerator<System.Collections.Generic.KeyValuePair<TKey,TValue>>
+    public struct Enumerator : IEnumerator<global::System.Collections.Generic.KeyValuePair<TKey,TValue>>
     {
-        private readonly Dictionary<TKey,TValue> owner;private readonly int version;private int index;private System.Collections.Generic.KeyValuePair<TKey,TValue> current;
+        private readonly Dictionary<TKey,TValue> owner;private readonly int version;private int index;private global::System.Collections.Generic.KeyValuePair<TKey,TValue> current;
         internal Enumerator(Dictionary<TKey,TValue> owner){this.owner=owner;version=owner.version;index=0;current=default;}
-        public System.Collections.Generic.KeyValuePair<TKey,TValue> Current=>current;
+        public global::System.Collections.Generic.KeyValuePair<TKey,TValue> Current=>current;
         object IEnumerator.Current {get{if(index==0||index==owner.used+1)throw new InvalidOperationException();return current;}}
-        public bool MoveNext(){if(version!=owner.version)throw new InvalidOperationException("Collection was modified.");while(index<owner.used){int i=index++;if(owner.hashes[i]>=0){current=new System.Collections.Generic.KeyValuePair<TKey,TValue>(owner.keys[i],owner.values[i]);return true;}}index=owner.used+1;current=default;return false;}
+        public bool MoveNext(){if(version!=owner.version)throw new InvalidOperationException("Collection was modified.");while(index<owner.used){int i=index++;if(owner.hashes[i]>=0){current=new global::System.Collections.Generic.KeyValuePair<TKey,TValue>(owner.keys[i],owner.values[i]);return true;}}index=owner.used+1;current=default;return false;}
         public void Reset(){if(version!=owner.version)throw new InvalidOperationException();index=0;current=default;}
         public void Dispose(){}
     }
@@ -121,7 +121,7 @@ public class Dictionary<TKey,TValue> : IDictionary<TKey,TValue>, IReadOnlyDictio
             private Dictionary<TKey,TValue>.Enumerator inner;
             internal Enumerator(Dictionary<TKey,TValue> owner){inner=owner.GetEnumerator();}
             public TKey Current=>inner.Current.Key;
-            object IEnumerator.Current=>((IEnumerator)inner).Current is System.Collections.Generic.KeyValuePair<TKey,TValue> pair?pair.Key:default!;
+            object IEnumerator.Current=>((IEnumerator)inner).Current is global::System.Collections.Generic.KeyValuePair<TKey,TValue> pair?pair.Key:default!;
             public bool MoveNext()=>inner.MoveNext();
             public void Reset()=>inner.Reset();
             public void Dispose(){}
@@ -146,7 +146,7 @@ public class Dictionary<TKey,TValue> : IDictionary<TKey,TValue>, IReadOnlyDictio
             private Dictionary<TKey,TValue>.Enumerator inner;
             internal Enumerator(Dictionary<TKey,TValue> owner){inner=owner.GetEnumerator();}
             public TValue Current=>inner.Current.Value;
-            object IEnumerator.Current=>((IEnumerator)inner).Current is System.Collections.Generic.KeyValuePair<TKey,TValue> pair?pair.Value:default!;
+            object IEnumerator.Current=>((IEnumerator)inner).Current is global::System.Collections.Generic.KeyValuePair<TKey,TValue> pair?pair.Value:default!;
             public bool MoveNext()=>inner.MoveNext();
             public void Reset()=>inner.Reset();
             public void Dispose(){}

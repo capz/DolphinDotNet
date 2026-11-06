@@ -1,5 +1,6 @@
 using System;
 using Dolphin.Graphics;
+using Dolphin.System;
 using Dolphin.Input;
 using Dolphin.Diagnostics;
 using System.Threading.Tasks;
@@ -15,6 +16,10 @@ internal static class Program
         try{font.MeasureText(null!);return 4;}catch(ArgumentNullException){}
         try{font.MeasureText("A",0);return 5;}catch(ArgumentOutOfRangeException){}
         using(var second=IplFont.Load()){if(second.SharedFirmwareBytes!=font.SharedFirmwareBytes)return 6;second.Dispose();try{second.MeasureText("A");return 7;}catch(ObjectDisposedException){}}
+        using(var facade=SystemFont.Load())
+        {
+            if(facade.CellWidth!=font.CellWidth||facade.LineHeight!=font.LineHeight||facade.MeasureText("A").X!=font.MeasureText("A").X)return 10;
+        }
         int before=device.NativeBytes;device.BeginFrame(Color32.Black);
         try{IplFont.Load();return 8;}catch(InvalidOperationException){}
         device.EndFrame();if(device.NativeBytes!=before)return 9;

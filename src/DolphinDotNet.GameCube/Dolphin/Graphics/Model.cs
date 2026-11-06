@@ -110,11 +110,11 @@ public sealed class Model : IDisposable
         var work=new LoadWork(path,nativeBudgetBytes,cancellationToken,5,allowMaterialApproximation,textureArchivePath,selection:modelIndex,staticSnapshot:loadDeformedMeshesAsStatic);
         Task.Run(work.Step);return work.Completion.Task;
     }
-    /// <summary>Load Super Mario Sunshine J3D2 BMD3/BDL4 models and embedded BTI
+    /// <summary>Load original J3D1 BMD1 or Super Mario Sunshine J3D2 BMD3/BDL4 models and embedded BTI
     /// textures on the background executor. Optional BCK/BCA skeletal animation
     /// is sampled at 60 Hz into the clip "Motion". Supports Yaz0/Yay0 and RARC;
     /// append #relative/member.bmd or #relative/member.bck to select a member.
-    /// Complex TEV materials need explicit approximation. Billboard geometry,
+    /// J3D1 retains its qualified MAT1 state; complex J3D2 TEV materials need explicit approximation. Billboard geometry,
     /// scaled Maya segment compensation and material animations are unsupported.</summary>
     public static Task<Model> LoadJ3dAsync(string path,string? animationPath=null,float animationFramesPerSecond=30,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024,bool allowMaterialApproximation=false)
     {
@@ -122,6 +122,18 @@ public sealed class Model : IDisposable
         if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)throw new ArgumentOutOfRangeException("nativeBudgetBytes");
         if(!(animationFramesPerSecond>=1&&animationFramesPerSecond<=240))throw new ArgumentOutOfRangeException("animationFramesPerSecond");
         var work=new LoadWork(path,nativeBudgetBytes,cancellationToken,6,allowMaterialApproximation,motion:animationPath,fps:animationFramesPerSecond);
+        Task.Run(work.Step);return work.Completion.Task;
+    }
+    /// <summary>Import an owned snapshot of a bounded J3D buffer on the background
+    /// executor, without temporary files. Original J3D1/MAT1 retains its authored
+    /// GX material profile; the existing strict J3D2 profile is also supported.</summary>
+    public static Task<Model> LoadJ3dAsync(byte[] data,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(data==null)throw new ArgumentNullException(nameof(data));
+        if(data.Length<32||data.Length>2*1024*1024)throw new global::System.IO.InvalidDataException("J3D memory source exceeds its input bounds.");
+        if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)throw new ArgumentOutOfRangeException(nameof(nativeBudgetBytes));
+        cancellationToken.ThrowIfCancellationRequested();
+        var work=new MemoryJ3dWork((byte[])data.Clone(),nativeBudgetBytes,cancellationToken);
         Task.Run(work.Step);return work.Completion.Task;
     }
     /// <summary>Load original GameCube Resident Evil 4 BIN geometry, TPL textures
@@ -186,7 +198,7 @@ public sealed class Model : IDisposable
         if(package==null)throw new ArgumentNullException("package");
         if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)throw new ArgumentOutOfRangeException("nativeBudgetBytes");
         int token=NativeModel.ModelBeginBytes(package,nativeBudgetBytes);
-        if(token==0)throw new System.IO.IOException("Invalid model package or insufficient memory.");
+        if(token==0)throw new global::System.IO.IOException("Invalid model package or insufficient memory.");
         try{return new Model(token);}catch{NativeModel.ModelDispose(token);throw;}
     }
     public bool TryGetAnimation(string name,out AnimationClipInfo clip)
@@ -227,8 +239,32 @@ public sealed class Model : IDisposable
         internal readonly TaskCompletionSource<Model> Completion=new TaskCompletionSource<Model>();
         internal LoadWork(string path,int budget,CancellationToken cancellation,int format=0,bool approximate=false,string? textures=null,string? motion=null,float fps=0,int eulerKeyBytes=16,int selection=-1,bool staticSnapshot=false){this.path=path;this.budget=budget;this.cancellation=cancellation;this.format=format;this.approximate=approximate;this.textures=textures;this.motion=motion;this.fps=fps;this.eulerKeyBytes=eulerKeyBytes;this.selection=selection;this.staticSnapshot=staticSnapshot;}
         internal void Step(){try{cancellation.ThrowIfCancellationRequested();if(token==0){token=format==10?NativeModel.ModelBeginPsoEpisode3(path,textures,motion,fps,eulerKeyBytes,budget,approximate?1:0):format>=6&&format<=9?NativeModel.ModelBeginFormat(path,textures,motion,fps,format,budget,(approximate?1:0)|(format==8&&staticSnapshot?2:0)):format==5?NativeModel.ModelBeginFzero(path,textures,selection,budget,(approximate?1:0)|(staticSnapshot?2:0)):format==1?NativeModel.ModelBeginScene(path,0,60,budget,approximate?1:0):format==2?NativeModel.ModelBeginGlb(path,budget,approximate?1:0):format==3?NativeModel.ModelBeginPso(path,textures,motion,fps,eulerKeyBytes,budget):format==4?NativeModel.ModelBeginScene(path,1,fps,budget,approximate?1:0):NativeModel.ModelBegin(path,budget);
-                if(token==0)throw new System.IO.IOException("Model input, native budget or handle limit is invalid.");}
-                int result=format!=0?1:NativeModel.ModelStep(token);if(result<0)throw new System.IO.IOException("Invalid or truncated model package, or insufficient native memory.");if(result==0){Task.Run(Step);return;}cancellation.ThrowIfCancellationRequested();var model=new Model(token);token=0;Completion.SetResult(model);}catch(Exception error){if(token!=0){try{NativeModel.ModelDispose(token);}catch(Exception closeError){error=closeError;}token=0;}Completion.SetException(error);}}
+                if(token==0)throw new global::System.IO.IOException("Model input, native budget or handle limit is invalid.");}
+                int result=format!=0?1:NativeModel.ModelStep(token);if(result<0)throw new global::System.IO.IOException("Invalid or truncated model package, or insufficient native memory.");if(result==0){Task.Run(Step);return;}cancellation.ThrowIfCancellationRequested();var model=new Model(token);token=0;Completion.SetResult(model);}catch(Exception error){if(token!=0){try{NativeModel.ModelDispose(token);}catch(Exception closeError){error=closeError;}token=0;}Completion.SetException(error);}}
+    }
+    private sealed class MemoryJ3dWork
+    {
+        private byte[]? data;private readonly int budget;private readonly CancellationToken cancellation;
+        internal readonly TaskCompletionSource<Model> Completion=new TaskCompletionSource<Model>();
+        internal MemoryJ3dWork(byte[] data,int budget,CancellationToken cancellation){this.data=data;this.budget=budget;this.cancellation=cancellation;}
+        internal void Step()
+        {
+            int token=0;
+            try
+            {
+                cancellation.ThrowIfCancellationRequested();
+                token=NativeModel.ModelJ3dMemory(data!,budget);
+                if(token==0)throw new global::System.IO.InvalidDataException("Unsupported or malformed J3D source, or insufficient native budget.");
+                cancellation.ThrowIfCancellationRequested();
+                var model=new Model(token);token=0;Completion.SetResult(model);
+            }
+            catch(Exception error)
+            {
+                if(token!=0)NativeModel.ModelDispose(token);
+                Completion.SetException(error);
+            }
+            finally{data=null;}
+        }
     }
     private sealed class ResidencyWork
     {
@@ -240,18 +276,18 @@ public sealed class Model : IDisposable
         {
             try
             {
-                if(pending!=null){if(!pending.IsCompleted){Scheduler.Post(Step);return;}pending.Wait();pending=null;if(restore&&NativeModel.ModelCopy(model.Token,position,buffer,count,1)<0)throw new System.IO.IOException("Model restore copy failed.");position+=count;}
+                if(pending!=null){if(!pending.IsCompleted){Scheduler.Post(Step);return;}pending.Wait();pending=null;if(restore&&NativeModel.ModelCopy(model.Token,position,buffer,count,1)<0)throw new global::System.IO.IOException("Model restore copy failed.");position+=count;}
                 cancellation.ThrowIfCancellationRequested();model.Check();
                 if(!begun){length=NativeModel.ModelStat(model.Token,2);storage=restore?model.cold:Aram.Allocate(length);if(restore&&NativeModel.ModelRestoreBegin(model.Token)<0)throw new OutOfMemoryException("Model restore exceeds its native budget.");begun=true;}
                 if(position==length)
                 {
-                    if(restore){if(NativeModel.ModelRestoreEnd(model.Token,1)<0)throw new System.IO.IOException("Model restore validation or instance budget failed.");}
+                    if(restore){if(NativeModel.ModelRestoreEnd(model.Token,1)<0)throw new global::System.IO.IOException("Model restore validation or instance budget failed.");}
                     else{if(NativeModel.ModelUnload(model.Token)<0)throw new InvalidOperationException("End the render frame before unloading a model.");if(model.cold!=null)model.cold.Dispose();model.cold=storage;storage=null;}
                     model.EndWork();Completion.SetResult(0);return;
                 }
                 count=length-position;if(count>buffer.Length)count=buffer.Length;
                 if(restore)pending=storage!.ReadAsync(position,buffer,0,count,cancellation);
-                else{if(NativeModel.ModelCopy(model.Token,position,buffer,count,0)<0)throw new System.IO.IOException("Model snapshot failed.");pending=storage!.WriteAsync(buffer,0,position,count,cancellation);}
+                else{if(NativeModel.ModelCopy(model.Token,position,buffer,count,0)<0)throw new global::System.IO.IOException("Model snapshot failed.");pending=storage!.WriteAsync(buffer,0,position,count,cancellation);}
                 Scheduler.Post(Step);
             }
             catch(Exception error)

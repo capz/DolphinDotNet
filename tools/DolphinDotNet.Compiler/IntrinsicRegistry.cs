@@ -98,6 +98,7 @@ internal static class IntrinsicRegistry
             ("Dolphin.Numerics.NativeNumeric",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Text.NativeText",_)=>IntrinsicKind.NativeStorage,
             ("System.String",".ctor") when (parameterCount is 1 or 3&&parameterTypes.FirstOrDefault()=="Char[]")||(parameterCount==2&&parameterTypes.FirstOrDefault()=="Char")=>IntrinsicKind.StringFromChars,
+            ("Dolphin.System.NativeFirmware",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Graphics.NativeModel",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Graphics.NativeGraphics",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Graphics.Raw.NativeGX",_)=>IntrinsicKind.NativeStorage,

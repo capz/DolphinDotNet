@@ -178,3 +178,9 @@ graphics_resource_boundaries_test: graphics_resource_boundaries_test.c ../source
 
 display_mode_test: display_mode_test.c ../include/dnd_display_gx.inc
 	$(CC) $(CFLAGS) display_mode_test.c -o $@
+
+.PHONY: system_firmware_native_test
+system_firmware_native_test:
+	$(CC) $(CFLAGS) -DDND_FIRMWARE_TEST system_firmware_native_test.c ../source/system_firmware.c -o /tmp/dnd-system-firmware-native-test
+	/tmp/dnd-system-firmware-native-test
+test: system_firmware_native_test

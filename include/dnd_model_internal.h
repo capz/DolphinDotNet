@@ -1,6 +1,7 @@
 #ifndef DND_MODEL_INTERNAL_H
 #define DND_MODEL_INTERNAL_H
 #include "dnd_model.h"
+#include "dnd_model_material.h"
 #define DND_MODEL_SLOTS 64
 #define DND_INSTANCE_SLOTS 128
 #define DND_MODEL_LIMIT (16u * 1024u * 1024u)
@@ -53,6 +54,8 @@ typedef struct {
   DndTexture *texture;
   DndSkin *skin;
   DndClip *clip;
+  DndAuthoredMaterial *authored;
+  unsigned authored_count;
 } DndModel;
 typedef struct {
   int token, clip, next;
@@ -60,7 +63,9 @@ typedef struct {
   float time, next_time, speed, fade, elapsed;
   DndModel *model;
   unsigned budget, bytes;
-  DndPose *pose, *other;
+  DndPose *pose, *other, *offset;
+  unsigned char *offset_set, *color_set;
+  float *colors;
   float *global;
   unsigned char *done;
   float **vertices;
@@ -68,6 +73,10 @@ typedef struct {
   unsigned *draw_order;
   float *draw_depth;
 } DndInstance;
+static inline bool dnd_model_translucent(const DndInstance *in,unsigned material) {
+  return (in->model->material[material].mode&4)||
+    (in->color_set&&(in->color_set[material*4]&2)&&in->colors[material*16+3]<255);
+}
 extern DndModel *dnd_models[DND_MODEL_SLOTS];
 extern DndInstance *dnd_instances[DND_INSTANCE_SLOTS];
 extern bool dnd_model_frame_active;
@@ -78,6 +87,8 @@ void *dnd_model_alloc(unsigned size, unsigned *used, unsigned budget);
 void dnd_model_free(void *p, unsigned *used);
 DndModel *dnd_model_find(int token, bool closed);
 int dnd_model_begin_data(const unsigned char *bytes, unsigned length, int budget);
+int dnd_model_begin_authored_data(const unsigned char *bytes,unsigned length,int budget,
+                                 const DndAuthoredMaterial *materials,unsigned count);
 DndInstance *dnd_instance_find(int token);
 void dnd_model_release(DndModel *model);
 void dnd_model_identity(float m[16]);

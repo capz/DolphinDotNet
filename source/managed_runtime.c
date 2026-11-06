@@ -44,6 +44,8 @@ const DndType DND_TYPE_KEY_NOT_FOUND_EXCEPTION = {"System.Collections.Generic.Ke
 const DndType DND_TYPE_NOT_SUPPORTED_EXCEPTION = {"System.NotSupportedException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_OUT_OF_MEMORY_EXCEPTION = {"System.OutOfMemoryException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_IO_EXCEPTION = {"System.IO.IOException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_INVALID_DATA_EXCEPTION = {"System.IO.InvalidDataException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+const DndType DND_TYPE_END_OF_STREAM_EXCEPTION = {"System.IO.EndOfStreamException", &DND_TYPE_IO_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_FILE_NOT_FOUND_EXCEPTION = {"System.IO.FileNotFoundException", &DND_TYPE_IO_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_DIRECTORY_NOT_FOUND_EXCEPTION = {"System.IO.DirectoryNotFoundException", &DND_TYPE_IO_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 const DndType DND_TYPE_UNAUTHORIZED_EXCEPTION = {"System.UnauthorizedAccessException", &DND_TYPE_SYSTEM_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
@@ -473,16 +475,16 @@ DndArray *dnd_array_clone(DndManagedHeap *heap, DndArray *source) {
     size_t bytes = sizeof(DndArray) + payload;
     DndObject *root = (DndObject *)source;
     DndObject **slots[] = { &root };
-    DndRootSet roots;
-    dnd_roots_init(&roots, slots, 1);
-    dnd_root_add(&roots, &root);
-    DndGcRootRegistration registration = {0};
-    if (!dnd_gc_register_roots(&registration, &roots)) return NULL;
+    /* This root lives for one synchronous allocation, like the other native
+     * array helpers. Use the active frame stack rather than the persistent
+     * registration list (which GCC diagnoses as an escaping local address). */
+    DndGcFrame frame;
+    dnd_gc_frame_push(&frame, slots, 1);
     DndArray *copy = (DndArray *)allocate(heap, &DND_TYPE_ARRAY, bytes);
     if (copy)
         memcpy((uint8_t *)copy + sizeof(DndObject),
-            (uint8_t *)source + sizeof(DndObject), bytes - sizeof(DndObject));
-    dnd_gc_unregister_roots(&registration);
+            (uint8_t *)root + sizeof(DndObject), bytes - sizeof(DndObject));
+    dnd_gc_frame_pop(&frame);
     return copy;
 }
 

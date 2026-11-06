@@ -33,19 +33,23 @@ void *__real_realloc(void *data,size_t size);
 void *__wrap_malloc(size_t size){allocations++;return __real_malloc(size);}
 void *__wrap_calloc(size_t count,size_t size){allocations++;return __real_calloc(count,size);}
 void *__wrap_realloc(void *data,size_t size){allocations++;return __real_realloc(data,size);}
-typedef struct {int a,b,c,d,op,dest,coord,tex,raster,konst,alpha[4],direct,swap;} Stage;
+typedef struct {int a,b,c,d,op,dest,coord,tex,raster,konst,alpha[4],alpha_clamp,direct,swap;} Stage;
 typedef struct {
   int count,texgens,cull,zwrite,blend,src,dst,compare,cutoff;
   Stage stages[16]; GXColor colors[4],konst[4]; GXTexObj texture,secondary;
   float position[9],uv[6],world_x; GXColor vertex[3];
 } Draw;
 static Draw state,record[16];static int draws,restores,position_index,color_index,uv_index,texture_loads,light_loads,vertex_invalidations;
+static bool authored_test;
+static GXColorS10 authored_colors[4];
+static int authored_rgb_op[5],authored_alpha_op[5],authored_depth_location,authored_dither;
+static int authored_tex_source,authored_tex_id;static Mtx authored_tex_matrix;
 static const unsigned char *indexed_arrays[32];static int indexed_stride[32],indexed_positions,indexed_normals,indexed_uvs,skin_normal_reads;
 static GXColor indexed_tint;static Mtx indexed_normal;
 void GX_SetChanMatColor(int channel,GXColor c){assert(channel==GX_COLOR0A0);indexed_tint=c;}
-void GX_SetChanAmbColor(int channel,GXColor c){assert(channel==GX_COLOR0A0&&c.r==64&&c.g==64&&c.b==64);}
+void GX_SetChanAmbColor(int channel,GXColor c){assert(channel==GX_COLOR0A0);if(!authored_test)assert(c.r==64&&c.g==64&&c.b==64);}
 void GX_InitLightPos(GXLightObj *p,float x,float y,float z){(void)p;assert(x==0&&y==0&&z==1000000);}
-void GX_InitLightColor(GXLightObj *p,GXColor c){(void)p;assert(c.r==191&&c.g==191&&c.b==191);}
+void GX_InitLightColor(GXLightObj *p,GXColor c){(void)p;if(!authored_test)assert(c.r==191&&c.g==191&&c.b==191);}
 void GX_InitLightAttn(GXLightObj *p,float a,float b,float c,float d,float e,float f){(void)p;assert(a==1&&b==0&&c==0&&d==1&&e==0&&f==0);}
 void GX_LoadLightObj(GXLightObj *p,int slot){(void)p;assert(slot==GX_LIGHT0);light_loads++;}
 void GX_SetArray(int attribute,void *p,int stride){assert(attribute>=0&&attribute<32&&(stride==80||stride==24));indexed_arrays[attribute]=p;indexed_stride[attribute]=stride;}
@@ -60,14 +64,18 @@ void GX_SetTevDirect(int s){state.stages[s].direct=1;}
 void GX_SetTevSwapMode(int s,int r,int t){assert(r==0&&t==0);state.stages[s].swap=1;}
 void GX_SetTevSwapModeTable(int t,int r,int g,int b,int a){assert(t==0&&r==0&&g==1&&b==2&&a==3);}
 void GX_SetTevColor(int s,GXColor c){state.colors[s]=c;}
+void GX_SetTevColorS10(int s,GXColorS10 c){assert(s>=0&&s<4);authored_colors[s]=c;}
+void GX_SetZCompLoc(int location){authored_depth_location=location;}
+void GX_SetDither(int enabled){authored_dither=enabled;}
+void GX_LoadTexMtxImm(Mtx matrix,int slot,int projection){assert(slot==30&&projection==1);memcpy(authored_tex_matrix,matrix,sizeof(Mtx));}
 void GX_SetTevKColor(int s,GXColor c){state.konst[s]=c;}
 void GX_SetTevOrder(int s,int c,int t,int r){state.stages[s].coord=c;state.stages[s].tex=t;state.stages[s].raster=r;}
 void GX_SetTevKColorSel(int s,int k){state.stages[s].konst=k;}
-void GX_SetTevKAlphaSel(int s,int k){(void)s;assert(k==GX_TEV_KASEL_1);}
+void GX_SetTevKAlphaSel(int s,int k){(void)s;assert(k==GX_TEV_KASEL_1||(authored_test&&s>=1&&s<=2&&k==GX_TEV_KASEL_K3_A));}
 void GX_SetTevColorIn(int s,int a,int b,int c,int d){Stage *p=&state.stages[s];p->a=a;p->b=b;p->c=c;p->d=d;}
-void GX_SetTevColorOp(int s,int op,int bias,int scale,int clamp,int dest){assert(!bias&&!scale&&clamp);state.stages[s].op=op;state.stages[s].dest=dest;}
+void GX_SetTevColorOp(int s,int op,int bias,int scale,int clamp,int dest){if(!authored_test)assert(!bias&&!scale&&clamp);state.stages[s].op=op;state.stages[s].dest=dest;int values[]={op,bias,scale,clamp,dest};memcpy(authored_rgb_op,values,sizeof(values));}
 void GX_SetTevAlphaIn(int s,int a,int b,int c,int d){int *p=state.stages[s].alpha;p[0]=a;p[1]=b;p[2]=c;p[3]=d;}
-void GX_SetTevAlphaOp(int s,int op,int bias,int scale,int clamp,int dest){(void)s;assert(!op&&!bias&&!scale&&clamp&&!dest);}
+void GX_SetTevAlphaOp(int s,int op,int bias,int scale,int clamp,int dest){state.stages[s].alpha_clamp=clamp;if(!authored_test)assert(!op&&!bias&&!scale&&clamp&&!dest);int values[]={op,bias,scale,clamp,dest};memcpy(authored_alpha_op,values,sizeof(values));}
 void GX_SetNumTexGens(int n){state.texgens=n;}
 void GX_InitTexObj(GXTexObj *t,void *p,u16 w,u16 h,int f,int s,int v,int m){
  /* Host ABI padding is not GX state. Vary it to catch raw-struct comparisons. */
@@ -79,13 +87,14 @@ void GX_InitTexObjLOD(GXTexObj *t,int min,int mag,float lo,float hi,float bias,i
 void GX_LoadTexObj(GXTexObj *t,int slot){assert((slot==0||slot==1)&&state.count==-1);texture_loads++;if(slot==0)state.texture=*t;else state.secondary=*t;}
 void GX_SetCullMode(int c){state.cull=c;}
 void GX_SetZMode(int e,int c,int w){assert(e&&c==GX_LEQUAL);state.zwrite=w;}
-void GX_SetBlendMode(int m,int s,int d,int op){assert(!op);state.blend=m;state.src=s;state.dst=d;}
-void GX_SetAlphaCompare(int c,int cutoff,int op,int other,int ref){assert(!op&&other==GX_ALWAYS&&!ref);state.compare=c;state.cutoff=cutoff;}
+void GX_SetBlendMode(int m,int s,int d,int op){if(!authored_test)assert(!op);state.blend=m;state.src=s;state.dst=d;}
+void GX_SetAlphaCompare(int c,int cutoff,int op,int other,int ref){if(!authored_test)assert(!op&&other==GX_ALWAYS&&!ref);state.compare=c;state.cutoff=cutoff;}
 void GX_Begin(int p,int f,u16 n){assert(p==GX_TRIANGLES&&f==0&&n==3&&state.count>0);position_index=color_index=uv_index=0;
- for(int i=0;i<state.count;i++){Stage *s=&state.stages[i];assert(s->direct==1&&s->swap==1&&s->raster==GX_COLOR0A0);
- if(s->tex==GX_TEXMAP1)assert(state.texgens==2&&s->coord==GX_TEXCOORD1);else {assert(s->coord==(state.texture.data?GX_TEXCOORD0:GX_TEXCOORDNULL));assert(s->tex==(state.texture.data?GX_TEXMAP0:GX_TEXMAP_NULL));}
- assert(s->alpha[0]==GX_CA_ZERO&&s->alpha[1]==(state.texture.data?GX_CA_TEXA:GX_CA_ZERO));
- assert(s->alpha[2]==(state.texture.data?GX_CA_RASA:GX_CA_ZERO)&&s->alpha[3]==(state.texture.data?GX_CA_ZERO:GX_CA_RASA));}}
+ for(int i=0;i<state.count;i++){Stage *s=&state.stages[i];assert(s->direct==1&&s->swap==1&&(s->raster==GX_COLOR0A0||(authored_test&&i>0&&s->raster==GX_COLORNULL)));
+ if(authored_test&&i>0){assert(s->coord==GX_TEXCOORDNULL&&s->tex==GX_TEXMAP_NULL);}
+ else if(s->tex==GX_TEXMAP1)assert(state.texgens==2&&s->coord==GX_TEXCOORD1);else {assert(s->coord==(state.texture.data?GX_TEXCOORD0:GX_TEXCOORDNULL));assert(s->tex==(state.texture.data?GX_TEXMAP0:GX_TEXMAP_NULL));}
+ if(!authored_test){assert(s->alpha[0]==GX_CA_ZERO&&s->alpha[1]==(state.texture.data?GX_CA_TEXA:GX_CA_ZERO));
+ assert(s->alpha[2]==(state.texture.data?GX_CA_RASA:GX_CA_ZERO)&&s->alpha[3]==(state.texture.data?GX_CA_ZERO:GX_CA_RASA));}}}
 void GX_Position3f32(float x,float y,float z){assert(position_index<9);state.position[position_index++]=x;state.position[position_index++]=y;state.position[position_index++]=z;}
 void GX_Color4u8(u8 r,u8 g,u8 b,u8 a){assert(color_index<3);state.vertex[color_index++]=(GXColor){r,g,b,a};}
 void GX_TexCoord2f32(float u,float v){assert(uv_index<6);state.uv[uv_index++]=u;state.uv[uv_index++]=v;}
@@ -116,7 +125,7 @@ void GX_SetChanCtrl(int channel,int enable,int ambient,int material,int lights,i
   else assert(channel==GX_ALPHA0&&!enable&&lights==GX_LIGHTNULL&&diffuse==GX_DF_NONE);
  }
 }
-void GX_SetTexCoordGen(int coordinate,int kind,int source,int matrix){(void)coordinate;(void)kind;(void)source;(void)matrix;}
+void GX_SetTexCoordGen(int coordinate,int kind,int source,int matrix){(void)coordinate;(void)kind;authored_tex_source=source;authored_tex_id=matrix;}
 static int effect_create(int count,int textured) {
  DndArray *a=calloc(1,sizeof(*a)+176+count*8);assert(a);a->element_size=1;a->length=176+count*8;
  unsigned char *p=a->data;memcpy(p,"DNEF",4);p[4]=1;p[8]=count;p[12]=textured;p[16]=1;
