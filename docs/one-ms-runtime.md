@@ -2,7 +2,7 @@
 
 This work targets foreground execution time on GameCube, without adding worker threads. The engine evidence is in the accompanying Hypercube worktree under `docs/measurements/one-ms`.
 
-The changes use GX indexed arrays for uniform-color unlit meshes, keeping the existing vertex allocation and index ordering. Lit, generated-UV and varying-color meshes retain their previous path. Mesh creation/update invalidates the vertex cache. Switching to immediate geometry restores vertex/channel state.
+The changes use GX indexed arrays for uniform-color unlit meshes, keeping the existing vertex allocation and index ordering. Unlit varying-color meshes with identity material tint also use indexed color arrays; see [the follow-up and controlled measurements](indexed-color-submission.md). Lit, generated-UV and nonwhite varying-color tint paths retain direct submission. Mesh creation/update invalidates the vertex cache. Switching to immediate geometry restores vertex/channel state.
 
 `OverlayGlyphMode.Atlas` adds one nearest-filtered I4 quad per character. Existing geometry modes remain available. Stable console geometry is cached as a geometry-only GX command list; state is configured outside the list. A completed-frame serial prevents rewriting in-flight commands, allocation failure falls back to immediate text, and shutdown releases caches after a GPU wait. Two caches are bounded to approximately 146 KiB combined; allocation is lazy.
 

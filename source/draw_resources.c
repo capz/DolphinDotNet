@@ -18,6 +18,7 @@ __attribute__((weak)) int dnd_ipl_font_build(uint8_t *a,size_t b,int32_t *m,size
 __attribute__((weak)) void dnd_draw_backend_publish_texture(void){}
 __attribute__((weak)) void dnd_draw_backend_mesh_changed(void){}
 __attribute__((weak)) void dnd_draw_backend_2d_projection(float w,float h){dnd_draw_backend_2d((int)w,(int)h);}
+__attribute__((weak)) bool dnd_draw_backend_mesh_colors(const DndDrawVertex *v,const uint16_t *i,int n,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)i;(void)n;(void)t;(void)m;(void)w;return false;}
 __attribute__((weak)) bool dnd_draw_backend_mesh(const DndDrawVertex *v,const uint16_t *i,int n,uint32_t c,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)i;(void)n;(void)c;(void)t;(void)m;(void)w;return false;}
 #endif
 
@@ -373,7 +374,8 @@ static int mesh_submit(Resource *r,int tex,DndDrawTexture tx,DndDrawTexture extr
     DndDrawMaterial material={color,flags,cutoff,effect,secondary?&extra:NULL};
     DndDrawVertex *v=(DndDrawVertex*)r->data;uint16_t *idx=(uint16_t*)(r->data+r->vertices*sizeof(DndDrawVertex));
     int count=r->indices?r->indices:r->vertices;
-    if(r->uniform_color&&dnd_draw_backend_mesh(v,r->indices?idx:NULL,count,r->mesh_color,tex?&tx:NULL,&material,transform))
+    if(r->uniform_color?dnd_draw_backend_mesh(v,r->indices?idx:NULL,count,r->mesh_color,tex?&tx:NULL,&material,transform):
+       dnd_draw_backend_mesh_colors(v,r->indices?idx:NULL,count,tex?&tx:NULL,&material,transform))
     {dnd_performance_add_triangles((uint32_t)count/3);return 0;}
     for(int start=0;start<count;) {
         int n=count-start;if(n>768)n=768;
