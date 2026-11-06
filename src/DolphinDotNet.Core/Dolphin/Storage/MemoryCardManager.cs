@@ -31,6 +31,7 @@ public sealed class ManagedCardSave
     public string Title=>Text(56,32);
     public string Comment=>Text(88,32);
     public byte[] RawFilename {get{var name=new byte[32];Array.Copy(metadata,24,name,0,32);return name;}}
+    public bool IconAnimationBounces=>(metadata[9]&4)!=0;
     public int IconFrameCount {get{int count=0;int formats=metadata[22]<<8|metadata[23];for(int i=0;i<8;i++)if(((formats>>(i*2))&3)!=0)count=i+1;return count;}}
     public int IconFrameDuration(int frame){if(frame<0||frame>7)throw new ArgumentOutOfRangeException("frame");return ((metadata[10]<<8|metadata[11])>>(2*frame)&3)*4;}
 }
