@@ -2,23 +2,26 @@ static bool vertex_cache_dirty=true;
 static const DndDrawVertex *vertex_cache_source;
 static int vertex_cache_layout=-1;
 void dnd_draw_backend_mesh_changed(void){vertex_cache_dirty=true;}
-/* Uniform-color, unlit meshes can use GX indexed arrays directly. The CPU
+/* Unlit meshes can use GX indexed arrays directly. Varying colors require
+ * identity material tint to preserve the direct path's integer tint semantics.
+ * Uniform-color meshes continue to use the material register. The CPU
  * sends indices; GX fetches the existing immutable vertex allocation. No
  * expanded staging copy or additional persistent geometry allocation. */
-bool dnd_draw_backend_mesh(const DndDrawVertex *vertices,const uint16_t *indices,int count,
+static bool indexed_mesh(const DndDrawVertex *vertices,const uint16_t *indices,int count,
                            uint32_t uniform_color,const DndDrawTexture *texture,
-                           const DndDrawMaterial *material,const float *world) {
+                           const DndDrawMaterial *material,const float *world,bool vertex_colors) {
 #if !defined(DND_INDEXED_MESHES) || DND_INDEXED_MESHES
-    if(material->flags&224)return false; /* Keep lit and generated-UV paths unchanged. */
+    if((material->flags&224)||(vertex_colors&&material->color!=0xffffffffu))return false; /* Keep lit and generated-UV paths unchanged. */
     DndVertexState state;
     if(!draw_state(texture,material,world,&state))return true;
-    int layout=(texture?1:0)|(material->secondary?2:0);
+    int layout=(texture?1:0)|(material->secondary?2:0)|(vertex_colors?4:0);
     if(vertex_cache_dirty||vertex_cache_source!=vertices||vertex_cache_layout!=layout){GX_InvVtxCache();vertex_cache_dirty=false;vertex_cache_source=vertices;vertex_cache_layout=layout;}
-    GX_SetChanCtrl(GX_COLOR0,GX_DISABLE,GX_SRC_REG,GX_SRC_REG,GX_LIGHTNULL,GX_DF_NONE,GX_AF_NONE);
-    GX_SetChanCtrl(GX_ALPHA0,GX_DISABLE,GX_SRC_REG,GX_SRC_REG,GX_LIGHTNULL,GX_DF_NONE,GX_AF_NONE);
+    GX_SetChanCtrl(GX_COLOR0,GX_DISABLE,GX_SRC_REG,vertex_colors?GX_SRC_VTX:GX_SRC_REG,GX_LIGHTNULL,GX_DF_NONE,GX_AF_NONE);
+    GX_SetChanCtrl(GX_ALPHA0,GX_DISABLE,GX_SRC_REG,vertex_colors?GX_SRC_VTX:GX_SRC_REG,GX_LIGHTNULL,GX_DF_NONE,GX_AF_NONE);
     GX_SetChanMatColor(GX_COLOR0A0,color(tint(uniform_color,material->color)));
     GX_ClearVtxDesc();GX_SetVtxDesc(GX_VA_POS,GX_INDEX16);
     GX_SetArray(GX_VA_POS,(void*)&vertices[0].x,sizeof(DndDrawVertex));
+    if(vertex_colors){GX_SetVtxDesc(GX_VA_CLR0,GX_INDEX16);GX_SetArray(GX_VA_CLR0,(void*)&vertices[0].color,sizeof(DndDrawVertex));}
     if(texture||material->secondary){
         GX_SetVtxDesc(GX_VA_TEX0,GX_INDEX16);
         GX_SetArray(GX_VA_TEX0,(void*)&vertices[0].u,sizeof(DndDrawVertex));
@@ -34,6 +37,7 @@ bool dnd_draw_backend_mesh(const DndDrawVertex *vertices,const uint16_t *indices
         for(int j=0;j<n;j++) {
             u16 index=indices?indices[start+j]:(u16)(start+j);
             GX_Position1x16(index);
+            if(vertex_colors)GX_Color1x16(index);
             if(texture||material->secondary)GX_TexCoord1x16(index);
             if(material->secondary)GX_TexCoord1x16(index);
         }
@@ -43,7 +47,12 @@ bool dnd_draw_backend_mesh(const DndDrawVertex *vertices,const uint16_t *indices
      * cached console explicitly restore descriptors when switching layouts. */
     indexed_layout=true;return true;
 #else
-    (void)vertices;(void)indices;(void)count;(void)uniform_color;(void)texture;(void)material;(void)world;
+    (void)vertex_colors;(void)vertices;(void)indices;(void)count;(void)uniform_color;(void)texture;(void)material;(void)world;
     return false;
 #endif
 }
+
+bool dnd_draw_backend_mesh(const DndDrawVertex *v,const uint16_t *i,int n,uint32_t c,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w)
+{return indexed_mesh(v,i,n,c,t,m,w,false);}
+bool dnd_draw_backend_mesh_colors(const DndDrawVertex *v,const uint16_t *i,int n,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w)
+{return indexed_mesh(v,i,n,0xffffffffu,t,m,w,true);}

@@ -375,6 +375,7 @@ void dnd_graphics_model_end(void){dnd_graphics_present();}
 #ifndef DND_GRAPHICS_TEST
 void dnd_draw_backend_overlay_shutdown(void){}
 void dnd_draw_backend_mesh_changed(void){}
+bool dnd_draw_backend_mesh_colors(const DndDrawVertex *v,const uint16_t *i,int n,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)i;(void)n;(void)t;(void)m;(void)w;return false;}
 bool dnd_draw_backend_mesh(const DndDrawVertex *v,const uint16_t *i,int n,uint32_t c,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)i;(void)n;(void)c;(void)t;(void)m;(void)w;return false;}
 bool dnd_draw_backend_immediate_ready(void){return true;}
 void dnd_draw_backend_invalidate_efb(void){}
