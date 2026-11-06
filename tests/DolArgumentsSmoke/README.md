@@ -17,3 +17,13 @@ python verify_native.py --caller <caller-dir>/bin/Release/net8.0/DolArgumentsSmo
 in Dolphin 2503. It checked five arguments, spaces, UTF-8 and all NUL separators.
 It is not a Swiss compatibility test or physical-console result. No user desktop
 or host clock is involved. The standalone fixture uses no copyrighted game data.
+
+A second native acceptance run launched the full official Swiss v0.6r2119 ELF
+load segments, losslessly repacked as an uncompressed DOL. Its real libogc
+`__system_argv` contained all five expected strings; see
+`native-review/official-swiss-startup.json`. This exercises the larger, low-address
+payload and safe stage placement as well as the shutdown-time argv copy. It does
+not establish Swiss UI/game autoboot or physical GC Loader acceptance: the
+Dolphin window was black. The release's separate packed wrapper probes expansion
+hardware unsupported by Dolphin 2503. Samples PR #18 records exact release,
+segment and repacked-executable provenance and the reproduction helpers.
