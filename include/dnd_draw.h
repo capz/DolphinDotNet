@@ -18,6 +18,12 @@ bool dnd_draw_backend_mesh(const DndDrawVertex *vertices,const uint16_t *indices
                            const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world);
 bool dnd_draw_backend_mesh_colors(const DndDrawVertex *vertices,const uint16_t *indices,int count,
                            const DndDrawTexture *texture,const DndDrawMaterial *material,const float *world);
+bool dnd_draw_backend_mesh_color_stream(const DndDrawVertex*,const uint16_t*,int,const uint32_t*,const DndDrawTexture*,const DndDrawMaterial*,const float*);
+int dnd_mesh_color_view(int token,DndArray *colors);
+int dnd_mesh_color_update(int token,DndArray *colors);
+int dnd_mesh_prepare_passes(int token);
+int dnd_mesh_draw_passes(int token,DndArray *world,DndArray *colors,DndArray *uv,int passes,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect);
+bool dnd_draw_backend_mesh_passes(const DndDrawVertex*,uint32_t,const DndDrawTexture*,const DndDrawMaterial*,const float*,const unsigned char*,int,int,const unsigned char*,const float*,int);
 void dnd_draw_backend_mesh_changed(void);
 void dnd_draw_backend_overlay_shutdown(void);
 /* One graphics owner and one active pass: 1=3D, 2=2D, 3=raw, 4=compatibility immediate. */

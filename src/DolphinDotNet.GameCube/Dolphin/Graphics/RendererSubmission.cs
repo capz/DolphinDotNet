@@ -29,6 +29,15 @@ public sealed partial class Renderer
         } finally {for(int i=0;i<count;i++)meshWorlds[i]=null!;}
 
     }
+    /// <summary>Submit prepared ordered color/UV passes with one managed/native
+    /// crossing. Keeps each GX draw and the caller's material state unchanged.</summary>
+    public void DrawMeshPasses(MeshPasses passes,Material material,Transform transform)
+    {
+        if(!active)throw new InvalidOperationException("Begin a 3D pass first.");
+        if(passes==null||material==null||transform==null)throw new ArgumentNullException();
+        passes.Geometry.Check();material.Check();ApplyMaterial(material);
+        GraphicsDevice.Check(NativeGraphics.MeshDrawPasses(passes.Geometry.Token,transform.WorldMatrix,passes.Colors,passes.Uv,passes.Count,material.TextureToken,material.SecondaryTextureToken,(int)material.Color.Packed,material.Flags,material.AlphaCutoff,material.EffectToken),"Repeated passes require single-texture unlit uniform-color geometry and valid prepared variants.");
+    }
     internal void DrawMeshTokens(int[] tokens,float[][] worlds,int count,Material material)
     {material.Check();ApplyMaterial(material);GraphicsDevice.Check(NativeGraphics.MeshDrawMany(tokens,worlds,count,material.TextureToken,material.SecondaryTextureToken,material.Color.Packed,material.Flags,material.AlphaCutoff,material.EffectToken),"Invalid mesh batch, transform or material.");}
     internal void DrawModelTokens(int[] tokens,float[] worlds,int count)

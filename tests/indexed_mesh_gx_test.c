@@ -33,6 +33,10 @@ static void GX_Position1x16(u16 index){last_index=index;positions++;checksum=che
 static void GX_Color1x16(u16 index){assert(index==last_index);vertex_colors++;}
 static void GX_TexCoord1x16(u16 index){assert(index==last_index);texcoords++;}
 static void GX_End(void){assert(texcoords==positions*expected_texcoords);}
+static bool style_options_active;static float style_options[40];
+static int uv_calls,list_calls;static float observed_uv[2];static GXColor pass_colors[2];
+static void managed_uv(int slot){assert(slot==0);observed_uv[uv_calls++]=style_options[8];}
+static void GX_CallDispList(void *data,uint32_t bytes){assert(data&&bytes>0);pass_colors[list_calls++]=material_color;}
 #include "dnd_indexed_mesh.inc"
 int main(void) {
  DndDrawVertex vertices[3]={{0}};uint16_t indices[3]={2,0,1};float world[16]={0};
@@ -69,5 +73,17 @@ int main(void) {
  material.flags=0;begins=positions=texcoords=0;vertex_colors=0;
  assert(dnd_draw_backend_mesh(vertices,indices,3,0xffffffffu,&texture,&material,world));
  assert(vertex_colors==0&&descriptors[GX_VA_CLR0]==0);
+ uint32_t separate[3]={0xff0000ff,0x00ff00ff,0x0000ffff};begins=positions=texcoords=vertex_colors=0;
+ assert(dnd_draw_backend_mesh_color_stream(vertices,indices,3,separate,&texture,&material,world));
+ assert(arrays[GX_VA_CLR0]==separate&&strides[GX_VA_CLR0]==4);
+ float saved[40];for(int i=0;i<40;i++)saved[i]=style_options[i]=(float)i;style_options_active=true;
+ unsigned char commands[32]={0x90,0,3},passes[8]={255,0,0,128,0,255,0,64};float uv[12]={1,0,0,1,.25f,0,1,0,0,1,.75f,0};
+ int prior_states=states;old_draws=recorded_draws;old_binds=recorded_binds;
+ assert(dnd_draw_backend_mesh_passes(vertices,0xffffffff,&texture,&material,world,commands,32,3,passes,uv,2));
+ assert(states==prior_states+1&&list_calls==2&&uv_calls==2&&observed_uv[0]==.25f&&observed_uv[1]==.75f);
+ assert(pass_colors[0].r==255&&pass_colors[0].a==128&&pass_colors[1].g==255&&pass_colors[1].a==64);
+ assert(recorded_draws==old_draws+2&&recorded_binds==old_binds+1&&style_options_active&&memcmp(saved,style_options,sizeof saved)==0);
+ state_valid=false;assert(dnd_draw_backend_mesh_passes(vertices,0xffffffff,&texture,&material,world,commands,32,3,passes,uv,2));
+ assert(list_calls==2&&memcmp(saved,style_options,sizeof saved)==0);
  puts("GX indexed meshes: descriptors, register tint/alpha, UV arrays, index order, cache invalidation, fallbacks and triangle splitting passed.");
 }

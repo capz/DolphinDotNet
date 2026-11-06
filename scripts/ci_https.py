@@ -11,6 +11,7 @@ import sys
 import tempfile
 import threading
 import time
+from string import Template
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tests'))
 from https_fixtures import certificates, main as native_acceptance
@@ -19,6 +20,30 @@ sys.path.insert(0,str(ROOT/'scripts'))
 from build_tls import build
 
 def run(*args,**kwargs):subprocess.run(list(map(str,args)),cwd=ROOT,check=True,**kwargs)
+
+def render_program(roots,entropy,utc,url,wrong):
+    # Substitute only original markers; never rescan random PEM/base64 content.
+    return Template('''using System;using System.IO;using System.Net.Http;using System.Threading.Tasks;
+using Dolphin.Network;using Scheduler=Dolphin.Threading.Tasks.Scheduler;
+class Program {
+static void Wait(Task task){for(int i=0;i<2000000&&!task.IsCompleted;i++){NetworkRuntime.Pump();Scheduler.Pump(16);}task.GetAwaiter().GetResult();}
+static int Main(){try{
+Wait(NetworkRuntime.StartAsync(new NetworkOptions{DnsServers=new[]{Dolphin.Network.IPAddress.Loopback},DnsPort=15353},default));
+var ca=Dolphin.Text.Encoding.ASCII.GetBytes($CA);var seed=new byte[]{$ENTROPY};TlsConfiguration.Initialize(ca,seed,$UTC);
+for(int i=0;i<seed.Length;i++)if(seed[i]!=0)return 1;
+using(var client=new HttpClient()){
+client.DefaultRequestHeaders.Add("authorization","test-secret");
+foreach(string path in new[]{"/final","/relative","/network","/cross","/chunked"}){var task=client.GetStringAsync($URL+path);Wait(task);if(task.GetAwaiter().GetResult()!="OK")return 2;}
+try{Wait(client.GetStringAsync($URL+"/downgrade"));return 3;}catch(IOException){}
+var streamTask=client.GetStreamAsync($URL+"/chunked");Wait(streamTask);using(var stream=streamTask.GetAwaiter().GetResult()){var b=new byte[8];int total=0;while(true){var r=stream.ReadAsync(b,0,b.Length);Wait(r);int n=r.GetAwaiter().GetResult();if(n==0)break;total+=n;}if(total!=2)return 4;}
+try{Wait(client.GetStringAsync($WRONG));return 5;}catch(IOException){}
+try{Wait(client.GetStringAsync($URL+"/truncated"));return 7;}catch(Exception){}
+var cancelled=new System.Threading.CancellationTokenSource();cancelled.Cancel();try{Wait(client.GetAsync($URL+"/final",cancelled.Token));return 8;}catch(OperationCanceledException){}
+}
+TlsConfiguration.Reset();using(var client=new HttpClient()){try{Wait(client.GetStringAsync($URL+"/final"));return 6;}catch(IOException){}}
+NetworkRuntime.Stop();return 0;
+}catch(Exception e){Console.WriteLine(e.Message);return 99;}}
+}''').substitute(CA=json.dumps(roots),ENTROPY=','.join(map(str,entropy)),UTC=str(utc),URL=json.dumps(url),WRONG=json.dumps(wrong))
 
 def main():
     run('dotnet','build','tools/DolphinDotNet.Compiler','-c','Release')
@@ -70,30 +95,9 @@ def main():
                 except OSError:return
                 threading.Thread(target=peer,args=(connection,index),daemon=True).start()
         for i,listener in enumerate(listeners):threading.Thread(target=serve,args=(listener,i),daemon=True).start()
-        ca=json.dumps((folder/'ca.pem').read_text());entropy=','.join(map(str,os.urandom(48)));utc=int(time.time())
         project=folder/'HttpsSmoke.csproj'
         project.write_text(f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include="{ROOT}/src/DolphinDotNet.Core/DolphinDotNet.Core.csproj" /></ItemGroup></Project>')
-        (folder/'Program.cs').write_text('''using System;using System.IO;using System.Net.Http;using System.Threading.Tasks;
-using Dolphin.Network;using Scheduler=Dolphin.Threading.Tasks.Scheduler;
-class Program {
-static void Wait(Task task){for(int i=0;i<2000000&&!task.IsCompleted;i++){NetworkRuntime.Pump();Scheduler.Pump(16);}task.GetAwaiter().GetResult();}
-static int Main(){try{
-Wait(NetworkRuntime.StartAsync(new NetworkOptions{DnsServers=new[]{Dolphin.Network.IPAddress.Loopback},DnsPort=15353},default));
-var ca=Dolphin.Text.Encoding.ASCII.GetBytes(CA);var seed=new byte[]{ENTROPY};TlsConfiguration.Initialize(ca,seed,UTC);
-for(int i=0;i<seed.Length;i++)if(seed[i]!=0)return 1;
-using(var client=new HttpClient()){
-client.DefaultRequestHeaders.Add("authorization","test-secret");
-foreach(string path in new[]{"/final","/relative","/network","/cross","/chunked"}){var task=client.GetStringAsync(URL+path);Wait(task);if(task.GetAwaiter().GetResult()!="OK")return 2;}
-try{Wait(client.GetStringAsync(URL+"/downgrade"));return 3;}catch(IOException){}
-var streamTask=client.GetStreamAsync(URL+"/chunked");Wait(streamTask);using(var stream=streamTask.GetAwaiter().GetResult()){var b=new byte[8];int total=0;while(true){var r=stream.ReadAsync(b,0,b.Length);Wait(r);int n=r.GetAwaiter().GetResult();if(n==0)break;total+=n;}if(total!=2)return 4;}
-try{Wait(client.GetStringAsync(WRONG));return 5;}catch(IOException){}
-try{Wait(client.GetStringAsync(URL+"/truncated"));return 7;}catch(Exception){}
-var cancelled=new System.Threading.CancellationTokenSource();cancelled.Cancel();try{Wait(client.GetAsync(URL+"/final",cancelled.Token));return 8;}catch(OperationCanceledException){}
-}
-TlsConfiguration.Reset();using(var client=new HttpClient()){try{Wait(client.GetStringAsync(URL+"/final"));return 6;}catch(IOException){}}
-NetworkRuntime.Stop();return 0;
-}catch(Exception e){Console.WriteLine(e.Message);return 99;}}
-}'''.replace('CA',ca).replace('ENTROPY',entropy).replace('UTC',str(utc)).replace('URL',json.dumps(f'https://localhost:{ports[0]}')).replace('WRONG',json.dumps(f'https://wrong.example:{ports[0]}/final')))
+        (folder/'Program.cs').write_text(render_program((folder/'ca.pem').read_text(),os.urandom(48),int(time.time()),f'https://localhost:{ports[0]}',f'https://wrong.example:{ports[0]}/final'))
         try:
             for configuration in ('Debug','Release'):
                 run('dotnet','build',project,'-c',configuration)

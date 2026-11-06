@@ -11,7 +11,8 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 test: ipl_font_test
 
-test: display_mode_test graphics_resource_boundaries_test graphics_phase_two_test graphics_submission_test render_state_gx_test overlay_list_test array_fast_test indexed_mesh_gx_test canvas_rectangle_test texture_reuse_test throughput_runtime_test asset_native_test mesh_range_test native_buffer_crc_test file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test jsystem_fixture_telemetry_test asset_compat_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
+test: mesh_streams_test display_mode_test graphics_resource_boundaries_test graphics_phase_two_test graphics_submission_test render_state_gx_test overlay_list_test array_fast_test indexed_mesh_gx_test canvas_rectangle_test texture_reuse_test throughput_runtime_test asset_native_test mesh_range_test native_buffer_crc_test file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test jsystem_fixture_telemetry_test asset_compat_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
+	./mesh_streams_test
 	./display_mode_test
 	./ipl_font_test
 	./graphics_resource_boundaries_test
@@ -145,7 +146,7 @@ clean:
 	rm -f graphics_phase_two_test graphics_submission_test render_state_gx_test canvas_rectangle_test indexed_mesh_gx_test array_fast_test overlay_list_test
 	rm -f texture_reuse_test
 	rm -f asset_native_test throughput_runtime_test
-	rm -f mesh_range_test native_buffer_crc_test
+	rm -f mesh_streams_test mesh_range_test native_buffer_crc_test
 	rm -f file_optimize_test file_extents_test contiguous_write_test dol_test
 	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test jsystem_fixture_telemetry_test asset_compat_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test
 
@@ -176,7 +177,7 @@ graphics_phase_two_test: graphics_phase_two_test.c ../source/draw_resources.c
 graphics_resource_boundaries_test: graphics_resource_boundaries_test.c ../source/draw_resources.c
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $^ $(GC_LDFLAGS) -lm -o $@
 
-display_mode_test: display_mode_test.c ../include/dnd_display_gx.inc
+display_mode_test: mesh_streams_test display_mode_test.c ../include/dnd_display_gx.inc
 	$(CC) $(CFLAGS) display_mode_test.c -o $@
 
 .PHONY: system_firmware_native_test
@@ -184,3 +185,6 @@ system_firmware_native_test:
 	$(CC) $(CFLAGS) -DDND_FIRMWARE_TEST system_firmware_native_test.c ../source/system_firmware.c -o /tmp/dnd-system-firmware-native-test
 	/tmp/dnd-system-firmware-native-test
 test: system_firmware_native_test
+
+mesh_streams_test: mesh_streams_test.c ../source/draw_resources.c ../include/dnd_mesh_streams.inc
+	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections mesh_streams_test.c ../source/draw_resources.c $(GC_LDFLAGS) -lm -o $@
