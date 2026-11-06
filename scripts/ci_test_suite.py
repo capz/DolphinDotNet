@@ -84,6 +84,7 @@ def main(area):
         run("python3","scripts/ci_display.py") # DisplayConfigurationSmoke
         run("python3","scripts/ci_graphics_phase_one.py")
         run("python3","scripts/ci_graphics_phase_two.py")
+        run("python3","scripts/ci_mesh_streams.py")
         build("tests/GraphicsPhaseOneSmoke/GraphicsPhaseOneSmoke.csproj")
         build("tests/GraphicsPhaseTwoSmoke/GraphicsPhaseTwoSmoke.csproj")
         test("tests/TextureStreamingTests")

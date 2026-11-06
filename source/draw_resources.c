@@ -18,6 +18,8 @@ __attribute__((weak)) int dnd_ipl_font_build(uint8_t *a,size_t b,int32_t *m,size
 __attribute__((weak)) void dnd_draw_backend_publish_texture(void){}
 __attribute__((weak)) void dnd_draw_backend_mesh_changed(void){}
 __attribute__((weak)) void dnd_draw_backend_2d_projection(float w,float h){dnd_draw_backend_2d((int)w,(int)h);}
+__attribute__((weak)) bool dnd_draw_backend_mesh_passes(const DndDrawVertex *v,uint32_t c,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w,const unsigned char *d,int b,int n,const unsigned char *p,const float *u,int k){(void)v;(void)c;(void)t;(void)m;(void)w;(void)d;(void)b;(void)n;(void)p;(void)u;(void)k;return false;}
+__attribute__((weak)) bool dnd_draw_backend_mesh_color_stream(const DndDrawVertex *v,const uint16_t *i,int n,const uint32_t *c,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)i;(void)n;(void)c;(void)t;(void)m;(void)w;return false;}
 __attribute__((weak)) bool dnd_draw_backend_mesh_colors(const DndDrawVertex *v,const uint16_t *i,int n,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)i;(void)n;(void)t;(void)m;(void)w;return false;}
 __attribute__((weak)) bool dnd_draw_backend_mesh(const DndDrawVertex *v,const uint16_t *i,int n,uint32_t c,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){(void)v;(void)i;(void)n;(void)c;(void)t;(void)m;(void)w;return false;}
 #endif
@@ -32,7 +34,9 @@ typedef struct {
     bool pending,io_busy;
     bool uniform_color;
     uint32_t mesh_color;
-    int holds;
+    int holds,geometry,extra_bytes;
+    void *command_allocation;
+    unsigned char *commands;
     float logical_width,logical_height;
     int effect;
     int levels;
@@ -45,6 +49,14 @@ static Resource slots[SLOTS];
 static int total_bytes,active_canvas;
 static float identity[16]={1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};
 static DndDrawVertex staging[768];
+static Resource *held_geometry(int token) {
+    int i=(token&1023)-1;
+    if(token<=0||i<0||i>=SLOTS)return NULL;
+    Resource *r=&slots[i];
+    return r->kind==MESH&&r->generation==(token>>10)&&r->holds>0?r:NULL;
+}
+static Resource *mesh_geometry(Resource *r){return r->geometry?held_geometry(r->geometry):r;}
+static const uint32_t *mesh_colors(Resource *r){return r->geometry?(const uint32_t*)r->data:NULL;}
 static Resource *find(int token,int kind) {
     int index=(token&1023)-1;
     if(token<=0 || index<0 || index>=SLOTS) return NULL;
@@ -76,8 +88,11 @@ static int create(int kind,int bytes,int alignment) {
     return 0;
 }
 static void release(Resource *r) {
-    total_bytes-=r->bytes; free(r->allocation);
-    int generation=r->generation; memset(r,0,sizeof(*r)); r->generation=generation;
+    int parent=r->geometry;
+    total_bytes-=r->bytes+r->extra_bytes;free(r->command_allocation);free(r->allocation);
+    int generation=r->generation;memset(r,0,sizeof(*r));r->generation=generation;
+    Resource *base=parent?held_geometry(parent):NULL;
+    if(base&&--base->holds==0&&base->pending)release(base);
 }
 int dnd_draw_release(int token) {
     if(dnd_raw_depth() || token==active_canvas) return -1;
@@ -114,7 +129,7 @@ uint64_t dnd_buffer_held_address(int token,int offset,int count) {
 void dnd_draw_shutdown(void) { active_canvas=0;for(int i=0;i<SLOTS;i++) if(slots[i].kind) release(&slots[i]);dnd_ipl_font_shutdown(); }
 int dnd_draw_live(void) { int n=0;for(int i=0;i<SLOTS;i++) if(slots[i].kind)n++;return n; }
 int dnd_draw_total_bytes(void) { return total_bytes; }
-int dnd_draw_bytes(int token) { Resource *r=find(token,0);return r?r->bytes:-1; }
+int dnd_draw_bytes(int token) { Resource *r=find(token,0);return r?r->bytes+r->extra_bytes:-1; }
 uint64_t dnd_buffer_io_begin(int token,int offset,int count) {
     Resource *r=find(token,BUFFER);
     if(!r || r->holds || r->io_busy || offset<0 || count<0 || offset>r->bytes || count>r->bytes-offset)return 0;
@@ -351,6 +366,8 @@ int dnd_mesh_update(int token,DndArray *a,int offset,int count,int format) {
     for(int start=0;start<count;start+=768) { int n=count-start;if(n>768)n=768;(void)vertices(a,start,n,format,staging);memcpy(r->data+(size_t)(offset+start)*sizeof(DndDrawVertex),staging,(size_t)n*sizeof(DndDrawVertex)); }
     mesh_color(r);dnd_draw_backend_flush(r->data,r->bytes,0);dnd_draw_backend_mesh_changed();return 0;
 }
+#include "dnd_mesh_streams.inc"
+
 int dnd_texture_sampler(int token,int wrap_s,int wrap_t,int min_filter,int mag_filter,float lod_bias) {
     Resource *r=find(token,TEXTURE);
     if(!r || dnd_device_active() || dnd_raw_depth() ||
@@ -372,17 +389,33 @@ static bool texture(int token,DndDrawTexture *out) {
 int dnd_texture_resolve(int token,DndDrawTexture *out){return texture(token,out)?0:-1;}
 static int mesh_submit(Resource *r,int tex,DndDrawTexture tx,DndDrawTexture extra,int secondary,const float *transform,uint32_t color,int flags,float cutoff,const DndDrawEffect *effect) {
     DndDrawMaterial material={color,flags,cutoff,effect,secondary?&extra:NULL};
-    DndDrawVertex *v=(DndDrawVertex*)r->data;uint16_t *idx=(uint16_t*)(r->data+r->vertices*sizeof(DndDrawVertex));
+    Resource *base=mesh_geometry(r);if(!base)return -1;
+    DndDrawVertex *v=(DndDrawVertex*)base->data;uint16_t *idx=(uint16_t*)(base->data+base->vertices*sizeof(DndDrawVertex));
+    const uint32_t *colors=mesh_colors(r);
     int count=r->indices?r->indices:r->vertices;
     if(r->uniform_color?dnd_draw_backend_mesh(v,r->indices?idx:NULL,count,r->mesh_color,tex?&tx:NULL,&material,transform):
-       dnd_draw_backend_mesh_colors(v,r->indices?idx:NULL,count,tex?&tx:NULL,&material,transform))
+       (colors?dnd_draw_backend_mesh_color_stream(v,r->indices?idx:NULL,count,colors,tex?&tx:NULL,&material,transform):
+        dnd_draw_backend_mesh_colors(v,r->indices?idx:NULL,count,tex?&tx:NULL,&material,transform)))
     {dnd_performance_add_triangles((uint32_t)count/3);return 0;}
     for(int start=0;start<count;) {
         int n=count-start;if(n>768)n=768;
-        for(int j=0;j<n;j++)staging[j]=v[r->indices?idx[start+j]:start+j];
+        for(int j=0;j<n;j++){int at=r->indices?idx[start+j]:start+j;staging[j]=v[at];if(colors)staging[j].color=colors[at];}
         dnd_draw_backend_vertices(staging,n,0x90,tex?&tx:NULL,&material,transform);start+=n;
     }
     dnd_performance_add_triangles((uint32_t)count/3);return 0;
+}
+int dnd_mesh_draw_passes(int token,DndArray *world,DndArray *colors,DndArray *uv,int passes,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect) {
+    dnd_performance_drawing_api();
+    Resource *r=find(token,MESH);DndDrawTexture tx;float transform[16];
+    if(dnd_device_pass()!=1||!r||r->geometry||!r->commands||!r->uniform_color||!tex||secondary||flags<0||flags>255||(flags&224)||!isfinite(cutoff)||cutoff<0||cutoff>1||!texture(tex,&tx)||!matrix(world,transform)||passes<1||passes>256||!colors||colors->elements_are_references||colors->element_size!=4||colors->length<(unsigned)passes||!uv||uv->elements_are_references||uv->element_size!=4||uv->length<(unsigned)passes*6)return -1;
+    const float *values=(const float*)uv->data;
+    for(int i=0;i<passes*6;i++)if(!isfinite(values[i]))return -1;
+    Resource *fx=effect?find(effect,EFFECT):NULL;
+    if(effect&&(!fx||(((DndDrawEffect*)fx->data)->texture&2)))return -1;
+    DndDrawMaterial material={color,flags,cutoff,fx?(DndDrawEffect*)fx->data:NULL,NULL};
+    int count=r->indices?r->indices:r->vertices;
+    if(!dnd_draw_backend_mesh_passes((DndDrawVertex*)r->data,r->mesh_color,&tx,&material,transform,r->commands,r->extra_bytes,count,colors->data,values,passes))return -1;
+    dnd_performance_add_triangles((uint32_t)count/3*(unsigned)passes);return 0;
 }
 int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int flags,float cutoff,int effect) {
     return dnd_mesh_draw_material(token,tex,0,world,color,flags,cutoff,effect);
@@ -428,11 +461,13 @@ int dnd_mesh_draw_batch(DndArray *mesh_tokens,int count,int tex,int secondary,Dn
     int staged=0;
     for(int i=0;i<count;i++) {
         Resource *r=find(tokens[i],MESH);
-        const DndDrawVertex *src=(const DndDrawVertex*)r->data;
-        const uint16_t *indices=(const uint16_t*)(r->data+r->vertices*sizeof(DndDrawVertex));
+        Resource *base=mesh_geometry(r);if(!base)return -1;
+        const DndDrawVertex *src=(const DndDrawVertex*)base->data;
+        const uint32_t *colors=mesh_colors(r);
+        const uint16_t *indices=(const uint16_t*)(base->data+base->vertices*sizeof(DndDrawVertex));
         int n=r->indices?r->indices:r->vertices;
         for(int j=0;j<n;j++) {
-            staging[staged++]=src[r->indices?indices[j]:j];
+            int at=r->indices?indices[j]:j;staging[staged]=src[at];if(colors)staging[staged].color=colors[at];staged++;
             if(staged==768) {
                 dnd_draw_backend_vertices(staging,staged,0x90,tex?&tx:NULL,&mat,transform);
                 staged=0;
@@ -691,12 +726,8 @@ int dnd_canvas_geometry(int token,int mesh,int tex,DndArray *world,uint32_t colo
     if(canvas->effect&&(!fx||(((DndDrawEffect*)fx->data)->texture&&!tex)))return -1;
     if(canvas_empty_clip)return 0;
     if(dnd_canvas_flush(token)<0)return -1;
-    DndDrawMaterial material={color,canvas->blend|8|16,0,fx?(DndDrawEffect*)fx->data:NULL,NULL};
-    const DndDrawVertex *vertices=(const DndDrawVertex*)geometry->data;
-    if(!geometry->uniform_color||!dnd_draw_backend_mesh(vertices,NULL,geometry->vertices,
-            geometry->mesh_color,tex?&tx:NULL,&material,transform))
-        dnd_draw_backend_vertices(vertices,geometry->vertices,0x90,tex?&tx:NULL,&material,transform);
-    dnd_performance_add_triangles((uint32_t)geometry->vertices/3);
+    DndDrawTexture extra={0};
+    if(mesh_submit(geometry,tex,tx,extra,0,transform,color,canvas->blend|8|16,0,fx?(DndDrawEffect*)fx->data:NULL)<0)return -1;
     canvas->draws++;return 0;
 }
 

@@ -103,6 +103,10 @@ internal static class NativeGraphics
     internal static int BufferWriteIndices(int token,int offset,ushort[] array,int index,int count) => throw Unsupported();
     internal static int BufferReadBytes(int token,int offset,byte[] array,int index,int count) => throw Unsupported();
     internal static uint BufferCrc32(int token,int offset,int count,uint initial) => throw Unsupported();
+    internal static int MeshColorView(int token,Color32[] colors) => throw Unsupported();
+    internal static int MeshColorUpdate(int token,Color32[] colors) => throw Unsupported();
+    internal static int MeshDrawPasses(int token,float[] world,Color32[] colors,float[] uv,int count,int texture,int secondary,int color,int flags,float cutoff,int effect) => throw Unsupported();
+    internal static int MeshPreparePasses(int token) => throw Unsupported();
     internal static int MeshCreateColor(VertexPositionColor[] vertices,ushort[]? indices,int format,int dynamic) => throw Unsupported();
     internal static int MeshUpdateColor(int token,VertexPositionColor[] vertices,int offset,int count,int format) => throw Unsupported();
     internal static int MeshCreateTexture(VertexPositionColorTexture[] vertices,ushort[]? indices,int format,int dynamic) => throw Unsupported();

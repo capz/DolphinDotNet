@@ -164,3 +164,5 @@ scene lights/fog and distinct-transform mesh batches. See the
 [two-phase roadmap](graphics-roadmap.md) for the separate follow-up scope.
 
 Phase 2 adds [cached text, retained geometry, primitive meshes, mips and scene capture](graphics-phase-two.md).
+
+Shared positions/UVs with independent colors and cached ordered color/UV passes are described in [mesh streams and passes](mesh-streams-and-passes.md).
