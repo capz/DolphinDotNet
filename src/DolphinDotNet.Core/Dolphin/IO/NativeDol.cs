@@ -9,4 +9,5 @@ internal static class NativeDol
     internal static int DolInfo(int token, int kind) => throw Unsupported();
     internal static int DolDispose(int token) => throw Unsupported();
     internal static int DolRequest(int token) => throw Unsupported();
+    internal static int DolArguments(int token,byte[] arguments) => throw Unsupported();
 }

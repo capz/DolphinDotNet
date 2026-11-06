@@ -58,3 +58,21 @@ managed AOT preparation/cancellation/cleanup with GC stress, and a Dolphin
 handoff into an independent libogc executable that verifies data/BSS and creates
 a new thread. Build that native fixture with `tests/build_dol_replacement.sh`;
 `chain.dol` boots `replacement.dol` from an embedded native snapshot.
+
+## Standard libogc arguments
+
+Before requesting launch, call `executable.SetArguments("swiss-gc.dol",
+"Autoload=gcldr:/games/Example.iso", "AutoBoot=Yes")`. Include `argv[0]` explicitly.
+Arguments are UTF-8, nonempty and NUL-free, with at most 64 entries and 4096
+encoded bytes including separators. Only executables carrying the standard
+libogc `_arg` entry marker are accepted; missing markers throw
+`NotSupportedException`. Existing launch validation and overlap checks still
+apply. This does not implement a relocating loader or bypass incompatible DOL
+layouts. The native staging block owns the command line through the handoff;
+libogc copies it into its reserved arena before allocating its heap.
+
+`tests/DolArgumentsSmoke` builds a managed caller and a tiny original PPC payload
+that reads the actual `_arg` structure after replacement. `verify_native.py`
+checks exact UTF-8 bytes, spaces, multiple arguments and terminators through
+cloud-local Dolphin’s debugger. This verifies the native handoff, not Swiss
+game compatibility or physical-console behavior.

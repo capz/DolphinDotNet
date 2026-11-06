@@ -9,6 +9,7 @@ static unsigned char image[10000];
 static size_t file_position;
 static bool supported=true, fail_read, throw_read;
 static int opened, closed, launched;
+static bool expect_arguments;
 static void word(unsigned char *p, unsigned n) { p[0]=(uint8_t)(n>>24);p[1]=(uint8_t)(n>>16);p[2]=(uint8_t)(n>>8);p[3]=(uint8_t)n; }
 static void valid(void) {
     memset(image,0,sizeof(image));
@@ -23,6 +24,12 @@ void dnd_dol_platform_stub_copy(void *p) { memset(p,0xab,4); }
 void dnd_dol_platform_launch(DndDolPlan *plan, void *bytes, void *stub) {
     assert(plan->entry==0x80004000 && ((unsigned char *)bytes)[256]==42 && ((unsigned char *)stub)[0]==0xab);
     launched++;
+    if(expect_arguments){
+        const unsigned char *entry=(unsigned char *)bytes+256;
+        assert(!memcmp(entry+8,"_arg",4));
+        assert(entry[16]==0&&entry[17]==0&&entry[18]==0&&entry[19]==23);
+        assert(!memcmp((unsigned char *)bytes-4096,"swiss.dol\0AutoBoot=Yes\0",23));
+    }
 }
 bool dnd_fs_path_utf8_native(DndString *path, char *p, unsigned capacity) { (void)path;assert(capacity>4);strcpy(p,"dol");return true; }
 int dnd_fs_open_utf8_native(const char *p,int mode,int access,int share) { assert(!strcmp(p,"dol") && mode==3 && access==1 && share==1);opened++;file_position=0;return 1; }
@@ -82,6 +89,18 @@ int main(void) {
     t=dnd_dol_begin(NULL);assert(t>0);throw_read=true;dnd_eh_push(&guard);
     if(!setjmp(guard.environment)){(void)dnd_dol_step(t);assert(false);}
     dnd_eh_pop(&guard);assert(opened==closed);dnd_exception_clear();throw_read=false;
+    valid();t=bytes();
+    DndArray *args=calloc(1,sizeof(DndArray)+4097);assert(args);args->element_size=1;
+    memcpy(args->data,"swiss.dol\0AutoBoot=Yes\0",23);args->length=23;
+    assert(dnd_dol_arguments(t,args)==-9);assert(dnd_dol_dispose(t)==0);
+    valid();word(image+260,0x5f617267);t=bytes();
+    args->length=0;assert(dnd_dol_arguments(t,args)==-10);
+    args->length=4097;assert(dnd_dol_arguments(t,args)==-10);
+    args->length=23;assert(dnd_dol_arguments(t,args)==0);
+    args->data[0]=0;assert(dnd_dol_arguments(t,args)==-10);args->data[0]='s';
+    assert(dnd_dol_request(t)==0);assert(dnd_dol_arguments(t,args)==-6);
+    expect_arguments=true;dnd_dol_finish(true);expect_arguments=false;
+    assert(dnd_dol_arguments(t,args)==-6);free(args);
     supported=false;assert(bytes()==-8);assert(dnd_dol_begin(NULL)==-8);
     puts("DOL validation, staging ownership, short reads, cancellation cleanup and failed-Main cancellation passed.");
     return 0;

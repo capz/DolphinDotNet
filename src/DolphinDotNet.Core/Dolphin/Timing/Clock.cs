@@ -17,4 +17,8 @@ public static class Clock
 internal static class NativeTiming
 {
     internal static long TimingNow() => throw new PlatformNotSupportedException("Requires DolphinDotNet AOT.");
+    internal static long CalendarRead() => throw new PlatformNotSupportedException("Requires a GameCube RTC.");
+    internal static int CalendarWrite(long seconds) => throw new PlatformNotSupportedException("Requires a GameCube RTC.");
+    internal static int ConsoleSoundRead() => throw new PlatformNotSupportedException("Requires GameCube SRAM.");
+    internal static int ConsoleSoundWrite(int mode) => throw new PlatformNotSupportedException("Requires GameCube SRAM.");
 }

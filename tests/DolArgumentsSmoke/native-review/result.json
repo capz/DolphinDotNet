@@ -1,0 +1,17 @@
+{
+  "diagnostics": {},
+  "environment": "Real PPC GameCube DOL chainload in cloud Dolphin 2503; not physical hardware",
+  "caller_sha256": "d7a1ddd835a2346a6de6523f8945de548d2fe77351608dc00a9f58bba6e9c14f",
+  "magic": "0x41524756",
+  "count": 5,
+  "length": 102,
+  "captured_hex": "73776973732d67632e646f6c004175746f6c6f61643d67636c64723a2f67616d65732f466978747572652047616d652e69736f004175746f426f6f743d59657300466f7263652050414c20566964656f204d6f64653d353736700063617074696f6e3dc3bc00",
+  "expected": [
+    "swiss-gc.dol",
+    "Autoload=gcldr:/games/Fixture Game.iso",
+    "AutoBoot=Yes",
+    "Force PAL Video Mode=576p",
+    "caption=\u00fc"
+  ],
+  "passed": true
+}

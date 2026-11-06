@@ -18,6 +18,7 @@ int dnd_dol_step(int token);
 int dnd_dol_info(int token, int kind);
 int dnd_dol_dispose(int token);
 int dnd_dol_request(int token);
+int dnd_dol_arguments(int token,DndArray *arguments);
 bool dnd_dol_pending(void);
 void dnd_dol_finish(bool success);
 /* Platform boundary; the final trampoline never returns or uses the old stack. */

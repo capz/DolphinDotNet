@@ -11,6 +11,7 @@
 typedef struct {
     DndDolPlan plan;
     _Alignas(32) uint8_t stub[STUB_SIZE];
+    uint8_t arguments[4096];
     uint8_t image[];
 } Stage;
 static struct {
@@ -21,9 +22,39 @@ static struct {
     size_t length, position;
 } slots[SLOT_COUNT];
 static int next_token = 1, pending;
+static int locate(int token);
 
 static uint32_t be32(const uint8_t *p) {
     return (uint32_t)p[0]<<24 | (uint32_t)p[1]<<16 | (uint32_t)p[2]<<8 | p[3];
+}
+static void put32(uint8_t *p,uint32_t value) {
+    p[0]=(uint8_t)(value>>24);p[1]=(uint8_t)(value>>16);p[2]=(uint8_t)(value>>8);p[3]=(uint8_t)value;
+}
+int dnd_dol_arguments(int token,DndArray *arguments) {
+    int i=locate(token);
+    if(i<0||!slots[i].ready||slots[i].queued)return -6;
+    if(!arguments||arguments->element_size!=1||arguments->length<2||arguments->length>4096||arguments->data[arguments->length-1]!=0)return -10;
+    size_t count=0;bool start=true;
+    for(size_t at=0;at<arguments->length;at++) {
+        if(start&&arguments->data[at]==0)return -10;
+        if(arguments->data[at]==0){count++;start=true;}else start=false;
+    }
+    if(count>64)return -10;
+    Stage *stage=slots[i].stage;
+    for(unsigned section=0;section<7;section++) {
+        DndDolSection *s=&stage->plan.sections[section];
+        if(stage->plan.entry<s->address||s->size<32||stage->plan.entry-s->address>s->size-32)continue;
+        uint8_t *entry=stage->image+s->offset+(stage->plan.entry-s->address);
+        if(be32(entry+4)!=0x5f617267u)return -9; /* libogc CRT _arg marker */
+        memcpy(stage->arguments,arguments->data,arguments->length);
+        put32(entry+8,0x5f617267u);put32(entry+12,(uint32_t)(uintptr_t)stage->arguments);
+        put32(entry+16,(uint32_t)arguments->length);
+        memset(entry+20,0,12);
+        /* Stage allocation is excluded from payload/BSS destinations. libogc's
+         * __CheckARGV copies commandLine into its reserved arena before malloc. */
+        return 0;
+    }
+    return -9;
 }
 static bool memory_range(uint32_t address, uint32_t size) {
     return address >= MEM_START && address < MEM_END && size <= MEM_END-address;

@@ -28,6 +28,14 @@ public sealed class PreparedDol : IDisposable
     private int token;
     public DolInfo Info { get; }
     internal PreparedDol(int handle) { token = handle; Info = new DolInfo(handle); }
+    /// <summary>Sets a standard libogc UTF-8 argv, including argv[0]. At most 64
+    /// nonempty NUL-free arguments and 4096 encoded bytes, including separators.
+    /// Requires a libogc _arg CRT marker; arbitrary executable code is not patched.</summary>
+    public void SetArguments(params string[] arguments)
+    {
+        if(token==0)throw new ObjectDisposedException("PreparedDol");
+        DolLauncher.Check(NativeDol.DolArguments(token,DolLauncher.EncodeArguments(arguments)));
+    }
     internal void Request()
     {
         if (token == 0) throw new ObjectDisposedException("PreparedDol");
@@ -43,6 +51,20 @@ public sealed class PreparedDol : IDisposable
 /// <summary>Prepares a GameCube executable and queues replacement of the current app.</summary>
 public static class DolLauncher
 {
+    internal static byte[] EncodeArguments(string[] arguments)
+    {
+        if(arguments==null)throw new ArgumentNullException("arguments");
+        if(arguments.Length==0||arguments.Length>64)throw new ArgumentOutOfRangeException("arguments");
+        var output=new byte[4096];int used=0;
+        for(int i=0;i<arguments.Length;i++){
+            string value=arguments[i];
+            if(value==null||value.Length==0||value.Length>4095||value.IndexOf('\0')>=0)throw new ArgumentException("Arguments must be nonempty, bounded and NUL-free.");
+            byte[] encoded=Dolphin.Text.Encoding.UTF8.GetBytes(value);
+            if(encoded.Length>=output.Length-used)throw new ArgumentException("Encoded arguments exceed 4096 bytes.");
+            Array.Copy(encoded,0,output,used,encoded.Length);used+=encoded.Length;output[used++]=0;
+        }
+        var result=new byte[used];Array.Copy(output,result,used);return result;
+    }
     /// <summary>Copies and validates the image into native memory. The input may be reused afterwards.</summary>
     public static PreparedDol Prepare(byte[] image)
     {
@@ -99,6 +121,8 @@ public static class DolLauncher
         if (result == -5) throw new InvalidOperationException("Too many prepared DOLs. Dispose an unused executable first.");
         if (result == -6) throw new ObjectDisposedException("PreparedDol");
         if (result == -7) throw new InvalidOperationException("A DOL launch is already queued.");
+        if (result == -9) throw new NotSupportedException("Executable has no standard libogc _arg header.");
+        if (result == -10) throw new ArgumentException("Invalid or oversized DOL argument block.");
         throw new PlatformNotSupportedException("DOL launching requires a DolphinDotNet GameCube AOT build.");
     }
     private sealed class PrepareWork
