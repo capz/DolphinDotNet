@@ -2,15 +2,20 @@
 #define DND_DOL_H
 #include "dnd_managed.h"
 
+#define DND_DOL_ARGUMENTS_ADDRESS 0x80002000u
+#define DND_DOL_ARGUMENTS_LIMIT 4096u
 #define DND_DOL_SECTIONS 18
 #define DND_DOL_MAX_SIZE (24u * 1024u * 1024u)
 typedef struct { uint32_t offset, address, size; } DndDolSection;
 typedef struct {
     uint32_t entry, bss_address, bss_size, count;
     DndDolSection sections[DND_DOL_SECTIONS];
+    const uint8_t *arguments;
+    uint32_t arguments_size;
 } DndDolPlan;
 /* Parse only the 256-byte header. All lengths/ranges use subtraction to avoid overflow. */
 bool dnd_dol_validate(const uint8_t header[256], size_t length, DndDolPlan *plan);
+uintptr_t dnd_dol_stage_location(const DndDolPlan *plan,uintptr_t start,size_t size);
 bool dnd_dol_stage_safe(const DndDolPlan *plan, uintptr_t start, size_t size);
 int dnd_dol_prepare(DndArray *image);
 int dnd_dol_begin(DndString *path);

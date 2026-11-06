@@ -76,3 +76,16 @@ that reads the actual `_arg` structure after replacement. `verify_native.py`
 checks exact UTF-8 bytes, spaces, multiple arguments and terminators through
 cloud-local Dolphin’s debugger. This verifies the native handoff, not Swiss
 game compatibility or physical-console behavior.
+
+Argument handoff also supports packed libogc executables that replace the old
+heap before their final CRT starts. After libogc shutdown and interrupt disable,
+the launcher copies at most 4096 argument bytes to `0x80002000..0x80002fff`.
+Every accepted DOL section/BSS begins at or above `0x80003100`; no low-memory
+bytes are touched during preparation or while devices/reset callbacks run.
+The trampoline's section descriptors retain their existing ABI offsets.
+
+Staging now searches past payload/BSS ranges inside one owned native allocation.
+If the first allocation overlaps, a bounded retry reserves a larger prefix and
+places the active plan/stub/image after the destinations. This supports normal
+low-address executables without requiring ARAM or relying on allocator luck.
+It fails without launching if a safe allocation cannot fit in available MEM1.

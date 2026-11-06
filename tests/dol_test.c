@@ -28,7 +28,9 @@ void dnd_dol_platform_launch(DndDolPlan *plan, void *bytes, void *stub) {
         const unsigned char *entry=(unsigned char *)bytes+256;
         assert(!memcmp(entry+8,"_arg",4));
         assert(entry[16]==0&&entry[17]==0&&entry[18]==0&&entry[19]==23);
-        assert(!memcmp((unsigned char *)bytes-4096,"swiss.dol\0AutoBoot=Yes\0",23));
+        assert(plan->arguments_size==23);
+        assert(!memcmp(plan->arguments,"swiss.dol\0AutoBoot=Yes\0",23));
+        assert(entry[12]==0x80&&entry[13]==0&&entry[14]==0x20&&entry[15]==0);
     }
 }
 bool dnd_fs_path_utf8_native(DndString *path, char *p, unsigned capacity) { (void)path;assert(capacity>4);strcpy(p,"dol");return true; }
@@ -70,6 +72,10 @@ int main(void) {
     assert(!dnd_dol_stage_safe(&plan,0x80006040,64));
     assert(!dnd_dol_stage_safe(&plan,UINTPTR_MAX-15,32));
     assert(dnd_dol_stage_safe(&plan,0x81000000,4096));
+    assert(dnd_dol_stage_location(&plan,0x80003ff1,32)==0x80004020);
+    assert(dnd_dol_stage_location(&plan,0x80003f00,0x2200)==0x80006080);
+    assert(dnd_dol_stage_location(&plan,0x81000001,4096)==0x81000020);
+    assert(dnd_dol_stage_location(&plan,UINTPTR_MAX-15,32)==0);
     int t=bytes();assert(t>0 && dnd_dol_info(t,2)==2);
     image[256]=0;assert(dnd_dol_request(t)==0);assert(dnd_dol_dispose(t)==0);
     assert(dnd_dol_pending());assert(dnd_dol_request(t)==-7);

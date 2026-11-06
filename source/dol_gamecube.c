@@ -88,6 +88,11 @@ void dnd_dol_platform_launch(DndDolPlan *plan, void *image, void *stub) {
      * the current thread remains alive. Do this before disabling interrupts. */
     SYS_ResetSystem(SYS_SHUTDOWN, 0, 0);
     IRQ_Disable();
+    if(plan->arguments_size){
+        void *handoff=(void *)(uintptr_t)DND_DOL_ARGUMENTS_ADDRESS;
+        memcpy(handoff,plan->arguments,plan->arguments_size);
+        DCFlushRange(handoff,plan->arguments_size);
+    }
     ((void (*)(DndDolPlan *, void *))stub)(plan, image);
     __builtin_unreachable();
 }
