@@ -57,7 +57,7 @@ static int directory_contains(const char *root, const char *suffix) {
     struct stat st;
     return stat(name,&st) == 0;
 }
-typedef struct {int cancel;unsigned reports;uint64_t durable;} Progress;
+typedef struct {int cancel;unsigned reports;uint64_t durable;unsigned final_checks;} Progress;
 static int cancel_copy(void *ctx) {return ((Progress *)ctx)->cancel;}
 static void copy_progress(void *ctx,const DndCopyResult *p) {
     Progress *progress=ctx;progress->reports++;
@@ -66,6 +66,15 @@ static void copy_progress(void *ctx,const DndCopyResult *p) {
 }
 static void cancel_after_sync(void *ctx,const DndCopyResult *p) {
     copy_progress(ctx,p);((Progress *)ctx)->cancel=1;
+}
+static int cancel_source_revalidation(void *ctx) {
+    Progress *p=ctx;
+    /* One final engine check precedes the source's final digest pass. */
+    return p->cancel && ++p->final_checks>=2;
+}
+static void mark_stage_verified(void *ctx,const DndCopyResult *p) {
+    copy_progress(ctx,p);
+    if(p->verified_bytes==135169)((Progress *)ctx)->cancel=1;
 }
 int main(void) {
     char root[]="/tmp/dnd-defrag-XXXXXX", path[1024];
@@ -160,6 +169,15 @@ int main(void) {
     assert(dnd_optimize_file_ex(root,path,&ops,options,&metrics)==-ECANCELED);
     expected_file(path,135169);
     assert(dnd_optimize_recover(root)==0 && !directory_contains(root,".__dnd_opt.prepare"));
+    progress=(Progress){0};options.cancelled=cancel_source_revalidation;
+    options.progress=mark_stage_verified;
+    assert(dnd_optimize_file_ex(root,path,&ops,options,&metrics)==-ECANCELED);
+    expected_file(path,135169);
+    assert(!directory_contains(root,".__dnd_opt.prepare"));
+    char link_path[1024];snprintf(link_path,sizeof(link_path),"%s/link.iso",root);
+    assert(symlink(path,link_path)==0);
+    assert(dnd_optimize_file(root,link_path,&ops)==-EINVAL);
+    assert(!directory_contains(root,".__dnd_opt.prepare") && unlink(link_path)==0);
     /* Even on a 64-bit host, reject inputs the PowerPC off_t cannot represent. */
     char huge[1024];snprintf(huge,sizeof(huge),"%s/huge.iso",root);
     int huge_fd=open(huge,O_WRONLY|O_CREAT|O_EXCL,0600);

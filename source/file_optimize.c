@@ -79,7 +79,7 @@ static int path_is_below(const char *root, const char *path) {
 }
 static int exists(const char *path) {
     struct stat st;
-    return stat(path, &st) == 0 ? 1 : errno == ENOENT ? 0 : -errno;
+    return lstat(path, &st) == 0 ? 1 : errno == ENOENT ? 0 : -errno;
 }
 static int sync_close(int fd) {
     int rc = fsync(fd) < 0 ? -errno : 0;
@@ -99,7 +99,8 @@ static int exact_write(int fd, const void *buffer, size_t size) {
     return 0;
 }
 static int full_digest(const char *path, uint64_t *bytes, uint64_t *digest,
-                         unsigned char sha256[32],DndCopyResult *metrics) {
+                         unsigned char sha256[32],DndCopyResult *metrics,
+                         const DndOptimizeOptions *options) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) return -errno;
     _Alignas(32) unsigned char buffer[DND_OPT_BUFFER];
@@ -107,6 +108,9 @@ static int full_digest(const char *path, uint64_t *bytes, uint64_t *digest,
     DndSha256 sha;dnd_sha256_init(&sha);
     int rc = 0;
     for (;;) {
+        if(options && options->cancelled && options->cancelled(options->context)) {
+            rc=-ECANCELED;break;
+        }
         ssize_t n = read(fd, buffer, sizeof(buffer));
         if (n < 0 && errno == EINTR) continue;
         if (n < 0) { rc = -errno; break; }
@@ -115,16 +119,18 @@ static int full_digest(const char *path, uint64_t *bytes, uint64_t *digest,
         dnd_sha256_update(&sha,buffer,(size_t)n);
         if(metrics)metrics->bytes_read+=(uint64_t)n;
         count += (uint64_t)n;
+        if(count>INT32_MAX) {rc=-EFBIG;break;}
     }
     int closed = close_file(fd);
     if (!rc) rc = closed;
     if (!rc) { *bytes = count; *digest = sum;dnd_sha256_finish(&sha,sha256); }
     return rc;
 }
-static int matches(const char *path,const DndOptimizeJournal *j,DndCopyResult *metrics) {
+static int matches(const char *path,const DndOptimizeJournal *j,DndCopyResult *metrics,
+                     const DndOptimizeOptions *options) {
     uint64_t bytes, digest;
     unsigned char sha[32];
-    int rc = full_digest(path, &bytes, &digest,sha,metrics);
+    int rc = full_digest(path, &bytes, &digest,sha,metrics,options);
     return rc < 0 ? rc : (bytes == j->bytes && digest == j->digest &&
                            (!memcmp(j->magic,"DNDFRG01",8) ||
                             !memcmp(sha,j->sha256,32)));
@@ -253,7 +259,7 @@ static int recover(const char *root,DndCopyResult *metrics) {
         if(!source) {
             if(rename(j->backup,j->original))return -errno;
         } else {
-            int good=matches(j->original,j,metrics);
+            int good=matches(j->original,j,metrics,NULL);
             if(good<0)return good;
             if(!good)return -EIO;
             int rc=safe_unlink(j->backup);
@@ -261,7 +267,7 @@ static int recover(const char *root,DndCopyResult *metrics) {
         }
     } else {
         if(!source)return -EIO;
-        int good=matches(j->original,j,metrics);
+        int good=matches(j->original,j,metrics,NULL);
         if(good<0)return good;
         /* Before the first rename, the original need not match a copy that
          * was prepared but never published. The stage still exists then. */
@@ -395,7 +401,7 @@ int dnd_optimize_file_ex(const char *root,const char *path,
     if (rc < 0) return rc;
     if (count <= 1) return DND_OPT_ALREADY_CONTIGUOUS;
     struct stat st;
-    if (stat(path,&st)) return -errno;
+    if (lstat(path,&st)) return -errno;
     if (!S_ISREG(st.st_mode) || st.st_size <= 0) return -EINVAL;
     /* This runtime uses native 32-bit off_t on GameCube; fail rather than
      * truncating offsets or allocating only part of a large file. */
@@ -448,7 +454,7 @@ int dnd_optimize_file_ex(const char *root,const char *path,
         return cleanup<0?cleanup:(rc==-ENOSYS || rc==-ENOTSUP?
                                    DND_OPT_UNSUPPORTED:rc);
     }
-    rc=matches(path,&j,copy_result);
+    rc=matches(path,&j,copy_result,&options);
     if(rc<0 || !rc) {
         int cleanup=recover(root,copy_result);
         return cleanup<0?cleanup:(rc<0?rc:-EBUSY);
