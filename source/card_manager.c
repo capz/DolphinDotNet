@@ -7,7 +7,16 @@
 #include <string.h>
 #ifdef DND_GAMECUBE_STORAGE
 #include <gccore.h>
+#ifdef __APPLE__
+/* Native host fixtures use the CARD shim on Darwin, which has no malloc.h. */
+static void *card_memalign(size_t alignment,size_t bytes) {
+    void *result=NULL;
+    return posix_memalign(&result,alignment,bytes)==0?result:NULL;
+}
+#else
 #include <malloc.h>
+#define card_memalign memalign
+#endif
 #include <ogc/card.h>
 #define STALE -1001
 #define NOT_READY -1002
@@ -62,7 +71,7 @@ int dnd_cmgr_refresh(int token){
 }
 int dnd_cmgr_open(int slot){
     if(slot<0||slot>1||sessions[slot].token||dnd_storage_is_mounted(slot+4))return OCCUPIED;
-    CARD_Init(NULL,NULL);void *work=memalign(32,CARD_WORKAREA);if(!work)return -2001;
+    CARD_Init(NULL,NULL);void *work=card_memalign(32,CARD_WORKAREA);if(!work)return -2001;
     int token=next_token();if(token<0){free(work);return token;}
     struct Session *s=&sessions[slot];memset(s,0,sizeof(*s));s->work=work;s->token=token;
     s->status=CARD_Mount(slot,work,detached);
@@ -144,7 +153,7 @@ int dnd_cmgr_copy_begin(int source,int revision,int index,int destination,int mo
     for(int i=0;i<d->count;i++)if(!memcmp(d->entries[i].filename,stat.filename,32)&&!memcmp(d->entries[i].gamecode,stat.gamecode,4)&&!memcmp(d->entries[i].company,stat.company,2))return CARD_ERROR_EXIST;
     int free_blocks=dnd_cmgr_stat(destination,2);if(free_blocks<0)return free_blocks;if(stat.len/BLOCK>(u32)free_blocks||d->count==MAX_FILES)return CARD_ERROR_INSSPACE;
     if(!stat.len||stat.len%BLOCK)return VERIFY_FAILED;
-    unsigned char *buffer=memalign(32,BLOCK);if(!buffer)return -2001;
+    unsigned char *buffer=card_memalign(32,BLOCK);if(!buffer)return -2001;
     int op=next_token();if(op<0){free(buffer);return op;}
     transfer.token=op;transfer.source=source;transfer.destination=destination;transfer.revision=revision;transfer.index=index;transfer.move=move!=0;transfer.length=stat.len;transfer.buffer=buffer;transfer.source_stat=stat;transfer.attributes=attr;transfer.write_crc=transfer.read_crc=UINT32_MAX;
     rc=CARD_OpenEntry(channel(s),&s->entries[index],&transfer.input);if(rc<0){cleanup(false);return rc;}transfer.source_open=true;
