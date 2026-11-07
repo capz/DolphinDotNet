@@ -25,7 +25,9 @@ static int independent(const DndDefragSnapshot *a,const DndDefragSnapshot *b) {
  * but a missing/free/overlapping interval must never imply a feasible plan. */
 static int valid_map(const DndDefragSnapshot *s) {
     if(!s || !s->valid || !s->files || !s->runs || !s->file_count ||
-       !s->run_count || !s->space.bytes_per_cluster ||
+       !s->run_count || s->file_count>=DND_DEFRAG_SYSTEM ||
+       s->space.bytes_per_cluster<512 || s->space.bytes_per_cluster>16777216 ||
+       (s->space.bytes_per_cluster&(s->space.bytes_per_cluster-1)) ||
        s->space.total_clusters>UINT32_MAX-2u ||
        !(s->device.physical_id[0]|s->device.physical_id[1]))return 0;
     uint64_t end=2,free_count=0;

@@ -321,7 +321,9 @@ static int name_safe(const uint16_t *name) {
 }
 static void defaults(DndDefragFile *f) {
     if(f->attributes&0x10)f->flags|=DND_DEFRAG_DIRECTORY|DND_DEFRAG_PINNED;
-    if(f->attributes&7 || f->bytes>INT32_MAX || !name_safe(f->name))
+    if(!name_safe(f->name))f->flags|=DND_DEFRAG_NAME_UNSUPPORTED;
+    if(f->attributes&7 || f->bytes>INT32_MAX ||
+       (f->flags&DND_DEFRAG_NAME_UNSUPPORTED))
         f->flags|=DND_DEFRAG_PINNED;
     /* Reserved staging names and memory-card containers are never blockers.
      * Mounted handle policy can pin other application-specific names. */
@@ -365,7 +367,8 @@ static int fat_entry(EntryState *s,const unsigned char *e,DndDefragFile *f) {
         for(unsigned i=0;i<11;i++) {
             if(i==8 && e[i]!=' ')f->name[n++]='.';
             if(e[i]==' ')continue;
-            if(e[i]<32 || e[i]>126)f->flags|=DND_DEFRAG_PINNED;
+            if(e[i]<32 || e[i]>126)
+                f->flags|=DND_DEFRAG_PINNED|DND_DEFRAG_NAME_UNSUPPORTED;
             unsigned char ch=e[i];
             if(ch>='A' && ch<='Z' && (e[12]&(i<8?8:16)))ch=(unsigned char)(ch+32);
             f->name[n++]=ch;

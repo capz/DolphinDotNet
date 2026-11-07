@@ -44,7 +44,7 @@ int dnd_defrag_preflight_direct(const DndDefragFreeSpace *stats,
 #define DND_DEFRAG_SYSTEM (UINT32_MAX-2u)
 enum {
     DND_DEFRAG_DIRECTORY=1, DND_DEFRAG_PINNED=2,
-    DND_DEFRAG_NO_FAT_CHAIN=4
+    DND_DEFRAG_NO_FAT_CHAIN=4, DND_DEFRAG_NAME_UNSUPPORTED=8
 };
 typedef struct {
     uint64_t entry_lba, bytes;

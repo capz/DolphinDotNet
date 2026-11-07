@@ -66,7 +66,8 @@ def main(area):
         with tempfile.TemporaryDirectory() as tmp:
             for name,source in (("allocation","allocation"),
                                 ("ownership","allocation"),
-                                ("planner","planner")):
+                                ("planner","planner"),
+                                ("rebuild","rebuild")):
                 binary=Path(tmp)/("defrag-"+name+"-test")
                 run("cc","-std=c11","-Wall","-Wextra","-Werror",
                     "-Iinclude","tests/defrag_"+name+"_test.c",

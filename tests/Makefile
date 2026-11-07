@@ -11,7 +11,10 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 test: ipl_font_test
 test: defrag_ownership_test defrag_planner_test verified_copy_test evacuation_journal_test evacuation_test
-test: defrag_batch_test
+test: defrag_batch_test defrag_rebuild_test
+
+defrag_rebuild_test: defrag_rebuild_test.c ../source/defrag_rebuild.c
+	$(CC) $(CFLAGS) $^ -o $@
 
 defrag_batch_test: defrag_batch_test.c ../source/defrag_batch.c ../source/evacuation.c ../source/evacuation_journal.c ../source/verified_copy.c
 	$(CC) $(CFLAGS) $^ -o $@
@@ -58,6 +61,7 @@ test: card_manager_test mesh_streams_test display_mode_test graphics_resource_bo
 	./evacuation_journal_test
 	./evacuation_test
 	./defrag_batch_test
+	./defrag_rebuild_test
 	./contiguous_write_test
 	./managed_runtime_tests
 	./fst_test
@@ -174,6 +178,7 @@ clean:
 	rm -f defrag_ownership_test defrag_planner_test verified_copy_test
 	rm -f evacuation_journal_test evacuation_test
 	rm -f defrag_batch_test
+	rm -f defrag_rebuild_test
 	rm -f card_manager_test
 	rm -f ipl_font_test
 	rm -f display_mode_test
