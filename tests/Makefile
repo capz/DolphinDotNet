@@ -11,7 +11,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 test: ipl_font_test
 
-test: card_manager_test mesh_streams_test display_mode_test graphics_resource_boundaries_test graphics_phase_two_test graphics_submission_test render_state_gx_test overlay_list_test array_fast_test indexed_mesh_gx_test canvas_rectangle_test texture_reuse_test throughput_runtime_test asset_native_test mesh_range_test native_buffer_crc_test file_optimize_test file_extents_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test jsystem_fixture_telemetry_test asset_compat_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
+test: card_manager_test mesh_streams_test display_mode_test graphics_resource_boundaries_test graphics_phase_two_test graphics_submission_test render_state_gx_test overlay_list_test array_fast_test indexed_mesh_gx_test canvas_rectangle_test texture_reuse_test throughput_runtime_test asset_native_test mesh_range_test native_buffer_crc_test file_optimize_test file_extents_test defrag_allocation_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test jsystem_fixture_telemetry_test asset_compat_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
 	./card_manager_test
 	./mesh_streams_test
 	./display_mode_test
@@ -31,6 +31,7 @@ test: card_manager_test mesh_streams_test display_mode_test graphics_resource_bo
 	./native_buffer_crc_test
 	./file_optimize_test
 	./file_extents_test
+	./defrag_allocation_test
 	./contiguous_write_test
 	./managed_runtime_tests
 	./fst_test
@@ -60,6 +61,9 @@ file_optimize_test: file_optimize_test.c ../source/file_optimize.c
 	$(CC) $(CFLAGS) $^ -o $@
 
 file_extents_test: file_extents_test.c ../source/file_extents.c
+	$(CC) $(CFLAGS) $^ -o $@
+
+defrag_allocation_test: defrag_allocation_test.c ../source/defrag_allocation.c
 	$(CC) $(CFLAGS) $^ -o $@
 
 contiguous_write_test: contiguous_write_test.c ../source/contiguous_write.c
@@ -149,7 +153,7 @@ clean:
 	rm -f texture_reuse_test
 	rm -f asset_native_test throughput_runtime_test
 	rm -f mesh_streams_test mesh_range_test native_buffer_crc_test
-	rm -f file_optimize_test file_extents_test contiguous_write_test dol_test
+	rm -f file_optimize_test file_extents_test defrag_allocation_test contiguous_write_test dol_test
 	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test jsystem_fixture_telemetry_test asset_compat_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test
 
 asset_native_test: asset_native_test.c ../source/storage.c ../source/draw_resources.c ../source/managed_runtime.c ../source/stw.c ../source/gc_stw.c ../source/file_optimize.c ../source/file_extents.c ../source/contiguous_write.c

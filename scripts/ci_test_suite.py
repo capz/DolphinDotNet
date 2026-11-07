@@ -60,6 +60,15 @@ def main(area):
                     "-lm","-o",binary)
                 run(binary)
     elif area=="storage":
+        # Run new physical FAT32/exFAT free-run fixtures independently of the
+        # broader native suite. The latter also exercises unrelated hardware
+        # stubs and may be unavailable on some host runner configurations.
+        with tempfile.TemporaryDirectory() as tmp:
+            binary=Path(tmp)/"defrag-allocation-test"
+            run("cc","-std=c11","-Wall","-Wextra","-Werror",
+                "-Iinclude","tests/defrag_allocation_test.c",
+                "source/defrag_allocation.c","-o",binary)
+            run(binary)
         test("tests/ConsoleServicesTests")
         build("tests/CardManagerSmoke/CardManagerSmoke.csproj")
         for p in ("StorageSmoke","AramSmoke","LibrarySmoke","DiscIdentityTests",
