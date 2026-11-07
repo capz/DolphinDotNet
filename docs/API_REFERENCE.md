@@ -1330,3 +1330,10 @@ per-draw `Renderer.DrawModel(instance,transform,effectOverride)` /
 Uniform updates run between frames. See [effects and graph compilation](effects.md).
 
 For consuming these APIs through NuGet, dependency AOT constraints and diagnostics, see the [SDK guide](nuget-sdk.md).
+
+### Unfiltered memory-card management
+
+`Dolphin.Storage.MemoryCardManager`, `ManagedCardSave`, and `MemoryCardTransfer`
+provide bounded all-game listings, icon metadata and protected/verified cross-slot
+operations. See [memory-card-manager.md](memory-card-manager.md) for ownership,
+confirmation, cancellation, snapshot and post-commit refresh semantics.

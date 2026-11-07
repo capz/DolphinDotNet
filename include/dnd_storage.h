@@ -1,6 +1,7 @@
 #ifndef DND_STORAGE_H
 #define DND_STORAGE_H
 #include "dnd_managed.h"
+#include "dnd_card_manager.h"
 #include "dnd_hardware.h" /* Shared native storage/platform intrinsic declarations. */
 bool dnd_storage_mount(int device);
 bool dnd_storage_mount_disc(int format);

@@ -44,6 +44,7 @@ int main(void) {
 
     intptr_t managed_result=dnd_aot_entry(&heap);
     dnd_audio_shutdown();
+    dnd_cmgr_shutdown();
     if (dnd_dol_pending() && managed_result==0 && !dnd_exception_pending()) {
         dnd_input_shutdown();
         dnd_net_stop();
