@@ -30,8 +30,8 @@ be mounted, including when loading from `dvd:/`.
 Dispose unused preparations explicitly; there is no finalizer. At most eight
 preparations may exist. `RequestLaunch` runs on the application thread and queues
 one launch, transferring ownership to bootstrap. Disposing that wrapper afterwards
-is safe. A second request fails. No argv, working directory or managed state is
-passed to the replacement.
+is safe. A second request fails. `SetArguments` can supply standard libogc argv as
+described below; no working directory or managed state is transferred.
 
 **Return successfully from Main after requesting launch.** The request does not
 terminate Main or interrupt a frame loop. Normal `using`/`finally` cleanup runs,
@@ -58,3 +58,34 @@ managed AOT preparation/cancellation/cleanup with GC stress, and a Dolphin
 handoff into an independent libogc executable that verifies data/BSS and creates
 a new thread. Build that native fixture with `tests/build_dol_replacement.sh`;
 `chain.dol` boots `replacement.dol` from an embedded native snapshot.
+
+## Standard libogc arguments
+
+Before requesting launch, call `executable.SetArguments("swiss-gc.dol",
+"Autoload=gcldr:/games/Example.iso", "AutoBoot=Yes")`. Include `argv[0]` explicitly.
+Arguments are UTF-8, nonempty and NUL-free, with at most 64 entries and 4096
+encoded bytes including separators. Only executables carrying the standard
+libogc `_arg` entry marker are accepted; missing markers throw
+`NotSupportedException`. Existing launch validation and overlap checks still
+apply. This does not implement a relocating loader or bypass incompatible DOL
+layouts. The native staging block owns the command line through the handoff;
+libogc copies it into its reserved arena before allocating its heap.
+
+`tests/DolArgumentsSmoke` builds a managed caller and a tiny original PPC payload
+that reads the actual `_arg` structure after replacement. `verify_native.py`
+checks exact UTF-8 bytes, spaces, multiple arguments and terminators through
+cloud-local Dolphin’s debugger. This verifies the native handoff, not Swiss
+game compatibility or physical-console behavior.
+
+Argument handoff also supports packed libogc executables that replace the old
+heap before their final CRT starts. After libogc shutdown and interrupt disable,
+the launcher copies at most 4096 argument bytes to `0x80002000..0x80002fff`.
+Every accepted DOL section/BSS begins at or above `0x80003100`; no low-memory
+bytes are touched during preparation or while devices/reset callbacks run.
+The trampoline's section descriptors retain their existing ABI offsets.
+
+Staging now searches past payload/BSS ranges inside one owned native allocation.
+If the first allocation overlaps, a bounded retry reserves a larger prefix and
+places the active plan/stub/image after the destinations. This supports normal
+low-address executables without requiring ARAM or relying on allocator luck.
+It fails without launching if a safe allocation cannot fit in available MEM1.

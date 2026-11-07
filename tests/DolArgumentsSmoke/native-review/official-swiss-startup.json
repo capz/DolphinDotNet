@@ -1,0 +1,22 @@
+{
+  "environment": "Real official Swiss v0.6r2119 after managed DOL chainload in cloud Dolphin 2503; not physical GC Loader/game autoboot",
+  "caller_sha256": "ee495edb0983fbbde1314b6546626f92c6376a9cad2e72cca451b8ff2398a98a",
+  "fixture_iso_sha256": "3bf68fcb5a2ea5d5e457823320133ca88b304e1e5496269c1a7254f9a918caa8",
+  "expected_argv": [
+    "swiss-gc.dol",
+    "AutoBoot=No",
+    "Force NTSC Video Mode=480p",
+    "Force PAL Video Mode=576p",
+    "Prefer Clean Boot=No"
+  ],
+  "received_argv": [
+    "swiss-gc.dol",
+    "AutoBoot=No",
+    "Force NTSC Video Mode=480p",
+    "Force PAL Video Mode=576p",
+    "Prefer Clean Boot=No"
+  ],
+  "caller_diagnostic": "",
+  "native_error": "",
+  "passed": true
+}

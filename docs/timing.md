@@ -85,7 +85,7 @@ executes inside an interrupt handler.
   work before releasing managed roots.
 
 TimeSpan/TimeProvider overloads, `System.Threading.Timer`, `PeriodicTimer` and
-calendar APIs are not included. Wii U requires a native timing/thread backend.
+general `DateTime` calendar APIs are not included. Wii U requires a native timing/thread backend.
 The deterministic manual scheduler test mode is not a timing execution backend.
 
 Controller rumble uses native libogc system alarms instead: its motor timeout is
@@ -99,3 +99,20 @@ slots, captured application/background callbacks, faults, disposal and shutdown.
 CI runs forced-GC/sanitizer and 32-bit host builds, links a PowerPC test DOL and
 checks its successful completion in Dolphin. Physical console latency remains a
 hardware validation task.
+
+## GameCube system calendar and sound
+
+`SystemClock.Read()` returns `CalendarTime` (year 2000–2099, month, day, hour,
+minute, second) from the console RTC plus IPL SRAM bias. Values represent the
+console’s local calendar; no timezone or UTC conversion is performed.
+`SystemClock.Write(new CalendarTime(2026, 11, 6, 14, 30))` updates that bias,
+validates the date and waits up to one second for SRAM synchronization. It never
+changes the monotonic PowerPC timebase. A pending write throws `IOException`
+and may still complete; reread the clock before retrying. Host backends report
+unavailable and never change the host clock. Dolphin 2503 explicitly resets
+RTC bias on boot; emulator restart cannot prove console persistence.
+
+`Dolphin.System.ConsolePreferences.SoundMode` reads/writes IPL stereo/mono SRAM
+settings using `ConsoleSoundMode.Stereo` or `Mono`. A successful setter has
+completed SRAM synchronization; a pending write has the same caveat as above.
+This sets the system preference; it does not remix an application’s audio.

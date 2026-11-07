@@ -60,6 +60,7 @@ def main(area):
                     "-lm","-o",binary)
                 run(binary)
     elif area=="storage":
+        test("tests/ConsoleServicesTests")
         for p in ("StorageSmoke","AramSmoke","LibrarySmoke","DiscIdentityTests",
                   "ConnectionSmoke","InputSmoke"):
             build("tests/"+p+"/"+p+".csproj")

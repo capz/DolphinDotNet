@@ -11,6 +11,7 @@
 typedef struct {
     DndDolPlan plan;
     _Alignas(32) uint8_t stub[STUB_SIZE];
+    uint8_t arguments[4096];
     uint8_t image[];
 } Stage;
 static struct {
@@ -21,9 +22,42 @@ static struct {
     size_t length, position;
 } slots[SLOT_COUNT];
 static int next_token = 1, pending;
+static int locate(int token);
 
 static uint32_t be32(const uint8_t *p) {
     return (uint32_t)p[0]<<24 | (uint32_t)p[1]<<16 | (uint32_t)p[2]<<8 | p[3];
+}
+static void put32(uint8_t *p,uint32_t value) {
+    p[0]=(uint8_t)(value>>24);p[1]=(uint8_t)(value>>16);p[2]=(uint8_t)(value>>8);p[3]=(uint8_t)value;
+}
+int dnd_dol_arguments(int token,DndArray *arguments) {
+    int i=locate(token);
+    if(i<0||!slots[i].ready||slots[i].queued)return -6;
+    if(!arguments||arguments->element_size!=1||arguments->length<2||arguments->length>4096||arguments->data[arguments->length-1]!=0)return -10;
+    size_t count=0;bool start=true;
+    for(size_t at=0;at<arguments->length;at++) {
+        if(start&&arguments->data[at]==0)return -10;
+        if(arguments->data[at]==0){count++;start=true;}else start=false;
+    }
+    if(count>64)return -10;
+    Stage *stage=slots[i].stage;
+    for(unsigned section=0;section<7;section++) {
+        DndDolSection *s=&stage->plan.sections[section];
+        if(stage->plan.entry<s->address||s->size<32||stage->plan.entry-s->address>s->size-32)continue;
+        uint8_t *entry=stage->image+s->offset+(stage->plan.entry-s->address);
+        if(be32(entry+4)!=0x5f617267u)return -9; /* libogc CRT _arg marker */
+        memcpy(stage->arguments,arguments->data,arguments->length);
+        put32(entry+8,0x5f617267u);put32(entry+12,DND_DOL_ARGUMENTS_ADDRESS);
+        put32(entry+16,(uint32_t)arguments->length);
+        memset(entry+20,0,12);
+        stage->plan.arguments=stage->arguments;
+        stage->plan.arguments_size=(uint32_t)arguments->length;
+        /* Packed loaders can overwrite the caller heap before libogc copies
+         * argv. Final shutdown moves this bounded block below all accepted DOL
+         * destinations. Do not write reserved low memory while libogc runs. */
+        return 0;
+    }
+    return -9;
 }
 static bool memory_range(uint32_t address, uint32_t size) {
     return address >= MEM_START && address < MEM_END && size <= MEM_END-address;
@@ -65,6 +99,25 @@ bool dnd_dol_stage_safe(const DndDolPlan *plan, uintptr_t start, size_t size) {
         if (overlaps(start, size, plan->sections[i].address, plan->sections[i].size)) return false;
     return true;
 }
+/* Find an aligned active stage after any overlapping destinations. The malloc
+ * prefix may be overwritten after shutdown; the plan/stub/image may not. */
+uintptr_t dnd_dol_stage_location(const DndDolPlan *plan,uintptr_t start,size_t size) {
+    if(!plan||!size||start>UINTPTR_MAX-31)return 0;
+    uintptr_t candidate=(start+31)&~(uintptr_t)31;
+    for(unsigned pass=0;pass<DND_DOL_SECTIONS+2;pass++){
+        if(candidate>UINTPTR_MAX-size)return 0;
+        uintptr_t next=candidate;
+        if(overlaps(candidate,size,plan->bss_address,plan->bss_size))next=(uintptr_t)plan->bss_address+plan->bss_size;
+        for(unsigned i=0;i<DND_DOL_SECTIONS;i++){
+            const DndDolSection *s=&plan->sections[i];
+            if(overlaps(candidate,size,s->address,s->size)&&(uintptr_t)s->address+s->size>next)next=(uintptr_t)s->address+s->size;
+        }
+        if(next==candidate)return candidate;
+        if(next>UINTPTR_MAX-31)return 0;
+        candidate=(next+31)&~(uintptr_t)31;
+    }
+    return 0;
+}
 static int locate(int token) {
     for (int i=0; i<SLOT_COUNT; i++) if (token>0 && slots[i].token==token) return i;
     return -1;
@@ -85,11 +138,22 @@ static int create(const uint8_t *header, size_t length) {
     int i;
     for (i=0; i<SLOT_COUNT && slots[i].token; i++) { }
     if (i==SLOT_COUNT || next_token==INT_MAX) return -5;
-    size_t size = sizeof(Stage)+length+31;
-    void *allocation = malloc(size);
-    if (!allocation) return -2;
-    Stage *stage = (Stage *)(((uintptr_t)allocation+31)&~(uintptr_t)31);
-    if (!dnd_dol_stage_safe(&plan, (uintptr_t)allocation, size)) { free(allocation); return -3; }
+    size_t required=sizeof(Stage)+length,padding=31;
+    void *allocation=NULL;Stage *stage=NULL;
+    for(unsigned attempt=0;attempt<DND_DOL_SECTIONS+2;attempt++){
+        if(padding>DND_DOL_MAX_SIZE||required>DND_DOL_MAX_SIZE-padding)return -2;
+        size_t size=required+padding;
+        allocation=malloc(size);
+        if(!allocation)return -2;
+        uintptr_t address=dnd_dol_stage_location(&plan,(uintptr_t)allocation,required);
+        if(!address){free(allocation);return -3;}
+        size_t skip=address-(uintptr_t)allocation;
+        if(skip<=size-required){stage=(Stage *)address;break;}
+        free(allocation);allocation=NULL;
+        if(skip>SIZE_MAX-31)return -3;
+        padding=skip+31;
+    }
+    if(!stage)return -3;
     size_t stub_size = dnd_dol_platform_stub_size();
     if (!stub_size || stub_size>STUB_SIZE) { free(allocation); return -8; }
     stage->plan = plan;
