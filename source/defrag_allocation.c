@@ -245,7 +245,14 @@ int dnd_defrag_read_free_space(const DndSectorReader *reader,
 int dnd_defrag_preflight_direct(const DndDefragFreeSpace *stats,
                                 uint64_t file_bytes,uint64_t *start_cluster) {
     if(!stats || !start_cluster || !stats->bytes_per_cluster ||
-       !stats->total_clusters)return -EINVAL;
+       !stats->total_clusters || stats->free_clusters>stats->total_clusters ||
+       stats->largest_free_run_clusters>stats->free_clusters ||
+       (stats->largest_free_run_clusters &&
+        (stats->largest_free_run_start_cluster<2 ||
+         stats->largest_free_run_start_cluster>stats->total_clusters+2 ||
+         stats->largest_free_run_clusters>
+             stats->total_clusters+2-stats->largest_free_run_start_cluster)) ||
+       stats->total_clusters>UINT32_MAX-2u)return -EINVAL;
     if(file_bytes>INT32_MAX)return -EFBIG;
     uint64_t required=(file_bytes+stats->bytes_per_cluster-1)/
                       stats->bytes_per_cluster;
@@ -310,8 +317,9 @@ static int name_safe(const uint16_t *name) {
     if(!name[0])return 0;
     for(unsigned i=0;i<256;i++) {
         uint16_t ch=name[i];
-        if(!ch)return 1;
-        if(ch<32 || ch=='/' || ch=='\\' || ch==':' || ch==0xffff)return 0;
+        if(!ch)return i && name[i-1]!='.' && name[i-1]!=' ';
+        if(ch<32 || ch=='/' || ch=='\\' || ch==':' || ch==0xffff ||
+           ch=='<' || ch=='>' || ch=='"' || ch=='|' || ch=='?' || ch=='*')return 0;
         if(ch>=0xd800 && ch<=0xdbff) {
             if(i>=254 || name[i+1]<0xdc00 || name[i+1]>0xdfff)return 0;
             i++;

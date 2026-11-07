@@ -13,7 +13,9 @@ typedef struct {
 typedef struct {
     void *context;
     /* Lock both physical volumes throughout the invocation. Revalidate the
-     * trusted manifest, source hashes, writable firmware and handle/DVD guards. */
+     * trusted manifest, source hashes, writable firmware, capacity, planned
+     * allocation changes and handle/DVD guards. Ignore only this operation's
+     * own journal/stage mutations; unrelated changes invalidate the plan. */
     int (*guard)(void *,const DndDefragBatch *);
     /* Immutable reserved manifest, indexed 0=header, 1=ISO, 2+=blockers.
      * Read EXACTLY WIRE_BYTES or -ENOENT. Writes are create-new only; partial

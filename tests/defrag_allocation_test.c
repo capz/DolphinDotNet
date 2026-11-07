@@ -60,6 +60,12 @@ int main(void) {
     assert(dnd_defrag_read_free_space(&reader,&stats)==-EIO);
     assert(dnd_defrag_read_free_space(NULL,&stats)==-EINVAL);
     assert(dnd_defrag_read_free_space(&reader,NULL)==-EINVAL);
+    stats=(DndDefragFreeSpace){.total_clusters=50,.free_clusters=20,
+        .largest_free_run_clusters=10,.largest_free_run_start_cluster=49,
+        .bytes_per_cluster=512};
+    assert(dnd_defrag_preflight_direct(&stats,512,&start)==-EINVAL);
+    stats.largest_free_run_start_cluster=2;stats.free_clusters=51;
+    assert(dnd_defrag_preflight_direct(&stats,512,&start)==-EINVAL);
     puts("read-only FAT32/exFAT free-run preflight passed");
     return 0;
 }
