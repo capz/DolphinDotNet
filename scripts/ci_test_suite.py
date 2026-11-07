@@ -76,6 +76,13 @@ def main(area):
             run("cc","-std=c11","-O2","-Wall","-Wextra","-Werror",
                 "-Iinclude","tests/verified_copy_test.c","source/verified_copy.c","-o",binary)
             run(binary,"--large")
+            for name,extra in (("evacuation_journal",()),
+                               ("evacuation",("source/evacuation.c",))):
+                binary=Path(tmp)/(name+"-test")
+                run("cc","-std=c11","-O2","-Wall","-Wextra","-Werror",
+                    "-Iinclude","tests/"+name+"_test.c",
+                    "source/evacuation_journal.c","source/verified_copy.c",*extra,"-o",binary)
+                run(binary)
         test("tests/ConsoleServicesTests")
         build("tests/CardManagerSmoke/CardManagerSmoke.csproj")
         for p in ("StorageSmoke","AramSmoke","LibrarySmoke","DiscIdentityTests",
