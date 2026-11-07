@@ -91,6 +91,11 @@ int main(void) {
     exfat(&f,0);
     f.sectors[0][110]=2; /* TexFAT dual bitmap needs an active-bitmap policy. */
     assert(dnd_defrag_read_free_space(&reader,&stats)==-ENOTSUP);
+    exfat(&f,0);
+    wr32(f.sectors[0]+92,UINT32_MAX);
+    wr64(f.sectors[0]+72,UINT64_C(1)<<42);
+    assert(dnd_defrag_read_free_space(&reader,&stats)==-EIO);
+    /* An attacker-controlled cluster count cannot wrap FAT-size checks. */
     fat32(&f,0);
     f.sectors[0][13]=3; /* Invalid non-power-of-two cluster size. */
     assert(dnd_defrag_read_free_space(&reader,&stats)==-EIO);

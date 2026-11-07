@@ -52,9 +52,10 @@ static int boot(Volume *v) {
         uint64_t size=u64(b+72);
         uint64_t fat_offset=u32(b+80), heap_offset=u32(b+88);
         if(!size || !v->fat_sectors || !v->clusters ||
+           v->clusters>0xfffffff5u || /* exFAT reserved cluster indices */
            fat_offset>=size || heap_offset>=size ||
            (uint64_t)v->clusters*v->spc>size-heap_offset ||
-           (uint64_t)(v->clusters+2u)*4>(uint64_t)v->fat_sectors*SECTOR)
+           ((uint64_t)v->clusters+2u)*4>(uint64_t)v->fat_sectors*SECTOR)
             return -EIO;
         v->volume_end=start+size;
         if(v->volume_end<start || fat_offset+v->fat_sectors>heap_offset)
