@@ -77,7 +77,8 @@ def main(area):
                 "-Iinclude","tests/verified_copy_test.c","source/verified_copy.c","-o",binary)
             run(binary,"--large")
             for name,extra in (("evacuation_journal",()),
-                               ("evacuation",("source/evacuation.c",))):
+                               ("evacuation",("source/evacuation.c",)),
+                               ("defrag_batch",("source/defrag_batch.c","source/evacuation.c"))):
                 binary=Path(tmp)/(name+"-test")
                 run("cc","-std=c11","-O2","-Wall","-Wextra","-Werror",
                     "-Iinclude","tests/"+name+"_test.c",

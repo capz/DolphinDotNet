@@ -19,7 +19,9 @@ typedef struct {
     int (*open_copy)(void *,const DndEvacRecord *,unsigned direction,DndCopyOps *);
     int (*close_copy)(void *);
     /* Reopen and verify full SHA-256/length. Original/target-stage checks
-     * additionally require physical extent count == 1 after restoration.
+     * additionally require physical extent count == 1 after ISO restoration.
+     * A BLOCKERS record may accept fragmentation only if the P4 coordinator
+     * measures and explicitly reports its physical extent count afterward.
      * Before source release, original need only match its original bytes.
      * No symlinks, special files, unverified overwrite or journal path trust.
      * Return -ENOENT only if the exact expected file is absent. */
