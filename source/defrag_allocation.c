@@ -12,6 +12,7 @@ typedef struct {
     uint64_t fat_lba, heap_lba, volume_end;
     uint32_t fat_sectors, clusters, spc, root;
     int exfat;
+    unsigned bitmap_seen,upcase_seen;
     uint64_t fingerprint, serial;
     uint64_t cached_fat;
     _Alignas(32) unsigned char fat_cache[SECTOR];
@@ -64,7 +65,7 @@ static int boot(Volume *v) {
     if(b[510]!=0x55 || b[511]!=0xaa)return -ENOTSUP;
     uint64_t start=v->reader->partition_lba;
     if(!memcmp(b+3,"EXFAT   ",8)) {
-        if(b[108]!=9 || b[109]>15 || b[110]!=1)
+        if(b[108]!=9 || b[109]>15 || b[110]!=1 || (u16(b+106)&1))
             return -ENOTSUP; /* TexFAT dual bitmap is not yet supported. */
         v->exfat=1;
         v->serial=u32(b+100);
@@ -365,7 +366,9 @@ static int fat_entry(EntryState *s,const unsigned char *e,DndDefragFile *f) {
             if(i==8 && e[i]!=' ')f->name[n++]='.';
             if(e[i]==' ')continue;
             if(e[i]<32 || e[i]>126)f->flags|=DND_DEFRAG_PINNED;
-            f->name[n++]=e[i];
+            unsigned char ch=e[i];
+            if(ch>='A' && ch<='Z' && (e[12]&(i<8?8:16)))ch=(unsigned char)(ch+32);
+            f->name[n++]=ch;
         }
     }
     f->attributes=e[11];
@@ -400,7 +403,7 @@ static int ex_entry(EntryState *s,const unsigned char *e,DndDefragFile *f,
     }
     if(!s->remaining) {
         /* Unsupported critical directory entries cannot safely hide owners. */
-        if((e[0]&0x80) && !(e[0]&0x20) &&
+        if((e[0]&0x80) &&
            e[0]!=0x81 && e[0]!=0x82 && e[0]!=0x83)return -ENOTSUP;
         return 0;
     }
@@ -445,6 +448,18 @@ static int directory(Volume *v,DndDefragSnapshot *m,uint32_t owner,
                     return state.remaining?-EIO:0;
                 const unsigned char *e=b+at;
                 if(!e[0])return state.remaining||state.active?-EIO:0;
+                if(v->exfat && (e[0]==0x81 || e[0]==0x82)) {
+                    if(owner!=0 || state.remaining)return -EIO;
+                    if(e[0]==0x81) {
+                        if(v->bitmap_seen++ || e[1])return -ENOTSUP;
+                    } else {
+                        if(v->upcase_seen++)return -EIO;
+                        if(!u64(e+24) || u64(e+24)>131072)return -EIO;
+                    }
+                    rc=chain(v,m,u32(e+20),u64(e+24),0,DND_DEFRAG_SYSTEM);
+                    if(rc<0)return rc;
+                    continue;
+                }
                 DndDefragFile f;
                 rc=v->exfat?ex_entry(&state,e,&f,lba+sec,at):
                             fat_entry(&state,e,&f);
@@ -531,18 +546,12 @@ int dnd_defrag_scan(const DndSectorReader *reader,DndDefragDevice device,
     /* Root has an unknown logical length on both formats. */
     rc=chain(&v,m,v.root,0,DND_DEFRAG_DIRECTORY,0);
     if(rc<0)return rc;
-    if(v.exfat) {
-        uint32_t first;uint64_t bytes;
-        rc=bitmap_location(&v,&first,&bytes);
-        if(rc<0)return rc;
-        rc=chain(&v,m,first,bytes,0,DND_DEFRAG_SYSTEM);
-        if(rc<0)return rc;
-    }
     for(size_t i=0;i<m->file_count;i++) {
         if(!(m->files[i].flags&DND_DEFRAG_DIRECTORY))continue;
         rc=directory(&v,m,(uint32_t)i,ops);
         if(rc<0)return rc;
     }
+    if(v.exfat && (v.bitmap_seen!=1 || v.upcase_seen!=1))return -EIO;
     rc=partition_runs(m);
     if(rc<0)return rc;
     m->device=device;m->partition_lba=reader->partition_lba;

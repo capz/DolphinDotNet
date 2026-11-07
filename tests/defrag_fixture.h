@@ -35,9 +35,10 @@ static void exfat(Fixture *f,int offset) {
     wr32(b+80,1);wr32(b+84,1);
     wr32(b+88,2);wr32(b+92,60);wr32(b+96,2);
     b[108]=9;b[109]=0;b[110]=1;b[510]=0x55;b[511]=0xaa;
-    wr32(fat+8,0xffffffff);wr32(fat+12,0xffffffff);
+    wr32(fat+8,0xffffffff);wr32(fat+12,0xffffffff);wr32(fat+16,0xffffffff);
     root[0]=0x81;root[1]=0;
     wr32(root+20,3);wr64(root+24,8);
+    root[32]=0x82;wr32(root+52,4);wr64(root+56,512);
     memset(bitmap,0xff,8);
     for(unsigned i=5;i<=9;i++)bitmap[i/8] &= (unsigned char)~(1u<<(i%8));
     for(unsigned i=22;i<=32;i++)bitmap[i/8] &= (unsigned char)~(1u<<(i%8));

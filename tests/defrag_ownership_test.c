@@ -118,9 +118,9 @@ int main(void) {
     assert(dnd_defrag_scan(&reader,device,ops,&m)==-EIO);
     /* exFAT NoFatChain with Unicode name and validated entry-set checksum. */
     exfat(&f,0);
-    unsigned char *e=f.sectors[2]+32;
+    unsigned char *e=f.sectors[2]+64;
     e[0]=0x85;e[1]=2;e[32]=0xc0;e[33]=3;e[35]=2;
-    wr64(e+40,1024);wr32(e+52,4);wr64(e+56,1024);
+    wr64(e+40,1024);wr32(e+52,12);wr64(e+56,1024);
     e[64]=0xc1;wr16(e+66,0x65e5);wr16(e+68,0x672c);
     wr16(e+2,(uint16_t)sum_set(e,3));
     assert(dnd_defrag_scan(&reader,device,ops,&m)==0 && m.file_count==2);
@@ -130,6 +130,15 @@ int main(void) {
     assert(dnd_defrag_scan(&reader,device,ops,&m)==-EIO); /* corrupt set */
     e[68]--;wr32(e+52,7);wr16(e+2,(uint16_t)sum_set(e,3));
     assert(dnd_defrag_scan(&reader,device,ops,&m)==-EIO); /* bitmap says free */
+    exfat(&f,0);
+    f.sectors[3][0]&=(unsigned char)~4u; /* Upcase metadata allocated as free. */
+    assert(dnd_defrag_scan(&reader,device,ops,&m)==-EIO);
+    exfat(&f,0);
+    memcpy(f.sectors[2]+64,f.sectors[2],32); /* Duplicate allocation bitmap. */
+    assert(dnd_defrag_scan(&reader,device,ops,&m)==-ENOTSUP);
+    exfat(&f,0);
+    f.sectors[2][64]=0xe0; /* Unsupported allocation-bearing vendor entry. */
+    assert(dnd_defrag_scan(&reader,device,ops,&m)==-ENOTSUP);
     reader.partition_lba=4;exfat(&f,4);
     assert(dnd_defrag_scan(&reader,device,ops,&m)==0 && m.partition_lba==4);
     f.read_error=1;
