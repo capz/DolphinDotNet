@@ -2,6 +2,7 @@
 #include "dnd_file_optimize.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -12,9 +13,15 @@
 
 #define DND_OPT_PATH 1024
 #define DND_OPT_BUFFER 16384
-#define DND_OPT_MAGIC "DNDFRG01"
+#define DND_OPT_MAGIC "DNDFRG02"
 #define DND_OPT_PREPARE ".__dnd_opt.prepare"
 #define DND_OPT_COMMIT ".__dnd_opt.jrn"
+typedef struct {
+    char magic[8];
+    uint64_t bytes,digest;
+    char original[DND_OPT_PATH],stage[DND_OPT_PATH],backup[DND_OPT_PATH];
+    uint32_t integrity;
+} DndOptimizeLegacyJournal;
 typedef struct {
     char magic[8];
     uint64_t bytes;
@@ -22,6 +29,7 @@ typedef struct {
     char original[DND_OPT_PATH];
     char stage[DND_OPT_PATH];
     char backup[DND_OPT_PATH];
+    unsigned char sha256[32];
     uint32_t integrity;
 } DndOptimizeJournal;
 
@@ -71,7 +79,7 @@ static int path_is_below(const char *root, const char *path) {
 }
 static int exists(const char *path) {
     struct stat st;
-    return stat(path, &st) == 0 ? 1 : errno == ENOENT ? 0 : -errno;
+    return lstat(path, &st) == 0 ? 1 : errno == ENOENT ? 0 : -errno;
 }
 static int sync_close(int fd) {
     int rc = fsync(fd) < 0 ? -errno : 0;
@@ -90,29 +98,42 @@ static int exact_write(int fd, const void *buffer, size_t size) {
     }
     return 0;
 }
-static int full_digest(const char *path, uint64_t *bytes, uint64_t *digest) {
+static int full_digest(const char *path, uint64_t *bytes, uint64_t *digest,
+                         unsigned char sha256[32],DndCopyResult *metrics,
+                         const DndOptimizeOptions *options) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) return -errno;
     _Alignas(32) unsigned char buffer[DND_OPT_BUFFER];
     uint64_t sum = UINT64_C(14695981039346656037), count = 0;
+    DndSha256 sha;dnd_sha256_init(&sha);
     int rc = 0;
     for (;;) {
+        if(options && options->cancelled && options->cancelled(options->context)) {
+            rc=-ECANCELED;break;
+        }
         ssize_t n = read(fd, buffer, sizeof(buffer));
         if (n < 0 && errno == EINTR) continue;
         if (n < 0) { rc = -errno; break; }
         if (n == 0) break;
         sum = digest_update(sum, buffer, (size_t)n);
+        dnd_sha256_update(&sha,buffer,(size_t)n);
+        if(metrics)metrics->bytes_read+=(uint64_t)n;
         count += (uint64_t)n;
+        if(count>INT32_MAX) {rc=-EFBIG;break;}
     }
     int closed = close_file(fd);
     if (!rc) rc = closed;
-    if (!rc) { *bytes = count; *digest = sum; }
+    if (!rc) { *bytes = count; *digest = sum;dnd_sha256_finish(&sha,sha256); }
     return rc;
 }
-static int matches(const char *path, const DndOptimizeJournal *j) {
+static int matches(const char *path,const DndOptimizeJournal *j,DndCopyResult *metrics,
+                     const DndOptimizeOptions *options) {
     uint64_t bytes, digest;
-    int rc = full_digest(path, &bytes, &digest);
-    return rc < 0 ? rc : (bytes == j->bytes && digest == j->digest);
+    unsigned char sha[32];
+    int rc = full_digest(path, &bytes, &digest,sha,metrics,options);
+    return rc < 0 ? rc : (bytes == j->bytes && digest == j->digest &&
+                           (!memcmp(j->magic,"DNDFRG01",8) ||
+                            !memcmp(sha,j->sha256,32)));
 }
 static int journal_path(char *out, const char *root, const char *name) {
     return compose(out, root, name);
@@ -123,10 +144,20 @@ static int journal_load(const char *root, const char *name, DndOptimizeJournal *
     if (rc) return rc;
     int fd = open(file, O_RDONLY);
     if (fd < 0) return errno == ENOENT ? 0 : -errno;
+    struct stat st;
+    if(fstat(fd,&st)<0) {rc=-errno;close_file(fd);return rc;}
+    /* The previous journal ended immediately after its FNV integrity field.
+     * Normalize that wire layout before validation, retaining its legacy
+     * digest rule so an upgrade can recover existing interrupted operations. */
+    size_t legacy_size=sizeof(DndOptimizeLegacyJournal);
+    int legacy=st.st_size==(off_t)legacy_size;
+    if(!legacy && st.st_size!=(off_t)sizeof(*j)) {close_file(fd);return -EINVAL;}
+    size_t encoded_size=legacy?legacy_size:sizeof(*j);
+    memset(j,0,sizeof(*j));
     unsigned char *p = (unsigned char *)j;
     size_t done = 0;
-    while (done < sizeof(*j)) {
-        ssize_t n = read(fd, p+done, sizeof(*j)-done);
+    while (done < encoded_size) {
+        ssize_t n = read(fd, p+done, encoded_size-done);
         if (n < 0 && errno == EINTR) continue;
         if (n <= 0) { rc = n < 0 ? -errno : -EIO; break; }
         done += (size_t)n;
@@ -139,7 +170,15 @@ static int journal_load(const char *root, const char *name, DndOptimizeJournal *
     int closed = close_file(fd);
     if (!rc) rc = closed;
     if (rc) return rc;
-    if (memcmp(j->magic, DND_OPT_MAGIC, 8) ||
+    if(legacy) {
+        uint32_t previous;
+        memcpy(&previous,j->sha256,sizeof(previous));
+        if(memcmp(j->magic,"DNDFRG01",8) ||
+           previous!=integrity(j,offsetof(DndOptimizeJournal,sha256)))return -EINVAL;
+        memset(j->sha256,0,sizeof(j->sha256));
+        j->integrity=integrity(j,offsetof(DndOptimizeJournal,integrity));
+    }
+    if ((!legacy && memcmp(j->magic, DND_OPT_MAGIC, 8)) ||
         j->integrity != integrity(j, offsetof(DndOptimizeJournal, integrity)) ||
         !memchr(j->original,0,sizeof(j->original)) ||
         !memchr(j->stage,0,sizeof(j->stage)) ||
@@ -193,7 +232,7 @@ static int safe_unlink(const char *path) {
     if(rc<=0)return rc;
     return unlink(path)<0?-errno:0;
 }
-int dnd_optimize_recover(const char *root) {
+static int recover(const char *root,DndCopyResult *metrics) {
     DndOptimizeJournal prepare={0},committed={0};
     int p=journal_load(root,DND_OPT_PREPARE,&prepare);
     if(p<0)return p;
@@ -220,7 +259,7 @@ int dnd_optimize_recover(const char *root) {
         if(!source) {
             if(rename(j->backup,j->original))return -errno;
         } else {
-            int good=matches(j->original,j);
+            int good=matches(j->original,j,metrics,NULL);
             if(good<0)return good;
             if(!good)return -EIO;
             int rc=safe_unlink(j->backup);
@@ -228,7 +267,7 @@ int dnd_optimize_recover(const char *root) {
         }
     } else {
         if(!source)return -EIO;
-        int good=matches(j->original,j);
+        int good=matches(j->original,j,metrics,NULL);
         if(good<0)return good;
         /* Before the first rename, the original need not match a copy that
          * was prepared but never published. The stage still exists then. */
@@ -241,37 +280,96 @@ int dnd_optimize_recover(const char *root) {
     rc=remove_journal(root,DND_OPT_COMMIT);
     return rc<0?rc:remove_journal(root,DND_OPT_PREPARE);
 }
-static int copy_and_hash(const char *from, const char *to, uint64_t size,
-                         uint64_t *hash,const DndOptimizeOps *ops) {
-    int input = open(from,O_RDONLY);
-    if (input < 0) return -errno;
-    int output = open(to,O_WRONLY|O_CREAT|O_EXCL,0600);
-    if (output < 0) { int rc=-errno; close_file(input); return rc; }
-    int rc = 0;
-    /* On libdvm this attempts f_expand before ordinary allocation. We still
-     * verify extents; libdvm currently ignores the f_expand result. */
-    if (ftruncate(output,(off_t)size) < 0) rc = -errno;
-    if (!rc && lseek(output,0,SEEK_SET) < 0) rc = -errno;
-    _Alignas(32) unsigned char buffer[DND_OPT_BUFFER];
-    uint64_t written=0, digest=UINT64_C(14695981039346656037);
-    while (!rc && written < size) {
-        size_t want = size-written < sizeof(buffer) ? (size_t)(size-written) : sizeof(buffer);
-        ssize_t got = read(input,buffer,want);
-        if (got < 0 && errno == EINTR) continue;
-        if (got <= 0) { rc = got < 0 ? -errno : -EIO; break; }
-        rc = exact_write(output,buffer,(size_t)got);
-        if (rc) break;
-        digest = digest_update(digest,buffer,(size_t)got);
-        written += (uint64_t)got;
-        if(written==(uint64_t)got && ops->checkpoint) {
-            rc=ops->checkpoint(ops->context,DND_OPT_DURING_COPY);
-        }
+typedef struct {
+    int input,output,verify;
+    const char *from,*to;
+    struct stat source;
+    const DndOptimizeOps *ops;
+    DndOptimizeOptions options;
+    uint64_t digest;
+} CopyContext;
+static int read_exact_at(int fd,uint64_t at,void *data,size_t bytes) {
+    if(at>INT32_MAX || bytes>(uint64_t)INT32_MAX-at)return -EFBIG;
+    if(lseek(fd,(off_t)at,SEEK_SET)<0)return -errno;
+    unsigned char *p=data;
+    while(bytes) {
+        ssize_t n=read(fd,p,bytes);
+        if(n<0 && errno==EINTR)continue;
+        if(n<=0)return n<0?-errno:-EIO;
+        p+=n;bytes-=(size_t)n;
     }
-    if (!rc) rc = sync_close(output); else close_file(output);
-    int closed = close_file(input);
-    if (!rc) rc = closed;
-    if (!rc) *hash = digest;
+    return 0;
+}
+static int copy_read(void *ctx,uint64_t at,void *data,size_t bytes) {
+    CopyContext *c=ctx;
+    int rc=read_exact_at(c->input,at,data,bytes);
+    if(!rc)c->digest=digest_update(c->digest,data,bytes);
     return rc;
+}
+static int copy_write(void *ctx,uint64_t at,const void *data,size_t bytes) {
+    CopyContext *c=ctx;
+    if(at>INT32_MAX || bytes>(uint64_t)INT32_MAX-at)return -EFBIG;
+    if(lseek(c->output,(off_t)at,SEEK_SET)<0)return -errno;
+    int rc=exact_write(c->output,data,bytes);
+    if(!rc && !at && c->ops->checkpoint)
+        rc=c->ops->checkpoint(c->ops->context,DND_OPT_DURING_COPY);
+    return rc;
+}
+static int copy_verify(void *ctx,uint64_t at,void *data,size_t bytes) {
+    CopyContext *c=ctx;return read_exact_at(c->verify,at,data,bytes);
+}
+static int copy_sync(void *ctx) {
+    CopyContext *c=ctx;return fsync(c->output)<0?-errno:0;
+}
+static int copy_reopen(void *ctx) {
+    CopyContext *c=ctx;
+    if(c->verify>=0) {int rc=close_file(c->verify);c->verify=-1;if(rc)return rc;}
+    c->verify=open(c->to,O_RDONLY);
+    return c->verify<0?-errno:0;
+}
+static int copy_checkpoint(void *ctx,const DndCopyCheckpoint *record) {
+    /* Direct PREPARE recovers by rollback. Resumable cross-device owners
+     * persist this record in the replicated journal instead. */
+    (void)ctx;(void)record;return 0;
+}
+static int copy_guard(void *ctx) {
+    CopyContext *c=ctx;struct stat st;
+    if(lstat(c->from,&st)<0)return -errno;
+    return !S_ISREG(st.st_mode) || st.st_dev!=c->source.st_dev ||
+           st.st_ino!=c->source.st_ino || st.st_size!=c->source.st_size ||
+           st.st_mtime!=c->source.st_mtime?-ESTALE:0;
+}
+static int copy_cancelled(void *ctx) {
+    CopyContext *c=ctx;
+    return c->options.cancelled && c->options.cancelled(c->options.context);
+}
+static void copy_progress(void *ctx,const DndCopyResult *progress) {
+    CopyContext *c=ctx;
+    if(c->options.progress)c->options.progress(c->options.context,progress);
+}
+static int copy_and_hash(const char *from,const char *to,DndOptimizeJournal *j,
+                         const DndOptimizeOps *ops,DndOptimizeOptions options,
+                         DndCopyResult *result) {
+    CopyContext c={.input=-1,.output=-1,.verify=-1,.from=from,.to=to,
+                   .ops=ops,.options=options,.digest=UINT64_C(14695981039346656037)};
+    if(lstat(from,&c.source)<0)return -errno;
+    c.input=open(from,O_RDONLY);if(c.input<0)return -errno;
+    c.output=open(to,O_WRONLY|O_CREAT|O_EXCL,0600);
+    if(c.output<0) {int rc=-errno;close_file(c.input);return rc;}
+    int rc=0;
+    /* libdvm attempts f_expand; successful aligned I/O still does not prove
+     * contiguity. The caller checks physical extents before publishing. */
+    if(j->bytes>INT32_MAX)rc=-EFBIG;
+    if(!rc && ftruncate(c.output,(off_t)j->bytes)<0)rc=-errno;
+    DndCopyOps stream={&c,copy_read,copy_write,copy_verify,copy_sync,copy_reopen,
+                       copy_checkpoint,copy_guard,copy_cancelled,copy_progress};
+    DndCopyCheckpoint start={.version=DND_COPY_VERSION,.length=j->bytes};
+    _Alignas(32) unsigned char buffer[DND_COPY_BUFFER];
+    if(!rc)rc=dnd_verified_copy(stream,&start,1024*1024,buffer,sizeof(buffer),result);
+    if(!rc) {j->digest=c.digest;memcpy(j->sha256,result->sha256,32);}
+    if(c.verify>=0) {int closed=close_file(c.verify);if(!rc)rc=closed;}
+    int closed=close_file(c.output);if(!rc)rc=closed;
+    closed=close_file(c.input);return rc?rc:closed;
 }
 /* Preserve user-visible timestamps and POSIX permission bits on host.
  * GameCube FAT attributes require the dedicated libdvm metadata callback. */
@@ -285,13 +383,17 @@ static int preserve_metadata(const char *original,const char *stage,
     if(chmod(stage,metadata->st_mode&07777)<0)return -errno;
     return 0;
 }
-int dnd_optimize_file(const char *root, const char *path,
-                      const DndOptimizeOps *ops) {
+int dnd_optimize_file_ex(const char *root,const char *path,
+                         const DndOptimizeOps *ops,DndOptimizeOptions options,
+                         DndCopyResult *copy_result) {
+    if(!copy_result)return -EINVAL;
+    memset(copy_result,0,sizeof(*copy_result));
+    if(options.cancelled && options.cancelled(options.context))return -ECANCELED;
     if (!root || !path || !ops || !ops->count_extents ||
         !path_is_below(root,path))
         return -EINVAL;
     DndOptimizeJournal j = {0};
-    int rc = dnd_optimize_recover(root);
+    int rc = recover(root,copy_result);
     if (rc < 0) return rc;
     unsigned count = 0;
     rc = ops->count_extents(ops->context,path,&count);
@@ -299,11 +401,11 @@ int dnd_optimize_file(const char *root, const char *path,
     if (rc < 0) return rc;
     if (count <= 1) return DND_OPT_ALREADY_CONTIGUOUS;
     struct stat st;
-    if (stat(path,&st)) return -errno;
+    if (lstat(path,&st)) return -errno;
     if (!S_ISREG(st.st_mode) || st.st_size <= 0) return -EINVAL;
     /* This runtime uses native 32-bit off_t on GameCube; fail rather than
      * truncating offsets or allocating only part of a large file. */
-    if ((uint64_t)(off_t)st.st_size != (uint64_t)st.st_size) return -EFBIG;
+    if ((uint64_t)st.st_size>INT32_MAX) return -EFBIG;
     uint32_t id = integrity(path,strlen(path));
     char leaf[40];
     snprintf(leaf,sizeof(leaf),".__dndopt_%08x.tmp",id);
@@ -327,23 +429,18 @@ int dnd_optimize_file(const char *root, const char *path,
         rc=ops->checkpoint(ops->context,DND_OPT_AFTER_PREPARE);
         if(rc<0)return rc;
     }
-    rc = copy_and_hash(path,j.stage,j.bytes,&j.digest,ops);
+    uint64_t recovery_reads=copy_result->bytes_read;
+    rc = copy_and_hash(path,j.stage,&j,ops,options,copy_result);
+    copy_result->bytes_read+=recovery_reads;
     if(rc<0) {
         if(rc==-EINTR && ops->checkpoint)return rc;
-        int cleanup=dnd_optimize_recover(root);
+        int cleanup=recover(root,copy_result);
         return cleanup<0?cleanup:rc;
-    }
-    uint64_t length=0, check=0;
-    rc = full_digest(j.stage,&length,&check);
-    if (rc < 0 || length != j.bytes || check != j.digest) {
-        int cleanup=dnd_optimize_recover(root);
-        if(cleanup<0)return cleanup;
-        return rc < 0 ? rc : -EIO;
     }
     unsigned stage_extents=0;
     rc = ops->count_extents(ops->context,j.stage,&stage_extents);
     if (rc < 0 || stage_extents != 1) {
-        int cleanup=dnd_optimize_recover(root);
+        int cleanup=recover(root,copy_result);
         if(cleanup<0)return cleanup;
         return rc == -ENOTSUP ? DND_OPT_UNSUPPORTED
              : rc < 0 ? rc : DND_OPT_NO_CONTIGUOUS_SPACE;
@@ -353,20 +450,24 @@ int dnd_optimize_file(const char *root, const char *path,
        ops->preserve_metadata(ops->context,path,j.stage,&st):
        preserve_metadata(path,j.stage,&st);
     if(rc<0) {
-        int cleanup=dnd_optimize_recover(root);
+        int cleanup=recover(root,copy_result);
         return cleanup<0?cleanup:(rc==-ENOSYS || rc==-ENOTSUP?
                                    DND_OPT_UNSUPPORTED:rc);
     }
-    rc=matches(path,&j);
+    rc=matches(path,&j,copy_result,&options);
     if(rc<0 || !rc) {
-        int cleanup=dnd_optimize_recover(root);
+        int cleanup=recover(root,copy_result);
         return cleanup<0?cleanup:(rc<0?rc:-EBUSY);
     }
     /* A second durable journal activates the rename transaction only after
      * the staged copy, metadata and hash have all been verified. */
+    if(options.cancelled && options.cancelled(options.context)) {
+        int cleanup=recover(root,copy_result);
+        return cleanup<0?cleanup:-ECANCELED;
+    }
     rc=journal_save(root,DND_OPT_COMMIT,&j);
     if(rc<0) {
-        int cleanup=dnd_optimize_recover(root);
+        int cleanup=recover(root,copy_result);
         return cleanup<0?cleanup:rc;
     }
     if (ops->checkpoint) {
@@ -383,6 +484,16 @@ int dnd_optimize_file(const char *root, const char *path,
         rc = ops->checkpoint(ops->context,DND_OPT_AFTER_PUBLISH);
         if (rc < 0) return rc;
     }
-    rc = dnd_optimize_recover(root);
+    rc = recover(root,copy_result);
     return rc < 0 ? rc : DND_OPT_REPAIRED;
+}
+
+int dnd_optimize_file(const char *root,const char *path,const DndOptimizeOps *ops) {
+    DndCopyResult result;DndOptimizeOptions options={0};
+    return dnd_optimize_file_ex(root,path,ops,options,&result);
+}
+
+int dnd_optimize_recover(const char *root) {
+    if(!root)return -EINVAL;
+    return recover(root,NULL);
 }

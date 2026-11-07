@@ -60,6 +60,31 @@ def main(area):
                     "-lm","-o",binary)
                 run(binary)
     elif area=="storage":
+        # Run new physical FAT32/exFAT free-run fixtures independently of the
+        # broader native suite. The latter also exercises unrelated hardware
+        # stubs and may be unavailable on some host runner configurations.
+        with tempfile.TemporaryDirectory() as tmp:
+            for name,source in (("allocation","allocation"),
+                                ("ownership","allocation"),
+                                ("planner","planner"),
+                                ("rebuild","rebuild")):
+                binary=Path(tmp)/("defrag-"+name+"-test")
+                run("cc","-std=c11","-Wall","-Wextra","-Werror",
+                    "-Iinclude","tests/defrag_"+name+"_test.c",
+                    "source/defrag_"+source+".c","-o",binary)
+                run(binary)
+            binary=Path(tmp)/"verified-copy-test"
+            run("cc","-std=c11","-O2","-Wall","-Wextra","-Werror",
+                "-Iinclude","tests/verified_copy_test.c","source/verified_copy.c","-o",binary)
+            run(binary,"--large")
+            for name,extra in (("evacuation_journal",()),
+                               ("evacuation",("source/evacuation.c",)),
+                               ("defrag_batch",("source/defrag_batch.c","source/evacuation.c"))):
+                binary=Path(tmp)/(name+"-test")
+                run("cc","-std=c11","-O2","-Wall","-Wextra","-Werror",
+                    "-Iinclude","tests/"+name+"_test.c",
+                    "source/evacuation_journal.c","source/verified_copy.c",*extra,"-o",binary)
+                run(binary)
         test("tests/ConsoleServicesTests")
         build("tests/CardManagerSmoke/CardManagerSmoke.csproj")
         for p in ("StorageSmoke","AramSmoke","LibrarySmoke","DiscIdentityTests",
