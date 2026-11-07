@@ -72,6 +72,10 @@ def main(area):
                     "-Iinclude","tests/defrag_"+name+"_test.c",
                     "source/defrag_"+source+".c","-o",binary)
                 run(binary)
+            binary=Path(tmp)/"verified-copy-test"
+            run("cc","-std=c11","-O2","-Wall","-Wextra","-Werror",
+                "-Iinclude","tests/verified_copy_test.c","source/verified_copy.c","-o",binary)
+            run(binary,"--large")
         test("tests/ConsoleServicesTests")
         build("tests/CardManagerSmoke/CardManagerSmoke.csproj")
         for p in ("StorageSmoke","AramSmoke","LibrarySmoke","DiscIdentityTests",

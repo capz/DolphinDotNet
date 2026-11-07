@@ -2,6 +2,7 @@
 #define DND_FILE_OPTIMIZE_H
 #include <stdint.h>
 #include <sys/stat.h>
+#include "dnd_verified_copy.h"
 
 /* Status values are stable across the native/managed bridge. */
 enum {
@@ -37,6 +38,19 @@ enum {
  * Return a status above or a negative errno. */
 int dnd_optimize_file(const char *root, const char *path,
                       const DndOptimizeOps *ops);
+typedef struct {
+    void *context;
+    int (*cancelled)(void *context);
+    void (*progress)(void *context,const DndCopyResult *progress);
+} DndOptimizeOptions;
+/* Same safe direct relocation with bounded SHA-256 streaming, cancellation
+ * before publication, durable-byte progress and actual transfer counters.
+ * Cancellation leaves PREPARE recovery able to discard the partial stage.
+ * Progress is advisory; it never authorizes deleting or publishing a file.
+ * source must remain locked against concurrent writers throughout the call. */
+int dnd_optimize_file_ex(const char *root,const char *path,
+                         const DndOptimizeOps *ops,DndOptimizeOptions options,
+                         DndCopyResult *copy_result);
 /* Call before exposing the newly mounted volume. The PREPARE journal
  * precedes creation of staged bytes, so interrupted partial copies are
  * reclaimable; the COMMIT journal precedes source renames. Never discards

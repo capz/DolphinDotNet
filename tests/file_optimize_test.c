@@ -57,6 +57,16 @@ static int directory_contains(const char *root, const char *suffix) {
     struct stat st;
     return stat(name,&st) == 0;
 }
+typedef struct {int cancel;unsigned reports;uint64_t durable;} Progress;
+static int cancel_copy(void *ctx) {return ((Progress *)ctx)->cancel;}
+static void copy_progress(void *ctx,const DndCopyResult *p) {
+    Progress *progress=ctx;progress->reports++;
+    assert(p->durable_bytes>=progress->durable);
+    progress->durable=p->durable_bytes;
+}
+static void cancel_after_sync(void *ctx,const DndCopyResult *p) {
+    copy_progress(ctx,p);((Progress *)ctx)->cancel=1;
+}
 int main(void) {
     char root[]="/tmp/dnd-defrag-XXXXXX", path[1024];
     assert(mkdtemp(root));
@@ -110,6 +120,7 @@ int main(void) {
         char magic[8];
         uint64_t bytes,digest;
         char original[1024],stage[1024],backup[1024];
+        unsigned char sha256[32];
         uint32_t integrity;
     } TestJournal;
     fixture.fail_at=DND_OPT_AFTER_PREPARE;
@@ -137,6 +148,46 @@ int main(void) {
     assert(unlink(prepare_path)==0);
     assert(unlink(keep)==0);
     fixture.fail_at=0;
+    Progress progress={0};DndCopyResult metrics;
+    DndOptimizeOptions options={&progress,cancel_copy,copy_progress};
+    assert(dnd_optimize_file_ex(root,path,&ops,options,&metrics)==DND_OPT_REPAIRED);
+    /* Source stream + stage readback + source revalidation + published
+     * recovery verification: exact actual I/O, no hidden redundant stage pass. */
+    assert(metrics.bytes_written==135169 && metrics.bytes_read==4*135169);
+    assert(metrics.durable_bytes==135169 && metrics.verified_bytes==135169);
+    assert(progress.reports>0);
+    options.progress=cancel_after_sync;progress=(Progress){0};
+    assert(dnd_optimize_file_ex(root,path,&ops,options,&metrics)==-ECANCELED);
+    expected_file(path,135169);
+    assert(dnd_optimize_recover(root)==0 && !directory_contains(root,".__dnd_opt.prepare"));
+    /* Even on a 64-bit host, reject inputs the PowerPC off_t cannot represent. */
+    char huge[1024];snprintf(huge,sizeof(huge),"%s/huge.iso",root);
+    int huge_fd=open(huge,O_WRONLY|O_CREAT|O_EXCL,0600);
+    assert(huge_fd>=0 && ftruncate(huge_fd,(off_t)2147483648ULL)==0 && close(huge_fd)==0);
+    assert(dnd_optimize_file(root,huge,&ops)==-EFBIG);
+    assert(!directory_contains(root,".__dnd_opt.prepare") && unlink(huge)==0);
+    /* An SDK upgrade can still recover an intact version-one transaction. */
+    fixture.fail_at=DND_OPT_BEFORE_BACKUP;
+    assert(dnd_optimize_file(root,path,&ops)==-EINTR);
+    typedef struct {
+        char magic[8];uint64_t bytes,digest;
+        char original[1024],stage[1024],backup[1024];uint32_t integrity;
+    } LegacyJournal;
+    const char *legacy_names[]={".__dnd_opt.prepare",".__dnd_opt.jrn"};
+    for(unsigned i=0;i<2;i++) {
+        char record_path[1024];snprintf(record_path,sizeof(record_path),"%s/%s",root,legacy_names[i]);
+        TestJournal current;int fd=open(record_path,O_RDONLY);
+        assert(fd>=0 && read(fd,&current,sizeof(current))==(ssize_t)sizeof(current));
+        assert(close(fd)==0);
+        LegacyJournal legacy={0};memcpy(&legacy,&current,offsetof(LegacyJournal,integrity));
+        memcpy(legacy.magic,"DNDFRG01",8);
+        uint32_t checksum=2166136261u;const unsigned char *bytes=(const unsigned char *)&legacy;
+        for(size_t j=0;j<offsetof(LegacyJournal,integrity);j++)checksum=(checksum^bytes[j])*16777619u;
+        legacy.integrity=checksum;fd=open(record_path,O_WRONLY|O_TRUNC);
+        assert(fd>=0 && write(fd,&legacy,sizeof(legacy))==(ssize_t)sizeof(legacy) && close(fd)==0);
+    }
+    assert(dnd_optimize_recover(root)==0 && dnd_optimize_recover(root)==0);
+    expected_file(path,135169);fixture.fail_at=0;
     /* A torn COMMIT journal fails closed. Restoring the intact record
      * makes repeated recovery possible without data loss. */
     fixture.fail_at=DND_OPT_BEFORE_BACKUP;

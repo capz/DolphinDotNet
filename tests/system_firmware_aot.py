@@ -53,6 +53,6 @@ def main():
         generated=work/'firmware.c'
         run('dotnet',ROOT/'tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll','--aot',ROOT/'tests/SystemFirmwareReadSmoke/bin/Release/net8.0/SystemFirmwareReadSmoke.dll',generated)
         run(os.environ.get('CC','cc'),'-pthread','-O1','-std=c11','-Wall','-Wextra','-Werror','-Wno-unused-function','-Iinclude',generated,'tests/system_firmware_read_host.c',
-            *sorted(str(p.relative_to(ROOT)) for p in (ROOT/'source').glob('model*.c')),'source/aram.c','source/audio.c','source/draw_resources.c','source/graphics_device.c','source/graphics_gx.c','source/performance.c','source/managed_runtime.c','source/async_runtime.c','source/text.c','source/numeric.c','source/storage.c','source/contiguous_write.c','source/file_optimize.c','-lm','-o',work/'read-host')
+            *sorted(str(p.relative_to(ROOT)) for p in (ROOT/'source').glob('model*.c')),'source/aram.c','source/audio.c','source/draw_resources.c','source/graphics_device.c','source/graphics_gx.c','source/performance.c','source/managed_runtime.c','source/async_runtime.c','source/text.c','source/numeric.c','source/storage.c','source/contiguous_write.c','source/file_optimize.c','source/verified_copy.c','-lm','-o',work/'read-host')
         run(work/'read-host',work,path)
 if __name__=='__main__':main()

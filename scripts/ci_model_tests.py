@@ -26,7 +26,7 @@ def main(fixtures):
     flags = ["-pthread", "-O1", "-g", "-std=c11", "-Wall", "-Wextra", "-Werror", "-Iinclude"]
     common = ["source/managed_runtime.c", "source/async_runtime.c"]
     model = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "source").glob("model*.c"))
-    runtime = common + ["source/storage.c", "source/contiguous_write.c", "source/file_optimize.c"] + model + [
+    runtime = common + ["source/storage.c", "source/contiguous_write.c", "source/file_optimize.c","source/verified_copy.c"] + model + [
         "source/graphics_device.c", "source/draw_resources.c", "source/graphics_gx.c", "source/performance.c"]
     inflate = work / "model-inflate"
     run(cc, *flags, "tests/model_inflate_test.c", "source/model_ufbx.c", "-lm", "-o", inflate)
@@ -61,7 +61,7 @@ def main(fixtures):
     run(cc,*gxflags,"tests/system_model_gx_test.c","source/model_source.c",
         "source/model.c","source/model_animation.c","source/model_transform.c",
         "source/model_graphics.c",*common,"source/storage.c","source/contiguous_write.c",
-        "source/file_optimize.c","source/graphics_device.c","source/draw_resources.c",
+        "source/file_optimize.c","source/verified_copy.c","source/graphics_device.c","source/draw_resources.c",
         "source/performance.c",dead_strip,"-lm","-o",system_recording)
     run(system_recording,system_fixture)
 
