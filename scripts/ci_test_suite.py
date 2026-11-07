@@ -64,11 +64,14 @@ def main(area):
         # broader native suite. The latter also exercises unrelated hardware
         # stubs and may be unavailable on some host runner configurations.
         with tempfile.TemporaryDirectory() as tmp:
-            binary=Path(tmp)/"defrag-allocation-test"
-            run("cc","-std=c11","-Wall","-Wextra","-Werror",
-                "-Iinclude","tests/defrag_allocation_test.c",
-                "source/defrag_allocation.c","-o",binary)
-            run(binary)
+            for name,source in (("allocation","allocation"),
+                                ("ownership","allocation"),
+                                ("planner","planner")):
+                binary=Path(tmp)/("defrag-"+name+"-test")
+                run("cc","-std=c11","-Wall","-Wextra","-Werror",
+                    "-Iinclude","tests/defrag_"+name+"_test.c",
+                    "source/defrag_"+source+".c","-o",binary)
+                run(binary)
         test("tests/ConsoleServicesTests")
         build("tests/CardManagerSmoke/CardManagerSmoke.csproj")
         for p in ("StorageSmoke","AramSmoke","LibrarySmoke","DiscIdentityTests",

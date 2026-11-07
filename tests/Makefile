@@ -10,6 +10,13 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 .PHONY: test clean
 
 test: ipl_font_test
+test: defrag_ownership_test defrag_planner_test
+
+defrag_ownership_test: defrag_ownership_test.c ../source/defrag_allocation.c
+	$(CC) $(CFLAGS) $^ -o $@
+
+defrag_planner_test: defrag_planner_test.c ../source/defrag_planner.c
+	$(CC) $(CFLAGS) $^ -o $@
 
 test: card_manager_test mesh_streams_test display_mode_test graphics_resource_boundaries_test graphics_phase_two_test graphics_submission_test render_state_gx_test overlay_list_test array_fast_test indexed_mesh_gx_test canvas_rectangle_test texture_reuse_test throughput_runtime_test asset_native_test mesh_range_test native_buffer_crc_test file_optimize_test file_extents_test defrag_allocation_test contiguous_write_test managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test jsystem_fixture_telemetry_test asset_compat_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test dol_test
 	./card_manager_test
@@ -32,6 +39,8 @@ test: card_manager_test mesh_streams_test display_mode_test graphics_resource_bo
 	./file_optimize_test
 	./file_extents_test
 	./defrag_allocation_test
+	./defrag_ownership_test
+	./defrag_planner_test
 	./contiguous_write_test
 	./managed_runtime_tests
 	./fst_test
@@ -145,6 +154,7 @@ texture_reuse_test: texture_reuse_test.c ../source/draw_resources.c
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $^ $(CRC_DEAD_STRIP) -lm -o $@
 
 clean:
+	rm -f defrag_ownership_test defrag_planner_test
 	rm -f card_manager_test
 	rm -f ipl_font_test
 	rm -f display_mode_test
