@@ -4,6 +4,12 @@
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef DND_REQUIRE_PPC32
+_Static_assert(sizeof(void *)==4 && sizeof(size_t)==4,"PowerPC32 ABI required");
+#if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
+#error PowerPC big-endian execution required
+#endif
+#endif
 
 int main(void) {
     DndRawMove r={.operation={7,11},.image_id={3,5},.sector_count=100000,

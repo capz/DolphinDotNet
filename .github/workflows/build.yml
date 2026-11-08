@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, feature/model-import-compatibility-phase1, codex/asset-throughput, codex/texture-stage-timings]
+    branches: [main, feature/model-import-compatibility-phase1, codex/asset-throughput, codex/texture-stage-timings, feature/iso-defrag-planning-and-evacuation]
   workflow_dispatch:
 
 permissions:

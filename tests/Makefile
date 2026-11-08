@@ -14,6 +14,10 @@ test: defrag_ownership_test defrag_planner_test verified_copy_test evacuation_jo
 test: defrag_batch_test defrag_rebuild_test
 test: raw_move_codec_test
 test: raw_move_test
+test: raw_move_safety_test
+
+raw_move_safety_test: raw_move_safety_test.c ../source/raw_move.c ../source/raw_move_fs.c ../source/raw_move_codec.c ../source/defrag_allocation.c ../source/verified_copy.c
+	$(CC) $(CFLAGS) $^ -o $@
 
 raw_move_test: raw_move_test.c ../source/raw_move.c ../source/raw_move_fs.c ../source/raw_move_codec.c ../source/defrag_allocation.c ../source/verified_copy.c
 	$(CC) $(CFLAGS) $^ -o $@
@@ -72,6 +76,7 @@ test: card_manager_test mesh_streams_test display_mode_test graphics_resource_bo
 	./defrag_rebuild_test
 	./raw_move_codec_test
 	./raw_move_test
+	./raw_move_safety_test
 	./contiguous_write_test
 	./managed_runtime_tests
 	./fst_test
@@ -187,6 +192,7 @@ texture_reuse_test: texture_reuse_test.c ../source/draw_resources.c
 clean:
 	rm -f raw_move_codec_test
 	rm -f raw_move_test
+	rm -f raw_move_safety_test
 	rm -f defrag_ownership_test defrag_planner_test verified_copy_test
 	rm -f evacuation_journal_test evacuation_test
 	rm -f defrag_batch_test
