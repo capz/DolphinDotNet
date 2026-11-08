@@ -10,6 +10,24 @@ An experimental C# AOT toolchain and managed runtime for Nintendo GameCube.
 DolphinDotNet compiles .NET assemblies to native C, then builds a GameCube DOL
 with devkitPPC and libogc2. Games run without a desktop CLR.
 
+## Open the framework in Rider or Visual Studio
+
+Open the root [`DolphinDotNet.sln`](DolphinDotNet.sln) to load the managed runtime,
+GameCube library, SDK, compiler, build tools, and the main storage/format test
+projects. The solution also exposes relevant native C storage/defragmentation
+sources and headers as solution items, without requiring a GameCube toolchain
+just to load the IDE workspace.
+
+```powershell
+dotnet sln DolphinDotNet.sln list
+dotnet build DolphinDotNet.sln -c Debug
+```
+
+The solution does not automatically run the native tests or build a DOL.
+Use the repository's existing CI scripts and devkitPPC workflow for those.
+After pulling the change, select `DolphinDotNet.sln` in Rider if it still
+tries to reopen a previously missing solution path.
+
 ## Project goals ##
 
 - **Make network requests using HttpClient**
