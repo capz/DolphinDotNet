@@ -249,6 +249,10 @@ quick raw-move cases separately.
 Local independent-tool review used dosfstools **4.2** (release archive SHA-256
 `64926eebf90092dca21b14259a5301b7b98e7b1943e8a201c7d726084809b527`)
 and exfatprogs **1.2.8** (`d742b17af7b09370b9334deff167222f21720577c6eea3f9b3c51770ac544516`).
+CI builds this checksum-pinned exfatprogs release using
+`scripts/ci_raw_move_tools.py`: Ubuntu's older 1.2.2 checker rejects the untouched
+cross-cluster entry-set fixture before the mover runs. Fixture/file SHA-256 values
+are printed in the retained independent-test log.
 exFAT field interpretation was checked against Microsoft's
 [`exfat-specification.md`](https://github.com/MicrosoftDocs/win32/blob/3574c9389fce6d9a8bb0920511bd2551f9a21a4e/desktop-src/FileIO/exfat-specification.md)
 (document date 2025-07-08). FAT review target is FAT32 File System Specification

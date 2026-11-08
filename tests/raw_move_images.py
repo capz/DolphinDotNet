@@ -219,6 +219,8 @@ def main():
             fixture = Image(work / (variant + ".img"), exfat, nofat, cluster_bytes)
             planned = command(binary, "plan", fixture.path, 0, fixture.name, 1, 2, 200)
             assert json.loads(planned.stdout)["fileBytes"] == len(fixture.data)
+            print(json.dumps({"fixture": variant, "backupSha256": fixture.backup_digest,
+                              "fileSha256": hashlib.sha256(fixture.data).hexdigest()}), flush=True)
             assert digest(fixture.path) == fixture.backup_digest
             target = work / (variant + "-moved.img")
             destination = 5000 if nofat else 200
