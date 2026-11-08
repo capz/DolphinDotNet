@@ -73,7 +73,7 @@ def exfat_entry(name, first, size, nofat=False, attributes=32):
 
 
 class Image:
-    def __init__(self, path, exfat, nofat=False, cluster_bytes=4096, fragmented_bitmap=False):
+    def __init__(self, path, exfat, nofat=False, cluster_bytes=4096, fragmented_bitmap=False, valid_mode=None):
         self.path, self.exfat, self.nofat = path, exfat, nofat
         with path.open("wb") as f: f.truncate(64 * 1024 * 1024)
         if exfat:
@@ -93,6 +93,8 @@ class Image:
             self.bpc = self.spc * 512
             self.sources = list(range(50, 54)) if nofat else [50, 70, 90, 110]
             self.data = hashlib.shake_256(b"DolphinDotNet independent P6 ISO fixture").digest(4 * self.bpc - 11)
+            self.valid_bytes = 0 if valid_mode == "zero" else len(self.data) // 2 + 123 if valid_mode else len(self.data)
+            self.logical_data = self.data[:self.valid_bytes] + bytes(len(self.data) - self.valid_bytes)
             self.keep = hashlib.shake_256(b"unrelated protected file").digest(self.bpc)
             self.name = "日本" + "x" * 240 + ".iso" if exfat else "GAME.ISO"
             for i, c in enumerate(self.sources):
@@ -136,6 +138,7 @@ class Image:
                 assert free_at <= 480
                 for at in range(free_at, 480, 32):directory[at] = 0x05
                 selected = exfat_entry(self.name, 50, len(self.data), nofat)
+                p64(selected, 40, self.valid_bytes);p16(selected, 2, entry_sum(selected))
                 self.entry_position = 480
                 directory[480:480 + len(selected)] = selected
                 keep = exfat_entry("keep.bin", 60, len(self.keep), True, 1)
@@ -205,11 +208,13 @@ class Image:
                     if not self.exfat:c &= 0x0fffffff
                 else:c += 1
             assert bytes(data[:size]) == self.data
+            logical = bytes(data[:self.valid_bytes]) + bytes(size - self.valid_bytes)
+            assert logical == self.logical_data
             f.seek(self.lba(60) * 512);assert f.read(self.bpc) == self.keep
             if self.exfat:
                 length = (e[1] + 1) * 32
                 assert entry_sum(e[:length]) == u16(e, 2)
-                assert u64(e, 40) == len(self.data)
+                assert u64(e, 40) == self.valid_bytes
         assert digest(self.path) == self.backup_digest, "Original backup image was modified"
         return nofat
 
@@ -230,13 +235,15 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dnd-p6-independent-") as directory:
         work = Path(directory);binary = args.binary or work / "raw-move-image"
         if not args.binary:build(binary)
-        for variant, exfat, nofat, cluster_bytes in (("fat32", False, False, 512),
-                ("exfat-chain", True, False, 4096), ("exfat-nofat", True, True, 512)):
-            fixture = Image(work / (variant + ".img"), exfat, nofat, cluster_bytes)
+        for variant, exfat, nofat, cluster_bytes, valid_mode in (("fat32", False, False, 512, None),
+                ("exfat-chain", True, False, 4096, None), ("exfat-nofat", True, True, 512, None),
+                ("exfat-partial-vdl", True, False, 512, "partial"), ("exfat-zero-vdl", True, True, 512, "zero")):
+            fixture = Image(work / (variant + ".img"), exfat, nofat, cluster_bytes, valid_mode=valid_mode)
             planned = command(binary, "plan", fixture.path, 0, fixture.name, 1, 2, 200)
             assert json.loads(planned.stdout)["fileBytes"] == len(fixture.data)
+            assert json.loads(planned.stdout)["fileSha256"] == hashlib.sha256(fixture.logical_data).hexdigest()
             print(json.dumps({"fixture": variant, "backupSha256": fixture.backup_digest,
-                              "fileSha256": hashlib.sha256(fixture.data).hexdigest()}), flush=True)
+                              "fileSha256": hashlib.sha256(fixture.logical_data).hexdigest()}), flush=True)
             assert digest(fixture.path) == fixture.backup_digest
             target = work / (variant + "-moved.img")
             destination = 5000 if nofat else 200
@@ -266,7 +273,7 @@ def main():
                 # Restoring the middle run must safely convert FAT -> NoFatChain.
                 restored = work / (variant + "-restored.img")
                 clone(target, restored)
-                command(binary, "execute", restored, target, work / "restore-a", work / "restore-b",
+                command(binary, "execute", restored, target, work / (variant + "-restore-a"), work / (variant + "-restore-b"),
                         0, fixture.name, 1, 2, 51)
                 assert fixture.verify(restored), "Contiguous result must use NoFatChain"
             for label, first, count, dest in (("head", 0, 1, 70000 if not exfat else 300),

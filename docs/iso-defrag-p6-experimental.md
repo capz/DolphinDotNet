@@ -238,6 +238,8 @@ quick raw-move cases separately.
   protected-file and backup checks, first/middle/tail moves, Unicode entry sets
   crossing sectors/clusters, both NoFatChain conversions, missing lookup caches,
   stale generation/request anchors, missing journals and interrupted execution.
+  Partial and zero exFAT ValidDataLength cases preserve that field and hash the
+  uninitialized logical suffix as zeros while verifying exact raw window bytes.
 - `large`: a deterministic virtual 1,459,978,240-byte ISO moved and checked with
   32 KiB and 64 KiB clusters through a 32 KiB transfer buffer. All logical bytes
   are generated/read/written/hashed; neither an ISO-sized allocation nor a full

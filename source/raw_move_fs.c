@@ -6,6 +6,7 @@
 static int bitmap_find(DndRawFs *v);
 static int bitmap_contiguous(DndRawFs *v);
 static int upcase_valid(DndRawFs *v);
+static int entry_next(DndRawFs *v,uint64_t *lba,unsigned *offset);
 
 static int checked(int rc) {return rc>0?-EIO:rc;}
 static uint16_t u16(const unsigned char *p) {return p[0]|(uint16_t)p[1]<<8;}
@@ -166,6 +167,15 @@ int dnd_raw_fs_open(DndRawOps io,const DndSectorReader *reader,const DndRawMove 
     v->file=m->files[found];
     if(v->file.parent>=m->file_count || v->file.flags&(DND_DEFRAG_PINNED|DND_DEFRAG_DIRECTORY))return -ENOTSUP;
     v->parent=m->files[v->file.parent];
+    v->valid_bytes=v->file.bytes;
+    if(v->exfat) {
+        uint64_t lba=r->entry_lba;unsigned at=r->entry_offset;
+        rc=entry_next(v,&lba,&at);if(rc)return rc;
+        _Alignas(32) unsigned char stream[512];rc=read_meta(v,lba,stream);if(rc)return rc;
+        if(stream[at]!=0xc0 || u64(stream+at+24)!=v->file.bytes)return -EIO;
+        v->valid_bytes=u64(stream+at+8);
+        if(v->valid_bytes>v->file.bytes)return -EIO;
+    }
     if(v->file.bytes!=r->file_bytes || v->file.attributes!=r->attributes ||
        m->space.filesystem!=(int)r->filesystem || m->space.bytes_per_cluster!=r->bytes_per_cluster)
         return -ESTALE;
@@ -175,7 +185,8 @@ int dnd_raw_fs_open(DndRawOps io,const DndSectorReader *reader,const DndRawMove 
 int dnd_raw_fs_hash(DndRawFs *v,const DndRawMove *r,void *buffer,DndRawResult *metrics,
                       unsigned char file_hash[32],unsigned char window_hash[32]) {
     DndSha256 all,window;dnd_sha256_init(&all);dnd_sha256_init(&window);
-    uint64_t remaining=v->file.bytes,n=(remaining+r->bytes_per_cluster-1)/r->bytes_per_cluster;
+    uint64_t remaining=v->file.bytes,initialized=v->valid_bytes;
+    uint64_t n=(remaining+r->bytes_per_cluster-1)/r->bytes_per_cluster;
     uint32_t c=v->file.first_cluster;
     for(uint64_t i=0;i<n;i++) {
         if(!cluster_ok(v,c))return -EIO;
@@ -183,9 +194,15 @@ int dnd_raw_fs_hash(DndRawFs *v,const DndRawMove *r,void *buffer,DndRawResult *m
             int rc=checked(v->io.read_sector(v->io.context,lba_of(v,c)+s,buffer));if(rc)return rc;
             if(metrics)metrics->data_bytes_read+=512;
             size_t logical=remaining<512?(size_t)remaining:512;
-            if(logical) {dnd_sha256_update(&all,buffer,logical);remaining-=logical;}
             if(i>=r->logical_first && i-r->logical_first<r->cluster_count)
                 dnd_sha256_update(&window,buffer,512);
+            if(logical) {
+                size_t valid=initialized<logical?(size_t)initialized:logical;
+                /* Hash logical exFAT zeros without altering the raw-window
+                 * hash or exposing uninitialized on-disk bytes as file data. */
+                if(valid<logical)memset((unsigned char *)buffer+valid,0,logical-valid);
+                dnd_sha256_update(&all,buffer,logical);remaining-=logical;initialized-=valid;
+            }
         }
         if(i+1<n) {int rc=dnd_raw_fs_next(v,c,&c);if(rc)return rc;}
     }

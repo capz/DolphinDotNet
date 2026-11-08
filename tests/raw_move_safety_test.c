@@ -29,6 +29,19 @@ static void forge_patch(const DndRawMove *move,unsigned mode) {
 int main(int argc,char **argv) {
     (void)argv;unsigned step=argc>1?1:256;
     DndRawMove move;DndRawResult result;
+    for(unsigned sample=0;sample<2;sample++) {
+        unsigned valid=sample?RM_BYTES/2+7:0;
+        rm_exfat(1,4);unsigned char *entry=rf.image[rf.root]+64;
+        rm_p64(entry+40,valid);rm_p16(entry+2,rm_set_sum(entry,3));rm_finish_fixture();
+        assert(rm_plan(&move,1,2,30)==0);
+        unsigned char logical[RM_BYTES],expected[32];DndSha256 hash;
+        for(unsigned i=0;i<RM_BYTES;i++)logical[i]=i<valid?rm_pattern(i):0;
+        dnd_sha256_init(&hash);dnd_sha256_update(&hash,logical,sizeof(logical));dnd_sha256_finish(&hash,expected);
+        assert(!memcmp(expected,move.file_sha256,32));
+        assert(dnd_raw_move_execute(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==0);
+        rm_oracle();
+        assert(dnd_raw_move_recover(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==0);
+    }
     rm_exfat(1,4);rm_finish_fixture();assert(rm_plan(&move,1,2,30)==0);initial=rf;
     assert(dnd_raw_move_execute(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==0);
     unsigned writes=rf.raw_writes,points[64];assert(writes<64);

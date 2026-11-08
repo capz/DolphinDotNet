@@ -7,7 +7,7 @@ typedef struct {
     DndSectorReader reader;
     DndRawMove request;
     DndDefragFile file,parent;
-    uint64_t fat_lba,heap_lba,end,fat_cached,bitmap_bytes;
+    uint64_t fat_lba,heap_lba,end,fat_cached,bitmap_bytes,valid_bytes;
     uint32_t clusters,spc,fat_sectors,root,fats,active,bitmap_first;
     int exfat,mirrored;
     _Alignas(32) unsigned char fat_cache[512];
