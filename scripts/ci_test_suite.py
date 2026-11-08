@@ -85,6 +85,14 @@ def main(area):
                     "-Iinclude","tests/"+name+"_test.c",
                     "source/evacuation_journal.c","source/verified_copy.c",*extra,"-o",binary)
                 run(binary)
+            for name in ("raw_move_codec", "raw_move", "raw_move_safety"):
+                binary=Path(tmp)/(name+"-test")
+                sources=["source/raw_move_codec.c","source/verified_copy.c"]
+                if name!="raw_move_codec":
+                    sources += ["source/raw_move.c","source/raw_move_fs.c","source/defrag_allocation.c"]
+                run("cc","-std=c11","-O2","-Wall","-Wextra","-Werror",
+                    "-Iinclude","tests/"+name+"_test.c",*sources,"-o",binary)
+                run(binary)
         test("tests/ConsoleServicesTests")
         build("tests/CardManagerSmoke/CardManagerSmoke.csproj")
         for p in ("StorageSmoke","AramSmoke","LibrarySmoke","DiscIdentityTests",

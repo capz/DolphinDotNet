@@ -1,0 +1,46 @@
+name: Experimental P6 image safety
+
+on:
+  pull_request:
+    branches: [main, feature/iso-defrag-planning-and-evacuation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p6-images-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image-safety:
+    name: P6 / ${{ matrix.suite }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [faults, large, sanitize, independent, powerpc]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install independent filesystem tools and PowerPC emulator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dosfstools exfatprogs gcc-powerpc-linux-gnu libc6-dev-powerpc-cross qemu-user
+      - name: Build the checksum-pinned independent exFAT checker
+        if: matrix.suite == 'independent'
+        run: |
+          python3 scripts/ci_raw_move_tools.py --prefix "${RUNNER_TEMP}/p6-tools"
+          echo "${RUNNER_TEMP}/p6-tools/sbin" >> "$GITHUB_PATH"
+      - name: Run image acceptance checks
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python3 scripts/ci_raw_move.py ${{ matrix.suite }} --report artifacts/${{ matrix.suite }}.json 2>&1 | tee artifacts/${{ matrix.suite }}.log
+      - name: Retain acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p6-${{ matrix.suite }}-${{ github.sha }}
+          path: artifacts/
