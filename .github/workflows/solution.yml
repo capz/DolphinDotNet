@@ -1,0 +1,31 @@
+name: Root IDE solution
+
+on:
+  pull_request:
+    paths:
+      - 'DolphinDotNet.sln'
+      - '.github/workflows/solution.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'DolphinDotNet.sln'
+      - '.github/workflows/solution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-solution:
+    name: Load and build root solution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Verify root solution can be loaded
+        run: dotnet sln DolphinDotNet.sln list
+      - name: Build managed solution
+        run: dotnet build DolphinDotNet.sln -c Debug --nologo
