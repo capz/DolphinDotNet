@@ -258,8 +258,9 @@ CI builds this checksum-pinned exfatprogs release using
 cross-cluster entry-set fixture before the mover runs. Fixture/file SHA-256 values
 are printed in the retained independent-test log.
 exFAT field interpretation was checked against Microsoft's
-[`exfat-specification.md`](https://github.com/MicrosoftDocs/win32/blob/3574c9389fce6d9a8bb0920511bd2551f9a21a4e/desktop-src/FileIO/exfat-specification.md)
-(document date 2025-07-08). FAT review target is FAT32 File System Specification
+[`exfat-specification.md`](https://github.com/MicrosoftDocs/win32/blob/8ea4fb742b61a0fcc85672f30cf433ba087bb1a0/desktop-src/FileIO/exfat-specification.md)
+(document date 2025-07-08, file blob
+`3574c9389fce6d9a8bb0920511bd2551f9a21a4e`). FAT review target is FAT32 File System Specification
 1.03 (2000-12-06); independent review of that source and both handlers is still
 required before physical support.
 
