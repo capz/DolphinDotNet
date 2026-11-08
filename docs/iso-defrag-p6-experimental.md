@@ -2,11 +2,18 @@
 
 Companion to the [SDK workstream](large-iso-defragmentation.md).
 
-**Status: design proposal, not implemented or enabled.** This phase belongs in a
-separate implementation PR after independent filesystem-metadata review. The
-current SDK branch provides ownership/planning and native evacuation protocols;
-it does not provide a raw mover, a raw recovery journal or a public experimental
-API. The existing green CI results do not validate P6.
+**Status: experimental offline-image engine implemented in dependent draft
+[PR #160](https://github.com/capz/DolphinDotNet/pull/160); physical execution
+disabled.** The native engine, replicated sector-image journal, verified undo/redo
+and a separate image-only tool are implemented. Independent metadata/protocol
+review, GameCube exclusive raw-mode/pre-mount integration and physical acceptance
+remain release gates. `DND_RAW_DEVICE` returns `ENOTSUP`; no bypass switch exists.
+PR #159's earlier green CI results do not validate these new P6 changes.
+
+The [image tool instructions](../tools/raw-move/README.md) describe runnable
+planning, execution, inspection and recovery. This is a bounded move-window
+engine: a successful partial move reports its actual extent count, and does not
+claim that the whole ISO has become contiguous.
 
 P6 would relocate file data between physical clusters on the **same volume** and
 update the filesystem's allocation metadata. This can avoid staging a second
@@ -170,6 +177,20 @@ window is not equivalent to achieving one extent for the whole file.
 
 ## P6 implementation milestones
 
+Current implementation coverage:
+
+| Milestone | Delivered | Remaining gate |
+|---|---|---|
+| P6.0 | Native contracts, canonical records, operation-specific regenerated sector allowlist, bounded workspace | Independent specification/metadata/protocol review |
+| P6.1 | FAT32 image moves, head/middle/tail updates, active/mirrored FAT handling, FSInfo preservation, undo/redo | Physical-device acceptance |
+| P6.2 | exFAT image moves, allocation bitmap, cross-cluster entry sets, checksums, both NoFatChain conversions | Fragmented bitmaps intentionally unsupported; independent review |
+| P6.3 | Exclusive offline image adapter, persistent identity/request anchors, explicit recovery-before-mount decision, cancellation, PowerPC32 big-endian tests | Actual GameCube driver, exclusive unmount/cache lifecycle and automatic pre-mount discovery |
+| P6.4 | No physical-device writes enabled | Sacrificial-media interruption/removal and flush acceptance for every supported device |
+| P6.5 | Separate image-only research interface | Public hardware opt-in API remains unavailable until all preceding gates pass |
+
+The milestones below retain the release requirements; image tests alone cannot
+authorize advancing a physical-device gate.
+
 1. **P6.0 — specification and contracts:** threat model, supported variants,
    metadata field catalogue, mount/recovery bootstrap design, journal wire
    format, memory/storage budgets and API outcomes. Independent review first.
@@ -192,9 +213,72 @@ window is not equivalent to achieving one extent for the whole file.
 
 ## Tests required before enabling P6
 
-These are **planned requirements**, not tests already delivered by PR #159.
-The current ownership/planner, copy, evacuation and batch tests are prerequisites;
-their callback interruption models do not replace sector-level raw-move tests.
+These are release requirements. PR #160 adds the image-level tests described
+below; unperformed hardware and independent-review requirements remain open.
+The ownership/planner, copy, evacuation and batch tests are prerequisites; their
+callback models do not replace sector-level raw-move tests.
+
+### Reproducible image implementation checks
+
+`scripts/ci_raw_move.py` runs the following separate suites, also scheduled in
+`.github/workflows/raw-move.yml`. CI retains logs and a JSON report identifying
+the exact commit, platform and installed tool versions. The existing native
+suite runs quick cases under both normal and O3/LTO builds; storage CI runs the
+quick raw-move cases separately.
+
+- `faults`: all 513 prefix cuts for every raw sector write across mirrored and
+  active FAT32, FAT-chained exFAT and NoFatChain exFAT (15,390 execution cuts),
+  plus every mutation-callback boundary; repeat recovery, every prefix cut during
+  the modeled undo/redo writes, persisted metadata-write subsets, zero-filled
+  metadata recovery, dropped writes and forged-but-rehashed inventory rejection.
+- `independent`: images created by `mkfs.fat`/`mkfs.exfat`, checked using
+  `fsck.fat -n`/`fsck.exfat -n`; independent logical-chain/hash verification,
+  protected-file and backup checks, first/middle/tail moves, Unicode entry sets
+  crossing sectors/clusters, both NoFatChain conversions, missing lookup caches,
+  stale generation/request anchors, missing journals and interrupted execution.
+- `large`: a deterministic virtual 1,459,978,240-byte ISO moved and checked with
+  32 KiB and 64 KiB clusters through a 32 KiB transfer buffer. All logical bytes
+  are generated/read/written/hashed; neither an ISO-sized allocation nor a full
+  volume bitmap is used. This virtual backup is reconstructible fixture data;
+  the real host adapter separately hashes its entire actual backup image.
+- `sanitize`: quick codec/move/recovery cases with address and undefined-behavior
+  sanitizers. `powerpc`: static PowerPC32 big-endian Linux binaries under
+  `qemu-ppc`, with compile-time pointer-size/endianness assertions. Linux emulation
+  does not establish GameCube driver or hardware behavior.
+
+Local independent-tool review used dosfstools **4.2** (release archive SHA-256
+`64926eebf90092dca21b14259a5301b7b98e7b1943e8a201c7d726084809b527`)
+and exfatprogs **1.2.8** (`d742b17af7b09370b9334deff167222f21720577c6eea3f9b3c51770ac544516`).
+exFAT field interpretation was checked against Microsoft's
+[`exfat-specification.md`](https://github.com/MicrosoftDocs/win32/blob/3574c9389fce6d9a8bb0920511bd2551f9a21a4e/desktop-src/FileIO/exfat-specification.md)
+(document date 2025-07-08). FAT review target is FAT32 File System Specification
+1.03 (2000-12-06); independent review of that source and both handlers is still
+required before physical support.
+
+The exFAT specification allows a chained allocation bitmap, but exfatprogs 1.2.8
+reads its bitmap contiguously in `fsck/fsck.c`. The raw engine therefore rejects
+fragmented allocation bitmaps during read-only preflight. A read-only ownership
+scanner accepting that variant does not enable writes. This conservative gate
+avoids publishing images that a supported independent checker misinterprets.
+
+The caller supplies fixed-capacity file/run arrays and one aligned 32 KiB transfer
+buffer. The host tool caps those arrays at 256 files and 8,192 runs, failing with
+`ENOSPC` rather than growing with the volume. Temporary coalesced metadata images
+spill into an operation-private disk builder; each authoritative replica contains
+a 512-byte request, two 512-byte checkpoint slots and 2,048 bytes per patched
+sector, plus a dispensable LBA index. Both complete inventories are allocated,
+synced and read back before the first image write, so journal-capacity failures
+at preparation cannot publish a partial mapping. No journal evidence is deleted
+automatically. An incomplete initial journal remains quarantined, with the
+byte-identical original backup retained.
+
+The Linux image adapter also persists an independent request-hash anchor and
+random generation token as working-image extended attributes, syncs their file
+and new journal parent directories, checks identities before every raw I/O, and
+rechecks the complete backup digest when opening recovery. Preserving two journal
+copies is insufficient if the trusted request/image identity is lost. These host
+file identities and advisory locks are not physical media identity or a substitute
+for the unimplemented GameCube exclusive raw-mode boundary.
 
 ### Independent filesystem fixtures
 
