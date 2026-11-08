@@ -1,7 +1,11 @@
-#include "raw_move_internal.h"
+#include "dnd_raw_move_internal.h"
 #include <errno.h>
 #include <limits.h>
 #include <string.h>
+
+static int bitmap_find(DndRawFs *v);
+static int bitmap_contiguous(DndRawFs *v);
+static int upcase_valid(DndRawFs *v);
 
 static int checked(int rc) {return rc>0?-EIO:rc;}
 static uint16_t u16(const unsigned char *p) {return p[0]|(uint16_t)p[1]<<8;}
@@ -71,6 +75,8 @@ static int geometry(DndRawFs *v,int clean,unsigned char boot_hash[32]) {
            (uint64_t)v->clusters*v->spc>size-heap ||
            ((uint64_t)v->clusters+2)*4>(uint64_t)v->fat_sectors*512)return -EIO;
         v->fat_lba=start+off;v->heap_lba=start+heap;v->end=start+size;
+        rc=read_meta(v,v->fat_lba,other);if(rc)return rc;
+        if(u32(other)!=0xfffffff8u || u32(other+4)!=0xffffffffu)return -EIO;
         rc=exfat_boot_region(v,start,&boot);if(rc)return rc;
         rc=exfat_boot_region(v,start+12,&boot);if(rc)return rc;
         rc=read_meta(v,start+12,other);if(rc)return rc;
@@ -106,7 +112,11 @@ static int geometry(DndRawFs *v,int clean,unsigned char boot_hash[32]) {
             if(memcmp(b,other,512))return -EIO;
         }
         rc=read_meta(v,v->fat_lba,b);if(rc)return rc;
-        if(clean && (u32(b+4)&0x0c000000)!=0x0c000000)return -EIO;
+        _Alignas(32) unsigned char volume_boot[512];
+        rc=read_meta(v,start,volume_boot);if(rc)return rc;
+        if((u32(b)&0x0fffffffu)!=(0x0fffff00u|volume_boot[21]) ||
+           (u32(b+4)&0x03ffffffu)<0x03fffff8u || !(u32(b+4)&0x04000000u) ||
+           (clean && !(u32(b+4)&0x08000000u)))return -EIO;
     }
     if(!cluster_ok(v,v->root))return -EIO;
     v->fat_cached=UINT64_MAX;dnd_sha256_finish(&boot,boot_hash);return 0;
@@ -148,6 +158,7 @@ int dnd_raw_fs_open(DndRawOps io,const DndSectorReader *reader,const DndRawMove 
     DndDefragScanOps policy={0};rc=dnd_defrag_scan(&hashing,device,policy,m);if(rc)return rc;
     dnd_sha256_finish(&h.sha,metadata_hash);
     rc=fsinfo(v,m,clean);if(rc)return rc;
+    if(v->exfat) {rc=bitmap_find(v);if(rc)return rc;rc=bitmap_contiguous(v);if(rc)return rc;rc=upcase_valid(v);if(rc)return rc;}
     uint32_t found=UINT32_MAX;
     for(size_t i=1;i<m->file_count;i++)if(m->files[i].entry_lba==r->entry_lba &&
         m->files[i].entry_offset==r->entry_offset) {found=(uint32_t)i;break;}
@@ -228,6 +239,45 @@ static int bitmap_find(DndRawFs *v) {
         int rc=fat(v,c,&c);if(rc || !cluster_ok(v,c))return rc?rc:-EIO;
     }
     return -EIO;
+}
+static int upcase_valid(DndRawFs *v) {
+    uint32_t root=v->root,first=0,expected=0;uint64_t bytes=0;
+    for(uint64_t visits=0;visits<v->clusters && !first;visits++) {
+        int ended=0;
+        for(uint32_t sec=0;sec<v->spc && !first && !ended;sec++) {
+            _Alignas(32) unsigned char b[512];int rc=read_meta(v,lba_of(v,root)+sec,b);if(rc)return rc;
+            for(unsigned at=0;at<512;at+=32) {
+                if(!b[at]) {ended=1;break;}
+                if(b[at]==0x82) {expected=u32(b+at+4);first=u32(b+at+20);bytes=u64(b+at+24);break;}
+            }
+        }
+        if(first || ended)break;
+        int rc=fat(v,root,&root);if(rc || !cluster_ok(v,root))return rc?rc:-EIO;
+    }
+    if(!cluster_ok(v,first) || !bytes || bytes>131072)return -EIO;
+    uint32_t sum=0,c=first;uint64_t remaining=bytes;
+    while(remaining) {
+        for(uint32_t sec=0;sec<v->spc && remaining;sec++) {
+            _Alignas(32) unsigned char b[512];int rc=read_meta(v,lba_of(v,c)+sec,b);if(rc)return rc;
+            unsigned n=remaining<512?(unsigned)remaining:512;
+            for(unsigned i=0;i<n;i++)sum=((sum>>1)|(sum<<31))+b[i];
+            remaining-=n;
+        }
+        if(remaining) {int rc=fat(v,c,&c);if(rc || !cluster_ok(v,c))return rc?rc:-EIO;}
+    }
+    return sum==expected?0:-EIO;
+}
+static int bitmap_contiguous(DndRawFs *v) {
+    uint64_t n=(v->bitmap_bytes+v->spc*512-1)/(v->spc*512);
+    if(!n || n>v->clusters)return -EIO;
+    uint32_t c=v->bitmap_first;
+    for(uint64_t i=1;i<n;i++) {
+        uint32_t next;int rc=fat(v,c,&next);if(rc)return rc;
+        if(next!=c+1)return -ENOTSUP;
+        c=next;
+    }
+    uint32_t end;int rc=fat(v,c,&end);if(rc)return rc;
+    return end>=0xfffffff8u?0:-EIO;
 }
 static int bitmap_edit(DndRawFs *v,uint32_t cluster,int destination) {
     uint64_t byte=(cluster-2ULL)/8,skip=byte/(v->spc*512);

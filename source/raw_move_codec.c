@@ -77,9 +77,8 @@ int dnd_raw_patch_encode(const DndRawPatch *p,uint64_t index,const unsigned char
     memset(out,0,2048);memcpy(out,"DNDRPAT1",8);put64(out+8,index);put64(out+16,p->lba);
     memcpy(out+24,binding,32);memcpy(out+512,p->before,512);
     memcpy(out+1024,p->applied,512);memcpy(out+1536,p->cleaned,512);
-    checksum(out,480,out+480);
-    /* Bind header and all three images; hash field is zero while hashing. */
-    memset(out+480,0,32);checksum(out,2048,out+480);return 0;
+    /* The hash field is still zero: bind header and all three images. */
+    checksum(out,2048,out+480);return 0;
 }
 int dnd_raw_patch_decode(const unsigned char in[2048],uint64_t index,
                            const unsigned char binding[32],DndRawPatch *out) {

@@ -30,6 +30,11 @@ static void rm_p32(unsigned char *p,uint32_t x) {rm_p16(p,(uint16_t)x);rm_p16(p+
 static void rm_p64(unsigned char *p,uint64_t x) {rm_p32(p,(uint32_t)x);rm_p32(p+4,(uint32_t)(x>>32));}
 static uint32_t rm_u32(const unsigned char *p) {return p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;}
 static int rm_tick(RawFixture *f) {return ++f->event==f->fail_event?-EINTR:0;}
+static unsigned char rm_pattern(uint64_t offset) {
+    uint32_t key=(uint32_t)(offset/512)+0x9e3779b9u;
+    key^=key>>16;key*=0x7feb352du;key^=key>>15;key*=0x846ca68bu;key^=key>>16;
+    return (unsigned char)((offset*17u+3u)^(key>>((offset%4)*8)));
+}
 static unsigned rm_source(RawFixture *f,unsigned logical) {return f->nofat?8+logical:(f->exfat?8:4)+logical*4;}
 static int rm_guard(void *ctx,const DndRawMove *r) {
     RawFixture *f=ctx;
@@ -115,7 +120,7 @@ static uint16_t rm_set_sum(unsigned char *e,unsigned n) {
 static void rm_fat32(int active,unsigned offset) {
     memset(&rf,0,sizeof(rf));rf.active=active;rf.offset=offset;rf.fat=offset+8;rf.heap=offset+10;rf.root=rf.heap;
     unsigned char *b=rf.image[offset];
-    rm_p16(b+11,512);b[13]=1;rm_p16(b+14,8);b[16]=2;rm_p32(b+32,110);rm_p32(b+36,1);
+    rm_p16(b+11,512);b[13]=1;b[21]=0xf8;rm_p16(b+14,8);b[16]=2;rm_p32(b+32,110);rm_p32(b+36,1);
     rm_p32(b+44,2);rm_p16(b+48,1);rm_p16(b+50,6);rm_p16(b+40,active?0x81:0);
     memcpy(b+82,"FAT32   ",8);b[510]=0x55;b[511]=0xaa;memcpy(rf.image[offset+6],b,512);
     for(unsigned copy=0;copy<2;copy++) {
@@ -147,6 +152,7 @@ static void rm_exfat(int nofat,unsigned offset) {
     for(unsigned i=0;i<512;i+=4)rm_p32(rf.image[offset+11]+i,checksum);
     memcpy(rf.image[offset+12],rf.image[offset],12*512);
     unsigned char *fat=rf.image[rf.fat];
+    rm_p32(fat,0xfffffff8);rm_p32(fat+4,0xffffffff);
     rm_p32(fat+8,0xffffffff);rm_p32(fat+12,0xffffffff);rm_p32(fat+16,0xffffffff);
     if(!nofat)for(unsigned i=0;i<4;i++)rm_p32(fat+rm_source(&rf,i)*4,i==3?0xffffffff:rm_source(&rf,i+1));
     unsigned char *root=rf.image[rf.root];root[0]=0x81;rm_p32(root+20,3);rm_p64(root+24,13);
@@ -161,7 +167,7 @@ static void rm_exfat(int nofat,unsigned offset) {
 }
 static void rm_finish_fixture(void) {
     for(unsigned i=0;i<4;i++)for(unsigned k=0;k<512;k++)
-        rf.image[rf.heap+rm_source(&rf,i)-2][k]=(unsigned char)((i*512+k)*17u+3u);
+        rf.image[rf.heap+rm_source(&rf,i)-2][k]=rm_pattern(i*512+k);
     memcpy(rf.original,rf.image,sizeof(rf.image));memcpy(rf.disk,rf.image,sizeof(rf.image));rf.cut=512;
 }
 static int rm_plan(DndRawMove *r,uint64_t first,uint64_t count,uint32_t dest) {
@@ -180,7 +186,7 @@ static void rm_oracle(void) {
     for(unsigned i=0;i<4;i++) {
         assert(c>=2 && c<102 && !used[c]);used[c]=1;
         unsigned char *data=rf.image[rf.heap+c-2];
-        for(unsigned k=0;k<512;k++)assert(data[k]==(unsigned char)((i*512+k)*17u+3u));
+        for(unsigned k=0;k<512;k++)assert(data[k]==rm_pattern(i*512+k));
         if(rf.exfat)assert(rf.image[rf.heap+1][(c-2)/8]&(1u<<((c-2)%8)));
         if(i<3)c=nofat?c+1:rm_u32(rf.image[rf.fat+rf.active]+c*4)&(rf.exfat?0xffffffffu:0x0fffffffu);
     }

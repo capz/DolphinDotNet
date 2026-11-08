@@ -1,4 +1,4 @@
-#include "raw_move_internal.h"
+#include "dnd_raw_move_internal.h"
 #include <errno.h>
 #include <limits.h>
 #include <string.h>
@@ -62,7 +62,8 @@ static int original_read(void *ctx,uint64_t lba,void *out) {
                 if(p.lba!=lba)return -EILSEQ;
                 memcpy(out,p.before,512);return 0;
             }
-        } else for(index=0;index<c->patch_count;index++) {
+        }
+        for(index=0;index<c->patch_count;index++) {
             DndRawPatch p;int rc=read_patch(c,0,index,&p);if(rc)return rc;
             if(p.lba==lba) {memcpy(out,p.before,512);return 0;}
         }
