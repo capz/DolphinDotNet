@@ -143,6 +143,7 @@ class Image:
                 for i, c in enumerate(root_chain):
                     f.seek(self.lba(c) * 512);f.write(directory[i * self.bpc:(i + 1) * self.bpc])
                 self.root_chain = root_chain
+                self.original_directory = bytes(directory)
             else:
                 self.entry_position = free_at
                 for name, first, length in ((b"GAME    ISO", 50, len(self.data)), (b"SAVE    GCI", 60, len(self.keep))):
@@ -156,6 +157,7 @@ class Image:
                     if u32(info, 488) != 0xffffffff:p32(info, 488, u32(info, 488) - 5)
                     f.seek(loc * 512);f.write(info)
                 self.root_chain = [self.root]
+                self.original_directory = bytes(root)
         self.check(path)
         self.backup_digest = digest(path)
 
@@ -177,6 +179,20 @@ class Image:
             for c in self.root_chain:
                 f.seek(self.lba(c) * 512);directory += f.read(self.bpc)
             e = directory[self.entry_position:]
+            # Independent field allowlist: timestamps, names, attributes,
+            # neighboring/protected entries and system directory entries stay exact.
+            observed, original = bytearray(directory), bytearray(self.original_directory)
+            allowed = (2, 3, 52, 53, 54, 55) if self.exfat else (20, 21, 26, 27)
+            for offset in allowed:
+                observed[self.entry_position + offset] = original[self.entry_position + offset] = 0
+            if self.exfat:
+                observed[self.entry_position + 33] &= ~2
+                original[self.entry_position + 33] &= ~2
+            assert observed == original, "Directory changed outside authorized fields"
+            with self.path.open("rb") as backup:
+                f.seek(0);backup.seek(0)
+                reserved = 24 if self.exfat else self.fat
+                assert f.read(reserved * 512) == backup.read(reserved * 512), "Boot/FSInfo metadata changed"
             first = u32(e, 52) if self.exfat else u16(e, 26) | u16(e, 20) << 16
             size = u64(e, 56) if self.exfat else u32(e, 28)
             nofat = self.exfat and bool(e[33] & 2)

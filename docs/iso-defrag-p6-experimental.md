@@ -230,7 +230,9 @@ quick raw-move cases separately.
   active FAT32, FAT-chained exFAT and NoFatChain exFAT (15,390 execution cuts),
   plus every mutation-callback boundary; repeat recovery, every prefix cut during
   the modeled undo/redo writes, persisted metadata-write subsets, zero-filled
-  metadata recovery, dropped writes and forged-but-rehashed inventory rejection.
+  metadata recovery, sampled suffix/mixed writes, dropped writes, failed reads
+  and syncs, cancellation at every modeled mutation boundary, and
+  forged-but-rehashed inventory rejection.
 - `independent`: images created by `mkfs.fat`/`mkfs.exfat`, checked using
   `fsck.fat -n`/`fsck.exfat -n`; independent logical-chain/hash verification,
   protected-file and backup checks, first/middle/tail moves, Unicode entry sets

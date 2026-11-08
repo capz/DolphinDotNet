@@ -99,6 +99,22 @@ int main(int argc,char **argv) {
     rf=initial;rf.cancelled=1;
     assert(dnd_raw_move_execute(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==-ECANCELED);
     assert(!rf.raw_writes && !rf.record_writes);
+    rf=initial;rf.read_error=1;
+    assert(dnd_raw_move_execute(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==-EIO);
+    assert(!rf.raw_writes && !rf.record_writes);
+    rf=initial;rf.sync_error=1;
+    assert(dnd_raw_move_execute(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==-EIO);
+    rf.sync_error=0;rm_reboot();
+    assert(dnd_raw_move_recover(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==0);rm_oracle();
+    rf=initial;
+    assert(dnd_raw_move_execute(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==0);
+    unsigned events=rf.event;
+    for(unsigned point=1;point<=events;point++) {
+        rf=initial;rf.cancel_event=point;
+        int rc=dnd_raw_move_execute(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result);
+        assert(rc==0 || rc==-ECANCELED);rm_reboot();
+        assert(dnd_raw_move_recover(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==0);rm_oracle();
+    }
     for(unsigned v=0;v<2;v++) {
         rf=initial;rf.missing[v]=1;
         assert(dnd_raw_move_execute(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==-ENODEV);

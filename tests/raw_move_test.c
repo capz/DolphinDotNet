@@ -27,6 +27,13 @@ int main(int argc,char **argv) {
             assert(dnd_raw_move_mount_allowed(rm_ops(),&move)==1);
         }
 
+        for(unsigned w=0;w<writes;w++)for(unsigned mode=1;mode<=2;mode++)for(unsigned sample=0;sample<3;sample++) {
+            rf=initial;rf.fail_event=write_points[w];rf.tear_mode=mode;rf.cut=sample==0?17:sample==1?255:511;
+            assert(dnd_raw_move_execute(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==-EINTR);
+            rm_reboot();
+            assert(dnd_raw_move_recover(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result)==0);
+            rm_oracle();
+        }
         for(unsigned point=1;point<=events;point++) {
             rf=initial;rf.fail_event=point;
             rc=dnd_raw_move_execute(rm_ops(),&move,&rm_snapshot,rm_transfer,sizeof(rm_transfer),&result);

@@ -17,7 +17,7 @@ typedef struct {
     _Alignas(32) unsigned char image[RM_SECTORS][512],disk[RM_SECTORS][512],original[RM_SECTORS][512];
     DndRawPatch builder[RM_PATCHES];unsigned count;
     RawReplica journal[2],saved[2];
-    unsigned event,fail_event,cut,raw_writes,write_event[64],record_writes,syncs;
+    unsigned event,fail_event,cancel_event,tear_mode,cut,raw_writes,write_event[64],record_writes,syncs;
     int missing[2],stale,cancelled,read_error,sync_error,drop_write,exfat,nofat,active;
     unsigned root,fat,heap,offset;
 } RawFixture;
@@ -29,7 +29,10 @@ static void rm_p16(unsigned char *p,uint16_t x) {p[0]=(unsigned char)x;p[1]=(uns
 static void rm_p32(unsigned char *p,uint32_t x) {rm_p16(p,(uint16_t)x);rm_p16(p+2,(uint16_t)(x>>16));}
 static void rm_p64(unsigned char *p,uint64_t x) {rm_p32(p,(uint32_t)x);rm_p32(p+4,(uint32_t)(x>>32));}
 static uint32_t rm_u32(const unsigned char *p) {return p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;}
-static int rm_tick(RawFixture *f) {return ++f->event==f->fail_event?-EINTR:0;}
+static int rm_tick(RawFixture *f) {
+    f->event++;if(f->event==f->cancel_event)f->cancelled=1;
+    return f->event==f->fail_event?-EINTR:0;
+}
 static unsigned char rm_pattern(uint64_t offset) {
     uint32_t key=(uint32_t)(offset/512)+0x9e3779b9u;
     key^=key>>16;key*=0x7feb352du;key^=key>>15;key*=0x846ca68bu;key^=key>>16;
@@ -51,7 +54,12 @@ static int rm_write(void *ctx,uint64_t lba,const void *in) {
     if(f->raw_writes<64)f->write_event[f->raw_writes]=f->event+1;
     f->raw_writes++;int rc=rm_tick(f);
     size_t n=rc?f->cut:512;
-    if(!f->drop_write)memcpy(f->image[lba],in,n);
+    if(!f->drop_write) {
+        if(rc && f->tear_mode==1)memcpy(f->image[lba]+512-n,(const unsigned char *)in+512-n,n);
+        else if(rc && f->tear_mode==2) {
+            for(unsigned i=0;i<512;i++)if((i*17+f->cut)%7<3)f->image[lba][i]=((const unsigned char *)in)[i];
+        } else memcpy(f->image[lba],in,n);
+    }
     if(rc)memcpy(f->disk[lba],f->image[lba],512);
     return rc;
 }
@@ -109,7 +117,7 @@ static DndRawOps rm_ops(void) {
 }
 static void rm_reboot(void) {
     memcpy(rf.image,rf.disk,sizeof(rf.image));memcpy(rf.journal,rf.saved,sizeof(rf.journal));
-    rf.fail_event=0;rf.event=0;rf.cancelled=0;
+    rf.fail_event=0;rf.cancel_event=0;rf.event=0;rf.cancelled=0;
 }
 static uint16_t rm_set_sum(unsigned char *e,unsigned n) {
     uint16_t sum=0;for(unsigned i=0;i<n*32;i++) {
