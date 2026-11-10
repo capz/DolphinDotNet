@@ -1,0 +1,4 @@
+<Project>
+  <!-- This repository also builds as a nested SDK dependency. Do not inherit
+       a consuming application's implicit usings, lockfile or build policies. -->
+</Project>
