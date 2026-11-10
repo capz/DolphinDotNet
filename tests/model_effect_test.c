@@ -16,7 +16,14 @@ static bool custom_scene_active;static int scene_lights,scene_normals;
 bool dnd_draw_backend_scene_active(void){return custom_scene_active;}
 void dnd_draw_backend_scene(int lit,const float *view){assert(view);if(lit)scene_lights++;}
 static int indirect_resets,full_draws,full_skin;
-void GX_SetNumIndStages(int count){assert(count==0);indirect_resets++;}
+static int active_indirect;static float indirect_gain;
+void GX_SetNumIndStages(int count){assert(count==0||count==1);active_indirect=count;if(!count)indirect_resets++;}
+void GX_SetIndTexOrder(int stage,int coord,int texmap){assert(active_indirect==1&&stage==0&&coord==GX_TEXCOORD1&&texmap==GX_TEXMAP1);}
+void GX_SetIndTexMatrix(int matrix,float offsets[2][3],int exponent){
+ assert(active_indirect==1&&matrix==GX_ITM_0&&exponent==-1);
+ assert(offsets[0][0]>0&&offsets[0][0]<.36f&&offsets[1][1]==offsets[0][0]);
+ assert(!offsets[0][1]&&!offsets[1][0]);indirect_gain=offsets[0][0];
+}
 /* Wrappers catch transient allocations that stable budgets would miss. The
  * portable CI build redirects production calls at compile time, leaving this
  * fixture's libc calls intact; older GNU builds can still use --wrap. */
@@ -40,6 +47,10 @@ typedef struct {
   float position[9],uv[6],world_x; GXColor vertex[3];
 } Draw;
 static Draw state,record[16];static int draws,restores,position_index,color_index,uv_index,texture_loads,light_loads,vertex_invalidations;
+void GX_SetTevIndWarp(int stage,int indstage,int signed_offset,int replace,int matrix){
+ assert(active_indirect==1&&indstage==0&&signed_offset==GX_TRUE&&!replace&&matrix==GX_ITM_0);
+ state.stages[stage].direct=2;
+}
 static bool authored_test;
 static GXColorS10 authored_colors[4];
 static int authored_rgb_op[5],authored_alpha_op[5],authored_depth_location,authored_dither;
