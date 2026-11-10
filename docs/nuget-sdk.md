@@ -128,7 +128,7 @@ mapping; supplied symbols are validated and entry-project symbols are required.
 Set `<DndManagedHeapBytes>1048576</DndManagedHeapBytes>` to override the native
 managed heap for an application. The build driver passes the same numeric Make
 override to Native and Docker backends; its CLI equivalent is
-`--managed-heap-bytes 1048576`. Values must be 64 KiB–16 MiB and 32-byte aligned.
+`--managed-heap-bytes 1048576`. Values must be 256 KiB–16 MiB and 32-byte aligned.
 Omitting it retains the compiler-selected default (usually 256 KiB). This is the
 managed allocation budget, separate from GPU/native buffers and prepared DOLs;
 it still has to fit alongside those allocations in MEM1. HTTPS updaters reading

@@ -233,7 +233,7 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
     build_args = ("build", "--assembly", assembly, "--compiler", tool_dir / "DolphinLaunchProbe.dll",
                   "--native-directory", native, "--dol", dol, "--elf", elf,
                   "--run-config", config, "--backend", "Docker", "--debug-symbols", "true")
-    for invalid_heap in ('0','65535','16777217','1048577','oops','1;echo injected'):
+    for invalid_heap in ('0','65535','131072','16777217','1048577','oops','1;echo injected'):
         output=call(*build_args,'--managed-heap-bytes',invalid_heap,env=tool_env,expected=1)
         assert 'aligned to 32 bytes' in output, output
     heap_capture=work/'native-arguments.json'
