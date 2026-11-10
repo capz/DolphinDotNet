@@ -24,7 +24,7 @@ internal static class Driver
                     "  doctor [--backend Auto|Native|Docker] [--dolphin PATH] [--build-only true]\n" +
                     "  build --assembly DLL --compiler DLL --native-directory DIR --dol DOL --elf ELF --run-config JSON\n" +
                     "        [--backend Auto|Native|Docker] [--dolphin PATH] [--user-directory DIR] [--jobs N]\n" +
-                     "        [--sample-controls true|false] [--debug-symbols true|false] [--gdb-transport Off|Tcp|UsbGecko] [--gdb-channel 0|1] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
+                     "        [--managed-heap-bytes BYTES] [--sample-controls true|false] [--debug-symbols true|false] [--gdb-transport Off|Tcp|UsbGecko] [--gdb-channel 0|1] [--gdb-ip IPv4] [--gdb-netmask IPv4] [--gdb-gateway IPv4] [--gdb-port PORT]\n" +
                     "  run --config JSON [--dolphin PATH] [--gdb-port PORT]");
                 return 0;
             }
@@ -89,7 +89,11 @@ internal static class Driver
             if (args[0] is not ("build" or "doctor")) throw new ArgumentException("Unknown command: " + args[0]);
             Allow(options, args[0] == "doctor" ? ["backend", "dolphin", "build-only"] :
                 ["assembly", "compiler", "native-directory", "dol", "elf", "run-config", "backend", "dolphin", "user-directory", "jobs",
-                  "sample-controls", "debug-symbols", "gdb-transport", "gdb-channel", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
+                  "managed-heap-bytes", "sample-controls", "debug-symbols", "gdb-transport", "gdb-channel", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
+            int managedHeapBytes=0;
+            if(options.ContainsKey("managed-heap-bytes") &&
+                (!int.TryParse(Get("managed-heap-bytes"),out managedHeapBytes) || managedHeapBytes<65536 || managedHeapBytes>16777216 || managedHeapBytes%32!=0))
+                throw new ArgumentException("--managed-heap-bytes must be 65536..16777216 bytes, aligned to 32 bytes.");
             string? native = null, dol = null, elf = null, runConfig = null, assembly = null, compiler = null;
             if (args[0] == "build")
             {
@@ -200,8 +204,10 @@ internal static class Driver
                     "--gdb-gateway", Get("gdb-gateway"), "--gdb-port", Get("gdb-port", "2828")]);
             int result = await Run(dotnet, compilerArgs, Directory.GetCurrentDirectory());
             if (result != 0) return result;
+            var makeArguments=new List<string>{"-j"+jobs};
+            if(managedHeapBytes!=0)makeArguments.Add("DND_MANAGED_HEAP_BYTES="+managedHeapBytes);
             if (backend.Equals("Native", StringComparison.OrdinalIgnoreCase))
-                result = await Run("make", ["-j" + jobs], native!);
+                result = await Run("make", makeArguments, native!);
             else
             {
                 container = "dnd-build-" + Guid.NewGuid().ToString("N");
@@ -218,7 +224,7 @@ internal static class Driver
                     .Select(Environment.GetEnvironmentVariable).FirstOrDefault(path => !string.IsNullOrEmpty(path) && File.Exists(path));
                 if (ca != null) docker.AddRange(["--volume", Path.GetFullPath(ca) + ":/tmp/dnd-ca-bundle.pem:ro",
                     "--env", "GIT_SSL_CAINFO=/tmp/dnd-ca-bundle.pem", "--env", "SSL_CERT_FILE=/tmp/dnd-ca-bundle.pem"]);
-                docker.AddRange(["--volume", native! + ":/work", "--workdir", "/work", Image, "bash", "-lc", "make -j" + jobs]);
+                docker.AddRange(["--volume", native! + ":/work", "--workdir", "/work", Image, "bash", "-lc", "make "+string.Join(" ",makeArguments)]);
                 try { result = await Run("docker", docker, Directory.GetCurrentDirectory(), native); }
                 finally { RemoveContainer(); }
             }

@@ -122,3 +122,14 @@ packages. They are optional and do not participate in the GameCube runtime
 assembly graph. See their tool READMEs for conversion commands/dependencies.
 Dependency packages without PDBs compile in Debug but have no source/locals
 mapping; supplied symbols are validated and entry-project symbols are required.
+
+### Managed heap budget
+
+Set `<DndManagedHeapBytes>1048576</DndManagedHeapBytes>` to override the native
+managed heap for an application. The build driver passes the same numeric Make
+override to Native and Docker backends; its CLI equivalent is
+`--managed-heap-bytes 1048576`. Values must be 64 KiB–16 MiB and 32-byte aligned.
+Omitting it retains the compiler-selected default (usually 256 KiB). This is the
+managed allocation budget, separate from GPU/native buffers and prepared DOLs;
+it still has to fit alongside those allocations in MEM1. HTTPS updaters reading
+large CA bundles and bounded JSON responses should budget at least 1 MiB.

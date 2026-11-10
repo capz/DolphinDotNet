@@ -14,6 +14,8 @@ if (Environment.GetEnvironmentVariable("DND_PROBE_TOOLCHAIN") == "true")
         File.WriteAllText(Path.Combine(args[2], "Game.dnd-addresses.json"), "{}");
         return 0;
     }
+    if(args.Length>0&&args[0]=="run" && Environment.GetEnvironmentVariable("DND_PROBE_NATIVE_OUTPUT") is string capture)
+        File.WriteAllText(capture,JsonSerializer.Serialize(args));
     return args.Length > 0 && args[0] == "run" ? 0 : 1;
 }
 
