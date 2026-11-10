@@ -3,7 +3,16 @@
 void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound) {
     /* Raw passes may leave indirect texturing enabled. Every shared combiner
      * invocation, including imported-model draws, owns this global state. */
-    GX_SetNumIndStages(0);
+    bool warp=effect&&effect->indirect_strength!=0;
+    GX_SetNumIndStages(warp?1:0);
+    if(warp){
+        // DNEF v3 uses TEXMAP1 as a signed, scrolling 2D displacement field.
+        // The two main color layers both sample TEXMAP0 via independent texgens.
+        f32 gain=(f32)effect->indirect_strength/255.f*.35f;
+        f32 offsets[2][3]={{gain,0,0},{0,gain,0}};
+        GX_SetIndTexOrder(GX_INDTEXSTAGE0,GX_TEXCOORD1,GX_TEXMAP1);
+        GX_SetIndTexMatrix(GX_ITM_0,offsets,-1);
+    }
     GX_SetTevSwapModeTable(GX_TEV_SWAP0,GX_CH_RED,GX_CH_GREEN,GX_CH_BLUE,GX_CH_ALPHA);
     /* DNEF rejects reads of uninitialized RGB registers. Clear them anyway so
      * every draw also starts with deterministic alpha/register/konst state. */
@@ -16,15 +25,20 @@ void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound) {
     GX_SetNumTevStages((u8)count);
     for(int i=0;i<count;i++) {
         u8 stage=(u8)i;
-        GX_SetTevDirect(stage);
+        const DndTevStage *s=effect?&effect->stages[i]:NULL;
+        bool secondary=s&&s->reserved==1,alt=s&&s->reserved==2;
+        bool sampled=s&&(s->a==GX_CC_TEXC||s->b==GX_CC_TEXC||s->c==GX_CC_TEXC||s->d==GX_CC_TEXC);
+        // The final v3 epilogue samples unwarped TEX0 alpha, preserving
+        // transparent outlines independently of the displaced RGB samples.
+        if(warp&&sampled)
+            GX_SetTevIndWarp(stage,GX_INDTEXSTAGE0,GX_TRUE,GX_FALSE,GX_ITM_0);
+        else GX_SetTevDirect(stage);
         GX_SetTevSwapMode(stage,GX_TEV_SWAP0,GX_TEV_SWAP0);
-        bool secondary=effect&&effect->stages[i].reserved;
-        GX_SetTevOrder(stage,secondary?GX_TEXCOORD1:texture_bound?GX_TEXCOORD0:GX_TEXCOORDNULL,
+        GX_SetTevOrder(stage,secondary||alt?GX_TEXCOORD1:texture_bound?GX_TEXCOORD0:GX_TEXCOORDNULL,
                        secondary?GX_TEXMAP1:texture_bound?GX_TEXMAP0:GX_TEXMAP_NULL,GX_COLOR0A0);
         GX_SetTevKColorSel(stage,effect?effect->stages[i].konst:GX_TEV_KCSEL_1);
         GX_SetTevKAlphaSel(stage,GX_TEV_KASEL_1);
         if(effect) {
-            const DndTevStage *s=&effect->stages[i];
             GX_SetTevColorIn(stage,s->a,s->b,s->c,s->d);
             GX_SetTevColorOp(stage,s->op,GX_TB_ZERO,GX_CS_SCALE_1,GX_TRUE,s->dest);
         } else {

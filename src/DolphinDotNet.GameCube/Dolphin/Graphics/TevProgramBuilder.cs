@@ -17,8 +17,19 @@ public sealed class TevProgramBuilder
     private readonly Color32[] colors=new Color32[MaximumColors];
     private int count,uniforms,initialized;
     private int textures;
+    private int indirectStrength;
     public int StageCount => count;
     public int ColorCount => uniforms;
+    /// <summary>Use the second texture only as a GX indirect UV warp map.
+    /// The first texture is sampled for all color stages; stages may select either
+    /// UV matrix without any CPU texture or vertex updates.</summary>
+    public void EnableIndirectWarp(byte strength=76)
+    {
+        if(strength==0)throw new ArgumentOutOfRangeException("strength");
+        if((textures&2)!=0)throw new InvalidOperationException("Secondary RGB sampling and indirect warp are mutually exclusive.");
+        indirectStrength=strength;
+        textures|=2;
+    }
     public int AddColor(string name,Color32 color)
     {
         if(name==null)throw new ArgumentNullException("name");
@@ -30,7 +41,7 @@ public sealed class TevProgramBuilder
     }
     public void AddStage(TevInput a,TevInput b,TevInput c,TevInput d,
         TevRegister destination=TevRegister.Previous,TevOperation operation=TevOperation.Add,
-        int colorSlot=-1,TevComponent component=TevComponent.Rgb)
+        int colorSlot=-1,TevComponent component=TevComponent.Rgb,bool alternateUv=false)
     {
         if(count==MaximumStages)throw new InvalidOperationException("TEV supports at most sixteen stages.");
         if((int)destination<0||(int)destination>3||(operation!=TevOperation.Add&&operation!=TevOperation.GreaterRed)
@@ -40,9 +51,11 @@ public sealed class TevProgramBuilder
         bool primary=a==TevInput.Texture||b==TevInput.Texture||c==TevInput.Texture||d==TevInput.Texture;
         bool secondary=a==TevInput.SecondaryTexture||b==TevInput.SecondaryTexture||c==TevInput.SecondaryTexture||d==TevInput.SecondaryTexture;
         if(primary&&secondary)throw new ArgumentException("A TEV stage can sample only one texture; use an intermediate register.");
+        if(indirectStrength!=0&&secondary)throw new ArgumentException("An indirect warp map cannot also be sampled as an RGB texture.");
+        if(alternateUv&&(indirectStrength==0||secondary||!primary))throw new ArgumentException("Alternate UVs require a primary-texture stage in an indirect-warp effect.");
         int at=count*8;
         stages[at]=(byte)(a==TevInput.SecondaryTexture?TevInput.Texture:a);stages[at+1]=(byte)(b==TevInput.SecondaryTexture?TevInput.Texture:b);stages[at+2]=(byte)(c==TevInput.SecondaryTexture?TevInput.Texture:c);stages[at+3]=(byte)(d==TevInput.SecondaryTexture?TevInput.Texture:d);
-        stages[at+7]=(byte)(secondary?1:0);
+        stages[at+7]=(byte)(alternateUv?2:secondary?1:0);
         stages[at+4]=(byte)operation;stages[at+5]=(byte)destination;
         stages[at+6]=(byte)(colorSlot<0?0:component==TevComponent.Rgb?12+colorSlot:12+(int)component*4+colorSlot);
         textures|=(primary?1:0)|(secondary?2:0);
@@ -62,8 +75,8 @@ public sealed class TevProgramBuilder
         if(count==0||stages[(count-1)*8+5]!=0)throw new InvalidOperationException("The final stage must write Previous.");
         bool dual=(textures&2)!=0;
         if(dual&&count==MaximumStages)throw new InvalidOperationException("Two-texture programs reserve one of sixteen stages for base opacity.");
-        var p=new byte[176+(count+(dual?1:0))*8];p[0]=68;p[1]=78;p[2]=69;p[3]=70;p[4]=(byte)(dual?2:1);
-        p[8]=(byte)(count+(dual?1:0));p[12]=(byte)textures;p[16]=(byte)uniforms;
+        var p=new byte[176+(count+(dual?1:0))*8];p[0]=68;p[1]=78;p[2]=69;p[3]=70;p[4]=(byte)(indirectStrength!=0?3:dual?2:1);
+        p[8]=(byte)(count+(dual?1:0));p[12]=(byte)textures;p[16]=(byte)uniforms;p[20]=(byte)indirectStrength;
         for(int i=0;i<uniforms;i++){
             for(int j=0;j<names[i].Length;j++)p[32+i*36+j]=(byte)names[i][j];
             int at=64+i*36;p[at]=colors[i].R;p[at+1]=colors[i].G;p[at+2]=colors[i].B;p[at+3]=colors[i].A;

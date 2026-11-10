@@ -84,3 +84,18 @@ mixed.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.SecondaryTextu
 for(int i=1;i<16;i++)mixed.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Previous);
 Reject<InvalidOperationException>(()=>mixed.BuildPackage());
 Console.WriteLine("Dual-texture TEV arithmetic and opacity-stage budgets passed.");
+
+var waterWarp=TevMaterialPresets.WaterWarp(new Color32(198,234,229),new Color32(230,246,240),76);
+var waterBytes=waterWarp.GetPackage();
+Check(waterWarp.StageCount==4&&waterWarp.RequiresTexture&&waterWarp.RequiresSecondaryTexture,"Warp requires two textures and a final opacity stage");
+Check(waterBytes[4]==3&&waterBytes[12]==3&&waterBytes[20]==76&&waterBytes[23]==0&&waterBytes[24]==0,"DNEF v3 indirect strength and reserved header");
+Check(waterBytes[176+8+7]==0&&waterBytes[176+16+7]==2&&waterBytes[176+24+7]==0,"Second foam layer uses alternate UV, never auxiliary RGB");
+var noWarp=new TevProgramBuilder();
+Reject<ArgumentException>(()=>noWarp.AddStage(TevInput.Zero,TevInput.Texture,TevInput.One,TevInput.Zero,alternateUv:true));
+Reject<ArgumentOutOfRangeException>(()=>noWarp.EnableIndirectWarp(0));
+noWarp.EnableIndirectWarp(76);
+Reject<ArgumentException>(()=>noWarp.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.SecondaryTexture));
+Reject<ArgumentException>(()=>noWarp.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Raster,alternateUv:true));
+var rgbFirst=new TevProgramBuilder();rgbFirst.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.SecondaryTexture);
+Reject<InvalidOperationException>(()=>rgbFirst.EnableIndirectWarp());
+Console.WriteLine("DNEF v3 indirect texture authoring and two-UV water preset passed.");

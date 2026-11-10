@@ -211,3 +211,44 @@ patch in turn and require rejection. Native tests cover perspective eye-ray and
 inverse-camera rotation math, skinned full overrides, transparent sorting,
 preflight failure without submission, and malformed v2 programs. No retail assets
 or interactive controls are added for these checks.
+
+## GX indirect water warp (DNEF v3)
+
+DNEF v3 is opt-in and backward compatible with ordinary v1/v2 effects.
+It uses two bound texture units, not three: primary TEXMAP0 supplies the
+same foam/color mask at two UV scales; secondary TEXMAP1 is exclusively
+a signed GX indirect displacement map. Stage flag 2 samples TEXMAP0 from
+TEXCOORD1. One GX indirect stage warps the authored color-sampling stages.
+A final unwarped TEX0 stage resolves base opacity. Non-warp materials
+explicitly reset the indirect stage count and per-stage direct settings.
+
+```csharp
+using var water=TevMaterialPresets.WaterWarp(
+    new Color32(196,228,222),
+    new Color32(222,245,237),strength:76).Create(foamMask,displacementMap);
+water.Material.Sampler=new SamplerState(
+    TextureAddressMode.Repeat,TextureAddressMode.Repeat,TextureFilter.Linear);
+water.Material.SecondarySampler=water.Material.Sampler;
+// Set TextureTransform and SecondaryTextureTransform independently each frame.
+renderer.DrawMesh(unchangedWaterMesh,water.Material,terrainTransform);
+```
+
+The displacement texture should contain independent horizontal/vertical
+channels (GX RGB565 or RGBA8). All textures are allocated and uploaded once
+outside frames. Tuning UV transforms and TEV colors is per-frame material
+state only. Native validation rejects a zero/out-of-range warp gain, nonzero
+reserved words, RGB samples of the indirect map, or a missing base/secondary
+binding. DNEF v3 uses byte 20 (1–255) of the 32-byte header for warp gain;
+all other header reserved words must remain zero.
+
+`TevProgramBuilder.EnableIndirectWarp(byte gain)` is the generic API.
+The `alternateUv:true` argument is permitted only on a primary-texture
+`AddStage` after enabling warp. The managed material accepts the distortion
+map as `SecondaryTexture`, and both textures must remain alive through
+the frame. RGB cannot sample that second texture in an indirect effect.
+
+The effect reproduces the original fixed-function *technique*, rather than
+Nintendo's texture art, exact mip biases or ocean mesh. For distinct LOD biases
+on the two sampled foam layers, another texture unit and material sampler
+extension would be required. Hardware accuracy and performance need testing
+on a real GameCube as well as the recording/native GX fixtures.

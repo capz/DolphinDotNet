@@ -26,4 +26,16 @@ static void effect_package_tests(void) {
     p[191]=1;assert(dnd_effect_create(a)==0);p[191]=0;
     p[4]=1;assert(dnd_effect_create(a)==0);p[4]=3;assert(dnd_effect_create(a)==0);
     free(a);assert(dnd_draw_total_bytes()==0);
+    a=calloc(1,sizeof(*a)+200);assert(a);a->element_size=1;a->length=200;p=a->data;
+    memcpy(p,"DNEF",4);p[4]=3;p[8]=3;p[12]=3;p[20]=76;
+    p[176]=p[177]=p[178]=15;p[179]=8;
+    p[184]=p[185]=p[186]=15;p[187]=8;p[191]=2;
+    p[192]=p[193]=p[194]=15;
+    token=dnd_effect_create(a);assert(token>0);assert(dnd_draw_release(token)==0);
+    p[20]=0;assert(dnd_effect_create(a)==0);p[20]=76;
+    p[20]=76;p[21]=1;assert(dnd_effect_create(a)==0);p[21]=0;
+    p[12]=1;assert(dnd_effect_create(a)==0);p[12]=3;
+    p[191]=1;assert(dnd_effect_create(a)==0);p[191]=2;
+    p[199]=2;assert(dnd_effect_create(a)==0);p[199]=0;
+    free(a);assert(dnd_draw_total_bytes()==0);
 }

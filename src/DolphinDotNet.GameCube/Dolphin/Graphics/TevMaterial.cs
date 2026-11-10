@@ -72,6 +72,19 @@ public sealed class EmissiveMaterialOptions
 /// Presets use at most two textures, four colors and eight total TEV stages.</summary>
 public static class TevMaterialPresets
 {
+    /// <summary>GameCube-style moving foam: two independent UV samples of one
+    /// color/foam mask, displaced by the second texture as a GX indirect map.
+    /// The distortion map is never used as a visible RGB texture.</summary>
+    public static TevMaterialDefinition WaterWarp(Color32 foam,Color32 secondaryFoam,byte strength=76)
+    {
+        var program=new TevProgramBuilder();
+        program.EnableIndirectWarp(strength);
+        program.AddColor("Foam",foam);program.AddColor("Foam2",secondaryFoam);
+        program.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Raster);
+        program.AddStage(TevInput.Previous,TevInput.Constant,TevInput.Texture,TevInput.Zero,colorSlot:0);
+        program.AddStage(TevInput.Previous,TevInput.Constant,TevInput.Texture,TevInput.Zero,colorSlot:1,alternateUv:true);
+        return new TevMaterialDefinition(program,LightingMode.Unlit);
+    }
     public static TevMaterialDefinition Toon(ToonMaterialOptions? options=null)
     {
         var o=options??new ToonMaterialOptions();
