@@ -22,8 +22,8 @@ typedef struct {
   DndContiguousOps ops;
   char root[DND_CW_PATH_CAP], target[DND_CW_PATH_CAP], staged[DND_CW_PATH_CAP];
   int fd;
-  uint64_t expected, written, checksum;
-  bool active;
+  uint64_t expected, written, checksum, verified, verify_checksum;
+  bool active, verifying;
 } DndContiguousWriter;
 
 /* Create-new only. The published path is never replaced/overwritten.
@@ -33,6 +33,9 @@ int dnd_contiguous_begin(DndContiguousWriter *writer,const char *root,
                          const char *target,uint64_t length,DndContiguousOps ops);
 int dnd_contiguous_write(DndContiguousWriter *writer,const void *data,size_t length);
 int dnd_contiguous_complete(DndContiguousWriter *writer);
+/* Read back at most 16 KiB per call. Returns 0 while pending, 1 once
+ * published, or a negative error. Abort remains valid between steps. */
+int dnd_contiguous_complete_step(DndContiguousWriter *writer);
 int dnd_contiguous_abort(DndContiguousWriter *writer);
 /* Recovers interrupted staging/publish on mount. Never deletes a published
  * destination; invalid journals fail closed without modifying any files. */

@@ -1239,6 +1239,15 @@ void dnd_fs_contiguous_complete(int token) {
   if(!contiguous_writers[d].active)contiguous_tokens[d]=0;
   if(rc<0)fail(-rc,"Contiguous file publication failed.");
 }
+int dnd_fs_contiguous_complete_step(int token) {
+  storage_barrier();
+  int d=contiguous_find(token);
+  if(d<0)return -1;
+  int rc=dnd_contiguous_complete_step(&contiguous_writers[d]);
+  if(!contiguous_writers[d].active)contiguous_tokens[d]=0;
+  if(rc<0)fail(-rc,"Contiguous file publication failed.");
+  return rc;
+}
 void dnd_fs_contiguous_abort(int token) {
   storage_barrier();
   for(int d=0;d<7;d++)if(token>0 && contiguous_tokens[d]==token) {

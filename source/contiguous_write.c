@@ -165,7 +165,7 @@ int dnd_contiguous_recover(const char *root) {
   return delete_journal(root);
 }
 static void reset(DndContiguousWriter *w) {
-  w->fd=-1;w->active=false;
+  w->fd=-1;w->active=false;w->verifying=false;
 }
 int dnd_contiguous_abort(DndContiguousWriter *w) {
   if(!w||!w->active)return -EINVAL;
@@ -234,7 +234,7 @@ int dnd_contiguous_begin(DndContiguousWriter *w,const char *root,
   return interrupted(w,DND_CW_AFTER_RESERVE);
 }
 int dnd_contiguous_write(DndContiguousWriter *w,const void *data,size_t length) {
-  if(!w||!w->active||w->fd<0||(!data&&length))return -EINVAL;
+  if(!w||!w->active||w->verifying||w->fd<0||(!data&&length))return -EINVAL;
   if(length>w->expected-w->written)return -EFBIG;
   const unsigned char *src=data;
   _Alignas(32) unsigned char buffer[BUFFER_SIZE];
@@ -249,31 +249,30 @@ int dnd_contiguous_write(DndContiguousWriter *w,const void *data,size_t length) 
   }
   return 0;
 }
-static int verify(const DndContiguousWriter *w) {
-  int fd=open(w->staged,O_RDONLY);
-  if(fd<0)return -errno;
-  _Alignas(32) unsigned char data[BUFFER_SIZE];
-  uint64_t digest=UINT64_C(14695981039346656037),len=0;
-  int rc=0;
-  for(;;) {
-    ssize_t n=read(fd,data,sizeof(data));
-    if(n<0 && errno==EINTR)continue;
-    if(n<0){rc=-errno;break;}
-    if(n==0)break;
-    digest=hash64(digest,data,(size_t)n);
-    len+=(uint64_t)n;
-  }
-  if(close(fd)<0&&!rc)rc=-errno;
-  if(rc)return rc;
-  return len==w->expected && digest==w->checksum?0:-EIO;
-}
-int dnd_contiguous_complete(DndContiguousWriter *w) {
+int dnd_contiguous_complete_step(DndContiguousWriter *w) {
   if(!w||!w->active||w->fd<0)return -EINVAL;
   if(w->written!=w->expected)return -EINVAL;
-  int rc=close_sync(w->fd);
-  w->fd=-1;
-  if(rc<0){dnd_contiguous_abort(w);return rc;}
-  rc=verify(w);
+  int rc=0;
+  if(!w->verifying) {
+    rc=close_sync(w->fd);w->fd=-1;
+    if(rc<0){dnd_contiguous_abort(w);return rc;}
+    w->fd=open(w->staged,O_RDONLY);
+    if(w->fd<0){rc=-errno;dnd_contiguous_abort(w);return rc;}
+    w->verifying=true;w->verified=0;
+    w->verify_checksum=UINT64_C(14695981039346656037);
+  }
+  _Alignas(32) unsigned char data[BUFFER_SIZE];
+  ssize_t n=read(w->fd,data,sizeof(data));
+  if(n<0 && errno==EINTR)return 0;
+  if(n<0){rc=-errno;dnd_contiguous_abort(w);return rc;}
+  if(n>0) {
+    if((uint64_t)n>w->expected-w->verified){dnd_contiguous_abort(w);return -EIO;}
+    w->verify_checksum=hash64(w->verify_checksum,data,(size_t)n);
+    w->verified+=(uint64_t)n;
+    return 0;
+  }
+  rc=close(w->fd)<0?-errno:0;w->fd=-1;
+  if(!rc && (w->verified!=w->expected || w->verify_checksum!=w->checksum))rc=-EIO;
   if(rc<0){dnd_contiguous_abort(w);return rc;}
   unsigned extents=0;
   rc=w->ops.count_extents(w->ops.context,w->staged,&extents);
@@ -295,5 +294,11 @@ int dnd_contiguous_complete(DndContiguousWriter *w) {
   rc=interrupted(w,DND_CW_AFTER_PUBLISH);
   if(rc<0)return rc;
   reset(w);
-  return delete_journal(w->root);
+  rc=delete_journal(w->root);
+  return rc<0?rc:1;
+}
+int dnd_contiguous_complete(DndContiguousWriter *w) {
+  int rc;
+  do{rc=dnd_contiguous_complete_step(w);}while(rc==0);
+  return rc==1?0:rc;
 }

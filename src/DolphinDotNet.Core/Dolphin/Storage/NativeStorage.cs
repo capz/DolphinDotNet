@@ -40,6 +40,7 @@ internal static class NativeStorage
     internal static int ContiguousBegin(string path,long expectedLength)=>throw Unsupported();
     internal static void ContiguousWrite(int handle,byte[] buffer,int offset,int count)=>throw Unsupported();
     internal static void ContiguousComplete(int handle)=>throw Unsupported();
+    internal static int ContiguousCompleteStep(int handle)=>throw Unsupported();
     internal static void ContiguousAbort(int handle)=>throw Unsupported();
     internal static void CreateDirectory(string path)=>throw Unsupported();
     internal static int Open(string path,int mode,int access,int share)=>throw Unsupported();

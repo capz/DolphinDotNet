@@ -64,6 +64,20 @@ def main(area):
         # broader native suite. The latter also exercises unrelated hardware
         # stubs and may be unavailable on some host runner configurations.
         with tempfile.TemporaryDirectory() as tmp:
+            binary=Path(tmp)/"contiguous-write-test"
+            run("cc","-std=c11","-O2","-Wall","-Wextra","-Werror",
+                "-Iinclude","tests/contiguous_write_test.c","source/contiguous_write.c","-o",binary)
+            run(binary)
+            generated=Path(tmp)/"contiguous-async.c"
+            aot("tests/ContiguousAsyncSmoke/ContiguousAsyncSmoke.csproj",generated)
+            binary=Path(tmp)/"contiguous-async"
+            run("cc","-std=c11","-pthread","-O1","-ffunction-sections","-fdata-sections","-Iinclude",
+                generated,"tests/contiguous_async_host.c","source/managed_runtime.c",
+                "source/async_runtime.c","source/numeric.c","source/text.c","source/timing.c",
+                "-Wl,--gc-sections" if __import__("sys").platform!="darwin" else "-Wl,-dead_strip",
+                "-lm","-o",binary)
+            run("env","DND_ASYNC_MANUAL=1",binary)
+            run("env","DND_ASYNC_MANUAL=1",binary,"--gc-stress")
             for name,source in (("allocation","allocation"),
                                 ("ownership","allocation"),
                                 ("planner","planner"),
