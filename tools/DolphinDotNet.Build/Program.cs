@@ -92,8 +92,8 @@ internal static class Driver
                   "managed-heap-bytes", "sample-controls", "debug-symbols", "gdb-transport", "gdb-channel", "gdb-ip", "gdb-netmask", "gdb-gateway", "gdb-port"]);
             int managedHeapBytes=0;
             if(options.ContainsKey("managed-heap-bytes") &&
-                (!int.TryParse(Get("managed-heap-bytes"),out managedHeapBytes) || managedHeapBytes<65536 || managedHeapBytes>16777216 || managedHeapBytes%32!=0))
-                throw new ArgumentException("--managed-heap-bytes must be 65536..16777216 bytes, aligned to 32 bytes.");
+                (!int.TryParse(Get("managed-heap-bytes"),out managedHeapBytes) || managedHeapBytes<262144 || managedHeapBytes>16777216 || managedHeapBytes%32!=0))
+                throw new ArgumentException("--managed-heap-bytes must be 262144..16777216 bytes, aligned to 32 bytes.");
             string? native = null, dol = null, elf = null, runConfig = null, assembly = null, compiler = null;
             if (args[0] == "build")
             {
