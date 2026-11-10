@@ -31,6 +31,11 @@ typedef struct {void *data;int width,height,format,wrap_s,wrap_t,mips,min_filter
 #define GX_LIGHT0 1
 #define GX_DF_CLAMP 2
 void GX_SetNumIndStages(int count);
+#define GX_INDTEXSTAGE0 0
+#define GX_ITM_0 1
+void GX_SetIndTexOrder(int stage,int coord,int texmap);
+void GX_SetIndTexMatrix(int matrix,float offsets[2][3],int exponent);
+void GX_SetTevIndWarp(int stage,int indstage,int signed_offset,int replace,int matrix);
 #define GX_ALWAYS 7
 #define GX_ANISO_1 0
 #define GX_AOP_AND 0
