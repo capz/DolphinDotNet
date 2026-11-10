@@ -28,7 +28,9 @@ internal static class Program
         Complete(NetworkRuntime.StartAsync(new NetworkOptions{DnsServers=new[]{Dolphin.Network.IPAddress.Loopback},DnsPort=15353},default));
         if(IPAddress.Parse("127.0.0.1").GetAddressBytes()[0]!=127)return 1;
         using var server=new UdpClient(0);using var client=new UdpClient(0);
-        var receive=server.ReceiveAsync();var send=client.SendAsync(new byte[]{4,5,6},3,(IPEndPoint)server.Client.LocalEndPoint!);
+        // Wildcard bind addresses are not portable UDP destinations (macOS).
+        var serverAddress=new IPEndPoint(IPAddress.Loopback,((IPEndPoint)server.Client.LocalEndPoint!).Port);
+        var receive=server.ReceiveAsync();var send=client.SendAsync(new byte[]{4,5,6},3,serverAddress);
         Wait(send,receive);var packet=receive.GetAwaiter().GetResult();if(packet.Buffer.Length!=3||packet.Buffer[1]!=5)return 2;
         var reply=client.ReceiveAsync();var sent=server.SendAsync(packet.Buffer,3,packet.RemoteEndPoint);Wait(sent,reply);if(reply.GetAwaiter().GetResult().Buffer[2]!=6)return 3;
         var listener=new TcpListener(IPAddress.Loopback,0);listener.Start();var accept=listener.AcceptTcpClientAsync();using var outgoing=new TcpClient();var connect=outgoing.ConnectAsync(IPAddress.Loopback,((IPEndPoint)listener.LocalEndpoint).Port);Wait(connect,accept);using var incoming=accept.GetAwaiter().GetResult();listener.Stop();
@@ -43,7 +45,7 @@ internal static class Program
         var ambiguous=http.GetStringAsync("http://config.test:18081/ambiguous");try{Wait(ambiguous,ambiguous);return 13;}catch(FormatException){}
         var cancel=new System.Threading.CancellationTokenSource();using var canceledSocket=new Dolphin.Network.UdpClient(0);var canceled=canceledSocket.ReceiveAsync(cancel.Token);cancel.Cancel();try{Complete(canceled);return 14;}catch(OperationCanceledException){}if(!canceled.IsCanceled)return 15;
         try{var bad=new JsonReader("{\"bad\":[1,]}");while(bad.Read()){}return 16;}catch(FormatException){}
-        var oversized=server.ReceiveAsync();var large=client.SendAsync(new byte[1201],1201,(IPEndPoint)server.Client.LocalEndPoint!);Wait(large,large);try{Wait(oversized,oversized);return 17;}catch(System.Net.Sockets.SocketException error){if(error.ErrorCode!=0)return 18;}
+        var oversized=server.ReceiveAsync();var large=client.SendAsync(new byte[1201],1201,serverAddress);Wait(large,large);try{Wait(oversized,oversized);return 17;}catch(System.Net.Sockets.SocketException error){if(error.ErrorCode!=0)return 18;}
         phase=6;
         using(var largeHttp=new Dolphin.Network.Http.HttpClient()){
             try{var rejected=largeHttp.GetAsync("http://config.test:18081/stream-iso",Dolphin.Network.Http.HttpCompletionOption.ResponseHeadersRead);Complete(rejected);return 22;}catch(System.IO.IOException){}
