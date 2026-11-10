@@ -72,6 +72,9 @@ public sealed class HttpClient : IDisposable
 {
     private readonly List<RequestWork> active=new List<RequestWork>();private bool disposed;
     public int MaximumResponseBytes {get;set;}=65536;
+    /// <summary>Per-response streaming limit, independent of the buffered response cap.
+    /// Defaults to 16 MiB; opt in to larger downloads without buffering them.</summary>
+    public int MaximumStreamBytes {get;set;}=16777216;
     public int MaximumRedirects {get;set;}=5;
     public HttpHeaders DefaultRequestHeaders {get;}=new HttpHeaders();
     public Task<HttpResponseMessage> GetAsync(string uri)=>GetAsync(uri,HttpCompletionOption.ResponseContentRead,default);
@@ -82,7 +85,7 @@ public sealed class HttpClient : IDisposable
     public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token)=>SendAsync(request,HttpCompletionOption.ResponseContentRead,token);
     public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,HttpCompletionOption option,CancellationToken token)
     {
-        if(disposed)throw new ObjectDisposedException("HttpClient");if(request==null)throw new ArgumentNullException("request");if(MaximumResponseBytes<1||MaximumResponseBytes>1048576||active.Count>=2)throw new InvalidOperationException("HTTP resource limit.");
+        if(disposed)throw new ObjectDisposedException("HttpClient");if(request==null)throw new ArgumentNullException("request");if(MaximumResponseBytes<1||MaximumResponseBytes>1048576||MaximumStreamBytes<1||active.Count>=2)throw new InvalidOperationException("HTTP resource limit.");
         var work=new RequestWork(this,request,option,token);NetworkRuntime.Add(work);active.Add(work);return work.Completion.Task;
     }
     public Task<string> GetStringAsync(string uri){var work=new DownloadString(GetAsync(uri));work.Start();return work.Completion.Task;}
@@ -106,17 +109,17 @@ public sealed class HttpClient : IDisposable
     }
     private sealed class RequestWork : Operation
     {
-        private readonly HttpClient owner;private readonly HttpRequestMessage request;private readonly HttpCompletionOption option;private readonly CancellationToken token;private HttpUrl url;private int redirects;private bool crossOrigin;
+        private readonly HttpClient owner;private readonly HttpRequestMessage request;private readonly HttpCompletionOption option;private readonly CancellationToken token;private HttpUrl url;private int redirects;private bool crossOrigin;private readonly int streamLimit;
         private TcpClient? client;private Task? connect;private Task<int>? io;private readonly byte[] headers=new byte[8192];private byte[]? wire;private int stage,offset,used,requestOffset;private HttpResponseMessage? response;private Task<byte[]>? body;
         internal readonly TaskCompletionSource<HttpResponseMessage> Completion=new TaskCompletionSource<HttpResponseMessage>();
-        internal RequestWork(HttpClient c,HttpRequestMessage r,HttpCompletionOption o,CancellationToken t):base(t){owner=c;request=r;option=o;token=t;url=new HttpUrl(r.RequestUri);}
+        internal RequestWork(HttpClient c,HttpRequestMessage r,HttpCompletionOption o,CancellationToken t):base(t){owner=c;request=r;option=o;token=t;streamLimit=c.MaximumStreamBytes;url=new HttpUrl(r.RequestUri);}
         protected override bool Step()
         {
             if(stage==0){client=new TcpClient();connect=client.ConnectAsync(url.Host,url.Port,token);stage=1;return false;}
             if(stage==1){if(!connect!.IsCompleted)return false;connect.GetAwaiter().GetResult();if(url.Secure){if(NativeNetwork.TlsStart(client!.Client.Handle,url.Host)<0)throw new IOException("TLS unavailable or not securely configured.");stage=5;return false;}wire=BuildRequest();stage=2;return false;}
             if(stage==5){int result=NativeNetwork.TlsHandshake(client!.Client.Handle);if(result==-1)return false;if(result<0)throw new IOException("TLS handshake or certificate verification failed.");wire=BuildRequest();stage=2;return false;}
             if(stage==2){if(io!=null){if(!io.IsCompleted)return false;int n=io.GetAwaiter().GetResult();if(n==0)throw new IOException("HTTP write closed.");requestOffset+=n;io=null;}if(requestOffset==wire!.Length){stage=3;return false;}io=client!.Client.SendAsync(wire,requestOffset,wire.Length-requestOffset,SocketFlags.None,token);return false;}
-            if(stage==3){if(io!=null){if(!io.IsCompleted)return false;int n=io.GetAwaiter().GetResult();io=null;if(n==0)throw new IOException("HTTP headers truncated.");used+=n;}for(int i=offset;i<=used-4;i++)if(headers[i]==13&&headers[i+1]==10&&headers[i+2]==13&&headers[i+3]==10){int end=i+4;response=ParseHeaders(end);if((int)response.StatusCode>=100&&(int)response.StatusCode<200){if((int)response.StatusCode==101)throw new NotSupportedException("HTTP upgrades unavailable.");Array.Copy(headers,end,headers,0,used-end);used-=end;offset=0;return false;}if(Redirect(response)){return false;}response.Content=new HttpContent{Body=new HttpBodyStream(client!,response,headers,end,used-end,request.Method.Method=="HEAD",token),Limit=owner.MaximumResponseBytes};if(option==HttpCompletionOption.ResponseHeadersRead){Finish();return true;}body=response.Content.ReadAsByteArrayAsync();stage=4;return false;}offset=used>3?used-3:0;if(used==headers.Length)throw new IOException("HTTP headers exceed limit.");io=client!.Client.ReceiveAsync(headers,used,headers.Length-used,SocketFlags.None,token);return false;}
+            if(stage==3){if(io!=null){if(!io.IsCompleted)return false;int n=io.GetAwaiter().GetResult();io=null;if(n==0)throw new IOException("HTTP headers truncated.");used+=n;}for(int i=offset;i<=used-4;i++)if(headers[i]==13&&headers[i+1]==10&&headers[i+2]==13&&headers[i+3]==10){int end=i+4;response=ParseHeaders(end);if((int)response.StatusCode>=100&&(int)response.StatusCode<200){if((int)response.StatusCode==101)throw new NotSupportedException("HTTP upgrades unavailable.");Array.Copy(headers,end,headers,0,used-end);used-=end;offset=0;return false;}if(Redirect(response)){return false;}response.Content=new HttpContent{Body=new HttpBodyStream(client!,response,headers,end,used-end,request.Method.Method=="HEAD",token,streamLimit),Limit=owner.MaximumResponseBytes};if(option==HttpCompletionOption.ResponseHeadersRead){Finish();return true;}body=response.Content.ReadAsByteArrayAsync();stage=4;return false;}offset=used>3?used-3:0;if(used==headers.Length)throw new IOException("HTTP headers exceed limit.");io=client!.Client.ReceiveAsync(headers,used,headers.Length-used,SocketFlags.None,token);return false;}
             if(!body!.IsCompleted)return false;body.GetAwaiter().GetResult();Finish();return true;
         }
         private void Finish(){owner.active.Remove(this);Completion.SetResult(response!);}

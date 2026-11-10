@@ -104,6 +104,17 @@ def main(area):
         for p in ("AsyncSmoke","AutomaticAsyncSmoke","AutomaticTaskSmoke",
                   "NetworkSmoke","TimingSmoke","InputContextSmoke"):
             build("tests/"+p+"/"+p+".csproj")
+        test("tests/UpdaterSupportTests")
+        with tempfile.TemporaryDirectory() as tmp:
+            generated=Path(tmp)/"network.c"
+            aot("tests/NetworkSmoke/NetworkSmoke.csproj",generated)
+            binary=Path(tmp)/"network"
+            run("cc","-std=c11","-pthread","-O1","-ffunction-sections","-fdata-sections","-Iinclude",
+                generated,"tests/network_host.c","source/network.c","source/network_posix.c",
+                "source/timing.c","source/managed_runtime.c","source/async_runtime.c",
+                "source/numeric.c","source/text.c","-Wl,--gc-sections" if __import__("sys").platform!="darwin" else "-Wl,-dead_strip","-lm","-o",binary)
+            run("env","DND_ASYNC_MANUAL=1","python3","tests/network_fixtures.py","--timeout-seconds","90",binary)
+            run("env","DND_ASYNC_MANUAL=1","python3","tests/network_fixtures.py","--timeout-seconds","90",binary,"--gc-stress")
         run("python3","-m","unittest","discover","-s","tests","-p","test_network_fixtures.py")
     elif area=="audio":
         test("tests/AudioAssetTests")

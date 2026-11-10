@@ -18,6 +18,7 @@ internal static class Program
     {
         int phase=0;
         try {
+        if(Dolphin.IO.DiscLauncher.GetSwissImagePath("gcloader:/AnimalTown.nkit.iso")!="gcldr:/AnimalTown.nkit.iso")return 26;
         var defaults=new NetworkOptions();var defaultDns=defaults.DnsServers;
         if(defaultDns.Length!=1)return 19;
         var defaultBytes=defaultDns[0].GetAddressBytes();
@@ -43,6 +44,25 @@ internal static class Program
         var cancel=new System.Threading.CancellationTokenSource();using var canceledSocket=new Dolphin.Network.UdpClient(0);var canceled=canceledSocket.ReceiveAsync(cancel.Token);cancel.Cancel();try{Complete(canceled);return 14;}catch(OperationCanceledException){}if(!canceled.IsCanceled)return 15;
         try{var bad=new JsonReader("{\"bad\":[1,]}");while(bad.Read()){}return 16;}catch(FormatException){}
         var oversized=server.ReceiveAsync();var large=client.SendAsync(new byte[1201],1201,(IPEndPoint)server.Client.LocalEndPoint!);Wait(large,large);try{Wait(oversized,oversized);return 17;}catch(System.Net.Sockets.SocketException error){if(error.ErrorCode!=0)return 18;}
+        phase=6;
+        using(var largeHttp=new Dolphin.Network.Http.HttpClient()){
+            try{var rejected=largeHttp.GetAsync("http://config.test:18081/stream-iso",Dolphin.Network.Http.HttpCompletionOption.ResponseHeadersRead);Complete(rejected);return 22;}catch(System.IO.IOException){}
+            largeHttp.MaximumStreamBytes=16777217;
+            var headers=largeHttp.GetAsync("http://config.test:18081/stream-iso",Dolphin.Network.Http.HttpCompletionOption.ResponseHeadersRead);Complete(headers);
+            // Changing the client after Send must not change this response's cap.
+            largeHttp.MaximumStreamBytes=32;
+            using(var largeResponse=headers.GetAwaiter().GetResult()){
+                var stream=largeResponse.Content.ReadAsStreamAsync().GetAwaiter().GetResult();var buffer=new byte[4096];int total=0;
+                while(true){var next=stream.ReadAsync(buffer,0,buffer.Length);Complete(next);int n=next.GetAwaiter().GetResult();if(n==0)break;for(int i=0;i<n;i++)if(buffer[i]!=88)return 23;total+=n;}
+                if(total!=16777217)return 24;
+            }
+            foreach(string path in new[]{"/stream-chunked","/stream-close"}){
+                bool rejected=false;
+                try{var headersTask=largeHttp.GetAsync("http://config.test:18081"+path,Dolphin.Network.Http.HttpCompletionOption.ResponseHeadersRead);Complete(headersTask);using var limited=headersTask.GetAwaiter().GetResult();var stream=limited.Content.ReadAsStreamAsync().GetAwaiter().GetResult();var buffer=new byte[16];while(true){var next=stream.ReadAsync(buffer,0,buffer.Length);Complete(next);if(next.GetAwaiter().GetResult()==0)break;}}
+                catch(System.IO.IOException){rejected=true;}catch(FormatException){rejected=true;}
+                if(!rejected)return 25;
+            }
+        }
         NetworkRuntime.Stop();return 0;
         } catch {return 100+phase;}
     }
