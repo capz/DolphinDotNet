@@ -41,7 +41,7 @@ public sealed class TevProgramBuilder
     }
     public void AddStage(TevInput a,TevInput b,TevInput c,TevInput d,
         TevRegister destination=TevRegister.Previous,TevOperation operation=TevOperation.Add,
-        int colorSlot=-1,TevComponent component=TevComponent.Rgb)
+        int colorSlot=-1,TevComponent component=TevComponent.Rgb,bool alternateUv=false)
     {
         if(count==MaximumStages)throw new InvalidOperationException("TEV supports at most sixteen stages.");
         if((int)destination<0||(int)destination>3||(operation!=TevOperation.Add&&operation!=TevOperation.GreaterRed)
