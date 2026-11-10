@@ -308,3 +308,17 @@ UTF codecs preserve surrogate pairs across writer buffers and reader byte bounda
 ## Verification
 
 CI runs the compiled smoke on 32/64-bit hosts, optimized ASan/UBSan, injected short I/O and failure cleanup, and GC stress, alongside the existing compiler/runtime regressions and GameCube DOL build. Library and storage smokes cover deferred tasks, cancellation, text boundaries and GC roots. The portable FST fixture rejects malformed trees/extents; the native-card transaction fault matrix retries failures at allocation, sector write, close, delete and metadata stages while checking complete old/new data. Host fixtures test API behavior, not physical hardware. The target build compiles the storage drivers but does not execute mounts or prove FAT encoding, ISO9660 media compatibility, card removal, DMA behavior or save-browser rendering. These remain target acceptance checks.
+
+## Booting updated images
+
+`Dolphin.IO.DiscLauncher.PrepareWithSwiss(swissDolPath, imagePath)` stages an
+installed, argv-capable Swiss DOL and sets its `Autoload` argument. Pass the
+returned `PreparedDol` to `DolLauncher.RequestLaunch`, dispose/unmount your
+resources, then return successfully from Main. Prepare before committing an
+update, so missing/unsupported Swiss binaries cannot strand the replacement.
+SDK volume prefixes map to Swiss (`gcloader:/` → `gcldr:/`, `carda:/` → `sda:/`,
+`cardb:/` → `sdb:/`, `sd:/` → `sdc:/`). Canonical ISO/GCM paths are required.
+Swiss is an external prerequisite, not bundled by this SDK. It handles NKit,
+ODE selection and game patches; extracting an ISO's DOL alone does not set up
+its disc or boot environment. Test the installed Swiss and GC Loader firmware
+on hardware; host path tests do not establish a successful console handoff.

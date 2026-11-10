@@ -57,7 +57,25 @@ def http_peer(peer):
             request.extend(part)
         path = request.split(b' ')[1]
         body = b'{"value":42,"name":"GameCube","ok":true}'
-        if path == b'/large':
+        if path in (b'/stream-iso', b'/stream-chunked', b'/stream-close'):
+            length = 16777217 if path == b'/stream-iso' else 33
+            if path == b'/stream-close':
+                peer.sendall(b'HTTP/1.1 200 OK\r\n\r\n')
+            elif path == b'/stream-chunked':
+                peer.sendall(b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n21\r\n')
+            else:
+                peer.sendall(b'HTTP/1.1 200 OK\r\nContent-Length: ' + str(length).encode() + b'\r\n\r\n')
+            try:
+                block = b'X' * 4096
+                while length:
+                    part = block[:min(length, len(block))]
+                    peer.sendall(part)
+                    length -= len(part)
+                if path == b'/stream-chunked':
+                    peer.sendall(b'\r\n0\r\n\r\n')
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+        elif path == b'/large':
             body = bytes(i % 251 for i in range(12001))
             peer.sendall(b'HTTP/1.1 200 OK\r\nContent-Length: ' + str(len(body)).encode() + b'\r\n\r\n' + body)
         elif path == b'/chunked':

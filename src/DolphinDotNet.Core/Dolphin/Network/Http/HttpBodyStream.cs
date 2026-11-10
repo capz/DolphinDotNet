@@ -6,14 +6,14 @@ using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 namespace Dolphin.Network.Http;
 internal sealed class HttpBodyStream : Dolphin.IO.Stream
 {
-    private readonly TcpClient client;private readonly CancellationToken requestToken;private readonly byte[] input;private int position,available,remaining,chunkState,lineLength,trailerBytes,total;private readonly char[] line=new char[256];private readonly bool chunked,untilClose;private bool lineCr,finished,disposed,busy;
-    internal HttpBodyStream(TcpClient client,HttpResponseMessage response,byte[] initial,int offset,int count,bool head,CancellationToken token)
+    private readonly int limit;private readonly TcpClient client;private readonly CancellationToken requestToken;private readonly byte[] input;private int position,available,remaining,chunkState,lineLength,trailerBytes,total;private readonly char[] line=new char[256];private readonly bool chunked,untilClose;private bool lineCr,finished,disposed,busy;
+    internal HttpBodyStream(TcpClient client,HttpResponseMessage response,byte[] initial,int offset,int count,bool head,CancellationToken token,int maximumBytes)
     {
-        this.client=client;requestToken=token;input=new byte[8192];Array.Copy(initial,offset,input,0,count);available=count;
+        limit=maximumBytes;this.client=client;requestToken=token;input=new byte[8192];Array.Copy(initial,offset,input,0,count);available=count;
         string? encoding=response.Headers.Get("content-encoding"),transfer=response.Headers.Get("transfer-encoding"),length=response.Headers.Get("content-length");
         if(encoding!=null&&HttpText.Lower(encoding)!="identity")throw new NotSupportedException("Compressed HTTP content is unavailable.");if(transfer!=null&&length!=null)throw new FormatException("Ambiguous HTTP body framing.");
         chunked=transfer!=null;if(chunked&&HttpText.Lower(transfer!)!="chunked")throw new NotSupportedException("Unsupported transfer coding.");
-        untilClose=!chunked&&length==null;remaining=length==null?0:HttpText.Number(length,16777216);int status=(int)response.StatusCode;finished=head||status==204||status==304||!chunked&&!untilClose&&remaining==0;if(finished)client.Dispose();
+        untilClose=!chunked&&length==null;remaining=length==null?0:HttpText.Number(length,int.MaxValue);int status=(int)response.StatusCode;finished=head||status==204||status==304||!chunked&&!untilClose&&remaining==0;if(!finished&&remaining>limit)throw new IOException("HTTP streamed body exceeds limit.");if(finished)client.Dispose();
     }
     public override bool CanRead=>!disposed;
     public override bool CanWrite=>false;
@@ -38,7 +38,7 @@ internal sealed class HttpBodyStream : Dolphin.IO.Stream
     }
     private void ChunkSize()
     {
-        int n=0,digits=0;for(int i=0;i<lineLength;i++){char c=line[i];if(c==';')break;int d=c>='0'&&c<='9'?c-'0':c>='a'&&c<='f'?c-'a'+10:c>='A'&&c<='F'?c-'A'+10:-1;if(d<0||n>(16777216-d)/16)throw new FormatException("Invalid chunk size.");n=n*16+d;digits++;}if(digits==0)throw new FormatException("Missing chunk size.");remaining=n;lineLength=0;chunkState=n==0?4:1;
+        int n=0,digits=0;for(int i=0;i<lineLength;i++){char c=line[i];if(c==';')break;int d=c>='0'&&c<='9'?c-'0':c>='a'&&c<='f'?c-'a'+10:c>='A'&&c<='F'?c-'A'+10:-1;if(d<0||d>limit-total||n>(limit-total-d)/16)throw new FormatException("Invalid chunk size.");n=n*16+d;digits++;}if(digits==0)throw new FormatException("Missing chunk size.");remaining=n;lineLength=0;chunkState=n==0?4:1;
     }
     private sealed class ReadWork : Operation
     {
@@ -50,7 +50,7 @@ internal sealed class HttpBodyStream : Dolphin.IO.Stream
             while(written<count&&!owner.finished)
             {
                 if(owner.position==owner.available){if(written>0)break;int n=NativeNetwork.NetRead(owner.client.Client.Handle,owner.input,0,4096,null!);NetworkRuntime.Check(n);if(n==-1)return false;if(n==0){if(!owner.untilClose)throw new IOException("HTTP response body truncated.");owner.End();break;}owner.position=0;owner.available=n;}
-                if(!owner.chunked||owner.chunkState==1){int n=owner.available-owner.position;if(n>count-written)n=count-written;if(!owner.untilClose&&n>owner.remaining)n=owner.remaining;Array.Copy(owner.input,owner.position,output,offset+written,n);owner.position+=n;written+=n;owner.total+=n;if(owner.total>16777216)throw new IOException("HTTP streamed body exceeds limit.");if(!owner.untilClose){owner.remaining-=n;if(owner.remaining==0){if(owner.chunked)owner.chunkState=2;else owner.End();}}continue;}
+                if(!owner.chunked||owner.chunkState==1){int n=owner.available-owner.position;if(n>count-written)n=count-written;if(!owner.untilClose&&n>owner.remaining)n=owner.remaining;if(n>owner.limit-owner.total)throw new IOException("HTTP streamed body exceeds limit.");Array.Copy(owner.input,owner.position,output,offset+written,n);owner.position+=n;written+=n;owner.total+=n;if(!owner.untilClose){owner.remaining-=n;if(owner.remaining==0){if(owner.chunked)owner.chunkState=2;else owner.End();}}continue;}
                 byte next=owner.input[owner.position++];if(owner.chunkState==2){if(next!=13)throw new FormatException("Chunk terminator missing.");owner.chunkState=3;}else if(owner.chunkState==3){if(next!=10)throw new FormatException("Chunk terminator invalid.");owner.chunkState=0;}else if(owner.chunkState==0){if(owner.LineByte(next))owner.ChunkSize();}else{if(++owner.trailerBytes>8192)throw new FormatException("HTTP trailers exceed limit.");if(owner.LineByte(next)){if(owner.lineLength==0)owner.End();else{string trailer=new string(owner.line,0,owner.lineLength);int colon=HttpText.Index(trailer,':');if(colon<=0)throw new FormatException("Invalid trailer.");string name=HttpText.Lower(trailer.Substring(0,colon));if(name=="content-length"||name=="transfer-encoding")throw new FormatException("Framing trailer rejected.");owner.lineLength=0;}}}
             }
             owner.busy=false;Completion.SetResult(written);return true;
