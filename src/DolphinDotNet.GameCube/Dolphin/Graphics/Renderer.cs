@@ -65,6 +65,17 @@ public sealed partial class Renderer
         if(gameObject==null)throw new ArgumentNullException("gameObject");
         gameObject.Check();if(gameObject.Model!=null)DrawModelWithMaterial(gameObject.Model,gameObject.Transform,material);
     }
+    /// <summary>Draw only primitives using an imported material index, with an
+    /// explicit replacement material. Geometry, skinning and UV0 stay authored.
+    /// Resolve/pin borrowed textures immediately before calling. Submit opaque
+    /// parts first and order transparent parts through the application queue.</summary>
+    public void DrawModelMaterialPart(ModelInstance instance,int materialIndex,Transform transform,Material material)
+    {
+        if(instance==null||transform==null||material==null)throw new ArgumentNullException();
+        instance.Check();if(materialIndex<0)throw new ArgumentOutOfRangeException("materialIndex");
+        material.Check();ApplyMaterial(material);
+        GraphicsDevice.Check(NativeModel.ModelDrawMaterialPart(instance.Token,transform.WorldMatrix,materialIndex,material.TextureToken,material.SecondaryTextureToken,material.Color.Packed,material.Flags,material.AlphaCutoff,material.EffectToken),"Invalid model material part, cold model or 3D pass.");
+    }
     public void DrawPrimitives(VertexPositionColor[] vertices,int offset,int vertexCount,PrimitiveType primitive,Transform transform)
     {
         if(vertices==null)throw new ArgumentNullException("vertices");if(transform==null)throw new ArgumentNullException("transform");

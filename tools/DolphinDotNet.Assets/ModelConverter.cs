@@ -10,8 +10,13 @@ public sealed class ImportOptions
     public int TextureLimit { get; set; } = 256;
     /// <summary>Total mip levels including the base; zero retains the full chain.</summary>
     public int MaximumMipLevels { get; set; }
+    /// <summary>Export independent DNLT families and a material sidecar instead
+    /// of embedding permanently resident texture chains in the model.</summary>
+    public bool StreamableTextures {get;set;}
+    public StreamableTextureFormat StreamableFormat {get;set;}=StreamableTextureFormat.Auto;
     internal int MipLevels(int width,int height)
     {
+        if(StreamableTextures)return 1; // Only base pixels feed the DNLT encoder.
         int levels=1;for(int n=Math.Min(width,height);n>4;n/=2)levels++;
         return MaximumMipLevels==0?levels:Math.Min(levels,MaximumMipLevels);
     }
@@ -26,7 +31,9 @@ public static class ModelConverter
     {
         options??=new();
         if(options.TextureLimit<4||options.TextureLimit>1024||(options.TextureLimit&(options.TextureLimit-1))!=0)throw new ArgumentException("Texture limit must be a power of two from 4 to 1024.");
-        if(options.MaximumMipLevels<0||options.MaximumMipLevels>9)throw new ArgumentException("Maximum mip levels must be 0 (full chain) or 1..9, including the base.");
+        int maximumLevels=options.StreamableTextures?11:9;
+        if(options.MaximumMipLevels<0||options.MaximumMipLevels>maximumLevels)throw new ArgumentException("Maximum mip levels must be 0 (full chain) or 1.."+maximumLevels+", including the base.");
+        if(!options.StreamableTextures&&options.StreamableFormat!=StreamableTextureFormat.Auto)throw new ArgumentException("Streamable format requires streamable model textures.");
         if(options.BakeNeutralStudio&&(options.CompileGxMaterials||options.ApproximateMaterials))throw new ArgumentException("Neutral studio baking is separate from GX mapping/approximation.");
         input=Path.GetFullPath(input);output=Path.GetFullPath(output);string ext=Path.GetExtension(input).ToLowerInvariant();string? temp=null;
         try
@@ -45,6 +52,7 @@ public static class ModelConverter
             }
             else if(ext is ".gj" or ".xj")
             {
+                if(options.StreamableTextures)throw new NotSupportedException("Streamable model sidecars currently require glTF/GLB or an Assimp import.");
                 if(options.MaximumMipLevels!=0)throw new NotSupportedException("Mip-level limits apply to glTF/GLB and Assimp imports, not direct PSO packages.");
                 if(options.BakeNeutralStudio)throw new InvalidDataException("Studio baking requires a static glTF/GLB or Assimp scene with UV0.");
                 var native=PsoGjImport.Convert(input,options.ApproximateMaterials);
@@ -57,8 +65,10 @@ public static class ModelConverter
             }
             else if(ext is ".gltf" or ".glb")importer=new(input,options);
             else throw new ArgumentException("Supported inputs: FBX, OBJ, DAE, 3DS, STL, PLY, glTF, GLB, PSO GameCube GJ and Blue Burst XJ geometry.");
+            importer.StreamableOutput=output;
             var package=importer.Build();Directory.CreateDirectory(Path.GetDirectoryName(output)!);string staged=output+"."+Guid.NewGuid().ToString("N")+".tmp";
             try{File.WriteAllBytes(staged,package);File.Move(staged,output,true);}finally{File.Delete(staged);}
+            if(options.StreamableTextures)importer.WriteStreamableSidecar();
             File.WriteAllText(output+".deps.json",JsonSerializer.Serialize(importer.Dependencies.OrderBy(x=>x,StringComparer.Ordinal).Select(x=>new{path=x,sha256=System.Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(x)))})));
             if(options.BakeNeutralStudio)NeutralStudioReport.Write(output,options.TextureLimit);
         }

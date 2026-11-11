@@ -43,6 +43,7 @@ internal static class NativeModel
     internal static int ModelDrawAnimated(int token,float[] world,float[] channels)=>throw Unsupported();
     internal static int ModelDrawAnimatedShapes(int token,float[] world,float[] channels,float[] visibility)=>throw Unsupported();
     internal static int ModelDrawMaterial(int token,float[] matrix,int texture,int secondary,uint color,int flags,float cutoff,int effect)=>throw Unsupported();
+    internal static int ModelDrawMaterialPart(int token,float[] matrix,int material,int texture,int secondary,uint color,int flags,float cutoff,int effect)=>throw Unsupported();
     internal static int ModelFrameBegin(float[] view,float[] projection)=>throw Unsupported();
     internal static int ModelFrameEnd()=>throw Unsupported();
 }

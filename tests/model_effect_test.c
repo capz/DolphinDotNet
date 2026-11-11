@@ -329,10 +329,16 @@ int main(void) {
  assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)==0);
  assert(full_draws==3&&full_skin==1&&order[0]==2&&order[1]==1&&order[2]==0&&allocations==full_allocations);
  assert(!memcmp(original_materials,materials,sizeof(materials)));
- assert(dnd_model_draw_material(123,world,wrong,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==3);
- wm[0]=0;assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==3);wm[0]=-1;
+ assert(dnd_model_draw_material_part(123,world,1,override_texture,override_texture,0x12345678,65,.25f,textured)==0&&full_draws==4&&full_skin==2);
+ assert(dnd_model_draw_material_part(123,world,0,override_texture,override_texture,0x12345678,65,.25f,textured)==0&&full_draws==5&&full_skin==2);
+ assert(dnd_model_draw_material_part(123,world,3,override_texture,override_texture,0x12345678,65,.25f,textured)==0&&full_draws==5);
+ assert(dnd_model_draw_material_part(123,world,-1,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==5);
+ assert(dnd_model_draw_material_part(123,world,4,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==5);
+ assert(!memcmp(original_materials,materials,sizeof(materials))&&allocations==full_allocations);
+ assert(dnd_model_draw_material(123,world,wrong,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==5);
+ wm[0]=0;assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==5);wm[0]=-1;
  assert(dnd_draw_release(override_texture)==0);
- assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==3);
+ assert(dnd_model_draw_material(123,world,override_texture,override_texture,0x12345678,65,.25f,textured)<0&&full_draws==5);
  custom_scene_active=true;int previous_normals=scene_normals;assert(dnd_model_draw(123,world)==0&&scene_normals>previous_normals&&scene_lights>0);custom_scene_active=false;
  // The real indexed production path preserves geometry, UV, authored alpha,
  // culling and imported material state. Skins use evaluated poses, not bind geometry.
