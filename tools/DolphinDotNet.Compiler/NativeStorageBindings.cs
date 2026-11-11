@@ -107,6 +107,11 @@ internal static class NativeStorageBindings
         ["TextureUpdateNative"]=("dnd_texture_update_native","iaii",false),
         ["TextureUpdateFromBuffer"]=("dnd_texture_update_buffer","iiii",false),
         ["TextureStageArray"]=("dnd_texture_stage_array","iaii",false),
+        ["TextureAllocateDetached"]=("dnd_texture_allocate_detached","iiii",false),
+        ["TextureUploadHold"]=("dnd_texture_upload_hold","i",false),
+        ["TextureUploadUnhold"]=("dnd_texture_upload_unhold","i",false),
+        ["TextureStageBufferRange"]=("dnd_texture_stage_buffer_range","iiiii",false),
+        ["TextureReleaseCompleted"]=("dnd_texture_release_completed","ii",false),
         ["TextureStageBuffer"]=("dnd_texture_stage_buffer","iiii",false),
         ["TexturePublishStaged"]=("dnd_texture_publish_staged","i",false),
         ["MeshDraw"]=("dnd_mesh_draw_effect","iiaiifi",false),
@@ -281,7 +286,7 @@ internal static class NativeStorageBindings
         // Only CPU-side staging copies are safe on the service executor.
         // Publication, allocation and every other texture/GX operation require
         // the application executor. Keep this list deliberately restrictive.
-        bool detachedTextureCopy = call.Operation is "TextureStageArray" or "TextureStageBuffer";
+        bool detachedTextureCopy = call.Operation is "TextureStageArray" or "TextureStageBuffer" or "TextureStageBufferRange";
         if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||(!detachedTextureCopy && call.Operation.StartsWith("Texture",StringComparison.Ordinal))||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginMemory" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation=="AssetCompatReport"||call.Operation is "ModelDrawModels" or "ModelDraw" or "ModelDrawEffect" or "ModelDrawMaterial" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");
         if(call.Operation=="Publish")

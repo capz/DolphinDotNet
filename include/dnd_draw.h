@@ -75,6 +75,12 @@ int dnd_texture_package(DndArray *package,int linear);
 int dnd_texture_ipl_font(DndArray *metadata,int linear);
 int dnd_texture_sampler(int token,int wrap_s,int wrap_t,int min_filter,int mag_filter,float lod_bias);
 int dnd_texture_allocate_native(int width,int height,int format,int linear);
+int dnd_texture_allocate_detached(int width,int height,int format,int linear);
+int dnd_texture_upload_hold(int token);
+int dnd_texture_upload_unhold(int token);
+int dnd_texture_stage_buffer_range(int texture_token,int buffer_token,int source_offset,int destination_offset,int count);
+/* Caller supplies the final reader fence; successful release never waits on GX. */
+int dnd_texture_release_completed(int token,int fence);
 int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int count);
 int dnd_texture_update_buffer(int texture_token,int buffer_token,int source_offset,int count);
 /* CPU-only staging to a texture allocation that is NOT referenced by in-flight GX

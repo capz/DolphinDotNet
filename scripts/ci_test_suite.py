@@ -145,6 +145,7 @@ def main(area):
                 if source=="audio_formats_test":run(binary,tmp)
                 else:run(binary)
     elif area=="graphics":
+        run("python3","scripts/ci_detached_textures.py")
         run("python3","scripts/ci_display.py") # DisplayConfigurationSmoke
         run("python3","scripts/ci_graphics_phase_one.py")
         run("python3","scripts/ci_graphics_phase_two.py")

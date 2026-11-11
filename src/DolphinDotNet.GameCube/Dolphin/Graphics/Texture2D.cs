@@ -46,6 +46,20 @@ public sealed partial class Texture2D : IDisposable
     }
     /// <summary>Create a GX-tiled, uncompressed-or-CMPR texture ready for repeated
     /// full-image replacement. Input bytes must use native GX tile order.</summary>
+    internal static Texture2D CreateDetached(int width,int height,NativeTextureFormat format)
+    {
+        int token=NativeGraphics.TextureAllocateDetached(width,height,(int)format,1);
+        if(token==0)throw new InvalidOperationException("Detached texture dimensions, format, frame or native budget.");
+        return new Texture2D(token);
+    }
+    /// <summary>Free an immutable texture after its final GPU reader fence is
+    /// complete, without a redundant global GPU wait. Do not submit it again.</summary>
+    public bool TryDisposeAfterFence(GpuFence finalReader)
+    {
+        if(disposed)return true;
+        if(!finalReader.IsValid||!finalReader.IsCompleted)return false;
+        GraphicsDevice.Check(NativeGraphics.TextureReleaseCompleted(Token,finalReader.Value),"Invalid final-reader fence or texture retirement state.");disposed=true;return true;
+    }
     public static Texture2D CreateNative(int width,int height,NativeTextureFormat format,bool linear=true)
     {
         if(format!=NativeTextureFormat.I4 && format!=NativeTextureFormat.I8 &&

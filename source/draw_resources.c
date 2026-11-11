@@ -31,10 +31,10 @@ typedef struct {
     void *allocation;
     unsigned char *data;
     int kind,bytes,generation;
-    bool pending,io_busy;
+    bool pending,io_busy,detached;
     bool uniform_color;
     uint32_t mesh_color;
-    int holds,geometry,extra_bytes;
+    int holds,geometry,extra_bytes,staged_bytes;
     void *command_allocation;
     unsigned char *commands;
     float logical_width,logical_height;
@@ -97,8 +97,9 @@ static void release(Resource *r) {
 int dnd_draw_release(int token) {
     if(dnd_raw_depth() || token==active_canvas) return -1;
     Resource *r=find(token,0); if(!r) return -1;
+    if(r->detached&&!r->holds){release(r);return 0;}
     if(dnd_device_active() || r->holds) r->pending=true;
-    else { dnd_draw_backend_wait(); release(r); }
+    else { if(!r->detached)dnd_draw_backend_wait(); release(r); }
     return 0;
 }
 void dnd_draw_collect(void) { for(int i=0;i<SLOTS;i++) if(slots[i].pending && !slots[i].holds) release(&slots[i]); }
@@ -155,7 +156,7 @@ static bool array_range(DndArray *a,int index,int count) {
 }
 int dnd_buffer_copy(int token,int offset,DndArray *array,int index,int count,int write) {
     Resource *r=find(token,BUFFER);
-    if(dnd_raw_depth() || dnd_device_active() || !r || r->io_busy || !array_range(array,index,count) || offset<0 || offset>r->bytes || (size_t)count*array->element_size>(size_t)(r->bytes-offset)) return -1;
+    if(dnd_raw_depth() || dnd_device_active() || !r || r->io_busy || (write&&r->holds) || !array_range(array,index,count) || offset<0 || offset>r->bytes || (size_t)count*array->element_size>(size_t)(r->bytes-offset)) return -1;
     void *p=(unsigned char*)array->data+(size_t)index*array->element_size;
     if(write) memcpy(r->data+offset,p,(size_t)count*array->element_size);
     else memcpy(p,r->data+offset,(size_t)count*array->element_size);
@@ -222,6 +223,41 @@ int dnd_texture_allocate_native(int w,int h,int format,int linear) {
     dnd_draw_backend_flush(r->data,bytes,2);
     return token;
 }
+/* The detached target is private until publication. No GX command/cache
+ * invalidation is needed to allocate it; CPU staging flushes exact ranges. */
+int dnd_texture_allocate_detached(int w,int h,int format,int linear) {
+    dnd_async_require_application_thread();
+    int bytes=texture_size(w,h,format);
+    if(dnd_device_active()||dnd_raw_depth()||bytes<0||(linear!=0&&linear!=1))return 0;
+    int token=create(TEXTURE,bytes,32);Resource *r=find(token,TEXTURE);if(!r)return 0;
+    r->width=w;r->height=h;r->format=format;r->linear=linear;r->detached=true;return token;
+}
+int dnd_texture_upload_hold(int token) {
+    dnd_async_require_application_thread();Resource *r=find(token,TEXTURE);
+    if(!r||!r->detached||r->holds)return -1;
+    r->holds++;return 0;
+}
+int dnd_texture_upload_unhold(int token) {
+    dnd_async_require_application_thread();int index=(token&1023)-1;
+    if(token<=0||index<0||index>=SLOTS)return -1;
+    Resource *r=&slots[index];
+    if(r->kind!=TEXTURE||r->generation!=(token>>10)||!r->detached||r->holds<=0)return -1;
+    if(--r->holds==0&&r->pending)release(r);
+    return 0;
+}
+int dnd_texture_stage_buffer_range(int token,int buffer_token,int source_offset,int destination_offset,int count) {
+    int index=(token&1023)-1;if(token<=0||index<0||index>=SLOTS)return -1;Resource *r=&slots[index];
+    if(r->kind!=TEXTURE||r->generation!=(token>>10)||!r->detached||r->holds<=0||source_offset<0||destination_offset<0||count<=0||
+       ((source_offset|destination_offset|count)&31)||destination_offset!=r->staged_bytes||destination_offset>r->bytes||count>r->bytes-destination_offset)return -1;
+    uint64_t address=dnd_buffer_held_address(buffer_token,source_offset,count);if(!address)return -1;
+    memcpy(r->data+destination_offset,(const void*)(uintptr_t)address,(size_t)count);
+    dnd_draw_backend_flush(r->data+destination_offset,count,0);r->staged_bytes+=count;return 0;
+}
+int dnd_texture_release_completed(int token,int fence) {
+    dnd_async_require_application_thread();Resource *r=find(token,TEXTURE);
+    if(dnd_raw_depth()||!r||r->detached||r->holds||fence<=0||!dnd_device_fence_completed(fence))return -1;
+    release(r);return 0;
+}
 int dnd_texture_update_native(int token,DndArray *payload,int source_offset,int count) {
     Resource *r=find(token,TEXTURE);
     if(dnd_device_active() || dnd_raw_depth() || !r || !payload ||
@@ -269,7 +305,9 @@ int dnd_texture_stage_buffer(int token,int buffer_token,int offset,int count) {
 }
 int dnd_texture_publish_staged(int token) {
     dnd_async_require_application_thread();
-    if(dnd_raw_depth() || dnd_device_pass()==3 || !find(token,TEXTURE))return -1;
+    Resource *r=find(token,TEXTURE);
+    if(dnd_raw_depth() || dnd_device_pass()==3 || !r || r->holds || (r->detached&&r->staged_bytes!=r->bytes))return -1;
+    r->detached=false;
     /* The backend issues GX_InvalidateTexAll only; no GPU completion wait. */
     dnd_draw_backend_publish_texture();
     return 0;
@@ -383,7 +421,7 @@ int dnd_texture_sampler(int token,int wrap_s,int wrap_t,int min_filter,int mag_f
 }
 static bool texture(int token,DndDrawTexture *out) {
     memset(out,0,sizeof(*out));if(!token)return true;
-    Resource *r=find(token,TEXTURE);if(!r)return false;
+    Resource *r=find(token,TEXTURE);if(!r||r->detached)return false;
     *out=(DndDrawTexture){r->data,(uint32_t)r->bytes,r->width,r->height,r->format,r->linear!=0,r->levels,r->sampler_set,r->wrap_s,r->wrap_t,r->min_filter,r->mag_filter,r->lod_bias};return true;
 }
 int dnd_texture_resolve(int token,DndDrawTexture *out){return texture(token,out)?0:-1;}
