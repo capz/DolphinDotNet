@@ -37,6 +37,20 @@ public readonly struct UvTransform
         a=co*scale.X;b=si*scale.X;c=-si*scale.Y;d=co*scale.Y;x=offset.X;y=offset.Y;set=true;
     }
     public Vector2 Transform(Vector2 value)=>set?new Vector2(a*value.X+c*value.Y+x,b*value.X+d*value.Y+y):value;
+    private UvTransform(float a,float b,float c,float d,float x,float y)
+    {
+        GraphicsMath.Finite(a);GraphicsMath.Finite(b);GraphicsMath.Finite(c);GraphicsMath.Finite(d);GraphicsMath.Finite(x);GraphicsMath.Finite(y);
+        this.a=a;this.b=b;this.c=c;this.d=d;this.x=x;this.y=y;set=true;
+    }
+    /// <summary>Apply this transform, then after. Preserves the full affine
+    /// matrix, including rotated animation followed by nonuniform atlas gutters.</summary>
+    public UvTransform Then(UvTransform after)
+    {
+        if(!set)return after;if(!after.set)return this;
+        return new UvTransform(after.a*a+after.c*b,after.b*a+after.d*b,
+            after.a*c+after.c*d,after.b*c+after.d*d,
+            after.a*x+after.c*y+after.x,after.b*x+after.d*y+after.y);
+    }
     internal void Write(float[] values,int at){values[at]=set?a:1;values[at+1]=set?b:0;values[at+2]=set?c:0;values[at+3]=set?d:1;values[at+4]=set?x:0;values[at+5]=set?y:0;}
 }
 public enum LightKind { Directional,Point,Spot }

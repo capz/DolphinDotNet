@@ -95,6 +95,7 @@ internal static class IntrinsicRegistry
         return (type,name) switch
         {
             ("Dolphin.Numerics.BitConverter","Int32BitsToSingle")=>IntrinsicKind.NativeStorage,
+            ("System.BitConverter","Int32BitsToSingle") when parameterCount==1&&parameterTypes[0]=="Int32"=>IntrinsicKind.NativeStorage,
             ("Dolphin.Numerics.NativeNumeric",_)=>IntrinsicKind.NativeStorage,
             ("Dolphin.Text.NativeText",_)=>IntrinsicKind.NativeStorage,
             ("System.String",".ctor") when (parameterCount is 1 or 3&&parameterTypes.FirstOrDefault()=="Char[]")||(parameterCount==2&&parameterTypes.FirstOrDefault()=="Char")=>IntrinsicKind.StringFromChars,

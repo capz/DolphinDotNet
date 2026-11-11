@@ -314,7 +314,10 @@ internal static class ValueCBackend
                     case ValueIrCopyObject x:b.AppendLine($"  memcpy((void*)v{x.Destination.Id}, (void*)v{x.Source.Id}, {(x.Size>0?x.Size:ValueTypeSize(x.TypeName,model))}u);");break;
                     case ValueIrFloatConstant x:b.AppendLine(x.Single?$"  {{uint32_t bits=0x{unchecked((uint)x.Bits):x}u;float value;memcpy(&value,&bits,4);v{x.Result.Id}=value;}}":$"  {{uint64_t bits=UINT64_C(0x{unchecked((ulong)x.Bits):x});double value;memcpy(&value,&bits,8);v{x.Result.Id}=value;}}");break;
                     case ValueIrConvert x:var cast=x.Opcode switch {0x67=>"int8_t",0x68=>"int16_t",0x69=>"int32_t",0x6a=>"int64_t",0x6b=>"float",0x6c=>"double",0x6d=>"uint32_t",0x6e=>"uint64_t",0xd1=>"uint16_t",0xd2=>"uint8_t",_=>CType(x.Result.Kind)};b.AppendLine(x.Opcode==0x76?$"  v{x.Result.Id} = (double)({(x.Value.Kind==IrValueKind.I8?"uint64_t":"uint32_t")})v{x.Value.Id};":x.Value.Kind==IrValueKind.I4&&x.Opcode is 0x6a or 0x6e?$"  v{x.Result.Id} = ({cast})({(x.Opcode==0x6e?"uint32_t":"int32_t")})v{x.Value.Id};":$"  v{x.Result.Id} = ({cast})v{x.Value.Id};");break;
-                    case ValueIrUnary x:b.AppendLine($"  v{x.Result.Id}={(x.Operation=="not"?"~":"-")}v{x.Value.Id};");break;
+                    case ValueIrUnary x:
+                        b.AppendLine(x.Value.Kind==IrValueKind.I4
+                            ?$"  v{x.Result.Id}=(int32_t)({(x.Operation=="not"?"~":"-")}(uint32_t)v{x.Value.Id});"
+                            :$"  v{x.Result.Id}={(x.Operation=="not"?"~":"-")}v{x.Value.Id};");break;
                     case ValueIrBinary x:
                     {
                         var unsigned = x.Operation.EndsWith(".un", StringComparison.Ordinal);
@@ -342,8 +345,12 @@ internal static class ValueCBackend
                         else
                         {
                             var unsignedType=x.Left.Kind==IrValueKind.I8?"uint64_t":x.Left.Kind==IrValueKind.I4?"uint32_t":"uintptr_t";
-                            var left = unsigned ? $"({unsignedType})v{x.Left.Id}" : $"v{x.Left.Id}";
-                            var right = unsigned ? $"({unsignedType})v{x.Right.Id}" : $"v{x.Right.Id}";
+                            // I4 stack values have exactly 32 significant bits,
+                            // even when uint fields were zero-extended into a
+                            // 64-bit host intptr_t and arithmetic sign-extended.
+                            bool i4=x.Left.Kind==IrValueKind.I4&&x.Right.Kind==IrValueKind.I4;
+                            var left = unsigned ? $"({unsignedType})v{x.Left.Id}" : i4?$"(int32_t)v{x.Left.Id}":$"v{x.Left.Id}";
+                            var right = unsigned ? $"({unsignedType})v{x.Right.Id}" : i4?$"(int32_t)v{x.Right.Id}":$"v{x.Right.Id}";
                             b.AppendLine($"  v{x.Result.Id} = {left} {op} {right};");
                         }
                         break;
@@ -643,8 +650,9 @@ internal static class ValueCBackend
                 var floating = IsFloating(x.Left) || (x.Right is { } operand && IsFloating(operand));
                 var unsignedInteger = x.Unsigned && !floating;
                 var unsignedType=x.Left.Kind==IrValueKind.I8?"uint64_t":x.Left.Kind==IrValueKind.I4?"uint32_t":"uintptr_t";
-                var left = unsignedInteger ? $"({unsignedType})v{x.Left.Id}" : $"v{x.Left.Id}";
-                var right = x.Right is { } rv ? (unsignedInteger ? $"({unsignedType})v{rv.Id}" : $"v{rv.Id}") : "0";
+                bool i4=x.Left.Kind==IrValueKind.I4&&(x.Right==null||x.Right.Value.Kind==IrValueKind.I4);
+                var left = unsignedInteger ? $"({unsignedType})v{x.Left.Id}" : i4?$"(int32_t)v{x.Left.Id}":$"v{x.Left.Id}";
+                var right = x.Right is { } rv ? (unsignedInteger ? $"({unsignedType})v{rv.Id}" : i4?$"(int32_t)v{rv.Id}":$"v{rv.Id}") : "0";
                 var op=x.Comparison switch{ValueIrComparison.NonZero=>"!=",ValueIrComparison.Equal=>"==",ValueIrComparison.NotEqual=>"!=",ValueIrComparison.GreaterThan=>">",ValueIrComparison.GreaterOrEqual=>">=",ValueIrComparison.LessThan=>"<",ValueIrComparison.LessOrEqual=>"<=",_=>throw new InvalidDataException()};
                 var condition = floating ? FloatingComparison(left, right, op, x.Unsigned) : $"{left} {op} {right}";
                 b.AppendLine($"  if ({condition}) {{");

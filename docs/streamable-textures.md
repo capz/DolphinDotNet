@@ -66,3 +66,46 @@ never allocates GPU resources and never implicitly reads a complete file.
 Run `dotnet run --project tests/StreamableTextureTests -c Release` for independent
 BTI pixel decoding, coverage/filtering, sparse/pair/gutter cases, corrupt-header
 and truncation checks, fuzz inputs and DNTX compatibility checks.
+
+## Detached runtime uploads
+
+`DetachedTextureUpload.Create(width, height, format, nativeBytes, crc32)` owns
+one private allocation, charged through `StagedBytes`. Between frames, read at
+most your configured chunk budget into a reusable aligned `NativeBuffer`, then
+await `StageChunkAsync(source, sourceOffset, destinationOffset, count)`. Chunks
+must be sequential, contiguous and 32-byte aligned. Both allocations stay held
+until the service copy and application continuation finish. Do not mutate raw
+addresses while held; normal buffer writes and storage reads reject reuse.
+
+`CompletedBytes` observes the completed task and incremental native-source CRC.
+`Seal()` rejects missing bytes or a checksum mismatch. `TryPublish` invalidates
+the GX texture cache on the application executor and transfers one immutable
+`Texture2D` to the caller. No copy or global GPU wait occurs at publication.
+The owner no longer counts the allocation after transfer; the caller counts
+`Texture2D.NativeBytes` as active, and later as retired.
+
+On cancellation, await `AbortAsync()` before reusing either allocation.
+`Dispose()` refuses a running copy; it cancels queued work but never frees
+memory under a worker. Failed uploads cannot publish. No whole-image managed
+staging array or permanent second texture is required. Existing
+`StreamingTexture` keeps its fixed-size front/back contract.
+
+Compose authored animation with each level's static usable rectangle using
+`authored.Then(levelMapping)`. `UvTransform.Then` preserves a complete affine
+matrix, including nonuniform gutters after rotation; no geometry rebuild or
+lossy decomposition into scale/rotation is necessary.
+
+Record the final reader using `GraphicsDevice.InsertFence()`. Once the texture
+is removed from all draw bindings, `Texture2D.TryDisposeAfterFence(fence)` frees
+it only when that fence completes, without another GPU wait. A fence cannot
+protect later submissions: resolve and pin immediately before drawing, and
+never submit a retired texture. Normal `Dispose()` retains its conservative
+existing behavior.
+
+Run `python3 scripts/ci_detached_textures.py` for native range/lifetime tests
+and Debug/Release managed AOT with GC stress. Build
+`tests/fixtures/DetachedTextures` and run
+`python3 scripts/dolphin_detached_textures.py Game.dol --logs out/fresh-capture`
+for repeated RGBA8/CMPR resolution changes and independent pixel-patch checks.
+The fixture uses two explicitly counted 32-KiB source buffers, with at most one
+detached destination per lane. Emulator timings are not console measurements.

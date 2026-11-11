@@ -68,6 +68,11 @@ internal static class NativeGraphics
     internal static int TextureSampler(int token,int wrapS,int wrapT,int minFilter,int magFilter,float lodBias) => throw Unsupported();
     internal static int TextureDimension(int token,int axis) => throw Unsupported();
     internal static int TextureAllocateNative(int width,int height,int format,int linear) => throw Unsupported();
+    internal static int TextureAllocateDetached(int width,int height,int format,int linear)=>throw Unsupported();
+    internal static int TextureUploadHold(int token)=>throw Unsupported();
+    internal static int TextureUploadUnhold(int token)=>throw Unsupported();
+    internal static int TextureStageBufferRange(int textureToken,int bufferToken,int sourceOffset,int destinationOffset,int count)=>throw Unsupported();
+    internal static int TextureReleaseCompleted(int token,int fence)=>throw Unsupported();
     internal static int TextureUpdateNative(int token,byte[] pixels,int sourceOffset,int count) => throw Unsupported();
     internal static int TextureUpdateFromBuffer(int textureToken,int bufferToken,int sourceOffset,int count) => throw Unsupported();
     internal static int TextureStageArray(int textureToken,byte[] pixels,int offset,int count) => throw Unsupported();
