@@ -5,7 +5,7 @@ try
     if (args.Length > 0 && args[0] == "gcft") { GameCubeAssetCommands.Run(args); return 0; }
     if (args.Length == 0 || args[0] == "--help")
     {
-        Console.WriteLine("dnd-assets firmware inspect INPUT\ndnd-assets gcft inspect INPUT | gcft extract ARCHIVE OUTPUT_DIR | gcft pack INPUT_DIR OUTPUT.arc | gcft bti INPUT.bti OUTPUT.png\ndnd-assets model INPUT.{glb,gltf,fbx,obj,dae,3ds,stl,ply,gj,xj} OUTPUT.dndmodel [--texture-limit N] [--mip-levels N] [--assimp PATH] [--allow-material-approximation] [--compile-gx-materials] [--bake-neutral-studio]\ndnd-assets audio INPUT.mp3 OUTPUT.adx [--loops PATH] [--loop NAME] [--sample-rate HZ] [--ffmpeg PATH]\ndnd-assets texture INPUT.png OUTPUT.dndtex [--mipmaps]\ndnd-assets font ATLAS.png OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]\nFBX/OBJ/DAE/3DS/STL/PLY require Assimp CLI 5.3.x. PSO GJ/XJ geometry uses built-in .NET parsers; textured PSO materials currently require --allow-material-approximation. Outputs include a dependency manifest.");
+        Console.WriteLine("dnd-assets firmware inspect INPUT\ndnd-assets gcft inspect INPUT | gcft extract ARCHIVE OUTPUT_DIR | gcft pack INPUT_DIR OUTPUT.arc | gcft bti INPUT.bti OUTPUT.png\ndnd-assets model INPUT.{glb,gltf,fbx,obj,dae,3ds,stl,ply,gj,xj} OUTPUT.dndmodel [--texture-limit N] [--mip-levels N] [--assimp PATH] [--allow-material-approximation] [--compile-gx-materials] [--bake-neutral-studio]\ndnd-assets audio INPUT.mp3 OUTPUT.adx [--loops PATH] [--loop NAME] [--sample-rate HZ] [--ffmpeg PATH]\ndnd-assets texture INPUT.png OUTPUT.dndtex [--mipmaps]\ndnd-assets texture INPUT.png OUTPUT.dnlod --streamable [--mipmaps] [--format auto|cmpr|rgba8] [--min-size N] [--levels 0,2,4] [--gutter N]\ndnd-assets texture --low LOW.png --high HIGH.png OUTPUT.dnlod --streamable --quality-pair\ndnd-assets font ATLAS.png OUTPUT.dndfont CELL_WIDTH CELL_HEIGHT [FIRST_CHARACTER] [CHARACTERS]\nFBX/OBJ/DAE/3DS/STL/PLY require Assimp CLI 5.3.x. PSO GJ/XJ geometry uses built-in .NET parsers; textured PSO materials currently require --allow-material-approximation. Outputs include a dependency manifest.");
         return 0;
     }
     if (args.Length >= 3 && args[0] == "audio")
@@ -28,6 +28,7 @@ try
         AudioConverter.Convert(args[1], args[2], sidecar, loop, rate, ffmpeg);
         return 0;
     }
+    if(args.Length>0&&args[0]=="texture"&&Array.IndexOf(args,"--streamable")>=0){StreamableTextureCommand.Run(args);return 0;}
     if(args.Length>=3&&(args[0]=="texture"||args[0]=="font"))
     {
         using var image=DolphinDotNet.Imaging.RasterImage.Load(File.ReadAllBytes(args[1]));

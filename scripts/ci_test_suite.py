@@ -152,6 +152,7 @@ def main(area):
         build("tests/GraphicsPhaseOneSmoke/GraphicsPhaseOneSmoke.csproj")
         build("tests/GraphicsPhaseTwoSmoke/GraphicsPhaseTwoSmoke.csproj")
         test("tests/TextureStreamingTests")
+        test("tests/StreamableTextureTests")
         test("tests/EffectCompilerTests")
         with tempfile.TemporaryDirectory() as tmp:
             run("dotnet","run","--project","tests/ModelAssetTests","-c","Release","--",tmp)
