@@ -104,6 +104,120 @@ libogc2 `__io_gcode` if supported by the installed GC Loader firmware.
 Availability and simultaneous ODE DVD use are hardware dependent; do not
 assume they can operate simultaneously. See [DiscBrowser](../samples/DiscBrowser/README.md).
 
+## Discovering and restoring mounts
+
+All high-level filesystem mount routes now share a session-local native registry:
+SD adapters in slots A/B, SD2SP2, physical/ODE discs, image-backed `dvd:/`, and
+GC Loader's raw filesystem. Memory-card saves and `MemoryCardManager` are excluded.
+Existing `Storage.Mount`, `MountDisc`, `Unmount`, `IsMounted` and `GetPath` signatures
+remain compatible and automatically update the registry. No application-side
+registration is necessary, even if the mount was made by another library.
+
+```csharp
+MountInfo[] devices = Storage.GetMounts(); // Five entries, including never-mounted devices.
+MountInfo? last = Storage.GetLastMount(); // null until a mount succeeds.
+if (last != null) {
+    if (!Storage.TryGetMountedFileSystem(last.Device, out var fs)) {
+        var restored = Storage.Remount(last.Device);
+        if (!restored.Succeeded) return; // Inspect restored.Failure.
+        fs = restored.FileSystem;
+    }
+    string root = fs!.RootPath;
+    using var input = fs.Open("opening.bnr", FileMode.Open, FileAccess.Read);
+}
+```
+
+`GetMountInfo(device)` is an immutable observation containing `State`, `Presence`,
+`RootPath`, `IsReadOnly`, `MountId`, `LastMountSequence`, `ChangeSequence`,
+`SourceMountId`, `LastNativeError` and `LastSuccessfulConfiguration`. Queries do
+not probe, reset, mount or write devices. State is `NeverMounted`, `Mounted`,
+`Unmounted`, or `Unavailable`; presence is a separate last-observed value.
+`IsReadOnly` describes the SDK's filesystem policy (DVD is read only), not a
+physical-media writeability guarantee. Mount snapshots do not contain native pointers.
+
+"Last" means the most recent **successful** filesystem mount anywhere in this
+application run, even if it has since been unmounted or removed. Failed attempts,
+reusing an active mount and explicit unmounts do not reorder it. Mounting a missing
+ISO dependency is itself a successful source-volume mount and is recorded too.
+State resets when a new application starts; nothing is persisted to disk.
+
+Configurations survive unmounts, removal and failed remounts. Block-volume
+snapshots contain the selected partition LBA, detected FAT/exFAT driver, and cache
+settings. Input `PartitionLba = -1` / `FileSystemFormat.Automatic` requests the
+legacy selection policy; successful GameCube snapshots contain the effective
+selection for exact replay. Cache pages (1..64) and sectors per page (1..128)
+must be powers of two. The defaults remain four pages of eight sectors.
+Disc snapshots retain their actual format: `Mount(DvdDrive)` remains ISO9660,
+whereas `MountDisc()` remains FST. Image snapshots contain a normalized full image
+path and the source volume's configuration.
+
+```csharp
+var configuration = MountConfiguration.BlockVolume(StorageDevice.SdSerialPort2);
+MountResult mounted = Storage.Mount(configuration);
+MountConfiguration image = MountConfiguration.DiscImage("sd:/games/game.iso",
+    mounted.FileSystem!.Info.LastSuccessfulConfiguration);
+MountResult dvd = Storage.Mount(image);
+```
+
+`Mount(configuration)` and `Remount(device)` report `MountFailure` without
+replacing a different active configuration. An exact active match returns borrowed
+access without mounting again. `Remount` returns `NoPreviousConfiguration` for a
+device that has never mounted successfully. Image restoration reuses a matching
+source or mounts its remembered source first. A conflicting source returns
+`ConfigurationConflict`. If image mounting fails, the runtime attempts to unmount
+only a source acquired by that attempt; a backend cleanup failure leaves that
+source visible in the registry. Existing sources are not unmounted on failure.
+Invalid factory arguments still throw ordinary argument exceptions.
+
+`MountedFileSystem` is borrowed, not an owning/disposable mount lease. Its
+`IsValid` and generation-checked `Open` refer to one mount lifetime. All streams,
+including those opened through old APIs, and directory enumerators are invalidated
+when removal is observed. Restoring the same path creates a new `MountId`; old
+access cannot become valid again. Disposal of invalidated streams/iterators still
+releases their handle slots. `RootPath` and strings returned by `GetPath` remain
+ordinary paths: later path-based I/O addresses the current occupant of that path.
+Use `fs.Open` when generation identity matters.
+
+Call `Storage.Poll()` once per application update to observe removal and dispatch
+`Storage.MountChanged`. Callbacks run on the application executor, after native
+state changes and outside storage operations. Native I/O failures also trigger
+non-resetting checks; `Busy`/`Unknown` observations do not mean absent. Detection
+is observational, not instantaneous hardware interrupt notification. A removed
+source invalidates its image-backed DVD as well. A gate beneath the block cache
+prevents removed-volume cleanup from writing buffered data to replacement media;
+unfinished journals are left for validated recovery on a later mount.
+
+Changes have `Reason`, `Info` and `Sequence`. The queue retains up to 16 changes.
+If it overflows, the next delivery is `HistoryLost` with null `Info`: pending old
+changes are dropped and callers should resynchronize through `GetMounts()`.
+Callbacks may subscribe/unsubscribe or query storage. Reentrant `Poll` calls are
+ignored and one call dispatches at most 17 records, so callback-driven transitions
+cannot create an unbounded dispatch loop. Subscriber exceptions propagate after
+the transition commits and the consumed change is not replayed.
+
+Restoring settings does **not** prove that an SD card or disc is the identical
+physical medium. Partition/format/path conflicts are checked; stable physical-media
+identity and replacement between observations cannot be guaranteed by these
+backends. Applications requiring content identity should verify their manifest,
+hash or `GetMountedDiscIdentity()` after restoration. GC Loader probe reliability
+and simultaneous raw-SD/DVD access remain firmware dependent.
+
+Native callers use the equivalent declarations in `include/dnd_storage.h`:
+`dnd_storage_get_mount_info`, `dnd_storage_last_mount_device`,
+`dnd_storage_mount_configuration`, `dnd_storage_remount`,
+`dnd_storage_mount_valid`, `dnd_storage_open_mounted`, `dnd_storage_poll` and
+`dnd_storage_next_mount_change`. `DndMountInfo.root_path` is available even after
+unmount; native polling queues changes but never invokes managed callbacks.
+The registry uses fixed-size records and a bounded queue, with no heap allocation
+for native queries or generation checks. The managed wire format is private,
+versioned and independent of native struct padding and host endianness.
+
+Run `python3 tests/storage_mounts.py` with .NET 8+ and a C compiler for native
+host/fake-GameCube lifecycle tests (including O3/LTO), removal-gate checks,
+real AOT managed tests with GC stress, and existing storage/fault regressions.
+The storage CI domain runs this suite. Physical hotplug/writeback behavior still
+requires console validation.
+
 ## Contiguous file creation (GameCube FAT32 and exFAT)
 
 Use `Storage.CreateContiguousFile(device, path, knownLength)` when writing a new

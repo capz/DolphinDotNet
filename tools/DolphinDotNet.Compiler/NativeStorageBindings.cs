@@ -239,6 +239,15 @@ internal static class NativeStorageBindings
         ["Decode"]=("dnd_text_decode","aiiii",true),
         ["FromChars"]=("dnd_text_from_chars","aii",true),
         ["Mount"]=("dnd_storage_mount","i",false),["Unmount"]=("dnd_storage_unmount","i",false),["IsMounted"]=("dnd_storage_is_mounted","i",false),
+        ["MountSnapshot"]=("dnd_storage_mount_snapshot","i",true),
+        ["NextMountChange"]=("dnd_storage_mount_change","",true),
+        ["LastMountDevice"]=("dnd_storage_last_mount_device","",false),
+        ["MountValid"]=("dnd_storage_mount_valid","il",false),
+        ["Remount"]=("dnd_storage_remount","i",false),
+        ["PollMounts"]=("dnd_storage_poll","",false),
+        ["MountHandlerEquals"]=("dnd_storage_mount_handler_equal","oo",false),
+        ["MountConfigured"]=("dnd_storage_mount_configured","iiisliiiiliii",false),
+        ["OpenMounted"]=("dnd_storage_open_mounted","ilsiii",false),
         ["SetAutoDefrag"]=("dnd_storage_auto_defrag_set","i",false),
         ["AutoDefragEnabled"]=("dnd_storage_auto_defrag_enabled","",false),
         ["DefragMinFileSize"]=("dnd_storage_auto_defrag_min_size","",false),
@@ -281,7 +290,7 @@ internal static class NativeStorageBindings
             b.AppendLine("  extern void dnd_corpus_finish(int,int,int,int);");
         if(call.Operation=="AssetCompatReport")
             b.AppendLine("  extern void dnd_asset_compat_report(int,int,int,int,int,const DndString*);");
-        if(call.Operation=="DolRequest")b.AppendLine("  dnd_async_require_application_thread();");
+        if(call.Operation is "DolRequest" or "PollMounts")b.AppendLine("  dnd_async_require_application_thread();");
         var expression=$"{binding.Symbol}({string.Join(", ",args)})";
         if(call.Result is {} result)b.AppendLine($"  v{result.Id} = {(result.Kind==IrValueKind.ObjectReference?"(intptr_t)":"")}{expression};");else b.AppendLine($"  {expression};");
     }

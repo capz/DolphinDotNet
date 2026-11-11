@@ -7,6 +7,11 @@
 
 static int disc_format;
 static bool drive_ready;
+int dnd_gc_disc_presence(void) {
+  if(DVD_LowGetCoverStatus()!=DVD_COVER_CLOSED)return 0;
+  int status=DVD_CheckDisk();
+  return status>0?1:status==0?0:3;
+}
 bool dnd_gc_mount_disc_image(const char *path) {
   if (!path || !dnd_gc_fst_mount_image(path))
     return false;

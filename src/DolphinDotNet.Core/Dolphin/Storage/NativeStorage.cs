@@ -16,6 +16,16 @@ internal static class NativeStorage
     internal static int CardManagerCopyAbort(int token)=>throw new NotSupportedException("AOT intrinsic");
 
     private static Exception Unsupported()=>new PlatformNotSupportedException("Requires DolphinDotNet AOT.");
+    internal static byte[] MountSnapshot(int device)=>throw Unsupported();
+    internal static byte[]? NextMountChange()=>throw Unsupported();
+    internal static int LastMountDevice()=>throw Unsupported();
+    internal static bool MountValid(int device,long mountId)=>throw Unsupported();
+    internal static int Remount(int device)=>throw Unsupported();
+    internal static void PollMounts()=>throw Unsupported();
+    internal static bool MountHandlerEquals(object first,object second)=>throw Unsupported();
+    internal static int MountConfigured(int device,int kind,int format,string image,long partition,int filesystem,
+        int pages,int sectors,int source,long sourcePartition,int sourceFs,int sourcePages,int sourceSectors)=>throw Unsupported();
+    internal static int OpenMounted(int device,long mountId,string relative,int mode,int access,int share)=>throw Unsupported();
     internal static bool MountDisc(int format)=>throw Unsupported();
     internal static bool MountDiscImage(string path)=>throw Unsupported();
     internal static byte[] DiscHeader()=>throw Unsupported();
