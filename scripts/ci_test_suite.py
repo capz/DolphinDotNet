@@ -175,6 +175,7 @@ def main(area):
         test("tests/EffectCompilerTests")
         build("tools/DolphinDotNet.Imaging/DolphinDotNet.Imaging.csproj")
     elif area=="sdk":
+        run("python3","-m","unittest","discover","-s","tests","-p","test_apploader.py")
         run("python3","eng/pack.py","--include-tools")
         with tempfile.TemporaryDirectory() as tmp:
             run("python3","tests/sdk_consumer.py","--workspace",Path(tmp)/"consumer")

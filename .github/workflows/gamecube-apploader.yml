@@ -1,0 +1,60 @@
+name: GameCube SDK apploader
+on:
+  push:
+    branches: [main, feat/gamecube-apploader]
+    paths: ['boot/gamecube/**', '.github/workflows/gamecube-apploader.yml', 'tests/test_apploader.py']
+  pull_request:
+    paths: ['boot/gamecube/**', '.github/workflows/gamecube-apploader.yml', 'tests/test_apploader.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check IPL image and callback invariants
+        run: python3 -m unittest discover -s tests -p test_apploader.py
+      - name: Build the redistributable boot component with the pinned SDK toolchain
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/work" -w /work \
+            ghcr.io/extremscorner/libogc2@sha256:13bb658d3f18903816617223f5d7c6f776d3db3ea806aae67f8d35a7a69d4c85 \
+            make -f boot/gamecube/Makefile OUTPUT=/work/out/apploader/apploader
+      - name: Record source identity, license and hashes
+        run: |
+          cp boot/gamecube/LICENSE out/apploader/LICENSE
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path('out/apploader')
+          report={'schema':1,'repository':'capz/DolphinDotNet','commit':os.environ['GITHUB_SHA'],'toolchain':'ghcr.io/extremscorner/libogc2@sha256:13bb658d3f18903816617223f5d7c6f776d3db3ea806aae67f8d35a7a69d4c85','discOffset':0x2440,'dolOffset':0x10000,'loadAddress':0x81200000,'includesIplHeader':True,'sourceLicense':'MIT','hardwareValidated':False}
+          report['files']={p.name:{'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(root.iterdir()) if p.is_file()}
+          (root/'BUILD.json').write_text(json.dumps(report,indent=2)+'\n')
+          (root/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(root.iterdir()) if p.is_file()))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gamecube-apploader
+          path: out/apploader/*
+          if-no-files-found: error
+  publish:
+    if: github.event_name == 'push' && github.repository == 'capz/DolphinDotNet'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gamecube-apploader
+          path: apploader
+      - name: Publish an immutable SDK boot-component prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="apploader-${GITHUB_SHA:0:12}"
+          gh release create "$tag" --target "$GITHUB_SHA" --prerelease \
+            --title "GameCube SDK apploader ${GITHUB_SHA:0:12}" \
+            --notes 'Redistributable SDK boot component. Includes the complete IPL header and initialized BSS. Place apploader.img at disc offset 0x2440 with a validated DOL at 0x10000. Source, toolchain and SHA-256 identity are recorded in BUILD.json. Physical GameCube/DVD validation remains outstanding.' \
+            apploader/apploader.img apploader/apploader.elf apploader/BUILD.json apploader/SHA256SUMS.txt apploader/LICENSE
