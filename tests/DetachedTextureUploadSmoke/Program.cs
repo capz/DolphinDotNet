@@ -17,6 +17,7 @@ internal static class Program
         var point=new Vector2(.3f,.8f);var expected=gutter.Transform(animation.Transform(point));
         var actual=animation.Then(gutter).Transform(point);
         Check(Math.Abs(expected.X-actual.X)<.00001f&&Math.Abs(expected.Y-actual.Y)<.00001f);
+        Check(BitConverter.Int32BitsToSingle(0x3fc00000)==1.5f&&float.IsNaN(BitConverter.Int32BitsToSingle(0x7fc00000)));
         var bytes=new byte[256];for(int i=0;i<bytes.Length;i++)bytes[i]=(byte)(i*17+3);
         uint crc=StreamableTextureDescriptor.ComputeCrc32(bytes,0,bytes.Length);
         using(var source=NativeBuffer.Allocate(128))

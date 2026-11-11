@@ -195,6 +195,7 @@ texture_reuse_test: texture_reuse_test.c ../source/draw_resources.c
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $^ $(CRC_DEAD_STRIP) -lm -o $@
 
 clean:
+	rm -f detached_texture_test
 	rm -f raw_move_codec_test
 	rm -f raw_move_test
 	rm -f raw_move_safety_test
