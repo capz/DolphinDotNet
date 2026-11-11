@@ -25,6 +25,18 @@ static bool card_initialized;
  * inspection sees the same filesystem state as the devoptab writer. */
 static DvmDisc *mounted_discs[7];
 static sec_t mounted_partition_lba[7];
+#include "storage_disc_gate.inc"
+static MountDiscGate *mount_gates[7];
+static DISC_INTERFACE *mount_interfaces[7];
+void dnd_gc_storage_invalidate(int device) {
+  if(device>=0&&device<7&&mount_gates[device])mount_gates[device]->removed=true;
+}
+int dnd_gc_disc_presence(void);
+int dnd_gc_storage_presence(int device) {
+  if(device==3)return dnd_gc_disc_presence();
+  DISC_INTERFACE *iface=device>=0&&device<7?mount_interfaces[device]:NULL;
+  return iface&&iface->isInserted?(iface->isInserted(iface)?1:0):3;
+}
 static int extent_sector_read(void *context,uint64_t lba,void *buffer) {
   DvmDisc *disc=context;
   if((uint64_t)(sec_t)lba!=lba)return -EIO;
@@ -66,53 +78,61 @@ static int card_errno(int rc) {
 }
 bool dnd_gc_mount_disc(int format);
 void dnd_gc_unmount_disc(void);
-bool dnd_gc_mount(int device) {
-  if (device == 3) {
-    return dnd_gc_mount_disc(1);
-  }
-  if (device < 0 || (device > 2 && device != 6))
-    return false;
+bool dnd_gc_mount_volume(const DndMountConfiguration *request,DndMountConfiguration *effective) {
+  int device=request->device;
+  if (device < 0 || (device > 2 && device != 6))return false;
   DISC_INTERFACE *iface = device == 0   ? get_io_gcsda()
                           : device == 1 ? get_io_gcsdb()
-                          : device == 2 ? get_io_gcsd2()
-                                        : &__io_gcode; /* GC Loader firmware-mediated SD sectors */
-  dvmRegisterFsDriver(&g_vfatFsDriver);
-  dvmRegisterFsDriver(&g_exfatFsDriver);
-  DvmDisc *disc = iface ? dvmDiscCreate(iface) : NULL;
-  if (!disc)
-    return false;
-  disc = dvmDiscCacheCreate(disc, 4, 8);
-  if (!disc)
-    return false;
-  DvmPartInfo parts[4];
-  unsigned count = dvmReadPartitionTable(disc, parts, 4, DVM_IDENT_FSTYPE);
-  bool mounted = false;
-  sec_t selected_partition = 0;
-  if (!count)
-    mounted = dvmMountVolume(names[device], disc, 0, "exfat");
-  for (unsigned i = 0; i < count && !mounted; i++)
-    if (parts[i].fstype && dvmMountPartition(names[device], disc, &parts[i])) {
-      mounted = true;
-      selected_partition = parts[i].start_sector;
+                          : device == 2 ? get_io_gcsd2() : &__io_gcode;
+  dvmRegisterFsDriver(&g_vfatFsDriver);dvmRegisterFsDriver(&g_exfatFsDriver);
+  DvmDisc *raw=iface?dvmDiscCreate(iface):NULL;
+  if(!raw)return false;
+  MountDiscGate *gate=calloc(1,sizeof(*gate));
+  if(!gate){raw->vt->destroy(raw);return false;}
+  gate->base=*raw;gate->base.vt=&gate_interface;gate->inner=raw;
+  DvmDisc *disc=dvmDiscCacheCreate(&gate->base,(unsigned)request->cache_pages,(unsigned)request->sectors_per_page);
+  /* libdvm can return its input when cache allocation fails. Do not report
+   * the requested cache as effective when the volume would be uncached. */
+  if(!disc||disc==&gate->base){gate_destroy(&gate->base);return false;}
+  bool success=false;sec_t selected=0;int filesystem=0;
+  if(request->partition_lba>=0) {
+    selected=(sec_t)request->partition_lba;
+    if((uint64_t)selected==(uint64_t)request->partition_lba) {
+      if(request->filesystem!=2&&dvmMountVolume(names[device],disc,selected,g_vfatFsDriver.fstype)){success=true;filesystem=1;}
+      else if(request->filesystem!=1&&dvmMountVolume(names[device],disc,selected,g_exfatFsDriver.fstype)){success=true;filesystem=2;}
     }
-  if (mounted) {
-    mounted_discs[device] = disc;
-    mounted_partition_lba[device] = selected_partition;
+  }else {
+    DvmPartInfo parts[4];unsigned count=dvmReadPartitionTable(disc,parts,4,DVM_IDENT_FSTYPE);
+    if(!count&&request->filesystem!=1&&dvmMountVolume(names[device],disc,0,g_exfatFsDriver.fstype)){success=true;filesystem=2;}
+    for(unsigned i=0;i<count&&!success;i++)if(parts[i].fstype) {
+      int fs=!strcmp(parts[i].fstype,g_vfatFsDriver.fstype)?1:!strcmp(parts[i].fstype,g_exfatFsDriver.fstype)?2:0;
+      if(fs&&(!request->filesystem||request->filesystem==fs)&&dvmMountPartition(names[device],disc,&parts[i])) {
+        success=true;selected=parts[i].start_sector;filesystem=fs;
+      }
+    }
   }
-  if (!mounted)
-    disc->vt->destroy(disc);
-  return mounted;
+  if(!success){disc->vt->destroy(disc);return false;}
+  *effective=*request;effective->partition_lba=selected;effective->filesystem=filesystem;
+  mounted_discs[device]=disc;mounted_partition_lba[device]=selected;
+  mount_gates[device]=gate;mount_interfaces[device]=iface;
+  return true;
 }
-void dnd_gc_unmount(int device) {
+bool dnd_gc_mount(int device) {
+  if(device==3)return dnd_gc_mount_disc(1);
+  DndMountConfiguration request={.device=device,.kind=1,.partition_lba=-1,.cache_pages=4,.sectors_per_page=8,.source_device=-1},effective;
+  return dnd_gc_mount_volume(&request,&effective);
+}
+bool dnd_gc_storage_unmount(int device) {
   if (device == 3) {
     dnd_gc_unmount_disc();
-    return;
+    return true;
   }
   if ((device >= 0 && device < 3) || device == 6) {
+    if(!dvmUnmountVolume(names[device]))return false;
     mounted_discs[device] = NULL;
     mounted_partition_lba[device] = 0;
-    dvmUnmountVolume(names[device]);
-    return;
+    mount_gates[device]=NULL;mount_interfaces[device]=NULL;
+    return true;
   }
   if (device >= 4 && device < 6) {
     int slot = device - 4;
@@ -120,7 +140,9 @@ void dnd_gc_unmount(int device) {
     free(workareas[slot]);
     workareas[slot] = NULL;
   }
+  return true;
 }
+void dnd_gc_unmount(int device) { (void)dnd_gc_storage_unmount(device); }
 static void identity(int slot) {
   CARD_SetGamecode(games[slot]);
   CARD_SetCompany(companies[slot]);

@@ -46,6 +46,12 @@ static void storage_barrier(void) {
 #define HANDLE_CAP 32
 static const char *prefixes[7] = {"carda", "cardb", "sd", "dvd", "mca", "mcb", "gcloader"};
 static bool mounted[7];
+static void mount_record_success(int device,const DndMountConfiguration *configuration);
+static void mount_record_failure(int device,int error);
+static void mount_record_unmounted(int device);
+static int64_t mount_generation(int device);
+static bool mount_handle_valid(int device,int64_t generation);
+static void mount_check_io(int error);
 /* Opt-in is explicitly off for each program launch; the application may
  * enable automatic extent reservation/repair before initiating writes. */
 static bool auto_defrag_enabled;
@@ -78,16 +84,21 @@ void dnd_storage_auto_defrag_set_min_size(int minimum) {
 /* Keep backing mounted while its ISO is presented through dvd:/ */
 static int iso_source_device = -1;
 static unsigned card_users[2];
+#ifndef DND_GAMECUBE_STORAGE
 static char roots[7][PATH_CAP];
+#endif
 static char cwd[PATH_CAP] = "sd:/";
 typedef struct {
   int token, fd, access, share, device;
+  int64_t mount_id;
   bool dirty;
   int64_t append_origin;
   char path[PATH_CAP];
 } FileHandle;
 typedef struct {
   int token;
+  int device;
+  int64_t mount_id;
   DIR *dir;
   char path[PATH_CAP];
 } DirectoryHandle;
@@ -107,6 +118,10 @@ static void contiguous_root(int d,char path[PATH_CAP]) {
 
 #ifdef DND_GAMECUBE_STORAGE
 bool dnd_gc_mount(int device);
+bool dnd_gc_mount_volume(const DndMountConfiguration *request,DndMountConfiguration *effective);
+int dnd_gc_storage_presence(int device);
+void dnd_gc_storage_invalidate(int device);
+bool dnd_gc_storage_unmount(int device);
 bool dnd_gc_mount_disc(int format);
 bool dnd_gc_mount_disc_image(const char *path);
 void dnd_gc_unmount(int device);
@@ -121,6 +136,7 @@ int dnd_gc_card_entries(int device, char names[127][33]);
 int dnd_gc_contiguous_extents(int device,const char *path,unsigned *extents);
 #endif
 static void fail(int error, const char *message) {
+  if(error==ENODEV || error==EIO)mount_check_io(error);
   DndExceptionKind kind = DND_EXCEPTION_IO;
   if (error == ENOENT)
     kind = DND_EXCEPTION_FILE_NOT_FOUND;
@@ -302,7 +318,7 @@ static bool valid_device(int d) {
 }
 bool dnd_storage_is_mounted(int d) {
   storage_barrier(); return valid_device(d) && mounted[d]; }
-bool dnd_storage_mount(int d) {
+static bool storage_mount_volume(int d,const DndMountConfiguration *request) {
   storage_barrier();
   if (!valid_device(d))
     return false;
@@ -312,8 +328,12 @@ bool dnd_storage_mount(int d) {
   }
   if (mounted[d])
     return true;
+  DndMountConfiguration configuration={.device=d,.kind=d==3?2:1,
+    .disc_format=d==3?1:0,.partition_lba=-1,.cache_pages=4,.sectors_per_page=8,
+    .source_device=-1};
+  if(request)configuration=*request;
 #ifdef DND_GAMECUBE_STORAGE
-  mounted[d] = dnd_gc_mount(d);
+  mounted[d] = d==3?dnd_gc_mount(d):dnd_gc_mount_volume(&configuration,&configuration);
 #else
   const char *root = getenv("DND_STORAGE_ROOT");
   if (!root)
@@ -336,17 +356,26 @@ bool dnd_storage_mount(int d) {
       dnd_gc_unmount(d);
 #endif
       mounted[d]=false;
+      mount_record_failure(d,-recovery);
       fail(-recovery,"An interrupted contiguous write needs recovery.");
     }
   }
+  if(mounted[d])mount_record_success(d,&configuration);
+  else mount_record_failure(d,ENODEV);
   return mounted[d];
 }
+bool dnd_storage_mount(int d) { return storage_mount_volume(d,NULL); }
 bool dnd_storage_mount_disc(int format) {
   storage_barrier();
   if(format!=1&&format!=2){fail(EINVAL,"Invalid disc format.");return false;}
   if(mounted[3]){fail(EBUSY,"Unmount the disc before selecting a format.");return false;}
 #ifdef DND_GAMECUBE_STORAGE
-  mounted[3]=dnd_gc_mount_disc(format);return mounted[3];
+  mounted[3]=dnd_gc_mount_disc(format);
+  if(mounted[3]){
+    DndMountConfiguration configuration={.device=3,.kind=2,.disc_format=format,.source_device=-1,.partition_lba=-1};
+    mount_record_success(3,&configuration);
+  }else mount_record_failure(3,ENODEV);
+  return mounted[3];
 #else
   if(format==2){fail(ENOSYS,"Use the portable FST image harness on a host.");return false;}
   return dnd_storage_mount(3);
@@ -377,9 +406,18 @@ bool dnd_storage_mount_disc_image(DndString *path) {
     return false;
   }
 #ifdef DND_GAMECUBE_STORAGE
-  if (!dnd_gc_mount_disc_image(native)) return false;
+  if (!dnd_gc_mount_disc_image(native)) {mount_record_failure(3,EIO);return false;}
   mounted[3] = true;
   iso_source_device = source;
+  DndMountInfo source_info;
+  dnd_storage_get_mount_info(source,&source_info);
+  DndMountConfiguration configuration={.device=3,.kind=3,.disc_format=2,.source_device=source,
+    .partition_lba=-1,.source_partition_lba=source_info.configuration.partition_lba,
+    .source_filesystem=source_info.configuration.filesystem,
+    .source_cache_pages=source_info.configuration.cache_pages,
+    .source_sectors_per_page=source_info.configuration.sectors_per_page};
+  strcpy(configuration.image_path,canonical);
+  mount_record_success(3,&configuration);
   return true;
 #else
   fail(ENOSYS, "Mounted GameCube image volumes require a GameCube target.");
@@ -415,14 +453,14 @@ int dnd_fs_open_handles(void) {
   storage_barrier();
   int n = 0;
   for (int i = 0; i < HANDLE_CAP; i++) {
-    n += files[i].token != 0;
-    n += directories[i].token != 0;
+    n += files[i].token != 0 && files[i].fd>=0;
+    n += directories[i].token != 0 && directories[i].dir!=NULL;
   }
   return n;
 }
 static bool busy(const char *path) {
   for (int i = 0; i < HANDLE_CAP; i++)
-    if (files[i].token && !strcasecmp(files[i].path, path))
+    if (files[i].token && files[i].fd>=0 && !strcasecmp(files[i].path, path))
       return true;
   return false;
 }
@@ -445,17 +483,20 @@ void dnd_storage_unmount(int d) {
   if (d == 4 || d == 5)
     card_users[d - 4] = 0;
   for (int i = 0; i < HANDLE_CAP; i++)
-    if ((files[i].token &&
+    if ((files[i].token && files[i].fd>=0 &&
          !strncmp(files[i].path, prefixes[d], strlen(prefixes[d]))) ||
-        (directories[i].token &&
+        (directories[i].token && directories[i].dir &&
          !strncmp(directories[i].path, prefixes[d], strlen(prefixes[d])))) {
       fail(EBUSY, "Volume has open handles.");
       return;
     }
 #ifdef DND_GAMECUBE_STORAGE
-  dnd_gc_unmount(d);
+  if(!dnd_gc_storage_unmount(d)) {
+    mount_record_failure(d,EIO);fail(EIO,"Filesystem backend could not unmount.");return;
+  }
 #endif
   mounted[d] = false;
+  mount_record_unmounted(d);
   if (d == 3) iso_source_device = -1;
 }
 void dnd_storage_shutdown(void) {
@@ -594,8 +635,10 @@ bool dnd_fs_exists(DndString *path, bool directory) {
 }
 static FileHandle *handle(int token) {
   for (int i = 0; i < HANDLE_CAP; i++)
-    if (token && files[i].token == token)
+    if (token && files[i].token == token) {
+      if(!mount_handle_valid(files[i].device,files[i].mount_id))return NULL;
       return &files[i];
+    }
   dnd_exception_throw(DND_EXCEPTION_OBJECT_DISPOSED, "File handle is closed.");
   return NULL;
 }
@@ -650,7 +693,7 @@ int dnd_fs_open(DndString *path, int mode, int access, int share) {
   for (int i = 0; i < HANDLE_CAP; i++) {
     if (!files[i].token && slot < 0)
       slot = i;
-    else if (files[i].token && !strcasecmp(files[i].path, canonical) &&
+    else if (files[i].token && files[i].fd>=0 && !strcasecmp(files[i].path, canonical) &&
              ((access & ~files[i].share) || (files[i].access & ~share))) {
       fail(EBUSY, "Sharing violation.");
       return 0;
@@ -694,6 +737,7 @@ int dnd_fs_open(DndString *path, int mode, int access, int share) {
                    .access = access,
                    .share = share,
                    .device = d,
+                   .mount_id = mount_generation(d),
                    .dirty = mode == 2 || mode == 5,
                    .append_origin = mode == 6 ? (int64_t)st.st_size : -1};
   strcpy(files[slot].path, canonical);
@@ -747,6 +791,7 @@ int dnd_fs_read(int token, DndArray *data, int offset, int count) {
 int64_t dnd_fs_length_native(int token) {
   storage_barrier();
   for (int i=0;i<HANDLE_CAP;i++) if(files[i].token==token && token>0) {
+    if(!mount_handle_valid(files[i].device,files[i].mount_id))return -1;
     struct stat st;return fstat(files[i].fd,&st)==0?(int64_t)st.st_size:-1;
   }
   return -1;
@@ -972,7 +1017,7 @@ int dnd_fs_defrag_optimize(DndString *path) {
 static int auto_contiguous_write(DndString *path,DndArray *data) {
   if(!auto_defrag_enabled)return 0;
 #ifdef DND_GAMECUBE_STORAGE
-  if(data->length<DND_AUTO_OPT_MIN_BYTES)return 0;
+  if(data->length<(uint32_t)DND_AUTO_OPT_MIN_BYTES)return 0;
   char canonical[PATH_CAP],native[PATH_CAP],root[PATH_CAP];
   int device=resolve(path,canonical,native);
   if(device<0)return -1;
@@ -1014,6 +1059,9 @@ static int auto_contiguous_write(DndString *path,DndArray *data) {
 
 void dnd_fs_close(int token) {
   storage_barrier();
+  for(int i=0;i<HANDLE_CAP;i++)if(token&&files[i].token==token&&files[i].fd<0) {
+    files[i].token=0;return; /* Removed volume: resources were already released. */
+  }
   FileHandle *h = handle(token);
   if (!h)
     return;
@@ -1295,7 +1343,8 @@ void dnd_fs_mkdir(DndString *path) {
 int dnd_fs_dir_open(DndString *path) {
   storage_barrier();
   char canonical[PATH_CAP], native[PATH_CAP];
-  if (resolve(path, canonical, native) < 0)
+  int device=resolve(path, canonical, native);
+  if (device < 0)
     return 0;
   int slot = -1;
   for (int i = 0; i < HANDLE_CAP; i++)
@@ -1314,13 +1363,17 @@ int dnd_fs_dir_open(DndString *path) {
   }
   directories[slot].token = next_token++;
   directories[slot].dir = dir;
+  directories[slot].device=device;
+  directories[slot].mount_id=mount_generation(device);
   strcpy(directories[slot].path, canonical);
   return directories[slot].token;
 }
 static DirectoryHandle *dir_handle(int token) {
   for (int i = 0; i < HANDLE_CAP; i++)
-    if (token && directories[i].token == token)
+    if (token && directories[i].token == token) {
+      if(!mount_handle_valid(directories[i].device,directories[i].mount_id))return NULL;
       return &directories[i];
+    }
   dnd_exception_throw(DND_EXCEPTION_OBJECT_DISPOSED,
                       "Directory handle is closed.");
   return NULL;
@@ -1379,6 +1432,9 @@ DndString *dnd_fs_dir_next(DndManagedHeap *heap, int token, int kind) {
 }
 void dnd_fs_dir_close(int token) {
   storage_barrier();
+  for(int i=0;i<HANDLE_CAP;i++)if(token&&directories[i].token==token&&!directories[i].dir) {
+    directories[i].token=0;return;
+  }
   DirectoryHandle *h = dir_handle(token);
   if (!h)
     return;
@@ -1837,3 +1893,5 @@ int dnd_asset_read(int token,int64_t offset,int buffer,int destination,int count
   if(error){fail(error,"Native asset read failed.");return -1;}
   return done;
 }
+
+#include "storage_mounts.inc"

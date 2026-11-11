@@ -59,7 +59,7 @@ public sealed class ContiguousFileWriter : IDisposable
         }
     }
 }
-public static class Storage
+public static partial class Storage
 {
     public static bool Mount(StorageDevice device)=>NativeStorage.Mount((int)device);
     /// <summary>Reserve contiguous clusters before streaming a new file.

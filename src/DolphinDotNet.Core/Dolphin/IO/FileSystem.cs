@@ -44,6 +44,7 @@ public sealed class FileStream : Stream
     public FileStream(string path,FileMode mode):this(path,mode,mode==FileMode.Append?FileAccess.Write:FileAccess.ReadWrite,FileShare.None){}
     public FileStream(string path,FileMode mode,FileAccess access):this(path,mode,access,FileShare.None){}
     public FileStream(string path,FileMode mode,FileAccess access,FileShare share){this.access=access;handle=NativeStorage.Open(path,(int)mode,(int)access,(int)share);}
+    internal FileStream(int nativeHandle,FileAccess access){this.access=access;handle=nativeHandle;}
     private void Check(){if(handle==0)throw new ObjectDisposedException("FileStream");}
     public override bool CanRead=>handle!=0 && access!=FileAccess.Write;
     public override bool CanWrite=>handle!=0 && access!=FileAccess.Read;

@@ -489,6 +489,13 @@ Mount/unmount SD or disc devices, switch ISO9660 versus GameCube original-disc F
 
 **API:** `Mount(device)`, `MountDisc(format)`, `IsMounted(device)`, `Unmount(device)`, `GetPath(device,path)`, `FileExists/DirectoryExists`, `ReadAllBytes/WriteAllBytes`, `Open(...)`, `CreateDirectory(...)`, `EnumerateFiles/EnumerateDirectories`, `GetFiles/GetDirectories`, `DeleteFile/DeleteDirectory`, `DiscFormat.Iso9660/Fst`.
 
+Mount discovery: `GetMounts()`, `GetMountInfo(device)`, `GetLastMount()`,
+`TryGetMountedFileSystem(device, out fs)`, `Mount(MountConfiguration)`,
+`Remount(device)`, `Poll()`, and `MountChanged`. Session history includes inactive
+mounts; memory-card save APIs are excluded. `MountedFileSystem.Open` checks the
+mount generation. See [mount lifecycle and restoration](storage-runtime.md#discovering-and-restoring-mounts).
+
+
 ~~~csharp
 if (Storage.Mount(StorageDevice.SdSerialPort2)) {
     Storage.WriteAllBytes(StorageDevice.SdSerialPort2, "save.bin", new byte[] { 1 });
