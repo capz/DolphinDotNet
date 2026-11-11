@@ -83,6 +83,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DisplayConfigurationSmoke",
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HardwareAssetCompatibilityPolicyTests", "tests\HardwareAssetCompatibilityPolicyTests\HardwareAssetCompatibilityPolicyTests.csproj", "{8A1D0B64-59B7-44F6-A0A9-4AD8FC000016}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "StreamableTextureTests", "tests\StreamableTextureTests\StreamableTextureTests.csproj", "{8A1D0B64-59B7-44F6-A0A9-4AD8FC000090}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -177,6 +179,10 @@ Global
 		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000016}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000016}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000016}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000090}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000090}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000090}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000090}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -204,6 +210,7 @@ Global
 		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000014} = {8A1D0B64-59B7-44F6-A0A9-4AD8FC000068}
 		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000015} = {8A1D0B64-59B7-44F6-A0A9-4AD8FC000068}
 		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000016} = {8A1D0B64-59B7-44F6-A0A9-4AD8FC000068}
+		{8A1D0B64-59B7-44F6-A0A9-4AD8FC000090} = {8A1D0B64-59B7-44F6-A0A9-4AD8FC000068}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {8A1D0B64-59B7-44F6-A0A9-4AD8FC0003E7}
