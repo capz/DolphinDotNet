@@ -60,6 +60,7 @@ def main(area):
                     "-lm","-o",binary)
                 run(binary)
     elif area=="storage":
+        build("tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj")
         # Run new physical FAT32/exFAT free-run fixtures independently of the
         # broader native suite. The latter also exercises unrelated hardware
         # stubs and may be unavailable on some host runner configurations.
