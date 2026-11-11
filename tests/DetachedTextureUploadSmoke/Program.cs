@@ -8,6 +8,11 @@ using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 
 internal static class Program
 {
+    private readonly struct CrcField
+    {
+        internal readonly uint Value;
+        internal CrcField(uint value){Value=value;}
+    }
     private static void Check(bool value){if(!value)throw new Exception("Detached upload assertion failed.");}
     private static void Drain(Task work){for(int i=0;i<10000&&!work.IsCompleted;i++)Scheduler.Pump(1);Check(work.IsCompleted);work.GetAwaiter().GetResult();}
     private static int Main()
@@ -18,6 +23,11 @@ internal static class Program
         var actual=animation.Then(gutter).Transform(point);
         Check(Math.Abs(expected.X-actual.X)<.00001f&&Math.Abs(expected.Y-actual.Y)<.00001f);
         Check(BitConverter.Int32BitsToSingle(0x3fc00000)==1.5f&&float.IsNaN(BitConverter.Int32BitsToSingle(0x7fc00000)));
+        var reference=new CrcField(0xcbf43926u);
+        uint calculated=StreamableTextureDescriptor.ComputeCrc32(new byte[]{49,50,51,52,53,54,55,56,57},0,9);
+        Check(reference.Value==calculated);
+        if(reference.Value!=calculated)return 9;
+        Check(unchecked((int)reference.Value)<0&&~reference.Value==0x340bc6d9u);
         var bytes=new byte[256];for(int i=0;i<bytes.Length;i++)bytes[i]=(byte)(i*17+3);
         uint crc=StreamableTextureDescriptor.ComputeCrc32(bytes,0,bytes.Length);
         using(var source=NativeBuffer.Allocate(128))
