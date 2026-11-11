@@ -1,5 +1,6 @@
 """IPL image layout and malformed boot-input checks, without a cross compiler."""
 import importlib.util
+import os
 from pathlib import Path
 import struct
 import subprocess
@@ -74,6 +75,21 @@ class ApploaderTests(unittest.TestCase):
             result=subprocess.run(['python3',str(ROOT/'boot/gamecube/pack.py'),str(source),str(output),'--dol',str(bad)],capture_output=True)
             self.assertNotEqual(result.returncode,0)
             self.assertEqual(output.read_bytes(),b'previous valid image')
+
+    def test_standalone_make_validates_dol_even_with_a_newer_cached_image(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder=Path(temp);output=folder/'apploader';bad=folder/'bad.dol'
+            output.with_suffix('.elf').write_bytes(elf())
+            output.with_suffix('.img').write_bytes(boot.image(elf()))
+            bad.write_bytes(b'bad')
+            # Make the cached outputs newer than every source and supplied DOL.
+            future=max(p.stat().st_mtime for p in (ROOT/'boot/gamecube').iterdir() if p.is_file())+60
+            for suffix in ('.elf','.img'):os.utime(output.with_suffix(suffix),(future,future))
+            result=subprocess.run(['make','-f',str(ROOT/'boot/gamecube/Makefile'),
+                                   'OUTPUT='+str(output),'DOL='+str(bad)],capture_output=True,text=True)
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn('truncated DOL header',result.stderr)
+            self.assertEqual(output.with_suffix('.img').read_bytes(),boot.image(elf()))
 
     def test_callback_protocol_and_bss_semantics(self):
         # Run the C callback logic on the host. Only the pointer word width and
