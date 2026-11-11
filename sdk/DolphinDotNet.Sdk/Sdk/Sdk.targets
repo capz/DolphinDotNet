@@ -113,7 +113,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
       <_DndNative>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)native'))</_DndNative>
     </PropertyGroup>
     <ItemGroup>
-      <_DndArgs Include="$(_DndTools)DolphinDotNet.Build.dll;build;--assembly;$(TargetPath);--compiler;$(_DndCompiler);--native-directory;$(_DndNative);--dol;$(TargetDir)$(AssemblyName).apploader.img;$(TargetDir)$(AssemblyName).dol;--elf;$(TargetDir)$(AssemblyName).elf;--run-config;$(TargetDir)dolphin-run.json;--backend;$(DndBuildBackend);--jobs;$(DndBuildJobs);--user-directory;$(DolphinUserDirectory)" />
+      <_DndArgs Include="$(_DndTools)DolphinDotNet.Build.dll;build;--assembly;$(TargetPath);--compiler;$(_DndCompiler);--native-directory;$(_DndNative);--dol;$(TargetDir)$(AssemblyName).dol;--elf;$(TargetDir)$(AssemblyName).elf;--run-config;$(TargetDir)dolphin-run.json;--backend;$(DndBuildBackend);--jobs;$(DndBuildJobs);--user-directory;$(DolphinUserDirectory)" />
       <_DndArgs Include="--managed-heap-bytes;$(DndManagedHeapBytes)" Condition="'$(DndManagedHeapBytes)' != ''" />
       <_DndArgs Include="--dolphin;$(DolphinPath)" Condition="'$(DolphinPath)' != ''" />
       <_DndArgs Include="--sample-controls;$(DndSampleControls)" Condition="'$(DndSampleControls)' != ''" />
