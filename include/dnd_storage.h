@@ -31,6 +31,7 @@ void dnd_fs_move(DndString *source, DndString *destination);
 int dnd_fs_contiguous_begin(DndString *path,int64_t expected_size);
 void dnd_fs_contiguous_write(int token,DndArray *data,int offset,int count);
 void dnd_fs_contiguous_complete(int token);
+int dnd_fs_contiguous_complete_step(int token);
 void dnd_fs_contiguous_abort(int token);
 void dnd_fs_mkdir(DndString *path);
 int dnd_fs_open(DndString *path, int mode, int access, int share);

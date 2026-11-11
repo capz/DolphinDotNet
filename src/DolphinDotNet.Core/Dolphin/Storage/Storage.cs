@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 namespace Dolphin.Storage;
 public enum StorageDevice { SdSlotA, SdSlotB, SdSerialPort2, DvdDrive, MemoryCardSlotA, MemoryCardSlotB, GcLoader }
 public enum DiscFormat { Iso9660=1, Fst=2 }
@@ -9,6 +11,7 @@ public enum DiscFormat { Iso9660=1, Fst=2 }
 public sealed class ContiguousFileWriter : IDisposable
 {
     private int handle;
+    private bool completing;
     internal ContiguousFileWriter(string path,long expectedLength)
     {
         if(path==null)throw new ArgumentNullException("path");
@@ -18,13 +21,34 @@ public sealed class ContiguousFileWriter : IDisposable
     public void Write(byte[] buffer,int offset,int count)
     {
         if(handle==0)throw new ObjectDisposedException("ContiguousFileWriter");
+        if(completing)throw new InvalidOperationException("File verification is in progress.");
         NativeStorage.ContiguousWrite(handle,buffer,offset,count);
     }
     public void Complete()
     {
         if(handle==0)throw new ObjectDisposedException("ContiguousFileWriter");
+        if(completing)throw new InvalidOperationException("File verification is in progress.");
         NativeStorage.ContiguousComplete(handle);
         handle=0;
+    }
+    /// <summary>Verify staged bytes in 16 KiB steps, yielding between steps so
+    /// the application can render and cancel. Cancellation/failure discards the
+    /// staging file. Once publication succeeds, cancellation cannot undo it.
+    /// Await the task or keep the normal application loop running.</summary>
+    public async Task CompleteAsync(CancellationToken cancellationToken=default)
+    {
+        if(handle==0)throw new ObjectDisposedException("ContiguousFileWriter");
+        if(completing)throw new InvalidOperationException("File verification is in progress.");
+        completing=true;
+        try{
+            while(true){
+                cancellationToken.ThrowIfCancellationRequested();
+                if(handle==0)throw new ObjectDisposedException("ContiguousFileWriter");
+                if(NativeStorage.ContiguousCompleteStep(handle)==1){handle=0;return;}
+                await Task.Yield();
+            }
+        }catch{Dispose();throw;}
+        finally{completing=false;}
     }
     public void Dispose()
     {

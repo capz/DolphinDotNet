@@ -233,7 +233,12 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
     build_args = ("build", "--assembly", assembly, "--compiler", tool_dir / "DolphinLaunchProbe.dll",
                   "--native-directory", native, "--dol", dol, "--elf", elf,
                   "--run-config", config, "--backend", "Docker", "--debug-symbols", "true")
-    call(*build_args, env=tool_env)
+    for invalid_heap in ('0','65535','131072','16777217','1048577','oops','1;echo injected'):
+        output=call(*build_args,'--managed-heap-bytes',invalid_heap,env=tool_env,expected=1)
+        assert 'aligned to 32 bytes' in output, output
+    heap_capture=work/'native-arguments.json'
+    call(*build_args,'--managed-heap-bytes','1048576',env={**tool_env,'DND_PROBE_NATIVE_OUTPUT':str(heap_capture)})
+    assert json.loads(heap_capture.read_text())[-1]=='make -j2 DND_MANAGED_HEAP_BYTES=1048576'
     assert not git_metadata.exists() and marker.exists()
     if os.name != "nt":
         assert (outside / "keep.txt").read_text() == "external"

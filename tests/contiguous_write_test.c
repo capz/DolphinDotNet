@@ -1,4 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
+#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
+#define _DARWIN_C_SOURCE 1
+#endif
 #include "dnd_contiguous_write.h"
 #include <assert.h>
 #include <errno.h>
@@ -64,6 +67,55 @@ int main(void) {
   assert(dnd_contiguous_begin(&writer,root,path,3,ops)==-EEXIST);
   file_data(path,payload,sizeof(payload));
   assert(unlink(path)==0);
+
+  /* Verification yields after at most one 16 KiB read. No final name is
+   * visible until EOF, checksum and the second extent probe all pass. */
+  assert(dnd_contiguous_begin(&writer,root,path,sizeof(payload),ops)==0);
+  assert(dnd_contiguous_write(&writer,payload,sizeof(payload))==0);
+  int steps=0,rc;
+  do {
+    uint64_t before=writer.verified;
+    rc=dnd_contiguous_complete_step(&writer);steps++;
+    assert(rc>=0 && writer.verified-before<=16384);
+    if(!rc)assert(writer.active && writer.verifying && !present(path));
+  } while(!rc);
+  assert(rc==1 && steps==10 && !writer.active);
+  file_data(path,payload,sizeof(payload));assert(unlink(path)==0);
+
+  /* Cancellation/disposal between verification steps discards only staging. */
+  assert(dnd_contiguous_begin(&writer,root,path,sizeof(payload),ops)==0);
+  assert(dnd_contiguous_write(&writer,payload,sizeof(payload))==0);
+  assert(dnd_contiguous_complete_step(&writer)==0);
+  assert(dnd_contiguous_write(&writer,payload,1)==-EINVAL);
+  assert(dnd_contiguous_abort(&writer)==0);
+  assert(!present(path) && !present(journal) && !present(writer.staged));
+
+  /* Corruption after a successful first step must still prevent publication. */
+  assert(dnd_contiguous_begin(&writer,root,path,sizeof(payload),ops)==0);
+  assert(dnd_contiguous_write(&writer,payload,sizeof(payload))==0);
+  assert(dnd_contiguous_complete_step(&writer)==0);
+  int changed=open(writer.staged,O_RDWR);assert(changed>=0);
+  unsigned char wrong=payload[20000]^255;
+  assert(pwrite(changed,&wrong,1,20000)==1 && close(changed)==0);
+  do{rc=dnd_contiguous_complete_step(&writer);}while(!rc);
+  assert(rc==-EIO && !writer.active && !present(path) && !present(journal));
+
+  /* A cut during readback is recoverable using the same durable journal. */
+  assert(dnd_contiguous_begin(&writer,root,path,sizeof(payload),ops)==0);
+  assert(dnd_contiguous_write(&writer,payload,sizeof(payload))==0);
+  assert(dnd_contiguous_complete_step(&writer)==0);
+  assert(close(writer.fd)==0);writer.active=false;
+  assert(dnd_contiguous_recover(root)==0);
+  assert(!present(path) && !present(journal) && !present(writer.staged));
+
+  /* Another file appearing between steps remains untouched. */
+  assert(dnd_contiguous_begin(&writer,root,path,4,ops)==0);
+  assert(dnd_contiguous_write(&writer,payload,4)==0);
+  assert(dnd_contiguous_complete_step(&writer)==0);
+  changed=open(path,O_CREAT|O_EXCL|O_WRONLY,0600);assert(changed>=0);
+  assert(write(changed,"keep",4)==4 && close(changed)==0);
+  assert(dnd_contiguous_complete_step(&writer)==-EEXIST);
+  file_data(path,(const unsigned char*)"keep",4);assert(unlink(path)==0);
 
   faults.extents=3;
   assert(dnd_contiguous_begin(&writer,root,path,sizeof(payload),ops)==-ENOSPC);

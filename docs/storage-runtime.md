@@ -141,6 +141,16 @@ is mutated directly by the extent scanner. A successfully returned `Complete`
 means the data and FAT allocation were checked, **not** that a FAT directory
 rename is guaranteed power-loss atomic on every card/firmware combination.
 Applications should keep authoritative download hashes/version manifests.
+
+For a download UI, use `await writer.CompleteAsync(cancellationToken)` instead
+of `Complete()`. Readback advances by at most 16 KiB per step and yields to the
+application scheduler between steps, allowing rendering and cancellation to
+continue. Cancellation or failure discards the staged file; publication happens
+only after the same length, checksum and physical-extent checks as `Complete()`.
+Cancellation after successful publication cannot undo the published file.
+Do not write or start another completion on that writer while its completion
+task is pending. Disposing it aborts the pending verification. Metadata flush,
+extent inspection and the final rename remain synchronous native operations.
 Temporary and journal files occupy root-directory entries until publication.
 Only one contiguous writer can be active per volume. On host filesystems
 the feature fails as unsupported rather than claiming unverified contiguity.

@@ -253,6 +253,7 @@ internal static class NativeStorageBindings
         ["ContiguousBegin"]=("dnd_fs_contiguous_begin","sl",false),
         ["ContiguousWrite"]=("dnd_fs_contiguous_write","iaii",false),
         ["ContiguousComplete"]=("dnd_fs_contiguous_complete","i",false),
+        ["ContiguousCompleteStep"]=("dnd_fs_contiguous_complete_step","i",false),
         ["ContiguousAbort"]=("dnd_fs_contiguous_abort","i",false),["CreateDirectory"]=("dnd_fs_mkdir","s",false),["Open"]=("dnd_fs_open","siii",false),
         ["Read"]=("dnd_fs_read","iaii",false),["Write"]=("dnd_fs_write","iaii",false),["Seek"]=("dnd_fs_seek","ili",false),
         ["Length"]=("dnd_fs_length","i",false),["SetLength"]=("dnd_fs_set_length","il",false),["Flush"]=("dnd_fs_flush","i",false),["Close"]=("dnd_fs_close","i",false),

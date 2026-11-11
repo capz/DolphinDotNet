@@ -35,6 +35,9 @@ foreach (var dependency in new[] { "scripts/verify_video_source.py", "vendor/lib
         throw new Exception("GameCube bundle is missing the mandatory VIDEO correction: " + dependency);
 if(!normalMake.Contains("DND_LTO ?= 1",StringComparison.Ordinal))
     throw new Exception("GameCube release optimization is not enabled.");
+if (!File.Exists(Path.Combine(normalBundle, "source/verified_copy.c")) ||
+    !File.Exists(Path.Combine(normalBundle, "include/dnd_verified_copy.h")))
+    throw new InvalidOperationException("Storage bundles must include the file optimizer's SHA-256 / verified-copy implementation.");
 Run("python3",$"\"{Path.Combine(root,"tests/native_optimization_build.py")}\" \"{Path.Combine(normalBundle,"Makefile")}\"");
 foreach (var dependency in new[] { "s2d.c", "d2fixed.c", "LICENSE-Boost" })
     if (!File.Exists(Path.Combine(normalBundle, "include", "ryu", dependency)))
