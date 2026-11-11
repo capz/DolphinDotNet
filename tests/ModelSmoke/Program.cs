@@ -102,6 +102,7 @@ class Program
         TransformChecks.Run();
         ModelEffectChecks.Run();
         SourceImports();
+        StreamedPartChecks.Run();
         using(var transparentModel=Model.LoadFZeroGxAsync("sd:/fz-translucent.gma").Result)
         using(var instance=transparentModel.CreateInstance())
         {

@@ -72,6 +72,7 @@ int dnd_model_state_cache(int enabled);
 int dnd_model_draw_animated(int token, DndArray *transform, DndArray *channels);
 int dnd_model_draw_animated_shapes(int token,DndArray *transform,DndArray *channels,DndArray *mesh_visibility);
 int dnd_model_draw_material(int token,DndArray *transform,int texture,int secondary,uint32_t color,int flags,float cutoff,int effect);
+int dnd_model_draw_material_part(int token,DndArray *transform,int material,int texture,int secondary,uint32_t color,int flags,float cutoff,int effect);
 int dnd_model_frame_begin(DndArray *view, DndArray *projection);
 int dnd_model_frame_end(void);
 /* Reference-output inspection for tests and profiling, not managed heap

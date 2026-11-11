@@ -144,12 +144,12 @@ int dnd_model_draw(int token, DndArray *transform) {
 /* Full override submission shares the managed mesh backend, so lighting,
  * coordinates, samplers, opacity and render state cannot diverge. Bounded
  * application-executor scratch storage; never allocate or mutate model assets. */
-int dnd_model_draw_material(int token,DndArray *transform,int tex,int secondary,
-    uint32_t color,int flags,float cutoff,int effect_token) {
+static int draw_material_part(int token,DndArray *transform,int tex,int secondary,
+    uint32_t color,int flags,float cutoff,int effect_token,int material_index) {
   dnd_performance_drawing_api();
   DndInstance *in=dnd_instance_find(token);float world[16];DndDrawTexture base,extra;
   const DndDrawEffect *effect;
-  if(!in||!in->model->ready||!dnd_model_frame_active||!matrix_array(transform,world)||
+  if(!in||!in->model->ready||(material_index>=0&&(unsigned)material_index>=in->model->materials)||!dnd_model_frame_active||!matrix_array(transform,world)||
      flags<0||flags>255||(flags&192)==192||!isfinite(cutoff)||cutoff<0||cutoff>1||
      dnd_texture_resolve(tex,&base)<0||dnd_texture_resolve(secondary,&extra)<0||
      dnd_effect_resolve(effect_token,&effect)<0)return -1;
@@ -158,7 +158,7 @@ int dnd_model_draw_material(int token,DndArray *transform,int tex,int secondary,
   DndModel *model=in->model;
   /* Validate every submitted transform/skinned buffer before sorting or GX. */
   for(unsigned i=0;i<model->meshes;i++){
-    DndMesh *mesh=&model->mesh[i];float object[16],mv[16],inverse[16];
+    DndMesh *mesh=&model->mesh[i];if(material_index>=0&&mesh->material!=material_index)continue;float object[16],mv[16],inverse[16];
     if(mesh->skin<0)dnd_model_multiply(object,world,in->global+(unsigned)mesh->node*16);
     else {if(!in->vertices[i])return -1;memcpy(object,world,64);}
     dnd_model_multiply(mv,frame_view,object);if(!dnd_model_inverse(inverse,mv))return -1;
@@ -167,7 +167,7 @@ int dnd_model_draw_material(int token,DndArray *transform,int tex,int secondary,
   static DndDrawVertex vertices[768];
   DndDrawMaterial material={color,flags,cutoff,effect,secondary?&extra:NULL};
   for(unsigned draw=0;draw<model->meshes;draw++){
-    unsigned mi=in->draw_order?in->draw_order[draw]:draw;DndMesh *mesh=&model->mesh[mi];float object[16];
+    unsigned mi=in->draw_order?in->draw_order[draw]:draw;DndMesh *mesh=&model->mesh[mi];if(material_index>=0&&mesh->material!=material_index)continue;float object[16];
     if(mesh->skin<0)dnd_model_multiply(object,world,in->global+(unsigned)mesh->node*16);else memcpy(object,world,64);
     for(unsigned first=0;first<mesh->indices;){
       unsigned count=mesh->indices-first;if(count>768)count=768;
@@ -185,6 +185,13 @@ int dnd_model_draw_material(int token,DndArray *transform,int tex,int secondary,
     dnd_performance_add_triangles(mesh->indices/3);
   }
   return 0;
+}
+int dnd_model_draw_material(int token,DndArray *transform,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect) {
+  return draw_material_part(token,transform,tex,secondary,color,flags,cutoff,effect,-1);
+}
+int dnd_model_draw_material_part(int token,DndArray *transform,int material_index,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect) {
+  if(material_index<0)return -1;
+  return draw_material_part(token,transform,tex,secondary,color,flags,cutoff,effect,material_index);
 }
 static int draw_model_selected(DndInstance *in,const float world[16],const DndDrawEffect *effect,int filter,int only);
 int dnd_model_draw_effect(int token, DndArray *transform, int effect_token) {

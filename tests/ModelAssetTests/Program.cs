@@ -188,6 +188,7 @@ ModelConverter.Convert(gltf,package+".second");if(!bytes.SequenceEqual(File.Read
 }
 MaterialBakingTests.Run(root,output);
 GxMaterialTests.Run(root,output);
+StreamableModelTests.Run(root,output);
 StudioBakeTests.Run(root,output);
 // External buffers and images, plus GLB binary geometry.
 root["buffers"]![0]!["uri"]="geometry.bin";root["images"]![0]!["uri"]="texture.png";File.WriteAllBytes(Path.Combine(output,"geometry.bin"),binary.ToArray());File.WriteAllBytes(Path.Combine(output,"texture.png"),png.ToArray());File.WriteAllText(gltf,root.ToJsonString());ModelConverter.Convert(gltf,package+".external");if(!bytes.SequenceEqual(File.ReadAllBytes(package+".external")))throw new Exception("External dependencies differ.");
