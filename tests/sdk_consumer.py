@@ -42,6 +42,10 @@ def main():
         metadata = ET.fromstring(archive.read('DolphinDotNet.Sdk.nuspec'))
         version = next(e.text for e in metadata.iter() if e.tag.endswith('}version') or e.tag == 'version')
         for required in ('Sdk/Sdk.props', 'tools/compiler/native/source/main.c',
+                         'tools/compiler/native/boot/gamecube/apploader.c',
+                         'tools/compiler/native/boot/gamecube/Makefile',
+                         'tools/compiler/native/boot/gamecube/pack.py',
+                         'tools/compiler/native/boot/gamecube/LICENSE',
                          'tools/compiler/native/vendor/libogc2/video.c',
                          'tools/compiler/native/scripts/verify_video_source.py',
                          'tools/build/DolphinDotNet.Build.dll', 'tools/debugger/DolphinDotNet.DebugAdapter.dll'):
@@ -132,7 +136,7 @@ def main():
         write(pong / 'ExternalPong.csproj', f'<Project Sdk="DolphinDotNet.Sdk/{version}"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="{version}" /></ItemGroup></Project>')
         run('dotnet', 'build', str(pong), '-c', 'Debug', '-p:DndBuildBackend=Docker')
         native_output = pong / 'bin/Debug/net8.0'
-        for suffix in ('dol', 'elf', 'dnd-debug.json', 'dnd-addresses.json'):
+        for suffix in ('dol', 'elf', 'apploader.img', 'dnd-debug.json', 'dnd-addresses.json'):
             assert (native_output / f'ExternalPong.{suffix}').stat().st_size > 0
         # Validate launch configuration without starting an interactive emulator.
         config = json.loads((native_output / 'dolphin-run.json').read_text())

@@ -124,6 +124,10 @@ internal static class GameCubeBundle
         File.Copy(Path.Combine(root,"scripts","build_tls.py"),Path.Combine(directory,"scripts","build_tls.py"),true);
         if (platform == "gamecube")
         {
+            var boot = Path.Combine(directory, "boot", "gamecube");
+            Directory.CreateDirectory(boot);
+            foreach (var file in Directory.GetFiles(Path.Combine(root, "boot", "gamecube")))
+                File.WriteAllText(Path.Combine(boot, Path.GetFileName(file)), File.ReadAllText(file).ReplaceLineEndings("\n"));
             // Every GameCube bundle uses the repository's verified EXI and
             // VIDEO corrections, including apps using raw VIDEO bindings.
             Directory.CreateDirectory(Path.Combine(directory, "vendor", "libogc2"));
@@ -363,14 +367,24 @@ internal static class GameCubeBundle
             builder.AppendLine("dnd-tls: $(BUILD)");
             builder.AppendLine("\tpython3 scripts/build_tls.py --output build/tls --cc \"$(CC)\" --ar \"$(AR)\" --cflags \"$(CFLAGS)\" --config include/dnd_tls_config.h");
         }
+        if (platform == "gamecube")
+        {
+            builder.AppendLine(".PHONY: apploader");
+            builder.AppendLine("apploader: all");
+            builder.AppendLine("\tpython3 boot/gamecube/pack.py apploader.elf apploader.img --dol \"$(OUTPUT).dol\"");
+        }
         builder.AppendLine(".PHONY: all clean");
         builder.AppendLine("all: " + (usesNetworking ? "dnd-tls " : "") + (platform == "gamecube" ?
             "$(EXI_OVERLAY) $(BUILD)" : "$(BUILD)"));
         builder.AppendLine("\t@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile");
+        if (platform == "gamecube")
+            builder.AppendLine("\t@$(MAKE) --no-print-directory -f boot/gamecube/Makefile OUTPUT=\"$(CURDIR)/apploader\"");
         builder.AppendLine("$(BUILD):");
         builder.AppendLine("\t@mkdir -p $@");
         builder.AppendLine("clean:");
         builder.AppendLine("\t@rm -rf $(BUILD) $(OUTPUT).elf $(OUTPUT)." + suffix);
+        if (platform == "gamecube")
+            builder.AppendLine("\t@$(MAKE) --no-print-directory -f boot/gamecube/Makefile OUTPUT=\"$(CURDIR)/apploader\" clean");
         builder.AppendLine("else");
         builder.AppendLine(".DEFAULT_GOAL := $(OUTPUT)." + suffix);
         builder.AppendLine("DEPENDS := $(OFILES:.o=.d)");

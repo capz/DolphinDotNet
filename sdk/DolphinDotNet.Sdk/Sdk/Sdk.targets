@@ -105,7 +105,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
   </Target>
   <Target Name="BuildDol" AfterTargets="Build"
           Condition="'$(DndBuildNative)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(BuildingProject)' != 'false' and '$(IsCrossTargetingBuild)' != 'true' and '$(OutputType)' != 'Library'">
-    <Delete Files="$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)$(AssemblyName).dnd-debug.json;$(TargetDir)$(AssemblyName).dnd-addresses.json;$(TargetDir)dolphin-run.json" />
+    <Delete Files="$(TargetDir)$(AssemblyName).apploader.img;$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)$(AssemblyName).dnd-debug.json;$(TargetDir)$(AssemblyName).dnd-addresses.json;$(TargetDir)dolphin-run.json" />
     <MSBuild Condition="'$(_DndPackaged)' != 'true'" Projects="$(_DndBuildProject);$(_DndCompilerProject)" Targets="Restore;Rebuild"
              Properties="Configuration=$(Configuration)"
              RemoveProperties="OutputPath;BaseOutputPath;BaseIntermediateOutputPath;IntermediateOutputPath;TargetFramework;RuntimeIdentifier;SelfContained;DndBuildNative" />
@@ -113,7 +113,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
       <_DndNative>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)native'))</_DndNative>
     </PropertyGroup>
     <ItemGroup>
-      <_DndArgs Include="$(_DndTools)DolphinDotNet.Build.dll;build;--assembly;$(TargetPath);--compiler;$(_DndCompiler);--native-directory;$(_DndNative);--dol;$(TargetDir)$(AssemblyName).dol;--elf;$(TargetDir)$(AssemblyName).elf;--run-config;$(TargetDir)dolphin-run.json;--backend;$(DndBuildBackend);--jobs;$(DndBuildJobs);--user-directory;$(DolphinUserDirectory)" />
+      <_DndArgs Include="$(_DndTools)DolphinDotNet.Build.dll;build;--assembly;$(TargetPath);--compiler;$(_DndCompiler);--native-directory;$(_DndNative);--dol;$(TargetDir)$(AssemblyName).apploader.img;$(TargetDir)$(AssemblyName).dol;--elf;$(TargetDir)$(AssemblyName).elf;--run-config;$(TargetDir)dolphin-run.json;--backend;$(DndBuildBackend);--jobs;$(DndBuildJobs);--user-directory;$(DolphinUserDirectory)" />
       <_DndArgs Include="--managed-heap-bytes;$(DndManagedHeapBytes)" Condition="'$(DndManagedHeapBytes)' != ''" />
       <_DndArgs Include="--dolphin;$(DolphinPath)" Condition="'$(DolphinPath)' != ''" />
       <_DndArgs Include="--sample-controls;$(DndSampleControls)" Condition="'$(DndSampleControls)' != ''" />
@@ -123,6 +123,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
       <_DndArgs Include="--gdb-channel;$(DndGdbChannel)" Condition="'$(DndGdbTransport)' == 'UsbGecko' or '$(DndGdbTransport)' == 'usbgecko' or '$(DndGdbTransport)' == 'USBGECKO'" />
     </ItemGroup>
     <DndRunTool Tool="$(_DndDotnet)" Arguments="@(_DndArgs)" />
+    <Copy SourceFiles="$(_DndNative)/apploader.img" DestinationFiles="$(TargetDir)$(AssemblyName).apploader.img" />
     <ItemGroup>
       <_DndLauncher Include="$(_DndTools)DolphinDotNet.Build.dll;$(_DndTools)DolphinDotNet.Build.deps.json;$(_DndTools)DolphinDotNet.Build.runtimeconfig.json" />
     </ItemGroup>
@@ -130,7 +131,7 @@ public sealed class DndRunTool : Microsoft.Build.Utilities.Task, ICancelableTask
   </Target>
   <Target Name="CleanDol" AfterTargets="Clean" Condition="'$(DesignTimeBuild)' != 'true'">
     <RemoveDir Directories="$(IntermediateOutputPath)native" />
-    <Delete Files="$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)$(AssemblyName).dnd-debug.json;$(TargetDir)$(AssemblyName).dnd-addresses.json;$(TargetDir)dolphin-run.json;$(TargetDir)DolphinDotNet.Build.dll;$(TargetDir)DolphinDotNet.Build.deps.json;$(TargetDir)DolphinDotNet.Build.runtimeconfig.json" />
+    <Delete Files="$(TargetDir)$(AssemblyName).apploader.img;$(TargetDir)$(AssemblyName).dol;$(TargetDir)$(AssemblyName).elf;$(TargetDir)$(AssemblyName).dnd-debug.json;$(TargetDir)$(AssemblyName).dnd-addresses.json;$(TargetDir)dolphin-run.json;$(TargetDir)DolphinDotNet.Build.dll;$(TargetDir)DolphinDotNet.Build.deps.json;$(TargetDir)DolphinDotNet.Build.runtimeconfig.json" />
   </Target>
   <Target Name="Run" DependsOnTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
     <ItemGroup>

@@ -13,6 +13,8 @@ def verify(makefile):
     with tempfile.TemporaryDirectory(prefix='dnd-native-flags-') as folder:
         root=Path(folder);devkit=root/'devkit';bundle=root/'bundle';commands=root/'commands.jsonl'
         (devkit/'libogc2').mkdir(parents=True);(bundle/'source').mkdir(parents=True)
+        (bundle/'boot/gamecube').mkdir(parents=True)
+        (bundle/'boot/gamecube/Makefile').write_text('all:\n\t@test -f "$(dir $(OUTPUT))/Game.dol"\n\t@touch "$(OUTPUT).img"\nclean:\n\t@true\n')
         (bundle/'scripts').mkdir();(bundle/'vendor/libogc2').mkdir(parents=True)
         compiler=shutil.which('cc');assert compiler
         wrapper=root/'cc-wrapper'

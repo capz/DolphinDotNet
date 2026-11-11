@@ -30,6 +30,11 @@ Run(helloHost, "");
 var normalBundle = Path.Combine(tempDirectory, "normal-bundle");
 Run("dotnet", $"run --project \"{compiler}\" -- --bundle \"{dll}\" \"{normalBundle}\"");
 var normalMake = File.ReadAllText(Path.Combine(normalBundle, "Makefile"));
+foreach (var file in new[] { "apploader.c", "link.ld", "Makefile", "pack.py", "LICENSE" })
+    if (!File.Exists(Path.Combine(normalBundle, "boot", "gamecube", file)))
+        throw new Exception("GameCube bundle is missing SDK boot component: " + file);
+if (!normalMake.Contains("boot/gamecube/Makefile", StringComparison.Ordinal))
+    throw new Exception("GameCube native builds must emit the SDK apploader image.");
 foreach (var dependency in new[] { "scripts/verify_video_source.py", "vendor/libogc2/video.c" })
     if (!File.Exists(Path.Combine(normalBundle, dependency)) || !normalMake.Contains(dependency, StringComparison.Ordinal))
         throw new Exception("GameCube bundle is missing the mandatory VIDEO correction: " + dependency);
