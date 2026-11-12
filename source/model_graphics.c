@@ -450,11 +450,15 @@ int dnd_model_draw_animated(int token,DndArray *transform,DndArray *channels) {
  * bounded and application-executor-owned; no model handles or pointers survive
  * this call. Opaque meshes from all instances precede the global alpha pass. */
 typedef struct {unsigned object,mesh,sequence;float depth;} ModelSubmission;
-static ModelSubmission alpha_submissions[4096],opaque_submissions[4096];
+#define MODEL_SUBMISSION_LIMIT 4096
+/* The total mesh bound applies to both passes together. Opaque submissions grow
+ * from the front, alpha from the back; neither scratch slice survives this call
+ * or is referenced by GX after a draw. */
+static ModelSubmission submissions[MODEL_SUBMISSION_LIMIT];
 static bool submission_later(ModelSubmission a,ModelSubmission b){
   return a.depth>b.depth||(a.depth==b.depth&&a.sequence>b.sequence);
 }
-static void submission_sift(unsigned count,unsigned root){
+static void submission_sift(ModelSubmission *alpha_submissions,unsigned count,unsigned root){
   for(;;){unsigned child=root*2+1;if(child>=count)return;
     if(child+1<count&&submission_later(alpha_submissions[child+1],alpha_submissions[child]))child++;
     if(!submission_later(alpha_submissions[child],alpha_submissions[root]))return;
@@ -468,7 +472,7 @@ static bool opaque_later(ModelSubmission a,ModelSubmission b,const int *ids){
   if(a.mesh!=b.mesh)return a.mesh>b.mesh;
   return a.sequence>b.sequence;
 }
-static void opaque_sift(unsigned count,unsigned root,const int *ids){
+static void opaque_sift(ModelSubmission *opaque_submissions,unsigned count,unsigned root,const int *ids){
   for(;;){unsigned child=root*2+1;if(child>=count)return;
     if(child+1<count&&opaque_later(opaque_submissions[child+1],opaque_submissions[child],ids))child++;
     if(!opaque_later(opaque_submissions[child],opaque_submissions[root],ids))return;
@@ -485,7 +489,7 @@ int dnd_model_draw_models(DndArray *tokens,DndArray *matrices,int count){
     if(!ids[i])continue;
     DndInstance *in=dnd_instance_find(ids[i]);if(!in||!in->model->ready)return -1;
     float *world=worlds+i*16;for(int k=0;k<16;k++)if(!isfinite(world[k]))return -1;
-    DndModel *model=in->model;if(model->meshes>4096-total)return -1;total+=model->meshes;
+    DndModel *model=in->model;if(model->meshes>MODEL_SUBMISSION_LIMIT-total)return -1;total+=model->meshes;
     for(unsigned j=0;j<model->meshes;j++){
       DndMesh *mesh=&model->mesh[j];float object[16],mv[16],inverse[16];
       if(mesh->skin<0)dnd_model_multiply(object,world,in->global+(unsigned)mesh->node*16);
@@ -494,15 +498,18 @@ int dnd_model_draw_models(DndArray *tokens,DndArray *matrices,int count){
       if(dnd_model_translucent(in,(unsigned)mesh->material)){
         float depth=mv[2]*mesh->center[0]+mv[6]*mesh->center[1]+mv[10]*mesh->center[2]+mv[14];
         if(!isfinite(depth))return -1;
-        alpha_submissions[alpha_count]=(ModelSubmission){(unsigned)i,j,alpha_count,depth};alpha_count++;
-      }else{opaque_submissions[opaque_count]=(ModelSubmission){(unsigned)i,j,opaque_count,0};opaque_count++;}
+        submissions[MODEL_SUBMISSION_LIMIT-1-alpha_count]=(ModelSubmission){(unsigned)i,j,alpha_count,depth};alpha_count++;
+      }else{submissions[opaque_count]=(ModelSubmission){(unsigned)i,j,opaque_count,0};opaque_count++;}
     }
   }
-  for(unsigned i=alpha_count/2;i>0;i--)submission_sift(alpha_count,i-1);
-  for(unsigned end=alpha_count;end>1;end--){ModelSubmission t=alpha_submissions[0];alpha_submissions[0]=alpha_submissions[end-1];alpha_submissions[end-1]=t;submission_sift(end-1,0);}
+  ModelSubmission *opaque_submissions=submissions,*alpha_submissions=submissions+MODEL_SUBMISSION_LIMIT-alpha_count;
+  /* Depth plus the original sequence restores stable alpha order, regardless
+   * of its backwards insertion into the shared scratch table. */
+  for(unsigned i=alpha_count/2;i>0;i--)submission_sift(alpha_submissions,alpha_count,i-1);
+  for(unsigned end=alpha_count;end>1;end--){ModelSubmission t=alpha_submissions[0];alpha_submissions[0]=alpha_submissions[end-1];alpha_submissions[end-1]=t;submission_sift(alpha_submissions,end-1,0);}
   if(model_state_cache_enabled){
-    for(unsigned i=opaque_count/2;i>0;i--)opaque_sift(opaque_count,i-1,ids);
-    for(unsigned end=opaque_count;end>1;end--){ModelSubmission t=opaque_submissions[0];opaque_submissions[0]=opaque_submissions[end-1];opaque_submissions[end-1]=t;opaque_sift(end-1,0,ids);}
+    for(unsigned i=opaque_count/2;i>0;i--)opaque_sift(opaque_submissions,opaque_count,i-1,ids);
+    for(unsigned end=opaque_count;end>1;end--){ModelSubmission t=opaque_submissions[0];opaque_submissions[0]=opaque_submissions[end-1];opaque_submissions[end-1]=t;opaque_sift(opaque_submissions,end-1,0,ids);}
     model_batch_active=true;model_batch_light_ready=model_batch_vertex_ready=false;
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
     batch_model=NULL;batch_material=NULL;

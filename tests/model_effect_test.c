@@ -47,6 +47,7 @@ typedef struct {
   float position[9],uv[6],world_x; GXColor vertex[3];
 } Draw;
 static Draw state,record[16];static int draws,restores,position_index,color_index,uv_index,texture_loads,light_loads,vertex_invalidations;
+static int boundary_mode,boundary_draws;static bool boundary_cached;
 void GX_SetTevIndWarp(int stage,int indstage,int signed_offset,int replace,int matrix){
  assert(active_indirect==1&&indstage==0&&signed_offset==GX_TRUE&&!replace&&matrix==GX_ITM_0);
  state.stages[stage].direct=2;
@@ -109,7 +110,18 @@ void GX_Begin(int p,int f,u16 n){assert(p==GX_TRIANGLES&&f==0&&n==3&&state.count
 void GX_Position3f32(float x,float y,float z){assert(position_index<9);state.position[position_index++]=x;state.position[position_index++]=y;state.position[position_index++]=z;}
 void GX_Color4u8(u8 r,u8 g,u8 b,u8 a){assert(color_index<3);state.vertex[color_index++]=(GXColor){r,g,b,a};}
 void GX_TexCoord2f32(float u,float v){assert(uv_index<6);state.uv[uv_index++]=u;state.uv[uv_index++]=v;}
-void GX_End(void){assert(position_index==9&&color_index==3&&uv_index==6);record[draws++%16]=state;}
+void GX_End(void){assert(position_index==9&&color_index==3&&uv_index==6);
+ if(boundary_mode){
+  unsigned at=(unsigned)boundary_draws++,object,mesh;bool alpha=boundary_mode==2||(boundary_mode==3&&at>=2048);
+  if(boundary_mode==2){object=at/32;mesh=at%32;}
+  else if(boundary_mode==3&&alpha){at-=2048;object=at/16;mesh=(at%16)*2+1;}
+  else if(boundary_cached){object=at%128;mesh=at/128;mesh=boundary_mode==3?mesh*2:mesh<16?mesh*2:(mesh-16)*2+1;}
+  else{unsigned per_object=boundary_mode==3?16:32;object=at/per_object;mesh=(at%per_object)*(boundary_mode==3?2:1);}
+  assert(state.world_x==(float)(object*100+mesh));
+  assert(state.blend==(alpha?GX_BM_BLEND:GX_BM_NONE));
+ }
+ record[draws++%16]=state;
+}
 void dnd_draw_set_camera(const float *v,const float *p){(void)v;(void)p;}
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int p,const DndDrawTexture *t,const DndDrawMaterial *m,const float *w){assert(n==3&&p==0x90&&t&&m->secondary&&m->flags==65&&m->color==0x12345678&&w[0]==-1);assert(v[0].nz==-1&&v[0].color==0xcc99667f);if(v[0].x==10)full_skin++;full_draws++;}
 void dnd_draw_backend_camera(const float *v,const float *p){(void)v;(void)p;}
@@ -189,6 +201,46 @@ static void assert_geometry_equal(Draw a,Draw b) {
  memset(a.colors,0,sizeof(a.colors));memset(b.colors,0,sizeof(b.colors));
  memset(a.konst,0,sizeof(a.konst));memset(b.konst,0,sizeof(b.konst));
  assert_draw_equal(a,b);
+}
+/* Both scratch slices must fit at their shared 4096-mesh bound, preserve the
+ * full stable alpha order, and keep all opaque draws ahead of alpha. Record
+ * every production GX draw rather than relying on the 16-entry history ring. */
+static void submission_boundaries(DndArray *camera,const unsigned char *data,const unsigned char *indices,DndTexture *texture){
+ DndInstance *saved[DND_INSTANCE_SLOTS];memcpy(saved,dnd_instances,sizeof(saved));
+ DndInstance *instances=calloc(128,sizeof(*instances));assert(instances);
+ DndArray *ids=calloc(1,sizeof(*ids)+128*4),*worlds=calloc(1,sizeof(*worlds)+128*64);assert(ids&&worlds);
+ ids->element_size=worlds->element_size=4;ids->length=128;worlds->length=128*16;
+ DndMesh meshes[33]={0};float globals[32*16];
+ DndMaterial materials[2]={
+  {.color={1,1,1,1},.texture=0,.mode=2},
+  {.color={1,1,1,1},.texture=0,.mode=2}
+ };
+ for(unsigned j=0;j<32;j++){
+  dnd_model_identity(globals+j*16);globals[j*16+12]=(float)j;
+  meshes[j]=(DndMesh){.node=(int)j,.skin=-1,.material=(int)(j%2),.vertices=3,.indices=3,.data=data,.index=indices};
+ }
+ meshes[32]=meshes[0];
+ DndModel model={.ready=true,.nodes=32,.meshes=32,.materials=2,.textures=1,.mesh=meshes,.material=materials,.texture=texture};
+ DndModel oversized=model;oversized.meshes=33;
+ for(unsigned i=0;i<128;i++){
+  instances[i]=(DndInstance){.token=1000+(int)i,.model=&model,.global=globals};dnd_instances[i]=&instances[i];
+  ((int*)ids->data)[i]=instances[i].token;
+  float *world=(float*)worlds->data+i*16;dnd_model_identity(world);world[12]=(float)(i*100);
+ }
+ for(int cached=0;cached<=1;cached++){
+  assert(dnd_model_state_cache(cached)==cached&&dnd_model_frame_begin(camera,camera)==0);
+  for(int mode=1;mode<=3;mode++){
+   materials[0].mode=2|(mode==2?4:0);materials[1].mode=2|(mode>=2?4:0);
+   boundary_cached=cached!=0;boundary_draws=0;boundary_mode=mode;size_t before_allocations=allocations;int before=draws;
+   assert(dnd_model_draw_models(ids,worlds,128)==0&&draws==before+4096&&boundary_draws==4096&&allocations==before_allocations);
+   boundary_mode=0;
+  }
+  instances[127].model=&oversized;int before=draws;uint32_t triangles=dnd_performance_stats()->triangles;
+  assert(dnd_model_draw_models(ids,worlds,128)<0&&draws==before&&dnd_performance_stats()->triangles==triangles);
+  instances[127].model=&model;
+  assert(dnd_model_frame_end()==0);
+ }
+ assert(dnd_model_state_cache(1)==1);memcpy(dnd_instances,saved,sizeof(saved));free(instances);free(ids);free(worlds);
 }
 int main(void) {
  assert(dnd_model_indexed_path(-1)==1&&dnd_model_indexed_path(0)==0&&dnd_model_indexed_path(1)==1&&dnd_model_indexed_path(2)<0);
@@ -425,6 +477,7 @@ int main(void) {
  assert(texture_loads-original_loads==5&&dnd_performance_stats()->texture_binds-old_bindings==5);
  assert(dnd_performance_stats()->drawing_api_calls-old_api==1&&dnd_performance_stats()->material_changes-old_changes==3);
  assert(dnd_model_frame_end()==0);free(batch_ids);free(batch_worlds);memcpy(materials,original_materials,sizeof(materials));
+ submission_boundaries(camera,data,indices,&texture);
  assert(dnd_draw_release(dual_alpha_effect)==0&&dnd_draw_release(alpha_effect)==0&&dnd_draw_release(short_effect)==0&&dnd_draw_release(textured)==0&&dnd_draw_release(replacement)==0&&dnd_draw_release(wrong)==0);
  assert(dnd_draw_total_bytes()==0&&dnd_draw_live()==0);
  assert(indirect_resets>=restores);

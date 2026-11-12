@@ -70,6 +70,7 @@ typedef struct {
   unsigned char *done;
   float **vertices;
   float *workspace;
+  unsigned palette_joints;
   unsigned *draw_order;
   float *draw_depth;
 } DndInstance;
