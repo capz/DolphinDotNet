@@ -21,6 +21,24 @@ static void idle(void){assert(dnd_aram_broker_stat(0)==0);for(int i=0;i<4;i++)as
 static int put(int token,void *memory,int count,int priority){int ticket=dnd_aram_request_memory(token,0,memory,count,1,priority);assert(ticket>0);return ticket;}
 
 int main(void){
+ /* Native requests may borrow cached or uncached aliases of the same MEM1.
+  * Test their dependency keys without ever dereferencing console addresses. */
+#ifdef GEKKO
+ assert(dnd_aram_test_memory_conflict(0x80010000u,64,0,0xc0010020u,32,0));
+ assert(dnd_aram_test_memory_conflict(0xc0010000u,32,1,0x80010000u,32,0));
+ assert(dnd_aram_test_memory_conflict(0x817fffe0u,32,0,0xc17fffe0u,32,0));
+#else
+ assert(!dnd_aram_test_memory_conflict(0x80010000u,64,0,0xc0010020u,32,0));
+#endif
+ assert(!dnd_aram_test_memory_conflict(0x80010000u,32,0,0xc0010020u,32,0));
+ assert(!dnd_aram_test_memory_conflict(0x80010000u,32,1,0xc0010000u,32,1));
+ assert(!dnd_aram_test_memory_conflict(0x81800000u,32,0,0xc1800000u,32,0));
+ assert(!dnd_aram_test_memory_conflict(0x817fffe0u,64,0,0xc17fffe0u,64,0));
+ assert(!dnd_aram_test_memory_conflict(0x80010000u,32,0,0xcc010000u,32,0));
+ assert(!dnd_aram_test_memory_conflict(0x00010000u,32,0,0xc0010000u,32,0));
+#if UINTPTR_MAX > UINT32_MAX
+ assert(!dnd_aram_test_memory_conflict(UINT64_C(0x180010000),32,0,UINT64_C(0x1c0010000),32,0));
+#endif
  assert(dnd_aram_initialize(2*1024*1024));
  int a=dnd_aram_allocate(BYTES),b=dnd_aram_allocate(BYTES);assert(a&&b);
  memset(buffers[0],0x11,BYTES);memset(buffers[1],0x22,BYTES);

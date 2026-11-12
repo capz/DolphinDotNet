@@ -9,6 +9,8 @@
 uint64_t dnd_buffer_held_address(int token,int offset,int count) {
  (void)token;(void)offset;(void)count;return 0;
 }
+int dnd_buffer_hold(int token) { (void)token; return -EINVAL; }
+int dnd_buffer_unhold(int token) { (void)token; return -EINVAL; }
 static DndArray *array(int size){DndArray *a=calloc(1,sizeof(*a)+(size_t)size);assert(a);a->length=(uint32_t)size;a->element_size=1;return a;}
 static void finish(DndArray *a,int offset){int rc;do{rc=dnd_aram_poll(a,offset);}while(rc==0);assert(rc==1);}
 int main(void){

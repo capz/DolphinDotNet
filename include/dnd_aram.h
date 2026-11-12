@@ -37,5 +37,7 @@ int dnd_aram_service_broker(void);
 int dnd_aram_broker_stat(int kind);
 #ifdef DND_ARAM_TEST
 void dnd_aram_test_fail_next(void);
+bool dnd_aram_test_memory_conflict(uintptr_t first,unsigned first_bytes,int first_write,
+                                  uintptr_t second,unsigned second_bytes,int second_write);
 #endif
 #endif

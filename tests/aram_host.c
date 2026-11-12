@@ -1,9 +1,17 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <errno.h>
 #include "dnd_managed.h"
 #include "dnd_aram.h"
 
 extern intptr_t dnd_value_aot_entry(DndManagedHeap *heap);
+
+/* This managed-array fixture has no native graphics buffers. Mach-O linkers
+ * require explicit hooks even though the production backend declares them weak. */
+int dnd_buffer_hold(int token) { (void)token; return -EINVAL; }
+int dnd_buffer_unhold(int token) { (void)token; return -EINVAL; }
+uint64_t dnd_buffer_held_address(int token,int offset,int count)
+{ (void)token; (void)offset; (void)count; return 0; }
 
 int main(int argc, char **argv)
 {

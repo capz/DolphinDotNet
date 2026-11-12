@@ -21,6 +21,10 @@ def main():
         run('cc','-std=c11','-O2','-Wall','-Wextra','-Werror','-DDND_ARAM_TEST','-Iinclude',
             'tests/aram_broker_test.c','source/aram.c','-o',native)
         run(native)
+        console_aliases=root/'broker-gekko-aliases'
+        run('cc','-std=c11','-O2','-Wall','-Wextra','-Werror','-DDND_ARAM_TEST','-DGEKKO','-Iinclude',
+            'tests/aram_broker_test.c','source/aram.c','-o',console_aliases)
+        run(console_aliases)
         for project,host in (('AramSmoke','aram_host.c'),('AramBrokerSmoke','aram_broker_host.c')):
             for config in ('Debug','Release'):
                 run('dotnet','build','tests/'+project,'-c',config,'-p:DndBuildNative=false')

@@ -195,11 +195,34 @@ static AramRequest *find_request(int token){
 }
 static int request_count(void){int n=0;for(int i=0;i<REQUESTS;i++)n+=requests[i].token!=0;return n;}
 static bool overlaps(uintptr_t a,unsigned an,uintptr_t b,unsigned bn){return a<=b?b-a<an:a-b<bn;}
+static uintptr_t memory_key(uintptr_t address,unsigned bytes){
+#ifdef GEKKO
+ /* The cached and uncached views alias the same 24 MiB of MEM1. Normalize
+  * only complete valid uncached MEM1 spans; do not reinterpret physical,
+  * MMIO/other segments, crossing ranges, or wider host-test pointers. */
+ const uintptr_t uncached=UINT32_C(0xc0000000),cached=UINT32_C(0x80000000);
+ const uintptr_t mem1=24u*1024u*1024u;
+ if(address>=uncached&&address-uncached<mem1&&bytes<=mem1-(address-uncached))
+  return cached+(address-uncached);
+#else
+ (void)bytes;
+#endif
+ return address;
+}
 static bool conflicts(const AramRequest *a,const AramRequest *b){
  if(a->aram==b->aram&&(a->write||b->write)&&
     overlaps((uintptr_t)(unsigned)a->offset,(unsigned)a->count,(uintptr_t)(unsigned)b->offset,(unsigned)b->count))return true;
- return (!a->write||!b->write)&&overlaps((uintptr_t)a->memory,(unsigned)a->count,(uintptr_t)b->memory,(unsigned)b->count);
+ return (!a->write||!b->write)&&overlaps(memory_key((uintptr_t)a->memory,(unsigned)a->count),(unsigned)a->count,
+                                        memory_key((uintptr_t)b->memory,(unsigned)b->count),(unsigned)b->count);
 }
+#ifdef DND_ARAM_TEST
+bool dnd_aram_test_memory_conflict(uintptr_t first,unsigned first_bytes,int first_write,
+                                  uintptr_t second,unsigned second_bytes,int second_write){
+ AramRequest a={.aram=1,.memory=(unsigned char*)first,.count=(int)first_bytes,.write=first_write!=0};
+ AramRequest b={.aram=2,.memory=(unsigned char*)second,.count=(int)second_bytes,.write=second_write!=0};
+ return conflicts(&a,&b);
+}
+#endif
 static bool blocked(const AramRequest *r){
  for(int i=0;i<REQUESTS;i++){
   const AramRequest *other=requests+i;

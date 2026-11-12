@@ -82,6 +82,8 @@ equal priorities receive round-robin chunks. Conflicting ARAM ranges and native
 MEM1 destinations retain submission order, so a later demand read cannot bypass
 an earlier snapshot of the same bytes. Independent requests can finish out of
 submission order. Active DMA is never preempted halfway through a chunk.
+On Gekko, cached and uncached views of the same valid MEM1 range share a
+dependency key; using an alias does not bypass this ordering.
 Priority does not bypass dependencies or guarantee a whole-transfer deadline.
 
 There are 128 fixed native request descriptors (7,168 B with the current 56 B
