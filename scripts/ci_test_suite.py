@@ -148,7 +148,7 @@ def main(area):
         run("python3","scripts/ci_display.py") # DisplayConfigurationSmoke
         run("python3","scripts/ci_graphics_phase_one.py")
         run("python3","scripts/ci_graphics_phase_two.py")
-        run("python3","scripts/ci_graphics_effects.py")
+        run("python3","scripts/ci_graphics_effects.py") # TevAlphaSmoke (Debug/Release AOT + GC stress)
         run("python3","scripts/ci_mesh_streams.py") # MeshStreamsSmoke (Debug/Release AOT + GC stress)
         build("tests/GraphicsPhaseOneSmoke/GraphicsPhaseOneSmoke.csproj")
         build("tests/GraphicsPhaseTwoSmoke/GraphicsPhaseTwoSmoke.csproj")
