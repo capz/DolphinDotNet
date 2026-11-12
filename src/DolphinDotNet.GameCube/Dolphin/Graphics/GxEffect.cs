@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 namespace Dolphin.Graphics;
 
 /// <summary>Validated immutable TEV program with four or fewer named color parameters.
-/// RGB expressions use fixed-point, saturating TEV arithmetic. Alpha remains the
-/// vertex/material alpha multiplied by texture alpha when a texture is bound.</summary>
+/// RGB expressions use fixed-point TEV arithmetic. DNEF v4 can author independent
+/// alpha equations and comparisons; older programs retain base texture opacity.</summary>
 public sealed class GxEffect : IDisposable
 {
     internal readonly int Token;

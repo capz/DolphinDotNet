@@ -77,7 +77,7 @@ emission alone does not enable additive blending or disable depth writes.
 
 These full material defaults apply through `Renderer.DrawMesh` and
 `Renderer.DrawModelWithMaterial`. Imported-model
-effect overrides and `Draw2D.SetEffect` accept the contained `Effect` for RGB only;
+effect overrides and `Draw2D.SetEffect` accept the contained `Effect` without material defaults;
 they do not apply the material's lighting or coordinate mode. In particular,
 passing the metallic effect alone uses existing UV0 instead of reflection coordinates.
 
@@ -153,7 +153,7 @@ existing frame resource lifetime. Missing required slots fail before drawing.
 programs. One stage can sample one texture: use a register to combine two samples.
 Two-texture builders reserve one of sixteen stages for a final TEX0 opacity
 resolve, so at most fifteen authored RGB stages are accepted. `StageCount` on the
-definition/effect includes that resolve. Packages remain at most 304 bytes.
+definition/effect includes that resolve. Legacy v1-v3 packages remain at most 304 bytes.
 
 DNEF v2 uses the texture header word as a two-bit requirement mask; stage byte 7
 selects texture/coordinate slot 0 or 1. Native validation rejects absent texture
@@ -252,3 +252,77 @@ Nintendo's texture art, exact mip biases or ocean mesh. For distinct LOD biases
 on the two sampled foam layers, another texture unit and material sampler
 extension would be required. Hardware accuracy and performance need testing
 on a real GameCube as well as the recording/native GX fixtures.
+
+## Independent alpha and two-reference cutouts (DNEF v4)
+
+`SetAlphaStage` configures GX alpha separately from RGB. Configure every authored
+stage when opting in; the builder then omits the legacy opacity epilogue, leaving
+all sixteen stages available. Both channels share the stage's one texture sample,
+but have independent Previous/Color0/Color1/Color2 registers and konst selectors.
+A stage cannot read primary RGB and secondary alpha together. Capture one sample
+in a register, then combine it with the other at a later stage.
+
+Alpha evaluates `D + ((1-C)*A + C*B)` for Add, or
+`D - ((1-C)*A + C*B)` for Subtract; bias, scale and optional clamp follow.
+Use Zero/AddHalf/SubtractHalf bias, One/Two/Four/Half scale, and `clamp:false`
+for signed intermediate registers. Alpha constants choose Red/Green/Blue/Alpha
+from one named color. `One` uses the same physical konst selector as a named
+constant, so those inputs cannot share one alpha stage. RGB and alpha
+read-before-write checks are independent; both final outputs must write Previous.
+
+`SetAlphaCompare` overrides `Material.AlphaCutoff` for that effect with two exact
+8-bit references and And/Or/Xor/Xnor. Ordinary material comparison is restored
+by subsequent draws. No explicit alpha stages are required to use the comparison
+alone; such programs preserve the legacy opacity calculation and epilogue.
+
+For AnimalTown #47's two scrolling authored IA8 samples, the following original
+preset keeps the existing RGB sum and combines both sampled alpha values:
+
+```csharp
+// reflection owns its authored mip chain. Binding it twice allocates no copy.
+using var water = TevMaterialPresets.DualTextureGlints(
+    new Color32(102, 150, 176), new Color32(215, 248, 244),
+    lowReference: 33, highReference: 235).Create(reflection, reflection);
+water.Material.Color = Color32.White; // raster opacity 255
+water.Material.Blend = BlendMode.Alpha;
+water.Material.DepthWrite = false;
+water.Material.Sampler = authoredSampler;
+water.Material.SecondarySampler = authoredSampler;
+water.Material.TextureTransform = primaryScroll;
+water.Material.SecondaryTextureTransform = secondaryScroll;
+renderer.DrawMesh(waterMesh, water.Material, waterTransform);
+```
+
+The three-stage preset produces `raster.rgb + PrimaryLight*TEX0.rgb +
+ReflectedLight*TEX1.rgb`, saturated, and alpha approximately
+`raster.a * (TEX0.a + TEX1.a) / 2` with GX fixed-point rounding. It passes
+`alpha <= 33 OR alpha >= 235`, rejecting the open middle band. Thresholds must
+be ordered. Lower raster opacity also scales the alpha tested: at opacity 206,
+the high branch at 235 cannot pass. Keep raster/vertex alpha opaque or explicitly
+choose thresholds and blending for the intended opacity.
+
+This is a reusable averaged-alpha glint material, not a claim of a retail game's
+exact equation. Consumers may express other alpha combinations with the generic
+builder. Existing authored mip levels, texture formats, UV scrolling and LOD bias
+need no change. This addition introduces no EFB reflection/refraction capture.
+Meshes and full imported-model material overrides accept both textures;
+Draw2D/effect-only imported-model draws retain their single-binding restriction.
+
+v1-v3 packages and material behavior stay unchanged. Opt-in v4 retains the
+32-byte little-endian header and four 36-byte color slots, then interleaves
+8-byte RGB and 8-byte alpha records per stage (maximum 432 bytes). Header byte 20
+is optional indirect gain; byte 21 enables custom comparison; bytes 24..28 are
+comparison0/reference0/operator/comparison1/reference1. Other reserved bytes
+remain zero. The alpha record is A/B/C/D/op/control/konst/reserved. Control packs
+explicit bit 7, clamp bit 6, scale bits 4..5, bias bits 2..3 and destination bits
+0..1; an all-zero record requests legacy opacity. Native inputs are GX selectors
+0..7; managed One and SecondaryTexture are normalized while packing. The existing
+native resource owns a 134-byte alpha tail only for v4; there are no per-draw
+allocations, texture copies or extra rendering passes.
+
+Validation includes all 65,536 pairs of alpha samples, scalar konst channels,
+state restoration, native malformed-package rejection, Debug/Release AOT with GC
+stress, and retained GX recording tests. The existing GraphicsPhaseOne Dolphin
+fixture also checks both branches of the cutout, rejected middle alpha,
+independent secondary alpha and restoration to an ordinary alpha-128 material.
+Physical GameCube precision/performance still needs hardware validation.

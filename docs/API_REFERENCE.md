@@ -1327,7 +1327,7 @@ The output is `out/Snake/Game.dol`; devkitPPC, libogc2 and .NET 8 are required. 
 
 ### GxEffect
 
-Managed TEV RGB programs: `ColorRamp(dark,bright)`,
+Managed TEV programs: `ColorRamp(dark,bright)`,
 `ToonBands(low,high,dark,middle,bright)`, `FromPackage(bytes)`,
 `LoadAsync(path[,token])`, `StageCount`, `UniformCount`, `RequiresTexture`,
 `GetUniformName(slot)`, `GetUniformSlot(name)`, `SetColor(slot/name,color)`,
@@ -1335,6 +1335,17 @@ Managed TEV RGB programs: `ColorRamp(dark,bright)`,
 per-draw `Renderer.DrawModel(instance,transform,effectOverride)` /
 `Renderer.Draw(gameObject,effectOverride)`.
 Uniform updates run between frames. See [effects and graph compilation](effects.md).
+
+`TevProgramBuilder.SetAlphaStage(stage,a,b,c,d,destination,operation,bias,scale,
+clamp,colorSlot,component)` opts into independent per-stage alpha arithmetic.
+`TevAlphaInput` includes both texture samples, raster, registers, constants, One
+and Zero; `TevAlphaOperation`, `TevBias` and `TevScale` select GX arithmetic.
+`SetAlphaCompare(comparison0,reference0,operation,comparison1,reference1)` uses
+`AlphaComparison` and `AlphaCompareOperation` for a two-reference cutout.
+`TevMaterialPresets.DualTextureGlints(primaryLight,reflectedLight,lowReference=33,
+highReference=235)` combines both sampled alphas with an outside-band comparison.
+See [TEV alpha and cutouts](tev-materials.md#independent-alpha-and-two-reference-cutouts-dnef-v4)
+for shared sampler limits, raster opacity, stage budgets and DNEF v4 layout.
 
 For consuming these APIs through NuGet, dependency AOT constraints and diagnostics, see the [SDK guide](nuget-sdk.md).
 

@@ -8,7 +8,7 @@ static int[] Evaluate(byte[] p,int raster,int tex,int secondary=0)
 {
     int[][] regs=[new int[3],new int[3],new int[3],new int[3]];
     for(int i=0;i<p[8];i++){
-        int at=176+i*8,k=p[at+6];
+        int at=176+i*(p[4]==4?16:8),k=p[at+6];
         int Read(int input,int channel)=>input switch {
             0 or 2 or 4 or 6=>regs[input/2][channel],8=>p[at+7]==1?secondary:tex,10=>raster,12=>255,15=>0,
             14=>p[64+(k-12)%4*36+(k<16?channel:(k-16)/4)],_=>throw new Exception("Invalid selector")};
@@ -99,3 +99,75 @@ Reject<ArgumentException>(()=>noWarp.AddStage(TevInput.Zero,TevInput.Zero,TevInp
 var rgbFirst=new TevProgramBuilder();rgbFirst.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.SecondaryTexture);
 Reject<InvalidOperationException>(()=>rgbFirst.EnableIndirectWarp());
 Console.WriteLine("DNEF v3 indirect texture authoring and two-UV water preset passed.");
+
+static int EvaluateAlpha(byte[] p,int raster,int tex0,int tex1)
+{
+    var regs=new int[4];
+    for(int i=0;i<p[8];i++){
+        int at=176+i*16,alpha=at+8;
+        if((p[alpha+5]&128)==0){regs[0]=tex0*raster/255;continue;}
+        int Read(int v)=>v switch{0 or 1 or 2 or 3=>regs[v],4=>p[at+7]==1?tex1:tex0,5=>raster,6=>p[alpha+6]==0?255:p[64+(p[alpha+6]-16)%4*36+(p[alpha+6]-16)/4],7=>0,_=>throw new Exception()};
+        int a=Read(p[alpha]),b=Read(p[alpha+1]),c=Read(p[alpha+2]),d=Read(p[alpha+3]);
+        int mix=a+((b-a)*(c+(c>>7))>>8);
+        int value=d+(p[alpha+4]==0?mix:-mix),control=p[alpha+5];
+        value+=((control>>2)&3) switch{1=>128,2=>-128,_=>0};
+        value=((control>>4)&3) switch{1=>value*2,2=>value*4,3=>value>>1,_=>value};
+        regs[control&3]=(control&64)!=0?Math.Clamp(value,0,255):Math.Clamp(value,-1024,1023);
+    }
+    return regs[0];
+}
+var glints=TevMaterialPresets.DualTextureGlints(new Color32(102,150,176),new Color32(215,248,244));
+var glintBytes=glints.GetPackage();
+Check(glintBytes[4]==4&&glints.StageCount==3&&glintBytes.Length==224&&glints.RequiresTexture&&glints.RequiresSecondaryTexture,"Explicit alpha uses three shared RGB/alpha stages without an opacity epilogue");
+Check(glintBytes[21]==1&&glintBytes[24]==3&&glintBytes[25]==33&&glintBytes[26]==1&&glintBytes[27]==6&&glintBytes[28]==235,"Exact GX outside-band alpha comparison");
+for(int a=0;a<256;a++)for(int aux=0;aux<256;aux++){
+    int actual=EvaluateAlpha(glintBytes,255,a,aux);
+    Check(actual==(a+aux)/2,"Independent samples both contribute to alpha");
+    Check((actual<=glintBytes[25]||actual>=glintBytes[28])==(actual<=33||actual>=235),"Two-sided cutout");
+}
+foreach(int opacity in new[]{0,17,128,206,255})foreach(int a in new[]{0,31,128,255})foreach(int aux in new[]{0,64,235,255})
+    Check(Math.Abs(EvaluateAlpha(glintBytes,opacity,a,aux)-(a+aux)*opacity/510.0)<=2,"Raster opacity retained");
+Reject<ArgumentException>(()=>TevMaterialPresets.DualTextureGlints(Color32.White,Color32.White,235,33));
+var alphaBuilder=new TevProgramBuilder();alphaBuilder.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Raster);
+Reject<ArgumentException>(()=>alphaBuilder.SetAlphaStage(0,TevAlphaInput.One,TevAlphaInput.Constant,TevAlphaInput.Zero,TevAlphaInput.Zero));
+Reject<ArgumentException>(()=>alphaBuilder.SetAlphaStage(0,(TevAlphaInput)10,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero));
+alphaBuilder.SetAlphaStage(0,TevAlphaInput.Previous,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero);
+Reject<InvalidOperationException>(()=>alphaBuilder.BuildPackage());
+alphaBuilder.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.One,TevAlphaInput.One,TevAlphaInput.Zero,operation:TevAlphaOperation.Subtract,bias:TevBias.AddHalf,scale:TevScale.Two,clamp:false);
+Check(EvaluateAlpha(alphaBuilder.BuildPackage(),255,0,0)==-254,"Subtract, signed output, bias and scale");
+alphaBuilder.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Previous);
+Reject<InvalidOperationException>(()=>alphaBuilder.BuildPackage());
+alphaBuilder.SetAlphaStage(1,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Previous);
+Check(alphaBuilder.BuildPackage().Length==208,"Complete alpha program");
+var conflict=new TevProgramBuilder();conflict.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Texture);
+Reject<ArgumentException>(()=>conflict.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.SecondaryTexture));
+Check(conflict.BuildPackage()[4]==1,"Failed alpha configuration leaves legacy builder unchanged");
+conflict.SetAlphaCompare(AlphaComparison.LessOrEqual,33,AlphaCompareOperation.Or,AlphaComparison.GreaterOrEqual,235);
+Check(conflict.BuildPackage()[4]==4&&conflict.BuildPackage()[189]==0,"Compare-only program keeps legacy opacity");
+Console.WriteLine("DNEF v4: exhaustive two-texture alpha, raster opacity, outside-band comparison, signed arithmetic and trust-boundary configuration passed.");
+
+// Alpha constants choose scalar channels independently of the RGB konst selector.
+var constants=new TevProgramBuilder();int constantSlot=constants.AddColor("Channels",new Color32(17,63,129,231));
+constants.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Constant,colorSlot:constantSlot);
+foreach(var component in new[]{TevComponent.Red,TevComponent.Green,TevComponent.Blue,TevComponent.Alpha}){
+    constants.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Constant,colorSlot:constantSlot,component:component);
+    Check(EvaluateAlpha(constants.BuildPackage(),255,0,0)==new[]{17,63,129,231}[(int)component-1],"Independent alpha konst channel");
+}
+Reject<ArgumentException>(()=>constants.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Constant,colorSlot:constantSlot,component:TevComponent.Rgb));
+Reject<ArgumentException>(()=>constants.SetAlphaCompare((AlphaComparison)8,0,AlphaCompareOperation.Or,AlphaComparison.Always,255));
+var sixteen=new TevProgramBuilder();
+for(int i=0;i<16;i++){
+    sixteen.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.One);
+    sixteen.SetAlphaStage(i,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,(i&1)==0?TevAlphaInput.Texture:TevAlphaInput.SecondaryTexture);
+}
+Check(sixteen.BuildPackage().Length==432&&sixteen.BuildPackage()[8]==16,"Explicit dual alpha supports all sixteen physical stages");
+var compareDual=new TevProgramBuilder();compareDual.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.SecondaryTexture);
+compareDual.SetAlphaCompare(AlphaComparison.Greater,10,AlphaCompareOperation.And,AlphaComparison.Always,0);
+var compareBytes=compareDual.BuildPackage();
+Check(compareBytes[8]==2&&compareBytes[4]==4&&compareBytes[^9]==0&&compareBytes[^1]==0,"Compare-only dual effect preserves legacy primary alpha epilogue");
+var warpAlpha=new TevProgramBuilder();warpAlpha.EnableIndirectWarp();
+warpAlpha.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Texture,alternateUv:true);
+Reject<ArgumentException>(()=>warpAlpha.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.SecondaryTexture));
+warpAlpha.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Texture,TevAlphaInput.Raster,TevAlphaInput.Zero);
+Check(warpAlpha.BuildPackage()[4]==4&&warpAlpha.BuildPackage()[20]==76&&warpAlpha.BuildPackage()[183]==2,"Explicit alpha retains primary indirect UV selection");
+Console.WriteLine("DNEF v4: scalar konst channels, sixteen-stage budget, legacy dual opacity and indirect-alpha compatibility passed.");

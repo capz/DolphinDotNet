@@ -38,4 +38,25 @@ static void effect_package_tests(void) {
     p[191]=1;assert(dnd_effect_create(a)==0);p[191]=2;
     p[199]=2;assert(dnd_effect_create(a)==0);p[199]=0;
     free(a);assert(dnd_draw_total_bytes()==0);
+    a=calloc(1,sizeof(*a)+208);assert(a);a->element_size=1;a->length=208;p=a->data;
+    memcpy(p,"DNEF",4);p[4]=4;p[8]=2;p[12]=3;p[21]=1;
+    p[24]=3;p[25]=33;p[26]=1;p[27]=6;p[28]=235;
+    const unsigned char first[]={15,15,15,10,0,0,0,0,7,7,7,4,0,193,0,0};
+    const unsigned char second[]={15,15,15,0,0,0,0,1,7,4,6,1,0,240,0,0};
+    memcpy(p+176,first,16);memcpy(p+192,second,16);
+    token=dnd_effect_create(a);assert(token>0);
+    const DndDrawEffect *v4=NULL;assert(dnd_effect_resolve(token,&v4)==0&&v4&&v4->alpha&&v4->count==2);
+    assert(v4->alpha->compare0==3&&v4->alpha->reference0==33&&v4->alpha->operation==1&&v4->alpha->reference1==235);
+    assert(v4->stages[1].reserved==1&&v4->alpha->stages[1].control==240);
+    assert(dnd_draw_release(token)==0);
+    const int corrupt_at[]={21,22,24,26,27,29,184,188,189,190,191,205};
+    const unsigned char corrupt_value[]={2,1,8,4,8,1,0,2,205,16,1,241};
+    for(unsigned i=0;i<sizeof(corrupt_at)/sizeof(*corrupt_at);i++){
+        int at=corrupt_at[i];unsigned char old=p[at];p[at]=corrupt_value[i];assert(dnd_effect_create(a)==0);p[at]=old;
+    }
+    p[12]=1;assert(dnd_effect_create(a)==0);p[12]=3; // Alpha-only TEX1 still requires its binding.
+    p[21]=0;assert(dnd_effect_create(a)==0);p[21]=1; // Disabled compare cannot conceal state.
+    p[189]=0;assert(dnd_effect_create(a)==0);p[189]=193; // Legacy record must be entirely zero.
+    a->length=207;assert(dnd_effect_create(a)==0);a->length=208;
+    free(a);assert(dnd_draw_total_bytes()==0);
 }

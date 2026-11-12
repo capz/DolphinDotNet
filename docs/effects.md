@@ -164,7 +164,10 @@ operations, excessive stages and excessive live register values produce errors
 identifying the node/resource. The scheduler rejects graphs it cannot place;
 it does not promise to find every possible hand-optimized TEV schedule.
 
-DNEF packages are 176 bytes plus eight bytes per stage (maximum 304 bytes).
+The offline compiler emits DNEF v1: 176 bytes plus eight bytes per stage
+(maximum 304 bytes). Managed [TEV programs](tev-materials.md#independent-alpha-and-two-reference-cutouts-dnef-v4)
+can opt into DNEF v4 with independent alpha and a two-reference comparison
+(16 bytes per stage, maximum 432 bytes).
 The runtime independently validates version, length, parameter names, selectors,
 register initialization, texture requirements and final output. It copies the
 program into the existing bounded graphics resource pool; editing or freeing the
