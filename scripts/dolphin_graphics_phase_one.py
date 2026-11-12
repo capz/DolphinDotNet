@@ -30,7 +30,13 @@ PATCHES=(('orthographic red',80,288,(220,40,40),8),
          ('alpha OR rejected middle',160,96,(220,40,40),8),
          ('alpha OR high branch',300,96,(255,255,255),8),
          ('independent secondary alpha',480,96,(220,40,40),8),
-         ('alpha comparison restored',630,96,(20,200,40),8))
+         ('alpha comparison restored',630,96,(20,200,40),8),
+         ('v5 sea doubled product and wrapped RGB',64,120,(222,229,255),8),
+         ('v5 sea zero primary alpha',192,120,(20,30,40),8),
+         ('v5 sea overflow wraps alpha to zero',320,120,(20,30,40),8),
+         ('v5 sea alpha35 rejected',448,120,(20,30,40),8),
+         ('v5 sea alpha34 low branch',576,120,(47,56,73),8),
+         ('v5 sea blend and compare restored',630,120,(20,200,40),8))
 def validate_frame(rgb):
     if len(rgb)!=FRAME_BYTES:raise ValueError('Incomplete RGB frame')
     for name,x,y,color,tolerance in PATCHES:

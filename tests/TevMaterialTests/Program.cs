@@ -18,7 +18,7 @@ static int Arithmetic(int a,int b,int c,int d,int op,int control)
     if(scale==3)value>>=1;
     return (control&64)!=0?Math.Clamp(value,0,255):Math.Clamp(value,-1024,1023);
 }
-static int[] Evaluate(byte[] p,int raster,int tex,int secondary=0)
+static int[] Evaluate(byte[] p,int raster,int tex,int secondary=0,bool raw=false)
 {
     int[][] regs=[new int[3],new int[3],new int[3],new int[3]];var alpha=new int[4];
     for(int i=0;i<p[8];i++){
@@ -40,7 +40,7 @@ static int[] Evaluate(byte[] p,int raster,int tex,int secondary=0)
             alpha[p[aa+5]&3]=Arithmetic(ReadAlpha(p[aa]),ReadAlpha(p[aa+1]),ReadAlpha(p[aa+2]),ReadAlpha(p[aa+3]),p[aa+4],p[aa+5]);
         }else alpha[0]=Arithmetic(0,sample,raster,0,0,64);
     }
-    return regs[0].Select(v=>v&255).ToArray();
+    return raw?regs[0]:regs[0].Select(v=>v&255).ToArray();
 }
 
 var toon=TevMaterialPresets.Toon(new ToonMaterialOptions{
@@ -222,3 +222,27 @@ Action<TevInput,TevInput,TevInput,TevInput,TevRegister,TevOperation,int,TevCompo
 oldAdd(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Raster,TevRegister.Previous,TevOperation.Add,-1,TevComponent.Rgb,false);
 var defaultSignature=new TevProgramBuilder();defaultSignature.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Raster);
 Check(legacySignature.BuildPackage().SequenceEqual(defaultSignature.BuildPackage()),"Original binary signature and new optional source API preserve legacy bytes");
+
+// Golden numeric material records for the documented two-stage sea program.
+// These are arithmetic/state records, independent of any retail texture assets.
+var sea=new TevProgramBuilder();
+sea.AddColor("Initial",new Color32(252,255,255));sea.AddColor("Multiplier",new Color32(232,228,252));
+sea.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Constant,colorSlot:0);
+sea.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Texture,TevAlphaInput.Raster,TevAlphaInput.Zero);
+sea.AddStage(TevInput.Zero,TevInput.Constant,TevInput.Previous,TevInput.Zero,colorSlot:1,scale:TevScale.Two,clamp:false);
+sea.SetAlphaStage(1,TevAlphaInput.Zero,TevAlphaInput.SecondaryTexture,TevAlphaInput.Previous,TevAlphaInput.Zero,scale:TevScale.Two,clamp:false);
+sea.SetAlphaCompare(AlphaComparison.GreaterOrEqual,235,AlphaCompareOperation.Xnor,AlphaComparison.GreaterOrEqual,35);
+sea.SetBlendFactors(TevBlendFactor.SourceAlpha,TevBlendFactor.One);
+var seaBytes=sea.BuildPackage();
+Check(seaBytes[4]==5&&seaBytes[8]==2&&seaBytes[24]==6&&seaBytes[25]==235&&seaBytes[26]==3&&seaBytes[27]==6&&seaBytes[28]==35&&seaBytes[29]==4&&seaBytes[30]==1,"Golden two-stage sea compare and additive blend state");
+Check(Evaluate(seaBytes,255,255,255,true).SequenceEqual(new[]{459,456,504}),"Golden sea RGB stays unclamped in 11-bit registers");
+Check(Evaluate(seaBytes,255,255,255).SequenceEqual(new[]{203,200,248}),"Golden sea RGB emits wrapped low bytes");
+for(int t0=0;t0<256;t0++)for(int t1=0;t1<256;t1++){
+    int expected=((2*t1*(t0+(t0>>7))+128)>>8)&255;
+    int alpha=EvaluateAlpha(seaBytes,255,t0,t1)&255;
+    Check(alpha==expected,"Sea alpha is doubled product with hardware rounding and overflow");
+    Check(((alpha>=seaBytes[25])==(alpha>=seaBytes[28]))==(expected<35||expected>=235),"Sea XNOR preserves the exact exclusive low cutoff at35");
+}
+Check((EvaluateAlpha(seaBytes,255,255,255)&255)==254&&(EvaluateAlpha(seaBytes,255,255,128)&255)==0,"Sea alpha overflow differs from early clamping");
+Check((EvaluateAlpha(seaBytes,255,128,35)&255)==35&&(EvaluateAlpha(seaBytes,255,128,34)&255)==34,"Sea low cut distinguishes alpha34 from35");
+Console.WriteLine("Golden sea records: unclamped/wrapped RGB, all 65,536 doubled-alpha pairs, exact XNOR cutoffs and additive factors passed.");
