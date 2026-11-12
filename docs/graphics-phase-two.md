@@ -110,8 +110,10 @@ capture.Draw(draw, new RectF(0, 0, 640, 480), Color32.White);
 draw.End();
 ```
 
-SceneCapture owns its RGBA8 texture. Width/height must be positive multiples of
-four. Capture runs between passes in an active frame. The source origin must be
+SceneCapture owns its RGBA8 texture by default; the overload taking
+`NativeTextureFormat.Rgb565` uses half the storage when alpha is unnecessary.
+Width/height must be positive multiples of four. Capture runs between passes in
+an active frame. The source origin must be
 even; source dimensions equal the target dimensions or exactly twice both target
 dimensions (hardware half-size copy). `GraphicsDevice.CaptureToTexture` exposes the
 same operation for a caller-owned texture. Targets cannot contain mip chains.

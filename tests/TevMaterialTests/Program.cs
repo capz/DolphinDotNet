@@ -4,23 +4,45 @@ static void Check(bool ok,string message){if(!ok)throw new Exception(message);}
 static void Reject<T>(Action action) where T:Exception {try{action();}catch(T){return;}throw new Exception("Expected "+typeof(T).Name);}
 // Independent fixed-point TEV interpreter. It consumes the serialized package,
 // including register writes and channel selectors, rather than calling preset code.
-static int[] Evaluate(byte[] p,int raster,int tex,int secondary=0)
+// Integer TEV model follows Dolphin's hardware shader generator: A/B/C are
+// bytes, D is signed, scale is applied before interpolation rounding, and
+// unclamped registers saturate to signed 11-bit before low-byte reads/output.
+static int Arithmetic(int a,int b,int c,int d,int op,int control)
 {
-    int[][] regs=[new int[3],new int[3],new int[3],new int[3]];
+    a&=255;b&=255;c&=255;
+    int scale=(control>>4)&3,left=scale==1?1:scale==2?2:0;
+    int mix=((a<<8)+(b-a)*(c+(c>>7)))<<left;
+    mix=(mix+(scale==3?0:op==1?127:128))>>8;
+    int bias=((control>>2)&3) switch{1=>128,2=>-128,_=>0};
+    int value=((d+bias)<<left)+(op==1?-mix:mix);
+    if(scale==3)value>>=1;
+    return (control&64)!=0?Math.Clamp(value,0,255):Math.Clamp(value,-1024,1023);
+}
+static int[] Evaluate(byte[] p,int raster,int tex,int secondary=0,bool raw=false)
+{
+    int[][] regs=[new int[3],new int[3],new int[3],new int[3]];var alpha=new int[4];
     for(int i=0;i<p[8];i++){
-        int at=176+i*(p[4]==4?16:8),k=p[at+6];
+        int at=176+i*(p[4]>=4?16:8),k=p[at+6],control=p[at+5];
+        int sample=p[at+7]==1?secondary:tex;
         int Read(int input,int channel)=>input switch {
-            0 or 2 or 4 or 6=>regs[input/2][channel],8=>p[at+7]==1?secondary:tex,10=>raster,12=>255,15=>0,
+            0 or 2 or 4 or 6=>regs[input/2][channel],1 or 3 or 5 or 7=>alpha[input/2],
+            8 or 9=>sample,10 or 11=>raster,12=>255,13=>128,15=>0,
             14=>p[64+(k-12)%4*36+(k<16?channel:(k-16)/4)],_=>throw new Exception("Invalid selector")};
         int[] result=new int[3];
         for(int c=0;c<3;c++){
             int a=Read(p[at],c),b=Read(p[at+1],c),t=Read(p[at+2],c),d=Read(p[at+3],c);
-            result[c]=Math.Clamp(p[at+4]==8?d+(Read(p[at],0)>Read(p[at+1],0)?t:0):a+((b-a)*(t+(t>>7))>>8)+d,0,255);
+            result[c]=p[at+4]==8?Math.Clamp(d+((a&255)>(b&255)?t&255:0),0,255):Arithmetic(a,b,t,d,p[at+4],(control&128)!=0?control:64|control);
         }
-        regs[p[at+5]]=result;
+        regs[control&3]=result;
+        if(p[4]>=4&&(p[at+13]&128)!=0){
+            int aa=at+8,ka=p[aa+6];
+            int ReadAlpha(int input)=>input switch{0 or 1 or 2 or 3=>alpha[input],4=>sample,5=>raster,6=>ka==0?255:p[64+(ka-16)%4*36+(ka-16)/4],7=>0,_=>throw new Exception()};
+            alpha[p[aa+5]&3]=Arithmetic(ReadAlpha(p[aa]),ReadAlpha(p[aa+1]),ReadAlpha(p[aa+2]),ReadAlpha(p[aa+3]),p[aa+4],p[aa+5]);
+        }else alpha[0]=Arithmetic(0,sample,raster,0,0,64);
     }
-    return regs[0];
+    return raw?regs[0]:regs[0].Select(v=>v&255).ToArray();
 }
+
 var toon=TevMaterialPresets.Toon(new ToonMaterialOptions{
     Dark=new Color32(20,30,40),Middle=new Color32(80,90,100),Bright=new Color32(210,220,230)});
 Check(toon.StageCount==8&&toon.RequiresTexture&&toon.Lighting==LightingMode.Diffuse,"Toon pipeline");
@@ -52,7 +74,7 @@ Reject<ArgumentException>(()=>definition.Create()); // no native calls on missin
 var b=new TevProgramBuilder();
 Reject<InvalidOperationException>(()=>b.BuildPackage());
 Reject<ArgumentException>(()=>b.AddStage(TevInput.Previous,TevInput.Zero,TevInput.Zero,TevInput.Zero));
-Reject<ArgumentException>(()=>b.AddStage((TevInput)9,TevInput.Zero,TevInput.Zero,TevInput.Zero));
+Reject<ArgumentException>(()=>b.AddStage((TevInput)18,TevInput.Zero,TevInput.Zero,TevInput.Zero));
 Reject<ArgumentException>(()=>b.AddStage(TevInput.Constant,TevInput.Zero,TevInput.Zero,TevInput.Zero));
 Check(b.StageCount==0,"Failed stages changed builder");
 Reject<ArgumentException>(()=>b.AddColor("not a name",Color32.White));
@@ -108,11 +130,7 @@ static int EvaluateAlpha(byte[] p,int raster,int tex0,int tex1)
         if((p[alpha+5]&128)==0){regs[0]=tex0*raster/255;continue;}
         int Read(int v)=>v switch{0 or 1 or 2 or 3=>regs[v],4=>p[at+7]==1?tex1:tex0,5=>raster,6=>p[alpha+6]==0?255:p[64+(p[alpha+6]-16)%4*36+(p[alpha+6]-16)/4],7=>0,_=>throw new Exception()};
         int a=Read(p[alpha]),b=Read(p[alpha+1]),c=Read(p[alpha+2]),d=Read(p[alpha+3]);
-        int mix=a+((b-a)*(c+(c>>7))>>8);
-        int value=d+(p[alpha+4]==0?mix:-mix),control=p[alpha+5];
-        value+=((control>>2)&3) switch{1=>128,2=>-128,_=>0};
-        value=((control>>4)&3) switch{1=>value*2,2=>value*4,3=>value>>1,_=>value};
-        regs[control&3]=(control&64)!=0?Math.Clamp(value,0,255):Math.Clamp(value,-1024,1023);
+        regs[p[alpha+5]&3]=Arithmetic(a,b,c,d,p[alpha+4],p[alpha+5]);
     }
     return regs[0];
 }
@@ -171,3 +189,82 @@ Reject<ArgumentException>(()=>warpAlpha.SetAlphaStage(0,TevAlphaInput.Zero,TevAl
 warpAlpha.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Texture,TevAlphaInput.Raster,TevAlphaInput.Zero);
 Check(warpAlpha.BuildPackage()[4]==4&&warpAlpha.BuildPackage()[20]==76&&warpAlpha.BuildPackage()[183]==2,"Explicit alpha retains primary indirect UV selection");
 Console.WriteLine("DNEF v4: scalar konst channels, sixteen-stage budget, legacy dual opacity and indirect-alpha compatibility passed.");
+
+var extended=new TevProgramBuilder();
+extended.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.TextureAlpha,TevRegister.Color0,clamp:false);
+extended.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Texture,TevAlphaInput.One,TevAlphaInput.Zero,TevRegister.Color0,scale:TevScale.Two,clamp:false);
+extended.AddStage(TevInput.Zero,TevInput.SecondaryTextureAlpha,TevInput.Color0Alpha,TevInput.Color0,scale:TevScale.Two,clamp:false);
+extended.SetAlphaStage(1,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Color0);
+var extendedBytes=extended.BuildPackage();
+Check(extendedBytes[4]==5&&extendedBytes.Length==208&&extendedBytes[183]==0&&extendedBytes[199]==1,"v5 envelope and alpha texture order");
+for(int first=0;first<256;first++)for(int second=0;second<256;second++){
+    int expected=Arithmetic(0,second,(first*2)&255,first,0,144)&255;
+    Check(Evaluate(extendedBytes,255,first,second)[0]==expected,"Unclamped RGB, replicated alpha and wrapped alpha-register input");
+}
+var invalidAlpha=new TevProgramBuilder();
+invalidAlpha.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.PreviousAlpha);
+invalidAlpha.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Raster);
+Reject<InvalidOperationException>(()=>invalidAlpha.BuildPackage());
+var subtractRgb=new TevProgramBuilder();subtractRgb.AddStage(TevInput.Zero,TevInput.One,TevInput.Half,TevInput.Zero,operation:TevOperation.Subtract,bias:TevBias.SubtractHalf,scale:TevScale.Two,clamp:false);
+Check(Evaluate(subtractRgb.BuildPackage(),0,0)[0]==255,"Signed subtract/bias/scale writes signed register then emits its low byte");
+Reject<ArgumentException>(()=>subtractRgb.AddStage(TevInput.Zero,TevInput.TextureAlpha,TevInput.SecondaryTextureAlpha,TevInput.Zero));
+Reject<ArgumentException>(()=>subtractRgb.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.One,operation:TevOperation.GreaterRed,clamp:false));
+Console.WriteLine("DNEF v5: exhaustive two-sample RGB/alpha wrapping, signed arithmetic, independent dataflow and sampler conflicts passed.");
+var blending=new TevProgramBuilder();blending.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Raster);
+blending.SetBlendFactors(TevBlendFactor.SourceAlpha,TevBlendFactor.Color);
+var blendingBytes=blending.BuildPackage();
+Check(blendingBytes[4]==5&&blendingBytes[22]==1&&blendingBytes[29]==4&&blendingBytes[30]==2&&blendingBytes[31]==0,"Exact custom GX blend factors in bounded v5 header");
+Reject<ArgumentException>(()=>blending.SetBlendFactors((TevBlendFactor)8,TevBlendFactor.Zero));
+Check(blending.BuildPackage().SequenceEqual(blendingBytes),"Failed blend mutation leaves valid configuration intact");
+// Existing engine IL binds the original nine-parameter CLR signature.
+var legacySignature=new TevProgramBuilder();
+Action<TevInput,TevInput,TevInput,TevInput,TevRegister,TevOperation,int,TevComponent,bool> oldAdd=legacySignature.AddStage;
+oldAdd(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Raster,TevRegister.Previous,TevOperation.Add,-1,TevComponent.Rgb,false);
+var defaultSignature=new TevProgramBuilder();defaultSignature.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Raster);
+Check(legacySignature.BuildPackage().SequenceEqual(defaultSignature.BuildPackage()),"Original binary signature and new optional source API preserve legacy bytes");
+
+// Golden numeric material records for the documented two-stage sea program.
+// These are arithmetic/state records, independent of any retail texture assets.
+var sea=new TevProgramBuilder();
+sea.AddColor("Initial",new Color32(252,255,255));sea.AddColor("Multiplier",new Color32(232,228,252));
+sea.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Constant,colorSlot:0);
+sea.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Texture,TevAlphaInput.Raster,TevAlphaInput.Zero);
+sea.AddStage(TevInput.Zero,TevInput.Constant,TevInput.Previous,TevInput.Zero,colorSlot:1,scale:TevScale.Two,clamp:false);
+sea.SetAlphaStage(1,TevAlphaInput.Zero,TevAlphaInput.SecondaryTexture,TevAlphaInput.Previous,TevAlphaInput.Zero,scale:TevScale.Two,clamp:false);
+sea.SetAlphaCompare(AlphaComparison.GreaterOrEqual,235,AlphaCompareOperation.Xnor,AlphaComparison.GreaterOrEqual,35);
+sea.SetBlendFactors(TevBlendFactor.SourceAlpha,TevBlendFactor.One);
+var seaBytes=sea.BuildPackage();
+Check(seaBytes[4]==5&&seaBytes[8]==2&&seaBytes[24]==6&&seaBytes[25]==235&&seaBytes[26]==3&&seaBytes[27]==6&&seaBytes[28]==35&&seaBytes[29]==4&&seaBytes[30]==1,"Golden two-stage sea compare and additive blend state");
+Check(Evaluate(seaBytes,255,255,255,true).SequenceEqual(new[]{459,456,504}),"Golden sea RGB stays unclamped in 11-bit registers");
+Check(Evaluate(seaBytes,255,255,255).SequenceEqual(new[]{203,200,248}),"Golden sea RGB emits wrapped low bytes");
+for(int t0=0;t0<256;t0++)for(int t1=0;t1<256;t1++){
+    int expected=((2*t1*(t0+(t0>>7))+128)>>8)&255;
+    int alpha=EvaluateAlpha(seaBytes,255,t0,t1)&255;
+    Check(alpha==expected,"Sea alpha is doubled product with hardware rounding and overflow");
+    Check(((alpha>=seaBytes[25])==(alpha>=seaBytes[28]))==(expected<35||expected>=235),"Sea XNOR preserves the exact exclusive low cutoff at35");
+}
+Check((EvaluateAlpha(seaBytes,255,255,255)&255)==254&&(EvaluateAlpha(seaBytes,255,255,128)&255)==0,"Sea alpha overflow differs from early clamping");
+Check((EvaluateAlpha(seaBytes,255,128,35)&255)==35&&(EvaluateAlpha(seaBytes,255,128,34)&255)==34,"Sea low cut distinguishes alpha34 from35");
+Console.WriteLine("Golden sea records: unclamped/wrapped RGB, all 65,536 doubled-alpha pairs, exact XNOR cutoffs and additive factors passed.");
+var matrixProgram=new TevProgramBuilder();
+Reject<InvalidOperationException>(()=>matrixProgram.SetIndirectMatrix(0,0,0,0,.001f,.015f,2));
+matrixProgram.EnableIndirectWarp();
+matrixProgram.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Texture);
+matrixProgram.SetIndirectMatrix(0,0,0,0,.001f,.015f,2,TevIndirectBias.STU);
+var matrixBytes=matrixProgram.BuildPackage();int matrixAt=176+matrixBytes[8]*16;
+Check(matrixBytes[4]==5&&matrixBytes[23]==1&&matrixBytes[31]==7&&matrixBytes.Length==matrixAt+28,"Custom GX indirect matrix has a bounded optional v5 tail");
+Check(BitConverter.ToSingle(matrixBytes,matrixAt+16)==.001f&&BitConverter.ToSingle(matrixBytes,matrixAt+20)==.015f&&matrixBytes[matrixAt+24]==2,"Custom matrix coefficients and exponent retain their exact bits");
+foreach(float bad in new[]{float.NaN,float.PositiveInfinity,float.NegativeInfinity,1f,-1.001f})
+    Reject<ArgumentException>(()=>matrixProgram.SetIndirectMatrix(bad,0,0,0,0,0,2));
+Reject<ArgumentException>(()=>matrixProgram.SetIndirectMatrix(0,0,0,0,0,0,-18));
+Reject<ArgumentException>(()=>matrixProgram.SetIndirectMatrix(0,0,0,0,0,0,47));
+Reject<ArgumentException>(()=>matrixProgram.SetIndirectMatrix(0,0,0,0,0,0,2,(TevIndirectBias)8));
+Check(matrixProgram.BuildPackage().SequenceEqual(matrixBytes),"Failed custom matrix writes leave the valid program unchanged");
+var maxMatrix=new TevProgramBuilder();maxMatrix.EnableIndirectWarp();
+for(int i=0;i<16;i++){
+    maxMatrix.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Texture);
+    maxMatrix.SetAlphaStage(i,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.One);
+}
+maxMatrix.SetIndirectMatrix(-1,0,0,0,0,0,-17,TevIndirectBias.None);
+Check(maxMatrix.BuildPackage().Length==460&&unchecked((sbyte)maxMatrix.BuildPackage()[456])==-17,"Largest legal v5 program and minimum indirect exponent");
+Console.WriteLine("Custom indirect matrix: exact payload, bounded floats, signed exponents, bias flags and failed-mutation isolation passed.");

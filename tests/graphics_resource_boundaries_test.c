@@ -24,7 +24,7 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const 
     (void)t;(void)m;(void)w;assert(v&&primitive==0x90&&submissions<8);counts[submissions++]=n;
 }
 void dnd_draw_backend_copy(const DndDrawTexture *t,int x,int y,int w,int h){
-    assert(t->format==6&&t->levels==1&&x>=0&&y>=0&&w>0&&h>0);copies++;
+    assert((t->format==6||t->format==4)&&t->levels==1&&x>=0&&y>=0&&w>0&&h>0);copies++;
 }
 static DndArray *array(unsigned count,unsigned stride){
     DndArray *a=calloc(1,sizeof(*a)+(size_t)count*stride);assert(a);a->length=count;a->element_size=stride;return a;
@@ -69,11 +69,13 @@ static void capture_bounds(void){
     assert(dnd_draw_copy_texture(target,636,476,4,4)==0&&copies==1);
     assert(dnd_draw_copy_texture(target,632,472,8,8)==0&&copies==2);
     frame=false;
-    int odd=dnd_texture_allocate_native(3,4,6,0),format=dnd_texture_allocate_native(4,4,4,0);assert(odd&&format);
+    int odd=dnd_texture_allocate_native(3,4,6,0),format=dnd_texture_allocate_native(4,4,1,0),rgb=dnd_texture_allocate_native(4,4,4,0);assert(odd&&format&&rgb);
     frame=true;assert(dnd_draw_copy_texture(odd,0,0,3,4)<0&&copies==2);
     assert(dnd_draw_copy_texture(format,0,0,4,4)<0&&copies==2);
     assert(dnd_draw_release(target)==0);assert(dnd_draw_copy_texture(target,0,0,4,4)<0&&copies==2);
-    frame=false;dnd_draw_collect();assert(dnd_draw_release(odd)==0&&dnd_draw_release(format)==0);
+    assert(dnd_draw_copy_texture(rgb,0,0,8,8)==0&&copies==3);
+    DndDrawTexture target565;assert(dnd_texture_resolve(rgb,&target565)==0&&target565.format==4&&target565.bytes==32);
+    frame=false;dnd_draw_collect();assert(dnd_draw_release(odd)==0&&dnd_draw_release(format)==0&&dnd_draw_release(rgb)==0);
 }
 static void retained_painter_order(void){
     DndArray *v=array(3,16),*matrix=array(16,4);float *m=(float*)matrix->data;

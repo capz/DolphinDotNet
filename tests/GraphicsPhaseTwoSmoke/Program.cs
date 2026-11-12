@@ -37,13 +37,20 @@ internal static class Program
         using var plane=PrimitiveMeshes.Plane(2,3);using var box=PrimitiveMeshes.Box(2,3,4);using var sphere=PrimitiveMeshes.Sphere(1,8,4);
         if(plane.NativeBytes!=4*36+6*2||box.NativeBytes!=24*36+36*2||sphere.NativeBytes!=45*36+144*2)return 10;
         using var billboard=new Billboard();using var capture=new SceneCapture(device,4,4);
+        using var rgbCapture=new SceneCapture(device,4,4,NativeTextureFormat.Rgb565);
+        if(capture.NativeBytes!=64||rgbCapture.NativeBytes!=32)return 20;
+        try{new SceneCapture(device,4,4,NativeTextureFormat.I8);return 21;}catch(ArgumentException){}
+        var projected=new Material{Texture=rgbCapture.Texture,TextureCoordinates=TextureCoordinateMode.ScreenProjection};
         var camera=new Camera();var renderer=new Renderer();var material=new Material{Cull=CullMode.None,Sampler=sampler};var transform=new Transform();
         using var draw=new Draw2D(device);
         device.BeginFrame(Color32.Black);
         try{device.ConfigureSampling(default);return 19;}catch(InvalidOperationException){}
         renderer.Begin3D(camera);renderer.DrawMesh(plane,material,transform);renderer.DrawMesh(box,material,transform);
         renderer.DrawMesh(sphere,material,transform);renderer.DrawBillboard(billboard,camera,Vector3.Zero,new Vector2(2,3),material);renderer.End3D();
-        capture.Capture(new Viewport(0,0,8,8));
+        capture.Capture(new Viewport(0,0,8,8));rgbCapture.Capture(new Viewport(0,0,8,8));
+        renderer.Begin3D(camera);renderer.DrawMesh(plane,projected,transform);renderer.End3D();
+        var missingProjection=new Material{SecondaryTexture=texture,TextureCoordinates=TextureCoordinateMode.ScreenProjection};
+        renderer.Begin3D(camera);try{renderer.DrawMesh(plane,missingProjection,transform);return 22;}catch(ArgumentException){}renderer.End3D();
         try{capture.Capture(new Viewport(1,0,4,4));return 11;}catch(ArgumentException){}
         try{capture.Capture(new Viewport(0,0,12,12));return 12;}catch(InvalidOperationException){}
         draw.Begin(new Camera2D{Zoom=2});draw.DrawGeometry(geometry,new Vector2(2,3),Color32.White);

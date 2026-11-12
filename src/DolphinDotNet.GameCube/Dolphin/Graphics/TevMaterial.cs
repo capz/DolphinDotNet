@@ -14,7 +14,7 @@ public sealed class TevMaterialDefinition
         TextureCoordinateMode textureCoordinates=TextureCoordinateMode.Uv0)
     {
         if(program==null)throw new ArgumentNullException("program");
-        if((int)lighting<0||(int)lighting>1||(int)textureCoordinates<0||(int)textureCoordinates>2)throw new ArgumentException("Invalid pipeline defaults.");
+        if((int)lighting<0||(int)lighting>1||(int)textureCoordinates<0||(int)textureCoordinates>3)throw new ArgumentException("Invalid pipeline defaults.");
         package=program.BuildPackage();Lighting=lighting;TextureCoordinates=textureCoordinates;
     }
     public byte[] GetPackage(){var copy=new byte[package.Length];Array.Copy(package,copy,copy.Length);return copy;}
@@ -24,6 +24,7 @@ public sealed class TevMaterialDefinition
         if(RequiresTexture&&texture==null)throw new ArgumentException("This material requires a base texture.");
         if(RequiresSecondaryTexture&&secondaryTexture==null)throw new ArgumentException("This material requires a secondary texture.");
         if(TextureCoordinates!=TextureCoordinateMode.Uv0&&texture==null&&secondaryTexture==null)throw new ArgumentException("This material requires a reflection map.");
+        if(TextureCoordinates==TextureCoordinateMode.ScreenProjection&&texture==null)throw new ArgumentException("Screen projection requires a primary capture texture.");
         if(texture!=null)texture.Check();
         if(secondaryTexture!=null)secondaryTexture.Check();
         return new TevMaterial(GxEffect.FromPackage(package),texture,Lighting,TextureCoordinates,secondaryTexture);

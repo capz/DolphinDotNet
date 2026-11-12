@@ -1342,6 +1342,15 @@ clamp,colorSlot,component)` opts into independent per-stage alpha arithmetic.
 and Zero; `TevAlphaOperation`, `TevBias` and `TevScale` select GX arithmetic.
 `SetAlphaCompare(comparison0,reference0,operation,comparison1,reference1)` uses
 `AlphaComparison` and `AlphaCompareOperation` for a two-reference cutout.
+`AddStage` adds optional `bias`, `scale` and `clamp` settings and Subtract,
+plus replicated RGB inputs from alpha registers, texture/raster alpha and Half.
+The original nine-parameter CLR overload remains available for existing binaries.
+`SetBlendFactors(source,destination)` selects `TevBlendFactor` values, including
+Color (destination color as a source factor, source color as a destination factor).
+These RGB/blend additions opt into DNEF v5; ordinary programs retain their bytes.
+`SetIndirectMatrix(m00,m01,m02,m10,m11,m12,exponent,bias)` follows
+`EnableIndirectWarp` and selects a finite bounded 2x3 matrix plus GX exponent
+and `TevIndirectBias` mask. Its optional v5 tail raises the package maximum to460 bytes.
 `TevMaterialPresets.DualTextureGlints(primaryLight,reflectedLight,lowReference=33,
 highReference=235)` combines both sampled alphas with an outside-band comparison.
 See [TEV alpha and cutouts](tev-materials.md#independent-alpha-and-two-reference-cutouts-dnef-v4)

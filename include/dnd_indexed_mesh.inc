@@ -12,7 +12,7 @@ static bool indexed_mesh(const DndDrawVertex *vertices,const uint16_t *indices,i
                            uint32_t uniform_color,const DndDrawTexture *texture,
                            const DndDrawMaterial *material,const float *world,bool vertex_colors,const uint32_t *colors) {
 #if !defined(DND_INDEXED_MESHES) || DND_INDEXED_MESHES
-    if((material->flags&224)||(vertex_colors&&material->color!=0xffffffffu))return false; /* Keep lit and generated-UV paths unchanged. */
+    if((material->flags&224)||(vertex_colors&&material->color!=0xffffffffu))return false; /* Normal-based generated UVs retain the expanded path; screen projection uses indexed positions. */
     DndVertexState state;
     if(!draw_state(texture,material,world,&state))return true;
     int layout=(texture?1:0)|(material->secondary?2:0)|(vertex_colors?4:0);

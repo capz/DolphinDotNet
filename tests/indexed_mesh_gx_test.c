@@ -55,6 +55,11 @@ int main(void) {
  assert(dnd_draw_backend_mesh(vertices,NULL,3,0xffffffffu,&texture,&material,world));
  assert(cache_invalidations==3&&descriptors[GX_VA_TEX1]==GX_INDEX16&&arrays[GX_VA_TEX1]==&vertices[0].u);
  for(int flags=32;flags<=128;flags*=2){int previous=states;material.flags=flags;assert(!dnd_draw_backend_mesh(vertices,NULL,3,0,NULL,&material,world));assert(states==previous);}
+ // Projective coordinates are generated from the same indexed positions;
+ // only normal-based generated modes require the expanded fallback.
+ material.flags=256;positions=texcoords=begins=0;
+ assert(dnd_draw_backend_mesh(vertices,NULL,3,0xffffffffu,&texture,&material,world));
+ assert(positions==3&&arrays[GX_VA_POS]==&vertices[0].x);
  material.flags=0;state_valid=false;int previous=begins;
  assert(dnd_draw_backend_mesh(vertices,NULL,3,0,NULL,&material,world));assert(begins==previous);
  static uint16_t large[65538];for(int i=0;i<65538;i++)large[i]=(uint16_t)(i%3);

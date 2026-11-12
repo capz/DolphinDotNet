@@ -16,11 +16,22 @@ static bool custom_scene_active;static int scene_lights,scene_normals;
 bool dnd_draw_backend_scene_active(void){return custom_scene_active;}
 void dnd_draw_backend_scene(int lit,const float *view){assert(view);if(lit)scene_lights++;}
 static int indirect_resets,full_draws,full_skin;
-static int active_indirect;static float indirect_gain;
+static int active_indirect;static float indirect_gain;static bool custom_matrix_test;static int custom_matrix_calls;
+static int indirect_scale_s,indirect_scale_t,indirect_scale_calls;
 void GX_SetNumIndStages(int count){assert(count==0||count==1);active_indirect=count;if(!count)indirect_resets++;}
 void GX_SetIndTexOrder(int stage,int coord,int texmap){assert(active_indirect==1&&stage==0&&coord==GX_TEXCOORD1&&texmap==GX_TEXMAP1);}
+void GX_SetIndTexCoordScale(int stage,int scale_s,int scale_t){
+ assert(active_indirect==1&&stage==0&&scale_s==GX_ITS_1&&scale_t==GX_ITS_1);
+ indirect_scale_s=scale_s;indirect_scale_t=scale_t;indirect_scale_calls++;
+}
 void GX_SetIndTexMatrix(int matrix,float offsets[2][3],int exponent){
- assert(active_indirect==1&&matrix==GX_ITM_0&&exponent==-1);
+ assert(active_indirect==1&&matrix==GX_ITM_0);
+ assert(indirect_scale_s==GX_ITS_1&&indirect_scale_t==GX_ITS_1);
+ if(custom_matrix_test){
+  assert(exponent==2&&!offsets[0][0]&&!offsets[0][1]&&!offsets[0][2]&&!offsets[1][0]&&offsets[1][1]==.001f&&offsets[1][2]==.015f);
+  custom_matrix_calls++;return;
+ }
+ assert(exponent==-1);
  assert(offsets[0][0]>0&&offsets[0][0]<.36f&&offsets[1][1]==offsets[0][0]);
  assert(!offsets[0][1]&&!offsets[1][0]);indirect_gain=offsets[0][0];
 }
@@ -52,7 +63,12 @@ void GX_SetTevIndWarp(int stage,int indstage,int signed_offset,int replace,int m
  assert(active_indirect==1&&indstage==0&&signed_offset==GX_TRUE&&!replace&&matrix==GX_ITM_0);
  state.stages[stage].direct=2;
 }
-static bool authored_test,v4_test;
+void GX_SetTevIndirect(int stage,int indstage,int format,int bias,int matrix,int wrap_s,int wrap_t,int addprev,int lod,int alpha){
+ assert(custom_matrix_test&&active_indirect==1&&indstage==0&&format==GX_ITF_8&&bias==7&&matrix==GX_ITM_0);
+ assert(wrap_s==GX_ITW_OFF&&wrap_t==GX_ITW_OFF&&!addprev&&!lod&&alpha==GX_ITBA_OFF);
+ state.stages[stage].direct=3;custom_matrix_calls++;
+}
+static bool authored_test,v4_test,v5_test;
 static GXColorS10 authored_colors[4];
 static int authored_rgb_op[5],authored_alpha_op[5],authored_depth_location,authored_dither;
 static int authored_tex_source,authored_tex_id;static Mtx authored_tex_matrix;
@@ -85,7 +101,7 @@ void GX_SetTevOrder(int s,int c,int t,int r){state.stages[s].coord=c;state.stage
 void GX_SetTevKColorSel(int s,int k){state.stages[s].konst=k;}
 void GX_SetTevKAlphaSel(int s,int k){state.stages[s].alpha_konst=k;assert(v4_test||k==GX_TEV_KASEL_1||(authored_test&&s>=1&&s<=2&&k==GX_TEV_KASEL_K3_A));}
 void GX_SetTevColorIn(int s,int a,int b,int c,int d){Stage *p=&state.stages[s];p->a=a;p->b=b;p->c=c;p->d=d;}
-void GX_SetTevColorOp(int s,int op,int bias,int scale,int clamp,int dest){if(!authored_test)assert(!bias&&!scale&&clamp);state.stages[s].op=op;state.stages[s].dest=dest;int values[]={op,bias,scale,clamp,dest};memcpy(authored_rgb_op,values,sizeof(values));}
+void GX_SetTevColorOp(int s,int op,int bias,int scale,int clamp,int dest){if(!authored_test&&!v5_test)assert(!bias&&!scale&&clamp);state.stages[s].op=op;state.stages[s].dest=dest;int values[]={op,bias,scale,clamp,dest};memcpy(authored_rgb_op,values,sizeof(values));}
 void GX_SetTevAlphaIn(int s,int a,int b,int c,int d){int *p=state.stages[s].alpha;p[0]=a;p[1]=b;p[2]=c;p[3]=d;}
 void GX_SetTevAlphaOp(int s,int op,int bias,int scale,int clamp,int dest){state.stages[s].alpha_clamp=clamp;if(!authored_test&&!v4_test)assert(!op&&!bias&&!scale&&clamp&&!dest);int values[]={op,bias,scale,clamp,dest};memcpy(authored_alpha_op,values,sizeof(values));memcpy(state.stages[s].alpha_op,values,sizeof(values));}
 void GX_SetNumTexGens(int n){state.texgens=n;}
@@ -163,6 +179,13 @@ static int alpha_effect_create(bool secondary){
  const unsigned char stages[]={15,15,15,10,0,0,0,0,7,7,7,4,0,193,0,0,
                               15,15,15,0,0,0,0,1,7,4,6,1,0,240,0,0};
  memcpy(p+176,stages,sizeof stages);if(!secondary){p[12]=1;p[199]=0;}int token=dnd_effect_create(a);free(a);assert(token>0);return token;
+}
+static int rgb_effect_create(void){
+ DndArray *a=calloc(1,sizeof(*a)+208);assert(a);a->element_size=1;a->length=208;
+ unsigned char *p=a->data;memcpy(p,"DNEF",4);p[4]=5;p[8]=2;p[12]=3;p[22]=1;p[29]=4;p[30]=2;
+ const unsigned char stages[]={15,15,15,9,0,129,0,0,7,7,7,4,0,193,0,0,
+                              15,9,3,2,1,148,0,1,7,7,7,1,0,192,0,0};
+ memcpy(p+176,stages,sizeof stages);int token=dnd_effect_create(a);free(a);assert(token>0);return token;
 }
 static DndArray *identity(void) {
  DndArray *a=calloc(1,sizeof(*a)+64);assert(a);a->element_size=4;a->length=16;
@@ -244,6 +267,23 @@ static void submission_boundaries(DndArray *camera,const unsigned char *data,con
 }
 int main(void) {
  assert(dnd_model_indexed_path(-1)==1&&dnd_model_indexed_path(0)==0&&dnd_model_indexed_path(1)==1&&dnd_model_indexed_path(2)<0);
+ DndEffectAlpha custom_indirect={.indirect_matrix={0,0,0,0,.001f,.015f},.indirect_exponent=2,.indirect_bias=7,.indirect_enabled=1};
+ DndDrawEffect indirect_effect={.count=1,.texture=3,.indirect_strength=76,.stages={{15,15,15,8,0,0,0,0}},.alpha=&custom_indirect};
+ // Simulate a preceding raw pass changing the indirect coordinate divisors.
+ indirect_scale_s=3;indirect_scale_t=5;
+ custom_matrix_test=true;dnd_draw_backend_tev(&indirect_effect,true);
+ assert(custom_matrix_calls==2&&state.stages[0].direct==3&&indirect_scale_calls==1);custom_matrix_test=false;
+ indirect_effect.alpha=NULL;indirect_scale_s=7;indirect_scale_t=2;
+ dnd_draw_backend_tev(&indirect_effect,true);
+ assert(state.stages[0].direct==2&&indirect_scale_calls==2&&indirect_gain>0);
+ int rgb_effect=rgb_effect_create();const DndDrawEffect *rgb=NULL;
+ assert(dnd_effect_resolve(rgb_effect,&rgb)==0);v4_test=v5_test=true;
+ dnd_draw_backend_tev(rgb,true);
+ assert(state.blend==GX_BM_BLEND&&state.src==4&&state.dst==2);
+ assert(state.stages[0].d==9&&state.stages[0].dest==1);
+ assert(state.stages[1].op==1&&state.stages[1].c==3&&state.stages[1].tex==GX_TEXMAP1);
+ assert(authored_rgb_op[1]==1&&authored_rgb_op[2]==1&&!authored_rgb_op[3]&&!authored_rgb_op[4]);
+ assert(dnd_draw_release(rgb_effect)==0);v4_test=v5_test=false;
  DndDrawEffect dual={.count=3,.texture=3,.stages={{15,15,15,10,0,0,0,0},{15,15,15,8,0,0,0,1},{15,15,15,0,0,0,0,0}}};
  dnd_draw_backend_tev(&dual,true);assert(state.stages[0].tex==GX_TEXMAP0&&state.stages[1].tex==GX_TEXMAP1&&state.stages[1].coord==GX_TEXCOORD1&&state.stages[2].tex==GX_TEXMAP0);
  channel_test=1;dnd_material_channels(true);channel_test=2;dnd_material_channels(false);
@@ -295,6 +335,7 @@ int main(void) {
  Draw baseline[3];memcpy(baseline,record,sizeof(baseline));
  for(int i=0;i<4;i++){assert(baseline[0].colors[i].r==0&&baseline[0].konst[i].r==0);}
  assert(baseline[0].cull==GX_CULL_FRONT&&baseline[0].compare==GX_GEQUAL&&baseline[0].cutoff==127);
+ assert(baseline[0].blend==GX_BM_NONE&&baseline[0].src==GX_BL_ONE&&baseline[0].dst==GX_BL_ZERO);
  assert(baseline[1].cull==GX_CULL_NONE&&baseline[1].position[0]==10);
  assert(baseline[0].vertex[0].r==102&&baseline[0].vertex[0].a==102);
  assert(baseline[2].vertex[0].r==25); // original diffuse shade remains before custom RGB

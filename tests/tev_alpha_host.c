@@ -13,7 +13,7 @@ int main(void){
  if(result||dnd_exception_pending()){
   fprintf(stderr,"TEV alpha AOT result=%ld error=%s\n",(long)result,dnd_exception_message());return 1;
  }
- assert(graphics_draws==4&&graphics_effect_draws==3);
+ assert(graphics_draws==6&&graphics_effect_draws==5);
  assert(!dnd_device_active()&&!dnd_draw_live()&&!dnd_draw_total_bytes());
  effect_package_tests();
  puts("TEV alpha AOT: dual alpha, konst, full stage budget, native validation and zero leaked resources under GC stress passed.");return 0;
