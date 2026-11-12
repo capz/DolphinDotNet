@@ -6,6 +6,8 @@ void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound) {
     const DndEffectAlpha *alpha=effect?effect->alpha:NULL;
     if(alpha&&alpha->compare_enabled)
         GX_SetAlphaCompare(alpha->compare0,alpha->reference0,alpha->operation,alpha->compare1,alpha->reference1);
+    if(alpha&&alpha->blend_enabled)
+        GX_SetBlendMode(GX_BM_BLEND,alpha->blend_source,alpha->blend_destination,GX_LO_CLEAR);
     /* Raw passes may leave indirect texturing enabled. Every shared combiner
      * invocation, including imported-model draws, owns this global state. */
     bool warp=effect&&effect->indirect_strength!=0;
@@ -34,7 +36,7 @@ void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound) {
         const DndTevAlphaStage *a=alpha?&alpha->stages[i]:NULL;
         bool explicit_alpha=a&&(a->control&128);
         bool secondary=s&&s->reserved==1,alt=s&&s->reserved==2;
-        bool sampled=s&&(s->a==GX_CC_TEXC||s->b==GX_CC_TEXC||s->c==GX_CC_TEXC||s->d==GX_CC_TEXC);
+        bool sampled=s&&(s->a==GX_CC_TEXC||s->a==9||s->b==GX_CC_TEXC||s->b==9||s->c==GX_CC_TEXC||s->c==9||s->d==GX_CC_TEXC||s->d==9);
         if(explicit_alpha&&(a->a==GX_CA_TEXA||a->b==GX_CA_TEXA||a->c==GX_CA_TEXA||a->d==GX_CA_TEXA))sampled=true;
         // The final v3 epilogue samples unwarped TEX0 alpha, preserving
         // transparent outlines independently of the displaced RGB samples.
@@ -48,7 +50,9 @@ void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound) {
         GX_SetTevKAlphaSel(stage,explicit_alpha?a->konst:GX_TEV_KASEL_1);
         if(effect) {
             GX_SetTevColorIn(stage,s->a,s->b,s->c,s->d);
-            GX_SetTevColorOp(stage,s->op,GX_TB_ZERO,GX_CS_SCALE_1,GX_TRUE,s->dest);
+            if(s->dest&128)
+                GX_SetTevColorOp(stage,s->op,(s->dest>>2)&3,(s->dest>>4)&3,(s->dest&64)?GX_TRUE:GX_FALSE,s->dest&3);
+            else GX_SetTevColorOp(stage,s->op,GX_TB_ZERO,GX_CS_SCALE_1,GX_TRUE,s->dest);
         } else {
             GX_SetTevColorIn(stage,GX_CC_ZERO,texture_bound?GX_CC_TEXC:GX_CC_ZERO,
                              texture_bound?GX_CC_RASC:GX_CC_ZERO,texture_bound?GX_CC_ZERO:GX_CC_RASC);

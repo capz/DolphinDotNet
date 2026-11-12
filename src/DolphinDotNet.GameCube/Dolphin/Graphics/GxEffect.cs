@@ -5,7 +5,8 @@ namespace Dolphin.Graphics;
 
 /// <summary>Validated immutable TEV program with four or fewer named color parameters.
 /// RGB expressions use fixed-point TEV arithmetic. DNEF v4 can author independent
-/// alpha equations and comparisons; older programs retain base texture opacity.</summary>
+/// alpha equations and comparisons; v5 adds extended RGB arithmetic and blend
+/// factors. Older programs retain base texture opacity and material blending.</summary>
 public sealed class GxEffect : IDisposable
 {
     internal readonly int Token;

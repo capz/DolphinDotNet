@@ -611,11 +611,13 @@ int dnd_effect_create(DndArray *a) {
     if(dnd_device_active()||dnd_raw_depth()||!a||a->element_size!=1||a->elements_are_references||a->length<184||a->length>432)return 0;
     const unsigned char *p=a->data;
     unsigned version=le32(p+4),count=le32(p+8),texture_flag=le32(p+12),uniforms=le32(p+16);
-    unsigned stride=version==4?16u:8u,warp=version==4?p[20]:le32(p+20);
-    if(memcmp(p,"DNEF",4)||(version<1||version>4)||count<1||count>16||
+    unsigned stride=version>=4?16u:8u,warp=version>=4?p[20]:le32(p+20);
+    if(memcmp(p,"DNEF",4)||(version<1||version>5)||count<1||count>16||
        texture_flag>(version==1?1u:3u)||uniforms>4||a->length!=176+count*stride)return 0;
-    if(version==4){
-        if(p[21]>1||p[22]||p[23]||p[29]||p[30]||p[31])return 0;
+    if(version>=4){
+        if(p[21]>1||p[23]||p[31])return 0;
+        if(version==4?(p[22]||p[29]||p[30]):
+           (p[22]>1||(p[22]?(p[29]>7||p[30]>7):(p[29]||p[30]))))return 0;
         if(p[21]?(p[24]>7||p[26]>3||p[27]>7):(le32(p+24)||p[28]))return 0;
         if(warp&&texture_flag!=3)return 0;
     }else{
@@ -631,21 +633,27 @@ int dnd_effect_create(DndArray *a) {
     unsigned initialized=0,initialized_alpha=0;
     for(unsigned i=0;i<count;i++) {
         const DndTevStage *s=(const DndTevStage*)(p+176+i*stride);
-        if((s->op!=0&&s->op!=8)||s->dest>3||s->reserved>(version==1?0:version==2?1:2)||
+        bool explicit_rgb=version==5&&(s->dest&128);
+        if((s->op!=0&&s->op!=8&&!(explicit_rgb&&s->op==1))||
+           (explicit_rgb?(((s->dest>>2)&3)>2||(s->op==8&&(s->dest&124)!=64)):s->dest>3)||s->reserved>(version==1?0:version==2?1:2)||
            (s->konst!=0&&(s->konst<12||s->konst>31)))return 0;
         if((version==3||warp)&&s->reserved==1)return 0; /* Indirect map is not a sampled source. */
-        if(version==4&&s->reserved==2&&!warp)return 0;
+        if(version>=4&&s->reserved==2&&!warp)return 0;
         if(s->reserved==1&&!(texture_flag&2))return 0;
         const unsigned char inputs[]={s->a,s->b,s->c,s->d};
         for(int j=0;j<4;j++) {
             unsigned v=inputs[j];
-            if(v==0||v==2||v==4||v==6){if(!(initialized&(1u<<(v/2))))return 0;}
+            if(v<=7){
+                if(v&1){if(version!=5||!explicit_rgb||!(initialized_alpha&(1u<<(v/2))))return 0;}
+                else if(!(initialized&(1u<<(v/2))))return 0;
+            }
             else if(v==14){unsigned k=s->konst;if(k<12||k>31||((k-12)%4)>=uniforms)return 0;}
-            else if(v==8){if(!(texture_flag&(s->reserved==1?2u:1u)))return 0;}
+            else if(v==8||v==9){if((v==9&&(version!=5||!explicit_rgb))||!(texture_flag&(s->reserved==1?2u:1u)))return 0;}
+            else if(v==11||v==13){if(version!=5||!explicit_rgb)return 0;}
             else if(v!=10&&v!=12&&v!=15)return 0;
         }
-        initialized|=1u<<s->dest;
-        if(version==4){
+        initialized|=1u<<(s->dest&3);
+        if(version>=4){
             const DndTevAlphaStage *alpha=(const DndTevAlphaStage*)(p+184+i*stride);
             if(!(alpha->control&128)){
                 const unsigned char *bytes=(const unsigned char*)alpha;
@@ -665,19 +673,20 @@ int dnd_effect_create(DndArray *a) {
             }
         }
     }
-    if(p[176+(count-1)*stride+5]!=0)return 0;
+    if((p[176+(count-1)*stride+5]&3)!=0)return 0;
     /* Version 2 ends on TEX0 so auxiliary alpha never changes base opacity. */
     if(version>=2&&version<=3&&p[176+(count-1)*8+7]!=0)return 0;
-    int token=create(EFFECT,sizeof(DndDrawEffect)+(version==4?sizeof(DndEffectAlpha):0),32);Resource *r=find(token,EFFECT);if(!r)return 0;
+    int token=create(EFFECT,sizeof(DndDrawEffect)+(version>=4?sizeof(DndEffectAlpha):0),32);Resource *r=find(token,EFFECT);if(!r)return 0;
     DndDrawEffect *effect=(DndDrawEffect*)r->data;
     effect->count=(int)count;effect->texture=(int)texture_flag;effect->uniforms=(int)uniforms;
     effect->indirect_strength=(int)warp;
     for(unsigned i=0;i<uniforms;i++){const unsigned char *c=p+64+i*36;effect->colors[i]=(unsigned)c[0]<<24|(unsigned)c[1]<<16|(unsigned)c[2]<<8|c[3];}
     effect->alpha=NULL;
-    DndEffectAlpha *alpha=version==4?(DndEffectAlpha*)(effect+1):NULL;
+    DndEffectAlpha *alpha=version>=4?(DndEffectAlpha*)(effect+1):NULL;
     if(alpha){
         memset(alpha,0,sizeof(*alpha));alpha->compare_enabled=p[21];
         alpha->compare0=p[24];alpha->reference0=p[25];alpha->operation=p[26];alpha->compare1=p[27];alpha->reference1=p[28];
+        if(version==5){alpha->blend_enabled=p[22];alpha->blend_source=p[29];alpha->blend_destination=p[30];}
         effect->alpha=alpha;
     }
     for(unsigned i=0;i<count;i++){

@@ -22,6 +22,13 @@ internal static class Program
         var compare=new TevProgramBuilder();compare.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Texture);
         compare.SetAlphaCompare(AlphaComparison.Greater,16,AlphaCompareOperation.And,AlphaComparison.Always,0);
         using var cutoff=new TevMaterialDefinition(compare).Create(texture);
+        var rgb=new TevProgramBuilder();
+        rgb.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.TextureAlpha,TevRegister.Color0,clamp:false);
+        rgb.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Texture,TevRegister.Color0);
+        rgb.AddStage(TevInput.Zero,TevInput.SecondaryTextureAlpha,TevInput.Color0Alpha,TevInput.Color0,operation:TevOperation.Subtract,bias:TevBias.AddHalf,scale:TevScale.Two,clamp:false);
+        rgb.SetAlphaStage(1,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Color0);
+        rgb.SetBlendFactors(TevBlendFactor.SourceAlpha,TevBlendFactor.Color);
+        using var rgbMaterial=new TevMaterialDefinition(rgb).Create(texture,texture);
         var vertices=new[]{V(0,1),V(-1,-1),V(1,-1)};
         using var mesh=Mesh.Create(vertices);
         var renderer=new Renderer();var camera=new Camera();var transform=new Transform();var normal=new Material{Texture=texture};
@@ -29,6 +36,7 @@ internal static class Program
         renderer.DrawMesh(mesh,glints.Material,transform);
         renderer.DrawMesh(mesh,sixteen.Material,transform);
         renderer.DrawMesh(mesh,cutoff.Material,transform);
+        renderer.DrawMesh(mesh,rgbMaterial.Material,transform);
         renderer.DrawMesh(mesh,normal,transform);
         renderer.End3D();device.EndFrame();
         return 0;

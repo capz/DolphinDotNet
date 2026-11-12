@@ -317,7 +317,7 @@ remain zero. The alpha record is A/B/C/D/op/control/konst/reserved. Control pack
 explicit bit 7, clamp bit 6, scale bits 4..5, bias bits 2..3 and destination bits
 0..1; an all-zero record requests legacy opacity. Native inputs are GX selectors
 0..7; managed One and SecondaryTexture are normalized while packing. The existing
-native resource owns a 134-byte alpha tail only for v4; there are no per-draw
+native resource owns a 137-byte alpha/render-state tail for v4/v5; there are no per-draw
 allocations, texture copies or extra rendering passes.
 
 Validation includes all 65,536 pairs of alpha samples, scalar konst channels,
@@ -326,3 +326,51 @@ stress, and retained GX recording tests. The existing GraphicsPhaseOne Dolphin
 fixture also checks both branches of the cutout, rejected middle alpha,
 independent secondary alpha and restoration to an ordinary alpha-128 material.
 Physical GameCube precision/performance still needs hardware validation.
+
+## Extended RGB arithmetic and blend factors (DNEF v5)
+
+`AddStage` now accepts optional `bias`, `scale` and `clamp` arguments after
+`alternateUv`, plus `TevOperation.Subtract`. Defaults preserve the original
+program bytes and behavior. The extended arithmetic is
+`(D + bias +/- mix(A,B,C)) * scale`, using GX fixed-point rounding. `GreaterRed`
+retains its original zero-bias, scale-one, clamped contract.
+
+RGB selectors also expose `PreviousAlpha`, `Color0Alpha`, `Color1Alpha`,
+`Color2Alpha`, `TextureAlpha`, `SecondaryTextureAlpha`, `RasterAlpha` and `Half`.
+Alpha selectors replicate a scalar into RGB. RGB and alpha initialization remain
+independent: an RGB read cannot consume alpha produced by the same stage, though
+both channels can read values produced by earlier stages. RGB and alpha still
+share the stage's single texture sample. Mixed primary/secondary sampling fails
+before serialization; secondary alpha sampling is also incompatible with using
+that image as an indirect warp map.
+
+`SetBlendFactors(TevBlendFactor.SourceAlpha, TevBlendFactor.Color)` selects
+`SRCALPHA/SRCCLR`, including destination source-color modulation unavailable in
+the ordinary material blend presets. GX encodes Color as factor 2: it reads
+**destination** RGB when used as a source factor, and **source** RGB when used as
+a destination factor. `InverseColor` is its complement. Other factors are Zero,
+One, SourceAlpha, InverseSourceAlpha, DestinationAlpha and InverseDestinationAlpha.
+Set `Material.Blend=BlendMode.Alpha` for transparent submission ordering. Custom
+factors override the GX draw state, and following ordinary draws restore their
+own factors.
+
+Only these extended RGB or blend settings select v5; unmodified v1-v4 builders
+retain their serialized layouts. V5 uses the v4 16-byte interleaved stage layout
+and same 432-byte maximum. RGB byte 5 is either the original destination 0..3,
+or explicit bit 7 plus clamp bit 6, scale bits 4..5, bias bits 2..3 and destination
+bits 0..1. In v5 only, header byte 22 enables custom blend factors in bytes 29/30;
+byte 31 remains zero. Native parsing validates these settings and both register
+channels before resource allocation. Legacy packages cannot opt in accidentally.
+
+Unclamped outputs saturate to signed 11-bit registers [-1024,1023]. A/B/C inputs
+read the low byte, while D keeps its signed register value; final output also
+uses the low byte before blending/alpha testing. Scaling by two/four happens
+before interpolation rounding. This matters for nonlinear multi-sample effects;
+floating-point arithmetic, early byte saturation or averaging produce different
+results. The tests follow the integer model in Dolphin's
+[hardware shader generator](https://github.com/dolphin-emu/dolphin/blob/master/Source/Core/VideoCommon/PixelShaderGen.cpp)
+and [software TEV register representation](https://github.com/dolphin-emu/dolphin/blob/master/Source/Core/VideoBackends/Software/Tev.h).
+
+These are generic fixed-function controls, not an assertion of any game's exact
+material. Existing `DualTextureGlints` remains the original averaged-alpha preset.
+V5 does not add scene capture, projective sampling or EFB reflection/refraction.
