@@ -184,6 +184,7 @@ static void global(DndInstance *in, unsigned node) {
 void dnd_model_drop_vertices(DndInstance *in) {
   dnd_model_free(in->workspace, &in->bytes);
   in->workspace = NULL;
+  in->palette_joints = 0;
   if (in->vertices)
     for (unsigned i = 0; i < in->model->meshes; i++) {
       dnd_model_free(in->vertices[i], &in->bytes);
@@ -234,12 +235,18 @@ int dnd_model_evaluate(DndInstance *in) {
     }
     DndSkin *skin = &m->skin[mesh->skin];
     if (!in->workspace) {
-      in->workspace = dnd_model_alloc(256 * 32 * 4, &in->bytes, in->budget);
+      /* Validated skins have 1..256 joints. Cache their largest bound with this
+       * allocation, shared by both palette halves and every skinned mesh. */
+      in->palette_joints = 0;
+      for (unsigned j = 0; j < m->skins; j++)
+        if ((unsigned)m->skin[j].count > in->palette_joints)
+          in->palette_joints = (unsigned)m->skin[j].count;
+      in->workspace = dnd_model_alloc(in->palette_joints * 32 * sizeof(float), &in->bytes, in->budget);
       if (!in->workspace)
         return -2;
     }
     float(*palette)[16] = (float(*)[16])in->workspace,
-    (*normal)[16] = (float(*)[16])(in->workspace + 256 * 16);
+    (*normal)[16] = (float(*)[16])(in->workspace + in->palette_joints * 16);
     for (int j = 0; j < skin->count; j++) {
       const unsigned char *joint = skin->data + (unsigned)j * 68;
       float bind[16];

@@ -2,9 +2,15 @@
 
 `Renderer.DrawModels` and the model portion of `RenderQueue` now flatten and
 group opaque submeshes by shared model, material and mesh. Limits remain 128
-objects and 4096 total meshes. The bounded sort uses 64 KiB of extra static
-scratch and allocates nothing per frame. Global stable back-to-front
-translucency remains a separate pass; it is not reordered by material.
+objects and 4096 total meshes. Opaque and translucent submissions share one
+64 KiB static table, growing from opposite ends within that combined mesh limit.
+This replaces two separate 64 KiB tables and saves 65,536 bytes of native static
+memory without allocating per frame. Global stable back-to-front translucency
+remains a separate pass; it is not reordered by material. Equal-depth translucent
+meshes retain input order, including batches at the 4096-mesh limit.
+The saving applies to executables that link this model batching path; builds
+using section garbage collection can already omit the table when they only use
+ordinary meshes or individual model draws.
 
 Within one native batch, compatible repeated materials reuse GX depth/blend,
 alpha, TEV, sampler and texture-object state. Object/normal matrices, mirrored

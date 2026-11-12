@@ -9,9 +9,11 @@ public sealed class Transform
     private const int MaximumHierarchyDepth = 128;
     // Native TRS layout: position XYZ, quaternion XYZW, scale XYZ.
     private readonly float[] values = new float[10];
-    private readonly float[] local = new float[16];
+    // Root transforms can build directly into world. Reserve a distinct local
+    // cache only when first attached, before changing the hierarchy.
+    private float[]? local;
     private readonly float[] world = new float[16];
-    private readonly List<Transform> children = new List<Transform>();
+    private List<Transform>? children;
     private Transform? parent;
     private bool localDirty = true;
     private bool worldDirty = true;
@@ -96,8 +98,13 @@ public sealed class Transform
             }
             // Validate the complete subtree before changing either parent's child list.
             ValidateDepth(depth);
-            if (value != null) value.children.Add(this);
-            if (parent != null) parent.children.Remove(this);
+            if (value != null)
+            {
+                if (local == null) local = new float[16];
+                if (value.children == null) value.children = new List<Transform>(4);
+                value.children.Add(this);
+            }
+            if (parent != null) parent.children!.Remove(this);
             parent = value;
             DirtyWorld();
         }
@@ -112,7 +119,8 @@ public sealed class Transform
     private void ValidateDepth(int depth)
     {
         CheckDepth(depth);
-        for (int i = 0; i < children.Count; i++) children[i].ValidateDepth(depth + 1);
+        if (children != null)
+            for (int i = 0; i < children.Count; i++) children[i].ValidateDepth(depth + 1);
     }
 
     private void Changed()
@@ -126,7 +134,8 @@ public sealed class Transform
         // A dirty node's descendants are already dirty. Stop repeated subtree walks.
         if (worldDirty) return;
         worldDirty = true;
-        for (int i = 0; i < children.Count; i++) children[i].DirtyWorld();
+        if (children != null)
+            for (int i = 0; i < children.Count; i++) children[i].DirtyWorld();
     }
 
     public void Translate(Vector3 offset, bool worldSpace = false)
@@ -152,6 +161,15 @@ public sealed class Transform
         get
         {
             if (!worldDirty) return world;
+            if (local == null)
+            {
+                if (NativeModel.ModelTrs(values, world) < 0)
+                    throw new ArgumentException("Transform must be finite, with nonzero quaternion and scale.");
+                // Keep local dirty until a separate local cache is populated.
+                // Attaching a root must not reuse a world matrix as local TRS.
+                worldDirty = false;
+                return world;
+            }
             if (localDirty)
             {
                 if (NativeModel.ModelTrs(values, local) < 0)

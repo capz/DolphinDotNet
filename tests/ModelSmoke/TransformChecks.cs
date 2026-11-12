@@ -70,6 +70,28 @@ static class TransformChecks
         catch (ArgumentException) { }
         Check(child.Parent == null && leaf.Parent == child, "Rejected subtree move preserves links.");
 
+        // A root draws directly into its world cache until it is first attached.
+        // Detaching, editing and reattaching must still use current local TRS.
+        var moving = new Transform();
+        moving.LocalPosition = new Vector3(2, 0, 0);
+        moving.CopyWorldMatrix(matrix);
+        Check(matrix[12] == 2, "Root placement before first attachment.");
+        var firstParent = new Transform();
+        firstParent.LocalPosition = new Vector3(10, 0, 0);
+        moving.Parent = firstParent;
+        moving.CopyWorldMatrix(matrix);
+        Check(matrix[12] == 12, "Root matrix is not reused as stale local TRS.");
+        moving.Parent = null;
+        moving.LocalPosition = new Vector3(4, 0, 0);
+        moving.CopyWorldMatrix(matrix);
+        Check(matrix[12] == 4, "Detached root edit updates its local cache.");
+        moving.Parent = firstParent;
+        moving.CopyWorldMatrix(matrix);
+        Check(matrix[12] == 14, "Reattaching uses edited local placement.");
+        firstParent.LocalPosition = new Vector3(20, 0, 0);
+        moving.CopyWorldMatrix(matrix);
+        Check(matrix[12] == 24, "First lazy child list propagates invalidation.");
+
         root.LocalRotation = new Quaternion(0, 0, 0, 0);
         try { root.CopyWorldMatrix(matrix); throw new InvalidOperationException("Zero quaternion accepted."); }
         catch (ArgumentException) { }

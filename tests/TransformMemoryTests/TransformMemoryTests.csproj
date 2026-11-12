@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/DolphinDotNet.GameCube/Dolphin/Graphics/Transform.cs" Link="Transform.cs" />
+    <Compile Include="../../src/DolphinDotNet.GameCube/Dolphin/Graphics/Vector3.cs" Link="Vector3.cs" />
+    <Compile Include="../../src/DolphinDotNet.GameCube/Dolphin/Graphics/Quaternion.cs" Link="Quaternion.cs" />
+    <Compile Include="../../src/DolphinDotNet.Core/Dolphin/Collections/List.cs" Link="List.cs" />
+    <Compile Include="../../src/DolphinDotNet.Core/Dolphin/Collections/ReadOnlyCollection.cs" Link="ReadOnlyCollection.cs" />
+  </ItemGroup>
+</Project>

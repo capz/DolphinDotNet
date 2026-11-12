@@ -24,10 +24,15 @@ def main(fixtures):
     work.mkdir(parents=True, exist_ok=True)
     cc = os.environ.get("CC", "cc")
     flags = ["-pthread", "-O1", "-g", "-std=c11", "-Wall", "-Wextra", "-Werror", "-Iinclude"]
+    dead_strip = "-Wl,-dead_strip" if sys.platform == "darwin" else "-Wl,--gc-sections"
     common = ["source/managed_runtime.c", "source/async_runtime.c"]
     model = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "source").glob("model*.c"))
     runtime = common + ["source/storage.c", "source/contiguous_write.c", "source/file_optimize.c","source/verified_copy.c"] + model + [
         "source/graphics_device.c", "source/draw_resources.c", "source/graphics_gx.c", "source/performance.c"]
+    skin = work / "model-skin-workspace"
+    run(cc, *flags, "-ffunction-sections", "-fdata-sections", "tests/model_skin_workspace_test.c",
+        "source/model.c", "source/model_animation.c", dead_strip, "-lm", "-o", skin)
+    run(skin)
     inflate = work / "model-inflate"
     run(cc, *flags, "tests/model_inflate_test.c", "source/model_ufbx.c", "-lm", "-o", inflate)
     run(inflate)
@@ -50,7 +55,6 @@ def main(fixtures):
             "-c", source, "-o", obj)
         objects.append(obj)
     recording = work / "model-recording"
-    dead_strip = "-Wl,-dead_strip" if sys.platform == "darwin" else "-Wl,--gc-sections"
     run(cc, *flags, *objects, dead_strip, "-lm", "-o", recording)
     run(recording)
 
