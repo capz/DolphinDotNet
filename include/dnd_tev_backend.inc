@@ -11,14 +11,20 @@ void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound) {
     /* Raw passes may leave indirect texturing enabled. Every shared combiner
      * invocation, including imported-model draws, owns this global state. */
     bool warp=effect&&effect->indirect_strength!=0;
+    bool custom_indirect=warp&&alpha&&alpha->indirect_enabled;
     GX_SetNumIndStages(warp?1:0);
     if(warp){
         // DNEF v3 uses TEXMAP1 as a signed, scrolling 2D displacement field.
         // The two main color layers both sample TEXMAP0 via independent texgens.
-        f32 gain=(f32)effect->indirect_strength/255.f*.35f;
-        f32 offsets[2][3]={{gain,0,0},{0,gain,0}};
         GX_SetIndTexOrder(GX_INDTEXSTAGE0,GX_TEXCOORD1,GX_TEXMAP1);
-        GX_SetIndTexMatrix(GX_ITM_0,offsets,-1);
+        if(custom_indirect){
+            f32 offsets[2][3];for(int r=0;r<2;r++)for(int c=0;c<3;c++)offsets[r][c]=alpha->indirect_matrix[r*3+c];
+            GX_SetIndTexMatrix(GX_ITM_0,offsets,alpha->indirect_exponent);
+        }else{
+            f32 gain=(f32)effect->indirect_strength/255.f*.35f;
+            f32 offsets[2][3]={{gain,0,0},{0,gain,0}};
+            GX_SetIndTexMatrix(GX_ITM_0,offsets,-1);
+        }
     }
     GX_SetTevSwapModeTable(GX_TEV_SWAP0,GX_CH_RED,GX_CH_GREEN,GX_CH_BLUE,GX_CH_ALPHA);
     /* DNEF rejects reads of uninitialized RGB registers. Clear them anyway so
@@ -40,8 +46,11 @@ void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound) {
         if(explicit_alpha&&(a->a==GX_CA_TEXA||a->b==GX_CA_TEXA||a->c==GX_CA_TEXA||a->d==GX_CA_TEXA))sampled=true;
         // The final v3 epilogue samples unwarped TEX0 alpha, preserving
         // transparent outlines independently of the displaced RGB samples.
-        if(warp&&sampled)
-            GX_SetTevIndWarp(stage,GX_INDTEXSTAGE0,GX_TRUE,GX_FALSE,GX_ITM_0);
+        if(warp&&sampled){
+            if(custom_indirect)
+                GX_SetTevIndirect(stage,GX_INDTEXSTAGE0,GX_ITF_8,alpha->indirect_bias,GX_ITM_0,GX_ITW_OFF,GX_ITW_OFF,GX_FALSE,GX_FALSE,GX_ITBA_OFF);
+            else GX_SetTevIndWarp(stage,GX_INDTEXSTAGE0,GX_TRUE,GX_FALSE,GX_ITM_0);
+        }
         else GX_SetTevDirect(stage);
         GX_SetTevSwapMode(stage,GX_TEV_SWAP0,GX_TEV_SWAP0);
         GX_SetTevOrder(stage,secondary||alt?GX_TEXCOORD1:texture_bound?GX_TEXCOORD0:GX_TEXCOORDNULL,

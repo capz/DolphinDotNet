@@ -261,3 +261,8 @@ float dnd_numeric_i32_bits_to_single(int32_t bits) {
     memcpy(&value, &bits, sizeof(value));
     return value;
 }
+int32_t dnd_numeric_single_to_i32_bits(float value) {
+    int32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}

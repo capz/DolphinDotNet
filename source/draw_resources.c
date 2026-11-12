@@ -286,7 +286,7 @@ static void texture_convert_rgba(Resource *r,const unsigned char *src) {
  }
 int dnd_texture_replace_rgba(int token,DndArray *rgba,int offset) {
     Resource *r=find(token,TEXTURE);
-    if(dnd_device_active()||dnd_raw_depth()||!r||r->format!=6||r->levels!=1||!rgba||rgba->elements_are_references||rgba->element_size!=1||offset<0||(uint32_t)offset>rgba->length||(uint32_t)(r->width*r->height*4)>rgba->length-(uint32_t)offset)return -1;
+    if(dnd_device_active()||dnd_raw_depth()||!r||(r->format!=6&&r->format!=4)||r->levels!=1||!rgba||rgba->elements_are_references||rgba->element_size!=1||offset<0||(uint32_t)offset>rgba->length||(uint32_t)(r->width*r->height*4)>rgba->length-(uint32_t)offset)return -1;
     dnd_draw_backend_wait();texture_convert_rgba(r,rgba->data+offset);
     dnd_draw_backend_flush(r->data,r->bytes,2);return 0;
 }
@@ -423,7 +423,7 @@ int dnd_mesh_draw_effect(int token,int tex,DndArray *world,uint32_t color,int fl
 int dnd_mesh_draw_material(int token,int tex,int secondary,DndArray *world,uint32_t color,int flags,float cutoff,int effect) {
     dnd_performance_drawing_api();
     Resource *r=find(token,MESH);DndDrawTexture tx,extra;float transform[16];
-    if(dnd_device_pass()!=1||!r||!texture(tex,&tx)||!matrix(world,transform)||flags<0||flags>255||(flags&192)==192||!texture(secondary,&extra)||!isfinite(cutoff)||cutoff<0||cutoff>1)return -1;
+    if(dnd_device_pass()!=1||!r||!texture(tex,&tx)||!matrix(world,transform)||flags<0||flags>511||(flags&192)==192||((flags&256)&&((flags&192)||!tex))||!texture(secondary,&extra)||!isfinite(cutoff)||cutoff<0||cutoff>1)return -1;
     /* Reflection coordinates require authored normals, not the fallback +Z used
      * by color-only meshes. Reject before any submission or triangle counters. */
     if((flags&192)&&((!tex&&!secondary)||r->format!=2))return -1;
@@ -443,7 +443,7 @@ int dnd_mesh_draw_batch(DndArray *mesh_tokens,int count,int tex,int secondary,Dn
        mesh_tokens->element_size!=4 || count<2 || count>128 ||
        (uint32_t)count>mesh_tokens->length || !matrix(world,transform) ||
        !texture(tex,&tx) || !texture(secondary,&extra) ||
-       flags<0 || flags>255 || (flags&192)==192 ||
+       flags<0 || flags>511 || (flags&192)==192 || ((flags&256)&&((flags&192)||!tex)) ||
        !isfinite(cutoff) || cutoff<0 || cutoff>1)return -1;
     Resource *fx=effect?find(effect,EFFECT):NULL;
     if(effect&&(!fx||((((DndDrawEffect*)fx->data)->texture&1)&&!tex)||
@@ -483,7 +483,7 @@ int dnd_mesh_draw(int token,int tex,DndArray *world,uint32_t color,int flags,flo
 }
 int dnd_mesh_primitives(DndArray *a,int offset,int count,int format,int primitive,DndArray *world,uint32_t color,int flags) {
     DndDrawMaterial material={color,flags,0,NULL,NULL};float transform[16];
-    if(dnd_device_pass()!=1||count<0||count>768||!matrix(world,transform)||!vertices(a,offset,count,format,staging))return -1;
+    if(dnd_device_pass()!=1||(flags&256)||count<0||count>768||!matrix(world,transform)||!vertices(a,offset,count,format,staging))return -1;
     if((primitive==0x90&&count%3)||(primitive==0xa8&&count%2)||(primitive!=0x90&&primitive!=0xa8&&primitive!=0xb8))return -1;
     if(count)dnd_draw_backend_vertices(staging,count,primitive,NULL,&material,transform);
     if(primitive==0x90)dnd_performance_add_triangles((uint32_t)count/3);
@@ -567,7 +567,7 @@ int dnd_canvas_blend(int token,int blend) {
 int dnd_canvas_stats(int token,int kind) { Resource *r=find(token,CANVAS);return !r?-1:kind==0?r->draws:kind==1?r->flushes:r->count; }
 int dnd_draw_copy_texture(int token,int x,int y,int w,int h) {
     Resource *r=find(token,TEXTURE);DndDrawTexture tx;
-    if(!r||!dnd_device_active()||dnd_device_pass()||!texture(token,&tx)||r->format!=6||r->levels!=1||((r->width|r->height)&3)||((x|y)&1)||!((w==r->width&&h==r->height)||(w==r->width*2&&h==r->height*2))||x<0||y<0||x>dnd_device_width()-w||y>dnd_device_height()-h)return -1;
+    if(!r||!dnd_device_active()||dnd_device_pass()||!texture(token,&tx)||(r->format!=6&&r->format!=4)||r->levels!=1||((r->width|r->height)&3)||((x|y)&1)||!((w==r->width&&h==r->height)||(w==r->width*2&&h==r->height*2))||x<0||y<0||x>dnd_device_width()-w||y>dnd_device_height()-h)return -1;
     dnd_draw_backend_copy(&tx,x,y,w,h);return 0;
 }
 
@@ -608,14 +608,16 @@ uint32_t dnd_buffer_crc32(int token,int offset,int count,uint32_t initial) {
 /* Programs are immutable. Uniform writes are forbidden while a frame is active. */
 int dnd_effect_create(DndArray *a) {
     dnd_async_require_application_thread();if(dnd_exception_pending())return 0;
-    if(dnd_device_active()||dnd_raw_depth()||!a||a->element_size!=1||a->elements_are_references||a->length<184||a->length>432)return 0;
+    if(dnd_device_active()||dnd_raw_depth()||!a||a->element_size!=1||a->elements_are_references||a->length<184||a->length>460)return 0;
     const unsigned char *p=a->data;
     unsigned version=le32(p+4),count=le32(p+8),texture_flag=le32(p+12),uniforms=le32(p+16);
     unsigned stride=version>=4?16u:8u,warp=version>=4?p[20]:le32(p+20);
+    bool custom_indirect=version==5&&p[23]==1;
     if(memcmp(p,"DNEF",4)||(version<1||version>5)||count<1||count>16||
-       texture_flag>(version==1?1u:3u)||uniforms>4||a->length!=176+count*stride)return 0;
+       texture_flag>(version==1?1u:3u)||uniforms>4||a->length!=176+count*stride+(custom_indirect?28u:0u))return 0;
     if(version>=4){
-        if(p[21]>1||p[23]||p[31])return 0;
+        if(p[21]>1)return 0;
+        if(version==4?(p[23]||p[31]):(p[23]>1||(custom_indirect?(p[31]>7||!warp):p[31]!=0)))return 0;
         if(version==4?(p[22]||p[29]||p[30]):
            (p[22]>1||(p[22]?(p[29]>7||p[30]>7):(p[29]||p[30]))))return 0;
         if(p[21]?(p[24]>7||p[26]>3||p[27]>7):(le32(p+24)||p[28]))return 0;
@@ -623,6 +625,16 @@ int dnd_effect_create(DndArray *a) {
     }else{
         if(le32(p+24)||le32(p+28))return 0;
         if(version==3?(texture_flag!=3||warp<1||warp>255):(warp!=0))return 0;
+    }
+    float indirect_matrix[6]={0};int indirect_exponent=0;
+    if(custom_indirect){
+        const unsigned char *tail=p+176+count*stride;
+        indirect_exponent=(int8_t)tail[24];
+        if(indirect_exponent< -17||indirect_exponent>46||tail[25]||tail[26]||tail[27])return 0;
+        for(int i=0;i<6;i++){
+            uint32_t bits=le32(tail+i*4);memcpy(&indirect_matrix[i],&bits,4);
+            if(!isfinite(indirect_matrix[i])||indirect_matrix[i]< -1.f||indirect_matrix[i]>=1.f)return 0;
+        }
     }
     for(unsigned i=0;i<4;i++) {
         const unsigned char *name=p+32+i*36;int end=0;
@@ -687,6 +699,10 @@ int dnd_effect_create(DndArray *a) {
         memset(alpha,0,sizeof(*alpha));alpha->compare_enabled=p[21];
         alpha->compare0=p[24];alpha->reference0=p[25];alpha->operation=p[26];alpha->compare1=p[27];alpha->reference1=p[28];
         if(version==5){alpha->blend_enabled=p[22];alpha->blend_source=p[29];alpha->blend_destination=p[30];}
+        if(custom_indirect){
+            memcpy(alpha->indirect_matrix,indirect_matrix,sizeof indirect_matrix);
+            alpha->indirect_exponent=(signed char)indirect_exponent;alpha->indirect_bias=p[31];alpha->indirect_enabled=1;
+        }
         effect->alpha=alpha;
     }
     for(unsigned i=0;i<count;i++){
@@ -752,7 +768,7 @@ int dnd_render_material(DndArray *a){return render_options(a,0);}
 int dnd_mesh_draw_many(DndArray *a,DndArray *w,int count,int tex,int secondary,uint32_t color,int flags,float cutoff,int effect){
     dnd_performance_drawing_api();
     DndDrawTexture tx,extra;
-    if(dnd_device_pass()!=1||!a||!w||a->element_size!=4||w->element_size!=sizeof(DndArray*)||a->elements_are_references||!w->elements_are_references||count<0||count>128||a->length<(unsigned)count||w->length<(unsigned)count||flags<0||flags>255||(flags&192)==192||!isfinite(cutoff)||cutoff<0||cutoff>1||!texture(tex,&tx)||!texture(secondary,&extra))return -1;
+    if(dnd_device_pass()!=1||!a||!w||a->element_size!=4||w->element_size!=sizeof(DndArray*)||a->elements_are_references||!w->elements_are_references||count<0||count>128||a->length<(unsigned)count||w->length<(unsigned)count||flags<0||flags>511||(flags&192)==192||((flags&256)&&((flags&192)||!tex))||!isfinite(cutoff)||cutoff<0||cutoff>1||!texture(tex,&tx)||!texture(secondary,&extra))return -1;
     Resource *fx=effect?find(effect,EFFECT):NULL;
     if(effect&&(!fx||((((DndDrawEffect*)fx->data)->texture&1)&&!tex)||((((DndDrawEffect*)fx->data)->texture&2)&&!secondary)))return -1;
     const int *ids=(const int*)a->data;DndArray *const *world=(DndArray*const*)w->data;

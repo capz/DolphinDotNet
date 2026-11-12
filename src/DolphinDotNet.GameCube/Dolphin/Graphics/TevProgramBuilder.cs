@@ -14,6 +14,7 @@ public enum AlphaCompareOperation { And, Or, Xor, Xnor }
 /// <summary>Color selects destination color in the source factor slot and
 /// source color in the destination factor slot, matching GX's factor encoding.</summary>
 public enum TevBlendFactor { Zero, One, Color, InverseColor, SourceAlpha, InverseSourceAlpha, DestinationAlpha, InverseDestinationAlpha }
+public enum TevIndirectBias { None=0, S=1, T=2, ST=3, U=4, SU=5, TU=6, STU=7 }
 
 /// <summary>Builds bounded DNEF v1-v5 programs without native allocations. RGB computes
 /// D +/- ((1-C)*A + C*B) with optional bias, scale and clamp, or a GreaterRed comparison.
@@ -37,6 +38,9 @@ public sealed class TevProgramBuilder
     private bool compareEnabled;
     private bool blendEnabled;
     private byte blendSource,blendDestination;
+    private float[]? indirectMatrix;
+    private sbyte indirectExponent;
+    private TevIndirectBias indirectBias;
     public int StageCount => count;
     public int ColorCount => uniforms;
     /// <summary>Use the second texture only as a GX indirect UV warp map.
@@ -49,6 +53,20 @@ public sealed class TevProgramBuilder
         for(int i=0;i<count;i++)if((alphaTextures[i]&2)!=0)throw new InvalidOperationException("Secondary alpha sampling and indirect warp are mutually exclusive.");
         indirectStrength=strength;
         textures|=2;
+    }
+    /// <summary>Override the indirect warp's GX 2x3 matrix and signed exponent.
+    /// EnableIndirectWarp must be called first. Coefficients are finite in [-1,1),
+    /// exponent is -17..46; GX quantizes coefficients when loading the matrix.</summary>
+    public void SetIndirectMatrix(float m00,float m01,float m02,float m10,float m11,float m12,
+        sbyte exponent,TevIndirectBias bias=TevIndirectBias.STU)
+    {
+        if(indirectStrength==0)throw new InvalidOperationException("Enable indirect warp before configuring its matrix.");
+        if(exponent< -17||exponent>46||(int)bias<0||(int)bias>7)
+            throw new ArgumentException("Invalid indirect exponent or bias.");
+        var matrix=new[]{m00,m01,m02,m10,m11,m12};
+        for(int i=0;i<6;i++)if(float.IsNaN(matrix[i])||float.IsInfinity(matrix[i])||matrix[i]< -1||matrix[i]>=1)
+            throw new ArgumentException("Invalid indirect matrix coefficient.");
+        indirectMatrix=matrix;indirectExponent=exponent;indirectBias=bias;
     }
     /// <summary>Configure the alpha equation for an existing RGB stage. When
     /// using explicit alpha, configure every stage; RGB and alpha share a texture
@@ -159,7 +177,8 @@ public sealed class TevProgramBuilder
     public byte[] BuildPackage()
     {
         if(count==0||(stages[(count-1)*8+5]&3)!=0)throw new InvalidOperationException("The final stage must write Previous.");
-        bool explicitAlpha=alphaMask!=0,v4=explicitAlpha||compareEnabled||extendedRgb||blendEnabled;int required=textures;
+        bool customIndirect=indirectMatrix!=null;
+        bool explicitAlpha=alphaMask!=0,v4=explicitAlpha||compareEnabled||extendedRgb||blendEnabled||customIndirect;int required=textures;
         int alphaReady=0;
         for(int i=0;i<count;i++){
             for(int j=0;j<4;j++){int v=stages[i*8+j];if(v<=7&&(v&1)!=0&&(alphaReady&(1<<(v/2)))==0)throw new InvalidOperationException("Read of an uninitialized alpha register in RGB.");}
@@ -178,10 +197,19 @@ public sealed class TevProgramBuilder
         if(indirectStrength!=0&&required!=3)throw new InvalidOperationException("An indirect warp needs a primary texture sample.");
         if(epilogue&&count==MaximumStages)throw new InvalidOperationException("Legacy two-texture programs reserve one stage for base opacity.");
         int stride=v4?16:8;
-        var p=new byte[176+(count+(epilogue?1:0))*stride];p[0]=68;p[1]=78;p[2]=69;p[3]=70;p[4]=(byte)(extendedRgb||blendEnabled?5:v4?4:indirectStrength!=0?3:dual?2:1);
+        int stageEnd=176+(count+(epilogue?1:0))*stride;
+        var p=new byte[stageEnd+(customIndirect?28:0)];p[0]=68;p[1]=78;p[2]=69;p[3]=70;p[4]=(byte)(extendedRgb||blendEnabled||customIndirect?5:v4?4:indirectStrength!=0?3:dual?2:1);
         p[8]=(byte)(count+(epilogue?1:0));p[12]=(byte)required;p[16]=(byte)uniforms;p[20]=(byte)indirectStrength;
         if(compareEnabled){p[21]=1;Array.Copy(alphaCompare,0,p,24,5);}
         if(blendEnabled){p[22]=1;p[29]=blendSource;p[30]=blendDestination;}
+        if(customIndirect){
+            p[23]=1;p[31]=(byte)indirectBias;
+            for(int i=0;i<6;i++){
+                int bits=Dolphin.Numerics.BitConverter.SingleToInt32Bits(indirectMatrix![i]);
+                for(int b=0;b<4;b++)p[stageEnd+i*4+b]=(byte)(bits>>(b*8));
+            }
+            p[stageEnd+24]=unchecked((byte)indirectExponent);
+        }
         for(int i=0;i<uniforms;i++){
             for(int j=0;j<names[i].Length;j++)p[32+i*36+j]=(byte)names[i][j];
             int at=64+i*36;p[at]=colors[i].R;p[at+1]=colors[i].G;p[at+2]=colors[i].B;p[at+3]=colors[i].A;

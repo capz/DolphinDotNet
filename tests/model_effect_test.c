@@ -16,11 +16,16 @@ static bool custom_scene_active;static int scene_lights,scene_normals;
 bool dnd_draw_backend_scene_active(void){return custom_scene_active;}
 void dnd_draw_backend_scene(int lit,const float *view){assert(view);if(lit)scene_lights++;}
 static int indirect_resets,full_draws,full_skin;
-static int active_indirect;static float indirect_gain;
+static int active_indirect;static float indirect_gain;static bool custom_matrix_test;static int custom_matrix_calls;
 void GX_SetNumIndStages(int count){assert(count==0||count==1);active_indirect=count;if(!count)indirect_resets++;}
 void GX_SetIndTexOrder(int stage,int coord,int texmap){assert(active_indirect==1&&stage==0&&coord==GX_TEXCOORD1&&texmap==GX_TEXMAP1);}
 void GX_SetIndTexMatrix(int matrix,float offsets[2][3],int exponent){
- assert(active_indirect==1&&matrix==GX_ITM_0&&exponent==-1);
+ assert(active_indirect==1&&matrix==GX_ITM_0);
+ if(custom_matrix_test){
+  assert(exponent==2&&!offsets[0][0]&&!offsets[0][1]&&!offsets[0][2]&&!offsets[1][0]&&offsets[1][1]==.001f&&offsets[1][2]==.015f);
+  custom_matrix_calls++;return;
+ }
+ assert(exponent==-1);
  assert(offsets[0][0]>0&&offsets[0][0]<.36f&&offsets[1][1]==offsets[0][0]);
  assert(!offsets[0][1]&&!offsets[1][0]);indirect_gain=offsets[0][0];
 }
@@ -51,6 +56,11 @@ static int boundary_mode,boundary_draws;static bool boundary_cached;
 void GX_SetTevIndWarp(int stage,int indstage,int signed_offset,int replace,int matrix){
  assert(active_indirect==1&&indstage==0&&signed_offset==GX_TRUE&&!replace&&matrix==GX_ITM_0);
  state.stages[stage].direct=2;
+}
+void GX_SetTevIndirect(int stage,int indstage,int format,int bias,int matrix,int wrap_s,int wrap_t,int addprev,int lod,int alpha){
+ assert(custom_matrix_test&&active_indirect==1&&indstage==0&&format==GX_ITF_8&&bias==7&&matrix==GX_ITM_0);
+ assert(wrap_s==GX_ITW_OFF&&wrap_t==GX_ITW_OFF&&!addprev&&!lod&&alpha==GX_ITBA_OFF);
+ state.stages[stage].direct=3;custom_matrix_calls++;
 }
 static bool authored_test,v4_test,v5_test;
 static GXColorS10 authored_colors[4];
@@ -251,6 +261,10 @@ static void submission_boundaries(DndArray *camera,const unsigned char *data,con
 }
 int main(void) {
  assert(dnd_model_indexed_path(-1)==1&&dnd_model_indexed_path(0)==0&&dnd_model_indexed_path(1)==1&&dnd_model_indexed_path(2)<0);
+ DndEffectAlpha custom_indirect={.indirect_matrix={0,0,0,0,.001f,.015f},.indirect_exponent=2,.indirect_bias=7,.indirect_enabled=1};
+ DndDrawEffect indirect_effect={.count=1,.texture=3,.indirect_strength=76,.stages={{15,15,15,8,0,0,0,0}},.alpha=&custom_indirect};
+ custom_matrix_test=true;dnd_draw_backend_tev(&indirect_effect,true);
+ assert(custom_matrix_calls==2&&state.stages[0].direct==3);custom_matrix_test=false;
  int rgb_effect=rgb_effect_create();const DndDrawEffect *rgb=NULL;
  assert(dnd_effect_resolve(rgb_effect,&rgb)==0);v4_test=v5_test=true;
  dnd_draw_backend_tev(rgb,true);

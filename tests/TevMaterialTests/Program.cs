@@ -246,3 +246,25 @@ for(int t0=0;t0<256;t0++)for(int t1=0;t1<256;t1++){
 Check((EvaluateAlpha(seaBytes,255,255,255)&255)==254&&(EvaluateAlpha(seaBytes,255,255,128)&255)==0,"Sea alpha overflow differs from early clamping");
 Check((EvaluateAlpha(seaBytes,255,128,35)&255)==35&&(EvaluateAlpha(seaBytes,255,128,34)&255)==34,"Sea low cut distinguishes alpha34 from35");
 Console.WriteLine("Golden sea records: unclamped/wrapped RGB, all 65,536 doubled-alpha pairs, exact XNOR cutoffs and additive factors passed.");
+var matrixProgram=new TevProgramBuilder();
+Reject<InvalidOperationException>(()=>matrixProgram.SetIndirectMatrix(0,0,0,0,.001f,.015f,2));
+matrixProgram.EnableIndirectWarp();
+matrixProgram.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Texture);
+matrixProgram.SetIndirectMatrix(0,0,0,0,.001f,.015f,2,TevIndirectBias.STU);
+var matrixBytes=matrixProgram.BuildPackage();int matrixAt=176+matrixBytes[8]*16;
+Check(matrixBytes[4]==5&&matrixBytes[23]==1&&matrixBytes[31]==7&&matrixBytes.Length==matrixAt+28,"Custom GX indirect matrix has a bounded optional v5 tail");
+Check(BitConverter.ToSingle(matrixBytes,matrixAt+16)==.001f&&BitConverter.ToSingle(matrixBytes,matrixAt+20)==.015f&&matrixBytes[matrixAt+24]==2,"Custom matrix coefficients and exponent retain their exact bits");
+foreach(float bad in new[]{float.NaN,float.PositiveInfinity,float.NegativeInfinity,1f,-1.001f})
+    Reject<ArgumentException>(()=>matrixProgram.SetIndirectMatrix(bad,0,0,0,0,0,2));
+Reject<ArgumentException>(()=>matrixProgram.SetIndirectMatrix(0,0,0,0,0,0,-18));
+Reject<ArgumentException>(()=>matrixProgram.SetIndirectMatrix(0,0,0,0,0,0,47));
+Reject<ArgumentException>(()=>matrixProgram.SetIndirectMatrix(0,0,0,0,0,0,2,(TevIndirectBias)8));
+Check(matrixProgram.BuildPackage().SequenceEqual(matrixBytes),"Failed custom matrix writes leave the valid program unchanged");
+var maxMatrix=new TevProgramBuilder();maxMatrix.EnableIndirectWarp();
+for(int i=0;i<16;i++){
+    maxMatrix.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Texture);
+    maxMatrix.SetAlphaStage(i,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.One);
+}
+maxMatrix.SetIndirectMatrix(-1,0,0,0,0,0,-17,TevIndirectBias.None);
+Check(maxMatrix.BuildPackage().Length==460&&unchecked((sbyte)maxMatrix.BuildPackage()[456])==-17,"Largest legal v5 program and minimum indirect exponent");
+Console.WriteLine("Custom indirect matrix: exact payload, bounded floats, signed exponents, bias flags and failed-mutation isolation passed.");

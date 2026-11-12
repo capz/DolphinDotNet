@@ -77,4 +77,26 @@ static void effect_package_tests(void) {
     // Same-stage alpha writes cannot satisfy an RGB read from that register.
     p[179]=3;assert(dnd_effect_create(a)==0);p[179]=9;
     free(a);assert(dnd_draw_total_bytes()==0);
+    a=calloc(1,sizeof(*a)+220);assert(a);a->element_size=1;a->length=220;p=a->data;
+    memcpy(p,"DNEF",4);p[4]=5;p[8]=1;p[12]=3;p[20]=76;p[23]=1;p[31]=7;
+    p[176]=p[177]=p[178]=15;p[179]=8;
+    const float coefficients[]={0,0,0,0,.001f,.015f};
+    for(int i=0;i<6;i++){uint32_t bits;memcpy(&bits,&coefficients[i],4);for(int b=0;b<4;b++)p[192+i*4+b]=(unsigned char)(bits>>(b*8));}
+    p[216]=2;token=dnd_effect_create(a);assert(token>0);
+    assert(dnd_effect_resolve(token,&v5)==0&&v5->alpha->indirect_enabled&&v5->alpha->indirect_bias==7&&v5->alpha->indirect_exponent==2);
+    assert(v5->alpha->indirect_matrix[4]==.001f&&v5->alpha->indirect_matrix[5]==.015f);assert(dnd_draw_release(token)==0);
+    const int matrix_corrupt_at[]={20,23,31,216,216,217,218,219};
+    const unsigned char matrix_corrupt_value[]={0,2,8,47,238,1,1,1};
+    for(unsigned i=0;i<sizeof(matrix_corrupt_at)/sizeof(*matrix_corrupt_at);i++){
+        int at=matrix_corrupt_at[i];unsigned char old=p[at];p[at]=matrix_corrupt_value[i];assert(dnd_effect_create(a)==0);p[at]=old;
+    }
+    const uint32_t invalid_floats[]={0x7f800001u,0x7f800000u,0xff800000u,0x3f800000u,0xbf800001u};
+    for(unsigned i=0;i<sizeof(invalid_floats)/sizeof(*invalid_floats);i++){
+        for(int b=0;b<4;b++)p[192+b]=(unsigned char)(invalid_floats[i]>>(b*8));
+        assert(dnd_effect_create(a)==0);
+    }
+    memset(p+192,0,4);a->length=219;assert(dnd_effect_create(a)==0);a->length=220;
+    p[23]=0;assert(dnd_effect_create(a)==0);
+    free(a);assert(dnd_draw_total_bytes()==0);
+
 }

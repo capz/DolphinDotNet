@@ -29,6 +29,16 @@ internal static class Program
         rgb.SetAlphaStage(1,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Color0);
         rgb.SetBlendFactors(TevBlendFactor.SourceAlpha,TevBlendFactor.Color);
         using var rgbMaterial=new TevMaterialDefinition(rgb).Create(texture,texture);
+        var indirect=new TevProgramBuilder();indirect.EnableIndirectWarp();
+        indirect.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Texture);
+        indirect.SetIndirectMatrix(0,0,0,0,.001f,.015f,2,TevIndirectBias.STU);
+        var indirectBytes=indirect.BuildPackage();
+        if(indirectBytes[indirectBytes.Length-4]!=2||indirectBytes[31]!=7)return 3;
+        int matrixTail=indirectBytes.Length-28;
+        if(indirectBytes[matrixTail+16]!=0x6f||indirectBytes[matrixTail+17]!=0x12||
+           indirectBytes[matrixTail+18]!=0x83||indirectBytes[matrixTail+19]!=0x3a||
+           Dolphin.Numerics.BitConverter.SingleToInt32Bits(-0.0f)!=unchecked((int)0x80000000))return 4;
+        using var indirectMaterial=new TevMaterialDefinition(indirect).Create(texture,texture);
         var vertices=new[]{V(0,1),V(-1,-1),V(1,-1)};
         using var mesh=Mesh.Create(vertices);
         var renderer=new Renderer();var camera=new Camera();var transform=new Transform();var normal=new Material{Texture=texture};
@@ -37,6 +47,7 @@ internal static class Program
         renderer.DrawMesh(mesh,sixteen.Material,transform);
         renderer.DrawMesh(mesh,cutoff.Material,transform);
         renderer.DrawMesh(mesh,rgbMaterial.Material,transform);
+        renderer.DrawMesh(mesh,indirectMaterial.Material,transform);
         renderer.DrawMesh(mesh,normal,transform);
         renderer.End3D();device.EndFrame();
         return 0;
