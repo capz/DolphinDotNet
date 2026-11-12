@@ -47,6 +47,8 @@ class ModelAcceptanceSchedulingTests(unittest.TestCase):
         regeneration = next(i for i, c in enumerate(commands) if "tests/ModelAssetTests" in c)
         self.assertLess(smoke_runs[0], regeneration)
         self.assertLess(regeneration, smoke_runs[1])
+        automatic = [call for call in run.call_args_list if call.kwargs.get("automatic")]
+        self.assertEqual(len(automatic), 2, "Normal and GC-stress automatic residency must execute.")
 
 
 if __name__ == "__main__":

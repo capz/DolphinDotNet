@@ -9,7 +9,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
 
-test: ipl_font_test
+test: ipl_font_test aram_broker_test
 test: defrag_ownership_test defrag_planner_test verified_copy_test evacuation_journal_test evacuation_test
 test: defrag_batch_test defrag_rebuild_test
 test: raw_move_codec_test
@@ -82,6 +82,7 @@ test: card_manager_test mesh_streams_test display_mode_test graphics_resource_bo
 	./fst_test
 	./card_transaction_test
 	./aram_test
+	./aram_broker_test
 	./overlay_test
 	./overlay_debug_test
 	./debug_heartbeat_test
@@ -156,6 +157,9 @@ card_transaction_test: card_transaction_test.c ../source/card_transaction.c
 aram_test: aram_test.c ../source/aram.c
 	$(CC) $(CFLAGS) -DDND_ARAM_TEST $^ -o $@
 
+aram_broker_test: aram_broker_test.c ../source/aram.c
+	$(CC) $(CFLAGS) -DDND_ARAM_TEST $^ -o $@
+
 stw_test: stw_test.c ../source/stw.c
 	$(CC) $(CFLAGS) -pthread $^ -o $@
 
@@ -207,6 +211,7 @@ clean:
 	rm -f mesh_streams_test mesh_range_test native_buffer_crc_test
 	rm -f file_optimize_test file_extents_test defrag_allocation_test contiguous_write_test dol_test
 	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test jsystem_fixture_telemetry_test asset_compat_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test
+	rm -f aram_broker_test
 
 asset_native_test: asset_native_test.c ../source/storage.c ../source/draw_resources.c ../source/managed_runtime.c ../source/stw.c ../source/gc_stw.c ../source/file_optimize.c ../source/file_extents.c ../source/contiguous_write.c ../source/verified_copy.c
 	$(CC) $(CFLAGS) -Dread=dnd_asset_test_read -pthread -ffunction-sections -fdata-sections $^ $(GC_LDFLAGS) -lm -o $@

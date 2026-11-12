@@ -3,6 +3,8 @@
 #ifndef DND_GAMECUBE_STORAGE
 /* Some isolated ARAM host tests intentionally do not link the graphics module. */
 extern uint64_t dnd_buffer_held_address(int token,int offset,int count) __attribute__((weak));
+extern int dnd_buffer_hold(int token) __attribute__((weak));
+extern int dnd_buffer_unhold(int token) __attribute__((weak));
 #endif
 #include <errno.h>
 #include <limits.h>
@@ -17,6 +19,8 @@ extern uint64_t dnd_buffer_held_address(int token,int offset,int count) __attrib
 #define CHUNK 4096
 #define ALIGN 32u
 #define OWNER 0x444e4441u
+#define REQUESTS 128
+#define REQUEST_CHUNK 16384
 /* No managed pointers survive a call into this module. */
 static struct {int token,length,holds;unsigned offset,size;bool closed;} slots[SLOTS];
 static unsigned first,end;
@@ -24,7 +28,22 @@ static int next_token=1;
 static bool initialized;
 static _Alignas(32) unsigned char staging[CHUNK+32];
 static unsigned char patch[CHUNK];
-static struct {bool active,write,direct;int phase,count,skip;unsigned address,size;void *native;} transfer;
+static struct {bool active,write,direct;int phase,count,skip,owner;unsigned address,size;void *native;} transfer;
+/* Broker service may finish legacy hardware, but its original caller still
+ * consumes the result. A completed legacy read keeps staging reserved until
+ * that caller copies it into its current managed array. Direct DMA never uses
+ * staging, so foreground tickets can progress without another executor's poll. */
+static int legacy_result,legacy_count,legacy_skip;
+static bool legacy_direct,legacy_read;
+typedef struct {
+ int token,aram,offset,buffer,count,position,chunk,priority,result;
+ bool write,cancel;
+ unsigned char *memory;
+ uint64_t order;
+} AramRequest;
+static AramRequest requests[REQUESTS];
+static int next_request=1,request_peak,canceled_requests;
+static uint64_t request_order,dma_read_bytes,dma_write_bytes;
 static volatile int completed;
 #ifdef DND_GAMECUBE_STORAGE
 static ARQRequest request;
@@ -91,6 +110,7 @@ int dnd_aram_release(int token){int i=locate(token);if(i<0 || slots[i].holds<=0)
 int dnd_aram_dispose(int token){int i=locate(token);if(i<0)return -EINVAL;slots[i].closed=true;if(!slots[i].holds)memset(slots+i,0,sizeof(slots[i]));return 0;}
 static void submit(bool write){
  completed=0;
+ if(write)dma_write_bytes+=transfer.size;else dma_read_bytes+=transfer.size;
 #ifdef DND_GAMECUBE_STORAGE
  void *address=transfer.direct?transfer.native:staging;
  if(write)DCFlushRange(address,transfer.size);else DCInvalidateRange(address,transfer.size);
@@ -102,36 +122,54 @@ static void submit(bool write){
 #endif
 }
 static bool range(DndArray *a,int offset,int count){return a && a->element_size==1 && offset>=0 && count>=0 && (size_t)offset<=a->length && (size_t)count<=a->length-(size_t)offset;}
+static void finish_legacy(int result){
+ legacy_result=result;legacy_count=transfer.count;legacy_skip=transfer.skip;legacy_direct=transfer.direct;
+ legacy_read=!transfer.direct&&!transfer.write;
+ transfer.active=false;transfer.direct=false;transfer.native=NULL;
+}
+static void service_legacy(void){
+ if(!transfer.active||transfer.owner||!completed)return;
+#ifdef DND_ARAM_TEST
+ if(fail_next){fail_next=false;finish_legacy(-EIO);return;}
+#endif
+#ifdef DND_GAMECUBE_STORAGE
+ if(!transfer.write||(!transfer.direct&&transfer.phase==1))DCInvalidateRange(transfer.direct?transfer.native:staging,transfer.size);
+#endif
+ if(!transfer.direct&&transfer.phase==1&&transfer.write){
+  memcpy(staging+transfer.skip,patch,(size_t)transfer.count);transfer.phase=2;submit(true);return;
+ }
+ finish_legacy(1);
+}
+static bool demand_waiting(void){for(int i=0;i<REQUESTS;i++)if(requests[i].token&&!requests[i].result&&!requests[i].cancel&&requests[i].priority==0)return true;return false;}
 int dnd_aram_begin(int token,int offset,DndArray *a,int ao,int count,int write){
  int i=locate(token);if(i<0 || slots[i].holds<=0 || offset<0 || count<=0 || count>CHUNK || offset>slots[i].length || count>slots[i].length-offset || !range(a,ao,count))return -EINVAL;
- if(transfer.active)return -EBUSY;
+ if(transfer.active||legacy_result||demand_waiting())return -EBUSY;
  unsigned address=slots[i].offset+(unsigned)offset;
- transfer.active=true;transfer.direct=false;transfer.native=NULL;transfer.write=write!=0;transfer.phase=1;transfer.count=count;transfer.skip=(int)(address%ALIGN);transfer.address=address&~31u;transfer.size=((unsigned)transfer.skip+(unsigned)count+31u)&~31u;
- if(write)memcpy(patch,(unsigned char*)a->data+ao,(size_t)count);
- submit(false);return 0;
+ transfer.active=true;transfer.direct=false;transfer.native=NULL;transfer.owner=0;transfer.write=write!=0;transfer.phase=1;transfer.count=count;transfer.skip=(int)(address%ALIGN);transfer.address=address&~31u;transfer.size=((unsigned)transfer.skip+(unsigned)count+31u)&~31u;
+ if(write&&transfer.skip==0&&((unsigned)count&31u)==0){
+  memcpy(staging,(unsigned char*)a->data+ao,(size_t)count);transfer.phase=2;submit(true);
+ }else{if(write)memcpy(patch,(unsigned char*)a->data+ao,(size_t)count);submit(false);}
+ return 0;
 }
 int dnd_aram_poll(DndArray *a,int ao){
- if(!transfer.active || transfer.direct)return -EINVAL;
- if(!completed)return 0;
-#ifdef DND_ARAM_TEST
- if(fail_next){fail_next=false;transfer.active=false;return -EIO;}
-#endif
- if(transfer.phase==1){
-#ifdef DND_GAMECUBE_STORAGE
-  DCInvalidateRange(staging,transfer.size);
-#endif
-  if(transfer.write){memcpy(staging+transfer.skip,patch,(size_t)transfer.count);transfer.phase=2;submit(true);return 0;}
-  if(!range(a,ao,transfer.count)){transfer.active=false;return -EINVAL;}
-  memcpy((unsigned char*)a->data+ao,staging+transfer.skip,(size_t)transfer.count);
+ service_legacy();
+ if(legacy_result){
+  if(legacy_direct)return -EINVAL;
+  int result=legacy_result;
+  if(result==1&&legacy_read){
+   if(!range(a,ao,legacy_count))result=-EINVAL;
+   else memcpy((unsigned char*)a->data+ao,staging+legacy_skip,(size_t)legacy_count);
+  }
+  legacy_result=0;return result;
  }
- transfer.active=false;return 1;
+ return transfer.active&&!transfer.direct&&!transfer.owner?0:-EINVAL;
 }
 
 /* Native DMA path requires 32-byte-aligned ranges; no read/modify/write.
  * The caller holds both the ARAM allocation and native buffer until poll ends. */
 int dnd_aram_begin_native(int token,int offset,int buffer_token,int bo,int count,int write) {
  int i=locate(token);
- if(transfer.active)return -EBUSY;
+ if(transfer.active||legacy_result||demand_waiting())return -EBUSY;
  if(i<0 || slots[i].holds<=0 || offset<0 || bo<0 ||
     count<=0 || count>65536 || ((offset|bo|count)&31) ||
     offset>slots[i].length || count>slots[i].length-offset)return -EINVAL;
@@ -140,19 +178,167 @@ int dnd_aram_begin_native(int token,int offset,int buffer_token,int bo,int count
 #endif
  uint64_t address=dnd_buffer_held_address(buffer_token,bo,count);
  if(!address || (address&31u))return -EINVAL;
- transfer.active=true;transfer.direct=true;transfer.native=(void*)(uintptr_t)address;
+ transfer.active=true;transfer.direct=true;transfer.native=(void*)(uintptr_t)address;transfer.owner=0;
  transfer.write=write!=0;transfer.phase=2;transfer.count=count;transfer.skip=0;
  transfer.address=slots[i].offset+(unsigned)offset;transfer.size=(unsigned)count;
  submit(write!=0);return 0;
 }
 int dnd_aram_poll_native(void) {
- if(!transfer.active || !transfer.direct)return -EINVAL;
- if(!completed)return 0;
+ service_legacy();
+ if(legacy_result){if(!legacy_direct)return -EINVAL;int result=legacy_result;legacy_result=0;return result;}
+ return transfer.active&&transfer.direct&&!transfer.owner?0:-EINVAL;
+}
+
+static AramRequest *find_request(int token){
+ for(int i=0;i<REQUESTS;i++)if(token>0&&requests[i].token==token)return requests+i;
+ return NULL;
+}
+static int request_count(void){int n=0;for(int i=0;i<REQUESTS;i++)n+=requests[i].token!=0;return n;}
+static bool overlaps(uintptr_t a,unsigned an,uintptr_t b,unsigned bn){return a<=b?b-a<an:a-b<bn;}
+static uintptr_t memory_key(uintptr_t address,unsigned bytes){
+#ifdef GEKKO
+ /* The cached and uncached views alias the same 24 MiB of MEM1. Normalize
+  * only complete valid uncached MEM1 spans; do not reinterpret physical,
+  * MMIO/other segments, crossing ranges, or wider host-test pointers. */
+ const uintptr_t uncached=UINT32_C(0xc0000000),cached=UINT32_C(0x80000000);
+ const uintptr_t mem1=24u*1024u*1024u;
+ if(address>=uncached&&address-uncached<mem1&&bytes<=mem1-(address-uncached))
+  return cached+(address-uncached);
+#else
+ (void)bytes;
+#endif
+ return address;
+}
+static bool conflicts(const AramRequest *a,const AramRequest *b){
+ if(a->aram==b->aram&&(a->write||b->write)&&
+    overlaps((uintptr_t)(unsigned)a->offset,(unsigned)a->count,(uintptr_t)(unsigned)b->offset,(unsigned)b->count))return true;
+ return (!a->write||!b->write)&&overlaps(memory_key((uintptr_t)a->memory,(unsigned)a->count),(unsigned)a->count,
+                                        memory_key((uintptr_t)b->memory,(unsigned)b->count),(unsigned)b->count);
+}
 #ifdef DND_ARAM_TEST
- if(fail_next){fail_next=false;transfer.active=false;transfer.direct=false;return -EIO;}
+bool dnd_aram_test_memory_conflict(uintptr_t first,unsigned first_bytes,int first_write,
+                                  uintptr_t second,unsigned second_bytes,int second_write){
+ AramRequest a={.aram=1,.memory=(unsigned char*)first,.count=(int)first_bytes,.write=first_write!=0};
+ AramRequest b={.aram=2,.memory=(unsigned char*)second,.count=(int)second_bytes,.write=second_write!=0};
+ return conflicts(&a,&b);
+}
 #endif
+static bool blocked(const AramRequest *r){
+ for(int i=0;i<REQUESTS;i++){
+  const AramRequest *other=requests+i;
+  if(other->token&&other->token<r->token&&!other->result&&conflicts(other,r))return true;
+ }
+ return false;
+}
+static void request_done(AramRequest *r,int result){
+ r->result=result;
+ if(result==-ECANCELED&&canceled_requests<INT_MAX)canceled_requests++;
+}
+/* One completion and one new bounded DMA per call. A caller polling its own
+ * ticket may advance other tickets, but only that ticket's poll consumes it. */
+static void service_requests(void){
+ service_legacy();
+ if(transfer.active){
+  if(!transfer.owner||!completed)return;
+  AramRequest *r=find_request(transfer.owner);
+  /* A broker ticket cannot disappear while a DMA owns its native pointer. */
+  if(!r)return;
+#ifdef DND_ARAM_TEST
+  if(fail_next){fail_next=false;request_done(r,-EIO);}
+  else
+#endif
+  {
 #ifdef DND_GAMECUBE_STORAGE
- if(!transfer.write)DCInvalidateRange(transfer.native,transfer.size);
+   if(!transfer.write)DCInvalidateRange(transfer.native,transfer.size);
 #endif
- transfer.active=false;transfer.direct=false;transfer.native=NULL;return 1;
+   r->position+=r->chunk;
+   if(r->cancel)request_done(r,-ECANCELED);
+   else if(r->position==r->count)request_done(r,1);
+   else r->order=++request_order;
+  }
+  transfer.active=false;transfer.owner=0;transfer.direct=false;transfer.native=NULL;
+ }
+ AramRequest *next=NULL;
+ for(int i=0;i<REQUESTS;i++){
+  AramRequest *r=requests+i;
+  if(!r->token||r->result)continue;
+  if(r->cancel){request_done(r,-ECANCELED);continue;}
+  if(blocked(r))continue;
+  if(!next||r->priority<next->priority||(r->priority==next->priority&&r->order<next->order))next=r;
+ }
+ if(!next)return;
+ int slot=locate(next->aram);
+ if(slot<0){request_done(next,-EINVAL);return;}
+ next->chunk=next->count-next->position;
+ if(next->chunk>REQUEST_CHUNK)next->chunk=REQUEST_CHUNK;
+ transfer.active=true;transfer.direct=true;transfer.write=next->write;transfer.owner=next->token;
+ transfer.native=next->memory+next->position;transfer.phase=2;transfer.count=next->chunk;transfer.skip=0;
+ transfer.address=slots[slot].offset+(unsigned)next->offset+(unsigned)next->position;
+ transfer.size=(unsigned)next->chunk;
+ submit(next->write);
+}
+static int request_memory(int token,int offset,void *address,int count,int write,int priority,int buffer){
+ int slot=locate(token),live=request_count();
+ if(slot<0||slots[slot].closed||offset<0||count<=0||priority<0||priority>2||
+    ((uintptr_t)address&31u)||!address||((offset|count)&31)||
+    offset>slots[slot].length||count>slots[slot].length-offset||
+    (uintptr_t)address>UINTPTR_MAX-(unsigned)count)return -EINVAL;
+ /* Leave room for foreground restoration even when optional work is full. */
+ int limit=priority==0?REQUESTS:priority==1?REQUESTS-16:REQUESTS-32;
+ if(live>=limit)return -EAGAIN;
+ if(next_request==INT_MAX)return -EOVERFLOW;
+ int index=0;while(index<REQUESTS&&requests[index].token)index++;
+ if(index==REQUESTS)return -EAGAIN;
+ if(dnd_aram_retain(token))return -EINVAL;
+ AramRequest *r=requests+index;
+ r->token=next_request++;r->aram=token;r->offset=offset;r->memory=address;r->buffer=buffer;
+ r->count=count;r->write=write!=0;r->priority=priority;r->order=++request_order;
+ if(live+1>request_peak)request_peak=live+1;
+ return r->token;
+}
+int dnd_aram_request_memory(int token,int offset,void *address,int count,int write,int priority){
+ return request_memory(token,offset,address,count,write,priority,0);
+}
+int dnd_aram_request_native(int token,int offset,int buffer,int bo,int count,int write,int priority){
+#ifndef DND_GAMECUBE_STORAGE
+ if(!dnd_buffer_hold||!dnd_buffer_unhold||!dnd_buffer_held_address)return -EINVAL;
+#endif
+ if(buffer<=0||bo<0||dnd_buffer_hold(buffer))return -EINVAL;
+ uint64_t address=dnd_buffer_held_address(buffer,bo,count);
+ int result=request_memory(token,offset,(void*)(uintptr_t)address,count,write,priority,buffer);
+ if(result<0)(void)dnd_buffer_unhold(buffer);
+ return result;
+}
+int dnd_aram_request_poll(int token){
+ AramRequest *r=find_request(token);if(!r)return -EINVAL;
+ if(!r->result)service_requests();
+ if(!r->result)return 0;
+ int result=r->result,aram=r->aram,buffer=r->buffer;
+ memset(r,0,sizeof(*r));
+ if(buffer)(void)dnd_buffer_unhold(buffer);
+ (void)dnd_aram_release(aram);
+ return result;
+}
+int dnd_aram_request_cancel(int token){
+ AramRequest *r=find_request(token);if(!r)return -EINVAL;
+ if(!r->result){r->cancel=true;if(!transfer.active||transfer.owner!=token)request_done(r,-ECANCELED);}
+ return 0;
+}
+int dnd_aram_service_broker(void){
+ bool pending=false;
+ for(int i=0;i<REQUESTS;i++)if(requests[i].token&&!requests[i].result){pending=true;break;}
+ if(!pending)return 0;
+ service_requests();
+ for(int i=0;i<REQUESTS;i++)if(requests[i].token&&!requests[i].result)return 1;
+ return 0;
+}
+static int counter_value(uint64_t n){return n>INT_MAX?INT_MAX:(int)n;}
+int dnd_aram_broker_stat(int kind){
+ if(kind==0)return request_count();
+ if(kind==1){uint64_t bytes=0;for(int i=0;i<REQUESTS;i++)if(requests[i].token&&!requests[i].result)bytes+=(unsigned)(requests[i].count-requests[i].position);return counter_value(bytes);}
+ if(kind==2)return request_peak;
+ if(kind==3)return counter_value(dma_read_bytes);
+ if(kind==4)return counter_value(dma_write_bytes);
+ if(kind==5)return canceled_requests;
+ return -EINVAL;
 }

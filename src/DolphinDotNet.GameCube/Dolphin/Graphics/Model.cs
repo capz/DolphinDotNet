@@ -30,6 +30,8 @@ public sealed class Model : IDisposable
     internal readonly int Token;
     private bool disposed,busy;
     private AramBuffer? cold;
+    private ResidencyWork? residency;
+    private bool automaticResidencyProgress=true;
     public AnimationCollection Animations {get;}
     public int NodeCount {get;}
     public int MaterialCount { get { Check(); return NativeModel.ModelStat(Token,5); } }
@@ -37,6 +39,24 @@ public sealed class Model : IDisposable
     public bool IsResident {get{Check();return NativeModel.ModelStat(Token,0)==1;}}
     public int NativeBytes {get{Check();return NativeModel.ModelStat(Token,1);}}
     public int AramBytes {get{Check();return cold==null?0:cold.Length;}}
+    /// <summary>Immutable source length; ARAM snapshots round this up to 32 bytes.</summary>
+    public int PackageBytes {get{Check();return NativeModel.ModelStat(Token,2);}}
+    public bool SupportsAramResidency {get{Check();return NativeModel.ModelStat(Token,8)==1;}}
+    public bool IsTransitioning=>busy;
+    /// <summary>False requires AdvanceResidency calls between frames. Set before starting a transition.</summary>
+    public bool AutomaticResidencyProgress
+    {get=>automaticResidencyProgress;set{Check();if(busy)throw new InvalidOperationException("A residency transition is active.");automaticResidencyProgress=value;}}
+    public int ResidencyBytesPerStep {get;set;}=16384;
+    public int ResidencyWorkItemsPerStep {get;set;}=64;
+    /// <summary>Grant one bounded residency tick; false means it is waiting for DMA.
+    /// May be called while disposing a pending manually driven transition.</summary>
+    public bool AdvanceResidency()=>residency!=null&&residency.Step();
+    /// <summary>Release a redundant cold snapshot only after its model is resident.</summary>
+    public bool ReleaseAramBacking()
+    {
+        Check();if(busy||!IsResident)throw new InvalidOperationException("Prepare the model and finish its transition before releasing its backing.");
+        if(cold==null)return false;cold.Dispose();cold=null;return true;
+    }
     internal Model(int token)
     {
         Token=token;NodeCount=NativeModel.ModelStat(token,4);
@@ -213,7 +233,8 @@ public sealed class Model : IDisposable
         var token=NativeModel.ModelInstance(Token,nativeBudgetBytes);if(token==0)throw new InvalidOperationException("Model is cold or instance memory budget is exhausted.");
         try{return new ModelInstance(this,token);}catch{NativeModel.ModelInstanceDispose(token);throw;}
     }
-    /// <summary>Commit the ARAM copy before freeing main-RAM payloads. Cancellation retains the original residency.</summary>
+    /// <summary>Commit the ARAM copy before retiring main-RAM payloads. Cancellation
+    /// before retirement retains residency; an already committed retirement finishes cold.</summary>
     public Task UnloadToAramAsync(CancellationToken cancellationToken=default)=>Transition(false,cancellationToken);
     /// <summary>Restore all resources from ARAM before drawing; never performs hidden I/O in DrawModel.</summary>
     public Task PrepareAsync(CancellationToken cancellationToken=default)=>Transition(true,cancellationToken);
@@ -222,16 +243,18 @@ public sealed class Model : IDisposable
     {
         Check();if(busy)throw new InvalidOperationException("Model residency transition is active.");
         if(restore==IsResident)return Task.CompletedTask;
-        if(!restore&&cold!=null){cancellation.ThrowIfCancellationRequested();if(NativeModel.ModelUnload(Token)<0)throw new InvalidOperationException("End the render frame before unloading models.");return Task.CompletedTask;}
+        if(!SupportsAramResidency)throw new NotSupportedException("This model does not retain a pageable immutable package.");
         if(!restore&&!Aram.IsAvailable)throw new InvalidOperationException("Initialize ARAM first.");
         if(restore&&cold==null)throw new InvalidOperationException("No ARAM backing package.");
-        var work=new ResidencyWork(this,restore,cancellation);busy=true;
-        try{Scheduler.Post(work.Step);}catch{busy=false;throw;}return work.Completion.Task;
+        if(ResidencyBytesPerStep<32||ResidencyBytesPerStep>65536||(ResidencyBytesPerStep&31)!=0)throw new ArgumentOutOfRangeException("ResidencyBytesPerStep");
+        if(ResidencyWorkItemsPerStep<1||ResidencyWorkItemsPerStep>1024)throw new ArgumentOutOfRangeException("ResidencyWorkItemsPerStep");
+        var work=new ResidencyWork(this,restore,cancellation);busy=true;residency=work;
+        try{work.Start();}catch{busy=false;residency=null;throw;}return work.Completion.Task;
     }
     internal void Check(){if(disposed)throw new ObjectDisposedException("Model");}
     internal void CheckInstanceUse(){if(busy)throw new InvalidOperationException("Model residency transition is active.");}
     public void Dispose(){if(disposed)return;if(busy){disposed=true;return;}if(NativeModel.ModelDispose(Token)<0)throw new InvalidOperationException("End the render frame before disposing models.");disposed=true;if(cold!=null){cold.Dispose();cold=null;}}
-    private void EndWork(){busy=false;if(disposed){NativeModel.ModelDispose(Token);if(cold!=null){cold.Dispose();cold=null;}}}
+    private void EndWork(){busy=false;residency=null;if(disposed){NativeModel.ModelDispose(Token);if(cold!=null){cold.Dispose();cold=null;}}}
     private sealed class LoadWork
     {
         private readonly string path;private readonly int budget,format;private readonly CancellationToken cancellation;private readonly bool approximate;private int token;
@@ -269,32 +292,62 @@ public sealed class Model : IDisposable
     private sealed class ResidencyWork
     {
         private readonly Model model;private readonly bool restore;private readonly CancellationToken cancellation;
-        private readonly byte[] buffer=new byte[4096];private AramBuffer? storage;private Task? pending;private int position,count,length;private bool begun;
+        private readonly int bytes,items;private readonly Action tick;
+        private AramBuffer? storage;private Dolphin.Timing.Timer? timer;
+        private bool begun,finished,manualScheduler;private Exception? failure;
         internal readonly TaskCompletionSource<int> Completion=new TaskCompletionSource<int>();
-        internal ResidencyWork(Model model,bool restore,CancellationToken cancellation){this.model=model;this.restore=restore;this.cancellation=cancellation;}
-        internal void Step()
+        internal ResidencyWork(Model model,bool restore,CancellationToken cancellation)
+        {this.model=model;this.restore=restore;this.cancellation=cancellation;bytes=model.ResidencyBytesPerStep;items=model.ResidencyWorkItemsPerStep;tick=Tick;}
+        internal void Start()
         {
+            if(!model.automaticResidencyProgress)return;
+            manualScheduler=!Dolphin.Threading.Tasks.NativeAsync.AsyncRunning();
+            if(manualScheduler)Scheduler.Post(tick);
+            else timer=Dolphin.Timing.Timer.Schedule(tick,0,16);
+        }
+        private void Tick()
+        {
+            if(finished)return;
+            long deadline=Dolphin.Timing.Clock.Timestamp+1000;
+            int grants=0;
+            do{if(!Step()||finished)break;}while(++grants<16&&Dolphin.Timing.Clock.Timestamp<deadline);
+            if(!finished&&manualScheduler)Scheduler.Post(tick);
+        }
+        internal bool Step()
+        {
+            if(finished)return false;
             try
             {
-                if(pending!=null){if(!pending.IsCompleted){Scheduler.Post(Step);return;}pending.Wait();pending=null;if(restore&&NativeModel.ModelCopy(model.Token,position,buffer,count,1)<0)throw new global::System.IO.IOException("Model restore copy failed.");position+=count;}
-                cancellation.ThrowIfCancellationRequested();model.Check();
-                if(!begun){length=NativeModel.ModelStat(model.Token,2);storage=restore?model.cold:Aram.Allocate(length);if(restore&&NativeModel.ModelRestoreBegin(model.Token)<0)throw new OutOfMemoryException("Model restore exceeds its native budget.");begun=true;}
-                if(position==length)
+                if(!begun)
                 {
-                    if(restore){if(NativeModel.ModelRestoreEnd(model.Token,1)<0)throw new global::System.IO.IOException("Model restore validation or instance budget failed.");}
-                    else{if(NativeModel.ModelUnload(model.Token)<0)throw new InvalidOperationException("End the render frame before unloading a model.");if(model.cold!=null)model.cold.Dispose();model.cold=storage;storage=null;}
-                    model.EndWork();Completion.SetResult(0);return;
+                    model.Check();cancellation.ThrowIfCancellationRequested();
+                    if(!restore&&model.cold==null)storage=Aram.Allocate((model.PackageBytes+31)&~31);
+                    int token=restore?model.cold!.NativeTransferToken:storage==null?0:storage.NativeTransferToken;
+                    int started=NativeModel.ModelResidencyBegin(model.Token,token,restore?1:0);
+                    if(started<0)throw started==-2?new OutOfMemoryException("Model residency exceeds its native budget."):new InvalidOperationException("Model residency requires an idle frame and a supported immutable package.");
+                    begun=true;return true;
                 }
-                count=length-position;if(count>buffer.Length)count=buffer.Length;
-                if(restore)pending=storage!.ReadAsync(position,buffer,0,count,cancellation);
-                else{if(NativeModel.ModelCopy(model.Token,position,buffer,count,0)<0)throw new global::System.IO.IOException("Model snapshot failed.");pending=storage!.WriteAsync(buffer,0,position,count,cancellation);}
-                Scheduler.Post(Step);
+                int result=NativeModel.ModelResidencyStep(model.Token,bytes,items,
+                    cancellation.IsCancellationRequested||model.disposed||failure!=null?1:0);
+                if(result==0||result==2)Aram.WakeTransfers();
+                if(result==0)return false;
+                if(result==2)return true;
+                begun=false;
+                if(result<0)throw failure??(model.disposed?new ObjectDisposedException("Model"):result==-3?new OperationCanceledException():result==-2?new OutOfMemoryException("Model residency exceeds its native budget."):new global::System.IO.IOException("Model residency integrity, DMA or reconstruction failed."));
+                if(!restore&&storage!=null){model.cold=storage;storage=null;}
+                Finish(model.disposed?new ObjectDisposedException("Model"):failure);return true;
             }
             catch(Exception error)
             {
-                if(restore&&begun)NativeModel.ModelRestoreEnd(model.Token,0);
-                if(!restore&&storage!=null)storage.Dispose();model.EndWork();Completion.SetException(error);
+                if(begun){failure=error;return true;} // Drain/rollback on the following granted ticks.
+                Finish(error);return true;
             }
+        }
+        private void Finish(Exception? error)
+        {
+            finished=true;timer?.Dispose();timer=null;
+            storage?.Dispose();storage=null;model.EndWork();
+            if(error==null)Completion.SetResult(0);else Completion.SetException(error);
         }
     }
 }

@@ -245,6 +245,9 @@ static int draw_model_selected(DndInstance *in,const float world[16],const DndDr
       if (anim[11] >= 0) animated_copy.texture = (int)anim[11];
       mat = &animated_copy;
     }
+    /* Common to direct, indexed and authored model emission. A loader can mark
+     * new image bytes without issuing GX from its service executor. */
+    if(dnd_model_take_texture_publication())dnd_draw_backend_publish_texture();
     dnd_performance_add_triangles(mesh->indices / 3);
     unsigned bindings=0;
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)

@@ -51,6 +51,12 @@ int dnd_model_copy(int token, int offset, DndArray *array, int count,
 int dnd_model_restore_begin(int token);
 int dnd_model_restore_end(int token, int commit);
 int dnd_model_unload(int token);
+/* Incremental immutable-package residency. step: 0 waiting, 2 progress,
+ * 1 committed, -3 canceled, -2 budget/allocation failure, -1 invalid/corrupt.
+ * Caller keeps the ARAM owner until terminal completion, including cancel. */
+int dnd_model_residency_begin(int token,int aram_token,int restore);
+int dnd_model_residency_step(int token,int byte_budget,int work_budget,int cancel);
+int dnd_model_residency_stat(int token,int kind);
 int dnd_model_instance(int token, int budget);
 int dnd_model_instance_bytes(int token);
 int dnd_model_instance_dispose(int token);
