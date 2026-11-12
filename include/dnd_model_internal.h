@@ -104,6 +104,10 @@ int dnd_model_evaluate(DndInstance *instance);
 void dnd_model_sort_draws(DndInstance *instance, const float world[16],
                            const float view[16]);
 void dnd_model_drop_vertices(DndInstance *instance);
+/* New cache images are flushed before marking, including service-thread loads.
+ * Consume only on the application renderer immediately before model emission. */
+void dnd_model_mark_texture_publication(void);
+bool dnd_model_take_texture_publication(void);
 /* Residency rebuilds use retained global matrices and never advance playback.
  * Each charged work item is one skin/mesh inspection, allocation, joint matrix
  * or output vertex. work reports units consumed by the most recent call. */

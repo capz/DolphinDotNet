@@ -58,6 +58,11 @@ typedef struct {
   float position[9],uv[6],world_x; GXColor vertex[3];
 } Draw;
 static Draw state,record[16];static int draws,restores,position_index,color_index,uv_index,texture_loads,light_loads,vertex_invalidations;
+static unsigned texture_publications;static bool publication_during_consume;
+void dnd_draw_backend_publish_texture(void){
+ texture_publications++;
+ if(publication_during_consume){publication_during_consume=false;dnd_model_mark_texture_publication();}
+}
 static int boundary_mode,boundary_draws;static bool boundary_cached;
 void GX_SetTevIndWarp(int stage,int indstage,int signed_offset,int replace,int matrix){
  assert(active_indirect==1&&indstage==0&&signed_offset==GX_TRUE&&!replace&&matrix==GX_ITM_0);
@@ -328,10 +333,13 @@ int main(void) {
  int short_effect=effect_create(2,0),long_effect=effect_create(7,0),textured=effect_create(1,1);
  int alpha_effect=alpha_effect_create(false),dual_alpha_effect=alpha_effect_create(true);
  int wrong=dnd_buffer_create(32,32);assert(wrong>0);
+ dnd_model_mark_texture_publication();dnd_model_mark_texture_publication();
+ assert(texture_publications==0); // Publication never emits GX on its loader.
  assert(dnd_model_draw_effect(123,world,short_effect)==-1);
+ assert(texture_publications==0); // Rejected draws cannot consume publication.
  assert(dnd_model_frame_begin(camera,camera)==0);
  assert(dnd_model_indexed_path(0)<0&&dnd_model_indexed_path(-1)==1);
- assert(dnd_model_draw(123,world)==0);assert(draws==3&&restores==3);
+ assert(dnd_model_draw(123,world)==0);assert(draws==3&&restores==3&&texture_publications==1);
  Draw baseline[3];memcpy(baseline,record,sizeof(baseline));
  for(int i=0;i<4;i++){assert(baseline[0].colors[i].r==0&&baseline[0].konst[i].r==0);}
  assert(baseline[0].cull==GX_CULL_FRONT&&baseline[0].compare==GX_GEQUAL&&baseline[0].cutoff==127);
@@ -343,7 +351,12 @@ int main(void) {
  assert(baseline[0].texture.wrap_s==1&&baseline[0].texture.wrap_t==2&&baseline[0].texture.max_lod==1);
  assert(baseline[0].texture.min_filter==GX_LIN_MIP_LIN&&baseline[0].texture.mips);
  assert(dnd_model_draw_effect(123,world,0)==0);
+ assert(texture_publications==1); // One coalesced invalidate, no redraw churn.
  for(int i=0;i<3;i++)assert_draw_equal(baseline[i],record[3+i]);
+ // Simulate a producer publishing between the atomic consume and GX command.
+ // Its mark must survive and be observed before the next mesh emission.
+ dnd_model_mark_texture_publication();publication_during_consume=true;
+ assert(dnd_model_draw(123,world)==0&&texture_publications==3);
  v4_test=true;int alpha_before=draws;size_t alpha_allocations=allocations;
  const DndDrawEffect *dual_alpha=NULL;assert(dnd_effect_resolve(dual_alpha_effect,&dual_alpha)==0);
  dnd_draw_backend_tev(dual_alpha,true);
@@ -457,7 +470,9 @@ int main(void) {
  // culling and imported material state. Skins use evaluated poses, not bind geometry.
  for(int i=0;i<3;i++){meshes[i].uniform_color=meshes[i].unit_normals=true;float color[]={.8f,.6f,.4f,.5f};memcpy(meshes[i].color,color,sizeof(color));}
  before=draws;int old_positions=indexed_positions,old_normals=indexed_normals,old_uvs=indexed_uvs;size_t old_allocations=allocations;
+ dnd_model_mark_texture_publication();unsigned old_publications=texture_publications;
  assert(dnd_model_draw(123,world)==0);
+ assert(texture_publications==old_publications+1);
  assert(indexed_positions==old_positions+9&&indexed_normals==old_normals+3&&indexed_uvs==old_uvs+9&&allocations==old_allocations);
  for(int i=0;i<3;i++)assert_geometry_equal(baseline[i],record[(before+i)%16]);
  // A lit skin fetches normalized evaluated normals at stride 24, independent

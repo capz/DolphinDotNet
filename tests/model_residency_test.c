@@ -203,7 +203,10 @@ static void round_trip(const unsigned char *package,unsigned length) {
   assert(dnd_aram_dispose(store)==0);no_leaks();
 }
 static void shared_textures(const unsigned char *package,unsigned length) {
-  int a=load(package,length),b=load(package,length),store=backing(length);
+  (void)dnd_model_take_texture_publication();
+  int a=load(package,length);assert(dnd_model_take_texture_publication());
+  int b=load(package,length),store=backing(length);
+  assert(!dnd_model_take_texture_publication()); /* Ready-cache reuse is coherent. */
   DndModel *first=dnd_model_find(a,false),*second=dnd_model_find(b,false);
   assert(first->textures&&first->texture[0].data==second->texture[0].data);
   void *shared=first->texture[0].data;
@@ -215,6 +218,7 @@ static void shared_textures(const unsigned char *package,unsigned length) {
   assert(finish(b,1)==-3&&second->bytes==cold);
   assert(dnd_model_stat(a,6)==physical&&first->texture[0].data==shared);
   begin(b,store,1);assert(finish(b,0)==1);
+  assert(!dnd_model_take_texture_publication());
   assert(second->texture[0].data==shared&&dnd_model_stat(a,6)==physical);
   assert(dnd_model_dispose(a)==0);
   assert(dnd_model_stat(b,6)==physical&&second->texture[0].data==shared);
@@ -223,18 +227,37 @@ static void shared_textures(const unsigned char *package,unsigned length) {
 
   /* A half-copied cache entry must not be observed by another model load. */
   a=load(package,length);first=dnd_model_find(a,false);store=backing(length);
+  assert(dnd_model_take_texture_publication());
   begin(a,store,0);assert(finish(a,0)==1);cold=first->bytes;
   begin(a,store,1);phase(a,TEXTURE_COPY);assert(tick(a,0)==2);
   assert(!first->texture[0].data);
+  assert(!dnd_model_take_texture_publication()); /* Partial copy is private. */
   b=load(package,length);second=dnd_model_find(b,false);shared=second->texture[0].data;
+  assert(dnd_model_take_texture_publication());
   assert(dnd_model_stat(b,6)>physical);
   assert(finish(a,1)==-3&&first->bytes==cold);
   assert(second->texture[0].data==shared&&dnd_model_stat(b,6)==physical);
   begin(a,store,1);assert(finish(a,0)==1);
+  assert(!dnd_model_take_texture_publication());
   assert(first->texture[0].data==shared&&dnd_model_stat(a,6)==physical);
   assert(dnd_model_dispose(b)==0);
   begin(a,0,0);assert(finish(a,0)==1);assert(dnd_model_stat(a,6)==0);
   assert(dnd_model_dispose(a)==0&&dnd_aram_dispose(store)==0);no_leaks();
+
+  /* Completing a fresh restored copy marks publication before cache reuse. */
+  a=load(package,length);assert(dnd_model_take_texture_publication());
+  first=dnd_model_find(a,false);store=backing(length);
+  begin(a,store,0);assert(finish(a,0)==1);
+  begin(a,store,1);phase(a,TEXTURE_COPY);
+  assert(!dnd_model_take_texture_publication());
+  assert(tick(a,0)==2&&!dnd_model_take_texture_publication());
+  assert(tick(a,0)==2&&dnd_model_take_texture_publication());
+  assert(!first->ready&&first->texture[0].data);
+  b=load(package,length);assert(!dnd_model_take_texture_publication());
+  assert(dnd_model_find(b,false)->texture[0].data==first->texture[0].data);
+  assert(finish(a,0)==1);
+  assert(dnd_model_dispose(a)==0&&dnd_model_dispose(b)==0);
+  assert(dnd_aram_dispose(store)==0);no_leaks();
 }
 static void closed_owner(const unsigned char *package,unsigned length) {
   int token=load(package,length),store=backing(length);

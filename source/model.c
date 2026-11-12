@@ -7,6 +7,7 @@
 #include <limits.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdatomic.h>
 #include <string.h>
 #ifdef DND_GAMECUBE_STORAGE
 #include <gccore.h>
@@ -82,6 +83,16 @@ static struct {
   unsigned size, hash, refs;
 } texture_cache[512];
 static unsigned texture_cache_bytes;
+/* Loaders may publish on the service executor. Only the application renderer
+ * consumes this handshake and emits the corresponding GX cache command. */
+static _Atomic unsigned model_textures_dirty;
+void dnd_model_mark_texture_publication(void) {
+  atomic_store_explicit(&model_textures_dirty,1u,memory_order_release);
+}
+bool dnd_model_take_texture_publication(void) {
+  if(!atomic_load_explicit(&model_textures_dirty,memory_order_relaxed))return false;
+  return atomic_exchange_explicit(&model_textures_dirty,0u,memory_order_acq_rel)!=0;
+}
 #define TEXTURE_LOADING UINT_MAX
 static bool texture_acquire(DndModel *m, DndTexture *t, const void *data) {
   unsigned charge = (t->size + 63u) & ~31u;
@@ -113,13 +124,14 @@ static bool texture_acquire(DndModel *m, DndTexture *t, const void *data) {
   texture_cache[slot].data = copy;
   texture_cache[slot].size = t->size;
   texture_cache[slot].hash = hash;
+#ifdef DND_GAMECUBE_STORAGE
+  DCFlushRange(copy, t->size);
+#endif
+  dnd_model_mark_texture_publication();
   texture_cache[slot].refs = 1;
   t->cache = slot;
   t->data = copy;
   m->bytes += charge;
-#ifdef DND_GAMECUBE_STORAGE
-  DCFlushRange(copy, t->size);
-#endif
   return true;
 }
 static void drop_textures(DndModel *m) {

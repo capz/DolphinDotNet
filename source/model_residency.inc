@@ -270,7 +270,10 @@ int dnd_model_residency_step(int token,int byte_budget,int work_budget,int cance
     }
     w->compare+=bytes;w->last_bytes=bytes;
     if (w->compare==t->size) {
-      if(texture_cache[w->cache].refs==TEXTURE_LOADING)texture_cache[w->cache].refs=1;
+      if(texture_cache[w->cache].refs==TEXTURE_LOADING){
+        dnd_model_mark_texture_publication();
+        texture_cache[w->cache].refs=1;
+      }
       t->cache=w->cache;t->data=texture_cache[w->cache].data;
       w->cache=-1;w->charged=false;w->texture_cursor+=28+t->size;w->texture++;
       w->search=0;w->free_slot=UINT_MAX;w->phase=MR_TEXTURE_SEARCH;
