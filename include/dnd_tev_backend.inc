@@ -17,6 +17,9 @@ void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound) {
         // DNEF v3 uses TEXMAP1 as a signed, scrolling 2D displacement field.
         // The two main color layers both sample TEXMAP0 via independent texgens.
         GX_SetIndTexOrder(GX_INDTEXSTAGE0,GX_TEXCOORD1,GX_TEXMAP1);
+        // A raw GX pass can leave this stage's coordinate divisor changed.
+        // Managed indirect programs always sample their map at authored scale.
+        GX_SetIndTexCoordScale(GX_INDTEXSTAGE0,GX_ITS_1,GX_ITS_1);
         if(custom_indirect){
             f32 offsets[2][3];for(int r=0;r<2;r++)for(int c=0;c<3;c++)offsets[r][c]=alpha->indirect_matrix[r*3+c];
             GX_SetIndTexMatrix(GX_ITM_0,offsets,alpha->indirect_exponent);

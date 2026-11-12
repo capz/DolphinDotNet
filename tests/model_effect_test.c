@@ -17,10 +17,16 @@ bool dnd_draw_backend_scene_active(void){return custom_scene_active;}
 void dnd_draw_backend_scene(int lit,const float *view){assert(view);if(lit)scene_lights++;}
 static int indirect_resets,full_draws,full_skin;
 static int active_indirect;static float indirect_gain;static bool custom_matrix_test;static int custom_matrix_calls;
+static int indirect_scale_s,indirect_scale_t,indirect_scale_calls;
 void GX_SetNumIndStages(int count){assert(count==0||count==1);active_indirect=count;if(!count)indirect_resets++;}
 void GX_SetIndTexOrder(int stage,int coord,int texmap){assert(active_indirect==1&&stage==0&&coord==GX_TEXCOORD1&&texmap==GX_TEXMAP1);}
+void GX_SetIndTexCoordScale(int stage,int scale_s,int scale_t){
+ assert(active_indirect==1&&stage==0&&scale_s==GX_ITS_1&&scale_t==GX_ITS_1);
+ indirect_scale_s=scale_s;indirect_scale_t=scale_t;indirect_scale_calls++;
+}
 void GX_SetIndTexMatrix(int matrix,float offsets[2][3],int exponent){
  assert(active_indirect==1&&matrix==GX_ITM_0);
+ assert(indirect_scale_s==GX_ITS_1&&indirect_scale_t==GX_ITS_1);
  if(custom_matrix_test){
   assert(exponent==2&&!offsets[0][0]&&!offsets[0][1]&&!offsets[0][2]&&!offsets[1][0]&&offsets[1][1]==.001f&&offsets[1][2]==.015f);
   custom_matrix_calls++;return;
@@ -263,8 +269,13 @@ int main(void) {
  assert(dnd_model_indexed_path(-1)==1&&dnd_model_indexed_path(0)==0&&dnd_model_indexed_path(1)==1&&dnd_model_indexed_path(2)<0);
  DndEffectAlpha custom_indirect={.indirect_matrix={0,0,0,0,.001f,.015f},.indirect_exponent=2,.indirect_bias=7,.indirect_enabled=1};
  DndDrawEffect indirect_effect={.count=1,.texture=3,.indirect_strength=76,.stages={{15,15,15,8,0,0,0,0}},.alpha=&custom_indirect};
+ // Simulate a preceding raw pass changing the indirect coordinate divisors.
+ indirect_scale_s=3;indirect_scale_t=5;
  custom_matrix_test=true;dnd_draw_backend_tev(&indirect_effect,true);
- assert(custom_matrix_calls==2&&state.stages[0].direct==3);custom_matrix_test=false;
+ assert(custom_matrix_calls==2&&state.stages[0].direct==3&&indirect_scale_calls==1);custom_matrix_test=false;
+ indirect_effect.alpha=NULL;indirect_scale_s=7;indirect_scale_t=2;
+ dnd_draw_backend_tev(&indirect_effect,true);
+ assert(state.stages[0].direct==2&&indirect_scale_calls==2&&indirect_gain>0);
  int rgb_effect=rgb_effect_create();const DndDrawEffect *rgb=NULL;
  assert(dnd_effect_resolve(rgb_effect,&rgb)==0);v4_test=v5_test=true;
  dnd_draw_backend_tev(rgb,true);
