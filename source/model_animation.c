@@ -191,6 +191,193 @@ void dnd_model_drop_vertices(DndInstance *in) {
       in->vertices[i] = NULL;
     }
 }
+static bool skin_joint(DndInstance *in, unsigned mesh_index, unsigned j) {
+  DndModel *m = in->model;
+  DndSkin *skin = &m->skin[m->mesh[mesh_index].skin];
+  const unsigned char *joint = skin->data + j * 68;
+  float (*palette)[16] = (float (*)[16])in->workspace;
+  float (*normal)[16] = (float (*)[16])(in->workspace + in->palette_joints * 16);
+  float bind[16];
+  for (int k = 0; k < 16; k++)
+    bind[k] = dnd_model_f32(joint + 4 + k * 4);
+  dnd_model_multiply(palette[j], in->global + dnd_model_u32(joint) * 16, bind);
+  return dnd_model_inverse(normal[j], palette[j]);
+}
+static void skin_vertex(DndInstance *in, unsigned mesh_index, unsigned vertex) {
+  const unsigned char *src = in->model->mesh[mesh_index].data + vertex * 80;
+  float (*palette)[16] = (float (*)[16])in->workspace;
+  float (*normal)[16] = (float (*)[16])(in->workspace + in->palette_joints * 16);
+  float pos[3], n[3], out[6] = {0};
+  for (int j = 0; j < 3; j++) {
+    pos[j] = dnd_model_f32(src + j * 4);
+    n[j] = dnd_model_f32(src + 12 + j * 4);
+  }
+  for (int j = 0; j < 4; j++) {
+    unsigned bone = dnd_model_u32(src + 48 + j * 4);
+    float weight = dnd_model_f32(src + 64 + j * 4);
+    for (int r = 0; r < 3; r++) {
+      out[r] += weight *
+          (palette[bone][r] * pos[0] + palette[bone][4 + r] * pos[1] +
+           palette[bone][8 + r] * pos[2] + palette[bone][12 + r]);
+      out[3 + r] += weight *
+          (normal[bone][r * 4] * n[0] + normal[bone][r * 4 + 1] * n[1] +
+           normal[bone][r * 4 + 2] * n[2]);
+    }
+  }
+  if (!normalize(out + 3, 3)) {
+    out[3] = 0;
+    out[4] = 1;
+    out[5] = 0;
+  }
+  memcpy(in->vertices[mesh_index] + vertex * 6, out, sizeof(out));
+}
+
+/* These phases deliberately charge scans and allocations as well as skin math.
+ * A model can contain many unskinned meshes or unused skins; neither can turn
+ * one residency callback into an unbounded walk. The verified package and its
+ * retained global matrices stay private until every instance is prepared. */
+enum {
+  SKIN_SCAN, SKIN_MESH, SKIN_WORKSPACE, SKIN_OUTPUT, SKIN_JOINTS,
+  SKIN_VERTICES, SKIN_FINISHED
+};
+int dnd_model_skin_prepare_step(DndInstance *in, DndSkinPrepareProgress *p,
+                                 unsigned maximum_work) {
+  if (p)
+    p->work = 0;
+  if (!in || !in->model || !p || !maximum_work || dnd_device_active())
+    return -1;
+  DndModel *m = in->model;
+  if (p->phase > SKIN_FINISHED || p->mesh > m->meshes || !in->vertices)
+    return -1;
+  while (p->work < maximum_work) {
+    if (p->phase == SKIN_FINISHED)
+      return 1;
+    if (p->phase == SKIN_SCAN) {
+      if (in->workspace) {
+        p->joint = 0;
+        p->phase = SKIN_MESH;
+        continue;
+      }
+      if (p->joint > m->skins)
+        return -1;
+      if (!p->joint)
+        in->palette_joints = 0;
+      if (p->joint < m->skins) {
+        int count = m->skin[p->joint++].count;
+        p->work++;
+        if (count < 1 || count > 256)
+          return -1;
+        if ((unsigned)count > in->palette_joints)
+          in->palette_joints = (unsigned)count;
+        continue;
+      }
+      p->joint = 0;
+      p->phase = SKIN_MESH;
+      continue;
+    }
+    if (p->phase == SKIN_MESH) {
+      if (p->mesh == m->meshes) {
+        p->phase = SKIN_FINISHED;
+        return 1;
+      }
+      DndMesh *mesh = &m->mesh[p->mesh];
+      p->work++;
+      if (mesh->skin < 0) {
+        p->mesh++;
+        continue;
+      }
+      if ((unsigned)mesh->skin >= m->skins ||
+          mesh->vertices > UINT_MAX / (6 * sizeof(float)))
+        return -1;
+      p->joint = p->vertex = 0;
+      p->phase = SKIN_WORKSPACE;
+      continue;
+    }
+    if (p->phase == SKIN_WORKSPACE) {
+      if (!in->workspace) {
+        p->work++;
+        if (!in->palette_joints)
+          return -1;
+        in->workspace = dnd_model_alloc_uninitialized(
+            in->palette_joints * 32 * sizeof(float), &in->bytes, in->budget);
+        if (!in->workspace)
+          return -2;
+      }
+      p->phase = SKIN_OUTPUT;
+      continue;
+    }
+    if (p->mesh >= m->meshes)
+      return -1;
+    DndMesh *mesh = &m->mesh[p->mesh];
+    if (p->phase == SKIN_OUTPUT) {
+      if (!in->vertices[p->mesh]) {
+        p->work++;
+        in->vertices[p->mesh] = dnd_model_alloc_uninitialized(
+            mesh->vertices * 6 * sizeof(float), &in->bytes, in->budget);
+        if (!in->vertices[p->mesh])
+          return -2;
+      }
+      p->phase = SKIN_JOINTS;
+      continue;
+    }
+    if (p->phase == SKIN_JOINTS) {
+      unsigned count = (unsigned)m->skin[mesh->skin].count;
+      if (count > in->palette_joints || p->joint > count)
+        return -1;
+      if (p->joint < count) {
+        p->work++;
+        if (!skin_joint(in, p->mesh, p->joint++))
+          return -1;
+        continue;
+      }
+      p->phase = SKIN_VERTICES;
+      continue;
+    }
+    if (p->vertex > mesh->vertices)
+      return -1;
+    unsigned first = p->vertex;
+    while (p->vertex < mesh->vertices && p->work < maximum_work) {
+      skin_vertex(in, p->mesh, p->vertex++);
+      p->work++;
+    }
+#ifdef DND_GAMECUBE_STORAGE
+    /* Flush only this call's bounded output span. GX cannot read the model
+     * until the owning residency operation publishes all of its instances. */
+    if (p->vertex != first)
+      DCFlushRange(in->vertices[p->mesh] + first * 6,
+                   (p->vertex - first) * 6 * sizeof(float));
+#else
+    (void)first;
+#endif
+    if (p->vertex == mesh->vertices) {
+      p->mesh++;
+      p->joint = p->vertex = 0;
+      p->phase = SKIN_MESH;
+    }
+  }
+  return p->phase == SKIN_FINISHED ? 1 : 0;
+}
+int dnd_model_skin_retire_step(DndInstance *in, unsigned *cursor,
+                                unsigned maximum_work) {
+  if (!in || !in->model || !cursor || !maximum_work || dnd_device_active() ||
+      *cursor > in->model->meshes + 1)
+    return -1;
+  for (unsigned work = 0; work < maximum_work; work++) {
+    if (*cursor == in->model->meshes + 1)
+      return 1;
+    if (!*cursor) {
+      dnd_model_free(in->workspace, &in->bytes);
+      in->workspace = NULL;
+      in->palette_joints = 0;
+    } else if (in->vertices) {
+      unsigned mesh = *cursor - 1;
+      dnd_model_free(in->vertices[mesh], &in->bytes);
+      in->vertices[mesh] = NULL;
+    }
+    (*cursor)++;
+  }
+  return *cursor == in->model->meshes + 1 ? 1 : 0;
+}
 int dnd_model_evaluate(DndInstance *in) {
   DndModel *m = in->model;
   if (!m->ready)
@@ -245,44 +432,11 @@ int dnd_model_evaluate(DndInstance *in) {
       if (!in->workspace)
         return -2;
     }
-    float(*palette)[16] = (float(*)[16])in->workspace,
-    (*normal)[16] = (float(*)[16])(in->workspace + in->palette_joints * 16);
-    for (int j = 0; j < skin->count; j++) {
-      const unsigned char *joint = skin->data + (unsigned)j * 68;
-      float bind[16];
-      for (int k = 0; k < 16; k++)
-        bind[k] = dnd_model_f32(joint + 4 + k * 4);
-      dnd_model_multiply(palette[j], in->global + dnd_model_u32(joint) * 16,
-                         bind);
-      if (!dnd_model_inverse(normal[j], palette[j]))
+    for (int j = 0; j < skin->count; j++)
+      if (!skin_joint(in, i, (unsigned)j))
         return -1;
-    }
-    for (unsigned v = 0; v < mesh->vertices; v++) {
-      const unsigned char *src = mesh->data + v * 80;
-      float pos[3], n[3], out[6] = {0};
-      for (int j = 0; j < 3; j++) {
-        pos[j] = dnd_model_f32(src + j * 4);
-        n[j] = dnd_model_f32(src + 12 + j * 4);
-      }
-      for (int j = 0; j < 4; j++) {
-        unsigned bone = dnd_model_u32(src + 48 + j * 4);
-        float weight = dnd_model_f32(src + 64 + j * 4);
-        for (int r = 0; r < 3; r++) {
-          out[r] += weight *
-                    (palette[bone][r] * pos[0] + palette[bone][4 + r] * pos[1] +
-                     palette[bone][8 + r] * pos[2] + palette[bone][12 + r]);
-          out[3 + r] += weight * (normal[bone][r * 4] * n[0] +
-                                  normal[bone][r * 4 + 1] * n[1] +
-                                  normal[bone][r * 4 + 2] * n[2]);
-        }
-      }
-      if (!normalize(out + 3, 3)) {
-        out[3] = 0;
-        out[4] = 1;
-        out[5] = 0;
-      }
-      memcpy(in->vertices[i] + v * 6, out, 24);
-    }
+    for (unsigned v = 0; v < mesh->vertices; v++)
+      skin_vertex(in, i, v);
 #ifdef DND_GAMECUBE_STORAGE
     /* Publish the completed pose once. Indexed GX reads this existing buffer;
      * Update/evaluation is prohibited while a device frame is active. */

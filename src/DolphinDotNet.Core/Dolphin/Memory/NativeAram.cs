@@ -12,4 +12,6 @@ internal static class NativeAram
     internal static int AramDispose(int token)=>throw Unsupported();
     internal static int AramBegin(int token,int offset,byte[] array,int arrayOffset,int count,int write)=>throw Unsupported();
     internal static int AramPoll(byte[] array,int arrayOffset)=>throw Unsupported();
+    internal static int AramBrokerService()=>throw Unsupported();
+    internal static int AramBrokerStat(int kind)=>throw Unsupported();
 }

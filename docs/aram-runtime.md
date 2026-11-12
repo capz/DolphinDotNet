@@ -61,7 +61,65 @@ Allocation uses 32-byte-rounded blocks, first-fit holes and implicit coalescing.
 
 New ARAM allocations have unspecified contents; upload data before reading it. Dispose prevents new submissions immediately. Pending operations retain their allocation and remain valid until completion. Once all holds end, its storage can be reused. Dropping an undisposed buffer leaks its native allocation; deterministic disposal is required.
 
-The service owns roughly 8 KiB of transfer staging/patch memory, plus its fixed allocation table. Payload chunks are at most 4 KiB; aligned DMA spans are at most 4,128 bytes. Uploads use read-modify-write to preserve neighboring bytes for arbitrary offset/count alignment. Native code never keeps managed pointers between calls. The managed work queue retains arrays until completion, keeping them safe across GC. Cancellation skips queued work or subsequent chunks; already submitted DMA drains before resources are released. Cancelled writes/reads may have transferred part of the requested range. Hardware ARQ completion has no per-request media-style error status; DMA faults/hangs need hardware diagnosis.
+The service owns roughly 8 KiB of transfer staging/patch memory, plus its fixed allocation table. Managed-array payload chunks are at most 4 KiB; aligned DMA spans are at most 4,128 bytes. Unaligned uploads use read-modify-write to preserve neighboring bytes. Fully aligned uploads copy into staging and issue one write DMA without the unnecessary read. Native code never keeps managed pointers between calls. The managed work queue retains arrays until completion, keeping them safe across GC. Cancellation skips queued work or subsequent chunks; already submitted DMA drains before resources are released. Cancelled writes/reads may have transferred part of the requested range. Hardware ARQ completion has no per-request media-style error status; DMA faults/hangs need hardware diagnosis.
+
+## Native DMA arbitration
+
+`Dolphin.Graphics.AramTransferQueue` shares a ticketed native broker with model
+residency and native terrain integrations. The original copy method signatures
+remain available; read requests default to demand priority, and writes default
+to background priority. Explicit overloads accept `AramTransferPriority.Demand`,
+`Prefetch` or `Background` before the optional cancellation token:
+
+```csharp
+await AramTransferQueue.CopyToAramAsync(source, 0, cold, 0, source.Length,
+    AramTransferPriority.Background, cancellationToken);
+```
+
+All offsets and lengths must be 32-byte aligned. The broker arbitrates at
+16 KiB chunk boundaries. Eligible demand runs before speculative prefetch and demotion;
+equal priorities receive round-robin chunks. Conflicting ARAM ranges and native
+MEM1 destinations retain submission order, so a later demand read cannot bypass
+an earlier snapshot of the same bytes. Independent requests can finish out of
+submission order. Active DMA is never preempted halfway through a chunk.
+Priority does not bypass dependencies or guarantee a whole-transfer deadline.
+
+There are 128 fixed native request descriptors (7,168 B with the current 56 B
+descriptor layout), with no per-chunk native allocation. Background admission
+stops at 96 live tickets and prefetch at 112, preserving capacity for foreground
+terrain/restoration. Queue exhaustion is explicit backpressure, not permission
+to drop visible resources. Direct native C submitters receive `-EAGAIN`; managed
+copy methods throw when submission is refused. The native-buffer managed queue
+also reserves its 128 reference slots on first use, avoiding growth during
+transfers.
+
+`dnd_aram_request_native` retains both native buffer and ARAM ownership until its
+ticket's terminal poll. `dnd_aram_request_memory` retains ARAM and borrows aligned
+native memory whose lifetime its caller must protect. Neither accepts managed
+pointers that can move during GC. Cancellation only marks a request; callers
+must poll until terminal completion to drain active DMA and release holds.
+
+Legacy managed/direct DMA results remain available to their original pollers.
+The broker can retire completed legacy hardware without consuming those results,
+preserving pending managed read bytes in staging while native demand progresses.
+This avoids requiring a blocked application thread to wait for another managed
+executor to poll. Legacy polling cannot consume a broker ticket's completion.
+Native callers integrating interactive paging should submit once and poll
+between frames, rather than busy-waiting in a render or movement callback.
+Managed native integrations call `Aram.WakeTransfers()` after submission. One
+cached background delegate advances the shared broker between application
+frames, leaving terminal results for their owners. It stops when all tickets
+are terminal, even if owners have not consumed them yet. Existing native-buffer
+copy methods wake this driver automatically. Dispatcher refusal falls back to
+owner polling and increments `Aram.NativeTransferDriverFailures`; it never drops
+DMA holds to recover queue space.
+
+The broker bounds transfer chunks and ownership; it does not bound model
+validation, allocation, texture publication or CPU skin reconstruction. Measure
+those separately, reserve restoration peaks, and verify audio/frame deadlines
+on hardware before claiming unchanged performance. Native diagnostic
+`dnd_aram_broker_stat` exposes live/peak tickets, outstanding bytes, actual read
+and write DMA bytes, and canceled requests.
 
 ## Asset cache
 

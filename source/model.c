@@ -1,6 +1,9 @@
 #include "dnd_draw.h"
 #include "dnd_model_internal.h"
 #include "dnd_storage.h"
+#include "dnd_aram.h"
+#include "dnd_verified_copy.h"
+#include <errno.h>
 #include <limits.h>
 #include <math.h>
 #include <stdlib.h>
@@ -30,7 +33,7 @@ unsigned dnd_model_hash(const void *data, unsigned n) {
     h = (h ^ *p++) * 16777619u;
   return h;
 }
-void *dnd_model_alloc(unsigned size, unsigned *used, unsigned budget) {
+void *dnd_model_alloc_uninitialized(unsigned size, unsigned *used, unsigned budget) {
   if (size > UINT_MAX - 63)
     return NULL;
   unsigned total = (size + 63u) & ~31u;
@@ -43,10 +46,14 @@ void *dnd_model_alloc(unsigned size, unsigned *used, unsigned budget) {
 #endif
   if (!p)
     return NULL;
-  memset(p, 0, total);
   p[0] = total;
   *used += total;
   return (unsigned char *)p + 32;
+}
+void *dnd_model_alloc(unsigned size, unsigned *used, unsigned budget) {
+  void *data = dnd_model_alloc_uninitialized(size, used, budget);
+  if (data) memset(data, 0, ((size + 31u) & ~31u));
+  return data;
 }
 void dnd_model_free(void *data, unsigned *used) {
   if (!data)
@@ -75,17 +82,19 @@ static struct {
   unsigned size, hash, refs;
 } texture_cache[512];
 static unsigned texture_cache_bytes;
+#define TEXTURE_LOADING UINT_MAX
 static bool texture_acquire(DndModel *m, DndTexture *t, const void *data) {
   unsigned charge = (t->size + 63u) & ~31u;
   if (charge > m->budget || m->bytes > m->budget - charge)
     return false;
   unsigned hash = dnd_model_hash(data, t->size);
+  t->hash = hash;
   int slot = -1;
   for (int i = 0; i < 512; i++) {
     if (!texture_cache[i].refs) {
       if (slot < 0)
         slot = i;
-    } else if (texture_cache[i].size == t->size &&
+    } else if (texture_cache[i].refs != TEXTURE_LOADING && texture_cache[i].size == t->size &&
                texture_cache[i].hash == hash &&
                !memcmp(texture_cache[i].data, data, t->size)) {
       texture_cache[i].refs++;
@@ -574,6 +583,8 @@ int dnd_model_stat(int token, int kind) {
     return (int)texture_cache_bytes;
   case 7:
     return (int)m->meshes;
+  case 8:
+    return !m->residency_disabled && m->length>=160;
   default:
     return -1;
   }
@@ -596,7 +607,7 @@ float dnd_model_duration(int token, int clip) {
 int dnd_model_copy(int token, int offset, DndArray *array, int count,
                    int write) {
   DndModel *m = dnd_model_find(token, false);
-  if (!m || !array || array->element_size != 1 ||
+  if (!m || m->residency || !array || array->element_size != 1 ||
       array->elements_are_references || offset < 0 || count < 0 ||
       (unsigned)count > array->length || (unsigned)offset > m->length ||
       (unsigned)count > m->length - (unsigned)offset)
@@ -610,7 +621,7 @@ int dnd_model_copy(int token, int offset, DndArray *array, int count,
 }
 int dnd_model_unload(int token) {
   DndModel *m = dnd_model_find(token, false);
-  if (!m || !m->ready || m->restoring || dnd_device_active())
+  if (!m || m->residency || !m->ready || m->restoring || dnd_device_active())
     return -1;
   for (int i = 0; i < DND_INSTANCE_SLOTS; i++)
     if (dnd_instances[i] && dnd_instances[i]->model == m)
@@ -623,7 +634,7 @@ int dnd_model_unload(int token) {
 }
 int dnd_model_restore_begin(int token) {
   DndModel *m = dnd_model_find(token, false);
-  if (!m || m->ready || m->restoring || m->file)
+  if (!m || m->residency || m->residency_offsets || m->ready || m->restoring || m->file)
     return -1;
   m->staged = dnd_model_alloc(m->length, &m->bytes, m->budget);
   if (!m->staged)
@@ -633,7 +644,7 @@ int dnd_model_restore_begin(int token) {
 }
 int dnd_model_restore_end(int token, int commit) {
   DndModel *m = dnd_model_find(token, false);
-  if (!m || !m->restoring)
+  if (!m || m->residency || !m->restoring)
     return -1;
   int result = 0;
   if (commit) {
@@ -671,3 +682,4 @@ int dnd_model_live_handles(void) {
       n++;
   return n;
 }
+#include "model_residency.inc"

@@ -40,8 +40,10 @@ typedef struct {
 typedef struct {
   unsigned width, height, levels, size;
   int wrap_s, wrap_t, linear, cache;
+  unsigned hash; /* Retained immutable content hash for sliced cache restore. */
   void *data;
 } DndTexture;
+struct DndModelResidency;
 typedef struct {
   int token, file, refs;
   bool closed, ready, restoring;
@@ -56,6 +58,9 @@ typedef struct {
   DndClip *clip;
   DndAuthoredMaterial *authored;
   unsigned authored_count;
+  struct DndModelResidency *residency;
+  unsigned char residency_digest[32];
+  bool residency_digest_valid, residency_offsets, residency_disabled;
 } DndModel;
 typedef struct {
   int token, clip, next;
@@ -99,4 +104,19 @@ int dnd_model_evaluate(DndInstance *instance);
 void dnd_model_sort_draws(DndInstance *instance, const float world[16],
                            const float view[16]);
 void dnd_model_drop_vertices(DndInstance *instance);
+/* Residency rebuilds use retained global matrices and never advance playback.
+ * Each charged work item is one skin/mesh inspection, allocation, joint matrix
+ * or output vertex. work reports units consumed by the most recent call. */
+typedef struct {
+  unsigned mesh, joint, vertex, phase, work;
+} DndSkinPrepareProgress;
+void *dnd_model_alloc_uninitialized(unsigned size, unsigned *used,
+                                    unsigned budget);
+int dnd_model_skin_prepare_step(DndInstance *instance,
+                                DndSkinPrepareProgress *progress,
+                                unsigned maximum_work);
+/* Cursor zero retires the palette workspace; cursors 1..meshes retire one
+ * output each. Resources may only be retired after their last GPU reader. */
+int dnd_model_skin_retire_step(DndInstance *instance, unsigned *cursor,
+                               unsigned maximum_work);
 #endif

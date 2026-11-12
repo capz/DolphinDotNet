@@ -28,6 +28,9 @@ internal static class NativeModel
     internal static int ModelRestoreBegin(int token)=>throw Unsupported();
     internal static int ModelRestoreEnd(int token,int commit)=>throw Unsupported();
     internal static int ModelUnload(int token)=>throw Unsupported();
+    internal static int ModelResidencyBegin(int token,int aram,int restore)=>throw Unsupported();
+    internal static int ModelResidencyStep(int token,int byteBudget,int workBudget,int cancel)=>throw Unsupported();
+    internal static int ModelResidencyStat(int token,int kind)=>throw Unsupported();
     internal static int ModelInstance(int token,int budget)=>throw Unsupported();
     internal static int ModelInstanceBytes(int token)=>throw Unsupported();
     internal static int ModelInstanceDispose(int token)=>throw Unsupported();

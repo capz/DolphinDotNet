@@ -105,11 +105,30 @@ renderer.Draw(player);
 renderer.EndFrame();
 ```
 
-`UnloadToAramAsync` preserves the old resident resources until the whole ARAM upload succeeds; cancellation/failure leaves the original residency intact. `PrepareAsync` validates the ARAM snapshot and rebuilds texture/skinning buffers transactionally; failure leaves the model cold. Existing instances resume at their preserved times. `PrepareAnimationAsync(name)` validates the clip and prepares its whole model. Selective clip-only eviction, compression and automatic LOD streaming are future optimizations.
+`UnloadToAramAsync` preserves resident resources until the ARAM upload succeeds,
+then retires them in bounded steps. Cancellation before retirement retains the
+original residency; once retirement commits, it finishes successfully cold.
+`PrepareAsync` verifies the immutable snapshot and rebuilds textures/skinning in
+bounded phases; failure rolls back to cold ownership. Existing instances resume
+at their preserved times. `PrepareAnimationAsync(name)` prepares the whole model,
+not just one clip. Selective clip eviction and compression remain future work.
+
+See [bounded model residency](model-aram-residency.md) for explicit frame-loop
+grants through `AutomaticResidencyProgress`/`AdvanceResidency`, byte/work budgets,
+native snapshot DMA, shared ownership and releasing redundant ARAM backings.
 
 Drawing/updating a cold model fails rather than hiding DMA. Await `PrepareAsync` ahead of need while the application continues its frame loop. Operations on an instance fail during its model's residency transition. Model disposal during a transition drains active DMA and cleans up without publishing the result. Transitions are serialized per model; DMA is globally serialized by the existing ARAM queue.
 
-Backing packages remain in ARAM after restoration, so later unloads reuse the snapshot without another upload. These allocations are pinned until model disposal, not subject to priority asset-cache eviction. `IsResident`, `NativeBytes` and `AramBytes` report residency and per-model memory charges (shared texture payloads are charged to each model's budget). `ModelInstance.NativeBytes` reports its pose, palette and output-buffer charge. Small model metadata, node transforms and instance playback/pose state remain in main RAM while cold; textures, package bytes, skin palettes and skinned outputs are freed. Keeping an ARAM backup consumes both memories while resident, but avoids disk reads after eviction.
+Backing packages remain in ARAM after restoration, so later unloads reuse the
+snapshot without another upload. The application can release a redundant hot
+backing with `ReleaseAramBacking`; cold or transitioning backings cannot be
+released. They are not silently evicted by `AramAssetCache`. `IsResident`,
+`NativeBytes`, `PackageBytes` and `AramBytes` expose residency and budget charges
+(shared textures are charged to each model). `ModelInstance.NativeBytes` covers
+pose, palette and output storage. Metadata, transforms and playback/pose state
+remain in MEM1 while cold; package bytes, last-owned textures, palettes and skin
+outputs are freed. Keeping a backing consumes both memories while resident,
+but avoids storage reads on the next prepare.
 
 Default native budgets are 8 MiB per model and 4 MiB per instance; each can be configured up to 16 MiB. Packages are limited to 16 MiB; model/instance slots are 64/128. These are upper bounds, not guaranteed available memory. Reserve sufficient main RAM for the runtime, graphics FIFO/framebuffers, networking/audio and other assets. Texture-cache payloads are globally capped at 16 MiB. ARAM capacity still follows the platform/audio reservation in `aram-runtime.md`.
 

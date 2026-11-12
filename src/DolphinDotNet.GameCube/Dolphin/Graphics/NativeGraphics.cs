@@ -54,6 +54,9 @@ internal static class NativeGraphics
     internal static int AramTransferRelease(int token) => throw Unsupported();
     internal static int AramNativeBegin(int token,int aramOffset,int bufferToken,int bufferOffset,int count,int write) => throw Unsupported();
     internal static int AramNativePoll() => throw Unsupported();
+    internal static int AramRequestNative(int token,int aramOffset,int bufferToken,int bufferOffset,int count,int write,int priority) => throw Unsupported();
+    internal static int AramRequestPoll(int request) => throw Unsupported();
+    internal static int AramRequestCancel(int request) => throw Unsupported();
     internal static int DrawRelease(int token) => throw Unsupported();
     internal static int DrawBytes(int token) => throw Unsupported();
     internal static int DrawTotalBytes() => throw Unsupported();

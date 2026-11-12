@@ -60,6 +60,8 @@ def main(area):
                     "-lm","-o",binary)
                 run(binary)
     elif area=="storage":
+        test("tests/AramQueueTests")
+        run("python3","scripts/ci_aram.py") # AramSmoke + AramBrokerSmoke, AOT/runtime and GC stress
         build("tests/MountRegistrySmoke/MountRegistrySmoke.csproj")
         run("python3","tests/storage_mounts.py")
         build("tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj")

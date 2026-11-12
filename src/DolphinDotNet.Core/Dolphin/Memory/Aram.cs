@@ -16,6 +16,30 @@ public sealed class AramStatistics
 }
 public static class Aram
 {
+    private static readonly Action nativePump=PumpNativeTransfers;
+    private static bool nativePumpQueued;
+    private static int nativePumpFailures;
+    /// <summary>Dispatch failures fall back to owner polling; no DMA ownership is released early.</summary>
+    public static int NativeTransferDriverFailures=>nativePumpFailures;
+    /// <summary>Wake the shared native DMA driver after a native integration
+    /// submits work. It advances bounded chunks on the serialized service
+    /// executor; request owners still consume their own terminal results.</summary>
+    public static void WakeTransfers()
+    {
+        if(nativePumpQueued||NativeAram.AramBrokerStat(1)==0)return;
+        nativePumpQueued=true;
+        try{Scheduler.PostBackground(nativePump);}
+        catch{nativePumpQueued=false;nativePumpFailures++;}
+    }
+    private static void PumpNativeTransfers()
+    {
+        try
+        {
+            if(NativeAram.AramBrokerService()==0){nativePumpQueued=false;return;}
+            Scheduler.PostBackground(nativePump);
+        }
+        catch{nativePumpQueued=false;nativePumpFailures++;}
+    }
     /// <summary>Initialize before any other ARAM owner. Reserve lower user memory for audio/platform services.</summary>
     public static bool Initialize(int reservedBytes=1024*1024)
     {

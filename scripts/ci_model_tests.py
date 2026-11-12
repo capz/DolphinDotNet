@@ -12,10 +12,13 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(*args):
+def run(*args, automatic=False):
     print("+", " ".join(map(str, args)), flush=True)
+    environment={**os.environ}
+    if automatic: environment.pop("DND_ASYNC_MANUAL",None)
+    else: environment["DND_ASYNC_MANUAL"]="1"
     subprocess.run([str(arg) for arg in args], cwd=ROOT, check=True, timeout=600,
-                   env={**os.environ, "DND_ASYNC_MANUAL": "1"})
+                   env=environment)
 
 
 def main(fixtures):
@@ -27,12 +30,25 @@ def main(fixtures):
     dead_strip = "-Wl,-dead_strip" if sys.platform == "darwin" else "-Wl,--gc-sections"
     common = ["source/managed_runtime.c", "source/async_runtime.c"]
     model = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "source").glob("model*.c"))
-    runtime = common + ["source/storage.c", "source/contiguous_write.c", "source/file_optimize.c","source/verified_copy.c"] + model + [
+    runtime = common + ["source/storage.c", "source/contiguous_write.c", "source/file_optimize.c","source/verified_copy.c","source/aram.c","source/timing.c"] + model + [
         "source/graphics_device.c", "source/draw_resources.c", "source/graphics_gx.c", "source/performance.c"]
     skin = work / "model-skin-workspace"
     run(cc, *flags, "-ffunction-sections", "-fdata-sections", "tests/model_skin_workspace_test.c",
         "source/model.c", "source/model_animation.c", dead_strip, "-lm", "-o", skin)
     run(skin)
+    bounded_skin = work / "model-skin-residency"
+    bounded_animation = work / "model-skin-residency-animation.o"
+    run(cc, *flags, "-DDND_GAMECUBE_STORAGE", "-Itests/model_skin_sdk",
+        "-ffunction-sections", "-fdata-sections", "-c", "source/model_animation.c",
+        "-o", bounded_animation)
+    run(cc, *flags, "-ffunction-sections", "-fdata-sections", "tests/model_skin_residency_test.c",
+        "source/model.c", bounded_animation, dead_strip, "-lm", "-o", bounded_skin)
+    run(bounded_skin)
+    residency = work / "model-residency"
+    run(cc, *flags, "-ffunction-sections", "-fdata-sections", "tests/model_residency_test.c",
+        "source/model.c", "source/model_animation.c", "source/aram.c",
+        "source/verified_copy.c", dead_strip, "-lm", "-o", residency)
+    run(residency, fixtures)
     inflate = work / "model-inflate"
     run(cc, *flags, "tests/model_inflate_test.c", "source/model_ufbx.c", "-lm", "-o", inflate)
     run(inflate)
@@ -80,12 +96,18 @@ def main(fixtures):
     # code; every runtime and host source still compiles with strict warnings.
     generated_object = work / "model-smoke-generated.o"
     run(cc, *flags, "-Wno-unused-function", "-c", generated, "-o", generated_object)
-    run(cc, *flags, generated_object, "tests/model_host.c", "source/text.c", "source/numeric.c", "source/aram.c",
+    run(cc, *flags, generated_object, "tests/model_host.c", "source/text.c", "source/numeric.c",
         *runtime, "-lm", "-o", smoke)
     run(smoke, fixtures)
     # Smoke mutates cache/stream fixtures; regenerate before the GC-stress run.
     run("dotnet", "run", "--project", "tests/ModelAssetTests", "-c", "Release", "--", fixtures)
     run(smoke, fixtures, "--gc-stress")
+    # Exercise automatic periodic model progress and its background DMA driver,
+    # including GC handoffs. ModelSmoke only deletes this one source package.
+    for arguments in ((),("--gc-stress",)):
+        run(sys.executable,"-c","import shutil,sys; shutil.copyfile(sys.argv[1],sys.argv[2])",
+            fixtures/"sd"/"animated.dndmodel",fixtures/"sd"/"cache.dndmodel")
+        run(smoke, fixtures, *arguments, automatic=True)
 
 
 if __name__ == "__main__":
