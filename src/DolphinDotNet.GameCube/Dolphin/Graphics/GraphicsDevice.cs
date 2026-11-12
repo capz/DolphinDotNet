@@ -61,7 +61,7 @@ public sealed partial class GraphicsDevice
     public void CopyToTexture(Texture2D destination,int x,int y)
     {
         if(destination==null)throw new ArgumentNullException("destination");destination.Check();
-        Check(NativeGraphics.DrawCopyTexture(destination.Token,x,y,destination.Width,destination.Height),"Copy requires an active frame between passes and an RGBA8 destination that fits the EFB.");
+        Check(NativeGraphics.DrawCopyTexture(destination.Token,x,y,destination.Width,destination.Height),"Copy requires an active frame between passes and an aligned RGBA8 or RGB565 destination that fits the EFB.");
     }
     internal static void Check(int result,string message){if(result<0)throw new InvalidOperationException(message);}
 }
