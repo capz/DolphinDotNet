@@ -608,26 +608,33 @@ uint32_t dnd_buffer_crc32(int token,int offset,int count,uint32_t initial) {
 /* Programs are immutable. Uniform writes are forbidden while a frame is active. */
 int dnd_effect_create(DndArray *a) {
     dnd_async_require_application_thread();if(dnd_exception_pending())return 0;
-    if(dnd_device_active()||dnd_raw_depth()||!a||a->element_size!=1||a->elements_are_references||a->length<184||a->length>304)return 0;
+    if(dnd_device_active()||dnd_raw_depth()||!a||a->element_size!=1||a->elements_are_references||a->length<184||a->length>432)return 0;
     const unsigned char *p=a->data;
     unsigned version=le32(p+4),count=le32(p+8),texture_flag=le32(p+12),uniforms=le32(p+16);
-    unsigned warp=le32(p+20);
-    if(memcmp(p,"DNEF",4)||(version<1||version>3)||count<1||count>16||
-       texture_flag>(version==1?1u:3u)||uniforms>4||a->length!=176+count*8||
-       le32(p+24)||le32(p+28))return 0;
-    if(version==3?(texture_flag!=3||warp<1||warp>255):(warp!=0))return 0;
+    unsigned stride=version==4?16u:8u,warp=version==4?p[20]:le32(p+20);
+    if(memcmp(p,"DNEF",4)||(version<1||version>4)||count<1||count>16||
+       texture_flag>(version==1?1u:3u)||uniforms>4||a->length!=176+count*stride)return 0;
+    if(version==4){
+        if(p[21]>1||p[22]||p[23]||p[29]||p[30]||p[31])return 0;
+        if(p[21]?(p[24]>7||p[26]>3||p[27]>7):(le32(p+24)||p[28]))return 0;
+        if(warp&&texture_flag!=3)return 0;
+    }else{
+        if(le32(p+24)||le32(p+28))return 0;
+        if(version==3?(texture_flag!=3||warp<1||warp>255):(warp!=0))return 0;
+    }
     for(unsigned i=0;i<4;i++) {
         const unsigned char *name=p+32+i*36;int end=0;
         for(int j=0;j<32;j++){if(!name[j])end=1;else if(end||name[j]<33||name[j]>126)return 0;}
         if(!end||(i<uniforms?!name[0]:name[0]!=0))return 0;
         for(unsigned j=0;j<i&&i<uniforms;j++)if(!strcmp((const char*)name,(const char*)p+32+j*36))return 0;
     }
-    unsigned initialized=0;
+    unsigned initialized=0,initialized_alpha=0;
     for(unsigned i=0;i<count;i++) {
-        const DndTevStage *s=(const DndTevStage*)(p+176+i*8);
+        const DndTevStage *s=(const DndTevStage*)(p+176+i*stride);
         if((s->op!=0&&s->op!=8)||s->dest>3||s->reserved>(version==1?0:version==2?1:2)||
            (s->konst!=0&&(s->konst<12||s->konst>31)))return 0;
-        if(version==3&&s->reserved==1)return 0; /* Indirect map is not an RGB source. */
+        if((version==3||warp)&&s->reserved==1)return 0; /* Indirect map is not a sampled source. */
+        if(version==4&&s->reserved==2&&!warp)return 0;
         if(s->reserved==1&&!(texture_flag&2))return 0;
         const unsigned char inputs[]={s->a,s->b,s->c,s->d};
         for(int j=0;j<4;j++) {
@@ -638,16 +645,46 @@ int dnd_effect_create(DndArray *a) {
             else if(v!=10&&v!=12&&v!=15)return 0;
         }
         initialized|=1u<<s->dest;
+        if(version==4){
+            const DndTevAlphaStage *alpha=(const DndTevAlphaStage*)(p+184+i*stride);
+            if(!(alpha->control&128)){
+                const unsigned char *bytes=(const unsigned char*)alpha;
+                for(int j=0;j<8;j++)if(bytes[j])return 0;
+                initialized_alpha|=1;
+            }else{
+                if(alpha->op>1||((alpha->control>>2)&3)>2||alpha->reserved||
+                   (alpha->konst!=0&&(alpha->konst<16||alpha->konst>31||((unsigned)(alpha->konst-16)%4)>=uniforms)))return 0;
+                const unsigned char inputs[]={alpha->a,alpha->b,alpha->c,alpha->d};
+                for(int j=0;j<4;j++){
+                    unsigned v=inputs[j];if(v>7)return 0;
+                    if(v<=3&&!(initialized_alpha&(1u<<v)))return 0;
+                    if(v==4&&!(texture_flag&(s->reserved==1?2u:1u)))return 0;
+                }
+                initialized_alpha|=1u<<(alpha->control&3);
+                if(i==count-1&&(alpha->control&3)!=0)return 0;
+            }
+        }
     }
-    if(p[176+(count-1)*8+5]!=0)return 0;
+    if(p[176+(count-1)*stride+5]!=0)return 0;
     /* Version 2 ends on TEX0 so auxiliary alpha never changes base opacity. */
-    if(version>=2&&p[176+(count-1)*8+7]!=0)return 0;
-    int token=create(EFFECT,sizeof(DndDrawEffect),32);Resource *r=find(token,EFFECT);if(!r)return 0;
+    if(version>=2&&version<=3&&p[176+(count-1)*8+7]!=0)return 0;
+    int token=create(EFFECT,sizeof(DndDrawEffect)+(version==4?sizeof(DndEffectAlpha):0),32);Resource *r=find(token,EFFECT);if(!r)return 0;
     DndDrawEffect *effect=(DndDrawEffect*)r->data;
     effect->count=(int)count;effect->texture=(int)texture_flag;effect->uniforms=(int)uniforms;
     effect->indirect_strength=(int)warp;
     for(unsigned i=0;i<uniforms;i++){const unsigned char *c=p+64+i*36;effect->colors[i]=(unsigned)c[0]<<24|(unsigned)c[1]<<16|(unsigned)c[2]<<8|c[3];}
-    memcpy(effect->stages,p+176,count*8);return token;
+    effect->alpha=NULL;
+    DndEffectAlpha *alpha=version==4?(DndEffectAlpha*)(effect+1):NULL;
+    if(alpha){
+        memset(alpha,0,sizeof(*alpha));alpha->compare_enabled=p[21];
+        alpha->compare0=p[24];alpha->reference0=p[25];alpha->operation=p[26];alpha->compare1=p[27];alpha->reference1=p[28];
+        effect->alpha=alpha;
+    }
+    for(unsigned i=0;i<count;i++){
+        memcpy(&effect->stages[i],p+176+i*stride,8);
+        if(alpha)memcpy(&alpha->stages[i],p+184+i*stride,8);
+    }
+    return token;
 }
 int dnd_effect_color(int token,int slot,uint32_t color) {
     dnd_async_require_application_thread();if(dnd_exception_pending())return -1;

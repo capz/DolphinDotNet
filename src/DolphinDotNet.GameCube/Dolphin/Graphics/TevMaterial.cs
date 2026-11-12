@@ -72,6 +72,23 @@ public sealed class EmissiveMaterialOptions
 /// Presets use at most two textures, four colors and eight total TEV stages.</summary>
 public static class TevMaterialPresets
 {
+    /// <summary>Two independently scrolling glint samples. Alpha is raster
+    /// alpha times the mean of both texture alphas. GX keeps alpha outside the
+    /// open low/high band (endpoints pass), using exact byte thresholds and no extra texture.</summary>
+    public static TevMaterialDefinition DualTextureGlints(Color32 primaryLight,Color32 reflectedLight,
+        byte lowReference=33,byte highReference=235)
+    {
+        if(lowReference>=highReference)throw new ArgumentException("Glint alpha thresholds must be ordered.");
+        var p=new TevProgramBuilder();p.AddColor("PrimaryLight",primaryLight);p.AddColor("ReflectedLight",reflectedLight);
+        p.AddStage(TevInput.Zero,TevInput.Zero,TevInput.Zero,TevInput.Raster);
+        p.AddStage(TevInput.Zero,TevInput.Constant,TevInput.Texture,TevInput.Previous,colorSlot:0);
+        p.AddStage(TevInput.Zero,TevInput.Constant,TevInput.SecondaryTexture,TevInput.Previous,colorSlot:1);
+        p.SetAlphaStage(0,TevAlphaInput.Zero,TevAlphaInput.Texture,TevAlphaInput.Raster,TevAlphaInput.Zero,TevRegister.Color0);
+        p.SetAlphaStage(1,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Zero,TevAlphaInput.Color0);
+        p.SetAlphaStage(2,TevAlphaInput.Zero,TevAlphaInput.SecondaryTexture,TevAlphaInput.Raster,TevAlphaInput.Color0,scale:TevScale.Half);
+        p.SetAlphaCompare(AlphaComparison.LessOrEqual,lowReference,AlphaCompareOperation.Or,AlphaComparison.GreaterOrEqual,highReference);
+        return new TevMaterialDefinition(p);
+    }
     /// <summary>GameCube-style moving foam: two independent UV samples of one
     /// color/foam mask, displaced by the second texture as a GX indirect map.
     /// The distortion map is never used as a visible RGB texture.</summary>

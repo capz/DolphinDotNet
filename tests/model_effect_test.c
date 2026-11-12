@@ -40,9 +40,9 @@ void *__real_realloc(void *data,size_t size);
 void *__wrap_malloc(size_t size){allocations++;return __real_malloc(size);}
 void *__wrap_calloc(size_t count,size_t size){allocations++;return __real_calloc(count,size);}
 void *__wrap_realloc(void *data,size_t size){allocations++;return __real_realloc(data,size);}
-typedef struct {int a,b,c,d,op,dest,coord,tex,raster,konst,alpha[4],alpha_clamp,direct,swap;} Stage;
+typedef struct {int a,b,c,d,op,dest,coord,tex,raster,konst,alpha[4],alpha_clamp,direct,swap,alpha_konst,alpha_op[5];} Stage;
 typedef struct {
-  int count,texgens,cull,zwrite,blend,src,dst,compare,cutoff;
+  int count,texgens,cull,zwrite,blend,src,dst,compare,cutoff,compare_op,compare1,reference1;
   Stage stages[16]; GXColor colors[4],konst[4]; GXTexObj texture,secondary;
   float position[9],uv[6],world_x; GXColor vertex[3];
 } Draw;
@@ -51,7 +51,7 @@ void GX_SetTevIndWarp(int stage,int indstage,int signed_offset,int replace,int m
  assert(active_indirect==1&&indstage==0&&signed_offset==GX_TRUE&&!replace&&matrix==GX_ITM_0);
  state.stages[stage].direct=2;
 }
-static bool authored_test;
+static bool authored_test,v4_test;
 static GXColorS10 authored_colors[4];
 static int authored_rgb_op[5],authored_alpha_op[5],authored_depth_location,authored_dither;
 static int authored_tex_source,authored_tex_id;static Mtx authored_tex_matrix;
@@ -82,11 +82,11 @@ void GX_LoadTexMtxImm(Mtx matrix,int slot,int projection){assert(slot==30&&proje
 void GX_SetTevKColor(int s,GXColor c){state.konst[s]=c;}
 void GX_SetTevOrder(int s,int c,int t,int r){state.stages[s].coord=c;state.stages[s].tex=t;state.stages[s].raster=r;}
 void GX_SetTevKColorSel(int s,int k){state.stages[s].konst=k;}
-void GX_SetTevKAlphaSel(int s,int k){(void)s;assert(k==GX_TEV_KASEL_1||(authored_test&&s>=1&&s<=2&&k==GX_TEV_KASEL_K3_A));}
+void GX_SetTevKAlphaSel(int s,int k){state.stages[s].alpha_konst=k;assert(v4_test||k==GX_TEV_KASEL_1||(authored_test&&s>=1&&s<=2&&k==GX_TEV_KASEL_K3_A));}
 void GX_SetTevColorIn(int s,int a,int b,int c,int d){Stage *p=&state.stages[s];p->a=a;p->b=b;p->c=c;p->d=d;}
 void GX_SetTevColorOp(int s,int op,int bias,int scale,int clamp,int dest){if(!authored_test)assert(!bias&&!scale&&clamp);state.stages[s].op=op;state.stages[s].dest=dest;int values[]={op,bias,scale,clamp,dest};memcpy(authored_rgb_op,values,sizeof(values));}
 void GX_SetTevAlphaIn(int s,int a,int b,int c,int d){int *p=state.stages[s].alpha;p[0]=a;p[1]=b;p[2]=c;p[3]=d;}
-void GX_SetTevAlphaOp(int s,int op,int bias,int scale,int clamp,int dest){state.stages[s].alpha_clamp=clamp;if(!authored_test)assert(!op&&!bias&&!scale&&clamp&&!dest);int values[]={op,bias,scale,clamp,dest};memcpy(authored_alpha_op,values,sizeof(values));}
+void GX_SetTevAlphaOp(int s,int op,int bias,int scale,int clamp,int dest){state.stages[s].alpha_clamp=clamp;if(!authored_test&&!v4_test)assert(!op&&!bias&&!scale&&clamp&&!dest);int values[]={op,bias,scale,clamp,dest};memcpy(authored_alpha_op,values,sizeof(values));memcpy(state.stages[s].alpha_op,values,sizeof(values));}
 void GX_SetNumTexGens(int n){state.texgens=n;}
 void GX_InitTexObj(GXTexObj *t,void *p,u16 w,u16 h,int f,int s,int v,int m){
  /* Host ABI padding is not GX state. Vary it to catch raw-struct comparisons. */
@@ -99,12 +99,12 @@ void GX_LoadTexObj(GXTexObj *t,int slot){assert((slot==0||slot==1)&&state.count=
 void GX_SetCullMode(int c){state.cull=c;}
 void GX_SetZMode(int e,int c,int w){assert(e&&c==GX_LEQUAL);state.zwrite=w;}
 void GX_SetBlendMode(int m,int s,int d,int op){if(!authored_test)assert(!op);state.blend=m;state.src=s;state.dst=d;}
-void GX_SetAlphaCompare(int c,int cutoff,int op,int other,int ref){if(!authored_test)assert(!op&&other==GX_ALWAYS&&!ref);state.compare=c;state.cutoff=cutoff;}
+void GX_SetAlphaCompare(int c,int cutoff,int op,int other,int ref){if(!authored_test&&!v4_test)assert(!op&&other==GX_ALWAYS&&!ref);state.compare=c;state.cutoff=cutoff;state.compare_op=op;state.compare1=other;state.reference1=ref;}
 void GX_Begin(int p,int f,u16 n){assert(p==GX_TRIANGLES&&f==0&&n==3&&state.count>0);position_index=color_index=uv_index=0;
  for(int i=0;i<state.count;i++){Stage *s=&state.stages[i];assert(s->direct==1&&s->swap==1&&(s->raster==GX_COLOR0A0||(authored_test&&i>0&&s->raster==GX_COLORNULL)));
  if(authored_test&&i>0){assert(s->coord==GX_TEXCOORDNULL&&s->tex==GX_TEXMAP_NULL);}
  else if(s->tex==GX_TEXMAP1)assert(state.texgens==2&&s->coord==GX_TEXCOORD1);else {assert(s->coord==(state.texture.data?GX_TEXCOORD0:GX_TEXCOORDNULL));assert(s->tex==(state.texture.data?GX_TEXMAP0:GX_TEXMAP_NULL));}
- if(!authored_test){assert(s->alpha[0]==GX_CA_ZERO&&s->alpha[1]==(state.texture.data?GX_CA_TEXA:GX_CA_ZERO));
+ if(!authored_test&&!v4_test){assert(s->alpha[0]==GX_CA_ZERO&&s->alpha[1]==(state.texture.data?GX_CA_TEXA:GX_CA_ZERO));
  assert(s->alpha[2]==(state.texture.data?GX_CA_RASA:GX_CA_ZERO)&&s->alpha[3]==(state.texture.data?GX_CA_ZERO:GX_CA_RASA));}}}
 void GX_Position3f32(float x,float y,float z){assert(position_index<9);state.position[position_index++]=x;state.position[position_index++]=y;state.position[position_index++]=z;}
 void GX_Color4u8(u8 r,u8 g,u8 b,u8 a){assert(color_index<3);state.vertex[color_index++]=(GXColor){r,g,b,a};}
@@ -144,6 +144,14 @@ static int effect_create(int count,int textured) {
  for(int i=0;i<count;i++){unsigned char *s=p+176+i*8;s[0]=s[1]=s[2]=15;s[3]=textured?8:14;s[6]=12;}
  int token=dnd_effect_create(a);free(a);assert(token>0);return token;
 }
+static int alpha_effect_create(bool secondary){
+ DndArray *a=calloc(1,sizeof(*a)+208);assert(a);a->element_size=1;a->length=208;
+ unsigned char *p=a->data;memcpy(p,"DNEF",4);p[4]=4;p[8]=2;p[12]=3;p[21]=1;
+ p[24]=3;p[25]=33;p[26]=1;p[27]=6;p[28]=235;
+ const unsigned char stages[]={15,15,15,10,0,0,0,0,7,7,7,4,0,193,0,0,
+                              15,15,15,0,0,0,0,1,7,4,6,1,0,240,0,0};
+ memcpy(p+176,stages,sizeof stages);if(!secondary){p[12]=1;p[199]=0;}int token=dnd_effect_create(a);free(a);assert(token>0);return token;
+}
 static DndArray *identity(void) {
  DndArray *a=calloc(1,sizeof(*a)+64);assert(a);a->element_size=4;a->length=16;
  float *m=(float*)a->data;m[0]=m[5]=m[10]=m[15]=1;return a;
@@ -159,6 +167,7 @@ static void assert_stage_equal(Stage a,Stage b) {
  assert(a.a==b.a&&a.b==b.b&&a.c==b.c&&a.d==b.d&&a.op==b.op&&a.dest==b.dest);
  assert(a.coord==b.coord&&a.tex==b.tex&&a.raster==b.raster&&a.konst==b.konst);
  assert(!memcmp(a.alpha,b.alpha,sizeof(a.alpha))&&a.direct==b.direct&&a.swap==b.swap);
+ assert(a.alpha_konst==b.alpha_konst&&!memcmp(a.alpha_op,b.alpha_op,sizeof(a.alpha_op)));
 }
 static void assert_color_equal(GXColor a,GXColor b) {
  assert(a.r==b.r&&a.g==b.g&&a.b==b.b&&a.a==b.a);
@@ -166,6 +175,7 @@ static void assert_color_equal(GXColor a,GXColor b) {
 static void assert_draw_equal(Draw a,Draw b) {
  assert(a.count==b.count&&a.texgens==b.texgens&&a.cull==b.cull&&a.zwrite==b.zwrite);
  assert(a.blend==b.blend&&a.src==b.src&&a.dst==b.dst&&a.compare==b.compare&&a.cutoff==b.cutoff);
+ assert(a.compare_op==b.compare_op&&a.compare1==b.compare1&&a.reference1==b.reference1);
  for(int i=0;i<16;i++)assert_stage_equal(a.stages[i],b.stages[i]);
  for(int i=0;i<4;i++){assert_color_equal(a.colors[i],b.colors[i]);assert_color_equal(a.konst[i],b.konst[i]);}
  assert_texture_equal(a.texture,b.texture);assert_texture_equal(a.secondary,b.secondary);
@@ -224,6 +234,7 @@ int main(void) {
  DndArray *rgba=calloc(1,sizeof(*rgba)+64);assert(rgba);rgba->element_size=1;rgba->length=64;memset(rgba->data,255,64);
  int override_texture=dnd_texture_create(4,4,rgba,0);assert(override_texture>0);free(rgba);
  int short_effect=effect_create(2,0),long_effect=effect_create(7,0),textured=effect_create(1,1);
+ int alpha_effect=alpha_effect_create(false),dual_alpha_effect=alpha_effect_create(true);
  int wrong=dnd_buffer_create(32,32);assert(wrong>0);
  assert(dnd_model_draw_effect(123,world,short_effect)==-1);
  assert(dnd_model_frame_begin(camera,camera)==0);
@@ -240,6 +251,21 @@ int main(void) {
  assert(baseline[0].texture.min_filter==GX_LIN_MIP_LIN&&baseline[0].texture.mips);
  assert(dnd_model_draw_effect(123,world,0)==0);
  for(int i=0;i<3;i++)assert_draw_equal(baseline[i],record[3+i]);
+ v4_test=true;int alpha_before=draws;size_t alpha_allocations=allocations;
+ const DndDrawEffect *dual_alpha=NULL;assert(dnd_effect_resolve(dual_alpha_effect,&dual_alpha)==0);
+ dnd_draw_backend_tev(dual_alpha,true);
+ assert(state.stages[1].tex==GX_TEXMAP1&&state.stages[1].alpha[1]==4&&state.stages[1].alpha_op[2]==3);
+ assert(state.compare==3&&state.cutoff==33&&state.compare_op==1&&state.compare1==6&&state.reference1==235);
+ // Effect-only imported models have no secondary binding; material overrides do.
+ assert(dnd_model_draw_effect(123,world,dual_alpha_effect)<0&&draws==alpha_before);
+ assert(dnd_model_draw_effect(123,world,alpha_effect)==0&&allocations==alpha_allocations);
+ for(int i=0;i<3;i++){
+  Draw *r=&record[(alpha_before+i)%16];assert(r->count==2&&r->compare==3&&r->cutoff==33&&r->compare_op==1&&r->compare1==6&&r->reference1==235);
+  assert(r->stages[0].alpha[3]==4&&r->stages[0].alpha_op[4]==1);
+  assert(r->stages[1].tex==GX_TEXMAP0&&r->stages[1].alpha[1]==4&&r->stages[1].alpha[3]==1&&r->stages[1].alpha_op[2]==3);
+ }
+ v4_test=false;alpha_before=draws;assert(dnd_model_draw(123,world)==0);
+ for(int i=0;i<3;i++){assert_draw_equal(baseline[i],record[(alpha_before+i)%16]);assert(record[(alpha_before+i)%16].compare_op==0&&record[(alpha_before+i)%16].compare1==GX_ALWAYS);}
  int before=draws;
  assert(dnd_model_draw_effect(124,world,long_effect)==0);
  for(int i=0;i<3;i++){Draw *r=&record[(before+i)%16];assert(r->count==7);assert_geometry_equal(baseline[i],*r);assert(r->konst[0].r==17);}
@@ -399,7 +425,7 @@ int main(void) {
  assert(texture_loads-original_loads==5&&dnd_performance_stats()->texture_binds-old_bindings==5);
  assert(dnd_performance_stats()->drawing_api_calls-old_api==1&&dnd_performance_stats()->material_changes-old_changes==3);
  assert(dnd_model_frame_end()==0);free(batch_ids);free(batch_worlds);memcpy(materials,original_materials,sizeof(materials));
- assert(dnd_draw_release(short_effect)==0&&dnd_draw_release(textured)==0&&dnd_draw_release(replacement)==0&&dnd_draw_release(wrong)==0);
+ assert(dnd_draw_release(dual_alpha_effect)==0&&dnd_draw_release(alpha_effect)==0&&dnd_draw_release(short_effect)==0&&dnd_draw_release(textured)==0&&dnd_draw_release(replacement)==0&&dnd_draw_release(wrong)==0);
  assert(dnd_draw_total_bytes()==0&&dnd_draw_live()==0);
  assert(indirect_resets>=restores);
  dnd_instances[0]=dnd_instances[1]=NULL;free(world);free(camera);
