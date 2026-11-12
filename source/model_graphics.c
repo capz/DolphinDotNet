@@ -150,7 +150,7 @@ int dnd_model_draw_material(int token,DndArray *transform,int tex,int secondary,
   DndInstance *in=dnd_instance_find(token);float world[16];DndDrawTexture base,extra;
   const DndDrawEffect *effect;
   if(!in||!in->model->ready||!dnd_model_frame_active||!matrix_array(transform,world)||
-     flags<0||flags>255||(flags&192)==192||!isfinite(cutoff)||cutoff<0||cutoff>1||
+     flags<0||flags>511||(flags&192)==192||((flags&256)&&((flags&192)||!tex))||!isfinite(cutoff)||cutoff<0||cutoff>1||
      dnd_texture_resolve(tex,&base)<0||dnd_texture_resolve(secondary,&extra)<0||
      dnd_effect_resolve(effect_token,&effect)<0)return -1;
   if((flags&192)&&!tex&&!secondary)return -1;

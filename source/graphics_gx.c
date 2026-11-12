@@ -192,13 +192,20 @@ static bool draw_state(const DndDrawTexture *texture,const DndDrawMaterial *mate
     if(lit){GX_SetVtxDesc(GX_VA_NRM,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_NRM,GX_NRM_XYZ,GX_F32,0);}
     if(texture||secondary){GX_SetVtxDesc(GX_VA_TEX0,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_TEX0,GX_TEX_ST,GX_F32,0);}
     if(secondary){GX_SetVtxDesc(GX_VA_TEX1,GX_DIRECT);GX_SetVtxAttrFmt(GX_VTXFMT0,GX_VA_TEX1,GX_TEX_ST,GX_F32,0);}
-    managed_uv(0);managed_uv(1);
+    if(!(material->flags&256))managed_uv(0);
+    managed_uv(1);
     if(dnd_device_pass()==1)dnd_draw_backend_scene(lit,view_matrix);
     cached_material=*material;
     cached_has_primary=texture!=NULL;cached_has_secondary=secondary!=NULL;
     if(texture)cached_primary=*texture;
     if(secondary)cached_secondary=*secondary;
     material_cache_valid=true;
+    }
+    // Screen projection depends on this object's transform even if its
+    // material/samplers were cached. GX divides interpolated STQ by Q.
+    if(material->flags&256){
+        float clip[16];multiply(clip,projection_matrix,mv);
+        managed_screen_projection(clip);
     }
     GX_SetCullMode((material->flags&4)?(determinant<0?GX_CULL_FRONT:GX_CULL_BACK):GX_CULL_NONE);
     if(output) {
@@ -239,7 +246,7 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
 #include "dnd_indexed_mesh.inc"
 void dnd_draw_backend_copy(const DndDrawTexture *texture,int x,int y,int w,int h) {
     dnd_draw_backend_invalidate_cache();
-    GX_SetTexCopySrc((u16)x,(u16)y,(u16)w,(u16)h);GX_SetTexCopyDst((u16)texture->width,(u16)texture->height,GX_TF_RGBA8,w!=texture->width);
+    GX_SetTexCopySrc((u16)x,(u16)y,(u16)w,(u16)h);GX_SetTexCopyDst((u16)texture->width,(u16)texture->height,(u8)texture->format,w!=texture->width);
     GX_CopyTex((void*)texture->data,GX_FALSE);GX_PixModeSync();GX_DrawDone();GX_InvalidateTexAll();
 }
 void dnd_graphics_begin_frame(float r,float g,float b,float a) {

@@ -27,7 +27,16 @@ int main(void){
  w[15]=NAN;assert(dnd_mesh_draw_many(ids,matrices,2,0,0,0xffffffff,0,0,0)<0&&draws==0);w[15]=1;
  assert(dnd_mesh_draw_many(ids,matrices,2,0,0,0xffffffff,0,0,0)==0&&draws==2&&translation==2);
  ((float*)style->data)[0]=3;assert(dnd_render_material(style)<0&&options==0);((float*)style->data)[0]=2;
- assert(dnd_render_material(style)==0&&options==1);pass=0;assert(dnd_render_material(style)<0&&options==1);
+ assert(dnd_render_material(style)==0&&options==1);
+ int before=draws;
+ assert(dnd_mesh_draw_many(ids,matrices,2,tex,0,0xffffffff,256,0,0)==0&&draws==before+2);
+ before=draws;
+ assert(dnd_mesh_draw_many(ids,matrices,2,0,tex,0xffffffff,256,0,0)<0&&draws==before);
+ assert(dnd_mesh_draw_many(ids,matrices,2,tex,0,0xffffffff,256|64,0,0)<0&&draws==before);
+ assert(dnd_mesh_draw_material(mesh,tex,0,m0,0xffffffff,256,0,0)==0&&draws==before+1);
+ assert(dnd_mesh_draw_material(mesh,0,tex,m0,0xffffffff,256,0,0)<0);
+ assert(dnd_mesh_primitives(v,0,3,0,0x90,m0,0xffffffff,256)<0);
+ pass=0;assert(dnd_render_material(style)<0&&options==1);
  int canvas=dnd_canvas_create(6);assert(canvas);assert(dnd_canvas_begin(canvas,640,480)==0);draws=0;
  assert(dnd_canvas_viewport(canvas,100,50,320,240)==0);assert(dnd_canvas_clip(canvas,20,40,100,80)==0);assert(scissor[0]==110&&scissor[1]==70&&scissor[2]==50&&scissor[3]==40);
  tokens[0]=tokens[1]=tex;

@@ -1,3 +1,4 @@
+#include "dnd_screen_projection.h"
 /* Shared scene/sampler state owned by the current managed pass. */
 static bool scene_options_active,style_options_active;
 static float scene_options[136],style_options[40],default_options[40];
@@ -69,4 +70,13 @@ static void managed_uv(int slot){
     u32 id=slot==0?GX_TEXMTX0:GX_TEXMTX1;
     GX_LoadTexMtxImm(matrix,id,GX_MTX2x4);
     GX_SetTexCoordGen(slot==0?GX_TEXCOORD0:GX_TEXCOORD1,GX_TG_MTX2x4,slot==0?GX_TG_TEX0:GX_TG_TEX1,id);
+}
+
+/* Bind primary screen projection after per-object modelview setup. Secondary
+ * coordinates retain the independent authored UV matrix. */
+static void managed_screen_projection(const float clip[16]){
+    Mtx matrix;
+    dnd_screen_projection_matrix(matrix,clip,managed_style_active()?style_options+4:NULL);
+    GX_LoadTexMtxImm(matrix,GX_TEXMTX0,GX_MTX3x4);
+    GX_SetTexCoordGen(GX_TEXCOORD0,GX_TG_MTX3x4,GX_TG_POS,GX_TEXMTX0);
 }
