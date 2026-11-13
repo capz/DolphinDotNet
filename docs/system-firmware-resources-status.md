@@ -1,5 +1,17 @@
 # System firmware resource status
 
+## Menu-audio follow-up — incomplete
+
+Opt-in menu catalog construction, stable action identifiers, metadata queries,
+the `CreateMenuSound` adapter, shared archive validation, private candidate
+audition and generated native/AOT tests are implemented. **No semantic menu
+profile is enabled**: cube rotation, return to center, menu entry and every
+secondary effect remain unavailable on every revision. Three original online
+inputs have structurally resolved archives only. Event/instrument tracing and
+original-action audio comparisons remain outstanding; there is no emulator or
+physical menu-output acceptance. See [menu research](system-menu-audio-research.md).
+The supported startup audio described below remains a separate feature.
+
 Phases 1–6 have supported-profile implementations. Phase 7 integration, automated
 acceptance fixtures and documentation are implemented; the evidence below keeps
 host, compiled, emulated and physical results separate. No Nintendo firmware or

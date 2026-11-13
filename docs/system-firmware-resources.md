@@ -63,6 +63,64 @@ rules are those of `Texture2D.FromBti`. Only immutable metadata is cached; nativ
 texture objects are never shared implicitly. `SystemFont.Load` wraps the existing
 `IplFont` implementation, which remains supported with its original API.
 
+## IPL menu audio (research infrastructure)
+
+No verified menu-event profile is enabled yet. `TurnSide`, `TurnCenter`, `Select`
+and all secondary `SystemMenuSound` identities currently return unavailable.
+`CreateMenuSound` reports `NotSupportedException` rather than playing a guessed
+instrument wave or substituting the startup jingle. See the
+[per-revision research matrix](system-menu-audio-research.md).
+
+Create the catalog with
+`image.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio, cancellationToken)`
+before disposing the image. Both arguments are required to preserve the existing
+`CreateCatalog(default)` call. Unknown option bits and sound values are errors.
+`TryGetMenuSoundInfo(sound, out info)` is cached metadata only; it does not expand
+audio or allocate a native voice. Returned metadata describes the complete output
+rate/frame count, channels, profile and direct/prepared status. No raw event ID or
+wave index is a public semantic identity. Without the option, queries return
+false and creation explains that retention was not requested. Disposed queries
+and creation throw `ObjectDisposedException`.
+
+The following is the intended lifecycle once a verified profile is available;
+on today's unsupported inputs preparation throws and cleans up:
+
+```csharp
+// On the preparation executor; image acquisition uses the existing API.
+Sound[] PrepareMenuSounds(FirmwareImage image, CancellationToken token)
+{
+    var sounds = new Sound[3];
+    try
+    {
+        using var catalog = image.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio, token);
+        sounds[0] = SystemResources.CreateMenuSound(catalog, SystemMenuSound.TurnSide, token);
+        sounds[1] = SystemResources.CreateMenuSound(catalog, SystemMenuSound.TurnCenter, token);
+        sounds[2] = SystemResources.CreateMenuSound(catalog, SystemMenuSound.Select, token);
+        return sounds; // Each successful Sound owns its native source independently.
+    }
+    catch { foreach (var sound in sounds) sound?.Dispose(); throw; }
+}
+// Dispose the caller-owned image after preparation and publish the sounds
+// to the application executor. On input, retain sounds[0].Play()'s returned
+// SoundChannel; reap/dispose it after IsPlaying becomes false. At shutdown,
+// stop/dispose outstanding channels before disposing the three sounds.
+```
+
+Load only needed effects: native audio has 16 clip slots, shared with other Sound
+and Music resources. The default 8 MiB native budget is a ceiling. Unknown profiles
+retain zero additional encoded menu sample bytes; `MenuAudioRetainedBytes` reports
+that payload counter, excluding managed object overhead. There is no hidden ROM
+reopen or decoded-PCM menu cache. Catalog access/disposal remains serialized.
+Full preparation peak includes the image, ordinary catalog, source snapshots and
+native validation scratch, not just `Sound.NativeBytes`.
+
+The opt-in metadata command is `firmware inspect INPUT --menu-audio`; it reports
+bank-local and flattened positions, source rates/frames/loops, archive-relative
+extents, association evidence and unavailable reasons. The separate
+`firmware audition INPUT WSYS_INDEX FLAT_WAVE_INDEX OUTPUT_DIRECTORY` research
+command explicitly isolates one raw wave to a private directory. It does not
+establish a named mapping. Never commit or upload its proprietary outputs.
+
 ## Original stereo audio
 
 `FirmwareWaveSystem.Inspect` validates WSYS metadata without duplicating a codec.
