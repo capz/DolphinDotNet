@@ -26,7 +26,7 @@ static int active_audio[32];
 void dnd_audio_backend_init(void){}
 void dnd_audio_backend_shutdown(void){}
 int dnd_audio_backend_play(unsigned slot,const void *data,unsigned size,unsigned format,unsigned rate,bool loop,float volume,float pitch)
-{(void)slot;(void)data;(void)size;(void)format;(void)rate;(void)loop;(void)volume;(void)pitch;assert(0);return 0;}
+{assert(slot<32&&data&&size==6560*4&&format==3&&rate==32000&&!loop&&volume==1&&pitch==1);active_audio[slot]=1;return 1;}
 int dnd_audio_backend_play_encoded(unsigned slot,const DndAudioSource *source,bool loop,unsigned start,unsigned end,float volume,float pitch)
 {
     assert(slot<32&&source->rate==32000);

@@ -22,6 +22,7 @@ static void *audio_memalign(size_t alignment,size_t bytes) {
 #endif
 
 enum { CLIPS = 16, VOICES = 32, MAX_PCM_BYTES = 16 * 1024 * 1024 };
+typedef struct MenuPreparation MenuPreparation;
 typedef struct {
   int token, file, ready;
   unsigned length, position, format, rate;
@@ -31,6 +32,8 @@ typedef struct {
   uint8_t *input[2];
   DndAudioSource source;
   DndAudioDecoder validation;
+  MenuPreparation *menu;
+  unsigned preparation_peak;
 } Clip;
 typedef struct {
   int token, clip;
@@ -115,6 +118,7 @@ static bool wav_header(int file, int64_t length, unsigned *offset,
   return false;
 }
 #include "audio_formats.inc"
+#include "audio_menu.inc"
 
 int dnd_audio_init(void) {
   if (!initialized) {
@@ -356,6 +360,8 @@ int dnd_audio_step(int token) {
     return -1;
   if (c->ready)
     return 1;
+  if (c->menu)
+    return audio_menu_step(c);
   if (c->encoded)
     return audio_encoded_step(c);
   unsigned remain = c->length - c->position;
@@ -399,6 +405,7 @@ int dnd_audio_stat(int token, int kind) {
                                                   sizeof(DndAudioSpan) +
                                               sizeof(DndAudioDecoder)
                                         : ((c->length + 31u) & ~31u))
+         : kind == 10 ? (int)c->preparation_peak
          : kind == 9 ? c->encoded
                      : -1;
 }
@@ -423,6 +430,7 @@ int dnd_audio_dispose(int token) {
   free(c->input[1]);
   free(c->source.span);
   free(c->pcm);
+  audio_menu_free(c->menu);
   memset(c, 0, sizeof(*c));
   return 0;
 }

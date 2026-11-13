@@ -1,184 +1,206 @@
 # IPL menu audio research — 2026-11-13
 
-This is infrastructure and research work, **not completed named menu playback**.
-No production semantic profile is enabled. `TurnSide`, `TurnCenter`, `Select`
-and every secondary effect return unavailable on every revision. A validated AW
-sample is not proof of a complete menu event. Do not merge this work as the
-finished menu-sound feature.
+`TurnSide`, `TurnCenter` and `Select` are implemented for the qualified NTSC 1.2
+and PAL 1.2 resource profile. They are composed effects, not raw-wave aliases.
+Early NTSC's different DSP-effect setup and all secondary effects remain
+unavailable. Physical-console output has not been verified.
 
-## Inputs and reproducibility
+## Inputs
 
-At the user's explicit request, the three research inputs were downloaded from
-[RetroBIOS](https://github.com/Abdess/retrobios/tree/a9772dd6c7f6824c43c4c0117cbee56c70da9369/bios/Nintendo/GameCube/GC)
-at commit `a9772dd6c7f6824c43c4c0117cbee56c70da9369`. Firmware and derived
-files remain outside the checkout. All inputs are exactly 2,097,152 bytes.
-Acquisition is online research, not a physical-console dump or output capture.
+The user explicitly authorized downloading these research inputs from
+[RetroBIOS](https://github.com/Abdess/retrobios/tree/a9772dd6c7f6824c43c4c0117cbee56c70da9369/bios/Nintendo/GameCube/GC).
+Each is 2,097,152 bytes. Firmware, extracted samples, RAM/debug traces and audio
+recordings stay outside Git and uploaded artifacts.
 
-| Input | Acquisition path | SHA-256 of input file, before descrambling |
+| Input | Acquisition path | SHA-256 before descrambling |
 | --- | --- | --- |
-| NTSC 1.0 | `JAP/IPL.bin` | `5b2f2617cc63f1861a1f4ae44bb135caf10e202b5b9b79271daaf60f8caaf37d` |
-| NTSC 1.2 | `USA/IPL.bin` | `7c833f95839c226699108b93ab6acbe772788bfa3f05132b8ced5e78f5bc9a26` |
-| PAL 1.2 | `EUR/IPL.bin` | `85ffcbc834238eb24c87fce27ba7b438cc53a77db013a0a7c59c78e0af08cb84` |
+| NTSC 1.0 | JAP/IPL.bin | `5b2f2617cc63f1861a1f4ae44bb135caf10e202b5b9b79271daaf60f8caaf37d` |
+| NTSC 1.2 | USA/IPL.bin | `7c833f95839c226699108b93ab6acbe772788bfa3f05132b8ced5e78f5bc9a26` |
+| PAL 1.2 | EUR/IPL.bin | `85ffcbc834238eb24c87fce27ba7b438cc53a77db013a0a7c59c78e0af08cb84` |
 
-The existing loader independently detects scrambled encoding for all three.
-The first has the publisher/copyright header without a revision suffix; the
-others explicitly report NTSC/PAL Revision 1.2. Folder names do not establish
-region/language or event semantics.
+Existing acquisition independently detects scrambled encoding. The first header
+has no revision suffix; the other two explicitly name Revision 1.2. Paths and
+region labels are evidence, never production profile selectors.
 
-The metadata command used was:
-
-```sh
-dotnet run --project tools/DolphinDotNet.Assets -c Release -- firmware inspect /private/ipl.bin --menu-audio
-```
-
-| Input | WSYS offset / bounded bytes | Descriptor bytes | Associated AW offset / bytes | Result |
-| --- | --- | --- | --- | --- |
-| NTSC 1.0 | 698048 / 976 | 36, compact | 699040 / 729322 | Structurally resolved |
-| NTSC 1.2 | 843712 / 1648 | 44, extended | 845376 / 729322 | Structurally resolved |
-| PAL 1.2 | 1022912 / 1648 | 44, extended | 1024576 / 729322 | Structurally resolved |
-
-All associate one `ipl_0.aw` bank containing twelve AFC waves through the
-numbered wrapper and packed extents. Offsets above are observations, never
-production locators. Compact stale wrapper sizes are retained and do not set
-the archive start. Inter-wave padding may be nonzero.
-
-The explicit audition command subsequently canonicalized all twelve candidates
-from each input. A private native harness using `source/audio.c` loaded and
-decoded all 36 selected sources through the copied-memory JAudio route, after
-destroying the temporary managed-style input arrays. It checked exact source
-frame counts, channels, rates, loop intervals and end of one-shot decoding.
-SHA-256 of the concatenated mono big-endian signed PCM16 output, in flattened
-wave order 0 through 11 with no separators or container headers, is identical
-for all three inputs:
-`102de93cbb189e0cbebfa69181a6ddf938c2c9fc09a6e247029ac1d689ebf48f`.
-This upgrades the **raw sources** to host-decoder verified; no named effect is
-upgraded. No independent retail decoder comparison or original-event comparison
-was performed in this follow-up. Source/output data and the private harness
-remain outside Git and published artifacts.
-
-The NTSC 1.2 inventory includes the following **flattened candidate positions**;
-these are not sound-event IDs or a published semantic map:
-
-| Positions | Source rate | Source frames | Loop interval |
+| Input | WSYS offset / bounded size | Descriptor bytes | Validated adjacent AW offset / size |
 | --- | --- | --- | --- |
-| 0, 1 | 32000 | 174067 each | None; existing startup channels |
-| 2, 3 | 32000 | 187092 each | None |
-| 4 | 32000 | 52049 | None |
-| 5 | 44100 | 31214 | None |
-| 6 | 32000 | 17821 | None |
-| 7 | 32000 | 31551 | [11892, 31415) |
-| 8 | 32000 | 28544 | [14080, 28137) |
-| 9, 10 | 32000 | 166745 each | None |
-| 11 | 44100 | 79249 | [31967, 36865) |
+| NTSC 1.0 | 698048 / 976 | 36, compact | 699040 / 729322 |
+| NTSC 1.2 | 843712 / 1648 | 44, extended | 845376 / 729322 |
+| PAL 1.2 | 1022912 / 1648 | 44, extended | 1024576 / 729322 |
 
-The descrambled NTSC 1.2 image also contains an IBNK tag at 0xcd6e0,
-`BANK` at 0xcd700, nine `INST` tags at 0xcdd80 through 0xcdf80, and
-`C-DF`/`SCNE` tables inside WSYS. These are leads only: instrument notes,
-ID tables, envelope/tuning behavior and event dispatch have not been resolved.
-In particular, a looping source cannot safely be treated as a complete one-shot
-effect without tracing its release/tail behavior.
+The numbered wrapper and packed extents associate `ipl_0.aw`. The bounded WSYS
+end, including compact stale-wrapper handling, sets the archive start. No
+absolute offsets above are production locators. All 36 raw-wave auditions
+passed the existing native decoder. Concatenated mono BE PCM16, flat positions
+0–11, has SHA-256
+`102de93cbb189e0cbebfa69181a6ddf938c2c9fc09a6e247029ac1d689ebf48f`
+on all three inputs; this alone does not establish named-effect semantics.
 
-[ogamespec/gc-ipl](https://github.com/ogamespec/gc-ipl/tree/0d8ec091b89f223b088b1debfbab3d0e83938f09/Jaudio)
-was inspected as an independent reverse-engineering lead. Its wave/bank reader
-describes pointer conversion and sound-handle lookup, not a verified map of the
-requested cube actions. No external implementation or payload was copied into
-the SDK. A second lead, [mstan/gcnlle](https://github.com/mstan/gcnlle), emulates
-the IPL's audio path; it was not used as mapping evidence.
+## Events, instruments and true wave IDs
 
-## Semantic evidence matrix
+Static analysis followed cube input branches into the original event dispatcher,
+then the BMS event jump table, IBNK program/key/velocity maps and WSYS C-DF IDs.
+The NTSC 1.2 original IPL was also driven through Dolphin 2609b's existing
+controller/TAS interface with GDB event and note traces. Up/down rotation,
+return and actual menu entry were observed. All four direction branches share
+the same event statically; this was also checked in PAL's handler.
 
-These results apply individually to each of NTSC 1.0, NTSC 1.2 and PAL 1.2.
-No event trace, uninterrupted original-action PCM comparison, emulator sound
-acceptance or physical-output recording was completed for menu effects.
+NTSC 1.2 dispatch is at RAM `0x81357840`; PAL dispatch is `0x8135abc0`.
+These are research observations, not production addresses. BS2 file offset
+`0x820` loads at RAM `0x81300000` for the inspected images.
 
-| Identity / original action to investigate | Source / parameters / profile | Evidence level |
+| Public identity / original action | Event and sequence entry | Verified instrument notes |
 | --- | --- | --- |
-| `TurnSide`: central cube toward a side; check each direction | Unresolved event/wave, pitch, gain, pan, envelope, layering and complete duration; no profile | Unsupported |
-| `TurnCenter`: return to central position; establish distinctness | Unresolved; no shared-source equivalence assumed | Unsupported |
-| `Select`: confirm and enter an actual menu | Unresolved; do not substitute an option-selection sound | Unsupported |
-| `Back`: return action | Unresolved | Unsupported |
-| `OptionCancel`: cancel option change | Unresolved | Unsupported |
-| `OptionConfirm`: confirm option change | Unresolved | Unsupported |
-| `OptionMove1`: first proposed option movement identity | Original action and recipe unresolved | Unsupported |
-| `OptionMove2`: second proposed option movement identity | Original action and recipe unresolved | Unsupported |
-| `OptionMove3`: third proposed option movement identity | Original action and recipe unresolved | Unsupported |
-| `OptionSelect`: select an option | Unresolved | Unsupported |
-| `PressStart`: start prompt action | Unresolved | Unsupported |
+| TurnSide: center toward any side | Event 3; BMS `0x3fc` | Program 7, wave ID 9: authored keys 64/67/60, transpose -12 → 52/55/48, velocity 100 |
+| TurnCenter: opposite direction or B returning to center | Event 4; BMS `0x423` | Program 7, wave ID 9: keys 60/57/53, transpose -12 → 48/45/41, velocity 100 |
+| Select: A entering a cube-side menu | Event 5; BMS `0xadf`, child entries `0xaed` and `0xb72` | Program 7 / ID 9: keys 72/70 → 60/58, velocity 85; program 9 / ID 11: 15 authored notes, keys 85…69 → 73…57, authored velocities and pan |
 
-Before enabling a profile, trace original input → event dispatch → event/note
-ID → bank instrument → true wave ID → archive span and all voice transforms.
-Correlate uninterrupted output with that same original action. Fingerprint a
-documented encoding stage of bounded event/bank content, then check hashing on
-the target AOT runtime. A whole-image hash, filename, wave count, rate or duration
-alone must never qualify a mapping. Recheck event relationships on each revision.
-No sequence interpreter or PCM renderer has been added without that evidence.
+Program 7's one key/velocity region references **ID 9**, resolved by C-DF to
+**flat position 7**, not position 9. Program 9 references **ID 11**, flat 11.
+Both have instrument/key/velocity gain and tuning 1.0. Native note traces
+confirmed IDs, transposed keys, velocities, tuning and squared velocity gain.
 
-## Implemented structural and ownership work
+| True ID | Flat position | Codec / rate / base key | Source frames / loop interval |
+| --- | --- | --- | --- |
+| 9 | 7 | AFC HQ / 32000 / 48 | 31551 / [11892,31415) |
+| 11 | 11 | AFC HQ / 44100 / 48 | 79249 / [31967,36865) |
 
-`IncludeMenuAudio` opts into structural association and future verified-source
-retention. Current unknown profiles retain **zero additional encoded sample
-bytes**. The default path does not perform menu discovery or retention, and the
-encoding-evidence scan remains independent of menu profiles. Metadata queries
-allocate no native audio or decoded PCM. Creation fails before native allocation
-on unavailable effects, with a diagnostic reason.
+The instrument rate is not the output sample rate. Original tuning divides by
+32028.5 Hz. The tempo/timebase product is 300 sequence ticks per second at
+that DAC reference, advanced in 80-sample DSP blocks. Track gain is linear;
+velocity gain is squared. Byte parameters use signed byte ×256 /32768.
+The event parent gain is 90/128; mixer master is 13107/16384 after output gain.
+These values were checked against the original PPC code and live track/DSP
+parameters, rather than inferred from a later JAudio implementation.
 
-The internal selected-wave canonicalizer is exercised by the explicit audition
-tool and generated tests, independently of semantic resolution. It preserves
-mono codec, sample rate, exact frame count, early loop end and descriptor fields
-from either source layout. It rebases the selected wave to zero in an extended
-256-byte WSYS header supported by the existing native reader. Only frames needed
-for actual samples are copied, including partial final frames. This capability
-does not make any named effect available.
+Rotation uses track gain 65/128, two four-tick pitch ramps (-685 then 0), waits
+60 and 87 ticks, note-offs, and the instrument's 500-unit **squared** release.
+The first Select layer uses gain 50/128, bend range 8, four bends at ticks
+0/21/42/63 (-685,685,0,1370), note-offs at 91/92 ticks and ADSR
+(1,10,2000,300,200). The second uses gain 40/128, starts at tick 30, follows the
+firmware's finite 15-note/pan sequence and ADSR (1,10,32000,1000,100).
+Envelope time units are 1/600 second at the DAC reference.
 
-Generated vectors cover all four WSYS codecs, both layouts and early/no loops.
-Every native decoded sample is compared with an independently specified PCM16
-oracle. Tests destroy the input arrays before native playback, exercise 16 clip
-slots and 32 independent voices, reject insufficient budgets, and drain all slots.
-The AOT firmware fixture additionally clears/disposes image, catalog and snapshot
-before playing an isolated generated wave under collection-on-allocation stress.
-Existing startup stereo Sound/Music remain covered in the same run.
+Rotation's default parent FX weighting yields send 127/512. The two audible
+feedback paths use 50 DSP blocks of delay, an 8-tap FIR and 0x6000 Q15 output
+gain. The filter coefficients are extracted from firmware. Select's common
+setup writes register 12 = 0, disabling the inherited send. Its panning uses
+its authored curves. An additional IPL reverb bus does not route to audible
+front outputs in the inspected HLE path; physical behavior is not claimed.
 
-Measured generated-vector counters: selected-wave payload is 265 bytes for the
-16-frame AFC fixture, and at most 294 bytes for the 19-frame codec vectors
-(256-byte header plus at most 38 bytes). Native single-clip retained usage peaks
-at 694 bytes in these vectors; this is a test measurement, not a retail-effect
-budget. Across the 36 retail raw-source auditions, the largest single native
-clip was 105,902 bytes (source positions 2 and 3), with a 105,502-byte selected
-header/body snapshot. No complete named effect has a measured budget yet.
-The forced-GC AOT bridge reported 572 collections and 4,208,224 occupied
-heap bytes at exit on its first expanded run; exit occupancy is **not peak**.
-Full preparation peak and physical latency have not been measured. Peak must
-include the live 2 MiB image, normal catalog, snapshots, parser temporaries,
-native sources and validation scratch; the native clip counter alone is
-insufficient. The existing 2 MiB aggregate catalog limit is unchanged.
+## Profile and bounds
 
-## Private audition and acceptance
+`ipl-menu-bms-v1` requires the checked WSYS/AW association, bounded adjacent IBNK,
+true ID tables and all the following SHA-256 fingerprints of **descrambled**
+resource-relative content:
+
+| Content | Bytes / SHA-256 |
+| --- | --- |
+| IBNK, starting with IBNK tag | 2272 / `50e79d0625aa0b8817509b6fa3f56af7c3f94aa81dac64a146e15e04f0ce10e1` |
+| BMS at aligned AW end, through `EOF\0` | 3117 / `3432f80f4f3c7be92e1288b81ce8071db3554cd8fcc520410f5dd489f0ccdc1f` |
+| DSP-effect initializer directly preceding IBNK | 128 / `c10b2ad8bc679484c74fe78f9b5bcca66e210a08cba43a51fbc5b36ad224b4fc` |
+| Four-tap, 64-phase resampling table, in bounded preceding 64 KiB | 512 / `f5010bc5d7798e7a059af43623dfcdb26c34b5bf2d282ad253db5bdc32ce591b` |
+
+Identical software/DSP copies of the complete resampling table are equivalent;
+competing event/archive associations remain errors. Hashing does not replace
+pointer, size, codec, loop, duplicate-ID or archive bounds checks. The small
+SHA-256 implementation passes standard host vectors and single/multiblock AOT
+vectors. Unknown bank/BMS/DSP semantics remain unavailable. A recognized profile
+with malformed ID/source tables fails validation. Private mutation and complete
+resource relocation tests passed on NTSC 1.2 and PAL 1.2.
+
+Early NTSC's 3092-byte BMS has hash
+`5e9be1050199629aa560f410effbbd5a8361ea17777fb07f580c1d75586cbd35`.
+Its equivalent note recipes compile in research, but the DSP-effect initializer
+differs. It is deliberately unavailable pending separate output qualification.
+
+The compiler accepts only the finite subset used here: notes/off, bounded waits,
+program/register writes, transpose, volume/pitch/pan, ADSR, route zero and bounded
+calls/child tracks. Limits are 512 instructions, three tracks, four call frames,
+32 notes, 64 automation changes, 2000 sequence ticks and eight output seconds.
+Unsupported commands, active-note reuse, unreleased notes and invalid ranges fail.
+It is not a public or general BMS/music engine.
+
+## Output comparison and limits
+
+An uninterrupted original NTSC 1.2 DSP dump was recorded in Dolphin 2609b HLE
+with ambient root tracks muted, while the event tracks and their DSP sends were
+left intact. GDB note/event tracing was disabled during that recording. Captures
+are private and contain no reference-collection WAV substitution.
+
+Host-rendered SDK PCM16 was compared with those three original actions. Capture
+windows began at 12.36 s (center), 24.39 s (side), 36.69 s (select). After aligning
+first-channel cross-correlation, lags were 309,454,421 samples respectively.
+Magnitudes were compared using 1024-sample Hann STFTs, 128-sample hops, retaining
+windows above 3% of original peak window energy:
+
+| Effect | Aligned waveform correlation | Mean spectral cosine | SDK/original stereo RMS |
+| --- | --- | --- | --- |
+| TurnSide | 0.965 | 0.997 | 1.002 |
+| TurnCenter | 0.993 | 0.997 | 1.002 |
+| Select | 0.610 | 0.981 | 0.982 |
+
+These establish matching notes/timbre, envelope, level and tail at the stated
+comparison level, **not bit-identical DSP output**. Select's layered notes are
+particularly sensitive to the running parent's fractional tick phase; a prepared
+one-shot uses a deterministic zero phase. The renderer quantizes pitch to DSP
+4.12, uses firmware four-tap coefficients with four initial history samples,
+and uses direct sample selection at ratios >=4. It does not retain an IPL DSP
+machine or the ambience's ongoing phase. Per-block mixer ramps/rounding also
+prevent an exact sample-by-sample claim. Physical DAC output is unverified.
+
+| Input / effect group | Evidence level |
+| --- | --- |
+| NTSC 1.2 / all three primary effects | Live event/instrument trace; host render compared with original emulated output |
+| PAL 1.2 / all three primary effects | Static action/dispatcher verification; identical bank/BMS/DSP content; native decoded/prepared output verified |
+| NTSC 1.0 / all primary effects | Structural/raw decoder and event-recipe research only; unsupported DSP setup |
+| Every secondary identity | Unsupported; no guessed or startup fallback |
+
+Output is ordinary stereo PCM16 at nominal 32000 Hz. Rotation contains 74480
+frames, including a bounded 32000-frame feedback tail after the final release;
+Select contains 38640. Metadata reports these exact prepared lengths. In the
+rotation comparison the final SDK 100 ms was below 4 PCM16 RMS steps. The
+inaudible residual of a feedback network is bounded, not claimed infinitely exact.
+
+## Ownership and memory
+
+Opt-in capture retains only the two selected encoded spans, small recipes/FIR
+metadata and one shared 512-byte resampling table: **65054 additional bytes**.
+It retains no ROM or decoded PCM. Unknown profiles retain zero. Legacy catalog
+construction does not invoke menu discovery or keep these bytes.
+
+`CreateMenuSound` detaches the selected packet, copies it to native ownership,
+decodes the needed instruments through the existing AFC decoder, and renders in
+bounded background slices. Its ordinary caller-owned Sound outlives all managed
+inputs. Completion frees packet, decoded scratch, FIR rings and parser spans;
+playback retains only aligned PCM16. Cancellation/budget/error/slot cleanup use
+normal AudioDispose. No second real-time mixer, WAV fallback or PCM8 reduction.
+
+Measured 64-bit host counters (allocator metadata excluded):
+
+| Effect | Native retained PCM16 | Maximum per-preparation native allocation charge |
+| --- | --- | --- |
+| TurnSide / TurnCenter | 297920 | 397694 |
+| Select | 154560 | 442518 |
+
+The 8 MiB default is a ceiling, not an allocation target. Peak must also include
+live firmware, ordinary catalog, detached managed packet and managed objects.
+The native column is **not full managed/native peak**. The target keeps the
+existing 8 MiB managed heap. Forced-GC AOT fixtures verify collection on allocation;
+exit occupancy is not peak, and physical latency has not been measured.
+
+## Validation and reproduction
+
+No Nintendo samples or firmware are in generated fixtures. Automated coverage
+includes all WSYS codecs/layouts, exact independent PCM16 decoding, bounded BMS
+compilation, hash vectors, timed pitch/pan/ADSR, independent layers, FIR feedback
+and complete tails, four-tap sampling, exact budget boundaries, malformed packets,
+partial-preparation disposal, 16 clips/32 voices and native ownership after
+managed-array destruction. Synthesized sample comparisons allow at most 3 PCM16
+steps; observed maximum is 1. AOT covers background preparation, disposal,
+forced GC, ordinary voices and unchanged startup Sound/Music.
 
 ```sh
-# Explicitly exports ONE validated raw candidate. Choose a private directory
-# outside Git; never add outputs to CI artifacts. Existing outputs are protected.
-dotnet run --project tools/DolphinDotNet.Assets -c Release -- firmware audition /private/ipl.bin 0 7 /private/audition-7
-```
-
-Load `selected.wsys` with `AudioFormat.JAudioWaveBank`, paired with
-`selected.aw`, entry zero, using the existing Sound API. Auditioning this raw
-source does not reproduce any instrument tuning, release, layering or event
-sequence. The normal inspection command exports no audio.
-
-`tests/SystemMenuAudioHardwareSmoke` requests only the three primary effects on
-the preparation executor, cleans partial initialization, disposes image/catalog,
-then uses normal application-executor Sound voices with completion markers and
-gaps. Its default build reads EXI only. `FIRMWARE_EXPLICIT_FILE` reads only
-`sd:/ipl.bin` after an explicit mount. It deliberately fails acceptance while
-mappings are unavailable. A compiled DOL or an unavailable log is not evidence
-of authentic audible playback. No physical run has been performed.
-
-## Local validation results
-
-Passed on 2026-11-13 using the local Linux development container:
-
-```sh
-dotnet run --project tests/SystemFirmwareTests -c Release -p:DndBuildNative=false
 python3 tests/system_menu_audio.py
 python3 tests/system_firmware_aot.py
 python3 tests/system_firmware_inventory.py
@@ -186,22 +208,32 @@ python3 scripts/ci_test_suite.py assets
 python3 scripts/ci_test_suite.py audio
 python3 scripts/ci_test_suite.py compiler
 python3 scripts/ci_test_suite.py gamecube
-python3 -m unittest discover -s tests -p test_ci_changes.py
-python3 -m unittest discover -s tests -p test_ci_workflow.py
 ```
 
-The final focused tests were rerun after tightening malformed numbered-WSYS
-handling and preserving the default inventory JSON shape. The selector tests
-cover the new test paths, and the audio suite actually executes the generated
-canonicalizer/native oracle test. The GameCube suite AOT-compiles the new
-acceptance fixture and compiles its generated C as a host object.
+For explicit **private** qualification, the managed test project accepts
+`--private-menu INPUT PRIVATE_DIRECTORY`. It tests changed fingerprints,
+conflicting IDs, allocation-free queries and relocation, then exports three
+bounded preparation packets. Never commit or upload input/output. The normal
+`firmware inspect INPUT --menu-audio` exports metadata only; `firmware audition`
+continues to export one explicitly chosen raw wave, without semantic claims.
 
-Separately, both console-only and `FIRMWARE_EXPLICIT_FILE` acceptance variants
-were bundled and **cross-linked with devkitPPC GCC 16.1.0 / libogc2**, including
-the repository's EXI/video overlay and O3/LTO. Both ELF-to-DOL conversions and
-the DOL section-alignment validator passed. The generated Makefiles retain the
-existing 8 MiB firmware managed heap. Console-only ELF/DOL sizes are
-5,871,484 / 911,616 bytes; explicit-file sizes are 6,181,396 / 1,055,040 bytes.
-These binaries contain SDK code, not firmware or sampled audio, and are retained
-locally for acceptance. Successful cross-linking is not an emulated or physical
-audio-output test. Neither variant has passed named-effect playback acceptance.
+The existing logging-only `SystemMenuAudioHardwareSmoke` fixture prepares these
+three sounds, disposes image/catalog, plays independent voices to completion and
+cleans up. Default acquisition is EXI only; `FIRMWARE_EXPLICIT_FILE` reads only
+`sd:/ipl.bin`. Cross-linking and emulated/physical acceptance are distinct checks.
+The final console/EXI capture build was cross-linked with devkitPPC GCC 16.1.0 /
+libogc2, O3/LTO, and passed DOL section alignment. It then completed all nine
+normal `Sound` playbacks in Dolphin 2609b, JIT single-core / DSP LLE, using the
+qualified PAL 1.2 firmware selected for the DOL's region. Private RAM inspection
+of the matching ELF's console ring observed `MENU AUDIO END 2` followed by
+`MENU AUDIO COMPLETE`; all three sounds had already been prepared and image /
+catalog disposed. `FIRMWARE_ACCEPTANCE_HOLD` only keeps this existing logging
+fixture alive after completion for private inspection. No debugger pause was
+used during the nine playback intervals. No physical-console run was performed.
+
+Research references include the independently inspected
+[early JAudio bank/wave reader](https://github.com/ogamespec/gc-ipl/tree/0d8ec091b89f223b088b1debfbab3d0e83938f09/Jaudio),
+[later JAS sequence documentation through source](https://github.com/projectPiki/pikmin2/tree/main/src/JSystem/JAudio/JAS),
+and [Dolphin's IPL DSP implementation](https://github.com/dolphin-emu/dolphin/blob/master/Source/Core/Core/HW/DSPHLE/UCodes/Zelda.cpp).
+The later oscillator/volume rules differ from this IPL and were not copied into
+the SDK. No external implementation or proprietary payload was committed.

@@ -83,7 +83,14 @@ internal static class Program
                 }
                 DebugOverlay.WriteLine("MENU AUDIO END "+i);Gap(.5f);
             }
-            DebugOverlay.WriteLine("MENU AUDIO COMPLETE");return 0;
+            DebugOverlay.WriteLine("MENU AUDIO COMPLETE");
+#if FIRMWARE_ACCEPTANCE_HOLD
+            // Optional private capture build: keep completion logs/RAM alive
+            // for the existing emulator debugger without pausing the audio run.
+            while(true)Gap(1);
+#else
+            return 0;
+#endif
         }
         catch(Exception error){DebugOverlay.WriteLine("MENU AUDIO ACCEPTANCE FAILED");DebugOverlay.WriteLine(error.Message);return 1;}
         finally

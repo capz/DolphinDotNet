@@ -18,6 +18,8 @@ static int handles, throw_aux, read_failure;
 static unsigned read_quantum = 7;
 static DndAudioDecoder decoder[32];
 static int active[32];
+static const uint8_t *resident_pcm[32];
+static unsigned resident_bytes[32];
 int dnd_fs_open(DndString *path, int mode, int access, int share) {
   assert(mode == 3 && access == 1 && share == 1);
   unsigned i = (unsigned)(uintptr_t)path - 1;
@@ -79,16 +81,9 @@ void dnd_audio_backend_shutdown(void) {}
 int dnd_audio_backend_play(unsigned slot, const void *data, unsigned size,
                            unsigned format, unsigned rate, bool loop,
                            float volume, float pitch) {
-  (void)slot;
-  (void)data;
-  (void)size;
-  (void)format;
-  (void)rate;
-  (void)loop;
-  (void)volume;
-  (void)pitch;
-  assert(0);
-  return 0;
+  assert(slot<32&&data&&size&&format==3&&rate==32000&&!loop&&volume==1&&pitch==1);
+  resident_pcm[slot]=data;resident_bytes[slot]=size;active[slot]=1;
+  return 1;
 }
 int dnd_audio_backend_play_encoded(unsigned slot, const DndAudioSource *s,
                                    bool loop, unsigned start, unsigned end,

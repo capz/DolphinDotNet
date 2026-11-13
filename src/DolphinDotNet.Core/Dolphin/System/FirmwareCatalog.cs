@@ -48,7 +48,7 @@ public sealed class FirmwareCatalog : IDisposable
         FirmwareMenuAudio.Validate(sound);CheckAlive();info=null;
         return menuAudio!=null&&menuAudio.TryGetInfo(sound,out info);
     }
-    internal FirmwareMenuWaveSource SnapshotMenuSound(SystemMenuSound sound,CancellationToken cancellation)
+    internal byte[] SnapshotMenuSound(SystemMenuSound sound,CancellationToken cancellation)
     {FirmwareMenuAudio.Validate(sound);return MenuAudio.Snapshot(sound,cancellation);}
     public int WaveSystemCount=>waveSystems.Length;
     public FirmwareWaveSystemInfo GetWaveSystem(int index)=>waveSystems[index];

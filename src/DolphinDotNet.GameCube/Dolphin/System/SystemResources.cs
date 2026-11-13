@@ -17,9 +17,9 @@ public static class SystemResources
         if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)
             throw new global::System.ArgumentOutOfRangeException(nameof(nativeBudgetBytes));
         cancellationToken.ThrowIfCancellationRequested();
-        using(var source=catalog.SnapshotMenuSound(sound,cancellationToken))
-            return Dolphin.Audio.Sound.FromEncoded(source.Header,Dolphin.Audio.AudioFormat.JAudioWaveBank,
-                source.Body,nativeBudgetBytes:nativeBudgetBytes,cancellationToken:cancellationToken);
+        var source=catalog.SnapshotMenuSound(sound,cancellationToken);
+        try {return Dolphin.Audio.Sound.FromMenuRecipe(source,nativeBudgetBytes,cancellationToken);}
+        finally {global::System.Array.Clear(source,0,source.Length);}
     }
     /// <summary>Import original model geometry/materials through the existing
     /// background model pipeline. The model owns its native data independently

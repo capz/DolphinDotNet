@@ -1,15 +1,17 @@
 # System firmware resource status
 
-## Menu-audio follow-up — incomplete
+## Menu-audio follow-up
 
-Opt-in menu catalog construction, stable action identifiers, metadata queries,
-the `CreateMenuSound` adapter, shared archive validation, private candidate
-audition and generated native/AOT tests are implemented. **No semantic menu
-profile is enabled**: cube rotation, return to center, menu entry and every
-secondary effect remain unavailable on every revision. Three original online
-inputs have structurally resolved archives only. Event/instrument tracing and
-original-action audio comparisons remain outstanding; there is no emulator or
-physical menu-output acceptance. See [menu research](system-menu-audio-research.md).
+`TurnSide`, `TurnCenter` and `Select` are implemented for the fingerprinted NTSC
+1.2 / PAL 1.2 event/bank/DSP profile. Live original NTSC 1.2 event/instrument
+traces and isolated emulated output comparisons qualify the recipes; PAL's
+event handlers and identical resource content were checked separately. Generated
+PCM16, FIR, resampler, lifetime, budget and forced-GC AOT tests pass. The EXI
+fixture completed nine ordinary Sound playbacks in Dolphin LLE after disposing
+the source image/catalog. Early NTSC's
+different DSP setup and all secondary effects remain unavailable. This is not
+bit-identical output or physical-console qualification. See the detailed
+[menu evidence matrix](system-menu-audio-research.md).
 The supported startup audio described below remains a separate feature.
 
 Phases 1–6 have supported-profile implementations. Phase 7 integration, automated

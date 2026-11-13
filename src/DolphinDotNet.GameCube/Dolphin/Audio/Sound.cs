@@ -11,6 +11,19 @@ public sealed class Sound : IDisposable
     private bool disposed;
     private float volume=1f,pitch=1f;
     private Sound(int token){this.token=token;}
+    internal static Sound FromMenuRecipe(byte[] recipe,int budget,CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();Audio.Initialize();
+        int native=NativeAudio.AudioBeginMenu(recipe,budget);
+        if(native==0)throw new IOException("Menu effect exceeds native budget or no audio slot is available.");
+        try
+        {
+            int status;do{cancellation.ThrowIfCancellationRequested();status=NativeAudio.AudioStep(native);}while(status==0);
+            if(status<0)throw new InvalidDataException("Invalid IPL menu recipe or source.");
+            cancellation.ThrowIfCancellationRequested();return new Sound(native);
+        }
+        catch {NativeAudio.AudioDispose(native);throw;}
+    }
     /// <summary>Create a self-contained sound from mono, unsigned 8-bit PCM.
     /// Copies the data to aligned native memory, so callers can reuse the array.</summary>
     public static Sound FromPcm8(byte[] samples,int sampleRate=22050)

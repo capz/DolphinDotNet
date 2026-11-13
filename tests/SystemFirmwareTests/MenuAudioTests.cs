@@ -95,6 +95,7 @@ internal static class MenuAudioTests
         // Produce original decoder vectors through the real canonicalizer,
         // independently for each source layout/codec/early-loop combination.
         string? output=args.Length==1?args[0]:null;if(output!=null)Directory.CreateDirectory(output);
+        MenuRecipeTests.Run(descriptor,output);
         foreach(bool compact in new[]{false,true})
         for(int codec=0;codec<4;codec++)
         for(int loop=0;loop<2;loop++)

@@ -94,7 +94,7 @@ def select(paths):
             selected.update({"graphics", "assets", "sdk"})
         elif path.startswith("tests/"):
             relative = path[6:].lower().replace("_", "")
-            if relative.startswith(("systemmenuaudio", "systemfirmware")):
+            if relative.startswith(("systemmenuaudio", "systemfirmware", "menurecipe")):
                 selected.update({"assets", "audio", "compiler", "gamecube"})
             elif relative.startswith(("testci", "citest", "testworkflow", "testsample",
                                     "testdebuggerdependency")):

@@ -1,5 +1,19 @@
 using Dolphin.System;
 using System.Text;
+if(args.Length==3&&args[0]=="--private-menu")
+{
+    using var input=FirmwareImage.Read(File.ReadAllBytes(args[1]));
+    using var catalog=input.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default);
+    MenuPrivateTests.Validate(input,catalog);
+    Directory.CreateDirectory(args[2]);
+    for(int i=0;i<3;i++)
+    {
+        if(!catalog.TryGetMenuSoundInfo((SystemMenuSound)i,out var menuInfo))throw new Exception("Unsupported private profile");
+        File.WriteAllBytes(Path.Combine(args[2],i+".dme"),catalog.SnapshotMenuSound((SystemMenuSound)i,default));
+        Console.WriteLine(i+" "+menuInfo!.ProfileId+" "+menuInfo.SampleFrameCount);
+    }
+    Console.WriteLine("Retained "+catalog.MenuAudioRetainedBytes);return;
+}
 static void Check(bool value){if(!value)throw new Exception("Assertion failed");}
 static void Reject(Action action){try{action();}catch(InvalidDataException){return;}throw new Exception("Accepted malformed input");}
 static void Big(byte[] data,int at,int value){data[at]=(byte)(value>>24);data[at+1]=(byte)(value>>16);data[at+2]=(byte)(value>>8);data[at+3]=(byte)value;}

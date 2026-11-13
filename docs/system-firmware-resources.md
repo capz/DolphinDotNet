@@ -63,13 +63,15 @@ rules are those of `Texture2D.FromBti`. Only immutable metadata is cached; nativ
 texture objects are never shared implicitly. `SystemFont.Load` wraps the existing
 `IplFont` implementation, which remains supported with its original API.
 
-## IPL menu audio (research infrastructure)
+## IPL menu audio
 
-No verified menu-event profile is enabled yet. `TurnSide`, `TurnCenter`, `Select`
-and all secondary `SystemMenuSound` identities currently return unavailable.
-`CreateMenuSound` reports `NotSupportedException` rather than playing a guessed
-instrument wave or substituting the startup jingle. See the
-[per-revision research matrix](system-menu-audio-research.md).
+`TurnSide`, `TurnCenter` and `Select` reproduce the original cube rotation,
+return to center and menu-entry sequences on the qualified NTSC 1.2 / PAL 1.2
+profile. They preserve instrument samples, tuning, bends, envelopes, layering,
+panning and rotation's FIR feedback tail. These are prepared stereo PCM16 effects,
+returned as normal caller-owned `Sound` resources. Unknown profiles, early NTSC's
+different DSP setup and secondary effects remain unavailable. See the
+[evidence and playback limits](system-menu-audio-research.md).
 
 Create the catalog with
 `image.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio, cancellationToken)`
@@ -82,8 +84,7 @@ wave index is a public semantic identity. Without the option, queries return
 false and creation explains that retention was not requested. Disposed queries
 and creation throw `ObjectDisposedException`.
 
-The following is the intended lifecycle once a verified profile is available;
-on today's unsupported inputs preparation throws and cleans up:
+Use the following preparation and playback lifecycle:
 
 ```csharp
 // On the preparation executor; image acquisition uses the existing API.
@@ -113,6 +114,13 @@ that payload counter, excluding managed object overhead. There is no hidden ROM
 reopen or decoded-PCM menu cache. Catalog access/disposal remains serialized.
 Full preparation peak includes the image, ordinary catalog, source snapshots and
 native validation scratch, not just `Sound.NativeBytes`.
+The qualified catalog retains 65,054 bytes of additional encoded samples/recipe
+data, including one shared copy of the firmware's resampling coefficients.
+Rotation clips contain 74,480 stereo frames (2.3275 seconds at 32 kHz), including
+a one-second bounded feedback tail after release; Select contains 38,640 frames
+(1.2075 seconds). Preparation uses cancellable decode/render slices. Each clip
+owns PCM16 independently after the image and catalog are disposed; no native
+voice is allocated until `Play`. The default native budget remains 8 MiB.
 
 The opt-in metadata command is `firmware inspect INPUT --menu-audio`; it reports
 bank-local and flattened positions, source rates/frames/loops, archive-relative
