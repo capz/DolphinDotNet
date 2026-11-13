@@ -5,6 +5,11 @@ and PAL 1.2 resource profile. They are composed effects, not raw-wave aliases.
 Early NTSC's different DSP-effect setup and all secondary effects remain
 unavailable. Physical-console output has not been verified.
 
+The follow-up [audio locations and extraction plan](system-menu-audio-extraction-plan.md)
+records a complete live ARAM archive match, all twelve wave IDs/instruments and
+additional Options/Calendar event traces. Those findings do not by themselves
+qualify additional public effects.
+
 ## Inputs
 
 The user explicitly authorized downloading these research inputs from
