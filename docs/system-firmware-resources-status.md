@@ -1,5 +1,21 @@
 # System firmware resource status
 
+## Physical ROM read correction
+
+A real-console report showed the system font working while all catalog
+resources failed with `Ambiguous or unsupported firmware encoding`. The native
+reader previously sent one address command for a complete 4 KiB burst; libogc's
+`__SYS_ReadROM` instead splits at 1 KiB boundaries. The reader now reissues chip
+select and the address at every such boundary while preserving the existing
+4 KiB API limit, deadline and cleanup guarantees. Dolphin pre-decodes its ROM
+and models linear reads, so the earlier emulator tests did not expose this case.
+
+A generated device model that wraps within each 1 KiB page fails with the old
+driver and passes with the correction. The full firmware AOT fixture now uses
+the production native driver against the same page-limited model. Actual
+confirmation on the reporting console remains pending; this simulated device
+test does not turn the earlier emulator results into physical qualification.
+
 ## Menu-audio follow-up
 
 Ten cube/options effects are implemented for the fingerprinted NTSC
