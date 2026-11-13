@@ -16,6 +16,11 @@ public sealed class FirmwareWave
     internal int DescriptorBytes {get;}
     public string ArchiveName {get;}
     public int Codec {get;}
+    /// <summary>Original C-DF identity in this bank, or -1 when no ID table exists.
+    /// This is not the flattened WINF position or a named menu effect.</summary>
+    public int WaveId {get;}
+    /// <summary>MIDI key used as the source's tuning reference.</summary>
+    public int BaseKey {get;}
     public int SampleRate {get;}
     public int SampleCount {get;}
     public int Offset {get;}
@@ -24,9 +29,9 @@ public sealed class FirmwareWave
     public int LoopStart {get;}
     public int LoopEnd {get;}
     internal FirmwareWave(string archive,int codec,int rate,int samples,int offset,int bytes,bool loop,int start,int end,
-        int bankIndex,int bankLocalIndex,int descriptorOffset,int descriptorBytes)
+        int bankIndex,int bankLocalIndex,int descriptorOffset,int descriptorBytes,int waveId=-1,int baseKey=0)
     {ArchiveName=archive;Codec=codec;SampleRate=rate;SampleCount=samples;Offset=offset;EncodedBytes=bytes;HasLoop=loop;LoopStart=start;LoopEnd=end;
-        BankIndex=bankIndex;BankLocalIndex=bankLocalIndex;DescriptorOffset=descriptorOffset;DescriptorBytes=descriptorBytes;}
+        BankIndex=bankIndex;BankLocalIndex=bankLocalIndex;DescriptorOffset=descriptorOffset;DescriptorBytes=descriptorBytes;WaveId=waveId;BaseKey=baseKey;}
 }
 
 public static class FirmwareWaveSystem
@@ -51,6 +56,7 @@ public static class FirmwareWaveSystem
         bool extended=BankLayout(data,size,winf,banks,112,44,cancellationToken);
         if(compact==extended)throw new InvalidDataException("Ambiguous or invalid WSYS bank layout.");
         int nameBytes=compact?68:112,descriptorBytes=compact?36:44;
+        var ids=ReadIds(data,size,winf,banks,nameBytes,cancellationToken);
         var waves=new List<FirmwareWave>();
         for(int b=0;b<banks;b++)
         {
@@ -79,10 +85,45 @@ public static class FirmwareWaveSystem
                 if(samples<1||samples>int.MaxValue/4||bytes<1||bytes>FirmwareCatalog.MaximumDecodedBytes||
                    ((long)samples+spf-1)/spf*frameBytes>bytes||loop!=0&&loop!=uint.MaxValue||
                    loop!=0&&(start>=stop||stop>samples))throw new InvalidDataException("Invalid WSYS sample/loop ranges.");
-                waves.Add(new FirmwareWave(name,codec,(int)rate,samples,offset,bytes,loop!=0,start,loop!=0?stop:samples,b,w,at,descriptorBytes));
+                if(data[at+2]>127)throw new InvalidDataException("Invalid WSYS base key.");
+                waves.Add(new FirmwareWave(name,codec,(int)rate,samples,offset,bytes,loop!=0,start,loop!=0?stop:samples,b,w,at,descriptorBytes,ids[b][w],data[at+2]));
             }
         }
         return waves.ToArray();
+    }
+    private static int[][] ReadIds(byte[] data,int size,int winf,int banks,int nameBytes,CancellationToken cancellation)
+    {
+        var result=new int[banks][];
+        for(int b=0;b<banks;b++)
+        {
+            int bank=AssetInt(U32(data,winf+8+b*4)),count=AssetInt(U32(data,bank+nameBytes));
+            result[b]=new int[count];for(int i=0;i<count;i++)result[b][i]=-1;
+        }
+        int wbct=AssetInt(U32(data,20));if(wbct==0)return result;
+        if(wbct<24||wbct>size-12||!FirmwareResource.Match(data,wbct,"WBCT"))throw new InvalidDataException("Invalid WSYS WBCT.");
+        int scenes=AssetInt(U32(data,wbct+8));
+        if(scenes!=banks||scenes>(size-wbct-12)/4)throw new InvalidDataException("Unsupported WSYS scene/bank association.");
+        for(int b=0;b<banks;b++)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            int scene=AssetInt(U32(data,wbct+12+b*4));
+            if(scene<24||scene>size-24||!FirmwareResource.Match(data,scene,"SCNE"))throw new InvalidDataException("Invalid WSYS SCNE extent.");
+            int cdf=AssetInt(U32(data,scene+12));
+            if(cdf<24||cdf>size-8||!FirmwareResource.Match(data,cdf,"C-DF"))throw new InvalidDataException("Invalid WSYS C-DF extent.");
+            int count=AssetInt(U32(data,cdf+4));
+            if(count!=result[b].Length||count>(size-cdf-8)/4)throw new InvalidDataException("Invalid WSYS C-DF count.");
+            var unique=new HashSet<int>();
+            for(int i=0;i<count;i++)
+            {
+                if((i&63)==0)cancellation.ThrowIfCancellationRequested();
+                int record=AssetInt(U32(data,cdf+8+i*4));
+                if(record<24||record>size-4)throw new InvalidDataException("Invalid WSYS ID record.");
+                int id=AssetInt(U32(data,record));
+                if(!unique.Add(id))throw new InvalidDataException("Duplicate WSYS wave ID in bank.");
+                result[b][i]=id;
+            }
+        }
+        return result;
     }
     private static bool BankLayout(byte[] data,int size,int winf,int banks,int nameBytes,int descriptorBytes,CancellationToken cancellation)
     {

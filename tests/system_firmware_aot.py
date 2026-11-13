@@ -40,6 +40,10 @@ def main():
             big(descriptor,wave+12,size);big(descriptor,wave+24,samples);big(descriptor,wave+28,samples)
             if channel<2:archive[offset:offset+size]=bytes([0]+[0x11 if channel==0 else 0xee]*8)*10880
             offset=(offset+size+31)&~31
+        # Original generated ID tables exercise bounded C-DF parsing under AOT.
+        big(descriptor,20,700);descriptor[700:704]=b'WBCT';big(descriptor,708,1);big(descriptor,712,720)
+        descriptor[720:724]=b'SCNE';big(descriptor,732,752);descriptor[752:756]=b'C-DF';big(descriptor,756,12)
+        for index in range(12):big(descriptor,760+index*4,808+index*4);big(descriptor,808+index*4,100+index)
         image[0x20000:0x20400]=descriptor;big(image,0x1ffe8,2);big(image,0x1ffec,1152);big(image,0x1fff0,1152)
         image[0x20400:0x20400+len(archive)]=archive
         for at,text in ((0x1aff00,b'FONT'),(0x1fcf00,b'GLYP')):

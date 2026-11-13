@@ -26,7 +26,7 @@ internal static class FirmwareInventory
                     var wave=system[w];
                     var association=catalog.MenuAudio.Archives.SingleOrDefault(a=>a.System.Offset==system.Offset&&a.Name==wave.ArchiveName);
                     candidates.Add(new {waveSystemIndex=s,bankIndex=wave.BankIndex,bankLocalIndex=wave.BankLocalIndex,
-                        flattenedIndex=w,archive=wave.ArchiveName,descriptorBytes=wave.DescriptorBytes,
+                        flattenedIndex=w,waveId=wave.WaveId,baseKey=wave.BaseKey,archive=wave.ArchiveName,descriptorBytes=wave.DescriptorBytes,
                         codec=wave.Codec,rate=wave.SampleRate,sampleFrames=wave.SampleCount,
                         hasLoop=wave.HasLoop,loopStart=wave.LoopStart,loopEnd=wave.LoopEnd,
                         archiveRelativeOffset=wave.Offset,encodedBytes=wave.EncodedBytes,

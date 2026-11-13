@@ -52,6 +52,7 @@ def main():
             section=json.loads(result.stdout)['menuAudio'];candidate=section['candidates'][2]
             assert len(section['candidates'])==12 and candidate['bankIndex']==0 and candidate['bankLocalIndex']==2
             assert candidate['flattenedIndex']==2 and candidate['sampleFrames']==19
+            assert candidate['waveId']==-1 and candidate['baseKey']==0
             assert candidate['association']['layout']=='AdjacentWaveArchive'
             assert candidate['descriptorBytes']==(36 if compact else 44)
             assert section['retainedEncodedBytes']==0 and all('unsupported' in effect for effect in section['effects'].values())

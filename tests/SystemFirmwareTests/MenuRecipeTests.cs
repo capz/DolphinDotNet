@@ -13,13 +13,24 @@ internal static class MenuRecipeTests
             string expected=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(input)).ToLowerInvariant();
             Check(FirmwareAudioFingerprint.Hash(input,0,input.Length)==expected);
         }
-        var bank=new byte[256];Big(bank,36+7*4,96);Big(bank,96+16,128);Big(bank,128+12,160);bank[163]=60;
+        var bank=MenuBankFixture.Create();
         // Authored test sequence: unrelated to the retail sequences. A pitched
         // note, timed bend and pan, early loop end, custom ADSR and note release.
         byte[] sequence={0xac,6,0,7,0xd9,0,0x98,0,64,0xa4,7,12,
             0xd8,0,2,0,3,0,20,0x40,0,0,60,0xf0,0,
             0x30,1,127,0x9e,1,1,0,4,0x9a,3,0,10,0x80,30,0x81,0xff};
         var recipe=FirmwareMenuRecipe.Compile(sequence,0,bank);Check(recipe.Frames==6560);
+        Check(recipe.SourceWaveIds.SequenceEqual(new[]{9}));
+        // Different programs must use their own bank release defaults, even
+        // when a raw source is shorter or has a different WSYS position.
+        byte[] option={0xac,6,0,9,0x30,1,100,0x80,30,0x81,0xff};
+        var shortRelease=FirmwareMenuRecipe.Compile(option,0,MenuBankFixture.Create(12));
+        Check(shortRelease.Frames==4000&&shortRelease.SourceWaveIds.SequenceEqual(new[]{11}));
+        byte[] cancel={0xac,6,0,3,0x30,1,100,0x80,30,0x81,0xff};
+        var cancellation=FirmwareMenuRecipe.Compile(cancel,0,bank);
+        Check(cancellation.Frames==5440&&cancellation.SourceWaveIds.SequenceEqual(new[]{6}));
+        var corruptBank=(byte[])bank.Clone();Big(corruptBank,0x350+12,0x3f000000);
+        try{FirmwareMenuRecipe.Compile(sequence,0,corruptBank);throw new Exception("Accepted unqualified tuning");}catch(InvalidDataException){}
         for(int n=0;n<sequence.Length;n++)
         {
             try{FirmwareMenuRecipe.Compile(sequence[..n],0,bank);throw new Exception("Accepted truncated recipe");}
@@ -29,7 +40,7 @@ internal static class MenuRecipeTests
         try{FirmwareMenuRecipe.Compile(bad,0,bank);throw new Exception("Accepted unknown opcode");}catch(InvalidDataException){}
         // A call cycle must hit a fixed depth/work limit, never hang.
         try{FirmwareMenuRecipe.Compile(new byte[]{0xc4,0,0,0,0},0,bank);throw new Exception("Accepted call cycle");}catch(InvalidDataException){}
-        var desc=descriptor(19);desc[193]=3;Big(desc,200,0);Big(desc,204,38);Big(desc,208,-1);Big(desc,212,3);Big(desc,216,17);
+        var desc=descriptor(19);desc[193]=3;desc[194]=48;Big(desc,200,0);Big(desc,204,38);Big(desc,208,-1);Big(desc,212,3);Big(desc,216,17);
         var image=new byte[1024];Array.Copy(desc,image,desc.Length);
         for(int i=0;i<19;i++){short v=(short)((i-9)*1500);image[512+i*2]=(byte)(v>>8);image[513+i*2]=(byte)v;}
         var system=new FirmwareWaveSystemInfo(0,desc.Length,FirmwareWaveSystem.Inspect(desc));
@@ -53,6 +64,7 @@ internal static class MenuRecipeTests
         sequence.CopyTo(layered,16);
         new byte[]{0xac,6,0,9,0x98,0,32,0x98,3,0,0x30,1,64,0x80,20,0x81,0xff}.CopyTo(layered,80);
         var layers=FirmwareMenuRecipe.Compile(layered,0,bank);Check(layers.Frames==6560);
+        Check(layers.SourceWaveIds.SequenceEqual(new[]{9,11}));
         var layeredPacket=layers.Packet(new[]{source,source},default);source.Dispose();
         if(directory!=null)File.WriteAllBytes(Path.Combine(directory,"recipe-layered.dme"),layeredPacket);
         Console.WriteLine("SHA-256 vectors and bounded menu recipe compilation passed");

@@ -2,14 +2,18 @@
 
 ## Menu-audio follow-up
 
-`TurnSide`, `TurnCenter` and `Select` are implemented for the fingerprinted NTSC
-1.2 / PAL 1.2 event/bank/DSP profile. Live original NTSC 1.2 event/instrument
+Ten cube/options effects are implemented for the fingerprinted NTSC
+1.2 / PAL 1.2 `ipl-menu-bms-v2` event/bank/DSP profile. This adds `Back`,
+`OptionCancel`, `OptionConfirm`, `OptionMove1`, `OptionMove2`, `OptionMove3` and
+`OptionSelect` to `TurnSide`, `TurnCenter` and `Select`. Live original NTSC 1.2 event/instrument
 traces and isolated emulated output comparisons qualify the recipes; PAL's
 event handlers and identical resource content were checked separately. Generated
 PCM16, FIR, resampler, lifetime, budget and forced-GC AOT tests pass. The EXI
-fixture completed nine ordinary Sound playbacks in Dolphin LLE after disposing
-the source image/catalog. Early NTSC's
-different DSP setup and all secondary effects remain unavailable. This is not
+fixture completed 30 ordinary Sound playbacks in Dolphin 2503 LLE after disposing
+the source image/catalog. WSYS inventory exposes bounded bank-qualified wave IDs
+and base keys; menu metadata exposes each effect's source IDs. The qualified
+catalog retains 77,984 encoded menu bytes. Early NTSC's
+different DSP setup, `PressStart`, memory-card effects and ambience remain unavailable. This is not
 bit-identical output or physical-console qualification. See the detailed
 [menu evidence matrix](system-menu-audio-research.md).
 The supported startup audio described below remains a separate feature.
@@ -105,12 +109,13 @@ preparation; this includes per-model texture charges and is not a unique-memory
 peak. Bare model previews preserve authored rest alpha, so the wordmark may be
 invisible until the animation activates its materials.
 
-The visual run deliberately omits audio initiation. This Dolphin version reports
+The earlier visual run deliberately omitted audio initiation. That Dolphin version reported
 unsupported AESND HLE microcode `8d527c50`; an audio attempt reached managed
 resource release but stalled in SDK DSP reset. An LLE attempt did not reach the
-first frame within the diagnostic deadline. No emulated audible-output or DSP
-shutdown success is claimed. Host original-data decoding and synthetic playback /
-lifetime tests passed; physical audio acceptance remains required.
+first frame within the diagnostic deadline. Those visual captures do not prove
+audio playback or DSP shutdown. The separate menu-audio LLE fixture described
+above subsequently completed its playback sequence. Physical audio acceptance
+remains required.
 
 The earlier synthetic Dolphin/JIT completion proof also verifies guest-written
 `SYSTEM FIRMWARE CIPHER PASS` and `MANAGED MAIN: OK` buffers at

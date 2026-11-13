@@ -65,12 +65,13 @@ texture objects are never shared implicitly. `SystemFont.Load` wraps the existin
 
 ## IPL menu audio
 
-`TurnSide`, `TurnCenter` and `Select` reproduce the original cube rotation,
-return to center and menu-entry sequences on the qualified NTSC 1.2 / PAL 1.2
+`TurnSide`, `TurnCenter`, `Select`, `Back`, `OptionCancel`, `OptionConfirm`,
+`OptionMove1`, `OptionMove2`, `OptionMove3` and `OptionSelect` reproduce the
+original cube and option sequences on the qualified NTSC 1.2 / PAL 1.2
 profile. They preserve instrument samples, tuning, bends, envelopes, layering,
 panning and rotation's FIR feedback tail. These are prepared stereo PCM16 effects,
 returned as normal caller-owned `Sound` resources. Unknown profiles, early NTSC's
-different DSP setup and secondary effects remain unavailable. See the
+different DSP setup and `PressStart` remain unavailable. See the
 [evidence and playback limits](system-menu-audio-research.md).
 
 Create the catalog with
@@ -90,13 +91,17 @@ Use the following preparation and playback lifecycle:
 // On the preparation executor; image acquisition uses the existing API.
 Sound[] PrepareMenuSounds(FirmwareImage image, CancellationToken token)
 {
-    var sounds = new Sound[3];
+    var names = new[] { SystemMenuSound.TurnSide, SystemMenuSound.TurnCenter,
+        SystemMenuSound.Select, SystemMenuSound.Back, SystemMenuSound.OptionCancel,
+        SystemMenuSound.OptionConfirm, SystemMenuSound.OptionMove1,
+        SystemMenuSound.OptionMove2, SystemMenuSound.OptionMove3,
+        SystemMenuSound.OptionSelect };
+    var sounds = new Sound[names.Length];
     try
     {
         using var catalog = image.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio, token);
-        sounds[0] = SystemResources.CreateMenuSound(catalog, SystemMenuSound.TurnSide, token);
-        sounds[1] = SystemResources.CreateMenuSound(catalog, SystemMenuSound.TurnCenter, token);
-        sounds[2] = SystemResources.CreateMenuSound(catalog, SystemMenuSound.Select, token);
+        for (int i = 0; i < names.Length; i++)
+            sounds[i] = SystemResources.CreateMenuSound(catalog, names[i], token);
         return sounds; // Each successful Sound owns its native source independently.
     }
     catch { foreach (var sound in sounds) sound?.Dispose(); throw; }
@@ -104,7 +109,7 @@ Sound[] PrepareMenuSounds(FirmwareImage image, CancellationToken token)
 // Dispose the caller-owned image after preparation and publish the sounds
 // to the application executor. On input, retain sounds[0].Play()'s returned
 // SoundChannel; reap/dispose it after IsPlaying becomes false. At shutdown,
-// stop/dispose outstanding channels before disposing the three sounds.
+// stop/dispose outstanding channels before disposing the sounds.
 ```
 
 Load only needed effects: native audio has 16 clip slots, shared with other Sound
@@ -114,20 +119,34 @@ that payload counter, excluding managed object overhead. There is no hidden ROM
 reopen or decoded-PCM menu cache. Catalog access/disposal remains serialized.
 Full preparation peak includes the image, ordinary catalog, source snapshots and
 native validation scratch, not just `Sound.NativeBytes`.
-The qualified catalog retains 65,054 bytes of additional encoded samples/recipe
+The qualified catalog retains 77,984 bytes of additional encoded samples/recipe
 data, including one shared copy of the firmware's resampling coefficients.
 Rotation clips contain 74,480 stereo frames (2.3275 seconds at 32 kHz), including
 a one-second bounded feedback tail after release; Select contains 38,640 frames
-(1.2075 seconds). Preparation uses cancellable decode/render slices. Each clip
+(1.2075 seconds). The additional Back, OptionCancel, OptionConfirm, OptionMove1,
+OptionMove2, OptionMove3 and OptionSelect effects contain 47,200, 78,800, 39,600,
+20,080, 20,080, 20,080 and 30,000 stereo frames respectively. `OptionMove1`
+changes a value, `OptionMove2` selects a field within an editor, and
+`OptionMove3` selects a row. Preparation uses cancellable decode/render slices. Each clip
 owns PCM16 independently after the image and catalog are disposed; no native
 voice is allocated until `Play`. The default native budget remains 8 MiB.
 
 The opt-in metadata command is `firmware inspect INPUT --menu-audio`; it reports
-bank-local and flattened positions, source rates/frames/loops, archive-relative
+bank-local and flattened positions, `waveId`, `baseKey`, source rates/frames/loops, archive-relative
 extents, association evidence and unavailable reasons. The separate
 `firmware audition INPUT WSYS_INDEX FLAT_WAVE_INDEX OUTPUT_DIRECTORY` research
 command explicitly isolates one raw wave to a private directory. It does not
 establish a named mapping. Never commit or upload its proprietary outputs.
+
+`FirmwareWave.WaveId` is the original bank-qualified C-DF identity; `-1` means
+the standalone WSYS has no ID table. Present tables are bounded and reject
+duplicate IDs within a bank, invalid scene links and truncated records. IDs
+can repeat across different banks and need not match flattened positions.
+`BaseKey` reports the source tuning reference. `SystemMenuSoundInfo` adds
+`SourceWaveCount` and `GetSourceWaveId(index)` to identify the waves used by a
+complete effect without decoding or allocating a voice. Metadata remains
+immutable after catalog disposal. The versioned semantic profile is
+`ipl-menu-bms-v2`; public enum values and the existing three effects are retained.
 
 ## Original stereo audio
 

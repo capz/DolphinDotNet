@@ -22,8 +22,10 @@ internal static class Program
     }
     private static Sound[] Prepare()
     {
-        var names=new[]{SystemMenuSound.TurnSide,SystemMenuSound.TurnCenter,SystemMenuSound.Select};
-        var sounds=new Sound[3];bool published=false;
+        var names=new[]{SystemMenuSound.TurnSide,SystemMenuSound.TurnCenter,SystemMenuSound.Select,
+            SystemMenuSound.Back,SystemMenuSound.OptionCancel,SystemMenuSound.OptionConfirm,
+            SystemMenuSound.OptionMove1,SystemMenuSound.OptionMove2,SystemMenuSound.OptionMove3,SystemMenuSound.OptionSelect};
+        var sounds=new Sound[names.Length];bool published=false;
         try
         {
             using(var image=Acquire())
