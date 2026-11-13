@@ -1,14 +1,16 @@
 # IPL menu audio research — 2026-11-13
 
-`TurnSide`, `TurnCenter` and `Select` are implemented for the qualified NTSC 1.2
-and PAL 1.2 resource profile. They are composed effects, not raw-wave aliases.
-Early NTSC's different DSP-effect setup and all secondary effects remain
+Ten cube/options effects are implemented for the qualified NTSC 1.2 and PAL 1.2
+resource profile: `TurnSide`, `TurnCenter`, `Select`, `Back`, `OptionCancel`,
+`OptionConfirm`, `OptionMove1`, `OptionMove2`, `OptionMove3` and `OptionSelect`.
+They are composed effects, not raw-wave aliases. Early NTSC's different DSP-effect
+setup, `PressStart`, memory-card effects and continuous ambience remain
 unavailable. Physical-console output has not been verified.
 
 The follow-up [audio locations and extraction plan](system-menu-audio-extraction-plan.md)
 records a complete live ARAM archive match, all twelve wave IDs/instruments and
-additional Options/Calendar event traces. Those findings do not by themselves
-qualify additional public effects.
+additional Options/Calendar event traces. The implementation and uninterrupted
+output comparisons below complete the finite events 6–12 part of that plan.
 
 ## Inputs
 
@@ -59,6 +61,13 @@ These are research observations, not production addresses. BS2 file offset
 | TurnSide: center toward any side | Event 3; BMS `0x3fc` | Program 7, wave ID 9: authored keys 64/67/60, transpose -12 → 52/55/48, velocity 100 |
 | TurnCenter: opposite direction or B returning to center | Event 4; BMS `0x423` | Program 7, wave ID 9: keys 60/57/53, transpose -12 → 48/45/41, velocity 100 |
 | Select: A entering a cube-side menu | Event 5; BMS `0xadf`, child entries `0xaed` and `0xb72` | Program 7 / ID 9: keys 72/70 → 60/58, velocity 85; program 9 / ID 11: 15 authored notes, keys 85…69 → 73…57, authored velocities and pan |
+| Back: B leaving a side menu | Event 6; BMS `0xb35` | Program 7 / ID 9 |
+| OptionCancel: B closing an editor | Event 7; BMS `0x497` | Program 3 / ID 6 |
+| OptionSelect: A opening an editor | Event 8; BMS `0x934` | Program 9 / ID 11 |
+| OptionMove1: change an edited value | Event 9; BMS `0x926` | Program 9 / ID 11 |
+| OptionMove2: move between editor fields | Event 10; BMS `0x918` | Program 9 / ID 11 |
+| OptionMove3: move between option rows | Event 11; BMS `0x90a` | Program 9 / ID 11 |
+| OptionConfirm: A accepting an edit | Event 12; BMS `0x942` | Program 9 / ID 11 |
 
 Program 7's one key/velocity region references **ID 9**, resolved by C-DF to
 **flat position 7**, not position 9. Program 9 references **ID 11**, flat 11.
@@ -67,6 +76,7 @@ confirmed IDs, transposed keys, velocities, tuning and squared velocity gain.
 
 | True ID | Flat position | Codec / rate / base key | Source frames / loop interval |
 | --- | --- | --- | --- |
+| 6 | 6 | AFC HQ / 32000 / 48 | 17821 / no loop |
 | 9 | 7 | AFC HQ / 32000 / 48 | 31551 / [11892,31415) |
 | 11 | 11 | AFC HQ / 44100 / 48 | 79249 / [31967,36865) |
 
@@ -86,6 +96,12 @@ The first Select layer uses gain 50/128, bend range 8, four bends at ticks
 firmware's finite 15-note/pan sequence and ADSR (1,10,32000,1000,100).
 Envelope time units are 1/600 second at the DAC reference.
 
+Instrument defaults are read from the actual program's oscillator/release table.
+Program 9's default release is 200, while program 7's is 500. Explicit sequence
+ADSR takes precedence. Program/key/velocity regions and unity gain/tuning are
+validated before compiling notes; source IDs are assigned per recipe, rather
+than assuming a program number is a flattened wave position.
+
 Rotation's default parent FX weighting yields send 127/512. The two audible
 feedback paths use 50 DSP blocks of delay, an 8-tap FIR and 0x6000 Q15 output
 gain. The filter coefficients are extracted from firmware. Select's common
@@ -95,7 +111,7 @@ front outputs in the inspected HLE path; physical behavior is not claimed.
 
 ## Profile and bounds
 
-`ipl-menu-bms-v1` requires the checked WSYS/AW association, bounded adjacent IBNK,
+`ipl-menu-bms-v2` requires the checked WSYS/AW association, bounded adjacent IBNK,
 true ID tables and all the following SHA-256 fingerprints of **descrambled**
 resource-relative content:
 
@@ -159,7 +175,9 @@ prevent an exact sample-by-sample claim. Physical DAC output is unverified.
 | NTSC 1.2 / all three primary effects | Live event/instrument trace; host render compared with original emulated output |
 | PAL 1.2 / all three primary effects | Static action/dispatcher verification; identical bank/BMS/DSP content; native decoded/prepared output verified |
 | NTSC 1.0 / all primary effects | Structural/raw decoder and event-recipe research only; unsupported DSP setup |
-| Every secondary identity | Unsupported; no guessed or startup fallback |
+| NTSC 1.2 / events 6–12 | Live action/dispatcher trace and uninterrupted original-output comparison described below |
+| PAL 1.2 / events 6–12 | Identical qualified bank/BMS/DSP content; prepared packets match NTSC 1.2; no live PAL action capture |
+| PressStart, memory-card effects and ambience | Unsupported; no guessed or startup fallback |
 
 Output is ordinary stereo PCM16 at nominal 32000 Hz. Rotation contains 74480
 frames, including a bounded 32000-frame feedback tail after the final release;
@@ -167,10 +185,51 @@ Select contains 38640. Metadata reports these exact prepared lengths. In the
 rotation comparison the final SDK 100 ms was below 4 PCM16 RMS steps. The
 inaudible residual of a feedback network is bounded, not claimed infinitely exact.
 
+### Additional options comparison — Dolphin 2503
+
+The original NTSC 1.2 IPL was driven through Sound and Calendar options in
+Dolphin 2503 HLE. Before recording actions, only the two persistent background
+roots (track IDs `0x21001` and `0x21003`) were sent to the sequence's existing
+empty end at relative `0x21b`, followed by three guest seconds for tails to clear.
+The event parent (`0x20002`), instruments, BMS bytes and DSP sends were left
+intact. No debugger stops occurred during the recorded actions. Input timing
+was measured in guest audio frames, avoiding wall-clock delays on a slow host.
+
+Each original action was matched to its prepared SDK effect near the recorded
+controller offset. After waveform alignment, stereo RMS and the cosine between
+long-term magnitude spectra (square root of Welch power, 1024-sample Hann,
+128-sample hop) were measured. This is a different spectral measure from the
+earlier per-window STFT comparison above. Ranges include repeated actions:
+
+| Effect | Waveform correlation | Long-term spectral cosine | SDK/original stereo RMS |
+| --- | --- | --- | --- |
+| Back | 0.944 | 0.99994 | 1.001 |
+| OptionCancel | 0.515–0.717 | 0.97062–0.99533 | 0.989–1.192 |
+| OptionConfirm | 0.741 | 0.99955 | 0.985 |
+| OptionMove1 (value) | 0.889 | 0.99909–0.99911 | 0.829–0.830 |
+| OptionMove2 (field) | 0.890 | 0.99958 | 0.987 |
+| OptionMove3 (row) | 0.822 | 0.99377–0.99379 | 1.145–1.146 |
+| OptionSelect (editor) | 0.802–0.812 | 0.99620–0.99656 | 0.915–0.920 |
+
+The capture confirms the selected actions, pitches, timbres and finite recipes;
+it does not establish identical levels or sample timing. The largest observed
+RMS difference is about 19%, and coherent layers, ongoing parent tick phase,
+block ramps and prior effect tails affect the comparison. No per-effect gain
+was fitted to these captures. Applications receive deterministic prepared
+one-shots, with the same playback limits described above. PAL prepared packets
+match NTSC byte-for-byte; live PAL options output and physical DAC output were
+not recorded.
+
+Back, OptionCancel, OptionConfirm, OptionMove1, OptionMove2, OptionMove3 and
+OptionSelect contain respectively 47,200, 78,800, 39,600, 20,080, 20,080, 20,080
+and 30,000 stereo frames. Duration follows note release and bounded DSP tails,
+rather than the length of a raw source or a trailing silent sequence wait.
+
 ## Ownership and memory
 
-Opt-in capture retains only the two selected encoded spans, small recipes/FIR
-metadata and one shared 512-byte resampling table: **65054 additional bytes**.
+Opt-in capture retains only three selected encoded spans (IDs 9, 11 and 6),
+small recipes/FIR metadata and one shared 512-byte resampling table:
+**77984 additional bytes**, up from 65054 for the original three-effect profile.
 It retains no ROM or decoded PCM. Unknown profiles retain zero. Legacy catalog
 construction does not invoke menu discovery or keep these bytes.
 
@@ -217,13 +276,15 @@ python3 scripts/ci_test_suite.py gamecube
 
 For explicit **private** qualification, the managed test project accepts
 `--private-menu INPUT PRIVATE_DIRECTORY`. It tests changed fingerprints,
-conflicting IDs, allocation-free queries and relocation, then exports three
-bounded preparation packets. Never commit or upload input/output. The normal
+conflicting IDs, allocation-free queries and relocation, then exports ten
+bounded preparation packets.
+It also rejects a bijective swap of IDs 9/11 against qualified source metadata.
+Never commit or upload input/output. The normal
 `firmware inspect INPUT --menu-audio` exports metadata only; `firmware audition`
 continues to export one explicitly chosen raw wave, without semantic claims.
 
 The existing logging-only `SystemMenuAudioHardwareSmoke` fixture prepares these
-three sounds, disposes image/catalog, plays independent voices to completion and
+ten sounds, disposes image/catalog, plays independent voices to completion and
 cleans up. Default acquisition is EXI only; `FIRMWARE_EXPLICIT_FILE` reads only
 `sd:/ipl.bin`. Cross-linking and emulated/physical acceptance are distinct checks.
 The final console/EXI capture build was cross-linked with devkitPPC GCC 16.1.0 /
@@ -235,6 +296,17 @@ of the matching ELF's console ring observed `MENU AUDIO END 2` followed by
 catalog disposed. `FIRMWARE_ACCEPTANCE_HOLD` only keeps this existing logging
 fixture alive after completion for private inspection. No debugger pause was
 used during the nine playback intervals. No physical-console run was performed.
+
+The expanded ten-effect fixture was cross-linked with the same devkitPPC GCC
+16.1.0 / libogc2 O3/LTO toolchain and completed **30** ordinary playbacks in
+Dolphin 2503, JIT single-core / DSP LLE. Private live MEM1 inspection of the
+matching ELF's console ring observed `MENU AUDIO END 9` and
+`MENU AUDIO COMPLETE`; no pauses were used during playback. The full local audio
+suite, metadata inventory, generated WSYS identity tests and forced-GC AOT fixture
+pass. The latter performed 1,025 reads and 887 collections, with 4,212,984 heap
+bytes occupied at exit (not peak). NTSC 1.2 and PAL 1.2 private mutation/relocation
+runs prepare all ten; early NTSC reports unsupported with zero retained menu
+bytes. No physical-console run was performed.
 
 Research references include the independently inspected
 [early JAudio bank/wave reader](https://github.com/ogamespec/gc-ipl/tree/0d8ec091b89f223b088b1debfbab3d0e83938f09/Jaudio),

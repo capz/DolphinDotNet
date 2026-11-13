@@ -24,6 +24,13 @@ internal static class MenuPrivateTests
         for(int i=0;i<count;i++){int entry=Read(root+cdf+8+i*4);if(Read(root+entry)==9){Big(invalid,root+entry,11);break;}}
         try{using var bad=FirmwareImage.Read(invalid);using var rejected=bad.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default);throw new Exception("Accepted corrupt instrument map");}
         catch(InvalidDataException){}
+        // A bijective ID swap is still a different instrument association.
+        // Both sources loop, so checking only codec/base key would accept it.
+        invalid=(byte[])image.Data.Clone();
+        for(int i=0;i<count;i++)
+        {int entry=Read(root+cdf+8+i*4),id=Read(root+entry);if(id==9||id==11)Big(invalid,root+entry,id==9?11:9);}
+        try{using var bad=FirmwareImage.Read(invalid);using var rejected=bad.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default);throw new Exception("Accepted swapped instrument sources");}
+        catch(InvalidDataException){}
         // Relocate the complete bounded resource group. Two original generated
         // Yay0 records provide encoding evidence without copying graphics.
         var moved=new byte[FirmwareImage.ImageBytes];Array.Copy(image.Data,moved,256);
@@ -31,7 +38,7 @@ internal static class MenuPrivateTests
         {int at=0x1000+i*0x1000;moved[at]=89;moved[at+1]=97;moved[at+2]=121;moved[at+3]=48;Big(moved,at+4,4);Big(moved,at+8,20);Big(moved,at+12,20);moved[at+16]=240;for(int b=0;b<4;b++)moved[at+20+b]=(byte)(b+1);}
         int start=bank-65536,length=seq+3117-start;Array.Copy(image.Data,start,moved,0x20000,length);
         using var relocated=FirmwareImage.Read(moved);using var resolved=relocated.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default);
-        for(int i=0;i<3;i++)Check(catalog.SnapshotMenuSound((SystemMenuSound)i,default).SequenceEqual(resolved.SnapshotMenuSound((SystemMenuSound)i,default)));
+        for(int i=0;i<10;i++)Check(catalog.SnapshotMenuSound((SystemMenuSound)i,default).SequenceEqual(resolved.SnapshotMenuSound((SystemMenuSound)i,default)));
         Console.WriteLine("Private profile mutation, true-ID conflict, allocation-free query and complete-resource relocation passed");
     }
 }

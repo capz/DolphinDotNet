@@ -6,14 +6,15 @@ using static Dolphin.Formats.GameCubeBinary;
 
 namespace Dolphin.System;
 
-// This is a finite compiler for the three fingerprinted IPL effects, not a
+// This is a finite compiler for fingerprinted IPL effects, not a
 // public BMS player. All addresses are relative to validated resource extents.
 internal sealed class FirmwareMenuRecipe
 {
     internal readonly byte[] Data;
     internal readonly int Frames;
+    internal readonly int[] SourceWaveIds;
     private readonly byte[]? resampling;
-    private FirmwareMenuRecipe(byte[] data,int frames,byte[]? coefficients){Data=data;Frames=frames;resampling=coefficients;}
+    private FirmwareMenuRecipe(byte[] data,int frames,byte[]? coefficients,int[] ids){Data=data;Frames=frames;resampling=coefficients;SourceWaveIds=ids;}
     internal static FirmwareMenuRecipe Compile(byte[] seq,int entry,byte[] bank,byte[]? reverb=null,byte[]? resampling=null)
     {
         var compiler=new Builder(seq,bank);compiler.Track(entry,0);
@@ -24,6 +25,7 @@ internal sealed class FirmwareMenuRecipe
         private readonly byte[] seq,bank;
         private readonly List<int[]> tracks=new List<int[]>(),notes=new List<int[]>(),curves=new List<int[]>();
         private readonly List<int> sends=new List<int>();
+        private readonly List<int> sourceIds=new List<int>();
         private int work;
         internal Builder(byte[] sequence,byte[] instruments){seq=sequence;bank=instruments;}
         private int Read(ref int pc,int bytes)
@@ -35,8 +37,7 @@ internal sealed class FirmwareMenuRecipe
         {
             if(depth>1||tracks.Count>=3)throw new InvalidDataException("Menu track budget.");
             int id=tracks.Count;var t=new int[9];t[0]=32768;t[1]=12;
-            int instrument=(int)U32(bank,36+7*4),osc=(int)U32(bank,instrument+16),release=(int)U32(bank,osc+12);
-            t[7]=U16(bank,release+2);t[8]=U16(bank,release);tracks.Add(t);
+            tracks.Add(t);
             sends.Add(depth==0?8128:4064);
             int tick=0,program=-1,transpose=0;var active=new int[8];for(int i=0;i<8;i++)active[i]=-1;
             var calls=new int[4];int callDepth=0;
@@ -47,9 +48,10 @@ internal sealed class FirmwareMenuRecipe
                 if(op<0x80)
                 {
                     int slot=Read(ref pc,1),velocity=Read(ref pc,1);
-                    if(slot<1||slot>7||velocity>127||program!=7&&program!=9||active[slot]>=0||notes.Count>=32)
+                    if(slot<1||slot>7||velocity>127||program<0||active[slot]>=0||notes.Count>=32)
                         throw new InvalidDataException("Unsupported menu note.");
-                    int source=program==7?0:1;
+                    int wave=Instrument(program,t,false),source=sourceIds.IndexOf(wave);
+                    if(source<0){if(sourceIds.Count==2)throw new InvalidDataException("Menu source budget.");source=sourceIds.Count;sourceIds.Add(wave);}
                     active[slot]=notes.Count;notes.Add(new[]{id,source,op+transpose,velocity,tick,-1,48,0});
                 }
                 else if(op==0x80||op==0x88)tick=FirmwareAudioBounds.Add(tick,Read(ref pc,op==0x80?1:2));
@@ -71,7 +73,11 @@ internal sealed class FirmwareMenuRecipe
                 else if(op==0xa4||op==0xac)
                 {
                     int reg=Read(ref pc,1),value=Read(ref pc,op==0xa4?1:2);
-                    if(reg==6){program=value;if(program!=7&&program!=9)throw new InvalidDataException("Unsupported menu instrument.");}
+                    if(reg==6)
+                    {
+                        if(program>=0||tick!=0)throw new InvalidDataException("Changing a menu instrument after setup is unsupported.");
+                        program=value;Instrument(program,t,true);
+                    }
                     else if(reg==7)t[1]=value;
                     else if(reg<8||reg>12||value!=(reg==10?32767:0))throw new InvalidDataException("Unsupported menu register.");
                     else if(reg==12)sends[id]=0;
@@ -92,6 +98,28 @@ internal sealed class FirmwareMenuRecipe
                 {if(callDepth!=0)throw new InvalidDataException("Unclosed menu call.");for(int i=1;i<8;i++)if(active[i]>=0)throw new InvalidDataException("Unreleased menu note.");return;}
                 else throw new InvalidDataException("Unsupported menu sequence command.");
             }
+        }
+        private int Instrument(int program,int[] track,bool setDefaults)
+        {
+            if(program!=3&&program!=7&&program!=9)throw new InvalidDataException("Unsupported menu instrument.");
+            int instrument=AssetInt(U32(bank,36+program*4));
+            Check(bank,instrument,48);
+            if(!FirmwareResource.Match(bank,instrument,"INST")||F32(bank,instrument+8)!=1||F32(bank,instrument+12)!=1||U32(bank,instrument+40)!=1)
+                throw new InvalidDataException("Unsupported menu instrument regions or tuning.");
+            int key=AssetInt(U32(bank,instrument+44));Check(bank,key,12);
+            if(bank[key]!=127||U32(bank,key+4)!=1)throw new InvalidDataException("Unsupported menu key region.");
+            int velocity=AssetInt(U32(bank,key+8));Check(bank,velocity,16);
+            if(bank[velocity]!=127||F32(bank,velocity+8)!=1||F32(bank,velocity+12)!=1)
+                throw new InvalidDataException("Unsupported menu velocity region.");
+            if(setDefaults&&track[6]==0)
+            {
+                int oscillator=AssetInt(U32(bank,instrument+16));Check(bank,oscillator,16);
+                int release=AssetInt(U32(bank,oscillator+12));Check(bank,release,6);
+                track[7]=U16(bank,release+2);track[8]=U16(bank,release);
+                if(track[7]>6000||track[8]>2||U16(bank,release+4)!=0)
+                    throw new InvalidDataException("Unsupported menu instrument release.");
+            }
+            return AssetInt(U32(bank,velocity+4));
         }
         internal FirmwareMenuRecipe Finish(byte[]? reverb,byte[]? coefficients)
         {
@@ -117,13 +145,14 @@ internal sealed class FirmwareMenuRecipe
             foreach(var n in notes)foreach(int v in n){Put(data,at,v);at+=4;}
             foreach(var c in curves)foreach(int v in c){Put(data,at,v);at+=4;}
             if(wet)Array.Copy(reverb!,0,data,at,64);
-            return new FirmwareMenuRecipe(data,frames,coefficients);
+            return new FirmwareMenuRecipe(data,frames,coefficients,sourceIds.ToArray());
         }
     }
     internal static void Put(byte[] d,int at,int n){d[at]=(byte)(n>>24);d[at+1]=(byte)(n>>16);d[at+2]=(byte)(n>>8);d[at+3]=(byte)n;}
     internal byte[] Packet(FirmwareMenuWaveSource[] sources,CancellationToken cancellation)
     {
-        int count=Data[51],bytes=FirmwareAudioBounds.Add(Data.Length,resampling==null?0:512);for(int i=0;i<count;i++)bytes=FirmwareAudioBounds.Add(bytes,sources[i].EncodedBytes);
+        int count=Data[51];if(sources.Length!=count)throw new InvalidDataException("Menu packet source count.");
+        int bytes=FirmwareAudioBounds.Add(Data.Length,resampling==null?0:512);for(int i=0;i<count;i++)bytes=FirmwareAudioBounds.Add(bytes,sources[i].EncodedBytes);
         var packet=new byte[bytes];
         try
         {

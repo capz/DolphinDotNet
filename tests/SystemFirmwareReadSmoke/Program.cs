@@ -18,6 +18,7 @@ internal static class Program
             if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=6||catalog.Files!=null||catalog.GetStartupAudio().Layout!=FirmwareAudioLayout.AdjacentWaveArchive||
                catalog.GetTexture(SystemTexture.Environment).HeaderOffset!=8448||catalog.GetStartupAudio().SampleRate!=32000||catalog.WaveSystemCount!=1)return 1;
             if(catalog[4].Offset!=0x1aff00||catalog[5].Offset!=0x1fcf00||catalog.Extract(4)[0]!=70)return 21;
+            if(catalog.GetWaveSystem(0)[2].WaveId!=102||catalog.GetWaveSystem(0)[2].BaseKey!=0)return 34;
             using(var menu=image.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default))
             {
                 SystemMenuSoundInfo info;
@@ -31,7 +32,10 @@ internal static class Program
                 {
                     // An original generated recipe reaches every new AOT/native
                     // preparation operation without qualifying synthetic firmware.
-                    var bank=new byte[256];FirmwareMenuRecipe.Put(bank,64,96);FirmwareMenuRecipe.Put(bank,112,128);FirmwareMenuRecipe.Put(bank,140,160);bank[163]=60;
+                    var bank=MenuBankFixture.Create();
+                    var option=FirmwareMenuRecipe.Compile(new byte[]{0xac,6,0,9,0x30,1,100,0x80,30,0x81,0xff},0,MenuBankFixture.Create(12));
+                    var cancel=FirmwareMenuRecipe.Compile(new byte[]{0xac,6,0,3,0x30,1,100,0x80,30,0x81,0xff},0,bank);
+                    if(option.Frames!=4000||option.SourceWaveIds[0]!=11||cancel.Frames!=5440||cancel.SourceWaveIds[0]!=6)return 35;
                     var recipe=FirmwareMenuRecipe.Compile(new byte[]{0xac,6,0,7,0x30,1,100,0x80,30,0x81,0xff},0,bank);
                     var packet=recipe.Packet(new[]{selected},default);
                     using(var rendered=global::System.Threading.Tasks.Task.Run(()=>Sound.FromMenuRecipe(packet,1024*1024,default)).Result)

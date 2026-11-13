@@ -6,7 +6,7 @@ if(args.Length==3&&args[0]=="--private-menu")
     using var catalog=input.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default);
     MenuPrivateTests.Validate(input,catalog);
     Directory.CreateDirectory(args[2]);
-    for(int i=0;i<3;i++)
+    for(int i=0;i<10;i++)
     {
         if(!catalog.TryGetMenuSoundInfo((SystemMenuSound)i,out var menuInfo))throw new Exception("Unsupported private profile");
         File.WriteAllBytes(Path.Combine(args[2],i+".dme"),catalog.SnapshotMenuSound((SystemMenuSound)i,default));
@@ -255,3 +255,4 @@ using(var catalog=image.CreateCatalog())
 }
 Array.Clear(withFonts,0x100,0x1afe00);Reject(()=>FirmwareImage.Read(withFonts));
 MenuAudioTests.Run(AdjacentAudioImage,WaveSystem,args);
+WaveIdentityTests.Run();

@@ -25,7 +25,13 @@ public enum FirmwareCatalogOptions
 public enum SystemMenuSound
 {
     TurnSide=0, TurnCenter=1, Select=2, Back=3, OptionCancel=4,
-    OptionConfirm=5, OptionMove1=6, OptionMove2=7, OptionMove3=8,
+    OptionConfirm=5,
+    /// <summary>Change a setting's value, such as Stereo/Mono or a time value.</summary>
+    OptionMove1=6,
+    /// <summary>Move between fields while editing a value.</summary>
+    OptionMove2=7,
+    /// <summary>Move between option rows.</summary>
+    OptionMove3=8,
     OptionSelect=9, PressStart=10
 }
 
@@ -40,8 +46,13 @@ public sealed class SystemMenuSoundInfo
     public double DurationSeconds=>(double)SampleFrameCount/SampleRate;
     public string ProfileId {get;}
     public bool IsDirectWave {get;}
-    internal SystemMenuSoundInfo(SystemMenuSound sound,int channels,int rate,int frames,string profile,bool direct)
-    {Sound=sound;Channels=channels;SampleRate=rate;SampleFrameCount=frames;ProfileId=profile;IsDirectWave=direct;}
+    private readonly int[] sourceWaveIds;
+    /// <summary>Number of original instrument waves used by this prepared effect.</summary>
+    public int SourceWaveCount=>sourceWaveIds.Length;
+    /// <summary>Original C-DF ID, not a flattened WSYS audition position.</summary>
+    public int GetSourceWaveId(int index)=>sourceWaveIds[index];
+    internal SystemMenuSoundInfo(SystemMenuSound sound,int channels,int rate,int frames,string profile,bool direct,int[] ids)
+    {Sound=sound;Channels=channels;SampleRate=rate;SampleFrameCount=frames;ProfileId=profile;IsDirectWave=direct;sourceWaveIds=(int[])ids.Clone();}
 }
 
 /// <summary>Owned selected-wave snapshot in the extended format understood by
@@ -116,6 +127,7 @@ internal sealed class FirmwareMenuAudio : IDisposable
     internal string UnsupportedReason {get;private set;}
     private readonly SystemMenuSoundInfo?[] effects=new SystemMenuSoundInfo?[11];
     private FirmwareMenuWaveSource[] sources=new FirmwareMenuWaveSource[0];
+    private readonly int[] sourceIds=new[]{9,11,6};
     private readonly FirmwareMenuRecipe?[] recipes=new FirmwareMenuRecipe?[11];
     internal int RetainedBytes {get;private set;}
     private FirmwareMenuAudio(FirmwareAudioArchive[] archives,string reason){Archives=archives;UnsupportedReason=reason;}
@@ -144,14 +156,12 @@ internal sealed class FirmwareMenuAudio : IDisposable
                 // Early NTSC has the same instruments/events but a different
                 // DSP-effect setup. Do not qualify its output from BMS alone.
                 if(!modern||bank<128||FirmwareAudioFingerprint.Hash(image,bank-128,128,cancellation)!="c10b2ad8bc679484c74fe78f9b5bcca66e210a08cba43a51fbc5b36ad224b4fc")continue;
-                result.UnsupportedReason="This IPL profile supports TurnSide, TurnCenter and Select; the requested secondary effect is unavailable.";
+                result.UnsupportedReason="This IPL profile supports ten cube/options effects; PressStart is not qualified.";
                 if(result.sources.Length!=0)throw new InvalidDataException("Conflicting IPL menu profiles.");
-                int first=ResolveId(image,archive,9),second=ResolveId(image,archive,11);
-                var selected=new FirmwareMenuWaveSource[2];
+                var selected=new FirmwareMenuWaveSource[result.sourceIds.Length];
                 try
                 {
-                    selected[0]=FirmwareMenuWaveSource.Capture(image,archive,first,cancellation);
-                    selected[1]=FirmwareMenuWaveSource.Capture(image,archive,second,cancellation);
+                    for(int i=0;i<selected.Length;i++)selected[i]=FirmwareMenuWaveSource.Capture(image,archive,ResolveId(archive,result.sourceIds[i]),cancellation);
                     result.sources=selected;
                 }
                 catch {foreach(var s in selected)s?.Dispose();throw;}
@@ -161,12 +171,14 @@ internal sealed class FirmwareMenuAudio : IDisposable
                 byte[] resampling=CaptureResampler(image,bank,cancellation);
                 result.RetainedBytes=FirmwareAudioBounds.Add(result.RetainedBytes,resampling.Length);
                 int table=0x1bc;
-                for(int i=0;i<3;i++)
+                // Stable public identities retain their original numeric values.
+                int[] events={3,4,5,6,7,12,9,10,11,8};
+                for(int i=0;i<events.Length;i++)
                 {
-                    cancellation.ThrowIfCancellationRequested();int at=table+(i+3)*3;
+                    cancellation.ThrowIfCancellationRequested();int at=table+events[i]*3;
                     int target=(sequence[at]<<16)|(sequence[at+1]<<8)|sequence[at+2];
                     var recipe=FirmwareMenuRecipe.Compile(sequence,target,instruments,reverb,resampling);result.recipes[i]=recipe;
-                    result.effects[i]=new SystemMenuSoundInfo((SystemMenuSound)i,2,32000,recipe.Frames,"ipl-menu-bms-v1",false);
+                    result.effects[i]=new SystemMenuSoundInfo((SystemMenuSound)i,2,32000,recipe.Frames,"ipl-menu-bms-v2",false,recipe.SourceWaveIds);
                     result.RetainedBytes=FirmwareAudioBounds.Add(result.RetainedBytes,recipe.Data.Length);
                 }
                 foreach(var s in selected)result.RetainedBytes=FirmwareAudioBounds.Add(result.RetainedBytes,s.EncodedBytes);
@@ -193,30 +205,23 @@ internal sealed class FirmwareMenuAudio : IDisposable
         if(found<0)throw new InvalidDataException("Missing qualified IPL resampling table.");
         var coefficients=new byte[512];Array.Copy(image,found,coefficients,0,512);return coefficients;
     }
-    private static int ResolveId(byte[] image,FirmwareAudioArchive archive,int id)
+    private static int ResolveId(FirmwareAudioArchive archive,int id)
     {
-        int root=archive.System.Offset,size=archive.System.Length;
-        int wbct=Read(image,root+20);
-        if(wbct<24||wbct>size-16||!FirmwareResource.Match(image,root+wbct,"WBCT")||Read(image,root+wbct+8)!=1)
-            throw new InvalidDataException("Menu WBCT association.");
-        int scne=Read(image,root+wbct+12);
-        if(scne<24||scne>size-24||!FirmwareResource.Match(image,root+scne,"SCNE"))throw new InvalidDataException("Menu SCNE extent.");
-        int cdf=Read(image,root+scne+12);
-        if(cdf<24||cdf>size-8||!FirmwareResource.Match(image,root+cdf,"C-DF"))throw new InvalidDataException("Menu C-DF extent.");
-        int count=Read(image,root+cdf+4);
-        if(count!=archive.System.Count||count>(size-cdf-8)/4)throw new InvalidDataException("Menu ID count.");
         int found=-1;
-        for(int i=0;i<count;i++)
+        for(int i=0;i<archive.System.Count;i++)
         {
-            int record=Read(image,root+cdf+8+i*4);
-            if(record<24||record>size-4)throw new InvalidDataException("Menu ID record extent.");
-            if(Read(image,root+record)!=id)continue;
+            if(archive.System[i].WaveId!=id)continue;
             if(found>=0)throw new InvalidDataException("Duplicate menu wave ID.");found=i;
         }
         if(found<0)throw new InvalidDataException("Missing menu instrument wave ID.");
         var wave=archive.System[found];
-        if(wave.BankIndex!=0||wave.Codec!=0||image[root+wave.DescriptorOffset+2]!=48||!wave.HasLoop)
+        if(wave.BankIndex!=0||wave.Codec!=0||wave.BaseKey!=48||wave.HasLoop!=(id!=6))
             throw new InvalidDataException("Menu instrument source differs from qualified profile.");
+        int frames=id==9?31551:id==11?79249:17821,rate=id==11?44100:32000;
+        if(wave.SampleCount!=frames||wave.SampleRate!=rate||
+           id==9&&(wave.LoopStart!=11892||wave.LoopEnd!=31415)||
+           id==11&&(wave.LoopStart!=31967||wave.LoopEnd!=36865))
+            throw new InvalidDataException("Menu instrument sample/loop metadata differs from qualified profile.");
         return found;
     }
     internal static void Validate(SystemMenuSound sound)
@@ -227,7 +232,13 @@ internal sealed class FirmwareMenuAudio : IDisposable
     {
         cancellation.ThrowIfCancellationRequested();var recipe=recipes[(int)sound];
         if(recipe==null)throw new NotSupportedException(UnsupportedReason);
-        return recipe.Packet(sources,cancellation);
+        var selected=new FirmwareMenuWaveSource[recipe.SourceWaveIds.Length];
+        for(int i=0;i<selected.Length;i++)
+        {
+            int at=Array.IndexOf(sourceIds,recipe.SourceWaveIds[i]);
+            if(at<0||at>=sources.Length)throw new InvalidDataException("Unretained menu source ID.");selected[i]=sources[at];
+        }
+        return recipe.Packet(selected,cancellation);
     }
     public void Dispose(){foreach(var source in sources)source?.Dispose();foreach(var recipe in recipes)recipe?.Release();RetainedBytes=0;}
 }

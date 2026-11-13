@@ -4,7 +4,13 @@ Research continued on 2026-11-13 from `feat/system-menu-audio` at
 `a8c7a2b486dbcacce825f1e15fa18b7f898482ca`. See
 [the existing qualification report](system-menu-audio-research.md) for the three
 implemented effects and their original-output comparisons. This investigation
-maps the remaining material; it does not qualify additional public sounds.
+maps the remaining material. The follow-up implementation now exposes finite
+events 6–12 in addition to the original three effects, with bounded true-ID/base-key
+metadata and per-instrument release defaults. The linked qualification report
+records the later output comparisons and their timing/level limits. The plan
+below preserves the original investigation and remaining work; alternate
+startups, continuous ambience, memory-card actions and `PressStart` are still
+research targets.
 
 ## Evidence and reproduction
 
