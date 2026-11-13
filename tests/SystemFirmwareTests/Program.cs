@@ -1,5 +1,19 @@
 using Dolphin.System;
 using System.Text;
+if(args.Length==3&&args[0]=="--private-menu")
+{
+    using var input=FirmwareImage.Read(File.ReadAllBytes(args[1]));
+    using var catalog=input.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default);
+    MenuPrivateTests.Validate(input,catalog);
+    Directory.CreateDirectory(args[2]);
+    for(int i=0;i<3;i++)
+    {
+        if(!catalog.TryGetMenuSoundInfo((SystemMenuSound)i,out var menuInfo))throw new Exception("Unsupported private profile");
+        File.WriteAllBytes(Path.Combine(args[2],i+".dme"),catalog.SnapshotMenuSound((SystemMenuSound)i,default));
+        Console.WriteLine(i+" "+menuInfo!.ProfileId+" "+menuInfo.SampleFrameCount);
+    }
+    Console.WriteLine("Retained "+catalog.MenuAudioRetainedBytes);return;
+}
 static void Check(bool value){if(!value)throw new Exception("Assertion failed");}
 static void Reject(Action action){try{action();}catch(InvalidDataException){return;}throw new Exception("Accepted malformed input");}
 static void Big(byte[] data,int at,int value){data[at]=(byte)(value>>24);data[at+1]=(byte)(value>>16);data[at+2]=(byte)(value>>8);data[at+3]=(byte)value;}
@@ -196,6 +210,7 @@ using(var catalog=firmware.CreateCatalog())
     Check(startup.SampleRate==32000&&startup.SampleCount==174080&&startup.ExtractAfc().Length==195872);
     catalog.Dispose();try{startup.ExtractAfc();throw new Exception("Disposed audio usable");}catch(ObjectDisposedException){}
 }
+MenuAudioTests.FileTable(filesystemImage);
 Array.Copy(filesystemImage,tableAt,filesystemImage,0x5000,92);
 Reject(()=>FirmwareFileTable.Inspect(filesystemImage));
 Console.WriteLine("System firmware synthetic tests passed");
@@ -239,3 +254,4 @@ using(var catalog=image.CreateCatalog())
     Check(Encoding.ASCII.GetString(catalog.Extract(4))=="GLYP");
 }
 Array.Clear(withFonts,0x100,0x1afe00);Reject(()=>FirmwareImage.Read(withFonts));
+MenuAudioTests.Run(AdjacentAudioImage,WaveSystem,args);

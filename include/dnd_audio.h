@@ -14,6 +14,9 @@ int dnd_audio_begin_source(DndString *path, DndString *data_path, int format,
 /* Copy compressed input to owned native RAM; no filesystem operations. Parsing
  * and validation continue through dnd_audio_step's bounded decoder slices. */
 int dnd_audio_begin_memory(DndArray *header,DndArray *body,int format,int entry,int budget);
+/* Private, bounded offline IPL effect preparation. Owns the copied packet;
+ * AudioStep decodes/renders slices and publishes an ordinary PCM16 clip. */
+int dnd_audio_begin_menu(DndArray *recipe,int budget);
 /* Copy mono 8-bit unsigned PCM out of movable managed memory into aligned DSP
  * RAM. */
 int dnd_audio_create_pcm8(DndArray *samples, int sample_rate);

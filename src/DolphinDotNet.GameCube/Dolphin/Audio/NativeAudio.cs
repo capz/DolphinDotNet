@@ -6,6 +6,7 @@ internal static class NativeAudio
     internal static int AudioInit()=>throw Unsupported();
     internal static int AudioBegin(string path)=>throw Unsupported();
     internal static int AudioBeginMemory(byte[] header,byte[]? body,int format,int entry,int budget)=>throw Unsupported();
+    internal static int AudioBeginMenu(byte[] recipe,int budget)=>throw Unsupported();
     internal static int AudioBeginSource(string path,string? dataPath,int format,int entryIndex,int nativeBudgetBytes)=>throw Unsupported();
     internal static int AudioCreatePcm8(byte[] data,int sampleRate)=>throw Unsupported();
     internal static int AudioStep(int clip)=>throw Unsupported();

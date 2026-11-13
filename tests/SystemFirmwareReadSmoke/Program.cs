@@ -9,6 +9,8 @@ internal static class Program
 {
     private static int Main()
     {
+        if(FirmwareAudioFingerprint.Hash(new byte[]{97,98,99},0,3)!="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")return 30;
+        if(FirmwareAudioFingerprint.Hash(new byte[64],0,64)!="f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b")return 33;
         var sequence=new SystemStartupSequence();sequence.Seek(4.2);if(sequence.Stage!=SystemStartupStage.Letters)return 19;
         using(var image=SystemFirmware.ReadConsole())
         using(var catalog=image.CreateCatalog())
@@ -16,6 +18,36 @@ internal static class Program
             if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=6||catalog.Files!=null||catalog.GetStartupAudio().Layout!=FirmwareAudioLayout.AdjacentWaveArchive||
                catalog.GetTexture(SystemTexture.Environment).HeaderOffset!=8448||catalog.GetStartupAudio().SampleRate!=32000||catalog.WaveSystemCount!=1)return 1;
             if(catalog[4].Offset!=0x1aff00||catalog[5].Offset!=0x1fcf00||catalog.Extract(4)[0]!=70)return 21;
+            using(var menu=image.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default))
+            {
+                SystemMenuSoundInfo info;
+                if(menu.TryGetMenuSoundInfo(SystemMenuSound.TurnSide,out info)||info!=null||menu.MenuAudioRetainedBytes!=0)return 22;
+                try{SystemResources.CreateMenuSound(menu,SystemMenuSound.Select);return 23;}catch(NotSupportedException){}
+                try{SystemResources.CreateMenuSound(menu,SystemMenuSound.Select,nativeBudgetBytes:0);return 24;}catch(ArgumentOutOfRangeException){}
+                // A raw generated wave exercises canonicalization and native
+                // ownership without asserting any authentic menu mapping.
+                using(var selected=FirmwareMenuWaveSource.Capture(image.Data,menu.MenuAudio.Archives[0],2,default))
+                using(var isolated=Sound.FromEncoded(selected.Header,AudioFormat.JAudioWaveBank,selected.Body))
+                {
+                    // An original generated recipe reaches every new AOT/native
+                    // preparation operation without qualifying synthetic firmware.
+                    var bank=new byte[256];FirmwareMenuRecipe.Put(bank,64,96);FirmwareMenuRecipe.Put(bank,112,128);FirmwareMenuRecipe.Put(bank,140,160);bank[163]=60;
+                    var recipe=FirmwareMenuRecipe.Compile(new byte[]{0xac,6,0,7,0x30,1,100,0x80,30,0x81,0xff},0,bank);
+                    var packet=recipe.Packet(new[]{selected},default);
+                    using(var rendered=global::System.Threading.Tasks.Task.Run(()=>Sound.FromMenuRecipe(packet,1024*1024,default)).Result)
+                    {
+                        Array.Clear(packet,0,packet.Length);
+                        var trigger=new byte[64];if(trigger.Length!=64||rendered.SampleCount!=6560||rendered.Channels!=2)return 31;
+                        using(var voice=rendered.Play())if(!voice.IsPlaying)return 32;
+                    }
+                    selected.Dispose();menu.Dispose();image.Dispose();
+                    // The host enables collection on every allocation.
+                    var collectionTrigger=new byte[64];if(collectionTrigger.Length!=64)return 28;
+                    if(isolated.Channels!=1||isolated.SampleRate!=32000||isolated.SampleCount!=16)return 25;
+                    using(var voice=isolated.Play())if(!voice.IsPlaying)return 26;
+                }
+                try{menu.TryGetMenuSoundInfo(SystemMenuSound.Select,out info);return 27;}catch(ObjectDisposedException){}
+            }
             int background=global::System.Threading.Tasks.Task.Run(()=>
             {
                 try{using(var startup=SystemStartupRenderer.Load(catalog)){}return 1;}

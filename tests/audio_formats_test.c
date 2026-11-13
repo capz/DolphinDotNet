@@ -18,6 +18,8 @@ static int handles, throw_aux, read_failure;
 static unsigned read_quantum = 7;
 static DndAudioDecoder decoder[32];
 static int active[32];
+static const uint8_t *resident_pcm[32];
+static unsigned resident_bytes[32];
 int dnd_fs_open(DndString *path, int mode, int access, int share) {
   assert(mode == 3 && access == 1 && share == 1);
   unsigned i = (unsigned)(uintptr_t)path - 1;
@@ -79,16 +81,9 @@ void dnd_audio_backend_shutdown(void) {}
 int dnd_audio_backend_play(unsigned slot, const void *data, unsigned size,
                            unsigned format, unsigned rate, bool loop,
                            float volume, float pitch) {
-  (void)slot;
-  (void)data;
-  (void)size;
-  (void)format;
-  (void)rate;
-  (void)loop;
-  (void)volume;
-  (void)pitch;
-  assert(0);
-  return 0;
+  assert(slot<32&&data&&size&&format==3&&rate==32000&&!loop&&volume==1&&pitch==1);
+  resident_pcm[slot]=data;resident_bytes[slot]=size;active[slot]=1;
+  return 1;
 }
 int dnd_audio_backend_play_encoded(unsigned slot, const DndAudioSource *s,
                                    bool loop, unsigned start, unsigned end,
@@ -288,6 +283,68 @@ static void check_adx_ranges(const char *root, const char *name, int format,
   assert(!dnd_audio_dispose(token) && !active[0] && !active[1]);
   assert(!dnd_audio_play_range(token, 0, 1, 1, 1));
 }
+#ifdef DND_MENU_AUDIO_ONLY
+/* Canonicalized by the managed parser from original generated compact and
+ * extended descriptors. Compare every sample to a hand-defined oracle. */
+int main(int argc, char **argv) {
+  assert(argc == 2);
+  memory_mode = 1;
+  unsigned peak_native = 0;
+  for (int layout = 0; layout < 2; layout++)
+    for (int codec = 0; codec < 4; codec++)
+      for (int loop = 0; loop < 2; loop++) {
+        char head[64], body[64];
+        snprintf(head, sizeof(head), "menu-%d-%d-%d.wsys", layout, codec, loop);
+        snprintf(body, sizeof(body), "menu-%d-%d-%d.aw", layout, codec, loop);
+        input(argv[1], head, body);
+        int token = start(7, 0, 1024 * 1024);
+        assert(token && complete(token) == 1 && !handles);
+        assert(dnd_audio_stat(token, 2) == 44100 && dnd_audio_stat(token, 3) == 1);
+        assert(dnd_audio_stat(token, 4) == 19 && dnd_audio_stat(token, 5) == loop);
+        if (loop) assert(dnd_audio_stat(token, 6) == 3 && dnd_audio_stat(token, 7) == 17);
+        unsigned native = (unsigned)dnd_audio_stat(token, 8);
+        if (native > peak_native) peak_native = native;
+        int voice = dnd_audio_play(token, 0, 1, 1);
+        assert(voice);
+        uint8_t pcm[38], extra[2];
+        assert(dnd_audio_decode(&decoder[0], pcm, 19) == 19);
+        assert(!dnd_audio_decode(&decoder[0], extra, 1));
+        for (unsigned i = 0; i < 19; i++) {
+          static const int afc2[] = {4, -8, -4, 0};
+          int expected = codec == 0 ? (i % 2 ? -2 : 1)
+                       : codec == 1 ? afc2[i % 4]
+                       : codec == 2 ? (i % 2 ? -512 : 256) : -32477;
+          assert(sample(pcm, i) == expected);
+        }
+        assert(!dnd_audio_voice_stop(voice));
+        int voices[32];
+        for (unsigned i = 0; i < 32; i++) {
+          voices[i] = dnd_audio_play(token, loop, 1, 1); assert(voices[i]);
+        }
+        assert(!dnd_audio_play(token, loop, 1, 1));
+        for (unsigned i = 0; i < 32; i++) {
+          uint8_t output[80];
+          assert(dnd_audio_decode(&decoder[i], output, 40) == (loop ? 40u : 19u));
+          for (unsigned frame = 0; frame < (loop ? 40u : 19u); frame++) {
+            unsigned at = loop && frame >= 17 ? 3 + (frame - 17) % 14 : frame;
+            assert(!memcmp(output + frame * 2, pcm + at * 2, 2));
+          }
+        }
+        assert(!dnd_audio_dispose(token));
+        for (unsigned i = 0; i < 32; i++) assert(!active[i] && !dnd_audio_voice_stat(voices[i]));
+        // Failed preparation must release its slot; fill and drain the pool.
+        assert(!start(7, 0, 32));
+        int clips[16];
+        for (unsigned i = 0; i < 16; i++) {clips[i] = start(7, 0, 1024 * 1024);assert(clips[i] && complete(clips[i]) == 1);}
+        assert(!start(7, 0, 1024 * 1024));
+        for (unsigned i = 0; i < 16; i++) assert(!dnd_audio_dispose(clips[i]));
+      }
+  for (unsigned i = 0; i < 2; i++) free(files[i].data);
+  dnd_audio_shutdown();
+  printf("Canonical WSYS: exact PCM16, signedness, 19-frame tails, early loops, copied native ownership, 16 clip/32 voice limits passed; peak single-clip native bytes=%u\n", peak_native);
+  return 0;
+}
+#else
 int main(int argc, char **argv) {
   assert(argc == 2);
   const char *root = argv[1];
@@ -433,3 +490,4 @@ int main(int argc, char **argv) {
        "errors and ownership passed");
   return 0;
 }
+#endif
