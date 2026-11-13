@@ -6,6 +6,21 @@ namespace Dolphin.System;
 /// graphics and audio resources. Returned resources are owned by the caller.</summary>
 public static class SystemResources
 {
+    /// <summary>Create a caller-owned, prepared IPL menu sound without playing
+    /// it. Unknown semantic profiles fail explicitly; no raw-wave substitution.
+    /// Preparation may use the background executor; play on the application executor.</summary>
+    public static Dolphin.Audio.Sound CreateMenuSound(FirmwareCatalog catalog,SystemMenuSound sound,
+        CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
+        FirmwareMenuAudio.Validate(sound);
+        if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)
+            throw new global::System.ArgumentOutOfRangeException(nameof(nativeBudgetBytes));
+        cancellationToken.ThrowIfCancellationRequested();
+        using(var source=catalog.SnapshotMenuSound(sound,cancellationToken))
+            return Dolphin.Audio.Sound.FromEncoded(source.Header,Dolphin.Audio.AudioFormat.JAudioWaveBank,
+                source.Body,nativeBudgetBytes:nativeBudgetBytes,cancellationToken:cancellationToken);
+    }
     /// <summary>Import original model geometry/materials through the existing
     /// background model pipeline. The model owns its native data independently
     /// of the catalog. Unknown material profiles fail without approximation.</summary>

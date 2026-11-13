@@ -16,6 +16,25 @@ internal static class Program
             if(image.Source!=FirmwareSource.ConsoleRom||catalog.Count!=6||catalog.Files!=null||catalog.GetStartupAudio().Layout!=FirmwareAudioLayout.AdjacentWaveArchive||
                catalog.GetTexture(SystemTexture.Environment).HeaderOffset!=8448||catalog.GetStartupAudio().SampleRate!=32000||catalog.WaveSystemCount!=1)return 1;
             if(catalog[4].Offset!=0x1aff00||catalog[5].Offset!=0x1fcf00||catalog.Extract(4)[0]!=70)return 21;
+            using(var menu=image.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default))
+            {
+                SystemMenuSoundInfo info;
+                if(menu.TryGetMenuSoundInfo(SystemMenuSound.TurnSide,out info)||info!=null||menu.MenuAudioRetainedBytes!=0)return 22;
+                try{SystemResources.CreateMenuSound(menu,SystemMenuSound.Select);return 23;}catch(NotSupportedException){}
+                try{SystemResources.CreateMenuSound(menu,SystemMenuSound.Select,nativeBudgetBytes:0);return 24;}catch(ArgumentOutOfRangeException){}
+                // A raw generated wave exercises canonicalization and native
+                // ownership without asserting any authentic menu mapping.
+                using(var selected=FirmwareMenuWaveSource.Capture(image.Data,menu.MenuAudio.Archives[0],2,default))
+                using(var isolated=Sound.FromEncoded(selected.Header,AudioFormat.JAudioWaveBank,selected.Body))
+                {
+                    selected.Dispose();menu.Dispose();image.Dispose();
+                    // The host enables collection on every allocation.
+                    var collectionTrigger=new byte[64];if(collectionTrigger.Length!=64)return 28;
+                    if(isolated.Channels!=1||isolated.SampleRate!=32000||isolated.SampleCount!=16)return 25;
+                    using(var voice=isolated.Play())if(!voice.IsPlaying)return 26;
+                }
+                try{menu.TryGetMenuSoundInfo(SystemMenuSound.Select,out info);return 27;}catch(ObjectDisposedException){}
+            }
             int background=global::System.Threading.Tasks.Task.Run(()=>
             {
                 try{using(var startup=SystemStartupRenderer.Load(catalog)){}return 1;}

@@ -12,6 +12,10 @@ spec.loader.exec_module(ci)
 class CiSelectionTests(unittest.TestCase):
     def test_docs_only(self):
         self.assertEqual(ci.select(["README.md","docs/guide.md"]),set())
+    def test_menu_audio_selects_parser_decoder_and_aot(self):
+        for path in ("tests/system_menu_audio.py", "tests/SystemFirmwareTests/MenuAudioTests.cs",
+                     "tests/SystemFirmwareReadSmoke/Program.cs"):
+            self.assertTrue({"assets", "audio", "compiler", "gamecube"}.issubset(ci.select([path])))
     def test_native_dependency_propagation(self):
         actual=ci.select(["source/managed_runtime.c"])
         for key in ("native","compiler","storage","network","audio","graphics","gamecube"):

@@ -29,11 +29,12 @@ int dnd_audio_backend_play(unsigned slot,const void *data,unsigned size,unsigned
 {(void)slot;(void)data;(void)size;(void)format;(void)rate;(void)loop;(void)volume;(void)pitch;assert(0);return 0;}
 int dnd_audio_backend_play_encoded(unsigned slot,const DndAudioSource *source,bool loop,unsigned start,unsigned end,float volume,float pitch)
 {
-    assert(slot<32&&source->channels==2&&source->rate==32000&&source->samples==174067);
+    assert(slot<32&&source->rate==32000);
     assert(volume==1&&pitch==1);
     DndAudioDecoder decoder;dnd_audio_decoder_init(&decoder,source,loop);
     uint8_t pcm[4];assert(dnd_audio_decode(&decoder,pcm,1)==1);
-    assert(pcm[0]==0&&pcm[1]==1&&pcm[2]==255&&pcm[3]==254);
+    if(source->channels==1){assert(source->samples==16&&pcm[0]==0&&pcm[1]==0);}
+    else {assert(source->channels==2&&source->samples==174067);assert(pcm[0]==0&&pcm[1]==1&&pcm[2]==255&&pcm[3]==254);}
     assert(start<end&&end<=source->samples);active_audio[slot]=1;return 1;
 }
 int dnd_audio_backend_playing(unsigned slot){assert(slot<32);return active_audio[slot];}
@@ -61,7 +62,7 @@ int main(int argc,char **argv)
         return 1;
     }
     for(unsigned slot=0;slot<32;slot++)assert(!active_audio[slot]);
-    for(int clip=1;clip<=3;clip++)assert(dnd_audio_stat(clip,1)==-1);
+    for(int clip=1;clip<=32;clip++)assert(dnd_audio_stat(clip,1)==-1);
     dnd_audio_shutdown();
     printf("Firmware console/file AOT passed; reads=%u collections=%zu heap=%zu\n",calls,heap.collections,heap.used);
     return 0;

@@ -10,6 +10,10 @@ namespace Dolphin.System;
 /// its named AW archive, never an assumed fixed ROM address.</summary>
 public sealed class FirmwareWave
 {
+    internal int BankIndex {get;}
+    internal int BankLocalIndex {get;}
+    internal int DescriptorOffset {get;}
+    internal int DescriptorBytes {get;}
     public string ArchiveName {get;}
     public int Codec {get;}
     public int SampleRate {get;}
@@ -19,8 +23,10 @@ public sealed class FirmwareWave
     public bool HasLoop {get;}
     public int LoopStart {get;}
     public int LoopEnd {get;}
-    internal FirmwareWave(string archive,int codec,int rate,int samples,int offset,int bytes,bool loop,int start,int end)
-    {ArchiveName=archive;Codec=codec;SampleRate=rate;SampleCount=samples;Offset=offset;EncodedBytes=bytes;HasLoop=loop;LoopStart=start;LoopEnd=end;}
+    internal FirmwareWave(string archive,int codec,int rate,int samples,int offset,int bytes,bool loop,int start,int end,
+        int bankIndex,int bankLocalIndex,int descriptorOffset,int descriptorBytes)
+    {ArchiveName=archive;Codec=codec;SampleRate=rate;SampleCount=samples;Offset=offset;EncodedBytes=bytes;HasLoop=loop;LoopStart=start;LoopEnd=end;
+        BankIndex=bankIndex;BankLocalIndex=bankLocalIndex;DescriptorOffset=descriptorOffset;DescriptorBytes=descriptorBytes;}
 }
 
 public static class FirmwareWaveSystem
@@ -73,7 +79,7 @@ public static class FirmwareWaveSystem
                 if(samples<1||samples>int.MaxValue/4||bytes<1||bytes>FirmwareCatalog.MaximumDecodedBytes||
                    ((long)samples+spf-1)/spf*frameBytes>bytes||loop!=0&&loop!=uint.MaxValue||
                    loop!=0&&(start>=stop||stop>samples))throw new InvalidDataException("Invalid WSYS sample/loop ranges.");
-                waves.Add(new FirmwareWave(name,codec,(int)rate,samples,offset,bytes,loop!=0,start,loop!=0?stop:samples));
+                waves.Add(new FirmwareWave(name,codec,(int)rate,samples,offset,bytes,loop!=0,start,loop!=0?stop:samples,b,w,at,descriptorBytes));
             }
         }
         return waves.ToArray();
@@ -161,7 +167,7 @@ public sealed class FirmwareStereoAudio
         {if((f&255)==0)cancellationToken.ThrowIfCancellationRequested();Array.Copy(archive,left.Offset+f*9,packet,32+f*18,9);Array.Copy(archive,right.Offset+f*9,packet,41+f*18,9);}
         return new FirmwareStereoAudio(packet,left,right){ArchiveBytes=archive.Length};
     }
-    private static bool StartupWave(FirmwareWave wave)
+    internal static bool StartupWave(FirmwareWave wave)
         =>wave.Codec==0&&wave.SampleRate==32000&&!wave.HasLoop&&
           wave.SampleCount>174064&&wave.SampleCount<=174080;
     internal static FirmwareStereoAudio? Discover(byte[] image,FirmwareFileTable? table,FirmwareWaveSystemInfo[] systems,CancellationToken cancellation)
@@ -221,6 +227,39 @@ public sealed class FirmwareStereoAudio
     }
     private static FirmwareStereoAudio? ReadAdjacentArchive(byte[] image,FirmwareWaveSystemInfo system,CancellationToken cancellation)
     {
+        var association=FirmwareAudioArchive.TryAdjacent(image,system,cancellation);
+        if(association==null)return null;
+        var descriptor=new byte[system.Length];Array.Copy(image,system.Offset,descriptor,0,descriptor.Length);
+        var archive=new byte[association.Length];Array.Copy(image,association.Offset,archive,0,archive.Length);
+        var result=Read(descriptor,archive,0,1,cancellation);
+        result.Layout=association.Layout;result.FirmwareOffset=association.Offset;
+        return result;
+    }
+    private static string Leaf(string path){int at=path.LastIndexOf('/');return at<0?path:path.Substring(at+1);}
+    private static void Write32(byte[] d,int a,int n){d[a]=(byte)(n>>24);d[a+1]=(byte)(n>>16);d[a+2]=(byte)(n>>8);d[a+3]=(byte)n;}
+}
+
+/// <summary>Borrow-free, bounded association shared by startup extraction and
+/// menu diagnostics. This is structural evidence, never an event mapping.</summary>
+internal sealed class FirmwareAudioArchive
+{
+    internal static bool ClaimsNumbered(byte[] image,int offset)
+    {
+        if(offset<32||offset>image.Length-32)return false;
+        int at=offset-32;
+        return U32(image,at)==0&&U32(image,at+4)==0&&U32(image,at+8)==2&&
+            U32(image,at+20)==0&&U32(image,at+24)==0&&U32(image,at+28)==0;
+    }
+    internal FirmwareWaveSystemInfo System {get;}
+    internal int Offset {get;}
+    internal int Length {get;}
+    internal string Name {get;}
+    internal FirmwareAudioLayout Layout {get;}
+    internal FirmwareAudioArchive(FirmwareWaveSystemInfo system,int offset,int length,string name,FirmwareAudioLayout layout)
+    {System=system;Offset=offset;Length=length;Name=name;Layout=layout;}
+
+    internal static FirmwareAudioArchive? TryAdjacent(byte[] image,FirmwareWaveSystemInfo system,CancellationToken cancellation,bool requireValid=false)
+    {
         // Original IPL profile: a numbered WSYS record followed by its single
         // packed AW bank. Verified in both 14-record NTSC and 31-record PAL
         // layouts. No ROM address or compressed-sample signature is a locator.
@@ -228,40 +267,124 @@ public sealed class FirmwareStereoAudio
         int header=system.Offset-32;
         if(U32(image,header)!=0||U32(image,header+4)!=0||U32(image,header+8)!=2||
            U32(image,header+20)!=0||U32(image,header+24)!=0||U32(image,header+28)!=0)return null;
+        string archiveName=system[0].ArchiveName;
+        if(Leaf(archiveName)!="ipl_0.aw")return null;
         uint declared=U32(image,header+12),allocated=U32(image,header+16);
         // The early compact bank retains the later wrapper's stale size. Its
         // own bounded WSYS extent determines the next record, not that field.
         if(declared<(uint)system.Length||declared>FirmwareCatalog.MaximumDecodedBytes||
-           allocated!=((declared+31)&~31u))return null;
+           allocated!=((declared+31)&~31u))return InvalidAdjacent(requireValid);
         int archiveAt=(system.Offset+system.Length+31)&~31;
-        if(archiveAt>0x1aff00)return null;
+        if(archiveAt>0x1aff00)return InvalidAdjacent(requireValid);
         int next=0,extent=0,startup=0;
-        string archiveName=system[0].ArchiveName;
-        if(Leaf(archiveName)!="ipl_0.aw")return null;
         for(int i=0;i<system.Count;i++)
         {
             cancellation.ThrowIfCancellationRequested();
             var wave=system[i];
             if(wave.ArchiveName!=archiveName||wave.Codec!=0||wave.Offset!=next||
                wave.EncodedBytes!=((long)wave.SampleCount+15)/16*9||
-               wave.Offset>FirmwareCatalog.MaximumDecodedBytes-wave.EncodedBytes)return null;
+               wave.Offset>FirmwareCatalog.MaximumDecodedBytes-wave.EncodedBytes)return InvalidAdjacent(requireValid);
             extent=wave.Offset+wave.EncodedBytes;next=(extent+31)&~31;
-            if(StartupWave(wave))startup++;
+            if(FirmwareStereoAudio.StartupWave(wave))startup++;
         }
-        if(startup!=2||!StartupWave(system[0])||!StartupWave(system[1])||
-           extent>0x1aff00-archiveAt)return null;
+        if(extent>0x1aff00-archiveAt)return InvalidAdjacent(requireValid);
+        if(startup!=2||!FirmwareStereoAudio.StartupWave(system[0])||!FirmwareStereoAudio.StartupWave(system[1]))return null;
         // The descriptor's alignment fill is zero in this profile. Padding
         // between AW waves is unspecified and can contain nonzero build data;
         // the decoder reads only each metadata-defined wave extent.
-        for(int i=system.Offset+system.Length;i<archiveAt;i++)if(image[i]!=0)return null;
-        var descriptor=new byte[system.Length];Array.Copy(image,system.Offset,descriptor,0,descriptor.Length);
-        var archive=new byte[extent];Array.Copy(image,archiveAt,archive,0,extent);
-        var result=Read(descriptor,archive,0,1,cancellation);
-        result.Layout=FirmwareAudioLayout.AdjacentWaveArchive;result.FirmwareOffset=archiveAt;
-        return result;
+        for(int i=system.Offset+system.Length;i<archiveAt;i++)if(image[i]!=0)return InvalidAdjacent(requireValid);
+        return new FirmwareAudioArchive(system,archiveAt,extent,archiveName,FirmwareAudioLayout.AdjacentWaveArchive);
+    }
+    private static FirmwareAudioArchive? InvalidAdjacent(bool requireValid)
+    {if(requireValid)throw new InvalidDataException("Malformed numbered IPL WSYS/adjacent AW association.");return null;}
+
+    internal static FirmwareAudioArchive[] Discover(byte[] image,FirmwareFileTable? table,FirmwareWaveSystemInfo[] systems,
+        FirmwareResource[] resources,CancellationToken cancellation)
+    {
+        var result=new List<FirmwareAudioArchive>();int comparisons=0;
+        foreach(var system in systems)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            var adjacent=TryAdjacent(image,system,cancellation,true);
+            if(adjacent!=null)Add(result,adjacent,resources);
+            if(table==null)continue;
+            // Each distinct archive name in each bank is resolved independently;
+            // flattened wave positions are not bank/event IDs.
+            var names=new List<string>();var banks=new List<int>();
+            for(int w=0;w<system.Count;w++)
+            {
+                var wave=system[w];int existing=names.IndexOf(wave.ArchiveName);
+                if(existing>=0)
+                {
+                    if(banks[existing]!=wave.BankIndex)throw new InvalidDataException("Duplicate AW archive names in distinct WSYS banks.");
+                    continue;
+                }
+                names.Add(wave.ArchiveName);banks.Add(wave.BankIndex);int found=-1;
+                for(int file=0;file<table.Count;file++)
+                {
+                    if(++comparisons>1024*1024)throw new InvalidDataException("Menu archive association work budget exceeded.");
+                    cancellation.ThrowIfCancellationRequested();
+                    if(table[file].Path!=wave.ArchiveName&&Leaf(table[file].Path)!=Leaf(wave.ArchiveName))continue;
+                    if(found>=0)throw new InvalidDataException("Ambiguous menu AW archive name.");
+                    found=file;
+                }
+                if(found<0)continue;
+                var entry=table[found];
+                if(entry.Length<1||entry.Offset<0||entry.Length>image.Length-entry.Offset)
+                    throw new InvalidDataException("Menu AW archive exceeds image.");
+                int previous=0;
+                var ranges=new List<FirmwareWave>();
+                for(int n=0;n<system.Count;n++)if(system[n].ArchiveName==wave.ArchiveName)ranges.Add(system[n]);
+                // Bounded insertion sort keeps this path compatible with the AOT
+                // runtime without allocating comparison delegates.
+                for(int n=1;n<ranges.Count;n++)
+                {
+                    var value=ranges[n];int j=n;
+                    while(j>0&&ranges[j-1].Offset>value.Offset)
+                    {
+                        if(++comparisons>1024*1024)throw new InvalidDataException("Menu archive range work budget exceeded.");
+                        if((comparisons&1023)==0)cancellation.ThrowIfCancellationRequested();
+                        ranges[j]=ranges[j-1];j--;
+                    }
+                    ranges[j]=value;
+                }
+                foreach(var range in ranges)
+                {
+                    if(range.Offset<previous||range.Offset>entry.Length||range.EncodedBytes>entry.Length-range.Offset)
+                        throw new InvalidDataException("Overlapping or out-of-range menu AW wave.");
+                    previous=FirmwareAudioBounds.Add(range.Offset,range.EncodedBytes);
+                }
+                Add(result,new FirmwareAudioArchive(system,entry.Offset,entry.Length,wave.ArchiveName,FirmwareAudioLayout.FileTable),resources);
+            }
+        }
+        foreach(var archive in result)
+            foreach(var system in systems)
+                if(archive.Offset<system.Offset+system.Length&&system.Offset<archive.Offset+archive.Length)
+                    throw new InvalidDataException("Menu AW archive overlaps a WSYS descriptor.");
+        return result.ToArray();
+    }
+    private static void Add(List<FirmwareAudioArchive> result,FirmwareAudioArchive candidate,FirmwareResource[] resources)
+    {
+        int end=FirmwareAudioBounds.Add(candidate.Offset,candidate.Length);
+        foreach(var record in resources)
+            if(candidate.Offset<record.Offset+record.CompressedBytes&&record.Offset<end)
+                throw new InvalidDataException("Menu AW archive overlaps a compressed resource.");
+        if(candidate.Offset<candidate.System.Offset+candidate.System.Length&&candidate.System.Offset<end)
+            throw new InvalidDataException("Menu AW archive overlaps its WSYS.");
+        foreach(var other in result)
+        {
+            if(other.System.Offset==candidate.System.Offset&&other.Name==candidate.Name)
+            {
+                if(other.Offset==candidate.Offset&&other.Length==candidate.Length)return;
+                throw new InvalidDataException("Conflicting menu AW archive associations.");
+            }
+            if(candidate.Offset<other.Offset+other.Length&&other.Offset<end)
+                throw new InvalidDataException("Overlapping menu AW archive associations.");
+        }
+        if(result.Count==256)throw new InvalidDataException("Menu AW association count exceeds budget.");
+        result.Add(candidate);
     }
     private static string Leaf(string path){int at=path.LastIndexOf('/');return at<0?path:path.Substring(at+1);}
-    private static void Write32(byte[] d,int a,int n){d[a]=(byte)(n>>24);d[a+1]=(byte)(n>>16);d[a+2]=(byte)(n>>8);d[a+3]=(byte)n;}
 }
 
 /// <summary>Detached metadata for a fully bounded WSYS found in the firmware.
@@ -275,7 +398,7 @@ public sealed class FirmwareWaveSystemInfo
     public FirmwareWave this[int index]=>waves[index];
     internal FirmwareWaveSystemInfo(int offset,int length,FirmwareWave[] entries)
     {Offset=offset;Length=length;waves=entries;}
-    internal static FirmwareWaveSystemInfo[] Scan(byte[] image,global::System.Threading.CancellationToken cancellation)
+    internal static FirmwareWaveSystemInfo[] Scan(byte[] image,global::System.Threading.CancellationToken cancellation,bool validateNumbered=false)
     {
         var result=new List<FirmwareWaveSystemInfo>();int work=0,totalWaves=0;
         for(int at=0x100;at<=0x1aff00-32;at+=4)
@@ -283,12 +406,17 @@ public sealed class FirmwareWaveSystemInfo
             if((at&4095)==0)cancellation.ThrowIfCancellationRequested();
             if(!FirmwareResource.Match(image,at,"WSYS"))continue;
             uint size=U32(image,at+4);
-            if(size<32||size>0x1aff00-at)continue;
+            if(size<32||size>0x1aff00-at)
+            {
+                if(validateNumbered&&FirmwareAudioArchive.ClaimsNumbered(image,at))throw new InvalidDataException("Malformed numbered WSYS extent.");
+                continue;
+            }
             if(size>16*FirmwareCatalog.MaximumDecodedBytes-work)throw new InvalidDataException("WSYS scan work budget exceeded.");
             work+=(int)size;
             var bytes=new byte[(int)size];Array.Copy(image,at,bytes,0,bytes.Length);FirmwareWave[] entries;
             try{entries=FirmwareWaveSystem.Inspect(bytes,cancellation);}
-            catch(InvalidDataException){continue;}catch(NotSupportedException){continue;}
+            catch(InvalidDataException){if(validateNumbered&&FirmwareAudioArchive.ClaimsNumbered(image,at))throw;continue;}
+            catch(NotSupportedException){continue;}
             if(result.Count==128||entries.Length>8192-totalWaves)throw new InvalidDataException("WSYS metadata budget exceeded.");
             totalWaves+=entries.Length;result.Add(new FirmwareWaveSystemInfo(at,(int)size,entries));
         }

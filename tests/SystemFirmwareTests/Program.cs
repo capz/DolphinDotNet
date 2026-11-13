@@ -196,6 +196,7 @@ using(var catalog=firmware.CreateCatalog())
     Check(startup.SampleRate==32000&&startup.SampleCount==174080&&startup.ExtractAfc().Length==195872);
     catalog.Dispose();try{startup.ExtractAfc();throw new Exception("Disposed audio usable");}catch(ObjectDisposedException){}
 }
+MenuAudioTests.FileTable(filesystemImage);
 Array.Copy(filesystemImage,tableAt,filesystemImage,0x5000,92);
 Reject(()=>FirmwareFileTable.Inspect(filesystemImage));
 Console.WriteLine("System firmware synthetic tests passed");
@@ -239,3 +240,4 @@ using(var catalog=image.CreateCatalog())
     Check(Encoding.ASCII.GetString(catalog.Extract(4))=="GLYP");
 }
 Array.Clear(withFonts,0x100,0x1afe00);Reject(()=>FirmwareImage.Read(withFonts));
+MenuAudioTests.Run(AdjacentAudioImage,WaveSystem,args);
