@@ -12,14 +12,35 @@
 #include <string.h>
 static unsigned calls;
 static uint8_t rom[0x200000];
-int dnd_firmware_read(DndArray *destination,int offset,int count)
+static uint32_t fw_registers[5];
+static unsigned fw_page,fw_cursor,fw_locked,fw_selected,fw_valid;
+static uint64_t fw_clock;
+/* Exercise the production EXI driver, including the physical ROM's 1 KiB
+ * burst window, rather than replacing the entire firmware ABI with memcpy. */
+int dnd_fw_lock(void)
 {
     unsigned read=calls++;
-    if(read>=1024)return -1; /* Then exercise inaccessible-source fallback. */
-    if(!destination||count!=4096||offset<0||offset>0x200000-count||destination->length<(unsigned)count)return -3;
-    if(read<512)memcpy(destination->data,rom+offset,(size_t)count);
-    else memset(destination->data,0,(size_t)count); /* Invalid console firmware -> file fallback. */
-    return count;
+    if(read>=1024)return 0; /* Then exercise inaccessible-source fallback. */
+    assert(!fw_locked);fw_locked=1;fw_valid=read<512;return 1;
+}
+int dnd_fw_select(void){assert(fw_locked&&!fw_selected);fw_selected=1;return 1;}
+int dnd_fw_deselect(void){assert(fw_selected);fw_selected=0;return 1;}
+void dnd_fw_unlock(void){assert(fw_locked&&!fw_selected);fw_locked=0;}
+uint64_t dnd_fw_now(void){return ++fw_clock;}
+uint32_t dnd_fw_read(unsigned reg){return fw_registers[reg];}
+void dnd_fw_write(unsigned reg,uint32_t value)
+{
+    assert(fw_locked&&fw_selected);fw_registers[reg]=value;
+    if(reg!=3||!(value&1))return;
+    if(value&4){unsigned address=fw_registers[4]>>6;fw_page=address&~1023u;fw_cursor=address&1023u;}
+    else {
+        unsigned bytes=((value>>4)&3)+1;fw_registers[4]=0;
+        for(unsigned i=0;i<bytes;i++){
+            unsigned address=fw_page+(fw_cursor++&1023u);assert(address<sizeof(rom));
+            fw_registers[4]|=(uint32_t)(fw_valid?rom[address]:0)<<(24-i*8);
+        }
+    }
+    fw_registers[3]=0;
 }
 void dnd_console_write_line(const char *text){puts(text);}
 static int active_audio[32];

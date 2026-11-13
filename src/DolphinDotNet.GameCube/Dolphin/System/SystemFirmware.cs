@@ -26,8 +26,9 @@ public static class SystemFirmware
         catch(NotSupportedException) { if(fallbackPath==null)throw; }
         return FirmwareImage.Load(fallbackPath!,FirmwareEncoding.Auto,cancellationToken);
     }
-    /// <summary>Read exactly 2 MiB with 4 KiB bounded EXI transactions and
-    /// cancellation between transactions. A busy bus fails instead of retrying
+    /// <summary>Read exactly 2 MiB in bounded 4 KiB chunks, split into EXI
+    /// transactions that never cross a 1 KiB ROM page, with
+    /// cancellation between chunks. A busy bus fails instead of retrying
     /// indefinitely. Console firmware may be raw or already descrambled.</summary>
     public static FirmwareImage ReadConsole(CancellationToken cancellationToken=default)
     {

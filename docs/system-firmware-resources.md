@@ -7,6 +7,11 @@ firmware, textures, geometry, fonts or sound samples are embedded in this librar
 ## Acquisition and lifetime
 
 `SystemFirmware.ReadConsole(token)` performs read-only EXI transactions.
+Each bounded 4 KiB read is split at 1 KiB ROM page boundaries, with a new
+chip-select/address command for each page. This matches libogc's ROM reader;
+one long burst can repeat data on physical consoles even when it works in
+Dolphin's linear ROM implementation. The 20 ms deadline covers the complete
+4 KiB operation, including all page transitions.
 `SystemFirmware.Open(explicitFallbackPath, token)` tries console ROM first, then
 only the supplied path if the console source is inaccessible, invalid or has an
 unsupported encoding/header. It does not silently switch sources when a later

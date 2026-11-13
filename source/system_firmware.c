@@ -25,7 +25,10 @@ static uint64_t dnd_fw_now(void){return ticks_to_microsecs(gettime());}
  * loop is unbounded. Immediate transfers avoid DMA lifetime/alignment hazards.
  * EXI_Lock/Select preserve normal SRAM/RTC arbitration. We do not call EXI_Imm:
  * its private transfer flags would outlive a timed-out immediate transaction.
- * This driver owns the channel until deselect/unlock and changes no ROM bytes. */
+ * This driver owns the channel until deselect/unlock and changes no ROM bytes.
+ * ROM bursts must stop at 1 KiB boundaries, as in libogc's __SYS_ReadROM.
+ * A new command/chip-select cycle is required for the next page. Dolphin's
+ * linear, pre-decoded ROM implementation does not expose this restriction. */
 static int transfer(uint32_t value,unsigned bytes,unsigned write,uint32_t *result,uint64_t deadline)
 {
     if(dnd_fw_now()>=deadline)return 0;
@@ -41,24 +44,31 @@ int dnd_firmware_read_raw(void *destination,unsigned offset,unsigned count)
 {
     if(!destination||!count||count>4096||offset>0x200000||count>0x200000-offset)return -3;
     if(!dnd_fw_lock())return -1;
-    if(!dnd_fw_select()){dnd_fw_unlock();return -1;}
     uint64_t deadline=dnd_fw_now()+20000; /* 20 ms and finite poll-count cap. */
-    int result=-2;
-    if(!transfer(offset<<6,4,1,NULL,deadline))goto cleanup;
+    int result=-2,selected=0;
     uint8_t *out=destination;
     for(unsigned at=0;at<count;){
-        unsigned n=count-at;if(n>4)n=4;
-        uint32_t value;
-        if(!transfer(0xffffffffu,n,0,&value,deadline))goto cleanup;
-        for(unsigned i=0;i<n;i++)out[at+i]=(uint8_t)(value>>(24-i*8));
-        at+=n;
+        if(dnd_fw_now()>=deadline)goto cleanup;
+        if(!dnd_fw_select()){result=-1;goto cleanup;}selected=1;
+        unsigned address=offset+at,page_bytes=1024-(address&1023u);
+        if(page_bytes>count-at)page_bytes=count-at;
+        if(!transfer(address<<6,4,1,NULL,deadline))goto cleanup;
+        for(unsigned done=0;done<page_bytes;){
+            unsigned n=page_bytes-done;if(n>4)n=4;
+            uint32_t value;
+            if(!transfer(0xffffffffu,n,0,&value,deadline))goto cleanup;
+            for(unsigned i=0;i<n;i++)out[at+done+i]=(uint8_t)(value>>(24-i*8));
+            done+=n;
+        }
+        int deselected=dnd_fw_deselect();selected=0;
+        if(!deselected){result=-1;goto cleanup;}
+        at+=page_bytes;
     }
     result=(int)count;
 cleanup:
     /* Immediate transfers never reference memory after return. Clear START on
      * timeout, then release chip select and the libogc lock on every path. */
-    if(result<0)dnd_fw_write(3,0);
-    if(!dnd_fw_deselect()&&result>=0)result=-1;
+    if(selected){if(result<0)dnd_fw_write(3,0);if(!dnd_fw_deselect()&&result>=0)result=-1;}
     dnd_fw_unlock();
     return result;
 }
