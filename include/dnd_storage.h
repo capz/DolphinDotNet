@@ -6,6 +6,9 @@
 bool dnd_storage_mount(int device);
 bool dnd_storage_mount_disc(int format);
 bool dnd_storage_mount_disc_image(DndString *path);
+/* Physical GC Loader selection, distinct from the file-backed dvd:/ mount.
+ * Returns only after physical readback verification; failure throws. */
+void dnd_storage_select_gcloader_disc_image(DndString *path);
 DndArray *dnd_storage_disc_header(DndManagedHeap *heap);
 void dnd_storage_unmount(int device);
 /* Bootstrap only, after managed executors stop. Closes owned handles and volumes. */

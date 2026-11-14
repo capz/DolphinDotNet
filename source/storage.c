@@ -124,6 +124,7 @@ void dnd_gc_storage_invalidate(int device);
 bool dnd_gc_storage_unmount(int device);
 bool dnd_gc_mount_disc(int format);
 bool dnd_gc_mount_disc_image(const char *path);
+int dnd_gc_select_gcloader_disc_image(const char *path);
 void dnd_gc_unmount(int device);
 bool dnd_gc_card_mount(int device, const char *game, const char *company);
 int dnd_gc_card_metadata(int device, const char *name, bool metadata,
@@ -422,6 +423,32 @@ bool dnd_storage_mount_disc_image(DndString *path) {
 #else
   fail(ENOSYS, "Mounted GameCube image volumes require a GameCube target.");
   return false;
+#endif
+}
+void dnd_storage_select_gcloader_disc_image(DndString *path) {
+  storage_barrier();
+#ifdef DND_GAMECUBE_STORAGE
+  char canonical[PATH_CAP], native[PATH_CAP], raw[PATH_CAP];
+  if(!utf8(path,raw))return;
+  if(!strchr(raw,':') || raw[0]=='/' || raw[0]=='\\') {
+    fail(EINVAL,"Specify a full gcloader:/ ISO path.");return;
+  }
+  int device=resolve(path,canonical,native);
+  if(device<0)return;
+  if(device!=6) {fail(EINVAL,"Physical disc selection requires gcloader:/.");return;}
+  if(mounted[3]) {fail(EBUSY,"Unmount dvd:/ before physical disc selection.");return;}
+  for(int d=0;d<7;d++)if(contiguous_tokens[d]) {
+    fail(EBUSY,"Complete all contiguous writes before physical disc selection.");return;
+  }
+  for(int i=0;i<HANDLE_CAP;i++)if(files[i].token && files[i].fd>=0 && (files[i].access&2)) {
+    fail(EBUSY,"Close all writable files before physical disc selection.");return;
+  }
+  int rc=dnd_gc_select_gcloader_disc_image(native);
+  if(rc<0)fail(rc==-ENOTSUP?ENOSYS:-rc,
+      "GC Loader selection or physical readback failed; retain both images.");
+#else
+  (void)path;
+  fail(ENOSYS,"Physical GC Loader selection requires a GameCube target.");
 #endif
 }
 /* Same immutable 0x440 boot header for a native disc or an ISO backed dvd:/.

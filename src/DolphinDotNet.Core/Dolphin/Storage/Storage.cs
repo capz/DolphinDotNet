@@ -77,6 +77,18 @@ public static partial class Storage
         if(imagePath==null)throw new ArgumentNullException("imagePath");
         return NativeStorage.MountDiscImage(imagePath);
     }
+    /// <summary>Select a contiguous plain GameCube ISO/GCM on GC Loader's
+    /// physical disc interface and verify its complete boot header by reading
+    /// that interface. Requires the GC Loader volume already mounted, dvd:/
+    /// unmounted, and all writers closed. Unlike MountDisc(string), this
+    /// changes the hardware mapping. Throws on unsupported hardware or failure.
+    /// On failure retain both images; a drive timeout can reset the mapping.
+    /// Do not modify the selected image or remount GC Loader before launching.</summary>
+    public static void SelectGcLoaderDiscImage(string imagePath)
+    {
+        if(imagePath==null)throw new ArgumentNullException("imagePath");
+        NativeStorage.SelectGcLoaderDiscImage(imagePath);
+    }
     /// <summary>Mount the currently loaded game disc or ODE-selected game.</summary>
     public static bool MountDisc()=>MountDisc(DiscFormat.Fst);
     /// <summary>Read the mounted GameCube boot header and optional opening.bnr

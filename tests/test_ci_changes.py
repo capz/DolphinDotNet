@@ -28,6 +28,8 @@ class CiSelectionTests(unittest.TestCase):
         for path,expected in (
             ("source/audio.c",{"native","audio","gamecube"}),
             ("source/network.c",{"native","network","gamecube"}),
+            ("source/gcloader.c",{"native","storage","gamecube"}),
+            ("tests/gcloader_test.c",{"storage"}),
             ("source/draw_resources.c",{"native","graphics","gamecube"}),
             ("tests/AudioAssetTests/Program.cs",{"audio"}),
             ("tests/ModelAssetTests/Program.cs",{"graphics"}),

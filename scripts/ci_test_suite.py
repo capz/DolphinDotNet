@@ -64,11 +64,17 @@ def main(area):
         run("python3","scripts/ci_aram.py") # AramSmoke + AramBrokerSmoke, AOT/runtime and GC stress
         build("tests/MountRegistrySmoke/MountRegistrySmoke.csproj")
         run("python3","tests/storage_mounts.py")
+        run("python3","tests/gcloader_select.py")
         build("tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj")
         # Run new physical FAT32/exFAT free-run fixtures independently of the
         # broader native suite. The latter also exercises unrelated hardware
         # stubs and may be unavailable on some host runner configurations.
         with tempfile.TemporaryDirectory() as tmp:
+            for name in ("file_extents", "gcloader"):
+                binary=Path(tmp)/(name+"-test")
+                run("cc","-std=c11","-O2","-Wall","-Wextra","-Werror",
+                    "-Iinclude","tests/"+name+"_test.c","source/"+name+".c","-o",binary)
+                run(binary)
             binary=Path(tmp)/"contiguous-write-test"
             run("cc","-std=c11","-O2","-Wall","-Wextra","-Werror",
                 "-Iinclude","tests/contiguous_write_test.c","source/contiguous_write.c","-o",binary)

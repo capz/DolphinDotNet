@@ -104,6 +104,26 @@ libogc2 `__io_gcode` if supported by the installed GC Loader firmware.
 Availability and simultaneous ODE DVD use are hardware dependent; do not
 assume they can operate simultaneously. See [DiscBrowser](../samples/DiscBrowser/README.md).
 
+`Storage.SelectGcLoaderDiscImage("gcloader:/games/new.iso")` changes GC Loader's
+physical DVD mapping; `MountDisc(imagePath)` only presents an image through the
+SDK's filesystem. Physical selection requires an already-mounted GC Loader raw
+volume, `dvd:/` unmounted, and all writable streams and contiguous writers closed.
+It accepts a nonempty, completely contiguous FAT32/exFAT file, resolves its
+absolute SD sectors (including the partition once), checks protocol bounds and
+GameCube magic, then sends the GC Loader fragment-table/select commands through
+libogc2's bounded DVD queue. It returns only after the physical DVD interface
+matches the image's entire `0x440`-byte boot header. It does not allocate, rename,
+delete or overwrite any image file. Hosts and unsupported media throw.
+
+For an updater, first verify the whole new download and close its streams, call
+`SelectGcLoaderDiscImage`, then delete the old image using the existing mounted
+raw volume, unmount that volume and hand off to the launcher. Keep the selected
+image unchanged. On **any** selection/readback failure retain both images and
+abort cleanup: a libogc2 timeout can reset the drive, so the old mapping cannot
+be promised after failure. Do not reset/remount GC Loader between selection and
+launch; its raw-device startup resets the drive. Physical GC Loader acceptance
+is separate from host protocol and fault-injection fixtures.
+
 ## Discovering and restoring mounts
 
 All high-level filesystem mount routes now share a session-local native registry:

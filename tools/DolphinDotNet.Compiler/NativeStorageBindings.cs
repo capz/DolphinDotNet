@@ -238,6 +238,7 @@ internal static class NativeStorageBindings
         ["AramBrokerService"]=("dnd_aram_service_broker","",false),["AramBrokerStat"]=("dnd_aram_broker_stat","i",false),
         ["TextCompare"]=("dnd_text_compare","ssi",false),["TextHash"]=("dnd_text_hash","si",false),["MountDisc"]=("dnd_storage_mount_disc","i",false),["MountDiscImage"]=("dnd_storage_mount_disc_image","s",false),
         ["DiscHeader"]=("dnd_storage_disc_header","",true),
+        ["SelectGcLoaderDiscImage"]=("dnd_storage_select_gcloader_disc_image","s",false),
         ["PlatformReset"]=("dnd_platform_reboot","i",false),
         ["PlatformResetButton"]=("dnd_platform_reset_button","",false),
         ["HardwareProbe"]=("dnd_hardware_probe","iii",false),
