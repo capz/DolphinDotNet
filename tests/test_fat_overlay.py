@@ -14,7 +14,7 @@ class FatOverlayPreparationTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='dnd-fat-overlay-test-')
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.source = self.root / 'upstream'
         for folder in ('include', 'source', 'fatfs/source'):
             (self.source / folder).mkdir(parents=True, exist_ok=True)
