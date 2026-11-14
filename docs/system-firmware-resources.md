@@ -75,11 +75,14 @@ texture objects are never shared implicitly. `SystemFont.Load` wraps the existin
 
 `TurnSide`, `TurnCenter`, `Select`, `Back`, `OptionCancel`, `OptionConfirm`,
 `OptionMove1`, `OptionMove2`, `OptionMove3` and `OptionSelect` reproduce the
-original cube and option sequences on the qualified NTSC 1.2 / PAL 1.2
-profile. They preserve instrument samples, tuning, bends, envelopes, layering,
-panning and rotation's FIR feedback tail. These are prepared stereo PCM16 effects,
-returned as normal caller-owned `Sound` resources. Unknown profiles, early NTSC's
-different DSP setup and `PressStart` remain unavailable. See the
+original cube and option sequences on the qualified early NTSC 1.0 and
+NTSC 1.2 / PAL 1.2 profiles. They preserve instrument samples, tuning, bends,
+envelopes, layering, panning and FIR feedback. The early profile has linear
+velocity, a different envelope clock and a three-second effects tail.
+These are deterministic prepared stereo PCM16 effects returned as normal
+caller-owned `Sound` resources. Phase, mixer ramps and rounding differ from
+the running IPL; playback is not sample-identical. Unknown profiles and
+`PressStart` remain unavailable. See the
 [evidence and playback limits](system-menu-audio-research.md).
 
 Create the catalog with

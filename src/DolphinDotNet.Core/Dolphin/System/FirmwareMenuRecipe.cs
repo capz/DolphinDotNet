@@ -15,19 +15,20 @@ internal sealed class FirmwareMenuRecipe
     internal readonly int[] SourceWaveIds;
     private readonly byte[]? resampling;
     private FirmwareMenuRecipe(byte[] data,int frames,byte[]? coefficients,int[] ids){Data=data;Frames=frames;resampling=coefficients;SourceWaveIds=ids;}
-    internal static FirmwareMenuRecipe Compile(byte[] seq,int entry,byte[] bank,byte[]? reverb=null,byte[]? resampling=null)
+    internal static FirmwareMenuRecipe Compile(byte[] seq,int entry,byte[] bank,byte[]? reverb=null,byte[]? resampling=null,bool early=false)
     {
-        var compiler=new Builder(seq,bank);compiler.Track(entry,0);
+        var compiler=new Builder(seq,bank,early);compiler.Track(entry,0);
         return compiler.Finish(reverb,resampling);
     }
     private sealed class Builder
     {
         private readonly byte[] seq,bank;
+        private readonly bool early;
         private readonly List<int[]> tracks=new List<int[]>(),notes=new List<int[]>(),curves=new List<int[]>();
         private readonly List<int> sends=new List<int>();
         private readonly List<int> sourceIds=new List<int>();
         private int work;
-        internal Builder(byte[] sequence,byte[] instruments){seq=sequence;bank=instruments;}
+        internal Builder(byte[] sequence,byte[] instruments,bool earlyMixer){seq=sequence;bank=instruments;early=earlyMixer;}
         private int Read(ref int pc,int bytes)
         {
             if(pc<0||pc>seq.Length-bytes)throw new InvalidDataException("Menu sequence operand outside extent.");
@@ -38,7 +39,7 @@ internal sealed class FirmwareMenuRecipe
             if(depth>1||tracks.Count>=3)throw new InvalidDataException("Menu track budget.");
             int id=tracks.Count;var t=new int[9];t[0]=32768;t[1]=12;
             tracks.Add(t);
-            sends.Add(depth==0?8128:4064);
+            sends.Add(!early&&depth==0?8128:4064);
             int tick=0,program=-1,transpose=0;var active=new int[8];for(int i=0;i<8;i++)active[i]=-1;
             var calls=new int[4];int callDepth=0;
             for(;;)
@@ -80,7 +81,7 @@ internal sealed class FirmwareMenuRecipe
                     }
                     else if(reg==7)t[1]=value;
                     else if(reg<8||reg>12||value!=(reg==10?32767:0))throw new InvalidDataException("Unsupported menu register.");
-                    else if(reg==12)sends[id]=0;
+                    else if(reg==12&&!early)sends[id]=0;
                 }
                 else if(op==0xc1)
                 {
@@ -129,18 +130,23 @@ internal sealed class FirmwareMenuRecipe
             {
                 var t=tracks[n[0]];
                 if(n[2]<0||n[2]>127||n[5]<=n[4]||t[1]>24||t[7]>6000||t[8]>2)throw new InvalidDataException("Invalid menu note bounds.");
-                int end=(int)(((long)n[5]*64057+47999)/48000+((long)t[7]*64057+95999)/96000)*80;
+                long release=early?t[7]:((long)t[7]*64057+95999)/96000;
+                int end=(int)(((long)n[5]*64057+47999)/48000+release)*80;
                 frames=Math.Max(frames,end);
                 n[7]=sends[n[0]];if(n[7]!=0)wet=true;
             }
             wet=wet&&reverb!=null;
-            if(wet)frames=FirmwareAudioBounds.Add(frames,32000);
+            int tail=wet?(early?96000:32000):0;
+            frames=FirmwareAudioBounds.Add(frames,tail);
             if(frames<1||frames>32000*8)throw new InvalidDataException("Menu output budget.");
             var data=new byte[64+tracks.Count*36+notes.Count*32+curves.Count*20+(wet?64:0)];
             Put(data,0,0x444d4531);Put(data,8,frames);Put(data,12,tracks.Count);Put(data,16,notes.Count);Put(data,20,curves.Count);
             int sourceCount=1;foreach(var n in notes)sourceCount=Math.Max(sourceCount,n[1]+1);Put(data,48,sourceCount);
-            if(wet){Put(data,52,1);Put(data,56,32000);}
-            if(coefficients!=null){if(coefficients.Length!=512)throw new InvalidDataException("Menu resampler table extent.");Put(data,60,1);}
+            if(wet){Put(data,52,1);Put(data,56,tail);}
+            // Private packet flags: four-tap coefficients and the qualified
+            // early IPL mixer (linear note velocity, fixed effects send).
+            Put(data,60,early?2:0);
+            if(coefficients!=null){if(coefficients.Length!=512)throw new InvalidDataException("Menu resampler table extent.");Put(data,60,early?3:1);}
             int at=64;foreach(var t in tracks)foreach(int v in t){Put(data,at,v);at+=4;}
             foreach(var n in notes)foreach(int v in n){Put(data,at,v);at+=4;}
             foreach(var c in curves)foreach(int v in c){Put(data,at,v);at+=4;}

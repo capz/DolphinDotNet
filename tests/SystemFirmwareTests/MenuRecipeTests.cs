@@ -60,6 +60,13 @@ internal static class MenuRecipeTests
         {int at=i*32;reverb[at]=1;reverb[at+7]=1;reverb[at+4+i*4]=0x20;Big(reverb,at+12,1);reverb[at+30]=0x40;}
         var wetRecipe=FirmwareMenuRecipe.Compile(sequence,0,bank,reverb);Check(wetRecipe.Frames==38560);
         if(directory!=null)File.WriteAllBytes(Path.Combine(directory,"recipe-wet.dme"),wetRecipe.Packet(new[]{source},default));
+        // The earlier mixer keeps the send with register 12 = 0, uses
+        // linear velocity and advances ADSR once per 80-sample DSP block.
+        var earlySequence=new byte[sequence.Length+3];new byte[]{0xa4,12,0}.CopyTo(earlySequence,0);sequence.CopyTo(earlySequence,3);
+        earlySequence[Array.IndexOf(earlySequence,(byte)0x30)+2]=64;
+        var earlyRecipe=FirmwareMenuRecipe.Compile(earlySequence,0,bank,reverb,coefficients,early:true);
+        Check(earlyRecipe.Frames==104080&&earlyRecipe.Data[63]==3&&earlyRecipe.Data[55]==1);
+        if(directory!=null)File.WriteAllBytes(Path.Combine(directory,"recipe-early.dme"),earlyRecipe.Packet(new[]{source},default));
         var layered=new byte[128];new byte[]{0xc1,0,0,0,16,0xc1,1,0,0,80,0xff}.CopyTo(layered,0);
         sequence.CopyTo(layered,16);
         new byte[]{0xac,6,0,9,0x98,0,32,0x98,3,0,0x30,1,64,0x80,20,0x81,0xff}.CopyTo(layered,80);

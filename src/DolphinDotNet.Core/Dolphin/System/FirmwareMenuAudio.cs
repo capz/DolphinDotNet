@@ -151,11 +151,19 @@ internal sealed class FirmwareMenuAudio : IDisposable
                    bank>image.Length-0x8e0||Read(image,bank+4)!=0x8e0||
                    FirmwareAudioFingerprint.Hash(image,bank,0x8e0,cancellation)!="50e79d0625aa0b8817509b6fa3f56af7c3f94aa81dac64a146e15e04f0ce10e1")continue;
                 bool modern=seq<=image.Length-3117&&FirmwareAudioFingerprint.Hash(image,seq,3117,cancellation)=="3432f80f4f3c7be92e1288b81ce8071db3554cd8fcc520410f5dd489f0ccdc1f";
-                if(!modern&&seq<=image.Length-3092&&FirmwareAudioFingerprint.Hash(image,seq,3092,cancellation)=="5e9be1050199629aa560f410effbbd5a8361ea17777fb07f580c1d75586cbd35")
-                    result.UnsupportedReason="Early NTSC menu events match, but its different DSP-effect setup is not qualified.";
-                // Early NTSC has the same instruments/events but a different
-                // DSP-effect setup. Do not qualify its output from BMS alone.
-                if(!modern||bank<128||FirmwareAudioFingerprint.Hash(image,bank-128,128,cancellation)!="c10b2ad8bc679484c74fe78f9b5bcca66e210a08cba43a51fbc5b36ad224b4fc")continue;
+                bool early=!modern&&seq<=image.Length-3092&&FirmwareAudioFingerprint.Hash(image,seq,3092,cancellation)=="5e9be1050199629aa560f410effbbd5a8361ea17777fb07f580c1d75586cbd35";
+                byte[]? reverb;
+                if(modern)
+                {
+                    if(bank<128||FirmwareAudioFingerprint.Hash(image,bank-128,128,cancellation)!="c10b2ad8bc679484c74fe78f9b5bcca66e210a08cba43a51fbc5b36ad224b4fc")continue;
+                    reverb=new byte[64];Array.Copy(image,bank-128,reverb,0,64);
+                }
+                else if(early)
+                {
+                    reverb=CaptureEarlyReverb(image,cancellation);
+                    if(reverb==null){result.UnsupportedReason="Early IPL events match, but its DSP or effects initialization differs from the qualified profile.";continue;}
+                }
+                else continue;
                 result.UnsupportedReason="This IPL profile supports ten cube/options effects; PressStart is not qualified.";
                 if(result.sources.Length!=0)throw new InvalidDataException("Conflicting IPL menu profiles.");
                 var selected=new FirmwareMenuWaveSource[result.sourceIds.Length];
@@ -165,20 +173,19 @@ internal sealed class FirmwareMenuAudio : IDisposable
                     result.sources=selected;
                 }
                 catch {foreach(var s in selected)s?.Dispose();throw;}
-                var sequence=new byte[3117];Array.Copy(image,seq,sequence,0,sequence.Length);
+                var sequence=new byte[early?3092:3117];Array.Copy(image,seq,sequence,0,sequence.Length);
                 var instruments=new byte[0x8e0];Array.Copy(image,bank,instruments,0,instruments.Length);
-                var reverb=new byte[64];Array.Copy(image,bank-128,reverb,0,64);
                 byte[] resampling=CaptureResampler(image,bank,cancellation);
                 result.RetainedBytes=FirmwareAudioBounds.Add(result.RetainedBytes,resampling.Length);
-                int table=0x1bc;
+                int table=early?0x1b4:0x1bc;
                 // Stable public identities retain their original numeric values.
                 int[] events={3,4,5,6,7,12,9,10,11,8};
                 for(int i=0;i<events.Length;i++)
                 {
                     cancellation.ThrowIfCancellationRequested();int at=table+events[i]*3;
                     int target=(sequence[at]<<16)|(sequence[at+1]<<8)|sequence[at+2];
-                    var recipe=FirmwareMenuRecipe.Compile(sequence,target,instruments,reverb,resampling);result.recipes[i]=recipe;
-                    result.effects[i]=new SystemMenuSoundInfo((SystemMenuSound)i,2,32000,recipe.Frames,"ipl-menu-bms-v2",false,recipe.SourceWaveIds);
+                    var recipe=FirmwareMenuRecipe.Compile(sequence,target,instruments,reverb,resampling,early);result.recipes[i]=recipe;
+                    result.effects[i]=new SystemMenuSoundInfo((SystemMenuSound)i,2,32000,recipe.Frames,early?"ipl-menu-early-v1":"ipl-menu-bms-v2",false,recipe.SourceWaveIds);
                     result.RetainedBytes=FirmwareAudioBounds.Add(result.RetainedBytes,recipe.Data.Length);
                 }
                 foreach(var s in selected)result.RetainedBytes=FirmwareAudioBounds.Add(result.RetainedBytes,s.EncodedBytes);
@@ -189,6 +196,38 @@ internal sealed class FirmwareMenuAudio : IDisposable
     }
     private static int Read(byte[] data,int at)
     {if(at<0||at>data.Length-4)throw new InvalidDataException("Menu table extent.");uint v=((uint)data[at]<<24)|((uint)data[at+1]<<16)|((uint)data[at+2]<<8)|data[at+3];if(v>int.MaxValue)throw new InvalidDataException("Menu pointer overflow.");return (int)v;}
+    private static int FindFingerprint(byte[] image,int bytes,uint prefix,string hash,CancellationToken cancellation,int prefixOffset=0)
+    {
+        for(int at=0;at<=image.Length-bytes;at+=4)
+        {
+            if((at&4095)==0)cancellation.ThrowIfCancellationRequested();
+            int p=at+prefixOffset;
+            uint word=((uint)image[p]<<24)|((uint)image[p+1]<<16)|((uint)image[p+2]<<8)|image[p+3];
+            if(word==prefix&&FirmwareAudioFingerprint.Hash(image,at,bytes,cancellation)==hash)return at;
+        }
+        return -1;
+    }
+    private static byte[]? CaptureEarlyReverb(byte[] image,CancellationToken cancellation)
+    {
+        // The early IPL constructs RPBs in code; bank-128 is unrelated data.
+        // Require the complete initializer, its RPB writer and the tiny-VPB
+        // DSP program before using the observed routing/delay interpretation.
+        int setup=FindFingerprint(image,348,0x7c0802a6,"30f48e0de7019f6877beae1dd71f602ae7e7a3157963fe76bea4c6f223337790",cancellation);
+        if(setup<0x220||FirmwareAudioFingerprint.Hash(image,setup-0x220,160,cancellation)!="e3294ac03e343ed739da72b5c58d052827d4315edad163399e117fe7389afa65"||
+           FindFingerprint(image,0x1280,0x029f0010,"8de9a39d6bac52ca5f983416f93a7a9ffb1d8b536c3eaa47a083baa2e207f2ba",cancellation)<0)return null;
+        int fir=FindFingerprint(image,16,0x02000800,"3a5c22d66a2bc0e5654861536bb522864a2da89a303776a494990b38ffcb6c27",cancellation,8);
+        if(fir<0)return null;
+        var reverb=new byte[64];
+        for(int channel=0;channel<2;channel++)
+        {
+            int at=channel*32;reverb[at]=1;reverb[at+7]=1;
+            reverb[at+4+channel*4]=0x2f;reverb[at+5+channel*4]=0xff;
+            FirmwareMenuRecipe.Put(reverb,at+12,100);Array.Copy(image,fir,reverb,at+16,16);
+        }
+        // These ten effects send to the two long-delay front-output paths.
+        // The 30-block post-filter paths belong to the background tracks.
+        return reverb;
+    }
     private static byte[] CaptureResampler(byte[] image,int bank,CancellationToken cancellation)
     {
         int found=-1;

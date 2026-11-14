@@ -208,7 +208,8 @@ render; output/effects and persistent track state still need investigation.
 - Only NTSC 1.2 was driven live in this investigation. The base branch records
   identical IBNK/BMS content for PAL 1.2, but PAL action paths and output still
   need qualification for newly exposed effects. Early NTSC's different DSP
-  setup remains unsupported.
+  setup was subsequently qualified separately; see the
+  [early-profile follow-up](system-menu-audio-research.md#early-menu-profile-follow-up--2026-11-14).
 
 ## Extraction and exposure plan
 

@@ -9,7 +9,7 @@ int main(int argc,char **argv) {
   DndArray *a=calloc(1,sizeof(*a)+(size_t)bytes);assert(a);a->length=(unsigned)bytes;a->element_size=1;
   assert(fread(a->data,1,(size_t)bytes,f)==(size_t)bytes);fclose(f);
   assert(!dnd_audio_begin_menu(a,1024));
-  unsigned corrupt_at[]={0,4,8,12,16,20,24,28,32,48};
+  unsigned corrupt_at[]={0,4,8,12,16,20,24,28,32,48,52,56,60};
   for(unsigned i=0;i<sizeof(corrupt_at)/sizeof(corrupt_at[0]);i++) {
     unsigned at=corrupt_at[i];uint8_t saved[4];memcpy(saved,a->data+at,4);memset(a->data+at,255,4);
     assert(!dnd_audio_begin_menu(a,1024*1024));memcpy(a->data+at,saved,4);
