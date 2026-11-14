@@ -29,9 +29,13 @@ def verify(makefile):
         (devkit/'libogc2/gamecube_rules').write_text(f'CC := {wrapper}\n%.o: %.c\n\t$(CC) $(CFLAGS) -MMD -MP -c $< -o $@\n')
         shutil.copyfile(makefile,bundle/'Makefile')
         (bundle/'source/probe.c').write_text('int main(void){return 0;}\n')
-        for name in ('build_exi_overlay.sh','verify_exi_source.py','verify_video_source.py','dol_sections.py'):
+        for name in ('build_exi_overlay.sh','verify_exi_source.py','verify_video_source.py','dol_sections.py',
+                     'build_fat_overlay.py','prepare_fat_overlay.py'):
             (bundle/'scripts'/name).write_text('')
         (bundle/'scripts/build_exi_overlay.sh').write_text('touch build/exi-overlay/libogc.a build/overlay-rebuilt\n')
+        (bundle/'scripts/build_fat_overlay.py').write_text('from pathlib import Path\n'
+            'p=Path("build/fat-overlay");p.mkdir(parents=True,exist_ok=True)\n'
+            '(p/"libdvm.a").touch();(p/"libfat.a").touch();Path("build/fat-rebuilt").touch()\n')
         (bundle/'vendor/libogc2/exi.c').write_text('')
         (bundle/'vendor/libogc2/video.c').write_text('')
         overlay=bundle/'build/exi-overlay';overlay.mkdir(parents=True)
@@ -57,8 +61,15 @@ def verify(makefile):
         assert (bundle/'build/overlay-rebuilt').exists(), 'VIDEO source change did not rebuild libogc'
         assert len(fourth)==7 and '-c' not in fourth[-1], 'Corrected archive did not relink the existing app'
         assert run(0)==fourth, 'Unchanged corrected archive caused a redundant rebuild'
+        time.sleep(1.1)
+        (bundle/'scripts/prepare_fat_overlay.py').touch()
+        fifth=run(0)
+        assert (bundle/'build/fat-rebuilt').exists(), 'FatFs source correction did not build the matching archives'
+        assert len(fifth)==8 and '-c' not in fifth[-1], 'Corrected FAT archives did not relink the existing app'
+        assert run(0)==fifth, 'Unchanged FAT archives caused a redundant rebuild'
         print('Native flag switching rebuilds objects and relinks; unchanged builds are reused.')
         print('VIDEO correction changes rebuild the archive and relink an existing app.')
+        print('FatFs correction changes rebuild matching archives and relink an existing app.')
 
 
 if __name__=='__main__':verify(Path(sys.argv[1]))

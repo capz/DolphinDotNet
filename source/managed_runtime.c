@@ -54,6 +54,18 @@ const DndType DND_TYPE_PATH_TOO_LONG_EXCEPTION = {"System.IO.PathTooLongExceptio
 const DndType DND_TYPE_OBJECT_DISPOSED_EXCEPTION = {"System.ObjectDisposedException", &DND_TYPE_INVALID_OPERATION_EXCEPTION, sizeof(DndException), 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
 // Keep caught native exception types stable across errors raised by cleanup.
 static DndException builtin_exceptions[DND_EXCEPTION_DIVIDE_BY_ZERO + 1];
+/* Emergency diagnostics must also work when the managed and native heaps are
+ * exhausted. Match the static-string layout used by generated literals, and
+ * retain separate storage for each already-reused builtin exception kind. */
+#define BUILTIN_MESSAGE_CAPACITY 192u
+typedef struct {
+    DndObject object;
+    uint32_t length;
+    uint16_t chars[BUILTIN_MESSAGE_CAPACITY];
+} BuiltinExceptionMessage;
+_Static_assert(offsetof(BuiltinExceptionMessage, chars) == offsetof(DndString, chars),
+               "Builtin diagnostic must have the managed UTF-16 string layout");
+static BuiltinExceptionMessage builtin_messages[DND_EXCEPTION_DIVIDE_BY_ZERO + 1];
 
 typedef struct DndHeapBlock {
     uint32_t size;
@@ -1076,9 +1088,26 @@ void dnd_exception_throw(DndExceptionKind kind, const char *message) {
         kind==DND_EXCEPTION_DIVIDE_BY_ZERO?&DND_TYPE_DIVIDE_BY_ZERO_EXCEPTION:
         kind==DND_EXCEPTION_NOT_SUPPORTED?&DND_TYPE_NOT_SUPPORTED_EXCEPTION:
         &DND_TYPE_EXCEPTION;
-    DndException *builtin = &builtin_exceptions[(unsigned)kind <= DND_EXCEPTION_DIVIDE_BY_ZERO ? (unsigned)kind : 0];
+    unsigned slot = (unsigned)kind <= DND_EXCEPTION_DIVIDE_BY_ZERO ? (unsigned)kind : 0;
+    DndException *builtin = &builtin_exceptions[slot];
+    BuiltinExceptionMessage *text = &builtin_messages[slot];
+    text->object.type = &DND_TYPE_STRING;
+    text->object.gc = 0;
+    uint32_t length = 0;
+    const unsigned char *cursor = (const unsigned char *)(message ? message : "");
+    while (*cursor && length + 1 < BUILTIN_MESSAGE_CAPACITY) {
+        uint32_t cp = utf8_next(&cursor);
+        if (cp > 0xffff) {
+            if (length + 2 >= BUILTIN_MESSAGE_CAPACITY) break;
+            cp -= 0x10000;
+            text->chars[length++] = (uint16_t)(0xd800 + (cp >> 10));
+            text->chars[length++] = (uint16_t)(0xdc00 + (cp & 1023));
+        } else text->chars[length++] = (uint16_t)cp;
+    }
+    text->length = length;
+    text->chars[length] = 0;
     builtin->object.type = type;
-    builtin->message = NULL;
+    builtin->message = (DndString *)text;
     exception_object = (DndObject *)builtin;
     exception_is_pending = true;
     dnd_exception_rethrow();

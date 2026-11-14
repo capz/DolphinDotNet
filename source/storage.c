@@ -149,8 +149,10 @@ static void fail(int error, const char *message) {
     kind = DND_EXCEPTION_OUT_OF_MEMORY;
   else if (error == ENODEV)
     kind = DND_EXCEPTION_DRIVE_NOT_FOUND;
-  else if (error == ENAMETOOLONG)
+  else if (error == ENAMETOOLONG) {
     kind = DND_EXCEPTION_PATH_TOO_LONG;
+    message = "Path length or filesystem directory depth limit exceeded.";
+  }
   else if (error == EINVAL)
     kind = DND_EXCEPTION_ARGUMENT;
   else if (error == ENOSYS)

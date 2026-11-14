@@ -5,6 +5,16 @@ This slice adds native/runtime primitives required to unblock common framework-f
 ## Exceptions
 A runtime exception kind/message channel now covers base Exception, argument errors, invalid operation, unsupported/platform unsupported, IO/file/directory/authorization and format errors. Managed try/catch/finally lowering is still compiler work; these primitives let BCL/intrinsics report failures now.
 
+Native runtime failures also expose their diagnostic through caught
+`Exception.Message`, including when allocation itself fails. Each builtin
+exception kind owns a static UTF-16 buffer, so raising and reading its message
+needs no native or managed allocation. Messages retain up to 191 UTF-16 code
+units, replace invalid UTF-8 consistently with runtime strings and truncate at
+a complete code point. Different exception kinds retain independent messages;
+raising the same native exception kind again reuses its existing singleton and
+message buffer. Managed exceptions created with a supplied message retain
+their usual independent managed strings.
+
 ## Guid
 Provides parse, canonical D-format formatting, and NewGuid-style generation. The current GameCube entropy source is intentionally weak and is suitable for uniqueness/game data, not cryptography.
 

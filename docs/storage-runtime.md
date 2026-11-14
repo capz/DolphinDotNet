@@ -124,6 +124,22 @@ be promised after failure. Do not reset/remount GC Loader between selection and
 launch; its raw-device startup resets the drive. Physical GC Loader acceptance
 is separate from host protocol and fault-injection fixtures.
 
+GameCube native bundles rebuild the pinned libdvm/FatFs FAT drivers with an
+exFAT path bound of 64 directory components. The toolchain's original bound was
+10: following the eleventh directory returned `FR_NOT_ENOUGH_CORE`, which its
+driver translated into `ENOMEM` and therefore `OutOfMemoryException`, despite
+using stack scratch buffers and having available RAM. This could stop a recursive
+volume scan as soon as it reached an unrelated deep directory.
+
+The SDK raises that bound and translates an over-depth path into
+`ENAMETOOLONG` / `PathTooLongException`. FAT/FAT32 traversal is unaffected.
+All FatFs code and its libdvm driver are rebuilt together because `FATFS` embeds
+the path tables; mixing the enlarged private structure with an old `ff.o` or
+`fat_driver.o` would corrupt its layout. The build emits matching local
+`libfat.a` and `libdvm.a` archives plus pinned-source fingerprints, without
+modifying the installed toolchain or card contents. The larger path tables cost
+1,296 additional native bytes per mounted FAT volume.
+
 ## Discovering and restoring mounts
 
 All high-level filesystem mount routes now share a session-local native registry:

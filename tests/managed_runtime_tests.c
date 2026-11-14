@@ -28,6 +28,76 @@ static void callback(void *target, void *arg) {
     (void)target; invoked = *(int *)arg;
 }
 
+static void ascii_message(DndString *message, const char *expected) {
+    assert(message && message->object.type == &DND_TYPE_STRING);
+    assert(message->length == strlen(expected));
+    for (uint32_t i = 0; i < message->length; ++i)
+        assert(message->chars[i] == (unsigned char)expected[i]);
+    assert(message->chars[message->length] == 0);
+}
+
+static void builtin_message_contracts(void) {
+    /* The complete heap is occupied by one rooted object. Raising/reading a
+       useful emergency diagnostic must not need even one spare byte. */
+    _Alignas(8) uint8_t memory[128]; DndManagedHeap heap;
+    dnd_managed_heap_init(&heap, memory, sizeof(memory));
+    const DndType whole_type = {"WholeHeap", &DND_TYPE_OBJECT,
+        sizeof(memory) - 16, 0, NULL, 0, NULL, 0, 0, NULL, 0, NULL};
+    DndObject *whole = dnd_object_new(&heap, &whole_type);
+    assert(whole && heap.used == sizeof(memory));
+    DndObject **slots[] = { &whole }; DndRootSet roots;
+    dnd_roots_init(&roots, slots, 1); assert(dnd_root_add(&roots, &whole));
+    DndGcFrame frame; dnd_gc_frame_push(&frame, slots, 1);
+    dnd_gc_set_stress(true);
+    assert(!dnd_object_new(&heap, &NODE_TYPE));
+    assert(dnd_exception_kind() == DND_EXCEPTION_OUT_OF_MEMORY);
+    DndException *oom = (DndException *)dnd_exception_object();
+    assert(oom->object.type == &DND_TYPE_OUT_OF_MEMORY_EXCEPTION);
+    ascii_message(oom->message, "Managed heap exhausted.");
+    size_t used = heap.used, collections = heap.collections;
+    dnd_exception_clear();
+    dnd_exception_throw(DND_EXCEPTION_DIRECTORY_NOT_FOUND, "Cannot open directory.");
+    DndException *directory = (DndException *)dnd_exception_object();
+    assert(directory != oom && directory->object.type == &DND_TYPE_DIRECTORY_NOT_FOUND_EXCEPTION);
+    ascii_message(directory->message, "Cannot open directory.");
+    ascii_message(oom->message, "Managed heap exhausted.");
+    assert(heap.used == used && heap.collections == collections);
+    dnd_gc_collect(&heap, &roots);
+    ascii_message(directory->message, "Cannot open directory.");
+    ascii_message(oom->message, "Managed heap exhausted.");
+    assert(heap.used == sizeof(memory) && whole->type == &whole_type);
+    dnd_exception_clear();
+
+    dnd_exception_throw(DND_EXCEPTION_FORMAT, "Caf\xc3\xa9 \xf0\x9f\xa6\x8a");
+    DndString *unicode = ((DndException *)dnd_exception_object())->message;
+    assert(unicode->length == 7 && unicode->chars[3] == 0xe9 &&
+        unicode->chars[5] == 0xd83e && unicode->chars[6] == 0xdd8a);
+    dnd_exception_clear();
+    dnd_exception_throw(DND_EXCEPTION_FORMAT, "\xff\xc0\x80\xe2\x82");
+    DndString *invalid = ((DndException *)dnd_exception_object())->message;
+    assert(invalid->length == 5);
+    for (uint32_t i = 0; i < invalid->length; ++i) assert(invalid->chars[i] == 0xfffd);
+    dnd_exception_clear();
+
+    char long_message[400]; memset(long_message, 'x', sizeof(long_message));
+    /* A supplementary character fits at the boundary only as a full pair. */
+    memcpy(long_message + 189, "\xf0\x9f\xa6\x8a", 4); long_message[193] = 0;
+    dnd_exception_throw(DND_EXCEPTION_FORMAT, long_message);
+    DndString *last_pair = ((DndException *)dnd_exception_object())->message;
+    assert(last_pair->length == 191 && last_pair->chars[189] == 0xd83e && last_pair->chars[190] == 0xdd8a);
+    dnd_exception_clear();
+    memset(long_message, 'x', sizeof(long_message));
+    memcpy(long_message + 190, "\xf0\x9f\xa6\x8a", 4); long_message[194] = 0;
+    dnd_exception_throw(DND_EXCEPTION_FORMAT, long_message);
+    DndString *truncated = ((DndException *)dnd_exception_object())->message;
+    assert(truncated->length == 190 && truncated->chars[190] == 0);
+    dnd_exception_clear();
+    dnd_exception_throw(DND_EXCEPTION_FORMAT, NULL);
+    ascii_message(((DndException *)dnd_exception_object())->message, "");
+    assert(heap.used == sizeof(memory));
+    dnd_exception_clear(); dnd_gc_set_stress(false); dnd_gc_frame_pop(&frame);
+}
+
 static void shaped_array_contracts(void) {
     uint8_t memory[4096];DndManagedHeap heap;
     dnd_managed_heap_init(&heap,memory,sizeof(memory));
@@ -86,6 +156,7 @@ static void array_clone_contracts(void) {
 }
 
 int main(void) {
+    builtin_message_contracts();
     shaped_array_contracts();
     array_clone_contracts();
     uint8_t memory[16384];

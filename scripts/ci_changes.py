@@ -43,7 +43,7 @@ TEST_DOMAINS = {
     "genericsharing": "compiler", "numeric": "compiler",
     "string": "compiler", "wishlist": "compiler", "exactnumber": "compiler",
     "storage": "storage", "saveimage": "assets", "disc": "storage",
-    "gcloader": "storage",
+    "gcloader": "storage", "fatfs": "storage", "fatoverlay": "storage",
     "aram": "storage", "library": "storage", "connection": "storage",
     "input": "storage", "timing": "network", "async": "network",
     "automatic": "network", "network": "network", "audio": "audio",
@@ -114,7 +114,9 @@ def select(paths):
         elif path.startswith(".github/workflows/") or path in {"scripts/ci_changes.py", "scripts/ci_test_suite.py"}:
             selected.update(ALL)
         elif path.startswith("scripts/"):
-            if "model" in path or "png" in path:
+            if path in {"scripts/build_fat_overlay.py", "scripts/prepare_fat_overlay.py"}:
+                selected.update({"native", "storage", "gamecube", "sdk"})
+            elif "model" in path or "png" in path:
                 selected.update({"assets", "graphics", "gamecube"})
             elif "network" in path:
                 selected.update({"network", "gamecube"})

@@ -65,6 +65,8 @@ def main(area):
         build("tests/MountRegistrySmoke/MountRegistrySmoke.csproj")
         run("python3","tests/storage_mounts.py")
         run("python3","tests/gcloader_select.py") # GcLoaderSelectSmoke: native preconditions + AOT/GC stress
+        run("python3","tests/fatfs_depth.py")
+        run("python3","-m","unittest","discover","-s","tests","-p","test_fat_overlay.py")
         build("tools/DolphinDotNet.Compiler/DolphinDotNet.Compiler.csproj")
         # Run new physical FAT32/exFAT free-run fixtures independently of the
         # broader native suite. The latter also exercises unrelated hardware
