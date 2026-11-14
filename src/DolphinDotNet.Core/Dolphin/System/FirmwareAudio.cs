@@ -163,6 +163,7 @@ public enum FirmwareAudioLayout { ExplicitPair, FileTable, AdjacentWaveArchive }
 public sealed class FirmwareStereoAudio
 {
     private byte[]? packet;
+    private FirmwareMenuWaveSource? leftSource,rightSource;
     public int SampleRate {get;}
     public int SampleCount {get;}
     public double DurationSeconds=>(double)SampleCount/SampleRate;
@@ -173,11 +174,31 @@ public sealed class FirmwareStereoAudio
     /// <summary>ROM-relative AW position, or -1 for an explicitly supplied archive.</summary>
     public int FirmwareOffset {get;private set;}=-1;
     public int ArchiveBytes {get;private set;}
-    public int CompressedBytes=>packet==null?0:packet.Length;
+    public int CompressedBytes=>packet!=null?packet.Length:leftSource==null?0:32+((SampleCount+15)/16)*18;
     private FirmwareStereoAudio(byte[] bytes,FirmwareWave left,FirmwareWave right)
     {packet=bytes;SampleRate=left.SampleRate;SampleCount=left.SampleCount;HasLoop=left.HasLoop;LeftArchiveOffset=left.Offset;RightArchiveOffset=right.Offset;}
-    public byte[] ExtractAfc(){var data=packet;if(data==null)throw new ObjectDisposedException(nameof(FirmwareStereoAudio));var result=new byte[data.Length];Array.Copy(data,result,result.Length);return result;}
-    internal void Release(){var data=packet;if(data==null)return;Array.Clear(data,0,data.Length);packet=null;}
+    public byte[] ExtractAfc()
+    {
+        var data=packet;
+        if(data!=null){var result=new byte[data.Length];Array.Copy(data,result,result.Length);return result;}
+        var left=leftSource;var right=rightSource;
+        if(left==null||right==null)throw new ObjectDisposedException(nameof(FirmwareStereoAudio));
+        int frames=(SampleCount+15)/16;var combined=new byte[32+frames*18];
+        Write32(combined,0,combined.Length);Write32(combined,4,SampleCount);
+        combined[8]=(byte)(SampleRate>>8);combined[9]=(byte)SampleRate;combined[11]=4;combined[13]=16;
+        for(int i=0;i<frames;i++)
+        {Array.Copy(left.Body,i*9,combined,32+i*18,9);Array.Copy(right.Body,i*9,combined,41+i*18,9);}
+        return combined;
+    }
+    internal int ShareOriginalSamples(FirmwareAudioSamples samples)
+    {
+        if(packet==null||HasLoop||FirmwareOffset<0)return 0;
+        var left=samples.FindSource(FirmwareAudioBounds.Add(FirmwareOffset,LeftArchiveOffset),SampleCount,SampleRate);
+        var right=samples.FindSource(FirmwareAudioBounds.Add(FirmwareOffset,RightArchiveOffset),SampleCount,SampleRate);
+        if(left==null||right==null)return 0;
+        int released=packet.Length;Array.Clear(packet,0,packet.Length);packet=null;leftSource=left;rightSource=right;return released;
+    }
+    internal void Release(){var data=packet;if(data!=null)Array.Clear(data,0,data.Length);packet=null;leftSource=null;rightSource=null;}
     /// <summary>Combine two metadata-selected AFC channels in original archive
     /// order. It rejects overlaps, unequal formats/rates/durations or loops.
     /// Interleaving is lossless and reuses the native AFC reader unchanged.</summary>

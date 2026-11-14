@@ -39,6 +39,9 @@ def main():
             big(descriptor,136+channel*4,wave);big(descriptor,wave+4,0x46fa0000);big(descriptor,wave+8,offset)
             big(descriptor,wave+12,size);big(descriptor,wave+24,samples);big(descriptor,wave+28,samples)
             if channel<2:archive[offset:offset+size]=bytes([0]+[0x11 if channel==0 else 0xee]*8)*10880
+            if channel==2:
+                big(descriptor,wave+16,0xffffffff);big(descriptor,wave+20,3);big(descriptor,wave+24,14)
+                archive[offset:offset+9]=bytes([0,0x12,0x34,0x56,0x71,0x23,0x45,0x67,0x12])
             offset=(offset+size+31)&~31
         # Original generated ID tables exercise bounded C-DF parsing under AOT.
         big(descriptor,20,700);descriptor[700:704]=b'WBCT';big(descriptor,708,1);big(descriptor,712,720)

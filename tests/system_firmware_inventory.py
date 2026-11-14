@@ -56,6 +56,11 @@ def main():
             assert candidate['association']['layout']=='AdjacentWaveArchive'
             assert candidate['descriptorBytes']==(36 if compact else 44)
             assert section['retainedEncodedBytes']==0 and all('unsupported' in effect for effect in section['effects'].values())
+            result=subprocess.run(['dotnet',str(tool),'firmware','inspect',str(path),'--system-audio'],cwd=ROOT,check=True,capture_output=True,text=True)
+            retained=json.loads(result.stdout)['audioSamples']
+            assert retained['retainedEncodedBytes']>0 and len(retained['samples'])==12
+            assert retained['samples'][2]['SampleCount']==19 and not retained['samples'][2]['HasLoop']
+            assert retained['samples'][2]['LoopEndSample']==19
             output=Path(tmp)/('compact' if compact else 'extended')
             command=['dotnet',str(tool),'firmware','audition',str(path),'0','2',str(output)]
             subprocess.run(command,cwd=ROOT,check=True,capture_output=True)

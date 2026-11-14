@@ -37,7 +37,30 @@ public sealed class FirmwareCatalog : IDisposable
     private readonly string[]?[] modelNamesCache;
     private readonly FirmwareWaveSystemInfo[] waveSystems;
     private readonly FirmwareMenuAudio? menuAudio;
+    private readonly FirmwareAudioSamples? audioSamples;
     public FirmwareCatalogOptions Options {get;}
+    /// <summary>Number of retained original samples. IncludeSystemAudio is
+    /// required when creating the catalog; unavailable associations yield zero.</summary>
+    public int AudioSampleCount {get {CheckAlive();return audioSamples==null?0:audioSamples.Count;}}
+    /// <summary>Retained sample payload, including data shared with startup and
+    /// menu resources. Subset retention statistics must not be added together.</summary>
+    public int AudioSampleRetainedBytes {get {CheckAlive();return audioSamples==null?0:audioSamples.RetainedBytes;}}
+    public FirmwareAudioSampleInfo GetAudioSampleInfo(int index)
+    {
+        CheckAlive();if(audioSamples==null)throw new NotSupportedException("Original audio retention was not requested; create the catalog with IncludeSystemAudio.");
+        if(index<0||index>=audioSamples.Count)throw new ArgumentOutOfRangeException(nameof(index));return audioSamples[index];
+    }
+    public FirmwareAudioSampleInfo[] GetAudioSamples()
+    {
+        CheckAlive();var result=new FirmwareAudioSampleInfo[AudioSampleCount];
+        for(int i=0;i<result.Length;i++)result[i]=audioSamples![i];return result;
+    }
+    internal FirmwareMenuWaveSource SnapshotAudioSample(FirmwareAudioSampleInfo info,CancellationToken cancellation)
+    {
+        if(info==null)throw new ArgumentNullException(nameof(info));CheckAlive();
+        if(audioSamples==null)throw new NotSupportedException("Original audio retention was not requested; create the catalog with IncludeSystemAudio.");
+        cancellation.ThrowIfCancellationRequested();return audioSamples.Snapshot(info,cancellation);
+    }
     /// <summary>Additional retained encoded menu payload bytes. Unknown profiles
     /// retain no samples. Excludes managed object overhead and startup audio.</summary>
     public int MenuAudioRetainedBytes {get {CheckAlive();return menuAudio==null?0:menuAudio.RetainedBytes;}}
@@ -55,8 +78,8 @@ public sealed class FirmwareCatalog : IDisposable
     public FirmwareFileTable? Files {get;}
     public int Count=>resources.Length;
     public FirmwareResource this[int index]=>resources[index];
-    private FirmwareCatalog(FirmwareResource[] metadata,byte[][] compressed,FirmwareFileTable? files,FirmwareStereoAudio? audio,FirmwareWaveSystemInfo[] waves,FirmwareCatalogOptions options,FirmwareMenuAudio? menu)
-    {resources=metadata;records=compressed;Files=files;startupAudio=audio;waveSystems=waves;Options=options;menuAudio=menu;textureCache=new FirmwareTextureInfo[metadata.Length][];modelNamesCache=new string[metadata.Length][];}
+    private FirmwareCatalog(FirmwareResource[] metadata,byte[][] compressed,FirmwareFileTable? files,FirmwareStereoAudio? audio,FirmwareWaveSystemInfo[] waves,FirmwareCatalogOptions options,FirmwareMenuAudio? menu,FirmwareAudioSamples? samples)
+    {resources=metadata;records=compressed;Files=files;startupAudio=audio;waveSystems=waves;Options=options;menuAudio=menu;audioSamples=samples;textureCache=new FirmwareTextureInfo[metadata.Length][];modelNamesCache=new string[metadata.Length][];}
     public FirmwareStereoAudio GetStartupAudio()
     {
         if(records==null)throw new ObjectDisposedException(nameof(FirmwareCatalog));
@@ -95,13 +118,14 @@ public sealed class FirmwareCatalog : IDisposable
             previousEnd=at+used;total+=used;
         }
         var files=includeMetadata?FirmwareFileTable.Inspect(data,cancellation):null;
-        var waves=includeMetadata?FirmwareWaveSystemInfo.Scan(data,cancellation,(options&FirmwareCatalogOptions.IncludeMenuAudio)!=0):new FirmwareWaveSystemInfo[0];
+        var waves=includeMetadata?FirmwareWaveSystemInfo.Scan(data,cancellation,(options&(FirmwareCatalogOptions.IncludeMenuAudio|FirmwareCatalogOptions.IncludeSystemAudio))!=0):new FirmwareWaveSystemInfo[0];
         var audio=includeMetadata?FirmwareStereoAudio.Discover(data,files,waves,cancellation):null;
         if(audio!=null&&audio.FirmwareOffset>=0)
             foreach(var record in metadata)
                 if(audio.FirmwareOffset<record.Offset+record.CompressedBytes&&record.Offset<audio.FirmwareOffset+audio.ArchiveBytes)
                 {audio.Release();throw new InvalidDataException("Firmware audio archive overlaps a compressed resource.");}
         FirmwareMenuAudio? menu=null;
+        FirmwareAudioSamples? samples=null;
         try
         {
             if(audio!=null)
@@ -109,14 +133,23 @@ public sealed class FirmwareCatalog : IDisposable
                 if(audio.CompressedBytes>MaximumDecodedBytes-total)throw new InvalidDataException("Firmware catalog retention budget exceeded.");
                 total+=audio.CompressedBytes;
             }
-            if((options&FirmwareCatalogOptions.IncludeMenuAudio)!=0)
+            if((options&(FirmwareCatalogOptions.IncludeMenuAudio|FirmwareCatalogOptions.IncludeSystemAudio))!=0)
                 menu=FirmwareMenuAudio.Inspect(data,files,waves,metadata.ToArray(),cancellation);
             if(total>MaximumDecodedBytes||menu!=null&&menu.RetainedBytes>MaximumDecodedBytes-total)
                 throw new InvalidDataException("Firmware catalog retention budget exceeded.");
+            if(menu!=null)total+=menu.RetainedBytes;
+            if((options&FirmwareCatalogOptions.IncludeSystemAudio)!=0)
+            {
+                int startupBytes=audio==null?0:audio.CompressedBytes;
+                samples=FirmwareAudioSamples.Capture(data,files,waves,metadata.ToArray(),MaximumDecodedBytes-total+startupBytes,menu,cancellation);
+                int released=audio==null?0:audio.ShareOriginalSamples(samples);
+                total=FirmwareAudioBounds.Add(total-released,samples.AdditionalRetainedBytes);
+                if(total>MaximumDecodedBytes)throw new InvalidDataException("Firmware catalog retention budget exceeded.");
+            }
             cancellation.ThrowIfCancellationRequested();
-            return new FirmwareCatalog(metadata.ToArray(),compressed.ToArray(),files,audio,waves,options,menu);
+            return new FirmwareCatalog(metadata.ToArray(),compressed.ToArray(),files,audio,waves,options,menu,samples);
         }
-        catch {audio?.Release();menu?.Dispose();foreach(var record in compressed)Array.Clear(record,0,record.Length);throw;}
+        catch {audio?.Release();menu?.Dispose();samples?.Dispose();foreach(var record in compressed)Array.Clear(record,0,record.Length);throw;}
     }
     public byte[] Extract(int index,CancellationToken cancellationToken=default)
     {
@@ -257,5 +290,5 @@ public sealed class FirmwareCatalog : IDisposable
         used=Math.Max(mask,Math.Max(links,literal));return output;
     }
     private static uint U32Bits(byte[] d,int a)=>((uint)d[a]<<24)|((uint)d[a+1]<<16)|((uint)d[a+2]<<8)|d[a+3];
-    public void Dispose(){var data=records;if(data==null)return;foreach(var record in data)Array.Clear(record,0,record.Length);startupAudio?.Release();menuAudio?.Dispose();Array.Clear(textureCache,0,textureCache.Length);Array.Clear(modelNamesCache,0,modelNamesCache.Length);records=null;}
+    public void Dispose(){var data=records;if(data==null)return;foreach(var record in data)Array.Clear(record,0,record.Length);startupAudio?.Release();menuAudio?.Dispose();audioSamples?.Dispose();Array.Clear(textureCache,0,textureCache.Length);Array.Clear(modelNamesCache,0,modelNamesCache.Length);records=null;}
 }

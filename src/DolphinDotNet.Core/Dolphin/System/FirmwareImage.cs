@@ -123,7 +123,7 @@ public sealed class FirmwareImage : IDisposable
     /// arguments are required so legacy CreateCatalog(default) stays unambiguous.</summary>
     public FirmwareCatalog CreateCatalog(FirmwareCatalogOptions options,CancellationToken cancellationToken)
     {
-        if((options&~FirmwareCatalogOptions.IncludeMenuAudio)!=0)throw new ArgumentOutOfRangeException(nameof(options));
+        if((options&~(FirmwareCatalogOptions.IncludeMenuAudio|FirmwareCatalogOptions.IncludeSystemAudio))!=0)throw new ArgumentOutOfRangeException(nameof(options));
         return FirmwareCatalog.Scan(Data,cancellationToken,true,options);
     }
     public byte[] ReadRange(int offset,int count)

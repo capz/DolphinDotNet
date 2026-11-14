@@ -17,7 +17,10 @@ internal static class FirmwareAudioBounds
 public enum FirmwareCatalogOptions
 {
     None=0,
-    IncludeMenuAudio=1
+    IncludeMenuAudio=1,
+    /// <summary>Retain validated original sample data for automatic-loop
+    /// playback. Semantic cue support is qualified independently.</summary>
+    IncludeSystemAudio=2
 }
 
 /// <summary>IPL menu actions. Values are stable SDK identities, not wave or
@@ -127,6 +130,7 @@ internal sealed class FirmwareMenuAudio : IDisposable
     internal string UnsupportedReason {get;private set;}
     private readonly SystemMenuSoundInfo?[] effects=new SystemMenuSoundInfo?[11];
     private FirmwareMenuWaveSource[] sources=new FirmwareMenuWaveSource[0];
+    private FirmwareAudioArchive? sourceArchive;
     private readonly int[] sourceIds=new[]{9,11,6};
     private readonly FirmwareMenuRecipe?[] recipes=new FirmwareMenuRecipe?[11];
     internal int RetainedBytes {get;private set;}
@@ -171,6 +175,7 @@ internal sealed class FirmwareMenuAudio : IDisposable
                 {
                     for(int i=0;i<selected.Length;i++)selected[i]=FirmwareMenuWaveSource.Capture(image,archive,ResolveId(archive,result.sourceIds[i]),cancellation);
                     result.sources=selected;
+                    result.sourceArchive=archive;
                 }
                 catch {foreach(var s in selected)s?.Dispose();throw;}
                 var sequence=new byte[early?3092:3117];Array.Copy(image,seq,sequence,0,sequence.Length);
@@ -278,6 +283,12 @@ internal sealed class FirmwareMenuAudio : IDisposable
             if(at<0||at>=sources.Length)throw new InvalidDataException("Unretained menu source ID.");selected[i]=sources[at];
         }
         return recipe.Packet(selected,cancellation);
+    }
+    internal FirmwareMenuWaveSource? FindRetainedSource(FirmwareAudioArchive archive,int index)
+    {
+        if(sourceArchive==null||sourceArchive.System!=archive.System||sourceArchive.Offset!=archive.Offset||sourceArchive.Name!=archive.Name)return null;
+        int at=Array.IndexOf(sourceIds,archive.System[index].WaveId);
+        return at>=0&&at<sources.Length?sources[at]:null;
     }
     public void Dispose(){foreach(var source in sources)source?.Dispose();foreach(var recipe in recipes)recipe?.Release();RetainedBytes=0;}
 }

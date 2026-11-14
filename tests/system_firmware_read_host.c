@@ -61,9 +61,24 @@ int dnd_audio_backend_play_encoded(unsigned slot,const DndAudioSource *source,bo
     assert(volume==1&&pitch==1);
     DndAudioDecoder decoder;dnd_audio_decoder_init(&decoder,source,loop);
     uint8_t pcm[4];assert(dnd_audio_decode(&decoder,pcm,1)==1);
-    if(source->channels==1){assert(source->samples==16&&pcm[0]==0&&pcm[1]==0);}
+    if(source->channels==1){assert(source->samples==16&&pcm[0]==0&&(pcm[1]==0||pcm[1]==1));}
     else {assert(source->channels==2&&source->samples==174067);assert(pcm[0]==0&&pcm[1]==1&&pcm[2]==255&&pcm[3]==254);}
-    assert(start<end&&end<=source->samples);active_audio[slot]=1;return 1;
+    assert(start<end&&end<=source->samples);
+    if(source->samples==16) {
+        dnd_audio_decoder_init(&decoder,source,loop);
+        decoder.loop_start=start;decoder.loop_end=end;
+        uint8_t output[80];unsigned frames=dnd_audio_decode(&decoder,output,40);
+        assert(frames==(loop?40u:16u));
+        if(loop) {
+            assert(source->has_loop&&start==3&&end==14);
+            const unsigned original[16]={1,2,3,4,5,6,7,1,2,3,4,5,6,7,1,2};
+            for(unsigned i=0;i<frames;i++) {
+                unsigned at=i<14?i:3+(i-14)%11;
+                assert(output[i*2]==0&&output[i*2+1]==original[at]);
+            }
+        }
+    }
+    active_audio[slot]=1;return 1;
 }
 int dnd_audio_backend_playing(unsigned slot){assert(slot<32);return active_audio[slot];}
 void dnd_audio_backend_control(unsigned slot,int kind,float value,unsigned rate){(void)slot;(void)kind;(void)value;(void)rate;}

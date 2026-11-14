@@ -104,6 +104,31 @@ internal static class Program
                 try{SystemResources.CreateStartupSound(catalog,canceled.Token);return 12;}catch(OperationCanceledException){}
             }
         }
+        using(var sampleImage=FirmwareImage.Load("sd:/firmware-synthetic.bin"))
+        using(var sampleCatalog=sampleImage.CreateCatalog(FirmwareCatalogOptions.IncludeSystemAudio,default))
+        {
+            if(sampleCatalog.AudioSampleCount!=12)return 40;
+            try{using(var exhausted=SystemResources.CreateAudioSample(sampleCatalog,sampleCatalog.GetAudioSampleInfo(0),nativeBudgetBytes:1024)){}return 46;}
+            catch(global::System.IO.IOException){}
+            var info=sampleCatalog.GetAudioSampleInfo(2);
+            if(info.WaveId!=102||!info.HasLoop||info.LoopStartSample!=3||info.LoopEndSample!=14)return 41;
+            using(var sample=SystemResources.CreateAudioSample(sampleCatalog,info))
+            {
+                var prepared=SystemResources.CreateAudioSampleAsync(sampleCatalog,sampleCatalog.GetAudioSampleInfo(3));
+                sampleImage.Dispose();sampleCatalog.Dispose();
+                var trigger=new byte[64];if(trigger.Length!=64)return 42;
+                using(var plain=prepared.Result)
+                using(var single=plain.Play())if(!single.IsPlaying||plain.Info.HasLoop)return 43;
+                // No loop flags, offsets or caller update loop. The host oracle
+                // verifies the intro followed by repeated partial-frame data.
+                using(var first=sample.Play())
+                using(var second=sample.Play())
+                {
+                    if(!first.IsPlaying||!second.IsPlaying)return 44;
+                    sample.Dispose();if(first.IsPlaying||second.IsPlaying)return 45;
+                }
+            }
+        }
         using(var fallback=SystemFirmware.Open("sd:/firmware-synthetic.bin"))
             if(fallback.Source!=FirmwareSource.ExplicitFile)return 14;
         try{throw new global::System.IO.EndOfStreamException("synthetic short read");}
