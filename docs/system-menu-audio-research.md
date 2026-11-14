@@ -1,10 +1,9 @@
 # IPL menu audio research — 2026-11-13
 
-Ten cube/options effects are implemented for the qualified NTSC 1.2 and PAL 1.2
+Ten cube/options effects are implemented for the qualified NTSC 1.0, NTSC 1.2 and PAL 1.2
 resource profile: `TurnSide`, `TurnCenter`, `Select`, `Back`, `OptionCancel`,
 `OptionConfirm`, `OptionMove1`, `OptionMove2`, `OptionMove3` and `OptionSelect`.
-They are composed effects, not raw-wave aliases. Early NTSC's different DSP-effect
-setup, `PressStart`, memory-card effects and continuous ambience remain
+They are composed effects, not raw-wave aliases. `PressStart`, memory-card effects and continuous ambience remain
 unavailable. Physical-console output has not been verified.
 
 The follow-up [audio locations and extraction plan](system-menu-audio-extraction-plan.md)
@@ -28,6 +27,71 @@ failure therefore remains unconfirmed in the emulator. The SDK now uses
 bounded continuous page DMA, matching libogc and the console-tested DMA path,
 with static buffer lifetime and quarantine after timeout. This transport change
 does not qualify early NTSC menu effects or relax firmware validation.
+
+The user subsequently confirmed Startup and textures working on the real
+console with demo B02 / published SDK `0.1.0-preview.339.1`. The remaining ten
+effects were unavailable because that package intentionally rejected the early
+menu profile. The separate qualification below adds it without changing the
+ROM reader or selecting a profile from the console's region.
+
+## Early menu profile follow-up — 2026-11-14
+
+`ipl-menu-early-v1` uses the same bounded IBNK and true wave IDs 9, 11 and 6.
+Its 3092-byte BMS event table starts at `0x1b4`, rather than `0x1bc`.
+Live controller/dispatcher traces at RAM `0x813595e4` verified all ten actions:
+3/4 rotation, 5 menu entry, 6 menu exit, 7 cancel, 8 editor entry, 9 value,
+10 field, 11 row and 12 confirm. These addresses are research observations.
+
+The early IPL builds its DSP-effect parameters in PPC code; bytes preceding
+IBNK are not an initializer. Production additionally requires these complete
+fingerprints, located from content rather than a region string or ROM CRC:
+
+| Resource | Bytes / SHA-256 |
+| --- | --- |
+| BMS | 3092 / `5e9be1050199629aa560f410effbbd5a8361ea17777fb07f580c1d75586cbd35` |
+| Effects initializer | 348 / `30f48e0de7019f6877beae1dd71f602ae7e7a3157963fe76bea4c6f223337790` |
+| RPB writer, initializer − `0x220` | 160 / `e3294ac03e343ed739da72b5c58d052827d4315edad163399e117fe7389afa65` |
+| Tiny-VPB DSP program | 4736 / `8de9a39d6bac52ca5f983416f93a7a9ffb1d8b536c3eaa47a083baa2e207f2ba` |
+| Effects FIR table | 16 / `3a5c22d66a2bc0e5654861536bb522864a2da89a303776a494990b38ffcb6c27` |
+
+The existing resampler digest also remains required. Mutating any of the
+early fingerprints rejects the semantic profile. The FIR coefficients are
+extracted from the caller's firmware, never embedded. Relocating the complete
+resource/code group preserves all ten preparation packets.
+
+Live DSP setup showed four RPBs: two 100-block (8000-sample) pre-filter feedback
+paths with front-output gain `0x2fff` Q15, and two 30-block post-filter paths.
+All ten finite effects route to the first pair. The latter pair belongs to
+background material and is not instantiated by these effects. The qualified
+finite mixer uses linear note velocity and send 127/1024, including sequences
+that write register 12 = 0. Envelopes advance one unit per 80-sample DSP block;
+the newer profile advances 48000/32028.5 units per block. Sequence tick rate,
+pitch quantization and instrument metadata remain shared. A three-second tail
+allows the longer feedback paths to decay. Modern packets/output are unchanged.
+
+Original effects were triggered through the existing sequence control port in
+unmodified Dolphin 2503, first HLE and then DSP LLE. Background track volumes
+and their cached inherited values were muted in private RAM; their PCs and
+allocation lifetimes remained intact. Ending background tracks instead can
+reuse their slots and invalidate measurements. Controller tracing separately
+established the semantic mappings before these uninterrupted captures.
+
+Comparing complete isolated LLE events with the deterministic host render gave
+spectral cosine 0.991–1.000. Stereo energy RMS ratios were 0.962–1.044 for seven
+effects and 1.249/1.319/1.500 for value/field/row movement. These overlapping
+short notes are sensitive to the running parent's fractional tick phase;
+the offline recipe starts at zero phase. This qualifies the event/instrument
+and mixer interpretation, **not exact original level or waveform fidelity**.
+No empirical per-effect gain correction is applied. Per-block ramps, rounding
+and ongoing sequence phase remain limitations; physical output of the newly
+enabled ten effects is not yet verified.
+
+The profile retains 78,368 encoded/recipe bytes after image disposal. Generated
+tests independently check linear velocity, the block envelope clock, register
+12 send behavior, resampling, FIR feedback, tail length, budgets and cleanup.
+Private native renders test all ten packets and reject changed fingerprints,
+duplicate/swapped IDs, and invalid extents. No ROM, sample, recording or dump
+is committed or included in an artifact.
 
 ## Inputs
 
@@ -149,8 +213,7 @@ resource relocation tests passed on NTSC 1.2 and PAL 1.2.
 
 Early NTSC's 3092-byte BMS has hash
 `5e9be1050199629aa560f410effbbd5a8361ea17777fb07f580c1d75586cbd35`.
-Its equivalent note recipes compile in research, but the DSP-effect initializer
-differs. It is deliberately unavailable pending separate output qualification.
+Its separate DSP qualification and supported early profile are described above.
 
 The compiler accepts only the finite subset used here: notes/off, bounded waits,
 program/register writes, transpose, volume/pitch/pan, ADSR, route zero and bounded
@@ -191,7 +254,7 @@ prevent an exact sample-by-sample claim. Physical DAC output is unverified.
 | --- | --- |
 | NTSC 1.2 / all three primary effects | Live event/instrument trace; host render compared with original emulated output |
 | PAL 1.2 / all three primary effects | Static action/dispatcher verification; identical bank/BMS/DSP content; native decoded/prepared output verified |
-| NTSC 1.0 / all primary effects | Structural/raw decoder and event-recipe research only; unsupported DSP setup |
+| NTSC 1.0 / all ten effects | Live action/event and DSP setup traces; HLE/LLE output comparisons, with phase/level limits above |
 | NTSC 1.2 / events 6–12 | Live action/dispatcher trace and uninterrupted original-output comparison described below |
 | PAL 1.2 / events 6–12 | Identical qualified bank/BMS/DSP content; prepared packets match NTSC 1.2; no live PAL action capture |
 | PressStart, memory-card effects and ambience | Unsupported; no guessed or startup fallback |
@@ -322,8 +385,9 @@ matching ELF's console ring observed `MENU AUDIO END 9` and
 suite, metadata inventory, generated WSYS identity tests and forced-GC AOT fixture
 pass. The latter performed 1,025 reads and 887 collections, with 4,212,984 heap
 bytes occupied at exit (not peak). NTSC 1.2 and PAL 1.2 private mutation/relocation
-runs prepare all ten; early NTSC reports unsupported with zero retained menu
-bytes. No physical-console run was performed.
+runs prepared all ten; at that stage early NTSC reported unsupported with zero
+retained menu bytes. The subsequent early-profile qualification is recorded
+above. No physical-console menu-effects run was performed.
 
 Research references include the independently inspected
 [early JAudio bank/wave reader](https://github.com/ogamespec/gc-ipl/tree/0d8ec091b89f223b088b1debfbab3d0e83938f09/Jaudio),

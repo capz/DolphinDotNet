@@ -11,9 +11,12 @@ internal static class MenuPrivateTests
     internal static void Validate(FirmwareImage image,FirmwareCatalog catalog)
     {
         var archive=catalog.MenuAudio.Archives[0];int bank=archive.System.Offset-0x8e0,seq=(archive.Offset+archive.Length+31)&~31;
+        Check(catalog.TryGetMenuSoundInfo(SystemMenuSound.Select,out var info));bool early=info!.ProfileId=="ipl-menu-early-v1";
         long before=GC.GetAllocatedBytesForCurrentThread();for(int i=0;i<100;i++)Check(catalog.TryGetMenuSoundInfo(SystemMenuSound.Select,out _));
         Check(GC.GetAllocatedBytesForCurrentThread()==before);
-        foreach(int at in new[]{bank+0x828,seq+0x400,bank-128+16})
+        // The explicitly supplied early reference additionally qualifies its
+        // code-built RPB initializer/writer, DSP program and FIR table.
+        foreach(int at in early?new[]{bank+0x828,seq+0x400,0x53580,0x53360,0xa8180,0x5ec48}:new[]{bank+0x828,seq+0x400,bank-128+16})
         {var changed=(byte[])image.Data.Clone();changed[at]^=1;Unknown(changed);}
         var invalid=(byte[])image.Data.Clone();
         // The modern ID-9 record is reached through the checked C-DF table;
@@ -36,7 +39,7 @@ internal static class MenuPrivateTests
         var moved=new byte[FirmwareImage.ImageBytes];Array.Copy(image.Data,moved,256);
         for(int i=0;i<2;i++)
         {int at=0x1000+i*0x1000;moved[at]=89;moved[at+1]=97;moved[at+2]=121;moved[at+3]=48;Big(moved,at+4,4);Big(moved,at+8,20);Big(moved,at+12,20);moved[at+16]=240;for(int b=0;b<4;b++)moved[at+20+b]=(byte)(b+1);}
-        int start=bank-65536,length=seq+3117-start;Array.Copy(image.Data,start,moved,0x20000,length);
+        int start=early?0x50000:bank-65536,length=seq+(early?3092:3117)-start;Array.Copy(image.Data,start,moved,0x20000,length);
         using var relocated=FirmwareImage.Read(moved);using var resolved=relocated.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default);
         for(int i=0;i<10;i++)Check(catalog.SnapshotMenuSound((SystemMenuSound)i,default).SequenceEqual(resolved.SnapshotMenuSound((SystemMenuSound)i,default)));
         Console.WriteLine("Private profile mutation, true-ID conflict, allocation-free query and complete-resource relocation passed");

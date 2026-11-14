@@ -22,7 +22,7 @@ struct MenuPreparation {
   DndAudioDecoder decoder;
   MenuNote voice[32];
   MenuReverb reverb[2];
-  unsigned wet;
+  unsigned wet,early;
   const uint8_t *coefficients;
 };
 static unsigned menu_u32(const uint8_t *p) {
@@ -77,8 +77,8 @@ int dnd_audio_begin_menu(DndArray *recipe,int budget) {
   const uint8_t *p=recipe->data;unsigned size=recipe->length;
   unsigned frames=menu_u32(p+8),tracks=menu_u32(p+12),notes=menu_u32(p+16),curves=menu_u32(p+20),sources=menu_u32(p+48);
   if(memcmp(p,"DME1",4)||menu_u32(p+4)!=size||!frames||frames>256000||!tracks||tracks>3||!notes||notes>32||curves>64||!sources||sources>2)return 0;
-  unsigned wet=menu_u32(p+52),tail=menu_u32(p+56),resampling=menu_u32(p+60);
-  if(wet>1||tail!=(wet?32000u:0u)||resampling>1)return 0;
+  unsigned wet=menu_u32(p+52),tail=menu_u32(p+56),flags=menu_u32(p+60),resampling=flags&1;
+  if(wet>1||flags>3||tail!=(wet?((flags&2)?96000u:32000u):0u))return 0;
   unsigned table_end=64+tracks*36+notes*32+curves*20+wet*64+resampling*512,output=(frames*4+31)&~31u;
   if(table_end>size||sizeof(MenuPreparation)+size+output>(unsigned)budget)return 0;
   dnd_audio_init();Clip *c=NULL;
@@ -91,7 +91,7 @@ int dnd_audio_begin_menu(DndArray *recipe,int budget) {
   memcpy(m->packet,p,size);p=m->packet;
   m->size=size;m->tracks=tracks;m->notes=notes;m->curves=curves;m->sources=sources;
   m->track=p+64;m->note=m->track+tracks*36;m->curve=m->note+notes*32;
-  m->wet=wet;
+  m->wet=wet;m->early=(flags>>1)&1;
   if(resampling)m->coefficients=p+table_end-512;
   unsigned spent=(unsigned)sizeof(*m)+size+output,next=table_end;
   for(unsigned i=0;i<wet*2;i++) {
@@ -127,7 +127,9 @@ int dnd_audio_begin_menu(DndArray *recipe,int budget) {
   for(unsigned i=0;i<notes;i++) {
     const uint8_t *n=m->note+i*32;unsigned track=menu_u32(n),on=menu_u32(n+16),off=menu_u32(n+20);
     if(track>=tracks||menu_u32(n+4)>=sources||menu_u32(n+8)>127||menu_u32(n+12)>127||on>=off||off>2000||menu_u32(n+24)>127||menu_u32(n+28)>32768)goto fail;
-    unsigned release=menu_u32(m->track+track*36+28),end=(unsigned)(((uint64_t)off*64057+47999)/48000+((uint64_t)release*64057+95999)/96000)*80;
+    unsigned release=menu_u32(m->track+track*36+28);
+    unsigned release_blocks=m->early?release:(unsigned)(((uint64_t)release*64057+95999)/96000);
+    unsigned end=((unsigned)(((uint64_t)off*64057+47999)/48000)+release_blocks)*80;
     if(end>last)last=end;
   }
   if(last+tail!=frames)goto fail;
@@ -174,7 +176,7 @@ static int audio_menu_step(Clip *c) {
       const uint8_t *n=m->note+i*32;unsigned track=menu_u32(n),src=menu_u32(n+4),on=menu_u32(n+16),off=menu_u32(n+20);
       const uint8_t *t=m->track+track*36;MenuNote *v=&m->voice[i];DndAudioSource *s=&m->source[src];
       unsigned on_block=(unsigned)(((uint64_t)on*64057+47999)/48000),off_block=(unsigned)(((uint64_t)off*64057+47999)/48000);
-      unsigned release_blocks=(unsigned)(((uint64_t)menu_u32(t+28)*64057+95999)/96000);
+      unsigned release_blocks=m->early?menu_u32(t+28):(unsigned)(((uint64_t)menu_u32(t+28)*64057+95999)/96000);
       if(block<on_block||block>=off_block+release_blocks)continue;
       if(frame%80==0||v->step==0) {
         float parameter_tick=floorf(tick),bend=menu_value(m,track,1,parameter_tick)*4*(float)menu_u32(t+4);
@@ -184,8 +186,9 @@ static int audio_menu_step(Clip *c) {
         if(!(step>0&&step<16))return -1;
         v->step=floorf(step*4096)/4096;
         float volume=(float)menu_u32(t)/32768.0f,vel=(float)menu_u32(n+12)/127;
-        float env=menu_envelope(t,(float)(block-on_block)*(48000.0f/32028.5f),(float)(off_block-on_block)*(48000.0f/32028.5f));
-        float gain=parent*volume*vel*vel*env*(13107.0f/16384.0f);
+        float envelope_step=m->early?1:48000.0f/32028.5f;
+        float env=menu_envelope(t,(float)(block-on_block)*envelope_step,(float)(off_block-on_block)*envelope_step);
+        float gain=parent*volume*vel*(m->early?1:vel)*env*(13107.0f/16384.0f);
         float pan=menu_value(m,track,3,parameter_tick);if(pan<0)pan=0;if(pan>1)pan=1;
         v->left=gain*cosf(pan*1.5707963267948966f);v->right=gain*sinf(pan*1.5707963267948966f);
       }

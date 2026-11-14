@@ -109,6 +109,32 @@ def main():
         actual=struct.unpack('>'+str(38560*2)+'h',(work/'wet.pcm').read_bytes())
         error=max(abs(a-b) for a,b in zip(actual,wet));assert error<=3,error
         print(f'Feedback FIR and complete-tail oracle: maximum error {error} LSB')
+        run(prepared,work/'recipe-early.dme',work/'early.pcm')
+        early=[];rings=[[0]*80,[0]*80];previous=[0,0];phase=0
+        send=math.sin(127/1024*math.pi/2)
+        for frame in range(104080):
+            block=frame//80
+            if frame%80==0:
+                tick=math.floor(block*24000/32028.5)
+                bend=math.floor(min(tick/4,1)*.375*64)/64
+                step=math.floor(32000/32028.5*2**(bend/12)*4096)/4096
+                # Early envelopes count DSP blocks, independent of sequence
+                # tempo. A lower velocity is linear, rather than squared.
+                env=attack(block) if block<41 else attack(41)*(1-(block-41)/60) if block<101 else 0
+                gain=(90/128)*.5*(64/127)*env*(13107/16384)
+                pan=.5*(1-min(tick/10,1))
+                gains_early=(gain*math.cos(pan*math.pi/2),gain*math.sin(pan*math.pi/2))
+            index=int(phase)-3;phase+=step
+            if index>=17:index=3+(index-17)%14
+            sample=0 if index<0 else ((index-9)*1500*32767)//32768
+            for channel in range(2):
+                dry=sample*gains_early[channel]
+                old=rings[channel][frame%80];filtered=previous[channel]//2;previous[channel]=old
+                rings[channel][frame%80]=filtered+int(dry*send)
+                early.append(int(dry+filtered*.25))
+        actual=struct.unpack('>'+str(104080*2)+'h',(work/'early.pcm').read_bytes())
+        error=max(abs(a-b) for a,b in zip(actual,early));assert error<=3,error
+        print(f'Early linear velocity, block envelope clock and retained-send oracle: maximum error {error} LSB')
 
 if __name__ == '__main__':
     main()
