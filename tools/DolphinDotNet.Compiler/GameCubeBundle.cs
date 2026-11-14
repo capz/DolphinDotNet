@@ -131,7 +131,8 @@ internal static class GameCubeBundle
             // Every GameCube bundle uses the repository's verified EXI and
             // VIDEO corrections, including apps using raw VIDEO bindings.
             Directory.CreateDirectory(Path.Combine(directory, "vendor", "libogc2"));
-            foreach (var file in new[] { "build_exi_overlay.sh", "verify_exi_source.py", "verify_video_source.py" })
+            foreach (var file in new[] { "build_exi_overlay.sh", "verify_exi_source.py", "verify_video_source.py",
+                                         "build_fat_overlay.py", "prepare_fat_overlay.py" })
                 // Existing Windows checkouts and packaged compilers can still
                 // contain CRLF even with the repository's LF checkout rule.
                 File.WriteAllText(Path.Combine(directory, "scripts", file),
@@ -231,7 +232,7 @@ internal static class GameCubeBundle
             "main", "managed_runtime", "system_firmware", "numeric", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
             "model_graphics", "model_transform", "tls", "network", "network_gamecube",
             "network_gamecube_backend", "network_link_gamecube", "performance", "platform_gamecube",
-            "storage", "storage_gamecube", "card_manager", "contiguous_write", "file_extents", "file_optimize", "verified_copy", "stw", "system", "text", "timing", "worker"
+            "storage", "storage_gamecube", "gcloader", "card_manager", "contiguous_write", "file_extents", "file_optimize", "verified_copy", "stw", "system", "text", "timing", "worker"
         };
 
         if (platform == "wiiu")
@@ -354,13 +355,19 @@ internal static class GameCubeBundle
         builder.AppendLine("export OFILES := $(notdir $(patsubst %.c,%.o,$(wildcard source/*.c)))");
         builder.AppendLine("export INCLUDE := -I$(CURDIR)/include " + (usesNetworking ? "-I$(CURDIR)/build/tls/source/include " : "") + "-I" + library + "/include -I$(CURDIR)/build");
         builder.AppendLine("export LIBPATHS := " + (usesNetworking ? "-L$(CURDIR)/build/tls " : "") + (platform == "gamecube" ?
-            "-L$(CURDIR)/build/exi-overlay " : "") + "-L" + library + "/lib");
+            "-L$(CURDIR)/build/exi-overlay -L$(CURDIR)/build/fat-overlay " : "") + "-L" + library + "/lib");
         builder.AppendLine("export DOL_VALIDATOR := $(CURDIR)/scripts/dol_sections.py");
         if (platform == "gamecube")
         {
             builder.AppendLine("export EXI_OVERLAY := $(CURDIR)/build/exi-overlay/libogc.a");
             builder.AppendLine("$(EXI_OVERLAY): scripts/build_exi_overlay.sh scripts/verify_exi_source.py scripts/verify_video_source.py vendor/libogc2/exi.c vendor/libogc2/video.c");
             builder.AppendLine("\t@bash scripts/build_exi_overlay.sh");
+            builder.AppendLine("export FAT_OVERLAY := $(CURDIR)/build/fat-overlay/libfat.a");
+            builder.AppendLine("export DVM_OVERLAY := $(CURDIR)/build/fat-overlay/libdvm.a");
+            builder.AppendLine("$(FAT_OVERLAY): scripts/build_fat_overlay.py scripts/prepare_fat_overlay.py");
+            builder.AppendLine("\t@python3 scripts/build_fat_overlay.py");
+            builder.AppendLine("$(DVM_OVERLAY): $(FAT_OVERLAY)");
+            builder.AppendLine("\t@test -f \"$@\" || python3 scripts/build_fat_overlay.py");
         }
         if(usesNetworking){
             builder.AppendLine(".PHONY: dnd-tls");
@@ -375,7 +382,7 @@ internal static class GameCubeBundle
         }
         builder.AppendLine(".PHONY: all clean");
         builder.AppendLine("all: " + (usesNetworking ? "dnd-tls " : "") + (platform == "gamecube" ?
-            "$(EXI_OVERLAY) $(BUILD)" : "$(BUILD)"));
+            "$(EXI_OVERLAY) $(FAT_OVERLAY) $(DVM_OVERLAY) $(BUILD)" : "$(BUILD)"));
         builder.AppendLine("\t@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile");
         if (platform == "gamecube")
             builder.AppendLine("\t@$(MAKE) --no-print-directory -f boot/gamecube/Makefile OUTPUT=\"$(CURDIR)/apploader\"");
@@ -408,7 +415,7 @@ internal static class GameCubeBundle
             if (debugSymbols)
                 builder.AppendLine("\tpython3 \"$(dir $(OUTPUT))scripts/dnd_debug_addresses.py\" --elf $(OUTPUT).elf --source-map \"$(dir $(OUTPUT))dnd-il-debug.json\" --output $(OUTPUT).dnd-addresses.json --readelf \"$(DEVKITPPC)/bin/powerpc-eabi-readelf\"");
         }
-        builder.AppendLine("$(OUTPUT).elf: $(OFILES) .dnd-native-flags" + (platform == "gamecube" ? " $(EXI_OVERLAY)" : ""));
+        builder.AppendLine("$(OUTPUT).elf: $(OFILES) .dnd-native-flags" + (platform == "gamecube" ? " $(EXI_OVERLAY) $(FAT_OVERLAY) $(DVM_OVERLAY)" : ""));
         builder.AppendLine("\t$(CC) $(OFILES) $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@");
         builder.AppendLine("-include $(DEPENDS)");
         builder.AppendLine("endif");

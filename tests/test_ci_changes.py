@@ -28,6 +28,12 @@ class CiSelectionTests(unittest.TestCase):
         for path,expected in (
             ("source/audio.c",{"native","audio","gamecube"}),
             ("source/network.c",{"native","network","gamecube"}),
+            ("source/gcloader.c",{"native","storage","gamecube"}),
+            ("tests/gcloader_test.c",{"storage"}),
+            ("tests/fatfs_depth_test.c",{"storage"}),
+            ("tests/test_fat_overlay.py",{"storage"}),
+            ("scripts/build_fat_overlay.py",{"native","storage","gamecube","sdk"}),
+            ("scripts/prepare_fat_overlay.py",{"native","storage","gamecube","sdk"}),
             ("source/draw_resources.c",{"native","graphics","gamecube"}),
             ("tests/AudioAssetTests/Program.cs",{"audio"}),
             ("tests/ModelAssetTests/Program.cs",{"graphics"}),

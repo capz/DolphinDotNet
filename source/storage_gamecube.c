@@ -2,10 +2,12 @@
 #include "dnd_fst.h"
 #include "dnd_storage.h"
 #include "dnd_file_extents.h"
+#include "dnd_gcloader.h"
 #ifdef DND_GAMECUBE_STORAGE
 #include <dvm.h>
 #include <errno.h>
 #include <fat.h>
+#include <fcntl.h>
 #include <gccore.h>
 #include <iso9660.h>
 #include <malloc.h>
@@ -16,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 static const char *names[] = {"carda", "cardb", "sd", "dvd", "mca", "mcb", "gcloader"};
 static void *workareas[2];
@@ -50,6 +53,49 @@ int dnd_gc_contiguous_extents(int device,const char *native_path,unsigned *exten
   DndSectorReader sector={mounted_discs[device],extent_sector_read,
                           (uint64_t)mounted_partition_lba[device]};
   return dnd_fat_count_extents(&sector,colon+1,extents);
+}
+static int gcloader_command(void *context,const uint32_t words[3],uint32_t *response) {
+  (void)context;
+  dvdcmdblk block={0};
+  dvdcmdbuf command={words[0],words[1],words[2]};
+  /* libogc2 serializes with the raw-volume driver and bounds each command's
+   * wait with its DVD timeout handler. No direct DI register polling. */
+  return DVD_ReadImmPrio(&block,command,response,sizeof(*response),2)==sizeof(*response)?0:-EIO;
+}
+static int gcloader_read_mapped(void *context,uint32_t offset,void *buffer,uint32_t length) {
+  (void)context;
+  dvdcmdblk block={0};
+  return DVD_ReadAbsPrio(&block,buffer,length,offset,2)==(s32)length?0:-EIO;
+}
+int dnd_gc_select_gcloader_disc_image(const char *native_path) {
+  DvmDisc *disc=mounted_discs[6];
+  if(!disc)return -ENODEV;
+  if(disc->sector_sz!=512)return -ENOTSUP;
+  const char *colon=strchr(native_path,':');
+  if(!colon || colon[1]!='/')return -EINVAL;
+  /* Complete previously closed writers' cache flush before inspecting FAT.
+   * No filesystem allocation or file contents are changed by selection. */
+  if(!dvmDiscFlush(disc))return -EIO;
+  DndSectorReader sector={disc,extent_sector_read,(uint64_t)mounted_partition_lba[6]};
+  uint64_t first_sector,length;
+  int rc=dnd_fat_contiguous_span(&sector,colon+1,&first_sector,&length);
+  if(rc<0)return rc;
+  _Alignas(32) unsigned char expected_header[DND_GCLOADER_HEADER_SIZE];
+  int fd=open(native_path,O_RDONLY);
+  if(fd<0)return -errno;
+  struct stat st;
+  rc=fstat(fd,&st)?-errno:!S_ISREG(st.st_mode)||(uint64_t)st.st_size!=length?-EIO:0;
+  size_t done=0;
+  while(!rc && done<sizeof(expected_header)) {
+    ssize_t count=read(fd,expected_header+done,sizeof(expected_header)-done);
+    if(count<0 && errno==EINTR)continue;
+    if(count<=0){rc=count<0?-errno:-EIO;break;}
+    done+=(size_t)count;
+  }
+  if(close(fd) && !rc)rc=-errno;
+  if(rc<0)return rc;
+  DndGcLoaderIo io={NULL,gcloader_command,gcloader_read_mapped};
+  return dnd_gcloader_select_contiguous(&io,first_sector,length,expected_header);
 }
 int dnd_gc_card_recover(int device);
 static int card_errno(int rc) {

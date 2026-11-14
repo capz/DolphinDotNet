@@ -28,6 +28,7 @@ internal static class NativeStorage
     internal static int OpenMounted(int device,long mountId,string relative,int mode,int access,int share)=>throw Unsupported();
     internal static bool MountDisc(int format)=>throw Unsupported();
     internal static bool MountDiscImage(string path)=>throw Unsupported();
+    internal static void SelectGcLoaderDiscImage(string path)=>throw Unsupported();
     internal static byte[] DiscHeader()=>throw Unsupported();
     internal static bool Mount(int device)=>throw Unsupported();
     internal static void Unmount(int device)=>throw Unsupported();

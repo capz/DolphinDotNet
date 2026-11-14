@@ -18,7 +18,7 @@ typedef struct {
 } Volume;
 typedef struct {
     uint32_t first;
-    uint64_t length;
+    uint64_t length, valid_length;
     bool directory, contiguous;
 } FileInfo;
 typedef struct {
@@ -48,10 +48,16 @@ static int boot(Volume *v) {
     if (sector[510] != 0x55 || sector[511] != 0xaa) return -ENOTSUP;
     if (!memcmp(sector+3,"EXFAT   ",8)) {
         unsigned ss=sector[108], cs=sector[109];
-        if (ss != 9 || cs > 15 || sector[110] == 0) return -ENOTSUP;
+        unsigned fats=sector[110], active=le16(sector+106)&1u;
+        if (ss != 9 || cs > 15 || !fats || fats>2) return -ENOTSUP;
+        if (active>=fats) return -EIO;
+        uint64_t fat_offset=(uint64_t)le32(sector+80)+
+                            (uint64_t)active*le32(sector+84);
+        if (v->reader->partition_lba>UINT64_MAX-fat_offset ||
+            v->reader->partition_lba>UINT64_MAX-le32(sector+88)) return -EIO;
         v->exfat=true;
         v->spc=1u<<cs;
-        v->fat_lba=v->reader->partition_lba+le32(sector+80);
+        v->fat_lba=v->reader->partition_lba+fat_offset;
         v->data_lba=v->reader->partition_lba+le32(sector+88);
         v->clusters=le32(sector+92);
         v->root=le32(sector+96);
@@ -65,8 +71,12 @@ static int boot(Volume *v) {
             return -EIO;
         uint64_t overhead=(uint64_t)reserved + (uint64_t)fats*fat;
         if (overhead >= sectors) return -EIO;
+        if (v->reader->partition_lba>UINT64_MAX-overhead) return -EIO;
         v->spc=spc;
-        v->fat_lba=v->reader->partition_lba+reserved;
+        unsigned flags=le16(sector+40);
+        unsigned active=(flags&0x80u)?flags&0x0fu:0;
+        if (active>=fats) return -EIO;
+        v->fat_lba=v->reader->partition_lba+reserved+(uint64_t)active*fat;
         v->data_lba=v->reader->partition_lba+overhead;
         v->clusters=(uint32_t)((sectors-overhead)/spc);
         v->root=le32(sector+44);
@@ -95,7 +105,9 @@ static bool is_eoc(const Volume *v,uint32_t cluster) {
 }
 static int cluster_lba(const Volume *v,uint32_t cluster,uint64_t *lba) {
     if (cluster<2 || (uint64_t)cluster>=(uint64_t)v->clusters+2) return -EIO;
-    *lba=v->data_lba+(uint64_t)(cluster-2)*v->spc;
+    uint64_t offset=(uint64_t)(cluster-2)*v->spc;
+    if (v->data_lba>UINT64_MAX-offset) return -EIO;
+    *lba=v->data_lba+offset;
     return 0;
 }
 static int same_ascii(const char *a,const char *b) {
@@ -212,6 +224,7 @@ static int fat_entry(DirectoryState *s,const unsigned char *e,
     found->directory=(e[11]&0x10)!=0;
     found->first=((uint32_t)le16(e+20)<<16)|le16(e+26);
     found->length=le32(e+28);
+    found->valid_length=found->length;
     found->contiguous=false;
     return 1;
 }
@@ -232,6 +245,7 @@ static int exfat_entry(DirectoryState *s,const unsigned char *e,
         s->entry.contiguous=(e[1]&2u)!=0; /* NoFatChain */
         s->entry.first=le32(e+20);
         s->entry.length=le64(e+24);
+        s->entry.valid_length=le64(e+8);
     } else if (e[0]==0xc1 && s->ex_stream) {
         for (unsigned i=0;i<15 && s->name_written<s->name_length;i++) {
             uint16_t c=le16(e+2+i*2);
@@ -257,7 +271,8 @@ static int find_file(Volume *v,uint32_t first,uint64_t dir_size,bool nofat,
     DirectoryState state={0};
     uint32_t current=first;
     uint64_t done=0, cluster_bytes=(uint64_t)v->spc*DND_SECTOR;
-    uint64_t max= nofat ? (dir_size+cluster_bytes-1)/cluster_bytes : v->clusters;
+    uint64_t max= nofat ? dir_size/cluster_bytes+(dir_size%cluster_bytes!=0)
+                       : v->clusters;
     if (max>v->clusters) return -EIO;
     for (uint64_t visited=0;visited<max;visited++) {
         uint64_t lba;
@@ -288,18 +303,12 @@ static int find_file(Volume *v,uint32_t first,uint64_t dir_size,bool nofat,
     }
     return -EIO;
 }
-int dnd_fat_count_extents(const DndSectorReader *reader,
-                          const char *relative_path,unsigned *extents) {
-    if (!reader || !reader->read_sector || !relative_path || !extents)
-        return -EINVAL;
-    Volume v={0};
-    v.reader=reader;
-    int rc=boot(&v);
-    if (rc<0) return rc;
+static int find_path(Volume *v,const char *relative_path,FileInfo *out) {
+    int rc;
     const char *p=relative_path;
     while (*p=='/') p++;
     if (!*p) return -EINVAL;
-    uint32_t directory=v.root;
+    uint32_t directory=v->root;
     uint64_t directory_size=0;
     bool directory_contiguous=false;
     FileInfo found={0};
@@ -313,42 +322,83 @@ int dnd_fat_count_extents(const DndSectorReader *reader,
         }
         part[n]=0;
         if (!n || !strcmp(part,".") || !strcmp(part,"..")) return -EINVAL;
-        rc=find_file(&v,directory,directory_size,
+        rc=find_file(v,directory,directory_size,
                      directory_contiguous,part,&found);
         if (rc<0) return rc;
         while (*p=='/' || *p=='\\') p++;
         if (!*p) {
             if (found.directory) return -EISDIR;
-            if (!found.length) { *extents=0;return 0; }
-            if (found.first<2) return -EIO;
-            uint64_t cluster_bytes=(uint64_t)v.spc*DND_SECTOR;
-            uint64_t nclusters=(found.length+cluster_bytes-1)/cluster_bytes;
-            if (!nclusters || nclusters>v.clusters) return -EIO;
-            if (found.contiguous) {
-                if ((uint64_t)found.first+nclusters>(uint64_t)v.clusters+2)
-                    return -EIO;
-                *extents=1;
-                return 0;
-            }
-            uint32_t current=found.first;
-            unsigned runs=1;
-            for (uint64_t i=1;i<nclusters;i++) {
-                uint32_t next;
-                rc=next_cluster(&v,current,&next);
-                if (rc<0 || is_eoc(&v,next)) return -EIO;
-                if (next!=current+1) runs++;
-                current=next;
-            }
-            uint32_t end;
-            rc=next_cluster(&v,current,&end);
-            if (rc<0 || !is_eoc(&v,end)) return -EIO;
-            *extents=runs;
+            *out=found;
             return 0;
         }
         if (!found.directory || found.first<2) return -ENOTDIR;
         directory=found.first;
         directory_size=found.length;
-        directory_contiguous=v.exfat && found.contiguous;
+        directory_contiguous=v->exfat && found.contiguous;
     }
     return -ENAMETOOLONG;
+}
+static int allocation_runs(Volume *v,const FileInfo *found,unsigned *extents) {
+    if (!found->length) { *extents=0;return 0; }
+    if (found->first<2) return -EIO;
+    uint64_t cluster_bytes=(uint64_t)v->spc*DND_SECTOR;
+    uint64_t nclusters=1+(found->length-1)/cluster_bytes;
+    if (nclusters>v->clusters) return -EIO;
+    if (found->contiguous) {
+        if ((uint64_t)found->first+nclusters>(uint64_t)v->clusters+2)
+            return -EIO;
+        *extents=1;
+        return 0;
+    }
+    uint32_t current=found->first;
+    unsigned runs=1;
+    for (uint64_t i=1;i<nclusters;i++) {
+        uint32_t next;
+        int rc=next_cluster(v,current,&next);
+        if (rc<0 || is_eoc(v,next)) return -EIO;
+        if (next!=current+1) runs++;
+        current=next;
+    }
+    uint32_t end;
+    int rc=next_cluster(v,current,&end);
+    if (rc<0 || !is_eoc(v,end)) return -EIO;
+    *extents=runs;
+    return 0;
+}
+int dnd_fat_count_extents(const DndSectorReader *reader,
+                          const char *relative_path,unsigned *extents) {
+    if (!reader || !reader->read_sector || !relative_path || !extents)
+        return -EINVAL;
+    Volume v={0};
+    v.reader=reader;
+    int rc=boot(&v);
+    FileInfo found;
+    if (!rc) rc=find_path(&v,relative_path,&found);
+    if (!rc) rc=allocation_runs(&v,&found,extents);
+    return rc;
+}
+int dnd_fat_contiguous_span(const DndSectorReader *reader,
+                            const char *relative_path,
+                            uint64_t *absolute_lba,uint64_t *length) {
+    if (!reader || !reader->read_sector || !relative_path ||
+        !absolute_lba || !length) return -EINVAL;
+    Volume v={0};
+    v.reader=reader;
+    int rc=boot(&v);
+    FileInfo found;
+    if (!rc) rc=find_path(&v,relative_path,&found);
+    if (rc<0) return rc;
+    if (!found.length) return -EINVAL;
+    if (found.valid_length!=found.length) return -EIO;
+    unsigned extents;
+    rc=allocation_runs(&v,&found,&extents);
+    if (rc<0) return rc;
+    if (extents!=1) return -ENOTSUP;
+    uint64_t first;
+    rc=cluster_lba(&v,found.first,&first);
+    if (rc<0) return rc;
+    if ((found.length-1)/DND_SECTOR>UINT64_MAX-first) return -EIO;
+    *absolute_lba=first;
+    *length=found.length;
+    return 0;
 }

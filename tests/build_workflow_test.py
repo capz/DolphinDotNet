@@ -330,7 +330,8 @@ with tempfile.TemporaryDirectory(prefix="dnd workflow & ") as temp:
     assert result.returncode == 0, result.stdout
     emitted_shell = (bundle / "scripts/build_exi_overlay.sh").read_bytes()
     assert emitted_shell == shell_lf.encode() and b'\r' not in emitted_shell
-    for path in ('scripts/verify_video_source.py', 'vendor/libogc2/video.c'):
+    for path in ('scripts/verify_video_source.py', 'vendor/libogc2/video.c',
+                 'scripts/build_fat_overlay.py', 'scripts/prepare_fat_overlay.py'):
         original = packaged_compiler / 'native' / path
         expected = original.read_text().encode() if path.startswith('scripts/') else original.read_bytes()
         assert (bundle / path).read_bytes() == expected
