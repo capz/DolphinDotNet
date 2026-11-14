@@ -61,6 +61,48 @@ internal static class Program
             GraphicsDevice.Default.BeginFrame(Color32.Black);GraphicsDevice.Default.EndFrame();elapsed+=clock.Tick();
         }
     }
+    private static void SampleAcceptance()
+    {
+        SystemAudioSample[]? samples=null;
+        try
+        {
+            samples=Task.Run(()=>
+            {
+                using(var image=Acquire())
+                using(var catalog=image.CreateCatalog(FirmwareCatalogOptions.IncludeSystemAudio,default))
+                {
+                    if(catalog.AudioSampleCount!=12)throw new IOException("Expected twelve original samples.");
+                    var prepared=new SystemAudioSample[12];
+                    try
+                    {
+                        for(int i=0;i<12;i++)prepared[i]=SystemResources.CreateAudioSample(catalog,catalog.GetAudioSampleInfo(i));
+                        return prepared;
+                    }
+                    catch {foreach(var sample in prepared)sample?.Dispose();throw;}
+                }
+            }).Result;
+            DebugOverlay.WriteLine("SAMPLE INPUTS DISPOSED COUNT "+samples.Length);
+            for(int i=0;i<samples.Length;i++)
+            {
+                var sample=samples[i];DebugOverlay.WriteLine("SAMPLE BEGIN "+i+" LOOP "+(sample.Info.HasLoop?1:0));
+                using(var voice=sample.Play())
+                {
+                    if(!voice.IsPlaying)throw new IOException("Original sample did not start.");
+                    Gap((float)sample.Info.SampleCount/sample.Info.SampleRate+1);
+                    if(voice.IsPlaying!=sample.Info.HasLoop)throw new IOException("Original sample automatic loop state mismatch.");
+                    voice.Stop();if(voice.IsPlaying)throw new IOException("Original sample did not stop.");
+                }
+                DebugOverlay.WriteLine("SAMPLE END "+i);
+            }
+            using(var a=samples[7].Play())
+            using(var b=samples[7].Play())
+            {
+                Gap(1);samples[7].Dispose();
+                if(a.IsPlaying||b.IsPlaying)throw new IOException("Sample disposal left active playback.");
+            }
+        }
+        finally {if(samples!=null)foreach(var sample in samples)sample?.Dispose();}
+    }
     private static int Main()
     {
         Sound[]? sounds=null;
@@ -70,6 +112,10 @@ internal static class Program
             if(!Storage.Mount(StorageDevice.SdSerialPort2))throw new IOException("Cannot mount explicit firmware volume.");
             DebugOverlay.WriteLine("MENU AUDIO FILE sd:/ipl.bin");
 #endif
+#if FIRMWARE_SAMPLE_ACCEPTANCE
+            SampleAcceptance();
+            DebugOverlay.WriteLine("SAMPLE AUDIO COMPLETE");
+#else
             sounds=Task.Run(Prepare).Result;
             for(int repeat=0;repeat<3;repeat++)for(int i=0;i<sounds.Length;i++)
             {
@@ -86,6 +132,7 @@ internal static class Program
                 DebugOverlay.WriteLine("MENU AUDIO END "+i);Gap(.5f);
             }
             DebugOverlay.WriteLine("MENU AUDIO COMPLETE");
+#endif
 #if FIRMWARE_ACCEPTANCE_HOLD
             // Optional private capture build: keep completion logs/RAM alive
             // for the existing emulator debugger without pausing the audio run.

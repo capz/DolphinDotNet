@@ -35,7 +35,7 @@ internal static class MenuAudioTests
             // This legacy call must keep compiling after adding the overload.
             using var normal=image.CreateCatalog(default);
             Check(normal.Options==FirmwareCatalogOptions.None&&normal.MenuAudioRetainedBytes==0);
-            Throws<ArgumentOutOfRangeException>(()=>image.CreateCatalog((FirmwareCatalogOptions)2,default));
+            Throws<ArgumentOutOfRangeException>(()=>image.CreateCatalog((FirmwareCatalogOptions)4,default));
             Throws<NotSupportedException>(()=>SystemResources.CreateMenuSound(normal,SystemMenuSound.Select));
             Throws<ArgumentOutOfRangeException>(()=>SystemResources.CreateMenuSound(normal,(SystemMenuSound)99));
             Throws<ArgumentOutOfRangeException>(()=>SystemResources.CreateMenuSound(normal,SystemMenuSound.Select,nativeBudgetBytes:1023));
@@ -96,6 +96,7 @@ internal static class MenuAudioTests
         // independently for each source layout/codec/early-loop combination.
         string? output=args.Length==1?args[0]:null;if(output!=null)Directory.CreateDirectory(output);
         MenuRecipeTests.Run(descriptor,output);
+        AudioSampleTests.Run(adjacent,output);
         foreach(bool compact in new[]{false,true})
         for(int codec=0;codec<4;codec++)
         for(int loop=0;loop<2;loop++)

@@ -6,6 +6,45 @@ namespace Dolphin.System;
 /// graphics and audio resources. Returned resources are owned by the caller.</summary>
 public static class SystemResources
 {
+    /// <summary>Create an owned original sample whose Play automatically uses
+    /// embedded loop metadata. The catalog/image can be disposed after return.</summary>
+    public static SystemAudioSample CreateAudioSample(FirmwareCatalog catalog,FirmwareAudioSampleInfo sample,
+        CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        ValidateSampleRequest(catalog,sample,nativeBudgetBytes);
+        using(var source=catalog.SnapshotAudioSample(sample,cancellationToken))
+            return CreateSample(sample,source,cancellationToken,nativeBudgetBytes);
+    }
+    /// <summary>Snapshot the selected source before returning, then prepare on
+    /// the background executor. It is safe to dispose the catalog once this
+    /// method returns its task. Cancellation releases partial native state.</summary>
+    public static global::System.Threading.Tasks.Task<SystemAudioSample> CreateAudioSampleAsync(FirmwareCatalog catalog,FirmwareAudioSampleInfo sample,
+        CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        ValidateSampleRequest(catalog,sample,nativeBudgetBytes);
+        var source=catalog.SnapshotAudioSample(sample,cancellationToken);
+        try
+        {
+            return global::System.Threading.Tasks.Task.Run(()=>
+            {
+                try{return CreateSample(sample,source,cancellationToken,nativeBudgetBytes);}
+                finally{source.Dispose();}
+            });
+        }
+        catch {source.Dispose();throw;}
+    }
+    private static void ValidateSampleRequest(FirmwareCatalog catalog,FirmwareAudioSampleInfo sample,int budget)
+    {
+        if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
+        if(sample==null)throw new global::System.ArgumentNullException(nameof(sample));
+        if(budget<1024||budget>16*1024*1024)throw new global::System.ArgumentOutOfRangeException("nativeBudgetBytes");
+    }
+    private static SystemAudioSample CreateSample(FirmwareAudioSampleInfo info,FirmwareMenuWaveSource source,CancellationToken cancellation,int budget)
+    {
+        var sound=Dolphin.Audio.Sound.FromEncoded(source.Header,Dolphin.Audio.AudioFormat.JAudioWaveBank,source.Body,
+            nativeBudgetBytes:budget,cancellationToken:cancellation);
+        return new SystemAudioSample(info,sound);
+    }
     /// <summary>Create a caller-owned, prepared IPL menu sound without playing
     /// it. Unknown semantic profiles fail explicitly; no raw-wave substitution.
     /// Preparation may use the background executor; play on the application executor.</summary>

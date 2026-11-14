@@ -10,10 +10,11 @@ internal static class FirmwareInventory
     internal static void Run(string[] args)
     {
         if(args.Length>1&&args[1]=="audition"){Audition(args);return;}
-        bool menu=args.Length==4&&args[3]=="--menu-audio";
-        if((args.Length!=3&&!menu)||args[1]!="inspect")throw new ArgumentException("firmware inspect INPUT [--menu-audio]");
+        bool allAudio=args.Length==4&&args[3]=="--system-audio";
+        bool menu=allAudio||args.Length==4&&args[3]=="--menu-audio";
+        if((args.Length!=3&&!menu)||args[1]!="inspect")throw new ArgumentException("firmware inspect INPUT [--menu-audio|--system-audio]");
         using var image=FirmwareImage.Load(args[2]);
-        using var catalog=image.CreateCatalog(menu?FirmwareCatalogOptions.IncludeMenuAudio:FirmwareCatalogOptions.None,default);
+        using var catalog=image.CreateCatalog(allAudio?FirmwareCatalogOptions.IncludeSystemAudio:menu?FirmwareCatalogOptions.IncludeMenuAudio:FirmwareCatalogOptions.None,default);
         object? menuAudio=null;
         if(menu)
         {
@@ -88,6 +89,9 @@ internal static class FirmwareInventory
             ["geometryValidation"]="NativeImportRequired"
         };
         if(menu)report["menuAudio"]=menuAudio;
+        if(allAudio)report["audioSamples"]=new {retainedEncodedBytes=catalog.AudioSampleRetainedBytes,
+            playbackPolicy="Embedded loop is automatic; raw samples are not sequenced effects",
+            samples=catalog.GetAudioSamples()};
         Console.WriteLine(JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
     }
 

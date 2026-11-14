@@ -10,6 +10,21 @@ internal static class MenuPrivateTests
     {using var image=FirmwareImage.Read(data);using var catalog=image.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default);Check(!catalog.TryGetMenuSoundInfo(SystemMenuSound.Select,out _)&&catalog.MenuAudioRetainedBytes==0);}
     internal static void Validate(FirmwareImage image,FirmwareCatalog catalog)
     {
+        using(var full=image.CreateCatalog(FirmwareCatalogOptions.IncludeSystemAudio,default))
+        {
+            Check(full.AudioSampleCount==12);
+            Check(full.GetStartupAudio().ExtractAfc().SequenceEqual(catalog.GetStartupAudio().ExtractAfc()));
+            for(int i=0;i<10;i++)Check(full.SnapshotMenuSound((SystemMenuSound)i,default).SequenceEqual(catalog.SnapshotMenuSound((SystemMenuSound)i,default)));
+            int looped=0;for(int i=0;i<12;i++)
+            {
+                var sample=full.GetAudioSampleInfo(i);using var source=full.SnapshotAudioSample(sample,default);
+                var wave=FirmwareWaveSystem.Inspect(source.Header)[0];
+                Check(wave.SampleCount==sample.SampleCount&&wave.LoopStart==sample.LoopStartSample&&wave.LoopEnd==sample.LoopEndSample);
+                if(sample.HasLoop)looped++;
+            }
+            Check(looped==3);
+            Console.WriteLine("All 12 original source snapshots, three embedded loops and byte-identical shared legacy packets passed");
+        }
         var archive=catalog.MenuAudio.Archives[0];int bank=archive.System.Offset-0x8e0,seq=(archive.Offset+archive.Length+31)&~31;
         Check(catalog.TryGetMenuSoundInfo(SystemMenuSound.Select,out var info));bool early=info!.ProfileId=="ipl-menu-early-v1";
         long before=GC.GetAllocatedBytesForCurrentThread();for(int i=0;i<100;i++)Check(catalog.TryGetMenuSoundInfo(SystemMenuSound.Select,out _));

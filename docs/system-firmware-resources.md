@@ -241,6 +241,37 @@ validate geometry; the native import is authoritative. See
 [format qualification](system-firmware-format-research.md) for tested profiles
 and unverified lighting/render-comparison semantics.
 
+## Original audio samples with automatic loops
+
+Request `IncludeSystemAudio` to retain every structurally resolved WSYS/AW
+sample as well as the existing menu resources. It includes `IncludeMenuAudio`
+behavior. Original C-DF wave IDs identify samples within a wave system and bank;
+the enumeration position is not a wave ID or a semantic menu event.
+
+```csharp
+using var image = SystemFirmware.ReadConsole();
+using var catalog = image.CreateCatalog(FirmwareCatalogOptions.IncludeSystemAudio, default);
+var info = catalog.GetAudioSampleInfo(0); // Inspect GetAudioSamples() to select a source.
+using var sample = await SystemResources.CreateAudioSampleAsync(catalog, info);
+using var channel = sample.Play();
+// An embedded loop repeats automatically after the intro. Otherwise it plays once.
+// channel.Stop() ends playback; disposing sample stops all of its channels.
+```
+
+The descriptor exposes rate, base key, source sample count and exclusive loop
+end. It is immutable and tied to its catalog: another catalog's descriptor is
+rejected. Creation copies the selected compressed source to native ownership;
+the image and catalog may then be disposed. The asynchronous factory snapshots
+before returning its task, so disposal is also safe while preparation is pending.
+Cancellation or native-budget failure releases the preparation data.
+
+The new `SystemAudioSample.Play()` requires no loop flag, endpoints or repeat
+scheduler. Existing `Sound.Play(bool loop = false)` and `Music.Play(bool loop = true)`
+retain their defaults. Raw sources do not include the original sequence's note
+pitch, instrument envelope or effect routing; use a semantic cue for those.
+Firmware bytes are never bundled in the SDK. `dnd-assets firmware inspect INPUT
+--system-audio` reports sample metadata without exporting sample data.
+
 ## Optional startup rendition
 
 `SystemStartupSequence` is an elapsed-time controller with `Update`, `Seek` and
