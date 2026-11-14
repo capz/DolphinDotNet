@@ -21,7 +21,7 @@ from build_tls import build
 
 def run(*args,**kwargs):subprocess.run(list(map(str,args)),cwd=ROOT,check=True,**kwargs)
 
-def render_program(roots,entropy,utc,url,wrong):
+def render_program(roots,entropy,local_entropy,utc,url,wrong):
     # Substitute only original markers; never rescan random PEM/base64 content.
     return Template('''using System;using System.IO;using System.Net.Http;using System.Threading.Tasks;
 using Dolphin.Network;using Scheduler=Dolphin.Threading.Tasks.Scheduler;
@@ -41,9 +41,19 @@ try{Wait(client.GetStringAsync($URL+"/truncated"));return 7;}catch(Exception){}
 var cancelled=new System.Threading.CancellationTokenSource();cancelled.Cancel();try{Wait(client.GetAsync($URL+"/final",cancelled.Token));return 8;}catch(OperationCanceledException){}
 }
 TlsConfiguration.Reset();using(var client=new HttpClient()){try{Wait(client.GetStringAsync($URL+"/final"));return 6;}catch(IOException){}}
+var rejected=new byte[48];for(int i=0;i<rejected.Length;i++)rejected[i]=1;
+try{TlsConfiguration.InitializeFromLocalClock(ca,rejected,0);return 9;}catch(IOException){}
+for(int i=0;i<rejected.Length;i++)if(rejected[i]!=0)return 10;
+for(int i=0;i<rejected.Length;i++)rejected[i]=1;
+try{TlsConfiguration.InitializeFromLocalClock(null,rejected,$LOCAL);return 11;}catch(ArgumentNullException){}
+for(int i=0;i<rejected.Length;i++)if(rejected[i]!=0)return 12;
+var localSeed=new byte[]{$LOCAL_ENTROPY};TlsConfiguration.InitializeFromLocalClock(ca,localSeed,$LOCAL);
+for(int i=0;i<localSeed.Length;i++)if(localSeed[i]!=0)return 13;
+using(var client=new HttpClient()){var task=client.GetStringAsync($URL+"/final");Wait(task);if(task.GetAwaiter().GetResult()!="OK")return 14;}
+TlsConfiguration.Reset();
 NetworkRuntime.Stop();return 0;
 }catch(Exception e){Console.WriteLine(e.Message);return 99;}}
-}''').substitute(CA=json.dumps(roots),ENTROPY=','.join(map(str,entropy)),UTC=str(utc),URL=json.dumps(url),WRONG=json.dumps(wrong))
+}''').substitute(CA=json.dumps(roots),ENTROPY=','.join(map(str,entropy)),LOCAL_ENTROPY=','.join(map(str,local_entropy)),UTC=str(utc),LOCAL=str(utc+2*86400),URL=json.dumps(url),WRONG=json.dumps(wrong))
 
 def main():
     run('dotnet','build','tools/DolphinDotNet.Compiler','-c','Release')
@@ -97,7 +107,7 @@ def main():
         for i,listener in enumerate(listeners):threading.Thread(target=serve,args=(listener,i),daemon=True).start()
         project=folder/'HttpsSmoke.csproj'
         project.write_text(f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include="{ROOT}/src/DolphinDotNet.Core/DolphinDotNet.Core.csproj" /></ItemGroup></Project>')
-        (folder/'Program.cs').write_text(render_program((folder/'ca.pem').read_text(),os.urandom(48),int(time.time()),f'https://localhost:{ports[0]}',f'https://wrong.example:{ports[0]}/final'))
+        (folder/'Program.cs').write_text(render_program((folder/'ca.pem').read_text(),os.urandom(48),os.urandom(48),int(time.time()),f'https://localhost:{ports[0]}',f'https://wrong.example:{ports[0]}/final'))
         try:
             for configuration in ('Debug','Release'):
                 run('dotnet','build',project,'-c',configuration)
@@ -114,5 +124,5 @@ def main():
             if errors:raise AssertionError(errors)
         finally:
             for listener in listeners:listener.close()
-        print('SDK HTTPS Debug/Release AOT + GC stress: verified buffered/streamed/chunked bodies, relative redirects, credential isolation, downgrade rejection and missing configuration passed.')
+        print('SDK HTTPS Debug/Release AOT + GC stress: exact/local-clock initialization and seed wiping, verified buffered/streamed/chunked bodies, relative redirects, credential isolation, downgrade rejection and missing configuration passed.')
 if __name__=='__main__':main()

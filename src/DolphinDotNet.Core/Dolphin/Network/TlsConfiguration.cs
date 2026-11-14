@@ -23,6 +23,28 @@ public static class TlsConfiguration
         }
         finally {Array.Clear(freshEntropy,0,freshEntropy.Length);}
     }
+    /// <summary>Initialize from a correctly set local calendar without knowing
+    /// its UTC offset. Certificate validity must cover every UTC instant within
+    /// 14 hours of the supplied local calendar; normal chain and hostname
+    /// verification remain mandatory. Near certificate validity boundaries this
+    /// stricter check can reject a connection that exact trusted UTC accepts.</summary>
+    /// <param name="trustedRootsPem">Explicit PEM trust anchors, maximum 256 KiB.</param>
+    /// <param name="freshEntropy">The same fresh secret entropy required by Initialize;
+    /// the array is cleared on success and failure.</param>
+    /// <param name="localUnixTimeSeconds">The console's correctly set local calendar,
+    /// encoded as Unix seconds without applying a timezone. Both ends of its
+    /// possible UTC interval must lie within the supported 2024–2038 time ABI.</param>
+    public static void InitializeFromLocalClock(byte[] trustedRootsPem,byte[] freshEntropy,long localUnixTimeSeconds)
+    {
+        if(freshEntropy==null)throw new ArgumentNullException("freshEntropy");
+        try
+        {
+            if(trustedRootsPem==null)throw new ArgumentNullException("trustedRootsPem");
+            if(NativeNetwork.TlsConfigureLocalClock(trustedRootsPem,freshEntropy,localUnixTimeSeconds)<0)
+                throw new IOException("TLS local-clock configuration rejected: set the console calendar correctly within 2024–2038 and supply valid roots and fresh entropy with no active TLS connections.");
+        }
+        finally {Array.Clear(freshEntropy,0,freshEntropy.Length);}
+    }
     /// <summary>Clear native trust and DRBG state. Active TLS connections must be disposed first.</summary>
     public static void Reset()
     {if(NativeNetwork.TlsReset()<0)throw new InvalidOperationException("TLS connections are still active.");}

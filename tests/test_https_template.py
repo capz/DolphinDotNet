@@ -12,12 +12,14 @@ class HttpsTemplateTests(unittest.TestCase):
         # URL and UTC are valid base64 sequences in real random certificates.
         # Include every marker and literal dollar text to check substitution is
         # simultaneous, including values that look like template syntax.
-        pem='-----BEGIN CERTIFICATE-----\nCAURLUTCWRONGENTROPY$URL\n-----END CERTIFICATE-----\n'
-        program=render_program(pem,bytes(range(48)),1793966400,'https://localhost:1234','https://wrong.example:1234/final')
+        pem='-----BEGIN CERTIFICATE-----\nCAURLUTCWRONGENTROPYLOCALLOCAL_ENTROPY$URL\n-----END CERTIFICATE-----\n'
+        program=render_program(pem,bytes(range(48)),bytes(range(48,96)),1793966400,'https://localhost:1234','https://wrong.example:1234/final')
         literal=re.search(r'GetBytes\(("(?:\\.|[^"\\])*")\)',program).group(1)
         self.assertEqual(json.loads(literal),pem)
         self.assertIn('TlsConfiguration.Initialize(ca,seed,1793966400)',program)
+        self.assertIn('TlsConfiguration.InitializeFromLocalClock(ca,localSeed,1794139200)',program)
         self.assertIn('GetStringAsync("https://wrong.example:1234/final")',program)
         self.assertIn('var seed=new byte[]{'+','.join(map(str,range(48)))+'}',program)
+        self.assertIn('var localSeed=new byte[]{'+','.join(map(str,range(48,96)))+'}',program)
 
 if __name__=='__main__':unittest.main()

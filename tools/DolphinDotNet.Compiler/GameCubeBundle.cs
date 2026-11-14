@@ -45,6 +45,7 @@ internal static class GameCubeBundle
     private static readonly (string Name, string[] Prefixes, string[] Libs)[] FeatureMap =
     {
         ("networking", new[] {"System.Net.", "Dolphin.Network."}, new[] {"-lbba", "-logc"}),
+        ("entropy", new[] {"Dolphin.Security.PlatformEntropy", "Dolphin.Security.NativeEntropy"}, new[] {"-ldndentropy", "-logc"}),
         ("storage", new[] {"System.IO.", "Dolphin.Storage."}, new[] {"-lfat", "-ldvm", "-liso9660", "-logc"}),
         ("aram", new[] {"Dolphin.IO.Aram", "Dolphin.Aram."}, new[] {"-logc"}),
         ("graphics", new[] {"Dolphin.Graphics.", "Dolphin.Models."}, new[] {"-logc", "-lm"}),
@@ -104,6 +105,8 @@ internal static class GameCubeBundle
 
         if (platform != "gamecube" && reachable.Any(t => t is "Dolphin.IO.DolLauncher" or "Dolphin.IO.NativeDol" or "Dolphin.IO.PreparedDol"))
             throw new NotSupportedException("Dolphin.IO.DolLauncher currently supports GameCube MEM1 executables only.");
+        if (platform != "gamecube" && features.Any(f => f.Name == "entropy"))
+            throw new NotSupportedException("Dolphin.Security.PlatformEntropy currently supports the GameCube native target only.");
 
         Directory.CreateDirectory(directory);
         foreach (var sub in new[] { "source", "include", "scripts" })
@@ -117,11 +120,21 @@ internal static class GameCubeBundle
         }
         foreach (var path in Directory.GetFiles(Path.Combine(root, "source"), "*.inc"))
             File.Copy(path, Path.Combine(directory, "source", Path.GetFileName(path)), true);
+        foreach (var path in Directory.GetFiles(Path.Combine(root, "source"), "*.h"))
+            File.Copy(path, Path.Combine(directory, "source", Path.GetFileName(path)), true);
+        foreach (var path in Directory.GetFiles(Path.Combine(root, "source", "jitterentropy"), "*", SearchOption.AllDirectories))
+        {
+            var destination = Path.Combine(directory, "source", "jitterentropy",
+                Path.GetRelativePath(Path.Combine(root, "source", "jitterentropy"), path));
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(path, destination, true);
+        }
         Directory.CreateDirectory(Path.Combine(directory,"vendor","ufbx"));
         File.Copy(Path.Combine(root,"vendor","ufbx","LICENSE"),Path.Combine(directory,"vendor","ufbx","LICENSE"),true);
         File.Copy(Path.Combine(root, "scripts", "dol_sections.py"),
             Path.Combine(directory, "scripts", "dol_sections.py"), true);
         File.Copy(Path.Combine(root,"scripts","build_tls.py"),Path.Combine(directory,"scripts","build_tls.py"),true);
+        File.Copy(Path.Combine(root,"scripts","build_entropy.py"),Path.Combine(directory,"scripts","build_entropy.py"),true);
         if (platform == "gamecube")
         {
             var boot = Path.Combine(directory, "boot", "gamecube");
@@ -231,7 +244,7 @@ internal static class GameCubeBundle
             "fst_gamecube", "iso_file", "dol", "dol_gamecube", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "ipl_font", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "system_firmware", "numeric", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
             "model_graphics", "model_transform", "tls", "network", "network_gamecube",
-            "network_gamecube_backend", "network_link_gamecube", "performance", "platform_gamecube",
+            "network_gamecube_backend", "network_link_gamecube", "performance", "platform_gamecube", "platform_entropy",
             "storage", "storage_gamecube", "gcloader", "card_manager", "contiguous_write", "file_extents", "file_optimize", "verified_copy", "stw", "system", "text", "timing", "worker"
         };
 
@@ -253,7 +266,7 @@ internal static class GameCubeBundle
             File.Copy(Path.Combine(root, "source", name + ".c"),
                 Path.Combine(directory, "source", name + ".c"), true);
 
-        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), gdbTcp is not null, gdbUsb is not null, debugSymbols, sampleControls, reachable.Contains("Dolphin.System.FirmwareImage", StringComparer.Ordinal)));
+        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), features.Any(f => f.Name == "entropy"), gdbTcp is not null, gdbUsb is not null, debugSymbols, sampleControls, reachable.Contains("Dolphin.System.FirmwareImage", StringComparer.Ordinal)));
         var report = new StringBuilder();
         report.AppendLine("DolphinDotNet AOT Native Dependencies");
         report.AppendLine("Target: " + platform);
@@ -297,7 +310,7 @@ internal static class GameCubeBundle
         throw new DirectoryNotFoundException("The DolphinDotNet repository's native sources are required to emit a self-contained build directory.");
     }
 
-    private static string Makefile(string platform, bool usesNetworking, bool gdbTcp, bool gdbUsb, bool debugSymbols, bool sampleControls, bool firmwareHeap)
+    private static string Makefile(string platform, bool usesNetworking, bool usesEntropy, bool gdbTcp, bool gdbUsb, bool debugSymbols, bool sampleControls, bool firmwareHeap)
     {
         var isWiiU = platform == "wiiu";
         var overlayTelemetry = debugSymbols && platform == "gamecube";
@@ -320,7 +333,7 @@ internal static class GameCubeBundle
         builder.AppendLine("SOURCES := source");
         builder.AppendLine("INCLUDES := include");
         builder.AppendLine("LIBDIRS := " + library);
-        builder.AppendLine("LIBS := " + (usesNetworking ? "-ldndtls " : "") + libs);
+        builder.AppendLine("LIBS := " + (usesNetworking ? "-ldndtls " : "") + (usesEntropy ? "-ldndentropy " : "") + libs);
         var symbols = debugSymbols ? "-Og -g3 -gdwarf-4 -fno-inline -fno-omit-frame-pointer -fno-optimize-sibling-calls" : "-O2 -g";
         builder.AppendLine("CFLAGS := " + symbols + " -Wall -Wextra $(MACHDEP) $(INCLUDE)" +
             (isWiiU ? " -D__WIIU__ -D__WUT__" :
@@ -331,7 +344,8 @@ internal static class GameCubeBundle
                 " -DDND_GAMECUBE_STORAGE -DDND_NO_AUTONETWORK") +
             (overlayTelemetry ? " -DDND_DEBUG_TELEMETRY" : "") +
             (overlayTelemetry ? " -DDND_DEBUG_AUTOMATION" : "") +
-            (sampleControls ? " -DDND_SAMPLE_CONTROLS" : "") + (usesNetworking ? " -DDND_TLS" : ""));
+            (sampleControls ? " -DDND_SAMPLE_CONTROLS" : "") + (usesNetworking ? " -DDND_TLS" : "") +
+            (usesEntropy ? " -DDND_PLATFORM_ENTROPY" : ""));
         if (!isWiiU)
         {
             builder.AppendLine("DND_MANAGED_HEAP_BYTES ?= " + (firmwareHeap ? "8388608" : "262144"));
@@ -354,7 +368,7 @@ internal static class GameCubeBundle
         builder.AppendLine("export DEPSDIR := $(CURDIR)/$(BUILD)");
         builder.AppendLine("export OFILES := $(notdir $(patsubst %.c,%.o,$(wildcard source/*.c)))");
         builder.AppendLine("export INCLUDE := -I$(CURDIR)/include " + (usesNetworking ? "-I$(CURDIR)/build/tls/source/include " : "") + "-I" + library + "/include -I$(CURDIR)/build");
-        builder.AppendLine("export LIBPATHS := " + (usesNetworking ? "-L$(CURDIR)/build/tls " : "") + (platform == "gamecube" ?
+        builder.AppendLine("export LIBPATHS := " + (usesNetworking ? "-L$(CURDIR)/build/tls " : "") + (usesEntropy ? "-L$(CURDIR)/build/entropy " : "") + (platform == "gamecube" ?
             "-L$(CURDIR)/build/exi-overlay -L$(CURDIR)/build/fat-overlay " : "") + "-L" + library + "/lib");
         builder.AppendLine("export DOL_VALIDATOR := $(CURDIR)/scripts/dol_sections.py");
         if (platform == "gamecube")
@@ -374,6 +388,13 @@ internal static class GameCubeBundle
             builder.AppendLine("dnd-tls: $(BUILD)");
             builder.AppendLine("\tpython3 scripts/build_tls.py --output build/tls --cc \"$(CC)\" --ar \"$(AR)\" --cflags \"$(CFLAGS)\" --config include/dnd_tls_config.h");
         }
+        if (usesEntropy)
+        {
+            builder.AppendLine("export ENTROPY_LIBRARY := $(CURDIR)/build/entropy/libdndentropy.a");
+            builder.AppendLine(".PHONY: dnd-entropy");
+            builder.AppendLine("dnd-entropy: $(BUILD)");
+            builder.AppendLine("\tpython3 scripts/build_entropy.py --output build/entropy --source source/jitterentropy --cc \"$(CC)\" --ar \"$(AR)\" --cflags \"$(CFLAGS)\"");
+        }
         if (platform == "gamecube")
         {
             builder.AppendLine(".PHONY: apploader");
@@ -381,7 +402,7 @@ internal static class GameCubeBundle
             builder.AppendLine("\tpython3 boot/gamecube/pack.py apploader.elf apploader.img --dol \"$(OUTPUT).dol\"");
         }
         builder.AppendLine(".PHONY: all clean");
-        builder.AppendLine("all: " + (usesNetworking ? "dnd-tls " : "") + (platform == "gamecube" ?
+        builder.AppendLine("all: " + (usesNetworking ? "dnd-tls " : "") + (usesEntropy ? "dnd-entropy " : "") + (platform == "gamecube" ?
             "$(EXI_OVERLAY) $(FAT_OVERLAY) $(DVM_OVERLAY) $(BUILD)" : "$(BUILD)"));
         builder.AppendLine("\t@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile");
         if (platform == "gamecube")
@@ -415,7 +436,7 @@ internal static class GameCubeBundle
             if (debugSymbols)
                 builder.AppendLine("\tpython3 \"$(dir $(OUTPUT))scripts/dnd_debug_addresses.py\" --elf $(OUTPUT).elf --source-map \"$(dir $(OUTPUT))dnd-il-debug.json\" --output $(OUTPUT).dnd-addresses.json --readelf \"$(DEVKITPPC)/bin/powerpc-eabi-readelf\"");
         }
-        builder.AppendLine("$(OUTPUT).elf: $(OFILES) .dnd-native-flags" + (platform == "gamecube" ? " $(EXI_OVERLAY) $(FAT_OVERLAY) $(DVM_OVERLAY)" : ""));
+        builder.AppendLine("$(OUTPUT).elf: $(OFILES) .dnd-native-flags" + (usesEntropy ? " $(ENTROPY_LIBRARY)" : "") + (platform == "gamecube" ? " $(EXI_OVERLAY) $(FAT_OVERLAY) $(DVM_OVERLAY)" : ""));
         builder.AppendLine("\t$(CC) $(OFILES) $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@");
         builder.AppendLine("-include $(DEPENDS)");
         builder.AppendLine("endif");
