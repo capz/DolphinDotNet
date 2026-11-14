@@ -71,11 +71,12 @@ static uint32_t tint(uint32_t a,uint32_t b) {
 static uint32_t rgba(float r,float g,float b,float a) {
     return (uint32_t)(r*255)<<24|(uint32_t)(g*255)<<16|(uint32_t)(b*255)<<8|(uint32_t)(a*255);
 }
+#include "dnd_framebuffer_gx.inc"
 void dnd_graphics_init(void) {
     if(mode)return;
     VIDEO_Init();mode=VIDEO_GetPreferredMode(NULL);
     if(!mode){dnd_exception_throw(DND_EXCEPTION_INVALID_OPERATION,"No video mode available.");return;}
-    void *first=SYS_AllocateFramebuffer(mode),*second=SYS_AllocateFramebuffer(mode);
+    void *first=allocate_display_framebuffer(mode),*second=allocate_display_framebuffer(mode);
     fifo=memalign(32,256*1024);
     /* A null allocation must be checked before the K0-to-K1 address alias. */
     if(!first||!second||!fifo){free(first);free(second);free(fifo);fifo=NULL;mode=NULL;dnd_exception_throw(DND_EXCEPTION_OUT_OF_MEMORY,"Graphics initialization failed.");return;}

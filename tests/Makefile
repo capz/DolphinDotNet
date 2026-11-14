@@ -244,7 +244,7 @@ graphics_phase_two_test: graphics_phase_two_test.c ../source/draw_resources.c
 graphics_resource_boundaries_test: graphics_resource_boundaries_test.c ../source/draw_resources.c
 	$(CC) $(CFLAGS) -ffunction-sections -fdata-sections $^ $(GC_LDFLAGS) -lm -o $@
 
-display_mode_test: mesh_streams_test display_mode_test.c ../include/dnd_display_gx.inc
+display_mode_test: mesh_streams_test display_mode_test.c ../include/dnd_display_gx.inc ../include/dnd_framebuffer_gx.inc
 	$(CC) $(CFLAGS) display_mode_test.c -o $@
 
 .PHONY: system_firmware_native_test

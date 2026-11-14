@@ -1,5 +1,6 @@
 /* Included by the GX backend and the isolated display lifecycle fixture.
  * mode/xfb/fb/first_frame are the backend's actual presentation state. */
+#include "dnd_framebuffer_gx.inc"
 static GXRModeObj configured_display_mode;
 static int select_display_mode(int resolution,int scan,GXRModeObj *selected) {
     if(resolution<0||resolution>3||scan<0||scan>2)return -1;
@@ -55,7 +56,7 @@ static int configure_display_mode(int resolution,int scan,int aa) {
     if(!memcmp(mode,&next,sizeof next))return 0;
     /* Allocate both replacements first. An allocation failure cannot destroy
      * the current mode or scanout buffers. */
-    void *a=SYS_AllocateFramebuffer(&next),*b=SYS_AllocateFramebuffer(&next);
+    void *a=allocate_display_framebuffer(&next),*b=allocate_display_framebuffer(&next);
     if(!a||!b){free(a);free(b);return -2;}
     GX_DrawDone();
     VIDEO_SetBlack(TRUE);VIDEO_Flush();VIDEO_WaitVSync();
