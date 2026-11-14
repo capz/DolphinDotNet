@@ -10,7 +10,7 @@ internal static class ValueCBackend
         b.AppendLine("static inline float dnd_read_float(const void *p) {float v;memcpy(&v,p,4);return v;}\nstatic inline double dnd_read_double(const void *p) {double v;memcpy(&v,p,8);return v;}\nstatic inline uint64_t dnd_float_bits(double v,bool single) {if(single){float f=(float)v;uint32_t bits;memcpy(&bits,&f,4);return bits;}uint64_t bits;memcpy(&bits,&v,8);return bits;}\nstatic inline double dnd_float_value(uint64_t bits,bool single) {if(single){uint32_t b=(uint32_t)bits;return dnd_read_float(&b);}return dnd_read_double(&bits);}");
         b.AppendLine("static inline intptr_t dnd_read_pointer(const void *p) {intptr_t v;memcpy(&v,p,sizeof(v));return v;}\nstatic inline uint16_t dnd_read_u16(const void *p) {uint16_t v;memcpy(&v,p,2);return v;}\nstatic inline int32_t dnd_read_i32(const void *p) { int32_t v; memcpy(&v,p,sizeof(v)); return v; }\nstatic inline int64_t dnd_read_i64(const void *p) { int64_t v; memcpy(&v,p,sizeof(v)); return v; }");
         b.AppendLine("#include \"dnd_system_firmware.h\"");
-        b.AppendLine("#include \"dnd_network.h\"\n#include \"dnd_async.h\"\n#include \"dnd_timing.h\"\n#include \"dnd_dol.h\"");
+        b.AppendLine("#include \"dnd_network.h\"\n#include \"dnd_platform_entropy.h\"\n#include \"dnd_async.h\"\n#include \"dnd_timing.h\"\n#include \"dnd_dol.h\"");
         var schedulerPump=methods.SingleOrDefault(m=>m.Key.TypeName=="Dolphin.Threading.Tasks.Scheduler"&&m.Key.Name=="PumpContext");
         var automaticAsync=schedulerPump is not null;
         var usesGraphics=methods.Any(m=>m.Key.TypeName.StartsWith("Dolphin.Graphics.",StringComparison.Ordinal));

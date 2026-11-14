@@ -12,8 +12,9 @@ static DndArray *bytes(size_t n){DndArray *a=calloc(1,sizeof(*a)+n);assert(a);a-
 static DndArray *file(const char *name){FILE *f=fopen(name,"rb");assert(f);fseek(f,0,SEEK_END);long n=ftell(f);rewind(f);assert(n>0);DndArray *a=bytes((size_t)n);assert(fread(a->data,1,(size_t)n,f)==(size_t)n);fclose(f);return a;}
 static void pause_poll(void){struct timespec t={0,1000000};nanosleep(&t,NULL);}
 int main(int argc,char **argv){
- assert(argc==7);DndArray *roots=file(argv[1]),*seed=file(argv[2]);int64_t utc=strtoll(argv[5],NULL,10);int expect=atoi(argv[6]);
- assert(dnd_net_tls_configure(roots,seed,utc)==0);assert(dnd_net_start(0,0,0,1)==0);
+ assert(argc==7||argc==8);DndArray *roots=file(argv[1]),*seed=file(argv[2]);int64_t utc=strtoll(argv[5],NULL,10);int expect=atoi(argv[6]);
+ int local=argc==8&&!strcmp(argv[7],"local");
+ assert((local?dnd_net_tls_configure_local_clock(roots,seed,utc):dnd_net_tls_configure(roots,seed,utc))==0);assert(dnd_net_start(0,0,0,1)==0);
  int t=dnd_net_open(1);assert(t>0);int r=dnd_net_connect(t,0x7f000001,atoi(argv[3]));
  for(int i=0;r==-1&&i<5000;i++){pause_poll();r=dnd_net_connected(t);}assert(r==0);
  size_t length=strlen(argv[4]);DndString *host=calloc(1,sizeof(*host)+length*2);assert(host);host->length=(uint32_t)length;
