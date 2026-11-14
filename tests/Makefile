@@ -247,6 +247,7 @@ display_mode_test: mesh_streams_test display_mode_test.c ../include/dnd_display_
 system_firmware_native_test:
 	$(CC) $(CFLAGS) -DDND_FIRMWARE_TEST system_firmware_native_test.c ../source/system_firmware.c -o /tmp/dnd-system-firmware-native-test
 	/tmp/dnd-system-firmware-native-test
+	/tmp/dnd-system-firmware-native-test --frozen-clock
 test: system_firmware_native_test
 
 mesh_streams_test: mesh_streams_test.c ../source/draw_resources.c ../include/dnd_mesh_streams.inc

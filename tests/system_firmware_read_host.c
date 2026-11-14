@@ -15,6 +15,7 @@ static uint8_t rom[0x200000];
 static uint32_t fw_registers[5];
 static unsigned fw_page,fw_cursor,fw_locked,fw_selected,fw_valid;
 static uint64_t fw_clock;
+static unsigned char *fw_dma_buffer;
 /* Exercise the production EXI driver, including the physical ROM's 1 KiB
  * burst window, rather than replacing the entire firmware ABI with memcpy. */
 int dnd_fw_lock(void)
@@ -28,16 +29,22 @@ int dnd_fw_deselect(void){assert(fw_selected);fw_selected=0;return 1;}
 void dnd_fw_unlock(void){assert(fw_locked&&!fw_selected);fw_locked=0;}
 uint64_t dnd_fw_now(void){return ++fw_clock;}
 uint32_t dnd_fw_read(unsigned reg){return fw_registers[reg];}
+uint32_t dnd_fw_dma_prepare(void *buffer,unsigned count)
+{assert(((uintptr_t)buffer&31)==0&&count==1024);fw_dma_buffer=buffer;return 0x1000;}
+void dnd_fw_dma_complete(void *buffer,unsigned count)
+{assert(buffer==fw_dma_buffer&&count==1024&&fw_registers[3]==0);}
+void dnd_fw_dma_flush(void *buffer,unsigned count)
+{for(unsigned i=0;i<count;i++)assert(((unsigned char*)buffer)[i]==0);}
 void dnd_fw_write(unsigned reg,uint32_t value)
 {
     assert(fw_locked&&fw_selected);fw_registers[reg]=value;
     if(reg!=3||!(value&1))return;
     if(value&4){unsigned address=fw_registers[4]>>6;fw_page=address&~1023u;fw_cursor=address&1023u;}
     else {
-        unsigned bytes=((value>>4)&3)+1;fw_registers[4]=0;
-        for(unsigned i=0;i<bytes;i++){
+        assert((value&2)&&fw_registers[1]==0x1000&&fw_registers[2]==1024&&fw_dma_buffer&&fw_cursor==0);
+        for(unsigned i=0;i<1024;i++){
             unsigned address=fw_page+(fw_cursor++&1023u);assert(address<sizeof(rom));
-            fw_registers[4]|=(uint32_t)(fw_valid?rom[address]:0)<<(24-i*8);
+            fw_dma_buffer[i]=fw_valid?rom[address]:0;
         }
     }
     fw_registers[3]=0;
