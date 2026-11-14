@@ -12,6 +12,23 @@ records a complete live ARAM archive match, all twelve wave IDs/instruments and
 additional Options/Calendar event traces. The implementation and uninterrupted
 output comparisons below complete the finite events 6–12 part of that plan.
 
+## Physical ROM reader follow-up — 2026-11-14
+
+A PAL console launched through GC Loader / CubiBoot returned ROM CRC-32
+`6DAC1F2A` and decoded-region CRC-32 `8F87BDB8`, matching the early NTSC 1.0
+reference below. The production immediate reader, DMA at 32/16 MHz, immediate
+reads at 16 MHz and a repeated production read all agreed. The generated-data
+managed cipher/catalog check passed; the decoded region contained 14 Yay0
+signatures. This establishes agreement for that diagnostic, not successful
+background acquisition or physical audio playback in the explorer.
+
+The exact published SDK 335 explorer also loads startup audio and all six
+textures from that raw reference in Dolphin. Its reported hardware encoding
+failure therefore remains unconfirmed in the emulator. The SDK now uses
+bounded continuous page DMA, matching libogc and the console-tested DMA path,
+with static buffer lifetime and quarantine after timeout. This transport change
+does not qualify early NTSC menu effects or relax firmware validation.
+
 ## Inputs
 
 The user explicitly authorized downloading these research inputs from
