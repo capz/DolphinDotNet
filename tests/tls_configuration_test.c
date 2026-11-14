@@ -2,12 +2,72 @@
 #include "../source/tls.c"
 #include <assert.h>
 #include <stdio.h>
+#include <time.h>
 static int64_t clock_us=1000000;
 int64_t dnd_timing_now(void){return clock_us;}
 int dnd_np_read(int fd,void *b,int n,int stream,uint32_t *ip,int *port){(void)fd;(void)b;(void)n;(void)stream;(void)ip;(void)port;return -1;}
 int dnd_np_write(int fd,const void *b,int n,int stream,uint32_t ip,int port){(void)fd;(void)b;(void)n;(void)stream;(void)ip;(void)port;return -1;}
 static DndArray *array(size_t size){DndArray *a=calloc(1,sizeof(*a)+size);assert(a);a->element_size=1;a->length=(uint32_t)size;return a;}
 static DndArray *read_file(const char *name){FILE *f=fopen(name,"rb");assert(f);fseek(f,0,SEEK_END);long n=ftell(f);rewind(f);assert(n>0);DndArray *a=array((size_t)n);assert(fread(a->data,1,(size_t)n,f)==(size_t)n);fclose(f);return a;}
+static void certificate_time(mbedtls_x509_time *out,int64_t seconds){
+ time_t value=(time_t)seconds;struct tm *time=gmtime(&value);assert(time);
+ out->year=time->tm_year+1900;out->mon=time->tm_mon+1;out->day=time->tm_mday;
+ out->hour=time->tm_hour;out->min=time->tm_min;out->sec=time->tm_sec;
+}
+static void local_clock_tests(DndArray *ca,DndArray *seed){
+ const int64_t local=1800000000,uncertainty=TLS_LOCAL_UNCERTAINTY_SECONDS;
+ assert(dnd_net_tls_configure_local_clock(ca,seed,INT64_MIN)<0);
+ assert(dnd_net_tls_configure_local_clock(ca,seed,INT64_MAX)<0);
+ assert(dnd_net_tls_configure_local_clock(ca,seed,TLS_MIN_SECONDS)<0);
+ assert(dnd_net_tls_configure_local_clock(ca,seed,TLS_MAX_SECONDS)<0);
+ assert(dnd_net_tls_configure_local_clock(ca,seed,TLS_MIN_SECONDS+uncertainty-1)<0);
+ assert(dnd_net_tls_configure_local_clock(ca,seed,TLS_MAX_SECONDS-uncertainty+1)<0);
+ assert(dnd_net_tls_configure_local_clock(ca,seed,TLS_MIN_SECONDS+uncertainty)==0);
+ assert(tls_time(NULL)==TLS_MIN_SECONDS+uncertainty);
+ assert(dnd_net_tls_reset()==0);
+ assert(dnd_net_tls_configure_local_clock(ca,seed,TLS_MAX_SECONDS-uncertainty)==0);
+ assert(tls_time(NULL)==TLS_MAX_SECONDS-uncertainty);
+ clock_us+=1000000;assert(tls_time(NULL)==0);clock_us-=1000000;
+ assert(dnd_net_tls_reset()==0);
+ assert(dnd_net_tls_configure_local_clock(ca,seed,local)==0);
+ assert(clock_uncertainty==uncertainty&&tls_time(NULL)==local);
+ mbedtls_x509_crt certificate;memset(&certificate,0,sizeof certificate);
+ certificate_time(&certificate.valid_from,local-uncertainty);
+ certificate_time(&certificate.valid_to,local+uncertainty);
+ uint32_t flags=0;assert(verify_local_clock(NULL,&certificate,0,&flags)==0&&flags==0);
+ flags=MBEDTLS_X509_BADCERT_CN_MISMATCH|MBEDTLS_X509_BADCERT_NOT_TRUSTED;
+ uint32_t original=flags;assert(verify_local_clock(NULL,&certificate,2,&flags)==0&&flags==original);
+ certificate_time(&certificate.valid_from,local-uncertainty+1);flags=original;
+ verify_local_clock(NULL,&certificate,0,&flags);assert(flags==(original|MBEDTLS_X509_BADCERT_FUTURE));
+ certificate_time(&certificate.valid_from,local-uncertainty);
+ certificate_time(&certificate.valid_to,local+uncertainty-1);flags=original;
+ verify_local_clock(NULL,&certificate,0,&flags);assert(flags==(original|MBEDTLS_X509_BADCERT_EXPIRED));
+ /* Valid at the naive local center is insufficient: both UTC endpoints must
+  * remain inside every validated certificate, including intermediate depths. */
+ certificate_time(&certificate.valid_from,local-3600);
+ certificate_time(&certificate.valid_to,local+3600);flags=original;
+ verify_local_clock(NULL,&certificate,1,&flags);
+ assert(flags==(original|MBEDTLS_X509_BADCERT_FUTURE|MBEDTLS_X509_BADCERT_EXPIRED));
+ certificate_time(&certificate.valid_from,local-uncertainty);
+ certificate_time(&certificate.valid_to,local+uncertainty);flags=0;
+ clock_us+=1000000;assert(tls_time(NULL)==local+1);
+ verify_local_clock(NULL,&certificate,0,&flags);assert(flags==MBEDTLS_X509_BADCERT_EXPIRED);clock_us-=1000000;
+ int64_t saved=clock_us;clock_us=0;flags=original;
+ verify_local_clock(NULL,&certificate,0,&flags);
+ assert(tls_time(NULL)==0&&flags==(original|MBEDTLS_X509_BADCERT_FUTURE|MBEDTLS_X509_BADCERT_EXPIRED));
+ clock_us=INT64_MAX;flags=0;verify_local_clock(NULL,&certificate,0,&flags);
+ assert(tls_time(NULL)==0&&flags==(MBEDTLS_X509_BADCERT_FUTURE|MBEDTLS_X509_BADCERT_EXPIRED));clock_us=saved;
+ mbedtls_x509_time leap={2024,2,29,0,0,0};int64_t seconds;
+ assert(certificate_seconds(&leap,&seconds)&&seconds==1709164800);
+ leap.year=2100;assert(!certificate_seconds(&leap,&seconds));
+ leap.year=2400;assert(certificate_seconds(&leap,&seconds));
+ leap.year=0;assert(!certificate_seconds(&leap,&seconds));
+ assert(dnd_net_tls_reset()==0);
+ /* The original exact-UTC API keeps its wider endpoint range and no window. */
+ assert(dnd_net_tls_configure(ca,seed,TLS_MIN_SECONDS)==0&&clock_uncertainty==0);
+ assert(dnd_net_tls_configure(ca,seed,TLS_MAX_SECONDS)==0&&tls_time(NULL)==TLS_MAX_SECONDS);
+ assert(dnd_net_tls_reset()==0);
+}
 int main(int argc,char **argv){
  assert(argc==3);DndArray *ca=read_file(argv[1]),*seed=read_file(argv[2]);
  assert(dnd_tls_begin(1,1,"localhost")<0);
@@ -16,11 +76,13 @@ int main(int argc,char **argv){
  assert(dnd_net_tls_configure(ca,seed,0)<0);
  assert(dnd_net_tls_configure(ca,seed,INT64_MAX)<0);
  seed->length=47;assert(dnd_net_tls_configure(ca,seed,1800000000)<0);seed->length=48;
+ local_clock_tests(ca,seed);
  assert(dnd_net_tls_configure(ca,seed,1800000000)==0);
  assert(tls_time(NULL)==1800000000);clock_us+=3000000;assert(tls_time(NULL)==1800000003);
  for(int i=1;i<=4;i++)assert(dnd_tls_begin(i,i,"localhost")==0);
  assert(dnd_tls_begin(5,5,"localhost")<0);assert(dnd_tls_begin(1,1,"localhost")<0);
  assert(dnd_net_tls_reset()<0&&dnd_net_tls_configure(ca,seed,1800000000)<0);
+ assert(dnd_net_tls_configure_local_clock(ca,seed,1800000000)<0&&clock_uncertainty==0);
  unsigned char out[32];assert(dnd_tls_read(1,out,1)<0&&dnd_tls_write(1,out,1)<0);
  for(int i=1;i<=4;i++){dnd_tls_close(i);dnd_tls_close(i);}
  /* Initial entropy cannot be silently reused for a reseed after its stack frame
@@ -29,5 +91,5 @@ int main(int argc,char **argv){
  assert(dnd_net_tls_reset()==0);
  ca->data[0]=0;assert(dnd_net_tls_configure(ca,seed,1800000000)<0);
  assert(dnd_tls_begin(1,1,"localhost")<0);assert(dnd_net_tls_reset()==0);
- free(ca);free(seed);puts("TLS configuration bounds, monotonic time, session limits, lifecycle and entropy exhaustion passed.");
+ free(ca);free(seed);puts("TLS exact/local-clock bounds, full UTC interval verification, flag preservation, monotonic time, session limits, lifecycle and entropy exhaustion passed.");
 }

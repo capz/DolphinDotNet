@@ -27,7 +27,11 @@ string content = await client.GetStringAsync("https://example.com/config.json");
 - `freshEntropy` contains 48–64 cryptographically random **secret** bytes, fresh
   for each initialization and process boot. The SDK consumes/copies this input
   and clears the caller's array even when initialization fails. Provision it
-  through a trusted host/device mechanism. Never use System.Random, ticks,
+  through a trusted host/device mechanism, or collect it with the bounded native
+  `Dolphin.Security.PlatformEntropy.GetBytesAsync(48)` provider described in
+  [platform-entropy.md](platform-entropy.md). Physical GameCube source
+  qualification remains outstanding; runtime health checks do not prove an
+  entropy rate. Never use System.Random, ticks,
   public build constants, an unchanged distributed seed file, or unauthenticated
   network input. A securely seeded DRBG generates subsequent session randomness.
   After 4096 generation requests its reseed fails closed; close active HTTPS
@@ -36,8 +40,26 @@ string content = await client.GetStringAsync("https://example.com/config.json");
   for the PowerPC time ABI. The SDK advances this using its monotonic clock.
   Unauthenticated HTTP Date or unauthenticated NTP does not establish trusted UTC.
 
+When the console calendar is correctly set to local time but its UTC offset is
+unknown, use `TlsConfiguration.InitializeFromLocalClock(trustedRootsPem,
+freshEntropy, localUnixTimeSeconds)` instead. Encode the local calendar as Unix
+seconds without applying a timezone. This API treats the possible UTC time as
+the full interval from 14 hours before that calendar to 14 hours after it, then
+advances the interval with the monotonic clock. Both endpoints must remain
+within the supported 2024–2038 range. An invalid calendar fails closed; neither
+the build timestamp nor an unauthenticated network response repairs it.
+
+Every certificate in the validated chain must be valid throughout that entire
+interval. The callback only adds certificate-date failures and preserves all
+existing hostname, trust, algorithm and date checks. A recently issued or nearly
+expired certificate may therefore fail even when it is valid at the supplied
+local calendar. This stricter option needs no timezone file, while the original
+`Initialize` API remains available when credible exact UTC is known. Both APIs
+consume and clear the fresh entropy array on success and failure.
+
 These are platform configuration inputs, not Hypercube-specific services. The
-console currently has no built-in verified entropy provisioner. An application
+console now has an SDK-owned bounded jitterentropy provider; its physical
+entropy-source qualification is still outstanding. An application
 without these inputs receives a clear HTTPS failure; it does not silently use
 plaintext or disable validation. Source certificates can be public; entropy must
 not be shipped in source, debug metadata or publicly distributed executables.
@@ -82,7 +104,10 @@ and with GC stress. It covers fragmented encrypted replies, trusted/untrusted
 roots, wrong hostname, expired/not-yet-valid certificates, time/configuration
 bounds, session capacity, entropy exhaustion, buffered/streamed/chunked bodies,
 relative redirects, credential isolation, downgrade rejection, truncation,
-cancellation and absent configuration. The network CI area runs this gate.
+cancellation and absent configuration. Local-clock coverage includes full-window
+certificate validity, preserved hostname/trust failures, monotonic advancement,
+ABI/overflow boundaries and managed entropy clearing through AOT. The network CI
+area runs this gate.
 
 The TLS-enabled GameCube ELF/DOL was compiled and linked with the SDK's pinned
 libogc2/devkitPPC image, including the provider configuration entry point under

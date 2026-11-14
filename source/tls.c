@@ -17,13 +17,52 @@ static mbedtls_x509_crt roots;
 static mbedtls_ssl_config config;
 static mbedtls_ctr_drbg_context random_state;
 static int configured,initialized,last_error;
-static int64_t epoch,started;
+static int64_t epoch,started,clock_uncertainty;
+#define TLS_MIN_SECONDS INT64_C(1704067200)
+#define TLS_MAX_SECONDS INT64_C(2147483647)
+#define TLS_LOCAL_UNCERTAINTY_SECONDS INT64_C(50400)
+static int clock_now(int64_t *out){
+    int64_t now=dnd_timing_now();
+    if(started<0||now<started)return 0;
+    int64_t elapsed=(now-started)/1000000;
+    if(epoch<TLS_MIN_SECONDS+clock_uncertainty||
+       epoch>TLS_MAX_SECONDS-clock_uncertainty||
+       elapsed>TLS_MAX_SECONDS-clock_uncertainty-epoch)return 0;
+    *out=epoch+elapsed;return 1;
+}
 static mbedtls_time_t tls_time(mbedtls_time_t *out){
-    int64_t elapsed=dnd_timing_now()-started;
-    int64_t now=elapsed<0?0:epoch+elapsed/1000000;
-    if(now>2147483647)now=0;
+    int64_t now;if(!clock_now(&now))now=0;
     if(out)*out=(mbedtls_time_t)now;
     return (mbedtls_time_t)now;
+}
+static int certificate_seconds(const mbedtls_x509_time *time,int64_t *out){
+    static const unsigned days[]={31,28,31,30,31,30,31,31,30,31,30,31};
+    if(time->year<1||time->year>9999||time->mon<1||time->mon>12||
+       time->hour<0||time->hour>23||time->min<0||time->min>59||
+       time->sec<0||time->sec>59)return 0;
+    int leap=time->year%4==0&&(time->year%100!=0||time->year%400==0);
+    unsigned limit=days[time->mon-1]+(time->mon==2&&leap);
+    if(time->day<1||(unsigned)time->day>limit)return 0;
+    int64_t year=time->year-1;
+    int64_t count=365*year+year/4-year/100+year/400-719162;
+    for(int month=1;month<time->mon;month++)count+=days[month-1]+(month==2&&leap);
+    count+=time->day-1;
+    *out=count*86400+time->hour*3600+time->min*60+time->sec;return 1;
+}
+/* mbedTLS supplies the validated path one certificate at a time. Never clear
+ * its hostname, chain, algorithm or existing date flags. Local time without a
+ * timezone is useful only when the entire possible UTC interval is valid. */
+static int verify_local_clock(void *context,mbedtls_x509_crt *certificate,int depth,uint32_t *flags){
+    (void)context;(void)depth;
+    int64_t now,from,to;
+    if(!clock_now(&now)){
+        *flags|=MBEDTLS_X509_BADCERT_FUTURE|MBEDTLS_X509_BADCERT_EXPIRED;return 0;
+    }
+    if(!certificate_seconds(&certificate->valid_from,&from)||from>now-clock_uncertainty)
+        *flags|=MBEDTLS_X509_BADCERT_FUTURE;
+    if(!certificate_seconds(&certificate->valid_to,&to)||to<now+clock_uncertainty)
+        *flags|=MBEDTLS_X509_BADCERT_EXPIRED;
+    return 0;
 }
 static int active(void){for(int i=0;i<TLS_SLOTS;i++)if(sessions[i].token)return 1;return 0;}
 static int find(int token){for(int i=0;i<TLS_SLOTS;i++)if(token>0&&sessions[i].token==token)return i;return -1;}
@@ -39,13 +78,14 @@ int dnd_net_tls_reset(void){
     if(active())return failure(-2);
     configured=0;
     if(initialized){mbedtls_ssl_config_free(&config);mbedtls_x509_crt_free(&roots);mbedtls_ctr_drbg_free(&random_state);initialized=0;}
+    epoch=started=clock_uncertainty=0;
     return 0;
 }
-int dnd_net_tls_configure(DndArray *ca,DndArray *seed,int64_t utc){
+static int configure(DndArray *ca,DndArray *seed,int64_t utc,int64_t uncertainty){
     if(active())return failure(-2);
     /* Invalidate previous configuration even when replacement input is invalid. */
     dnd_net_tls_reset();
-    if(!ca||!seed||ca->elements_are_references||seed->elements_are_references||ca->element_size!=1||seed->element_size!=1||ca->length<1||ca->length>262144||seed->length<48||seed->length>64||utc<1704067200||utc>2147483647)return failure(-2);
+    if(!ca||!seed||ca->elements_are_references||seed->elements_are_references||ca->element_size!=1||seed->element_size!=1||ca->length<1||ca->length>262144||seed->length<48||seed->length>64||utc<TLS_MIN_SECONDS+uncertainty||utc>TLS_MAX_SECONDS-uncertainty)return failure(-2);
     unsigned nonzero=0;for(unsigned i=0;i<seed->length;i++)nonzero|=seed->data[i];if(!nonzero)return failure(-2);
     unsigned char *pem=malloc((size_t)ca->length+1);if(!pem)return failure(-4);
     memcpy(pem,ca->data,ca->length);pem[ca->length]=0;
@@ -61,10 +101,11 @@ int dnd_net_tls_configure(DndArray *ca,DndArray *seed,int64_t utc){
     mbedtls_ctr_drbg_set_reseed_interval(&random_state,4096);
     if(r==0)r=mbedtls_ssl_config_defaults(&config,MBEDTLS_SSL_IS_CLIENT,MBEDTLS_SSL_TRANSPORT_STREAM,MBEDTLS_SSL_PRESET_DEFAULT);
     if(r!=0){dnd_net_tls_reset();return failure(r);}
-    epoch=utc;started=dnd_timing_now();mbedtls_platform_set_time(tls_time);
+    epoch=utc;started=dnd_timing_now();clock_uncertainty=uncertainty;mbedtls_platform_set_time(tls_time);
     mbedtls_ssl_conf_rng(&config,mbedtls_ctr_drbg_random,&random_state);
     mbedtls_ssl_conf_authmode(&config,MBEDTLS_SSL_VERIFY_REQUIRED);
     mbedtls_ssl_conf_ca_chain(&config,&roots,NULL);
+    if(uncertainty)mbedtls_ssl_conf_verify(&config,verify_local_clock,NULL);
     mbedtls_ssl_conf_min_tls_version(&config,MBEDTLS_SSL_VERSION_TLS1_2);
     mbedtls_ssl_conf_max_tls_version(&config,MBEDTLS_SSL_VERSION_TLS1_2);
     static const char *alpn[]={"http/1.1",NULL};mbedtls_ssl_conf_alpn_protocols(&config,alpn);
@@ -75,6 +116,8 @@ int dnd_net_tls_configure(DndArray *ca,DndArray *seed,int64_t utc){
     mbedtls_ssl_conf_ciphersuites(&config,suites);
     configured=1;last_error=0;return 0;
 }
+int dnd_net_tls_configure(DndArray *ca,DndArray *seed,int64_t utc){return configure(ca,seed,utc,0);}
+int dnd_net_tls_configure_local_clock(DndArray *ca,DndArray *seed,int64_t local){return configure(ca,seed,local,TLS_LOCAL_UNCERTAINTY_SECONDS);}
 static int send_bytes(void *context,const unsigned char *buffer,size_t count){
     int fd=*(int*)context;int n=dnd_np_write(fd,buffer,(int)count,1,0,0);
     return n==-1?MBEDTLS_ERR_SSL_WANT_WRITE:n<0?MBEDTLS_ERR_SSL_INTERNAL_ERROR:n;
@@ -113,6 +156,7 @@ void dnd_tls_close(int token){int i=find(token);if(i>=0){mbedtls_ssl_free(&sessi
 int dnd_net_tls_error(void){return last_error;}
 #else
 int dnd_net_tls_configure(DndArray *a,DndArray *b,int64_t t){(void)a;(void)b;(void)t;return -2;}
+int dnd_net_tls_configure_local_clock(DndArray *a,DndArray *b,int64_t t){(void)a;(void)b;(void)t;return -2;}
 int dnd_net_tls_reset(void){return 0;}
 int dnd_tls_begin(int t,int f,const char *h){(void)t;(void)f;(void)h;return -2;}
 int dnd_tls_handshake(int t){(void)t;return -2;}

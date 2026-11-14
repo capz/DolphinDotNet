@@ -5,6 +5,7 @@
 #define MBEDTLS_CONFIG_FILE "dnd_tls_config.h"
 #endif
 int dnd_net_tls_configure(DndArray *roots,DndArray *seed,int64_t unix_seconds);
+int dnd_net_tls_configure_local_clock(DndArray *roots,DndArray *seed,int64_t local_unix_seconds);
 int dnd_net_tls_reset(void);
 int dnd_net_tls_start(int token,DndString *host);
 int dnd_net_tls_handshake(int token);
