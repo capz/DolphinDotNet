@@ -108,6 +108,12 @@ internal static class Program
         using(var sampleCatalog=sampleImage.CreateCatalog(FirmwareCatalogOptions.IncludeSystemAudio,default))
         {
             if(sampleCatalog.AudioSampleCount!=12)return 40;
+            SystemStartupSoundInfo unavailable;
+            if(sampleCatalog.TryGetStartupSoundInfo(SystemStartupSoundVariant.OneControllerZ,out unavailable)||unavailable!=null)return 47;
+            try{SystemResources.CreateStartupVariantSound(sampleCatalog,SystemStartupSoundVariant.OneControllerZ);return 48;}
+            catch(NotSupportedException){}
+            try{SystemResources.CreateStartupVariantMusic(sampleCatalog,SystemStartupSoundVariant.FourControllerZ);return 49;}
+            catch(NotSupportedException){}
             try{using(var exhausted=SystemResources.CreateAudioSample(sampleCatalog,sampleCatalog.GetAudioSampleInfo(0),nativeBudgetBytes:1024)){}return 46;}
             catch(global::System.IO.IOException){}
             var info=sampleCatalog.GetAudioSampleInfo(2);

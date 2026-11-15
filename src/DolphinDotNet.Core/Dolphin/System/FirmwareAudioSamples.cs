@@ -44,6 +44,7 @@ internal sealed class FirmwareAudioSamples : IDisposable
     private readonly List<FirmwareMenuWaveSource> sources=new List<FirmwareMenuWaveSource>();
     private readonly List<bool> owned=new List<bool>();
     private readonly List<FirmwareAudioSampleInfo> samples=new List<FirmwareAudioSampleInfo>();
+    private readonly SystemStartupSoundInfo?[] startup=new SystemStartupSoundInfo?[3];
     internal int RetainedBytes {get;private set;}
     internal int AdditionalRetainedBytes {get;private set;}
     internal int Count=>samples.Count;
@@ -76,9 +77,45 @@ internal sealed class FirmwareAudioSamples : IDisposable
                 result.RetainedBytes=FirmwareAudioBounds.Add(result.RetainedBytes,source.EncodedBytes);
                 if(own)result.AdditionalRetainedBytes=FirmwareAudioBounds.Add(result.AdditionalRetainedBytes,source.EncodedBytes);
             }
+            result.QualifyStartup(menu);
             cancellation.ThrowIfCancellationRequested();return result;
         }
         catch {result.Dispose();throw;}
+    }
+    private void QualifyStartup(FirmwareMenuAudio? menu)
+    {
+        var archive=menu==null?null:menu.QualifiedArchive;
+        SystemMenuSoundInfo? profile;
+        if(archive==null||menu==null||!menu.TryGetInfo(SystemMenuSound.Select,out profile)||profile==null)return;
+        // Live controller selection and the original score's program table:
+        // one Z selects program 2 (IDs 2/3); four Zs select program 1 (IDs 0/1).
+        // These are deliberately independent of the stable SDK enum order.
+        int[] leftIds={7,2,0},rightIds={8,3,1},counts={174067,166745,187092};
+        for(int v=0;v<3;v++)
+        {
+            int left=-1,right=-1;
+            for(int i=0;i<Count;i++)
+            {
+                var info=this[i];
+                if(info.BankIndex!=0||info.ArchiveName!=archive.Name||info.FirmwareSampleOffset<archive.Offset||
+                   info.FirmwareSampleOffset>=archive.Offset+archive.Length)continue;
+                if(info.WaveId==leftIds[v]){if(left>=0)throw new InvalidDataException("Ambiguous startup left source.");left=i;}
+                if(info.WaveId==rightIds[v]){if(right>=0)throw new InvalidDataException("Ambiguous startup right source.");right=i;}
+            }
+            if(left<0||right<0)continue;
+            var l=this[left];var r=this[right];
+            if(l.Codec!=0||r.Codec!=0||l.HasLoop||r.HasLoop||l.BaseKey!=60||r.BaseKey!=60||
+               l.SampleRate!=32000||r.SampleRate!=32000||l.SampleCount!=counts[v]||r.SampleCount!=counts[v])
+                throw new InvalidDataException("Startup source metadata differs from qualified profile.");
+            startup[v]=new SystemStartupSoundInfo((SystemStartupSoundVariant)v,profile.ProfileId,32000,counts[v],leftIds[v],rightIds[v],left,right);
+        }
+    }
+    internal SystemStartupSoundInfo? StartupInfo(SystemStartupSoundVariant variant)=>startup[(int)variant];
+    internal byte[] SnapshotStartup(SystemStartupSoundVariant variant,CancellationToken cancellation)
+    {
+        var info=StartupInfo(variant);
+        if(info==null)throw new NotSupportedException("No qualified original startup variant in this catalog.");
+        return FirmwareStereoAudio.Interleave(sources[info.LeftIndex],sources[info.RightIndex],info.SampleCount,info.SampleRate,cancellation);
     }
     internal FirmwareMenuWaveSource? FindSource(int offset,int samples,int rate)
     {

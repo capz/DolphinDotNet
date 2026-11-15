@@ -183,12 +183,28 @@ public sealed class FirmwareStereoAudio
         if(data!=null){var result=new byte[data.Length];Array.Copy(data,result,result.Length);return result;}
         var left=leftSource;var right=rightSource;
         if(left==null||right==null)throw new ObjectDisposedException(nameof(FirmwareStereoAudio));
-        int frames=(SampleCount+15)/16;var combined=new byte[32+frames*18];
-        Write32(combined,0,combined.Length);Write32(combined,4,SampleCount);
-        combined[8]=(byte)(SampleRate>>8);combined[9]=(byte)SampleRate;combined[11]=4;combined[13]=16;
-        for(int i=0;i<frames;i++)
-        {Array.Copy(left.Body,i*9,combined,32+i*18,9);Array.Copy(right.Body,i*9,combined,41+i*18,9);}
-        return combined;
+        return Interleave(left,right,SampleCount,SampleRate,default);
+    }
+    internal static byte[] Interleave(FirmwareMenuWaveSource left,FirmwareMenuWaveSource right,int samples,int rate,CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if(samples<1||samples>(FirmwareCatalog.MaximumDecodedBytes-32)/18*16||rate<5000||rate>48000)
+            throw new InvalidDataException("Original stereo source exceeds budget.");
+        int frames=(samples+15)/16;
+        if(left.Body.Length<frames*9||right.Body.Length<frames*9)throw new InvalidDataException("Truncated original stereo source.");
+        var combined=new byte[32+frames*18];
+        try
+        {
+            Write32(combined,0,combined.Length);Write32(combined,4,samples);
+            combined[8]=(byte)(rate>>8);combined[9]=(byte)rate;combined[11]=4;combined[13]=16;
+            for(int i=0;i<frames;i++)
+            {
+                if((i&255)==0)cancellation.ThrowIfCancellationRequested();
+                Array.Copy(left.Body,i*9,combined,32+i*18,9);Array.Copy(right.Body,i*9,combined,41+i*18,9);
+            }
+            cancellation.ThrowIfCancellationRequested();return combined;
+        }
+        catch {Array.Clear(combined,0,combined.Length);throw;}
     }
     internal int ShareOriginalSamples(FirmwareAudioSamples samples)
     {

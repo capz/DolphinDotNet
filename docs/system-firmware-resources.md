@@ -272,6 +272,24 @@ pitch, instrument envelope or effect routing; use a semantic cue for those.
 Firmware bytes are never bundled in the SDK. `dnd-assets firmware inspect INPUT
 --system-audio` reports sample metadata without exporting sample data.
 
+All three paired startup sources are available on qualified IPL profiles:
+
+```csharp
+using var sound = SystemResources.CreateStartupVariantSound(
+    catalog, SystemStartupSoundVariant.OneControllerZ);
+using var channel = sound.Play();
+```
+
+`Normal`, `OneControllerZ` and `FourControllerZ` are SDK identities. Their values
+are independent of the original instrument programs: one Z selects program 2
+(wave IDs 2/3); four Zs select program 1 (IDs 0/1). Query
+`TryGetStartupSoundInfo` for availability, source identities and duration.
+`CreateStartupVariantMusic` exposes the same owned source through the established
+Music API. These factories require `IncludeSystemAudio` and fail on unknown
+semantic profiles. They return losslessly interleaved original stereo sources;
+the persistent score's envelopes and startup-to-ambience handover are separate.
+The existing `CreateStartupSound(catalog, default)` call stays source compatible.
+
 ## Optional startup rendition
 
 `SystemStartupSequence` is an elapsed-time controller with `Update`, `Seek` and
