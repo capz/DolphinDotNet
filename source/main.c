@@ -1,3 +1,4 @@
+#include "dnd_ipl_player.h"
 #include "dnd_platform.h"
 #include "dnd_managed.h"
 #include "dnd_input.h"
@@ -43,6 +44,9 @@ int main(void) {
 #endif
 
     intptr_t managed_result=dnd_aot_entry(&heap);
+#ifdef DND_IPL_AUDIO
+    dnd_ipl_player_shutdown();
+#endif
     dnd_audio_shutdown();
     dnd_cmgr_shutdown();
     if (dnd_dol_pending() && managed_result==0 && !dnd_exception_pending()) {

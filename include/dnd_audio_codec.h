@@ -29,6 +29,12 @@ typedef struct {
 } DndAudioDecoder;
 void dnd_audio_decoder_init(DndAudioDecoder *decoder,
                             const DndAudioSource *source, bool loop);
+/* Parse bounded native-owned memory. The caller keeps the compressed bytes
+ * alive and releases the allocated span metadata with source_dispose. */
+bool dnd_audio_source_parse_memory(DndAudioSource *source,const uint8_t *header,
+    unsigned header_bytes,const uint8_t *body,unsigned body_bytes,
+    unsigned format,unsigned entry,unsigned budget);
+void dnd_audio_source_dispose(DndAudioSource *source);
 /* Returns frames produced, with interleaved PCM16 in big-endian byte order. */
 unsigned dnd_audio_decode(DndAudioDecoder *decoder, uint8_t *output,
                           unsigned frames);

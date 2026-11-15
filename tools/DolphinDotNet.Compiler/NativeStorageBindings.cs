@@ -153,6 +153,16 @@ internal static class NativeStorageBindings
         ["MeshCreateNormal"]=("dnd_mesh_create","aaii",false),
         ["MeshCreateNormalRange"]=("dnd_mesh_create_range","aiaiii",false),
         ["MeshUpdateNormal"]=("dnd_mesh_update","iaiii",false),
+        ["AudioSystemBegin"]=("dnd_ipl_player_begin","ai",false),
+        ["AudioSystemStep"]=("dnd_ipl_player_step","i",false),
+        ["AudioSystemStart"]=("dnd_ipl_player_start","ii",false),
+        ["AudioSystemPlay"]=("dnd_ipl_player_play","iii",false),
+        ["AudioSystemControl"]=("dnd_ipl_player_control","iif",false),
+        ["AudioSystemStat"]=("dnd_ipl_player_stat","ii",false),
+        ["AudioSystemOwner"]=("dnd_ipl_player_owner","ii",false),
+        ["AudioSystemStopOwner"]=("dnd_ipl_player_stop_owner","ii",false),
+        ["AudioSystemStop"]=("dnd_ipl_player_stop","i",false),
+        ["AudioSystemDispose"]=("dnd_ipl_player_dispose","i",false),
         ["AudioInit"]=("dnd_audio_init","",false),
         ["AudioBegin"]=("dnd_audio_begin","s",false),
         ["AudioBeginMemory"]=("dnd_audio_begin_memory","aaiii",false),
@@ -293,7 +303,7 @@ internal static class NativeStorageBindings
         // Publication, allocation and every other texture/GX operation require
         // the application executor. Keep this list deliberately restrictive.
         bool detachedTextureCopy = call.Operation is "TextureStageArray" or "TextureStageBuffer";
-        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||(!detachedTextureCopy && call.Operation.StartsWith("Texture",StringComparison.Ordinal))||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioInit" or "AudioBegin" or "AudioBeginMemory" or "AudioBeginMenu" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation=="AssetCompatReport"||call.Operation is "ModelDrawModels" or "ModelDraw" or "ModelDrawEffect" or "ModelDrawMaterial" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
+        if(call.Operation.StartsWith("Device",StringComparison.Ordinal)||call.Operation.StartsWith("Buffer",StringComparison.Ordinal)||call.Operation.StartsWith("Draw",StringComparison.Ordinal)||(!detachedTextureCopy && call.Operation.StartsWith("Texture",StringComparison.Ordinal))||call.Operation.StartsWith("Mesh",StringComparison.Ordinal)||call.Operation.StartsWith("Canvas",StringComparison.Ordinal)||call.Operation=="NativeObjectSize"||call.Operation.StartsWith("Graphics",StringComparison.Ordinal)||call.Operation.StartsWith("Input",StringComparison.Ordinal)||(call.Operation.StartsWith("Audio",StringComparison.Ordinal)&&call.Operation is not ("AudioSystemBegin" or "AudioSystemStep" or "AudioSystemDispose" or "AudioInit" or "AudioBegin" or "AudioBeginMemory" or "AudioBeginMenu" or "AudioBeginSource" or "AudioStep" or "AudioDispose" or "AudioStat"))||call.Operation=="AssetCompatReport"||call.Operation is "ModelDrawModels" or "ModelDraw" or "ModelDrawEffect" or "ModelDrawMaterial" or "ModelFrameBegin" or "ModelFrameEnd" or "PlatformReset" or "HardwareProbe" or "HardwareId")
             b.AppendLine("  dnd_async_require_application_thread();");
         if(call.Operation=="Publish")
             b.AppendLine("  extern void dnd_corpus_publish(int,int,int,int,DndString*);");

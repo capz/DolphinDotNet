@@ -151,6 +151,8 @@ def main(area):
         run("python3","tests/system_menu_audio.py")
         test("tests/AudioAssetTests")
         build("tests/AudioFormatsSmoke/AudioFormatsSmoke.csproj")
+        build("tests/SystemAudioSessionSmoke/SystemAudioSessionSmoke.csproj")
+        run("python3","tests/system_audio_session.py")
         with tempfile.TemporaryDirectory() as tmp:
             run("python3","tests/generate_audio_fixtures.py",tmp)
             for source in ("audio_native_test","audio_formats_test"):

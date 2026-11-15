@@ -240,7 +240,7 @@ internal static class GameCubeBundle
         }
 
         var sources = new[] {
-            "aram", "audio", "audio_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "debug_heartbeat", "debug_automation", "asset_corpus", "asset_fixture", "asset_compat", "disc_gamecube", "fst",
+            "aram", "audio", "audio_gamecube", "ipl_audio", "ipl_sequence", "ipl_mixer", "ipl_player", "ipl_player_gamecube", "async_runtime", "bcl", "card_transaction", "console_overlay", "debug_heartbeat", "debug_automation", "asset_corpus", "asset_fixture", "asset_compat", "disc_gamecube", "fst",
             "fst_gamecube", "iso_file", "dol", "dol_gamecube", "hardware", "gc_stw", "graphics_gx", "graphics_device", "draw_resources", "ipl_font", "gx_raw", "gx_guard", "input", "input_gamecube",
             "main", "managed_runtime", "system_firmware", "numeric", "model", "model_obj", "model_source", "model_ufbx", "model_animation",
             "model_graphics", "model_transform", "tls", "network", "network_gamecube",
@@ -266,7 +266,7 @@ internal static class GameCubeBundle
             File.Copy(Path.Combine(root, "source", name + ".c"),
                 Path.Combine(directory, "source", name + ".c"), true);
 
-        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), features.Any(f => f.Name == "entropy"), gdbTcp is not null, gdbUsb is not null, debugSymbols, sampleControls, reachable.Contains("Dolphin.System.FirmwareImage", StringComparer.Ordinal)));
+        File.WriteAllText(Path.Combine(directory, "Makefile"), Makefile(platform, features.Any(f => f.Name == "networking"), features.Any(f => f.Name == "entropy"), gdbTcp is not null, gdbUsb is not null, debugSymbols, sampleControls, reachable.Contains("Dolphin.System.FirmwareImage", StringComparer.Ordinal), reachable.Contains("Dolphin.System.SystemAudioSession", StringComparer.Ordinal)));
         var report = new StringBuilder();
         report.AppendLine("DolphinDotNet AOT Native Dependencies");
         report.AppendLine("Target: " + platform);
@@ -310,7 +310,7 @@ internal static class GameCubeBundle
         throw new DirectoryNotFoundException("The DolphinDotNet repository's native sources are required to emit a self-contained build directory.");
     }
 
-    private static string Makefile(string platform, bool usesNetworking, bool usesEntropy, bool gdbTcp, bool gdbUsb, bool debugSymbols, bool sampleControls, bool firmwareHeap)
+    private static string Makefile(string platform, bool usesNetworking, bool usesEntropy, bool gdbTcp, bool gdbUsb, bool debugSymbols, bool sampleControls, bool firmwareHeap, bool systemAudio)
     {
         var isWiiU = platform == "wiiu";
         var overlayTelemetry = debugSymbols && platform == "gamecube";
@@ -345,7 +345,7 @@ internal static class GameCubeBundle
             (overlayTelemetry ? " -DDND_DEBUG_TELEMETRY" : "") +
             (overlayTelemetry ? " -DDND_DEBUG_AUTOMATION" : "") +
             (sampleControls ? " -DDND_SAMPLE_CONTROLS" : "") + (usesNetworking ? " -DDND_TLS" : "") +
-            (usesEntropy ? " -DDND_PLATFORM_ENTROPY" : ""));
+            (usesEntropy ? " -DDND_PLATFORM_ENTROPY" : "") + (systemAudio ? " -DDND_IPL_AUDIO" : ""));
         if (!isWiiU)
         {
             builder.AppendLine("DND_MANAGED_HEAP_BYTES ?= " + (firmwareHeap ? "8388608" : "262144"));

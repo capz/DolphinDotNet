@@ -6,6 +6,37 @@ namespace Dolphin.System;
 /// graphics and audio resources. Returned resources are owned by the caller.</summary>
 public static class SystemResources
 {
+    /// <summary>Prepare a self-contained native IPL score without starting it.
+    /// Requires IncludeSystemAudio and a qualified complete-audio profile.</summary>
+    public static SystemAudioSession CreateAudioSession(FirmwareCatalog catalog,
+        CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        ValidateSessionRequest(catalog,nativeBudgetBytes);
+        using(var snapshot=catalog.SnapshotSystemAudio(cancellationToken))
+            return SystemAudioSession.Prepare(snapshot,nativeBudgetBytes,cancellationToken);
+    }
+    /// <summary>Capture an owned snapshot before returning the task. The image
+    /// and catalog can then be disposed. Cancellation releases partial native state.</summary>
+    public static global::System.Threading.Tasks.Task<SystemAudioSession> CreateAudioSessionAsync(FirmwareCatalog catalog,
+        CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        ValidateSessionRequest(catalog,nativeBudgetBytes);
+        var snapshot=catalog.SnapshotSystemAudio(cancellationToken);
+        try
+        {
+            return global::System.Threading.Tasks.Task.Run(()=>
+            {
+                try{return SystemAudioSession.Prepare(snapshot,nativeBudgetBytes,cancellationToken);}
+                finally{snapshot.Dispose();}
+            });
+        }
+        catch{snapshot.Dispose();throw;}
+    }
+    private static void ValidateSessionRequest(FirmwareCatalog catalog,int budget)
+    {
+        if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
+        if(budget<1024||budget>16*1024*1024)throw new global::System.ArgumentOutOfRangeException("nativeBudgetBytes");
+    }
     /// <summary>Create an owned original sample whose Play automatically uses
     /// embedded loop metadata. The catalog/image can be disposed after return.</summary>
     public static SystemAudioSample CreateAudioSample(FirmwareCatalog catalog,FirmwareAudioSampleInfo sample,

@@ -118,6 +118,21 @@ static bool wav_header(int file, int64_t length, unsigned *offset,
   return false;
 }
 #include "audio_formats.inc"
+bool dnd_audio_source_parse_memory(DndAudioSource *s,const uint8_t *header,
+    unsigned header_bytes,const uint8_t *body,unsigned body_bytes,
+    unsigned format,unsigned entry,unsigned budget) {
+  if(!s)return false;
+  memset(s,0,sizeof(*s));
+  if(!header||!header_bytes||header_bytes>MAX_PCM_BYTES||body_bytes>MAX_PCM_BYTES||
+     (body_bytes&&!body)||budget>MAX_PCM_BYTES)return false;
+  AudioView h={header,header_bytes,0},b={body,body_bytes,0};
+  if(ac_parse(s,&h,&b,format,entry,budget))return true;
+  dnd_audio_source_dispose(s);return false;
+}
+void dnd_audio_source_dispose(DndAudioSource *s) {
+  if(!s)return;
+  free(s->span);memset(s,0,sizeof(*s));
+}
 #include "audio_menu.inc"
 
 int dnd_audio_init(void) {

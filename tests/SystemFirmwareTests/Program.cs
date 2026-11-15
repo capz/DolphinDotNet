@@ -6,6 +6,22 @@ if(args.Length==3&&args[0]=="--private-menu")
     using var catalog=input.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default);
     MenuPrivateTests.Validate(input,catalog);
     Directory.CreateDirectory(args[2]);
+    using(var full=input.CreateCatalog(FirmwareCatalogOptions.IncludeSystemAudio,default))
+    {
+        try
+        {
+            if(full.GetAudioCues().Length!=19)throw new Exception("Complete cue inventory");
+            for(int cue=0;cue<19;cue++)
+            {
+                if(!full.TryGetAudioCueInfo((SystemAudioCue)cue,out var metadata)||metadata==null||
+                    metadata.RepeatsUntilStopped!=(cue==14||cue==15))throw new Exception("Cue metadata");
+            }
+            using var system=full.SnapshotSystemAudio(default);
+            File.WriteAllBytes(Path.Combine(args[2],"system-private.dia"),system.Packet);
+            Console.WriteLine("Complete private system snapshot "+system.Packet.Length);
+        }
+        catch(NotSupportedException){}
+    }
     for(int i=0;i<10;i++)
     {
         if(!catalog.TryGetMenuSoundInfo((SystemMenuSound)i,out var menuInfo))throw new Exception("Unsupported private profile");
