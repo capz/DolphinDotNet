@@ -145,7 +145,7 @@ internal static class GameCubeBundle
             // VIDEO corrections, including apps using raw VIDEO bindings.
             Directory.CreateDirectory(Path.Combine(directory, "vendor", "libogc2"));
             foreach (var file in new[] { "build_exi_overlay.sh", "verify_exi_source.py", "verify_video_source.py",
-                                         "build_fat_overlay.py", "prepare_fat_overlay.py" })
+                                         "build_fat_overlay.py", "prepare_fat_overlay.py", "build_bba_overlay.py" })
                 // Existing Windows checkouts and packaged compilers can still
                 // contain CRLF even with the repository's LF checkout rule.
                 File.WriteAllText(Path.Combine(directory, "scripts", file),
@@ -370,6 +370,20 @@ internal static class GameCubeBundle
         builder.AppendLine("export INCLUDE := -I$(CURDIR)/include " + (usesNetworking ? "-I$(CURDIR)/build/tls/source/include " : "") + "-I" + library + "/include -I$(CURDIR)/build");
         builder.AppendLine("export LIBPATHS := " + (usesNetworking ? "-L$(CURDIR)/build/tls " : "") + (usesEntropy ? "-L$(CURDIR)/build/entropy " : "") + (platform == "gamecube" ?
             "-L$(CURDIR)/build/exi-overlay -L$(CURDIR)/build/fat-overlay " : "") + "-L" + library + "/lib");
+        if (platform == "gamecube" && usesNetworking)
+        {
+            builder.AppendLine("DND_BBA_TCP_WINDOW_BYTES ?= 0");
+            builder.AppendLine("ifneq ($(DND_BBA_TCP_WINDOW_BYTES),0)");
+            builder.AppendLine("export BBA_OVERLAY := $(CURDIR)/build/bba-overlay/libbba.a");
+            builder.AppendLine("export LIBPATHS := -L$(CURDIR)/build/bba-overlay $(LIBPATHS)");
+            builder.AppendLine(".PHONY: dnd-bba");
+            builder.AppendLine("dnd-bba: $(BUILD)");
+            builder.AppendLine("\t@python3 scripts/build_bba_overlay.py --window $(DND_BBA_TCP_WINDOW_BYTES)");
+            builder.AppendLine("else");
+            builder.AppendLine(".PHONY: dnd-bba");
+            builder.AppendLine("dnd-bba:");
+            builder.AppendLine("endif");
+        }
         builder.AppendLine("export DOL_VALIDATOR := $(CURDIR)/scripts/dol_sections.py");
         if (platform == "gamecube")
         {
@@ -402,7 +416,7 @@ internal static class GameCubeBundle
             builder.AppendLine("\tpython3 boot/gamecube/pack.py apploader.elf apploader.img --dol \"$(OUTPUT).dol\"");
         }
         builder.AppendLine(".PHONY: all clean");
-        builder.AppendLine("all: " + (usesNetworking ? "dnd-tls " : "") + (usesEntropy ? "dnd-entropy " : "") + (platform == "gamecube" ?
+        builder.AppendLine("all: " + (usesNetworking ? "dnd-tls " + (platform == "gamecube" ? "dnd-bba " : "") : "") + (usesEntropy ? "dnd-entropy " : "") + (platform == "gamecube" ?
             "$(EXI_OVERLAY) $(FAT_OVERLAY) $(DVM_OVERLAY) $(BUILD)" : "$(BUILD)"));
         builder.AppendLine("\t@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile");
         if (platform == "gamecube")
@@ -436,7 +450,7 @@ internal static class GameCubeBundle
             if (debugSymbols)
                 builder.AppendLine("\tpython3 \"$(dir $(OUTPUT))scripts/dnd_debug_addresses.py\" --elf $(OUTPUT).elf --source-map \"$(dir $(OUTPUT))dnd-il-debug.json\" --output $(OUTPUT).dnd-addresses.json --readelf \"$(DEVKITPPC)/bin/powerpc-eabi-readelf\"");
         }
-        builder.AppendLine("$(OUTPUT).elf: $(OFILES) .dnd-native-flags" + (usesEntropy ? " $(ENTROPY_LIBRARY)" : "") + (platform == "gamecube" ? " $(EXI_OVERLAY) $(FAT_OVERLAY) $(DVM_OVERLAY)" : ""));
+        builder.AppendLine("$(OUTPUT).elf: $(OFILES) .dnd-native-flags" + (usesEntropy ? " $(ENTROPY_LIBRARY)" : "") + (platform == "gamecube" ? " $(EXI_OVERLAY) $(FAT_OVERLAY) $(DVM_OVERLAY) $(BBA_OVERLAY)" : ""));
         builder.AppendLine("\t$(CC) $(OFILES) $(LDFLAGS) $(LIBPATHS) $(LIBS) -o $@");
         builder.AppendLine("-include $(DEPENDS)");
         builder.AppendLine("endif");
