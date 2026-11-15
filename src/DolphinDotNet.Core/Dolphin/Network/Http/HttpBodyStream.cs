@@ -6,10 +6,10 @@ using Scheduler = Dolphin.Threading.Tasks.Scheduler;
 namespace Dolphin.Network.Http;
 internal sealed class HttpBodyStream : Dolphin.IO.Stream
 {
-    private readonly int limit;private readonly TcpClient client;private readonly CancellationToken requestToken;private readonly byte[] input;private int position,available,remaining,chunkState,lineLength,trailerBytes,total;private readonly char[] line=new char[256];private readonly bool chunked,untilClose;private bool lineCr,finished,disposed,busy;
-    internal HttpBodyStream(TcpClient client,HttpResponseMessage response,byte[] initial,int offset,int count,bool head,CancellationToken token,int maximumBytes)
+    private readonly int limit,readBufferSize;private readonly TcpClient client;private readonly CancellationToken requestToken;private readonly byte[] input;private int position,available,remaining,chunkState,lineLength,trailerBytes,total;private readonly char[] line=new char[256];private readonly bool chunked,untilClose;private bool lineCr,finished,disposed,busy;
+    internal HttpBodyStream(TcpClient client,HttpResponseMessage response,byte[] initial,int offset,int count,bool head,CancellationToken token,int maximumBytes,int readBufferSize)
     {
-        limit=maximumBytes;this.client=client;requestToken=token;input=new byte[8192];Array.Copy(initial,offset,input,0,count);available=count;
+        limit=maximumBytes;this.readBufferSize=readBufferSize;this.client=client;requestToken=token;input=new byte[Math.Max(8192,readBufferSize)];Array.Copy(initial,offset,input,0,count);available=count;
         string? encoding=response.Headers.Get("content-encoding"),transfer=response.Headers.Get("transfer-encoding"),length=response.Headers.Get("content-length");
         if(encoding!=null&&HttpText.Lower(encoding)!="identity")throw new NotSupportedException("Compressed HTTP content is unavailable.");if(transfer!=null&&length!=null)throw new FormatException("Ambiguous HTTP body framing.");
         chunked=transfer!=null;if(chunked&&HttpText.Lower(transfer!)!="chunked")throw new NotSupportedException("Unsupported transfer coding.");
@@ -43,13 +43,13 @@ internal sealed class HttpBodyStream : Dolphin.IO.Stream
     private sealed class ReadWork : Operation
     {
         private readonly HttpBodyStream owner;private readonly byte[] output;private readonly int offset,count;internal readonly TaskCompletionSource<int> Completion=new TaskCompletionSource<int>();
-        internal ReadWork(HttpBodyStream s,byte[] b,int o,int n,CancellationToken token):base(token){owner=s;output=b;offset=o;count=n>4096?4096:n;}
+        internal ReadWork(HttpBodyStream s,byte[] b,int o,int n,CancellationToken token):base(token){owner=s;output=b;offset=o;count=n>s.readBufferSize?s.readBufferSize:n;}
         protected override bool Step()
         {
             owner.requestToken.ThrowIfCancellationRequested();if(owner.disposed)throw new ObjectDisposedException("HttpBodyStream");int written=0;
             while(written<count&&!owner.finished)
             {
-                if(owner.position==owner.available){if(written>0)break;int n=NativeNetwork.NetRead(owner.client.Client.Handle,owner.input,0,4096,null!);NetworkRuntime.Check(n);if(n==-1)return false;if(n==0){if(!owner.untilClose)throw new IOException("HTTP response body truncated.");owner.End();break;}owner.position=0;owner.available=n;}
+                if(owner.position==owner.available){if(written>0)break;int n=NativeNetwork.NetRead(owner.client.Client.Handle,owner.input,0,owner.readBufferSize,null!);NetworkRuntime.Check(n);if(n==-1)return false;if(n==0){if(!owner.untilClose)throw new IOException("HTTP response body truncated.");owner.End();break;}owner.position=0;owner.available=n;}
                 if(!owner.chunked||owner.chunkState==1){int n=owner.available-owner.position;if(n>count-written)n=count-written;if(!owner.untilClose&&n>owner.remaining)n=owner.remaining;if(n>owner.limit-owner.total)throw new IOException("HTTP streamed body exceeds limit.");Array.Copy(owner.input,owner.position,output,offset+written,n);owner.position+=n;written+=n;owner.total+=n;if(!owner.untilClose){owner.remaining-=n;if(owner.remaining==0){if(owner.chunked)owner.chunkState=2;else owner.End();}}continue;}
                 byte next=owner.input[owner.position++];if(owner.chunkState==2){if(next!=13)throw new FormatException("Chunk terminator missing.");owner.chunkState=3;}else if(owner.chunkState==3){if(next!=10)throw new FormatException("Chunk terminator invalid.");owner.chunkState=0;}else if(owner.chunkState==0){if(owner.LineByte(next))owner.ChunkSize();}else{if(++owner.trailerBytes>8192)throw new FormatException("HTTP trailers exceed limit.");if(owner.LineByte(next)){if(owner.lineLength==0)owner.End();else{string trailer=new string(owner.line,0,owner.lineLength);int colon=HttpText.Index(trailer,':');if(colon<=0)throw new FormatException("Invalid trailer.");string name=HttpText.Lower(trailer.Substring(0,colon));if(name=="content-length"||name=="transfer-encoding")throw new FormatException("Framing trailer rejected.");owner.lineLength=0;}}}
             }

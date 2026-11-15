@@ -19,3 +19,17 @@ the linked PowerPC TCP allocation/window-output code. An attempted raw-TCP
 Dolphin debugger fixture did not complete reliably; it is not a passing packet
 or hardware-throughput test. Advertised window/packet loss and sustained transfer
 still require physical BBA acceptance.
+
+Stage 2 adds `Dolphin.Network.Http.HttpClient.StreamReadBufferSize`, default
+4096 and bounded to 4096..16384. Each request snapshots its setting. The body
+input buffer remains at least 8192 bytes for header spillover, growing to 16384
+only when requested. Both the native TLS read and managed operation use the
+configured quantum. Short reads, framing, limits, cancellation and security
+checks are retained. The updater explicitly selects 16384.
+
+Real local verified HTTPS, through SDK AOT Debug/Release and GC stress, delivered
+the same 65,567 payload bytes in 17 -> 5 body operations (Content-Length) and
+21 -> 9 (chunked). Max payload read grew from 4096 to 16384/16378 respectively.
+These are operation counts, not BBA throughput. Host fixture heap was 253008
+bytes normally / 84816 at the end of GC stress (262144 capacity); the updater
+retains its 1 MiB managed budget.

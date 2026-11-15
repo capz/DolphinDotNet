@@ -40,6 +40,16 @@ try{Wait(client.GetStringAsync($WRONG));return 5;}catch(IOException){}
 try{Wait(client.GetStringAsync($URL+"/truncated"));return 7;}catch(Exception){}
 var cancelled=new System.Threading.CancellationTokenSource();cancelled.Cancel();try{Wait(client.GetAsync($URL+"/final",cancelled.Token));return 8;}catch(OperationCanceledException){}
 }
+foreach(int quantum in new[]{4096,16384}){
+using(var client=new Dolphin.Network.Http.HttpClient()){client.StreamReadBufferSize=quantum;
+foreach(string path in new[]{"/bulk","/bulk-chunked"}){
+var pending=client.GetStreamAsync($URL+path);Wait(pending);using(var stream=pending.GetAwaiter().GetResult()){
+var data=new byte[16384];int total=0,calls=0,largest=0;
+while(true){var read=stream.ReadAsync(data,0,data.Length);Wait(read);int n=read.GetAwaiter().GetResult();if(n==0)break;calls++;if(n>largest)largest=n;for(int i=0;i<n;i++)if(data[i]!=(byte)((total+i)%251))return 20;total+=n;}
+if(total!=65567||largest>quantum||quantum==16384&&largest<=4096)return 21;
+Console.WriteLine("HTTP_QUANTUM="+quantum+" CALLS="+calls+" MAX="+largest+" BYTES="+total);
+}}}}
+using(var bounds=new Dolphin.Network.Http.HttpClient()){foreach(int bad in new[]{0,4095,16385}){try{bounds.StreamReadBufferSize=bad;return 22;}catch(ArgumentOutOfRangeException){}}}
 TlsConfiguration.Reset();using(var client=new HttpClient()){try{Wait(client.GetStringAsync($URL+"/final"));return 6;}catch(IOException){}}
 var rejected=new byte[48];for(int i=0;i<rejected.Length;i++)rejected[i]=1;
 try{TlsConfiguration.InitializeFromLocalClock(ca,rejected,0);return 9;}catch(IOException){}
@@ -90,6 +100,15 @@ def main():
                         request+=part
                     path=request.split(b' ')[1]
                     if index==1 and b'authorization:' in request.lower():errors.append('credentials crossed origins')
+                    if path in (b'/bulk',b'/bulk-chunked'):
+                        data=bytes(i%251 for i in range(65567))
+                        chunked=path==b'/bulk-chunked'
+                        stream.sendall(b'HTTP/1.1 200 OK\r\n'+(b'Transfer-Encoding: chunked' if chunked else b'Content-Length: 65567')+b'\r\n\r\n')
+                        for offset in range(0,len(data),16384):
+                            part=data[offset:offset+16384]
+                            stream.sendall((f'{len(part):x}\r\n'.encode()+part+b'\r\n') if chunked else part)
+                        if chunked:stream.sendall(b'0\r\n\r\n')
+                        return
                     if path==b'/relative':reply=b'HTTP/1.1 302 Found\r\nLocation: /final\r\nContent-Length: 0\r\n\r\n'
                     elif path==b'/network':reply=f'HTTP/1.1 302 Found\r\nLocation: //localhost:{ports[0]}/final\r\nContent-Length: 0\r\n\r\n'.encode()
                     elif path==b'/cross':reply=f'HTTP/1.1 302 Found\r\nLocation: https://localhost:{ports[1]}/final\r\nContent-Length: 0\r\n\r\n'.encode()
