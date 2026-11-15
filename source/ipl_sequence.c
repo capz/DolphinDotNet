@@ -173,7 +173,7 @@ static void execute(DndIplSequence *s,unsigned n) {
       unsigned flags=take(s,t,1),entry=take(s,t,3),slot=flags&15;
       if(t->child[slot]>=0)close_track(s,(unsigned)t->child[slot]);
       int child=open_track(s,(int)n,flags,entry,t->owner);t->child[slot]=child;
-      if(child>=0){if(s->processing_tick&&!s->modern)s->track[child].born_block=s->blocks+1;else execute(s,(unsigned)child);}
+      if(child>=0){if(s->processing_tick&&!s->modern)s->track[child].born_block=s->blocks+1;else if(!s->modern||!s->processing_tick)execute(s,(unsigned)child);}
     } else if(op==0xc4||op==0xc8) {
       unsigned flags=take(s,t,1),target=branch_target(s,t,flags);
       if(condition(s,t,flags)) {
@@ -285,7 +285,7 @@ void dnd_ipl_sequence_modern(DndIplSequence *s,bool modern) {
 }
 static void modern_tick_tree(DndIplSequence *s,unsigned n) {
   DndIplTrack *t=&s->track[n];
-  if(!t->active||t->born_block==s->blocks)return;
+  if(!t->active)return;
   t->ticks++;
   if(t->timer&&!--t->timer) {
     t->pending|=1u<<6;if(!t->timer_count||--t->timer_count)t->timer=t->timer_period;

@@ -1,167 +1,105 @@
-# Complete IPL audio implementation
+# Complete IPL audio qualification
 
-This work follows the approved complete-audio plan. Milestones continue until
-all reachable audio behavior in the three reference profiles is accounted for.
-Normal startup and ten finite menu effects are already supported by SDK 343.
+The native session executes caller-supplied, qualified IPL score/instrument data.
+It does not bundle firmware, extracted sounds, textures, sequence bytes,
+oscillator tables, recordings or runtime dumps. Private reference work uses the
+installed, unmodified Dolphin 2503 emulator with DSP LLE. Emulator results and
+physical-console confirmation are recorded separately.
 
-## Qualification ledger
+## Inventory and interfaces
 
-| Family | Evidence | Remaining qualification |
-| --- | --- | --- |
-| Twelve original samples | All three reference images: 12 owned snapshots, three embedded loops; native AOT partial-frame loop oracle; GameCube-target LLE playback/stop/disposal | Physical-console confirmation |
-| Startup variants | Live early-IPL controller selection plus original DSP voice source counts; all 3 profile snapshots; native Sound/Music variant factories | Complete persistent-score startup handover and physical-console confirmation |
-| Remaining finite cues | Static event 13 and 14–22 sequence paths | Original visible actions, stop/release paths and uninterrupted LLE comparisons |
-| Controlled card effects | Backward branches in events 17/18 and extended parameter instructions | External termination, ownership and complete port/interrupt semantics |
-| Ambience | Live programs 6/7/8, source IDs 10/9/4; persistent root traces | All control states, loop continuity and full DSP routing |
-| Output/global controls | Profile-specific clock/velocity and effect setup traced | Stereo/mono transitions, startup-to-idle handover, replacement/shutdown |
+- Twelve original WSYS sources have true wave IDs and copied metadata. Nine
+  play once; three have authored repeating sections. Both the standalone
+  `SystemAudioSample.Play()` and session `PlaySample(session.GetSample(i))`
+  handle the intro and repeating section without caller loop configuration.
+- Normal, One Controller Z and Four Controller Z select the original score's
+  three startup paths. Source completion triggers automatic idle handover.
+  Standalone Sound/Music paired-source factories remain available separately.
+- Nineteen named score cues cover the ten existing cube/options effects,
+  Press Start, Error, and seven card notifications/progress effects. Progress
+  identities describe the source slot, independently of copying or moving.
+- Original visible card actions establish error (13), erase/move completion
+  (15), copy/format completion (16), transfer from A/B (17/18), copy-transfer
+  completion (19), and move-to-B/A transfer completion (20/21). A self-authored
+  disc's Game Play screen establishes Press Start (22).
+- Event 14 has a valid recipe but no identified caller; it receives no invented
+  public action name. The dispatcher’s three startup paths, motion wrapper
+  (23), ambience enable/disable wrappers and output-mode setup were audited
+  alongside table-dispatched cues. Verified cube/submenu motion and ambience
+  controls have typed APIs; raw event numbers and ports are not public APIs.
 
-No guessed public cue names, raw event aliases or fixed-duration substitutes
-are qualified by this ledger. Raw sample playback is structural extraction;
-it does not claim to reproduce a sequenced effect or instrument envelope.
+Early, NTSC 1.2 and PAL 1.2 profiles retain qualified score/bank/effect/resampler
+and oscillator snapshots. Clock and absolute-gate helpers are fingerprinted as
+well. NTSC 1.2 and PAL 1.2 complete normalized snapshots are byte-identical;
+physical region alone does not identify the profile. The reporting PAL console
+returned the early reference fingerprint through GC Loader / CubiBoot.
 
-## Implementation checkpoints
+## Native behavior and bounds
 
-- Automatic samples: catalog retention/enumeration, ownership-safe snapshots,
-  and a facade whose parameterless Play honors the source loop are implemented.
-  Legacy Sound.Play and Music.Play defaults are unchanged.
-- Automatic-sample validation: synthetic metadata/foreign descriptor/cancel
-  checks, native-budget failure, forced-GC host AOT (8 MiB heap), metadata-only
-  inventory CLI and complete legacy audio regression suite pass. The 3-profile
-  private check confirms byte-identical legacy packets after shared retention.
-- GameCube-target acceptance: installed Dolphin 2503, JIT64/single CPU thread,
-  OpenGL/DSP LLE, early reference IPL. All twelve samples play after input
-  disposal; only the three looped sources remain active beyond source duration;
-  Stop works, and sample disposal stops concurrent playbacks. Final native
-  counts: zero clips and zero voices. No physical-console result is claimed.
-- Next: qualify startup variants and remaining finite cues, then implement the
-  persistent native session and its streaming mixer.
-- Demo: revised mockup and confirmation before UI changes; consume only public
-  SDK packages after publication, with a downloadable verified DOL.
+Preparation is stopped and ownership-safe, defaults to 8 MiB, and supports two
+prepared caches with one streaming session. Twelve decoded sources and all
+producer/queue/delay allocations are charged; the current early target reports
+approximately 3.45 MB. Ordinary Sound/Music can play alongside the session.
 
-Firmware, decoded copies, samples, captures, screenshots and runtime dumps stay
-outside Git and downloadable artifacts. Qualification levels distinguish
-generated fixtures, emulation and physical-console testing.
+A dedicated producer feeds four 320-frame chunks. The AESND bridge primes 576
+stereo frames and subsequently requests 288, carrying a cursor across chunk
+boundaries. Its callback copies bounded native PCM and posts an IRQ-safe wakeup;
+it performs no managed access, allocation, I/O or score decoding. A generation
+cookie rejects stale callbacks. Stop unregisters the callback and joins the
+producer before clearing voices, queue and delays. Disposal releases the cache.
 
-## Paired startup sources
+The VM bounds tracks, nesting and opcode work. Unsupported instructions,
+malformed inputs and repeated underruns fail closed. The 64-voice mixer recycles
+lower-priority released score tails and then older equal-priority score voices;
+explicit raw auditions retain their owned playback. Dense generated retriggers
+verify the bound. A faulted session is disposed and prepared again.
 
-Live reference boots use disposable controller pipes, DSP LLE and a self-authored
-test disc. One held Z selects program 2, wave IDs 2/3, 166,745 samples; four held
-Zs select program 1, IDs 0/1, 187,092 samples. Normal selects program 0, IDs 7/8,
-174,067 samples. Every source is mono 32 kHz; each pair is interleaved losslessly.
-These numeric program IDs are not public variant enum values.
+Sequenced resampling uses exact 4.12 positions and a bounded int32 four-tap MAC.
+Sparse block mixing and cached unchanged pitch/pan calculations reduce render
+cost without changing PCM. An excessive coefficient norm is rejected before
+rendering. Source loops retain their exact partial-frame metadata boundaries.
 
-The metadata/factory milestone exposes the paired sources, with no claim that
-a standalone raw clip executes the original score's gain envelopes or handover.
-Unknown profiles remain unavailable. Synthetic/host AOT and 3-profile private
-checks pass. A GameCube-target DOL prepares all three variants through both Sound
-and Music, disposes the inputs, plays/stops them and finishes with zero native
-clips/voices in installed Dolphin 2503 DSP LLE. Legacy normal packets remain
-byte-identical. The full native session remains a later milestone.
+The early dialect uses float tempo/timebase clocks, deferred tick-created
+children, its original velocity/envelope laws and effects. Modern tracks share
+the root tick tree: children opened between ticks participate in the following
+tick, and children opened during traversal initialize at their place in that
+tree. Modern absolute gates, neutral oscillator replacement, center/subtractive
+routing and mono routing follow the separately qualified modern behavior.
 
-## Native session implementation checkpoint — 2026-11-15
+## Validation evidence
 
-The unpublished native session now owns the complete score/instrument snapshot,
-prepares twelve decoded sources in bounded slices, and runs a bounded native
-track VM and mixer. A dedicated producer feeds four 320-frame stereo chunks;
-the AESND callback only copies native PCM. Stop unregisters the callback and
-joins the producer before resetting voices/delay storage; disposal releases the
-owned cache. Ordinary Sound/Music behavior is unchanged.
+- Generated tests pass for VM clocks/branches/registers/ports/interrupts,
+  malformed and zero-time programs, gates and child creation, partial-frame
+  loops, finite and filtered PCM oracles, effects/routing, dense voice recycling,
+  ownership, budgets, cancellation, stale tokens and joined teardown.
+- The generated producer test consumes ten minutes of continuous 288-frame
+  output across 320-frame chunks. The backend test verifies priming, callback
+  sizes, continuous PCM, generation cookies and teardown. Sanitizer suites pass;
+  latest VM/mixer changes additionally pass address/undefined-behavior checks.
+- Managed synthetic firmware tests and inventory CLI checks pass. Private
+  three-profile checks establish twelve snapshots, three embedded loops,
+  qualification rejection and byte-identical legacy packets.
+- New cue events 13–22 pass aligned original LLE comparisons in early and
+  modern profiles: spectral cosine exceeds 0.9990 and RMS ratios remain within
+  0.974–1.035. Semantic names are established separately by original UI actions.
+- The full early ambience loop passes sixteen long comparison windows:
+  minimum spectral cosine 0.9997, RMS ratio 1.0007–1.0376.
+- The full modern ambience loop passes all sixteen windows after matching the
+  original control-input clock phase: minimum spectral cosine 0.99998, RMS
+  ratio 0.9995–1.0045. The first ninety original note-clock observations match
+  track order and root phase within floating-point rounding. Matching input
+  timing matters because unison voices can interfere differently when their
+  starts move by one DSP block; this is not a bit-identical waveform claim.
+- Fixed-point optimization is byte-identical to a complete previous native
+  modern render. Legacy Sound/Music defaults and factory packets are unchanged.
 
-Generated suites cover calls/branches/loops/registers/ports/interrupts, malformed
-instructions and zero-time cycles, PCM-loop and finite-note oracles, routed
-post-filter delays, source disposal, budgets/cancellation/stale tokens, and ten
-minutes of generated producer output. Address/undefined-behavior sanitizer runs
-pass. A first GameCube-target public-API test in installed Dolphin DSP LLE passed
-ambience, ten cues, an automatically looping sample, stereo/mono, ordinary-audio
-coexistence, three startups, stop/restart and disposal. It reported 3,435,829
-native bytes, zero underruns/faults, and no surviving native session. This is
-functional emulator evidence for that checkpoint, not full audio qualification.
+Final all-profile public-API target runs, the complete dense-motion target soak,
+and repeated menu-cue comparisons are in progress. Earlier pressure failures
+were traced to dense motion exhausting the voice pool and exceeding the render
+deadline; they do not qualify the final bounded renderer. Physical-console
+acceptance of the newly added session remains pending.
 
-Subsequent changes add the original cube/submenu motion calculations and
-startup-source completion detection for automatic ambience handover. The modern
-128-byte effects initializer has also been decoded: two 50-block pre-filter
-paths, a 40-block post-filter path to auxiliary buses, and a disabled fourth
-path. Live original DSP RPBs corroborate this structure; the auxiliary returns
-must not be redirected to front output. These additions need their own target
-acceptance before publication.
-
-The complete early ambience comparison currently fails the planned fidelity
-thresholds (approximately 0.946 long-term spectral cosine and 1.249 RMS ratio
-in the first measured interval). It is not qualified for release. Further
-voice/timing/modulation/routing investigation is required. Native-startup early
-output before the original UI fade closely matches its reference interval
-(0.999996 waveform correlation, 1.000 RMS ratio); UI-driven transitions remain
-separate from raw paired-source factories.
-
-Original card-menu traces using generated saves confirm the repeating transfer
-path, a transfer completion path, a final completion cue and the error when the
-destination contains the same save. Direction-specific mappings and move/erase
-semantics remain under investigation; no guessed card cue names are published.
-
-## Further qualification — 2026-11-15
-
-The early clock updater uses float `tempo * timebase / 25200`; live early
-tracks inherit that root rate. The modern updater uses the actual DSP output
-clock and also propagates the parent timebase. Live PAL 1.2 and NTSC 1.2 root
-rates are both 0.74933260679245. Complete-session qualification now additionally
-fingerprints the clock updater and retains the caller's qualified oscillator
-presets and tables. No authored oscillator data is embedded in the SDK.
-
-Original card actions confirm Error (13), erase/move completion (15),
-copy/format completion (16), transfer from A/B (17/18), copy transfer completion
-(19), and move-to-B/A transfer completion (20/21). Original Game Play with a
-self-authored disc confirms Press Start (22). Event 14 has a valid recipe but
-no identified caller; it is not given an invented public action name.
-
-Parameter-isolated original LLE recordings qualify events 13–22 in the early
-and NTSC 1.2 profiles: spectral cosines exceed 0.9979 and RMS ratios range from
-0.988 to 1.035. These are aligned cue intervals, not trigger latency or exact
-waveform claims. Longer procedural ambience comparisons still diverge in later
-phrases and remain a release blocker.
-
-The AESND bridge now primes 576 stereo frames and streams 288-frame requests,
-carrying the cursor across the producer's 320-frame chunks. Generated PCM
-oracles cover those boundaries, and the actual backend has its own generated
-buffer/callback test. A generation cookie rejects callbacks from an earlier
-backend lease. The latest instrumented GameCube-target run passes all nineteen
-named cues, three startup paths with automatic handover, automatic sample loops,
-mono/stereo, ordinary playback coexistence and disposal: 3,441,161 native bytes,
-zero underruns/faults and no surviving session. A preceding restart stalled;
-repeat acceptance of the final source is still required. Compiler bundles are
-rebuilt and compared with native source before target compilation; earlier
-checks using stale copied native sources do not qualify later changes.
-
-## Render and lifetime corrections — 2026-11-15
-
-Absolute gated notes now use the modern dialect's full gate conversion, and
-slot-zero notes retain independent gates when the following note starts. The
-modern neutral oscillator replaces the attack envelope and uses its original
-short default release. Mono routes the subtractive spatial send into the front
-mix before downmixing. Generated fixtures cover these cases independently.
-The profile qualification additionally fingerprints the absolute-gate helper.
-
-The mixer handles flush-all/flush-release and transfers closed child release
-voices to their parent manager. Raw audition handles remain separate. Sparse
-block mixing, bounded int32 four-tap resampling, and cached unchanged pitch/pan
-calculations reduce render work; a generated filter oracle and coefficient-norm
-rejection guard the optimization. The GameCube producer uses an IRQ-safe
-semaphore wakeup when the callback frees queue space, at a priority above the
-managed executors. The four-chunk queue is unchanged.
-
-Generated native and managed firmware regression checks pass. Long early-IPL
-ambience comparisons meet the planned thresholds, but a later modern phrase
-still differs in the mixed reference. An uninterrupted original reference and
-final target pressure run are pending. Earlier timer-polling pressure runs
-reported isolated underruns and do not qualify the final producer. These remain
-release gates; no physical-console acceptance or final qualification is claimed.
-
-The pressure failure was traced to dense motion producing nearly sixty
-simultaneous voices: a measured 320-frame render reached 10.4 ms. Sequenced
-4.12-ratio resampling now keeps its position in exact fixed-point arithmetic;
-a full private modern render is byte-identical to the previous implementation.
-Generated filtered-note/loop/release oracles and address/undefined-behavior
-sanitizers pass. Full voice pools recycle default-priority score channels,
-preferencing released tails and then age, while preserving explicit raw
-sample playbacks. Dense generated retriggers verify this bound. The new target
-pressure run has passed its initial twenty-second concurrent-motion checkpoints
-with zero underruns/faults; the full soak is still running.
+The demo consumes the official public NuGet package after SDK publication.
+Its approved category design adds Startup/Menu/Cards/Ambience/Samples and
+read-only automatic-loop status. Downloadable artifacts contain executable DOL
+code only, with no extracted firmware resources.

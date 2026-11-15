@@ -72,6 +72,18 @@ int main(void) {
   blocks(f,1385);assert(f->sequence.track[0].ticks==1000);
   start(f,finite,sizeof(finite));f->sequence.tick_divisor=24021.375f;
   assert(dnd_ipl_sequence_tick_rate(&f->sequence,0)==(float)18000/24021.375f);
+  /* A modern port handler may open a child before the next root tick. Its
+   * first wait participates in that tick, while children opened during tick
+   * traversal initialize once at their turn in the child tree. */
+  uint8_t modern_birth[128]={0xc1,0,0,0,24,0x80,100,0xff};
+  const uint8_t listening[]={0xd0,0,2,0x10,1,0xe5,0xdf,3,0,0,64,0x80,100,0xc8,0,0,0,35};
+  const uint8_t opening[]={0xc1,0,0,0,96,0xe3};
+  const uint8_t waiting[]={0x80,1,66,1,100,0x80,100,0xff};
+  memcpy(modern_birth+24,listening,sizeof(listening));memcpy(modern_birth+64,opening,sizeof(opening));memcpy(modern_birth+96,waiting,sizeof(waiting));
+  start(f,modern_birth,sizeof(modern_birth));dnd_ipl_sequence_modern(&f->sequence,true);f->sequence.tick_divisor=24021.375f;
+  blocks(f,1);f->sequence.track[0].clock=.5f;
+  assert(dnd_ipl_sequence_port(&f->sequence,0x21001,0,1));blocks(f,1);
+  assert(f->events.on==1&&f->events.last_key==66&&f->sequence.track[2].ticks==1);
   /* No malformed input can cause an unbounded zero-time cycle or an unchecked
    * operand/table/stack access. Every fault stops further execution. */
   const uint8_t spin[]={0xc8,0,0,0,0};start(f,spin,sizeof(spin));

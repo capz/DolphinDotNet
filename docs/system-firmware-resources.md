@@ -341,7 +341,7 @@ at a time, alongside ordinary Sound/Music; two sessions may be prepared.
 `GetStatistics()` reports native/peak bytes, logical voices, buffered and rendered
 frames, underruns and faults. Four native PCM chunks isolate the producer from
 the callback; callbacks perform bounded native copies without managed access,
-allocation, locks, file I/O or score decoding. Repeated underruns or malformed
+allocation, blocking locks, file I/O or score decoding. Repeated underruns or malformed
 score execution fault the session and produce silence; dispose a faulted session
 and prepare a replacement. See [qualification](ipl-complete-audio-progress.md)
 for measured profiles, comparison limits and emulator/hardware distinctions.
