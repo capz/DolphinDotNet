@@ -97,6 +97,28 @@ int main(void) {
     previous=target;
   }
   assert(error<=3);dnd_ipl_mixer_dispose(m);
+  /* The fixed-point sequenced filter path must match a floating-coordinate
+   * mathematical oracle through source loops and the complete note release. */
+  uint8_t note_coefficients[512]={0};
+  for(unsigned phase=0;phase<64;phase++)be16(note_coefficients+phase*8+6,32767);
+  assert(dnd_ipl_mixer_init(m,waves,note,sizeof(note),bank,sizeof(bank),note_coefficients,effects,true,exact));
+  position=0;previous=0;
+  for(unsigned block=0;block<20;block++) {
+    assert(dnd_ipl_mixer_block(m,out));
+    double env=block<3?1:block>=13?0:pow(1-(block-3)/10.0,2),target=gain*env;
+    for(unsigned frame=0;frame<80;frame++) {
+      int expected=0;
+      if(block<13) {
+        int index=(int)position-1;
+        if(index>=14)index=3+(index-14)%11;
+        int source=index<0?0:(index+1)*1000;
+        expected=(int)(((source*32767)>>15)*(previous+(target-previous)*frame/80));position+=step;
+      }
+      assert(abs(pcm(out+frame*4)-expected)<=3&&abs(pcm(out+frame*4+2)-expected)<=3);
+    }
+    previous=target;
+  }
+  dnd_ipl_mixer_dispose(m);
   /* Slot zero is polyphonic: an authored absolute gate may outlive the
    * score's wait before the next note. Independent timers, not another Play,
    * determine when the preceding note begins releasing. */
@@ -122,6 +144,16 @@ int main(void) {
   assert(m->voice[0].active&&m->voice[0].released&&m->voice[0].manager==0);
   for(unsigned i=0;i<3;i++)assert(dnd_ipl_mixer_block(m,out));
   assert(!m->voice[0].active&&m->voice[1].active);dnd_ipl_mixer_dispose(m);
+  /* Sustained motion-like retriggers recycle lower-priority release tails
+   * within 64 voices, while an explicitly owned looping audition survives. */
+  be16(bank+242,1000);
+  const uint8_t dense[]={60,1,127,0x80,1,0xc8,0,0,0,0};
+  assert(dnd_ipl_mixer_init(m,waves,dense,sizeof(dense),bank,sizeof(bank),NULL,effects,true,exact));
+  assert(dnd_ipl_mixer_sample(m,0,991));
+  for(unsigned block=0;block<400;block++)assert(dnd_ipl_mixer_block(m,out));
+  assert(dnd_ipl_mixer_owner_playing(m,991));
+  unsigned occupied=0;for(unsigned i=0;i<DND_IPL_VOICES;i++)if(m->voice[i].active)occupied++;
+  assert(occupied==64&&!m->fault);dnd_ipl_mixer_dispose(m);be16(bank+242,10);
   /* A post-filter path returns the delayed input before applying its zero
    * feedback filter. A nonzero delay is audible, rather than discarded. */
   for(unsigned i=0;i<16;i++)be16(wave+i*2,1000);

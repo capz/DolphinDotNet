@@ -154,3 +154,14 @@ still differs in the mixed reference. An uninterrupted original reference and
 final target pressure run are pending. Earlier timer-polling pressure runs
 reported isolated underruns and do not qualify the final producer. These remain
 release gates; no physical-console acceptance or final qualification is claimed.
+
+The pressure failure was traced to dense motion producing nearly sixty
+simultaneous voices: a measured 320-frame render reached 10.4 ms. Sequenced
+4.12-ratio resampling now keeps its position in exact fixed-point arithmetic;
+a full private modern render is byte-identical to the previous implementation.
+Generated filtered-note/loop/release oracles and address/undefined-behavior
+sanitizers pass. Full voice pools recycle default-priority score channels,
+preferencing released tails and then age, while preserving explicit raw
+sample playbacks. Dense generated retriggers verify this bound. The new target
+pressure run has passed its initial twenty-second concurrent-motion checkpoints
+with zero underruns/faults; the full soak is still running.

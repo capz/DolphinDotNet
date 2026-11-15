@@ -98,7 +98,18 @@ static void sequence_event(void *context,const DndIplEvent *e) {
   if(e->kind!=DND_IPL_NOTE_ON)return;
   unsigned at=0;
   for(;at<DND_IPL_VOICES;at++)if(!m->voice[at].active)break;
-  if(at==DND_IPL_VOICES){m->fault=1;return;}
+  if(at==DND_IPL_VOICES) {
+    /* Qualified scores use the driver's default channel priority. Released
+     * channels have lower priority; equal priorities evict the oldest voice.
+     * Explicit raw auditions keep their owned playback until Stop. */
+    for(unsigned i=0;i<DND_IPL_VOICES;i++) {
+      DndIplMixVoice *candidate=&m->voice[i];if(candidate->raw)continue;
+      if(at==DND_IPL_VOICES||
+          (candidate->released&&!m->voice[at].released)||
+          (candidate->released==m->voice[at].released&&candidate->born<=m->voice[at].born))at=i;
+    }
+    if(at==DND_IPL_VOICES){m->fault=1;return;}
+  }
   for(unsigned i=0;i<DND_IPL_VOICES;i++) {
     DndIplMixVoice *v=&m->voice[i];
     if(v->active&&!v->raw&&v->track==e->track&&v->generation==e->generation&&e->slot!=0&&v->slot==e->slot)release(m,v);
@@ -185,6 +196,23 @@ static int source_sample(const DndIplWave *w,int at) {
 }
 static float sample(DndIplMixer *m,DndIplMixVoice *v) {
   const DndIplWave *w=&m->wave[v->source];
+  if(m->coefficients&&!v->raw) {
+    unsigned position=v->fixed_phase,end=(w->loop?w->loop_end:w->samples)+4;
+    if(position>=end*4096u) {
+      if(!w->loop){v->active=false;return 0;}
+      position=(w->loop_start+4)*4096u+(position-end*4096u)%((w->loop_end-w->loop_start)*4096u);
+    }
+    int result;
+    if(v->fixed_step>=4*4096u) {
+      position+=v->fixed_step;result=source_sample(w,(int)(position>>12)-4);
+    } else {
+      const int16_t *c=m->resampler[(position>>6)&63];int index=(int)(position>>12)-4;
+      int32_t sum=0;
+      for(unsigned j=0;j<4;j++)sum+=(int32_t)c[j]*source_sample(w,index+(int)j);
+      result=saturate(sum>>15);position+=v->fixed_step;
+    }
+    v->fixed_phase=position;return (float)result;
+  }
   if(w->loop&&v->phase>=(double)w->loop_end+4)
     v->phase=w->loop_start+4+fmod(v->phase-w->loop_end-4,(double)(w->loop_end-w->loop_start));
   if(!w->loop&&v->phase>=(double)w->samples+4){v->active=false;return 0;}
@@ -264,7 +292,7 @@ static void update_voice(DndIplMixer *m,DndIplMixVoice *v) {
     if(v->step==0||pitch!=v->last_pitch||pitch_scale!=v->last_pitch_scale) {
       float ratio=(float)w->rate/32028.5f*v->tuning*pitch_scale*powf(2,((float)v->key-(float)w->base_key+pitch)/12);
       if(!(ratio>0&&ratio<16)){m->fault=1;return;}
-      v->step=floorf(ratio*4096)/4096;v->last_pitch=pitch;v->last_pitch_scale=pitch_scale;
+      v->step=floorf(ratio*4096)/4096;v->fixed_step=(unsigned)(v->step*4096);v->last_pitch=pitch;v->last_pitch_scale=pitch_scale;
     }
     if(!isfinite(volume)){m->fault=1;return;}
     if(pan<0)pan=0;
@@ -348,7 +376,10 @@ bool dnd_ipl_mixer_block(DndIplMixer *m,uint8_t *out) {
     out[frame*4]=(uint8_t)(left>>8);out[frame*4+1]=(uint8_t)left;
     out[frame*4+2]=(uint8_t)(right>>8);out[frame*4+3]=(uint8_t)right;
   }
-  for(unsigned i=0;i<DND_IPL_VOICES;i++)if(m->voice[i].active)memcpy(m->voice[i].current,m->voice[i].target,sizeof(m->voice[i].target));
+  for(unsigned i=0;i<DND_IPL_VOICES;i++)if(m->voice[i].active) {
+    DndIplMixVoice *v=&m->voice[i];memcpy(v->current,v->target,sizeof(v->target));
+    if(m->coefficients&&!v->raw)v->phase=(double)v->fixed_phase/4096;
+  }
   for(unsigned i=0;i<DND_IPL_TRACKS;i++) {
     DndIplTrack *t=&m->sequence.track[i];
     if(t->active&&t->oscillator_enabled&&m->oscillators) {

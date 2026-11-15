@@ -16,6 +16,7 @@ typedef struct {
   float held,source_gain,tuning,step,left,right,send,pan,fx;
   float last_pitch,last_pitch_scale,pan_left,pan_right;
   float current[12],target[12];
+  unsigned fixed_phase,fixed_step;
   double phase;
 } DndIplMixVoice;
 typedef struct {
