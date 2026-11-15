@@ -103,6 +103,58 @@ internal static class Program
         }
         finally {if(samples!=null)foreach(var sample in samples)sample?.Dispose();}
     }
+    private sealed class StartupSet : IDisposable
+    {
+        internal Sound[] Sounds=new Sound[3];
+        internal Music[] Music=new Music[3];
+        public void Dispose(){foreach(var sound in Sounds)sound?.Dispose();foreach(var music in Music)music?.Dispose();}
+    }
+    private static void StartupAcceptance()
+    {
+        using(var prepared=Task.Run(()=>
+        {
+            var set=new StartupSet();
+            try
+            {
+                using(var image=Acquire())
+                using(var catalog=image.CreateCatalog(FirmwareCatalogOptions.IncludeSystemAudio,default))
+                {
+                    for(int i=0;i<3;i++)
+                    {
+                        var variant=(SystemStartupSoundVariant)i;
+                        SystemStartupSoundInfo? info;
+                        if(!catalog.TryGetStartupSoundInfo(variant,out info)||info==null)throw new NotSupportedException("Startup variant unavailable.");
+                        int expected=i==0?174067:i==1?166745:187092;
+                        if(info.SampleCount!=expected||info.Channels!=2||info.SampleRate!=32000)throw new IOException("Startup variant metadata mismatch.");
+                        set.Sounds[i]=SystemResources.CreateStartupVariantSound(catalog,variant);
+                        set.Music[i]=SystemResources.CreateStartupVariantMusic(catalog,variant);
+                    }
+                    // Keep the established default-token call source compatible.
+                    using(var legacy=SystemResources.CreateStartupSound(catalog,default))
+                        if(legacy.SampleCount!=174067)throw new IOException("Legacy startup changed.");
+                }
+                return set;
+            }
+            catch {set.Dispose();throw;}
+        }).Result)
+        {
+            DebugOverlay.WriteLine("STARTUP INPUTS DISPOSED COUNT 3");
+            for(int i=0;i<3;i++)
+            {
+                var sound=prepared.Sounds[i];DebugOverlay.WriteLine("STARTUP VARIANT BEGIN "+i+" FRAMES "+sound.SampleCount);
+                using(var voice=sound.Play())
+                {
+                    if(!voice.IsPlaying||sound.Channels!=2||sound.SampleRate!=32000)throw new IOException("Startup variant did not start.");
+                    Gap((float)sound.SampleCount/sound.SampleRate+1);
+                    if(voice.IsPlaying)throw new IOException("Startup variant did not finish.");
+                }
+                var music=prepared.Music[i];music.Play(false);Gap(.25f);
+                if(!music.IsPlaying)throw new IOException("Startup variant music did not start.");
+                music.Stop();if(music.IsPlaying)throw new IOException("Startup variant music did not stop.");
+                DebugOverlay.WriteLine("STARTUP VARIANT END "+i);
+            }
+        }
+    }
     private static int Main()
     {
         Sound[]? sounds=null;
@@ -112,7 +164,10 @@ internal static class Program
             if(!Storage.Mount(StorageDevice.SdSerialPort2))throw new IOException("Cannot mount explicit firmware volume.");
             DebugOverlay.WriteLine("MENU AUDIO FILE sd:/ipl.bin");
 #endif
-#if FIRMWARE_SAMPLE_ACCEPTANCE
+#if FIRMWARE_STARTUP_ACCEPTANCE
+            StartupAcceptance();
+            DebugOverlay.WriteLine("STARTUP AUDIO COMPLETE");
+#elif FIRMWARE_SAMPLE_ACCEPTANCE
             SampleAcceptance();
             DebugOverlay.WriteLine("SAMPLE AUDIO COMPLETE");
 #else

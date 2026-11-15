@@ -14,6 +14,17 @@ internal static class MenuPrivateTests
         {
             Check(full.AudioSampleCount==12);
             Check(full.GetStartupAudio().ExtractAfc().SequenceEqual(catalog.GetStartupAudio().ExtractAfc()));
+            foreach(var variant in Enum.GetValues<SystemStartupSoundVariant>())
+            {
+                Check(full.TryGetStartupSoundInfo(variant,out var startup)&&startup!=null);
+                Check(startup!.Channels==2&&startup.SampleRate==32000);
+                int startupCount=variant==SystemStartupSoundVariant.Normal?174067:variant==SystemStartupSoundVariant.OneControllerZ?166745:187092;
+                int leftId=variant==SystemStartupSoundVariant.Normal?7:variant==SystemStartupSoundVariant.OneControllerZ?2:0;
+                Check(startup.SampleCount==startupCount&&startup.LeftSourceWaveId==leftId&&startup.RightSourceWaveId==leftId+1);
+                byte[] packet=full.SnapshotStartupVariant(variant,default);
+                Check(packet.Length==32+((startupCount+15)/16)*18);
+                if(variant==SystemStartupSoundVariant.Normal)Check(packet.SequenceEqual(catalog.GetStartupAudio().ExtractAfc()));
+            }
             for(int i=0;i<10;i++)Check(full.SnapshotMenuSound((SystemMenuSound)i,default).SequenceEqual(catalog.SnapshotMenuSound((SystemMenuSound)i,default)));
             int looped=0;for(int i=0;i<12;i++)
             {

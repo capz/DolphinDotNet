@@ -89,9 +89,15 @@ internal static class FirmwareInventory
             ["geometryValidation"]="NativeImportRequired"
         };
         if(menu)report["menuAudio"]=menuAudio;
-        if(allAudio)report["audioSamples"]=new {retainedEncodedBytes=catalog.AudioSampleRetainedBytes,
-            playbackPolicy="Embedded loop is automatic; raw samples are not sequenced effects",
-            samples=catalog.GetAudioSamples()};
+        if(allAudio)
+        {
+            report["audioSamples"]=new {retainedEncodedBytes=catalog.AudioSampleRetainedBytes,
+                playbackPolicy="Embedded loop is automatic; raw samples are not sequenced effects",samples=catalog.GetAudioSamples()};
+            var startupVariants=new Dictionary<string,object>();
+            foreach(var variant in Enum.GetValues<SystemStartupSoundVariant>())
+                startupVariants[variant.ToString()]=catalog.TryGetStartupSoundInfo(variant,out var info)?info!:(object)new {unsupported="No qualified original startup selection"};
+            report["startupVariants"]=startupVariants;
+        }
         Console.WriteLine(JsonSerializer.Serialize(report,new JsonSerializerOptions{WriteIndented=true}));
     }
 

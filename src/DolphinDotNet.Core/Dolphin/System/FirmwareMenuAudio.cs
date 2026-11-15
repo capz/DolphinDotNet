@@ -131,6 +131,7 @@ internal sealed class FirmwareMenuAudio : IDisposable
     private readonly SystemMenuSoundInfo?[] effects=new SystemMenuSoundInfo?[11];
     private FirmwareMenuWaveSource[] sources=new FirmwareMenuWaveSource[0];
     private FirmwareAudioArchive? sourceArchive;
+    internal FirmwareAudioArchive? QualifiedArchive=>sourceArchive;
     private readonly int[] sourceIds=new[]{9,11,6};
     private readonly FirmwareMenuRecipe?[] recipes=new FirmwareMenuRecipe?[11];
     internal int RetainedBytes {get;private set;}

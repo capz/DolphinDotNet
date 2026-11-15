@@ -61,6 +61,19 @@ public sealed class FirmwareCatalog : IDisposable
         if(audioSamples==null)throw new NotSupportedException("Original audio retention was not requested; create the catalog with IncludeSystemAudio.");
         cancellation.ThrowIfCancellationRequested();return audioSamples.Snapshot(info,cancellation);
     }
+    /// <summary>Query a qualified original stereo startup source. Requires
+    /// IncludeSystemAudio; unknown profiles return false without substitution.</summary>
+    public bool TryGetStartupSoundInfo(SystemStartupSoundVariant variant,out SystemStartupSoundInfo? info)
+    {
+        SystemStartupSoundInfo.Validate(variant);CheckAlive();
+        info=audioSamples==null?null:audioSamples.StartupInfo(variant);return info!=null;
+    }
+    internal byte[] SnapshotStartupVariant(SystemStartupSoundVariant variant,CancellationToken cancellation)
+    {
+        SystemStartupSoundInfo.Validate(variant);CheckAlive();cancellation.ThrowIfCancellationRequested();
+        if(audioSamples==null)throw new NotSupportedException("Original startup variant retention requires IncludeSystemAudio.");
+        return audioSamples.SnapshotStartup(variant,cancellation);
+    }
     /// <summary>Additional retained encoded menu payload bytes. Unknown profiles
     /// retain no samples. Excludes managed object overhead and startup audio.</summary>
     public int MenuAudioRetainedBytes {get {CheckAlive();return menuAudio==null?0:menuAudio.RetainedBytes;}}

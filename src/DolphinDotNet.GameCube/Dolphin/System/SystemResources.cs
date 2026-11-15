@@ -81,6 +81,29 @@ public static class SystemResources
         cancellationToken.ThrowIfCancellationRequested();
         return Dolphin.Audio.Sound.FromEncoded(catalog.GetStartupAudio().ExtractAfc(),Dolphin.Audio.AudioFormat.Afc,nativeBudgetBytes:nativeBudgetBytes,cancellationToken:cancellationToken);
     }
+    /// <summary>Create an owned original stereo source for a verified startup
+    /// selection. Includes the original samples; ambience handover is separate.
+    /// Requires IncludeSystemAudio. The existing CreateStartupSound is unchanged.</summary>
+    public static Dolphin.Audio.Sound CreateStartupVariantSound(FirmwareCatalog catalog,SystemStartupSoundVariant variant,
+        CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
+        if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)throw new global::System.ArgumentOutOfRangeException(nameof(nativeBudgetBytes));
+        var packet=catalog.SnapshotStartupVariant(variant,cancellationToken);
+        try{return Dolphin.Audio.Sound.FromEncoded(packet,Dolphin.Audio.AudioFormat.Afc,nativeBudgetBytes:nativeBudgetBytes,cancellationToken:cancellationToken);}
+        finally{global::System.Array.Clear(packet,0,packet.Length);}
+    }
+    /// <summary>The verified paired startup source through Music's normal
+    /// ownership and explicit Play lifetime. Requires IncludeSystemAudio.</summary>
+    public static Dolphin.Audio.Music CreateStartupVariantMusic(FirmwareCatalog catalog,SystemStartupSoundVariant variant,
+        CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
+    {
+        if(catalog==null)throw new global::System.ArgumentNullException(nameof(catalog));
+        if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)throw new global::System.ArgumentOutOfRangeException(nameof(nativeBudgetBytes));
+        var packet=catalog.SnapshotStartupVariant(variant,cancellationToken);
+        try{return Dolphin.Audio.Music.FromEncoded(packet,Dolphin.Audio.AudioFormat.Afc,nativeBudgetBytes:nativeBudgetBytes,cancellationToken:cancellationToken);}
+        finally{global::System.Array.Clear(packet,0,packet.Length);}
+    }
     /// <summary>The same original compressed stereo source through Music's normal lifetime.</summary>
     public static Dolphin.Audio.Music CreateStartupMusic(FirmwareCatalog catalog,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
     {

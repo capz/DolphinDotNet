@@ -9,7 +9,7 @@ Normal startup and ten finite menu effects are already supported by SDK 343.
 | Family | Evidence | Remaining qualification |
 | --- | --- | --- |
 | Twelve original samples | All three reference images: 12 owned snapshots, three embedded loops; native AOT partial-frame loop oracle; GameCube-target LLE playback/stop/disposal | Physical-console confirmation |
-| Startup variants | Three paired instruments, common IBNK fingerprint across early NTSC/NTSC 1.2/PAL 1.2 | Live one-controller/four-controller Z selection and output captures |
+| Startup variants | Live early-IPL controller selection plus original DSP voice source counts; all 3 profile snapshots; native Sound/Music variant factories | Complete persistent-score startup handover and physical-console confirmation |
 | Remaining finite cues | Static event 13 and 14–22 sequence paths | Original visible actions, stop/release paths and uninterrupted LLE comparisons |
 | Controlled card effects | Backward branches in events 17/18 and extended parameter instructions | External termination, ownership and complete port/interrupt semantics |
 | Ambience | Live programs 6/7/8, source IDs 10/9/4; persistent root traces | All control states, loop continuity and full DSP routing |
@@ -41,3 +41,19 @@ it does not claim to reproduce a sequenced effect or instrument envelope.
 Firmware, decoded copies, samples, captures, screenshots and runtime dumps stay
 outside Git and downloadable artifacts. Qualification levels distinguish
 generated fixtures, emulation and physical-console testing.
+
+## Paired startup sources
+
+Live reference boots use disposable controller pipes, DSP LLE and a self-authored
+test disc. One held Z selects program 2, wave IDs 2/3, 166,745 samples; four held
+Zs select program 1, IDs 0/1, 187,092 samples. Normal selects program 0, IDs 7/8,
+174,067 samples. Every source is mono 32 kHz; each pair is interleaved losslessly.
+These numeric program IDs are not public variant enum values.
+
+The metadata/factory milestone exposes the paired sources, with no claim that
+a standalone raw clip executes the original score's gain envelopes or handover.
+Unknown profiles remain unavailable. Synthetic/host AOT and 3-profile private
+checks pass. A GameCube-target DOL prepares all three variants through both Sound
+and Music, disposes the inputs, plays/stops them and finishes with zero native
+clips/voices in installed Dolphin 2503 DSP LLE. Legacy normal packets remain
+byte-identical. The full native session remains a later milestone.

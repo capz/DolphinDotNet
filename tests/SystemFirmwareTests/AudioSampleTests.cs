@@ -19,6 +19,13 @@ internal static class AudioSampleTests
             byte[] startup=legacy.GetStartupAudio().ExtractAfc();
             using var catalog=image.CreateCatalog(FirmwareCatalogOptions.IncludeSystemAudio,default);
             Check(catalog.AudioSampleCount==12&&catalog.AudioSampleRetainedBytes>0);
+            foreach(var variant in Enum.GetValues<SystemStartupSoundVariant>())
+            {
+                Check(!catalog.TryGetStartupSoundInfo(variant,out var unavailable)&&unavailable==null);
+                Throws<NotSupportedException>(()=>SystemResources.CreateStartupVariantSound(catalog,variant));
+                Throws<NotSupportedException>(()=>SystemResources.CreateStartupVariantMusic(catalog,variant));
+            }
+            Throws<ArgumentOutOfRangeException>(()=>catalog.TryGetStartupSoundInfo((SystemStartupSoundVariant)3,out _));
             Check(catalog.GetStartupAudio().ExtractAfc().SequenceEqual(startup));
             using(var combined=image.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio|FirmwareCatalogOptions.IncludeSystemAudio,default))
                 Check(combined.AudioSampleCount==12&&combined.GetStartupAudio().ExtractAfc().SequenceEqual(startup));
@@ -44,6 +51,9 @@ internal static class AudioSampleTests
             Throws<OperationCanceledException>(()=>catalog.SnapshotAudioSample(info,canceled.Token));
             Throws<OperationCanceledException>(()=>SystemResources.CreateAudioSampleAsync(catalog,info,canceled.Token));
             using var source=catalog.SnapshotAudioSample(info,default);
+            using(var left=catalog.SnapshotAudioSample(catalog.GetAudioSampleInfo(0),default))
+            using(var right=catalog.SnapshotAudioSample(catalog.GetAudioSampleInfo(1),default))
+                Check(FirmwareStereoAudio.Interleave(left,right,174067,32000,default).SequenceEqual(startup));
             image.Dispose();
             Check(catalog.GetStartupAudio().ExtractAfc().SequenceEqual(startup));
             var shared=catalog.GetStartupAudio();catalog.Dispose();
@@ -58,6 +68,7 @@ internal static class AudioSampleTests
             }
             Throws<ObjectDisposedException>(()=>catalog.GetAudioSampleInfo(2));
             Throws<ObjectDisposedException>(()=>catalog.GetAudioSamples());
+            Throws<ObjectDisposedException>(()=>catalog.TryGetStartupSoundInfo(SystemStartupSoundVariant.Normal,out _));
             Throws<ObjectDisposedException>(()=>SystemResources.CreateAudioSample(catalog,info));
         }
         Console.WriteLine("Original sample metadata, copied ownership, foreign descriptors, cancellation and embedded loop snapshots passed");
