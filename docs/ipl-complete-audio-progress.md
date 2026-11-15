@@ -97,3 +97,36 @@ Original card-menu traces using generated saves confirm the repeating transfer
 path, a transfer completion path, a final completion cue and the error when the
 destination contains the same save. Direction-specific mappings and move/erase
 semantics remain under investigation; no guessed card cue names are published.
+
+## Further qualification — 2026-11-15
+
+The early clock updater uses float `tempo * timebase / 25200`; live early
+tracks inherit that root rate. The modern updater uses the actual DSP output
+clock and also propagates the parent timebase. Live PAL 1.2 and NTSC 1.2 root
+rates are both 0.74933260679245. Complete-session qualification now additionally
+fingerprints the clock updater and retains the caller's qualified oscillator
+presets and tables. No authored oscillator data is embedded in the SDK.
+
+Original card actions confirm Error (13), erase/move completion (15),
+copy/format completion (16), transfer from A/B (17/18), copy transfer completion
+(19), and move-to-B/A transfer completion (20/21). Original Game Play with a
+self-authored disc confirms Press Start (22). Event 14 has a valid recipe but
+no identified caller; it is not given an invented public action name.
+
+Parameter-isolated original LLE recordings qualify events 13–22 in the early
+and NTSC 1.2 profiles: spectral cosines exceed 0.9979 and RMS ratios range from
+0.988 to 1.035. These are aligned cue intervals, not trigger latency or exact
+waveform claims. Longer procedural ambience comparisons still diverge in later
+phrases and remain a release blocker.
+
+The AESND bridge now primes 576 stereo frames and streams 288-frame requests,
+carrying the cursor across the producer's 320-frame chunks. Generated PCM
+oracles cover those boundaries, and the actual backend has its own generated
+buffer/callback test. A generation cookie rejects callbacks from an earlier
+backend lease. The latest instrumented GameCube-target run passes all nineteen
+named cues, three startup paths with automatic handover, automatic sample loops,
+mono/stereo, ordinary playback coexistence and disposal: 3,441,161 native bytes,
+zero underruns/faults and no surviving session. A preceding restart stalled;
+repeat acceptance of the final source is still required. Compiler bundles are
+rebuilt and compared with native source before target compilation; earlier
+checks using stale copied native sources do not qualify later changes.

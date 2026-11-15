@@ -76,6 +76,21 @@ public sealed class FirmwareCatalog : IDisposable
     }
     /// <summary>Whether a complete native score profile was retained and qualified.</summary>
     public bool SupportsAudioSession {get {CheckAlive();return menuAudio!=null&&menuAudio.SystemAudio!=null&&audioSamples!=null;}}
+    /// <summary>Query a verified cue of the complete score, including controlled
+    /// card loops. Unknown profiles return false without substituting audio.</summary>
+    public bool TryGetAudioCueInfo(SystemAudioCue cue,out SystemAudioCueInfo? info)
+    {
+        SystemAudioCueInfo.Validate(cue);CheckAlive();info=null;
+        if(!SupportsAudioSession)return false;
+        info=new SystemAudioCueInfo(cue,menuAudio!.SystemAudio!.ProfileId);return true;
+    }
+    public SystemAudioCueInfo[] GetAudioCues()
+    {
+        CheckAlive();if(!SupportsAudioSession)return new SystemAudioCueInfo[0];
+        var result=new SystemAudioCueInfo[19];
+        for(int i=0;i<result.Length;i++)result[i]=new SystemAudioCueInfo((SystemAudioCue)i,menuAudio!.SystemAudio!.ProfileId);
+        return result;
+    }
     internal FirmwareSystemAudioSnapshot SnapshotSystemAudio(CancellationToken cancellation)
     {
         CheckAlive();cancellation.ThrowIfCancellationRequested();

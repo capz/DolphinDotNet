@@ -22,10 +22,12 @@ typedef struct {
   unsigned ticks, tempo, timebase, mix[6], adsr[5], simple_oscillator, oscillator_route, sync_mask;
   uint16_t reg[32], port[16], imported, exported;
   int parent, child[16], transpose, last_key;
-  double clock;
+  float clock, oscillator_time;
+  unsigned parameter_written, oscillator_modes[2], oscillator_slot;
+  bool oscillator_enabled;
   DndIplParameter parameter[DND_IPL_PARAMS];
   bool active, in_interrupt, interrupts_enabled, independent, override_tempo;
-  bool has_adsr, time_relative, registered;
+  bool has_adsr, release_override, time_relative, registered;
 } DndIplTrack;
 typedef enum {
   DND_IPL_NOTE_ON, DND_IPL_NOTE_OFF, DND_IPL_TRACK_CLOSED,
@@ -41,6 +43,8 @@ typedef struct {
   const uint8_t *sequence;
   unsigned length, generation, work, fault, fault_pc, fault_opcode;
   uint64_t blocks;
+  float tick_divisor;
+  bool processing_tick, modern;
   DndIplTrack track[DND_IPL_TRACKS];
   DndIplEventHandler handler;
   void *context;
@@ -48,7 +52,9 @@ typedef struct {
 /* The sequence extent remains owned by the caller for the VM lifetime. */
 bool dnd_ipl_sequence_init(DndIplSequence *, const uint8_t *, unsigned,
                            DndIplEventHandler, void *);
+void dnd_ipl_sequence_modern(DndIplSequence *,bool);
 bool dnd_ipl_sequence_block(DndIplSequence *);
+float dnd_ipl_sequence_tick_rate(const DndIplSequence *,unsigned);
 bool dnd_ipl_sequence_port(DndIplSequence *, unsigned identifier, unsigned port, unsigned value);
 void dnd_ipl_sequence_stop_owner(DndIplSequence *, unsigned owner);
 int dnd_ipl_sequence_open(DndIplSequence *, unsigned entry, unsigned owner);

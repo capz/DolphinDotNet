@@ -24,10 +24,12 @@ public sealed class SystemAudioStatistics
     public int PeakNativeBytes {get;}
     public int ActiveVoices {get;}
     public int BufferedFrames {get;}
+    /// <summary>Frames synthesized since the latest Start or startup reset.</summary>
+    public long RenderedFrames {get;}
     public int Underruns {get;}
     public int FaultCode {get;}
-    internal SystemAudioStatistics(int bytes,int peak,int voices,int buffered,int underruns,int fault)
-    {NativeBytes=bytes;PeakNativeBytes=peak;ActiveVoices=voices;BufferedFrames=buffered;Underruns=underruns;FaultCode=fault;}
+    internal SystemAudioStatistics(int bytes,int peak,int voices,int buffered,int underruns,int fault,long rendered)
+    {NativeBytes=bytes;PeakNativeBytes=peak;ActiveVoices=voices;BufferedFrames=buffered;Underruns=underruns;FaultCode=fault;RenderedFrames=rendered;}
 }
 
 /// <summary>Owns a prepared original IPL score, instruments and native producer.
@@ -104,8 +106,11 @@ public sealed class SystemAudioSession : IDisposable
     public SystemAudioPlayback PlayCue(SystemMenuSound cue)
     {
         Check();FirmwareMenuAudio.Validate(cue);
-        if(cue==SystemMenuSound.PressStart)throw new NotSupportedException("Press Start has not been qualified for the session.");
-        Start();return Play(0,(int)cue);
+        return PlayCue((SystemAudioCue)(int)cue);
+    }
+    public SystemAudioPlayback PlayCue(SystemAudioCue cue)
+    {
+        Check();SystemAudioCueInfo.Validate(cue);Start();return Play(0,(int)cue);
     }
     /// <summary>Audition an owned source. Its intro and embedded repeat section
     /// are handled automatically; a nonlooping source plays once.</summary>
@@ -133,7 +138,7 @@ public sealed class SystemAudioSession : IDisposable
     public SystemAudioStatistics GetStatistics()
     {
         Check();return new SystemAudioStatistics(NativeAudio.AudioSystemStat(token,1),NativeAudio.AudioSystemStat(token,2),
-            NativeAudio.AudioSystemStat(token,3),NativeAudio.AudioSystemStat(token,8),NativeAudio.AudioSystemStat(token,7),NativeAudio.AudioSystemStat(token,9));
+            NativeAudio.AudioSystemStat(token,3),NativeAudio.AudioSystemStat(token,8),NativeAudio.AudioSystemStat(token,7),NativeAudio.AudioSystemStat(token,9),(long)NativeAudio.AudioSystemStat(token,4)*80);
     }
     public void Stop(){Check();NativeAudio.AudioSystemStop(token);}
     internal bool IsPlaying(int owner)=>!disposed&&NativeAudio.AudioSystemOwner(token,owner)!=0;

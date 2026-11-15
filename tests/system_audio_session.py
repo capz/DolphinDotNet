@@ -7,6 +7,10 @@ import tempfile
 ROOT=Path(__file__).resolve().parents[1]
 def main():
     with tempfile.TemporaryDirectory() as temp:
+        backend=Path(temp)/'ipl_backend'
+        subprocess.run([os.environ.get('CC','cc'),'-std=c11','-O1','-Wall','-Wextra','-Werror','-Itests/fake_ipl','-Iinclude',
+            'tests/ipl_backend_test.c','source/ipl_player_gamecube.c','-o',str(backend)],cwd=ROOT,check=True)
+        subprocess.run([str(backend)],cwd=ROOT,check=True)
         for name,sources in (
             ('ipl_sequence',['ipl_sequence']),
             ('ipl_mixer',['ipl_sequence','ipl_mixer']),

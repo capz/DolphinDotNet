@@ -32,7 +32,7 @@ static void pause_producer(void){struct timespec t={0,1000000};nanosleep(&t,NULL
 #define IPL_CHUNK_BYTES 1280u
 #define IPL_STACK_BYTES (16u*1024u)
 /* Reserve opaque synchronization bookkeeping as part of the native budget. */
-#define IPL_SYNC_RESERVE (512u+1280u)
+#define IPL_SYNC_RESERVE (512u+2304u)
 typedef struct {
   int token,cache,ready,running,thread_started,mono;
   unsigned next_owner,startup,startup_seen;
@@ -40,7 +40,7 @@ typedef struct {
   DndIplAudioContext *cache_context;
   IplMutex mutex;
   IplThread thread;
-  atomic_uint produced,consumed,underruns,streak,fault,stopping;
+  atomic_uint produced,consumed,offset,underruns,streak,fault,stopping;
   _Alignas(32) uint8_t queue[IPL_CHUNKS][IPL_CHUNK_BYTES];
   _Alignas(32) uint8_t stack[IPL_STACK_BYTES];
 } IplPlayer;
@@ -50,24 +50,31 @@ static IplPlayer *find(int token) {
   for(unsigned i=0;i<2;i++)if(players[i]&&players[i]->token==token)return players[i];
   return NULL;
 }
-static void pull(void *context,uint8_t *out) {
+static void pull(void *context,uint8_t *out,unsigned frames) {
   IplPlayer *p=context;
-  unsigned read=atomic_load_explicit(&p->consumed,memory_order_relaxed);
-  unsigned write=atomic_load_explicit(&p->produced,memory_order_acquire);
+  if(!out||!frames||frames>320)return;
   if(atomic_load_explicit(&p->fault,memory_order_relaxed)||atomic_load_explicit(&p->stopping,memory_order_relaxed)) {
-    memset(out,0,IPL_CHUNK_BYTES);return;
+    memset(out,0,frames*4);return;
   }
-  if(read==write) {
-    memset(out,0,IPL_CHUNK_BYTES);
-    if(!atomic_load_explicit(&p->stopping,memory_order_relaxed)) {
+  unsigned done=0;
+  while(done<frames) {
+    unsigned read=atomic_load_explicit(&p->consumed,memory_order_relaxed);
+    unsigned write=atomic_load_explicit(&p->produced,memory_order_acquire);
+    if(read==write) {
+      memset(out+done*4,0,(frames-done)*4);
       atomic_fetch_add_explicit(&p->underruns,1,memory_order_relaxed);
       if(atomic_fetch_add_explicit(&p->streak,1,memory_order_relaxed)>=2)
         atomic_store_explicit(&p->fault,2,memory_order_release);
+      return;
     }
-    return;
+    unsigned offset=atomic_load_explicit(&p->offset,memory_order_relaxed),take=320-offset;
+    if(take>frames-done)take=frames-done;
+    memcpy(out+done*4,p->queue[read%IPL_CHUNKS]+offset*4,take*4);done+=take;offset+=take;
+    if(offset==320) {
+      atomic_store_explicit(&p->offset,0,memory_order_relaxed);
+      atomic_store_explicit(&p->consumed,read+1,memory_order_release);
+    } else atomic_store_explicit(&p->offset,offset,memory_order_relaxed);
   }
-  memcpy(out,p->queue[read%IPL_CHUNKS],IPL_CHUNK_BYTES);
-  atomic_store_explicit(&p->consumed,read+1,memory_order_release);
   atomic_store_explicit(&p->streak,0,memory_order_relaxed);
 }
 static bool produce(IplPlayer *p) {
@@ -121,7 +128,7 @@ int dnd_ipl_player_begin(DndArray *packet,int budget) {
 #endif
   if(!p)return 0;
   memset(p,0,sizeof(*p));
-  atomic_init(&p->produced,0);atomic_init(&p->consumed,0);atomic_init(&p->underruns,0);
+  atomic_init(&p->offset,0);atomic_init(&p->produced,0);atomic_init(&p->consumed,0);atomic_init(&p->underruns,0);
   atomic_init(&p->streak,0);atomic_init(&p->fault,0);atomic_init(&p->stopping,0);
   if(mutex_init(&p->mutex)){free(p);return 0;}
   p->cache=dnd_ipl_audio_begin(packet,budget-(int)overhead);
@@ -149,7 +156,7 @@ int dnd_ipl_player_start(int token,int startup) {
   if(!dnd_ipl_audio_reset(p->cache)||!dnd_ipl_audio_output(p->cache,p->mono,p->volume))return 0;
   if(!dnd_ipl_audio_port(p->cache,startup<0?0x21001:0x21002,0,startup<0?1u:(unsigned)startup))return 0;
   p->startup=startup>=0;p->startup_seen=0;
-  atomic_store(&p->produced,0);atomic_store(&p->consumed,0);atomic_store(&p->stopping,0);atomic_store(&p->streak,0);
+  atomic_store(&p->offset,0);atomic_store(&p->produced,0);atomic_store(&p->consumed,0);atomic_store(&p->stopping,0);atomic_store(&p->streak,0);
   for(unsigned i=0;i<IPL_CHUNKS;i++)if(!produce(p))return 0;
   active=p;p->running=1;
   if(thread_start(p)){p->running=0;active=NULL;return 0;}
@@ -162,8 +169,8 @@ int dnd_ipl_player_play(int token,int kind,int value) {
   if(!p||!p->running||atomic_load(&p->fault)||p->next_owner==INT_MAX||value<0)return 0;
   unsigned owner=p->next_owner++;
   lock(&p->mutex);
-  static const unsigned menu_events[]={3,4,5,6,7,12,9,10,11,8,22};
-  bool ok=kind==0?(value<11&&dnd_ipl_audio_cue(p->cache,menu_events[value],owner)):
+  static const unsigned menu_events[]={3,4,5,6,7,12,9,10,11,8,22,13,15,16,17,18,19,20,21};
+  bool ok=kind==0?(value<19&&dnd_ipl_audio_cue(p->cache,menu_events[value],owner)):
     kind==1&&dnd_ipl_audio_sample(p->cache,(unsigned)value,owner);
   unlock(&p->mutex);return ok?(int)owner:0;
 }
@@ -184,7 +191,10 @@ int dnd_ipl_player_stat(int token,int kind) {
     int bytes=dnd_ipl_audio_stat(p->cache,kind);return bytes<0?bytes:bytes+(int)sizeof(*p)+(int)IPL_SYNC_RESERVE;
   }
   if(kind==7)return (int)atomic_load(&p->underruns);
-  if(kind==8)return (int)(atomic_load(&p->produced)-atomic_load(&p->consumed))*320;
+  if(kind==8) {
+    unsigned read=atomic_load(&p->consumed),offset=atomic_load(&p->offset),write=atomic_load(&p->produced);
+    unsigned frames=(write-read)*320;return (int)(frames>=offset?frames-offset:0);
+  }
   if(kind==9)return (int)atomic_load(&p->fault);
   lock(&p->mutex);int result=kind==10?(int)p->startup:dnd_ipl_audio_stat(p->cache,kind);unlock(&p->mutex);return result;
 }

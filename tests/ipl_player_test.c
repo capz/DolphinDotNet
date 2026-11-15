@@ -13,10 +13,10 @@ void dnd_ipl_backend_stop(void *p) {
   assert(context==p&&callback);context=NULL;callback=NULL;stops++;
 }
 static void wait_queue(int token) {
-  for(unsigned i=0;dnd_ipl_player_stat(token,8)<1280&&i<2000;i++) {
+  for(unsigned i=0;dnd_ipl_player_stat(token,8)<960&&i<2000;i++) {
     struct timespec delay={0,1000000};nanosleep(&delay,NULL);
   }
-  assert(dnd_ipl_player_stat(token,8)==1280);
+  assert(dnd_ipl_player_stat(token,8)>=960);
 }
 static int prepare(void) {
   DndArray *a=packet();int p=dnd_ipl_player_begin(a,8*1024*1024);assert(p);
@@ -29,13 +29,25 @@ int main(void) {
   assert(dnd_ipl_player_start(first,-1));assert(!dnd_ipl_player_start(second,-1));
   assert(dnd_ipl_player_stat(first,8)==1280);
   int owner=dnd_ipl_player_play(first,1,0);assert(owner&&dnd_ipl_player_owner(first,owner));
-  uint8_t output[1280];bool heard=false;
-  /* Ten minutes of 320-frame chunks with a generated embedded-loop source.
+  uint8_t output[1152];bool heard=false;unsigned absolute=0;
+  /* Ten minutes of 288-frame backend pulls across 320-frame chunks with a generated embedded-loop source.
    * The fake consumes only published chunks: this is a deterministic queue,
    * ownership and producer-throughput test, not a hardware real-time claim. */
-  for(unsigned chunk=0;chunk<60060;chunk++) {
-    wait_queue(first);callback(context,output);
+  for(unsigned chunk=0;chunk<66727;chunk++) {
+    wait_queue(first);callback(context,output,288);
     for(unsigned i=0;i<sizeof(output);i++)if(output[i])heard=true;
+    /* Independent sample-by-sample oracle catches padded, skipped or repeated
+     * PCM at the backend's 288-frame / producer's 320-frame boundary. */
+    for(unsigned frame=0;frame<288;frame++,absolute++)if(absolute<64000) {
+      int expected=0;
+      if(absolute>1280) {
+        unsigned n=absolute-1280,index=n-1;
+        if(index>=14)index=3+(index-14)%11;
+        int source=(int)((index+1)*1000)-1;
+        expected=n<80?(int)((float)source*(float)n/80):source;
+      }
+      for(unsigned channel=0;channel<2;channel++)assert(abs((int16_t)((unsigned)output[frame*4+channel*2]<<8|output[frame*4+channel*2+1])-expected)<=1);
+    }
   }
   assert(heard&&dnd_ipl_player_owner(first,owner)&&!dnd_ipl_player_stat(first,7));
   assert(dnd_ipl_player_control(first,0,.5f)&&dnd_ipl_player_control(first,1,1));

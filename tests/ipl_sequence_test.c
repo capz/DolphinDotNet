@@ -44,9 +44,9 @@ int main(void) {
   const uint8_t handler[]={0xcb,0,0,0xa4,16,0,0xac,17,0,60,0xaa,0,6,0x28,0,0xe3};
   memcpy(irq+20,handler,sizeof(handler));irq[60]=7;irq[61]=9;
   start(f,irq,sizeof(irq));blocks(f,1);
-  assert(dnd_ipl_sequence_port(&f->sequence,0x12345678,0,1));blocks(f,1);
+  assert(dnd_ipl_sequence_port(&f->sequence,0x12345678,0,1));blocks(f,2);
   assert(f->sequence.track[0].reg[6]==9&&!f->sequence.track[0].in_interrupt);
-  assert(f->sequence.track[0].wait==100);
+  assert(f->sequence.track[0].wait==99);
   assert(!dnd_ipl_sequence_port(&f->sequence,123,0,1));
   assert(!dnd_ipl_sequence_port(&f->sequence,0x12345678,16,1));
   /* Bounded calls and authored loops; note source metadata is untouched. */
@@ -60,6 +60,18 @@ int main(void) {
   start(f,tree,sizeof(tree));assert(dnd_ipl_sequence_open(&f->sequence,20,77)>=0);blocks(f,1);
   assert(f->events.last_owner==77&&f->events.last_key==64);
   dnd_ipl_sequence_stop_owner(&f->sequence,77);assert(f->sequence.track[0].active&&f->events.closed==2);
+  /* Early IPL's root clock is 5/7 ticks per DSP block, including children
+   * with a different absolute-gate timebase. Tick-created children begin at
+   * the next block, while the initial root children execute immediately. */
+  uint8_t clocks[64]={0x80,10,0xc1,0,0,0,32,0x88,255,255,0xc8,0,0,0,7};
+  const uint8_t delayed[]={0xfe,0,80,67,1,80,0x80,100,0xff};
+  memcpy(clocks+32,delayed,sizeof(delayed));start(f,clocks,sizeof(clocks));blocks(f,15);
+  assert(f->events.on==0&&f->sequence.track[1].active);
+  blocks(f,1);assert(f->events.on==1&&f->events.last_key==67);
+  assert(dnd_ipl_sequence_tick_rate(&f->sequence,1)==(float)18000/25200);
+  blocks(f,1385);assert(f->sequence.track[0].ticks==1000);
+  start(f,finite,sizeof(finite));f->sequence.tick_divisor=24021.375f;
+  assert(dnd_ipl_sequence_tick_rate(&f->sequence,0)==(float)18000/24021.375f);
   /* No malformed input can cause an unbounded zero-time cycle or an unchecked
    * operand/table/stack access. Every fault stops further execution. */
   const uint8_t spin[]={0xc8,0,0,0,0};start(f,spin,sizeof(spin));

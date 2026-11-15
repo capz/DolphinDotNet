@@ -10,11 +10,11 @@ internal sealed class FirmwareSystemAudio : IDisposable
 {
     internal readonly FirmwareAudioArchive Archive;
     internal readonly string ProfileId;
-    private readonly byte[] sequence,bank,coefficients,effects;
-    internal int AdditionalRetainedBytes=>sequence.Length+bank.Length+effects.Length;
-    internal FirmwareSystemAudio(FirmwareAudioArchive archive,string profile,byte[] sequence,byte[] bank,byte[] coefficients,byte[] finiteEffects)
+    private readonly byte[] sequence,bank,coefficients,effects,oscillators;
+    internal int AdditionalRetainedBytes=>sequence.Length+bank.Length+effects.Length+oscillators.Length;
+    internal FirmwareSystemAudio(FirmwareAudioArchive archive,string profile,byte[] sequence,byte[] bank,byte[] coefficients,byte[] finiteEffects,byte[] oscillators)
     {
-        Archive=archive;ProfileId=profile;this.sequence=sequence;this.bank=bank;this.coefficients=coefficients;
+        Archive=archive;ProfileId=profile;this.sequence=sequence;this.bank=bank;this.coefficients=coefficients;this.oscillators=oscillators;
         if(coefficients.Length!=512)throw new NotSupportedException("Unqualified IPL resampler.");
         if(profile=="ipl-menu-early-v1"&&finiteEffects.Length==64)
         {
@@ -34,7 +34,7 @@ internal sealed class FirmwareSystemAudio : IDisposable
     {
         cancellation.ThrowIfCancellationRequested();
         var selected=new FirmwareMenuWaveSource[12];var info=new FirmwareAudioSampleInfo[12];
-        int bytes=64+12*24+sequence.Length+bank.Length+coefficients.Length+effects.Length;
+        int bytes=64+12*24+sequence.Length+bank.Length+coefficients.Length+effects.Length+oscillators.Length;
         for(int id=0;id<12;id++)
         {
             int index=samples.FindQualifiedIndex(Archive,id);
@@ -51,8 +51,9 @@ internal sealed class FirmwareSystemAudio : IDisposable
             FirmwareMenuRecipe.Put(packet,8,ProfileId=="ipl-menu-early-v1"?1:2);FirmwareMenuRecipe.Put(packet,12,12);
             FirmwareMenuRecipe.Put(packet,16,sequence.Length);FirmwareMenuRecipe.Put(packet,20,bank.Length);
             FirmwareMenuRecipe.Put(packet,24,4);FirmwareMenuRecipe.Put(packet,28,512);
+            FirmwareMenuRecipe.Put(packet,32,oscillators.Length);
             int at=64+12*24;
-            foreach(var part in new[]{sequence,bank,effects,coefficients})
+            foreach(var part in new[]{sequence,bank,effects,coefficients,oscillators})
             {cancellation.ThrowIfCancellationRequested();Array.Copy(part,0,packet,at,part.Length);at+=part.Length;}
             for(int id=0;id<12;id++)
             {
@@ -73,7 +74,7 @@ internal sealed class FirmwareSystemAudio : IDisposable
         }
         catch {Array.Clear(packet,0,packet.Length);throw;}
     }
-    public void Dispose(){Array.Clear(sequence,0,sequence.Length);Array.Clear(bank,0,bank.Length);Array.Clear(effects,0,effects.Length);}
+    public void Dispose(){Array.Clear(sequence,0,sequence.Length);Array.Clear(bank,0,bank.Length);Array.Clear(effects,0,effects.Length);Array.Clear(oscillators,0,oscillators.Length);}
 }
 
 internal sealed class FirmwareSystemAudioSnapshot : IDisposable

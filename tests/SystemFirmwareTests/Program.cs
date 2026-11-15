@@ -10,6 +10,12 @@ if(args.Length==3&&args[0]=="--private-menu")
     {
         try
         {
+            if(full.GetAudioCues().Length!=19)throw new Exception("Complete cue inventory");
+            for(int cue=0;cue<19;cue++)
+            {
+                if(!full.TryGetAudioCueInfo((SystemAudioCue)cue,out var metadata)||metadata==null||
+                    metadata.RepeatsUntilStopped!=(cue==14||cue==15))throw new Exception("Cue metadata");
+            }
             using var system=full.SnapshotSystemAudio(default);
             File.WriteAllBytes(Path.Combine(args[2],"system-private.dia"),system.Packet);
             Console.WriteLine("Complete private system snapshot "+system.Packet.Length);

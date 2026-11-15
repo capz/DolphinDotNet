@@ -77,7 +77,7 @@ static int open_track(DndIplSequence *s,int parent,unsigned flags,unsigned entry
   t->parameter[17].value=t->parameter[17].target=0;
   for(unsigned i=12;i<16;i++)t->parameter[i].value=t->parameter[i].target=0;
   for(unsigned i=0;i<4;i++)t->mix[i]=((i+1)<<4)|(i<2?4:5);
-  t->simple_oscillator=1;t->oscillator_route=15;
+  t->simple_oscillator=0;t->oscillator_modes[1]=1;
   if(parent>=0) {
     DndIplTrack *p=&s->track[parent];t->tempo=p->tempo;t->timebase=p->timebase;
     if(!(flags&0x80))memcpy(t->reg,p->reg,sizeof(t->reg));
@@ -129,6 +129,7 @@ static void timed_parameter(DndIplSequence *s,DndIplTrack *t,unsigned op) {
   else if((op&3)==2)duration=take(s,t,1);
   else if((op&3)==3)duration=take(s,t,2);
   if(p>=DND_IPL_PARAMS){fail(s,t->pc,op);return;}
+  t->parameter_written|=1u<<p;
   DndIplParameter *a=&t->parameter[p];a->target=(float)v/32768;
   a->remaining=duration;a->step=duration?(a->target-a->value)/(float)duration:0;
   if(!duration)a->value=a->target;
@@ -172,7 +173,7 @@ static void execute(DndIplSequence *s,unsigned n) {
       unsigned flags=take(s,t,1),entry=take(s,t,3),slot=flags&15;
       if(t->child[slot]>=0)close_track(s,(unsigned)t->child[slot]);
       int child=open_track(s,(int)n,flags,entry,t->owner);t->child[slot]=child;
-      if(child>=0)execute(s,(unsigned)child);
+      if(child>=0){if(s->processing_tick&&!s->modern)s->track[child].born_block=s->blocks+1;else execute(s,(unsigned)child);}
     } else if(op==0xc4||op==0xc8) {
       unsigned flags=take(s,t,1),target=branch_target(s,t,flags);
       if(condition(s,t,flags)) {
@@ -202,15 +203,17 @@ static void execute(DndIplSequence *s,unsigned n) {
       if(child>=0)write_port(&s->track[child],route&15,v);
     } else if(op==0xd4)t->last_key=(int)take(s,t,1)+t->transpose;
     else if(op==0xd5)t->time_relative=take(s,t,1)!=0;
-    else if(op==0xd6){t->simple_oscillator=take(s,t,1);if(t->simple_oscillator>1)fail(s,at,op);}
-    else if(op==0xd8){for(unsigned i=0;i<5;i++)t->adsr[i]=take(s,t,2);t->has_adsr=true;}
+    else if(op==0xd6){t->simple_oscillator=take(s,t,1);t->oscillator_enabled=true;t->oscillator_slot=s->modern&&t->simple_oscillator==1?0:1;
+      if(s->modern&&t->simple_oscillator==1)t->has_adsr=false;
+      if(t->simple_oscillator>1)fail(s,at,op);}
+    else if(op==0xd8){for(unsigned i=0;i<5;i++)t->adsr[i]=take(s,t,2);t->has_adsr=true;t->release_override=true;t->oscillator_modes[0]=3;}
     else if(op==0xd9)t->transpose=signed_byte(take(s,t,1));
     else if(op==0xda) {
       unsigned slot=take(s,t,1);if(slot>15){fail(s,at,op);return;}
       if(t->child[slot]>=0)close_track(s,(unsigned)t->child[slot]);
     } else if(op==0xdc){t->sync_mask=take(s,t,2);emit(s,n,DND_IPL_TRACK_UPDATED,0,0,0,0,0,0,0);}
     else if(op==0xdd) {
-      unsigned bus=take(s,t,1),routing=take(s,t,1);if(bus>5){fail(s,at,op);return;}t->mix[bus]=routing;
+      unsigned bus=take(s,t,1),routing=take(s,t,s->modern?2:1);if(bus>5){fail(s,at,op);return;}t->mix[bus]=routing|(s->modern?0x1000000u:0);
     } else if(op==0xdf) {
       unsigned irq=take(s,t,1),entry=take(s,t,3);if(irq>7||entry>=s->length){fail(s,at,op);return;}
       t->interrupt[irq]=entry;t->interrupt_mask|=1u<<irq;
@@ -226,7 +229,8 @@ static void execute(DndIplSequence *s,unsigned n) {
     } else if(op==0xe5||op==0xe6)t->registered=op==0xe5;
     else if(op==0xe7)emit(s,n,DND_IPL_SYNC,0,take(s,t,2),0,0,0,0,0);
     else if(op==0xe9)emit(s,n,DND_IPL_TRACK_UPDATED,0,0,0,0,0,0,1);
-    else if(op==0xf0){t->oscillator_route=take(s,t,1);if(t->oscillator_route>15)fail(s,at,op);}
+    else if(op==0xf0){unsigned route=take(s,t,1),index=route>>4,mode=route&15;
+      if(index>1||mode>3)fail(s,at,op);else {t->oscillator_modes[index]=mode;if(index==1&&mode==1)t->oscillator_time=0;}}
     else if(op==0xfd){unsigned tempo=take(s,t,2);if(!tempo||tempo>1000){fail(s,at,op);return;}t->tempo=tempo;t->override_tempo=true;}
     else if(op==0xfe){unsigned base=take(s,t,2);if(!base||base>1000){fail(s,at,op);return;}t->timebase=base;}
     else if(op==0xff)close_track(s,n);
@@ -244,7 +248,7 @@ static void interrupt(DndIplSequence *s,DndIplTrack *t) {
 bool dnd_ipl_sequence_init(DndIplSequence *s,const uint8_t *data,unsigned bytes,
                           DndIplEventHandler handler,void *context) {
   if(!s||!data||!bytes||bytes>4096)return false;
-  memset(s,0,sizeof(*s));s->sequence=data;s->length=bytes;s->handler=handler;s->context=context;
+  memset(s,0,sizeof(*s));s->sequence=data;s->length=bytes;s->handler=handler;s->context=context;s->tick_divisor=25200;
   return open_track(s,-1,0,0,0)==0;
 }
 int dnd_ipl_sequence_open(DndIplSequence *s,unsigned entry,unsigned owner) {
@@ -265,20 +269,63 @@ void dnd_ipl_sequence_stop_owner(DndIplSequence *s,unsigned owner) {
   if(!s||!owner)return;
   for(unsigned i=0;i<DND_IPL_TRACKS;i++)if(s->track[i].active&&s->track[i].owner==owner)close_track(s,i);
 }
+float dnd_ipl_sequence_tick_rate(const DndIplSequence *s,unsigned track) {
+  const DndIplTrack *t=&s->track[track];
+  while(t->parent>=0)t=&s->track[t->parent];
+  float rate=(float)t->timebase*(float)t->tempo;
+  return rate/s->tick_divisor;
+}
+void dnd_ipl_sequence_modern(DndIplSequence *s,bool modern) {
+  s->modern=modern;
+  if(modern) {
+    s->track[0].mix[0]=0x1000150;s->track[0].mix[1]=0x1000210;
+    s->track[0].mix[2]=0x1000352;s->track[0].mix[3]=0x1000412;
+  }
+}
+static void modern_tick_tree(DndIplSequence *s,unsigned n) {
+  DndIplTrack *t=&s->track[n];
+  if(!t->active||t->born_block==s->blocks)return;
+  t->ticks++;
+  if(t->timer&&!--t->timer) {
+    t->pending|=1u<<6;if(!t->timer_count||--t->timer_count)t->timer=t->timer_period;
+  }
+  if(t->wait)t->wait--;
+  interrupt(s,t);execute(s,n);
+  for(unsigned p=0;p<DND_IPL_PARAMS;p++) {
+    DndIplParameter *a=&t->parameter[p];
+    if(a->remaining){a->value+=a->step;if(!--a->remaining)a->value=a->target;}
+  }
+  for(unsigned slot=0;slot<16&&!s->fault;slot++)
+    if(t->child[slot]>=0)modern_tick_tree(s,(unsigned)t->child[slot]);
+}
+static bool linked_child(const DndIplSequence *s,unsigned n) {
+  int parent=s->track[n].parent;if(parent<0)return false;
+  for(unsigned i=0;i<16;i++)if(s->track[parent].child[i]==(int)n)return true;
+  return false;
+}
 bool dnd_ipl_sequence_block(DndIplSequence *s) {
   if(!s||s->fault)return false;
   s->work=0;
   if(!s->blocks)execute(s,0);
+  if(s->modern) {
+    for(unsigned i=0;i<DND_IPL_TRACKS&&!s->fault;i++) {
+      DndIplTrack *t=&s->track[i];if(!t->active)continue;
+      interrupt(s,t);execute(s,i);
+    }
+    for(unsigned i=0;i<DND_IPL_TRACKS&&!s->fault;i++) {
+      DndIplTrack *t=&s->track[i];if(!t->active||linked_child(s,i)||t->born_block==s->blocks)continue;
+      t->clock+=dnd_ipl_sequence_tick_rate(s,i);s->processing_tick=true;
+      while(t->clock>=1&&t->active&&!s->fault){t->clock-=1;modern_tick_tree(s,i);}
+      s->processing_tick=false;
+    }
+    s->blocks++;return !s->fault;
+  }
   for(unsigned i=0;i<DND_IPL_TRACKS&&!s->fault;i++) {
-    DndIplTrack *t=&s->track[i];if(!t->active)continue;
+    s->processing_tick=false;DndIplTrack *t=&s->track[i];if(!t->active||t->born_block>s->blocks)continue;
     interrupt(s,t);execute(s,i);
     if(t->born_block==s->blocks)continue;
-    unsigned tempo=t->tempo;
-    if(t->parent>=0&&!t->override_tempo) {
-      int p=t->parent;while(s->track[p].parent>=0&&!s->track[p].override_tempo)p=s->track[p].parent;
-      tempo=s->track[p].tempo;
-    }
-    t->clock+=(double)tempo*(double)t->timebase*160.0/(60.0*64057.0);
+    t->clock+=dnd_ipl_sequence_tick_rate(s,i);
+    s->processing_tick=true;
     while(t->clock>=1&&t->active&&!s->fault) {
       t->clock-=1;t->ticks++;
       for(unsigned p=0;p<DND_IPL_PARAMS;p++) {
@@ -293,5 +340,5 @@ bool dnd_ipl_sequence_block(DndIplSequence *s) {
       interrupt(s,t);execute(s,i);
     }
   }
-  s->blocks++;return !s->fault;
+  s->processing_tick=false;s->blocks++;return !s->fault;
 }

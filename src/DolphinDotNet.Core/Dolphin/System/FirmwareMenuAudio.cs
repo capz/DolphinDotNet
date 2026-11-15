@@ -201,12 +201,49 @@ internal sealed class FirmwareMenuAudio : IDisposable
                 {
                     var fullEffects=reverb!;
                     if(modern){fullEffects=new byte[128];Array.Copy(image,bank-128,fullEffects,0,128);}
-                    result.SystemAudio=new FirmwareSystemAudio(archive,early?"ipl-menu-early-v1":"ipl-menu-bms-v2",sequence,instruments,resampling,fullEffects);
+                    byte[]? oscillators=CaptureOscillators(image,bank,early,cancellation);
+                    if(oscillators==null)continue;
+                    result.SystemAudio=new FirmwareSystemAudio(archive,early?"ipl-menu-early-v1":"ipl-menu-bms-v2",sequence,instruments,resampling,fullEffects,oscillators);
                 }
             }
             return result;
         }
         catch {result.Dispose();throw;}
+    }
+    private static byte[]? CaptureOscillators(byte[] image,int bank,bool early,CancellationToken cancellation)
+    {
+        // Retain the caller's two qualified presets and their envelope tables.
+        // Neither authored envelope data nor executable ROM offsets are embedded.
+        bool clock=early?
+            FindFingerprint(image,104,0x9421ffe0,"bcbbbbdadc7384c65b1c3a8a93c0a3fab75c7af4fc4bb1c36902cfada4c31c75",cancellation)>=0:
+            FindFingerprint(image,104,0xc022889c,"87a6a94e276a2e4a9fd7d942f443154a371d1811cc7b9c58ea4c6c8da3b57cec",cancellation)>=0||
+            FindFingerprint(image,104,0xc02288ec,"319a1eee910122ab7e40ab2b2f9b5db45fd8f12d5ab781203a09aa09887a167b",cancellation)>=0;
+        if(!clock)return null;
+        string[] hashes={"25accec48cd5d338c833900a2bbcbfcbb8f934e3994ae5796097f26926240f93",
+            "0a4ffe1b224fed2da2a82dcd890c0254729c20ced69b3ccb6f940b3003fccf1d"};
+        var result=new byte[128];
+        for(int i=0;i<2;i++)
+        {
+            int found=-1;
+            for(int at=Math.Max(0,bank-4096);at<=bank-36;at+=4)
+                if(FirmwareAudioFingerprint.Hash(image,at,36,cancellation)==hashes[i])
+                {if(found>=0)return null;found=at;}
+            if(found<0)return null;
+            // Definitions immediately follow the two bounded 36-byte tables and
+            // a 12-byte release record. Normalize pointer-free scalar fields.
+            int definition=found-i*36+84+i*24;
+            if(definition>bank-24||image[definition]!=(i==0?1:0))return null;
+            string hash=FirmwareAudioFingerprint.Hash(image,definition,24,cancellation);
+            string[] accepted=early?new[]{"404b2a90e57a5ad93341710efcfc2c716152ee8197960309851ad1b12a233091","a70809c7fac9bfbda1d6c3bab59e2ba9ff54560e39d38ced89bddddab7cf40c6"}:
+                i==0?new[]{"30b8f4c8edbfa685803ab022f8b6a4f6d429445e013985c6b2a73f3ede8a2621","709a26306f43d5f15fe70014042606538fd62ea3c11d9e7e92a41fb282f042de"}:
+                new[]{"14d8dd3bd85d2eb355bace8228e97893ce0624ae8f05ea5d8a1c212c42f0b28d","b21fbdf6ac1534f504603d32685c6884c71bd742a92576b6a43c5543ecf2c82a"};
+            if(Array.IndexOf(accepted,hash)<0)return null;
+            int target=i*64;FirmwareMenuRecipe.Put(result,target,image[definition]);
+            Array.Copy(image,definition+4,result,target+4,4);
+            Array.Copy(image,definition+16,result,target+8,8);
+            Array.Copy(image,found,result,target+16,36);
+        }
+        return result;
     }
     private static int Read(byte[] data,int at)
     {if(at<0||at>data.Length-4)throw new InvalidDataException("Menu table extent.");uint v=((uint)data[at]<<24)|((uint)data[at+1]<<16)|((uint)data[at+2]<<8)|data[at+3];if(v>int.MaxValue)throw new InvalidDataException("Menu pointer overflow.");return (int)v;}

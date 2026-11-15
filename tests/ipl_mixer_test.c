@@ -85,10 +85,31 @@ int main(void) {
   assert(repeated>first&&pcm(out+2)==pcm(out+318));
   dnd_ipl_mixer_dispose(m);
   /* Modern firmware has an enabled post-filter route to auxiliary bus 10,
-   * and a disabled fourth path. Neither becomes an accidental front return. */
+   * and a disabled fourth path. The auxiliary center is folded equally into front L/R at the output stage. */
   memset(effects+96,0,32);effects[64+3]=10;
-  assert(dnd_ipl_mixer_init(m,waves,wet,sizeof(wet),bank,sizeof(bank),NULL,effects,false,exact));
-  for(unsigned i=0;i<5;i++){assert(dnd_ipl_mixer_block(m,out));for(unsigned j=0;j<sizeof(out);j++)assert(!out[j]);}
-  assert(dnd_ipl_mixer_reset(m));dnd_ipl_mixer_dispose(m);free(m);
+  const uint8_t auxiliary[]={0xdd,0,0,0,0xdd,1,0,0,0xdd,2,5,0,60,1,127,0x80,100,0xff};
+  assert(dnd_ipl_mixer_init(m,waves,auxiliary,sizeof(auxiliary),bank,sizeof(bank),NULL,effects,false,exact));
+  assert(dnd_ipl_mixer_block(m,out));assert(pcm(out)==0);
+  assert(dnd_ipl_mixer_block(m,out));assert(dnd_ipl_mixer_block(m,out));
+  assert(pcm(out)>0&&pcm(out)==pcm(out+2));
+  assert(dnd_ipl_mixer_reset(m));dnd_ipl_mixer_dispose(m);
+  /* Original generated modulation fixture: a caller-owned envelope traverses
+   * both half cycles and loops without replay calls or embedded firmware data. */
+  uint8_t oscillators[128]={0};uint8_t *osc=oscillators+64;
+  be32(osc+4,0x3f800000);be32(osc+8,0x3e800000);be32(osc+12,0x3f800000);
+  be16(osc+20,16384);be16(osc+24,4);be16(osc+26,(unsigned)(uint16_t)-16384);
+  be16(osc+30,4);be16(osc+32,16384);be16(osc+34,13);be16(osc+38,1);
+  const uint8_t tremolo[]={0xd6,1,0x9c,9,0x20,0,0x9c,10,0x40,0,60,1,127,0x80,100,0xff};
+  assert(dnd_ipl_mixer_init(m,waves,tremolo,sizeof(tremolo),bank,sizeof(bank),NULL,effects,true,exact));
+  m->oscillators=oscillators;
+  for(unsigned block=0;block<40;block++) {
+    assert(dnd_ipl_mixer_block(m,out));double phase=fmod(block*.5,8);
+    double triangle=phase<4?.5-phase*.25:-.5+(phase-4)*.25;
+    double expected=(1+triangle*.25)*(13107.0/16384)/sqrt(2.0);
+    assert(fabs(m->voice[0].left-expected)<.000001);
+  }
+  be16(osc+38,3);assert(!dnd_ipl_mixer_block(m,out)&&m->fault);
+  dnd_ipl_mixer_dispose(m);free(m);
+
   printf("IPL mixer: automatic partial-frame source loops, one-shots, bounded allocation, finite PCM oracle (%u LSB), and post-filter delay passed\n",error);
 }

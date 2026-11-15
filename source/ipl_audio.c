@@ -41,7 +41,8 @@ int dnd_ipl_audio_begin(DndArray *input,int budget) {
   unsigned seq=be32(p+16),bank=be32(p+20);
   if(memcmp(p,"DIA1",4)||be32(p+4)!=input->length||(be32(p+8)!=1&&be32(p+8)!=2)||be32(p+12)!=12||
      !seq||seq>4096||bank!=0x8e0||be32(p+24)!=4||be32(p+28)!=512)return 0;
-  unsigned begin=352+seq+bank+128+512;
+  unsigned oscillator_bytes=be32(p+32);if(oscillator_bytes!=0&&oscillator_bytes!=128)return 0;
+  unsigned begin=352+seq+bank+128+512+oscillator_bytes;
   if(begin>input->length||(unsigned)budget<sizeof(IplAudio)+sizeof(DndIplMixer)+input->length)return 0;
   IplAudio *s=calloc(1,sizeof(*s));if(!s)return 0;s->budget=(unsigned)budget;
   if(!charge(s,(unsigned)sizeof(*s)+input->length+(unsigned)sizeof(DndIplMixer)))goto fail;
@@ -88,6 +89,7 @@ int dnd_ipl_audio_step(int token) {
   unsigned budget=s->budget-s->bytes+(unsigned)sizeof(DndIplMixer);
   if(!dnd_ipl_mixer_init(s->mixer,waves,p+352,s->sequence_bytes,p+s->bank_offset,0x8e0,
       p+s->coefficient_offset,p+s->effect_offset,s->early!=0,budget)){s->state=-1;return -1;}
+  if(be32(p+32))s->mixer->oscillators=p+s->coefficient_offset+512;
   if(!charge(s,s->mixer->bytes-(unsigned)sizeof(DndIplMixer))){s->state=-1;return -1;}
   s->state=1;return 1;
 }
