@@ -3,6 +3,16 @@ namespace Dolphin.Audio;
 internal static class NativeAudio
 {
     private static Exception Unsupported()=>new PlatformNotSupportedException("Requires a DolphinDotNet native GameCube build.");
+    internal static int AudioSystemBegin(byte[] packet,int budget)=>throw Unsupported();
+    internal static int AudioSystemStep(int token)=>throw Unsupported();
+    internal static int AudioSystemStart(int token,int startup)=>throw Unsupported();
+    internal static int AudioSystemPlay(int token,int kind,int value)=>throw Unsupported();
+    internal static int AudioSystemControl(int token,int kind,float value)=>throw Unsupported();
+    internal static int AudioSystemStat(int token,int kind)=>throw Unsupported();
+    internal static int AudioSystemOwner(int token,int owner)=>throw Unsupported();
+    internal static void AudioSystemStopOwner(int token,int owner)=>throw Unsupported();
+    internal static void AudioSystemStop(int token)=>throw Unsupported();
+    internal static void AudioSystemDispose(int token)=>throw Unsupported();
     internal static int AudioInit()=>throw Unsupported();
     internal static int AudioBegin(string path)=>throw Unsupported();
     internal static int AudioBeginMemory(byte[] header,byte[]? body,int format,int entry,int budget)=>throw Unsupported();

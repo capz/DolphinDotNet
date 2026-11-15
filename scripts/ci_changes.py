@@ -20,6 +20,7 @@ API = {"compiler", "storage", "network", "audio", "graphics", "assets", "sdk", "
 COMPILER = {"compiler", "storage", "network", "audio", "graphics", "gamecube", "sdk"}
 DOMAIN = {
     "audio": {"native", "audio", "gamecube"},
+    "ipl": {"native", "audio", "gamecube"},
     "network": {"native", "network", "gamecube"},
     "socket": {"native", "network", "gamecube"},
     "storage": {"native", "storage", "gamecube"},
@@ -96,7 +97,7 @@ def select(paths):
             selected.update({"graphics", "assets", "sdk"})
         elif path.startswith("tests/"):
             relative = path[6:].lower().replace("_", "")
-            if relative.startswith(("systemmenuaudio", "systemfirmware", "menurecipe")):
+            if relative.startswith(("systemmenuaudio", "systemfirmware", "systemaudiosession", "menurecipe", "ipl")):
                 selected.update({"assets", "audio", "compiler", "gamecube"})
             elif relative.startswith(("testci", "citest", "testworkflow", "testsample",
                                     "testdebuggerdependency")):

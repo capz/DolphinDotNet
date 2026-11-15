@@ -57,3 +57,43 @@ checks pass. A GameCube-target DOL prepares all three variants through both Soun
 and Music, disposes the inputs, plays/stops them and finishes with zero native
 clips/voices in installed Dolphin 2503 DSP LLE. Legacy normal packets remain
 byte-identical. The full native session remains a later milestone.
+
+## Native session implementation checkpoint — 2026-11-15
+
+The unpublished native session now owns the complete score/instrument snapshot,
+prepares twelve decoded sources in bounded slices, and runs a bounded native
+track VM and mixer. A dedicated producer feeds four 320-frame stereo chunks;
+the AESND callback only copies native PCM. Stop unregisters the callback and
+joins the producer before resetting voices/delay storage; disposal releases the
+owned cache. Ordinary Sound/Music behavior is unchanged.
+
+Generated suites cover calls/branches/loops/registers/ports/interrupts, malformed
+instructions and zero-time cycles, PCM-loop and finite-note oracles, routed
+post-filter delays, source disposal, budgets/cancellation/stale tokens, and ten
+minutes of generated producer output. Address/undefined-behavior sanitizer runs
+pass. A first GameCube-target public-API test in installed Dolphin DSP LLE passed
+ambience, ten cues, an automatically looping sample, stereo/mono, ordinary-audio
+coexistence, three startups, stop/restart and disposal. It reported 3,435,829
+native bytes, zero underruns/faults, and no surviving native session. This is
+functional emulator evidence for that checkpoint, not full audio qualification.
+
+Subsequent changes add the original cube/submenu motion calculations and
+startup-source completion detection for automatic ambience handover. The modern
+128-byte effects initializer has also been decoded: two 50-block pre-filter
+paths, a 40-block post-filter path to auxiliary buses, and a disabled fourth
+path. Live original DSP RPBs corroborate this structure; the auxiliary returns
+must not be redirected to front output. These additions need their own target
+acceptance before publication.
+
+The complete early ambience comparison currently fails the planned fidelity
+thresholds (approximately 0.946 long-term spectral cosine and 1.249 RMS ratio
+in the first measured interval). It is not qualified for release. Further
+voice/timing/modulation/routing investigation is required. Native-startup early
+output before the original UI fade closely matches its reference interval
+(0.999996 waveform correlation, 1.000 RMS ratio); UI-driven transitions remain
+separate from raw paired-source factories.
+
+Original card-menu traces using generated saves confirm the repeating transfer
+path, a transfer completion path, a final completion cue and the error when the
+destination contains the same save. Direction-specific mappings and move/erase
+semantics remain under investigation; no guessed card cue names are published.

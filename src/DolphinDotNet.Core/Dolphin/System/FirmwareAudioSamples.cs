@@ -127,6 +127,19 @@ internal sealed class FirmwareAudioSamples : IDisposable
         }
         return null;
     }
+    internal FirmwareMenuWaveSource SourceAt(int index)=>sources[index];
+    internal int FindQualifiedIndex(FirmwareAudioArchive archive,int id)
+    {
+        int found=-1;
+        for(int i=0;i<Count;i++)
+        {
+            var info=this[i];
+            if(info.BankIndex!=0||info.WaveId!=id||info.ArchiveName!=archive.Name||
+               info.FirmwareSampleOffset<archive.Offset||info.FirmwareSampleOffset>=archive.Offset+archive.Length)continue;
+            if(found>=0)throw new InvalidDataException("Ambiguous complete IPL source ID.");found=i;
+        }
+        if(found<0)throw new InvalidDataException("Missing complete IPL source ID.");return found;
+    }
     internal FirmwareMenuWaveSource Snapshot(FirmwareAudioSampleInfo info,CancellationToken cancellation)
     {
         if(info.Owner!=owner||info.Index<0||info.Index>=Count||samples[info.Index]!=info)

@@ -74,6 +74,15 @@ public sealed class FirmwareCatalog : IDisposable
         if(audioSamples==null)throw new NotSupportedException("Original startup variant retention requires IncludeSystemAudio.");
         return audioSamples.SnapshotStartup(variant,cancellation);
     }
+    /// <summary>Whether a complete native score profile was retained and qualified.</summary>
+    public bool SupportsAudioSession {get {CheckAlive();return menuAudio!=null&&menuAudio.SystemAudio!=null&&audioSamples!=null;}}
+    internal FirmwareSystemAudioSnapshot SnapshotSystemAudio(CancellationToken cancellation)
+    {
+        CheckAlive();cancellation.ThrowIfCancellationRequested();
+        var profile=menuAudio==null?null:menuAudio.SystemAudio;
+        if(profile==null||audioSamples==null)throw new NotSupportedException("No qualified complete IPL audio profile; IncludeSystemAudio is required.");
+        return profile.Snapshot(audioSamples,cancellation);
+    }
     /// <summary>Additional retained encoded menu payload bytes. Unknown profiles
     /// retain no samples. Excludes managed object overhead and startup audio.</summary>
     public int MenuAudioRetainedBytes {get {CheckAlive();return menuAudio==null?0:menuAudio.RetainedBytes;}}
@@ -147,10 +156,11 @@ public sealed class FirmwareCatalog : IDisposable
                 total+=audio.CompressedBytes;
             }
             if((options&(FirmwareCatalogOptions.IncludeMenuAudio|FirmwareCatalogOptions.IncludeSystemAudio))!=0)
-                menu=FirmwareMenuAudio.Inspect(data,files,waves,metadata.ToArray(),cancellation);
-            if(total>MaximumDecodedBytes||menu!=null&&menu.RetainedBytes>MaximumDecodedBytes-total)
+                menu=FirmwareMenuAudio.Inspect(data,files,waves,metadata.ToArray(),cancellation,(options&FirmwareCatalogOptions.IncludeSystemAudio)!=0);
+            int menuBytes=menu==null?0:FirmwareAudioBounds.Add(menu.RetainedBytes,menu.SystemRetainedBytes);
+            if(total>MaximumDecodedBytes||menuBytes>MaximumDecodedBytes-total)
                 throw new InvalidDataException("Firmware catalog retention budget exceeded.");
-            if(menu!=null)total+=menu.RetainedBytes;
+            total+=menuBytes;
             if((options&FirmwareCatalogOptions.IncludeSystemAudio)!=0)
             {
                 int startupBytes=audio==null?0:audio.CompressedBytes;

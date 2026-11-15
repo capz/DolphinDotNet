@@ -132,12 +132,14 @@ internal sealed class FirmwareMenuAudio : IDisposable
     private FirmwareMenuWaveSource[] sources=new FirmwareMenuWaveSource[0];
     private FirmwareAudioArchive? sourceArchive;
     internal FirmwareAudioArchive? QualifiedArchive=>sourceArchive;
+    internal FirmwareSystemAudio? SystemAudio {get;private set;}
+    internal int SystemRetainedBytes=>SystemAudio==null?0:SystemAudio.AdditionalRetainedBytes;
     private readonly int[] sourceIds=new[]{9,11,6};
     private readonly FirmwareMenuRecipe?[] recipes=new FirmwareMenuRecipe?[11];
     internal int RetainedBytes {get;private set;}
     private FirmwareMenuAudio(FirmwareAudioArchive[] archives,string reason){Archives=archives;UnsupportedReason=reason;}
     internal static FirmwareMenuAudio Inspect(byte[] image,FirmwareFileTable? files,FirmwareWaveSystemInfo[] systems,
-        FirmwareResource[] resources,CancellationToken cancellation)
+        FirmwareResource[] resources,CancellationToken cancellation,bool complete=false)
     {
         var archives=FirmwareAudioArchive.Discover(image,files,systems,resources,cancellation);
         cancellation.ThrowIfCancellationRequested();
@@ -195,6 +197,12 @@ internal sealed class FirmwareMenuAudio : IDisposable
                     result.RetainedBytes=FirmwareAudioBounds.Add(result.RetainedBytes,recipe.Data.Length);
                 }
                 foreach(var s in selected)result.RetainedBytes=FirmwareAudioBounds.Add(result.RetainedBytes,s.EncodedBytes);
+                if(complete)
+                {
+                    var fullEffects=reverb!;
+                    if(modern){fullEffects=new byte[128];Array.Copy(image,bank-128,fullEffects,0,128);}
+                    result.SystemAudio=new FirmwareSystemAudio(archive,early?"ipl-menu-early-v1":"ipl-menu-bms-v2",sequence,instruments,resampling,fullEffects);
+                }
             }
             return result;
         }
@@ -291,5 +299,5 @@ internal sealed class FirmwareMenuAudio : IDisposable
         int at=Array.IndexOf(sourceIds,archive.System[index].WaveId);
         return at>=0&&at<sources.Length?sources[at]:null;
     }
-    public void Dispose(){foreach(var source in sources)source?.Dispose();foreach(var recipe in recipes)recipe?.Release();RetainedBytes=0;}
+    public void Dispose(){foreach(var source in sources)source?.Dispose();foreach(var recipe in recipes)recipe?.Release();SystemAudio?.Dispose();RetainedBytes=0;}
 }

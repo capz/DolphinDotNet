@@ -6,6 +6,16 @@ if(args.Length==3&&args[0]=="--private-menu")
     using var catalog=input.CreateCatalog(FirmwareCatalogOptions.IncludeMenuAudio,default);
     MenuPrivateTests.Validate(input,catalog);
     Directory.CreateDirectory(args[2]);
+    using(var full=input.CreateCatalog(FirmwareCatalogOptions.IncludeSystemAudio,default))
+    {
+        try
+        {
+            using var system=full.SnapshotSystemAudio(default);
+            File.WriteAllBytes(Path.Combine(args[2],"system-private.dia"),system.Packet);
+            Console.WriteLine("Complete private system snapshot "+system.Packet.Length);
+        }
+        catch(NotSupportedException){}
+    }
     for(int i=0;i<10;i++)
     {
         if(!catalog.TryGetMenuSoundInfo((SystemMenuSound)i,out var menuInfo))throw new Exception("Unsupported private profile");
