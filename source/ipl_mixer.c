@@ -67,6 +67,9 @@ static bool instrument(DndIplMixer *m,DndIplMixVoice *v,const DndIplTrack *t) {
     if(!range(m,rel,6))return false;
     v->release_mode=u16(m->bank+rel);v->release_units=u16(m->bank+rel+2);
   }
+  if(!m->early&&t->oscillator_enabled&&t->oscillator_slot==0&&t->simple_oscillator==1) {
+    v->adsr=false;v->release_units=16;v->release_mode=0;
+  }
   return v->release_units<=6000&&v->release_mode<=2;
 }
 static void sequence_event(void *context,const DndIplEvent *e) {
@@ -76,6 +79,19 @@ static void sequence_event(void *context,const DndIplEvent *e) {
       DndIplMixVoice *v=&m->voice[i];
       if(v->active&&!v->raw&&v->track==e->track&&v->generation==e->generation&&
          (e->kind==DND_IPL_TRACK_CLOSED||v->slot==e->slot))release(m,v);
+      if(e->kind==DND_IPL_TRACK_CLOSED&&v->active&&!v->raw&&v->manager==e->track&&v->manager_generation==e->generation) {
+        int parent=m->sequence.track[e->track].parent;
+        v->manager=parent>=0?(unsigned)parent:UINT_MAX;
+        v->manager_generation=parent>=0?m->sequence.track[parent].generation:0;
+      }
+    }
+    return;
+  }
+  if(e->kind==DND_IPL_TRACK_UPDATED&&e->release) {
+    for(unsigned i=0;i<DND_IPL_VOICES;i++) {
+      DndIplMixVoice *v=&m->voice[i];
+      if(v->active&&!v->raw&&v->manager==e->track&&v->manager_generation==e->generation&&
+          (v->released||e->release==2))v->active=false;
     }
     return;
   }
@@ -85,9 +101,10 @@ static void sequence_event(void *context,const DndIplEvent *e) {
   if(at==DND_IPL_VOICES){m->fault=1;return;}
   for(unsigned i=0;i<DND_IPL_VOICES;i++) {
     DndIplMixVoice *v=&m->voice[i];
-    if(v->active&&!v->raw&&v->track==e->track&&v->generation==e->generation&&v->slot==e->slot)release(m,v);
+    if(v->active&&!v->raw&&v->track==e->track&&v->generation==e->generation&&e->slot!=0&&v->slot==e->slot)release(m,v);
   }
   DndIplMixVoice *v=&m->voice[at];memset(v,0,sizeof(*v));
+  v->manager=e->track;v->manager_generation=e->generation;
   v->track=e->track;v->generation=e->generation;v->owner=e->owner;v->slot=e->slot;
   v->key=e->key;v->velocity=e->velocity;v->born=m->blocks;v->gate=UINT64_MAX;
   const DndIplTrack *t=&m->sequence.track[e->track];
@@ -96,7 +113,7 @@ static void sequence_event(void *context,const DndIplEvent *e) {
   if(e->duration!=UINT_MAX) {
     double length=(double)e->duration*(double)e->gate_percent/100;
     if(t->time_relative)length/=dnd_ipl_sequence_tick_rate(&m->sequence,e->track);
-    else length*=120.0/(double)t->timebase*.8;
+    else length*=120.0/(double)t->timebase*(m->early?.8:1);
     if(length<0||length>1000000){m->fault=1;return;}
     v->gate=m->blocks+(uint64_t)length;
   }
@@ -109,6 +126,15 @@ bool dnd_ipl_mixer_init(DndIplMixer *m,const DndIplWave *waves,const uint8_t *se
   memset(m,0,sizeof(*m));memcpy(m->wave,waves,sizeof(m->wave));
   m->bank=bank;m->bank_bytes=bank_bytes;m->coefficients=coefficients;m->early=early;m->volume=1;
   m->bytes=(unsigned)sizeof(*m);
+  if(coefficients)for(unsigned phase=0;phase<64;phase++) {
+    unsigned total=0;
+    for(unsigned j=0;j<4;j++) {
+      int c=(int16_t)u16(coefficients+phase*8+j*2);
+      m->resampler[phase][j]=(int16_t)c;total+=(unsigned)abs(c);
+    }
+    /* With signed 16-bit PCM this bound makes the four-tap MAC fit int32. */
+    if(total>65535)goto fail;
+  }
   for(unsigned i=0;i<DND_IPL_WAVES;i++) {
     const DndIplWave *w=&m->wave[i];
     if(!w->pcm||!w->samples||w->samples>200000||w->rate<5000||w->rate>48000||w->base_key>127||
@@ -166,9 +192,9 @@ static float sample(DndIplMixer *m,DndIplMixVoice *v) {
   if(m->coefficients) {
     if(v->step>=4){v->phase+=v->step;result=(float)source_sample(w,(int)v->phase-4);}
     else {
-      unsigned phase=(unsigned)((v->phase-(int)v->phase)*4096),which=(phase>>6)*8;
-      int64_t sum=0;
-      for(unsigned j=0;j<4;j++)sum+=(int64_t)(int16_t)u16(m->coefficients+which+j*2)*source_sample(w,(int)v->phase+(int)j-4);
+      unsigned phase=(unsigned)((v->phase-(int)v->phase)*4096),which=phase>>6;
+      int32_t sum=0;
+      for(unsigned j=0;j<4;j++)sum+=(int32_t)m->resampler[which][j]*source_sample(w,(int)v->phase+(int)j-4);
       result=(float)saturate((int)(sum>>15));v->phase+=v->step;
     }
   } else {
@@ -214,7 +240,7 @@ static float oscillator_value(DndIplMixer *m,DndIplTrack *t,unsigned *target) {
 static void update_voice(DndIplMixer *m,DndIplMixVoice *v) {
   const DndIplWave *w=&m->wave[v->source];
   if(v->raw) {
-    v->step=(float)w->rate/32000;v->target[0]=v->target[1]=1;return;
+    v->step=(float)w->rate/32028.5f;v->target[0]=v->target[1]=1;return;
   }
   if(!v->released&&m->blocks>=v->gate)release(m,v);
   float env=envelope(m,v);if(env<=0&&v->released){v->active=false;return;}
@@ -235,28 +261,36 @@ static void update_voice(DndIplMixer *m,DndIplMixVoice *v) {
       pitch+=p->parameter[1].value*(float)p->reg[7]*4;parent=p->independent?-1:p->parent;
     }
     pitch=floorf(pitch*64)/64;
-    float ratio=(float)w->rate/32028.5f*v->tuning*pitch_scale*powf(2,((float)v->key-(float)w->base_key+pitch)/12);
-    if(!(ratio>0&&ratio<16)||!isfinite(volume)){m->fault=1;return;}
-    v->step=floorf(ratio*4096)/4096;
+    if(v->step==0||pitch!=v->last_pitch||pitch_scale!=v->last_pitch_scale) {
+      float ratio=(float)w->rate/32028.5f*v->tuning*pitch_scale*powf(2,((float)v->key-(float)w->base_key+pitch)/12);
+      if(!(ratio>0&&ratio<16)){m->fault=1;return;}
+      v->step=floorf(ratio*4096)/4096;v->last_pitch=pitch;v->last_pitch_scale=pitch_scale;
+    }
+    if(!isfinite(volume)){m->fault=1;return;}
     if(pan<0)pan=0;
     if(pan>1)pan=1;
     float velocity=(float)v->velocity/127;
     float gain=volume*velocity*(m->early?1:velocity)*v->source_gain*(13107.0f/16384.0f);
-    v->left=gain*cosf(pan*1.5707963267948966f);v->right=gain*sinf(pan*1.5707963267948966f);
+    if((v->pan_left==0&&v->pan_right==0)||pan!=v->pan) {
+      v->pan_left=cosf(pan*1.5707963267948966f);v->pan_right=sinf(pan*1.5707963267948966f);
+    }
+    v->left=gain*v->pan_left;v->right=gain*v->pan_right;
     if(fx<0)fx=0;
     if(fx>1)fx=1;
-    v->pan=pan;v->fx=fx;v->send=sinf(fx*(m->early?.125f:.25f)*1.5707963267948966f);
+    if(v->fx!=fx)v->send=sinf(fx*(m->early?.125f:.25f)*1.5707963267948966f);
+    v->pan=pan;v->fx=fx;
     memcpy(v->routing,t->mix,sizeof(v->routing));
   }
   memset(v->target,0,sizeof(v->target));
+  float modern_gain=m->early?0:sqrtf(v->left*v->left+v->right*v->right);
   for(unsigned i=0;i<6;i++) {
     unsigned route=v->routing[i];
     if(route&0x1000000u) {
       unsigned destination=(route>>8)&255;
       if(!destination)continue;
       if(destination>11||destination==10){m->fault=1;return;}
-      destination=destination==9?11:destination==11?10:destination-1;
-      float gain=sqrtf(v->left*v->left+v->right*v->right);
+      destination=destination==9?(m->mono?1u:11u):destination==11?10:destination-1;
+      float gain=modern_gain;
       for(unsigned shift=0;shift<=4;shift+=4) {
         unsigned mode=(route>>shift)&15;float control;
         if(!mode)continue;
@@ -281,13 +315,23 @@ bool dnd_ipl_mixer_block(DndIplMixer *m,uint8_t *out) {
   if(!m||!out||m->fault||!dnd_ipl_sequence_block(&m->sequence))return false;
   for(unsigned i=0;i<DND_IPL_VOICES;i++)if(m->voice[i].active)update_voice(m,&m->voice[i]);
   if(m->fault)return false;
-  for(unsigned frame=0;frame<80;frame++) {
-    float bus[12]={0};
-    for(unsigned i=0;i<DND_IPL_VOICES;i++) {
-      DndIplMixVoice *v=&m->voice[i];if(!v->active)continue;
+  /* Mix each live voice once across the block. Keep the original summation
+   * order, but avoid scanning inactive voices and unused buses per sample. */
+  float buses[80][12]={0};
+  for(unsigned i=0;i<DND_IPL_VOICES;i++) {
+    DndIplMixVoice *v=&m->voice[i];if(!v->active)continue;
+    unsigned destinations[12],count=0;
+    for(unsigned b=0;b<12;b++)if(v->current[b]!=0||v->target[b]!=0)destinations[count++]=b;
+    for(unsigned frame=0;frame<80&&v->active;frame++) {
       float value=sample(m,v);
-      for(unsigned b=0;b<12;b++)bus[b]+=value*(v->current[b]+(v->target[b]-v->current[b])*(float)frame/80);
+      for(unsigned j=0;j<count;j++) {
+        unsigned b=destinations[j];
+        buses[frame][b]+=value*(v->current[b]+(v->target[b]-v->current[b])*(float)frame/80);
+      }
     }
+  }
+  for(unsigned frame=0;frame<80;frame++) {
+    float *bus=buses[frame];
     for(unsigned i=0;i<4;i++) {
       DndIplMixEffect *e=&m->effect[i];if(!e->mode)continue;int delayed=e->ring[e->position];int64_t sum=0;
       for(unsigned j=0;j<8;j++)sum+=(int64_t)e->history[j]*e->coefficient[j];
@@ -312,6 +356,17 @@ bool dnd_ipl_mixer_block(DndIplMixer *m,uint8_t *out) {
       unsigned base=t->oscillator_slot?9:6;
   float rate=(t->parameter_written&(1u<<(base+1)))?t->parameter[base+1].value:f32(p+4);
       t->oscillator_time+=rate*(m->early?1:48000.0f/32028.5f);
+      for(unsigned at=0;at<6;at++)if(u16(p+16+at*6)==13) {
+        unsigned loop=u16(p+16+at*6+4);float prefix=0,period=0;
+        if(loop>=at){m->fault=1;break;}
+        for(unsigned j=0;j<at;j++) {
+          float duration=(float)u16(p+16+j*6+2);
+          if(j<loop)prefix+=duration;else period+=duration;
+        }
+        if(period<=0){m->fault=1;break;}
+        if(t->oscillator_time>=prefix+period)t->oscillator_time=prefix+fmodf(t->oscillator_time-prefix,period);
+        break;
+      }
     }
   }
   m->blocks++;return !m->fault;

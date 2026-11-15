@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +10,10 @@ using Scheduler=Dolphin.Threading.Tasks.Scheduler;
 
 internal static class Program
 {
+    private static byte[] StressPcm()
+    {
+        var pcm=new byte[320];for(int i=0;i<pcm.Length;i++)pcm[i]=(byte)(i%4==1?140:i%4==3?116:128);return pcm;
+    }
     private static int Failure(int code){DebugOverlay.WriteLine("IPL SESSION FAILURE "+code);return code;}
     private static async Task<int> Main()
     {
@@ -59,6 +64,36 @@ internal static class Program
                 session.Stop();session.PlayStartup();await Time.DelayAsync(6500);
                 if(session.IsStartupPlaying)return Failure(15);
             }
+#if IPL_AUDIO_STRESS
+            if(session.ProfileId=="ipl-menu-early-v1")
+            using(var ordinaryStress=Sound.FromPcm8(StressPcm(),8000))
+            using(var ordinaryVoice=ordinaryStress.Play(true))
+            using(var repeated=session.PlaySample(session.GetSample(10)))
+            {
+                SystemAudioPlayback? cue=null;
+                try
+                {
+                    for(int frame=0;frame<24000;frame++)
+                    {
+                        float progress=(frame%80)/79f;
+                        session.SetControl((frame/80)%2==0?SystemAudioControl.CubeMotion:SystemAudioControl.SubmenuMotion,progress);
+                        if(frame%120==0)
+                        {
+                            cue?.Dispose();cue=session.PlayCue((SystemAudioCue)((frame/120)%19));
+                            session.OutputMode=(frame/120)%2==0?SystemAudioOutputMode.Stereo:SystemAudioOutputMode.Mono;
+                        }
+                        if(frame%400==0)
+                        {
+                            var health=session.GetStatistics();
+                            DebugOverlay.WriteLine("IPL STRESS "+(frame/40)+"s BYTES "+health.NativeBytes+" UNDERRUNS "+health.Underruns+" FAULT "+health.FaultCode);
+                            if(health.Underruns!=0||health.FaultCode!=0||!repeated.IsPlaying||!ordinaryVoice.IsPlaying)return Failure(16);
+                        }
+                        await Time.DelayAsync(25);
+                    }
+                }
+                finally {cue?.Dispose();}
+            }
+#endif
             var stats=session.GetStatistics();
             DebugOverlay.WriteLine("IPL BYTES "+stats.NativeBytes+" UNDERRUNS "+stats.Underruns+" FAULT "+stats.FaultCode);
             if(stats.Underruns!=0||stats.FaultCode!=0||stats.PeakNativeBytes>8*1024*1024)return Failure(10);

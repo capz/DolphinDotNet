@@ -9,6 +9,7 @@
 #ifdef DND_GAMECUBE_STORAGE
 #include <ogc/lwp.h>
 #include <ogc/mutex.h>
+#include <ogc/semaphore.h>
 #include <malloc.h>
 #include <unistd.h>
 typedef mutex_t IplMutex;
@@ -17,7 +18,6 @@ static int mutex_init(IplMutex *m){return LWP_MutexInit(m,false);}
 static void lock(IplMutex *m){LWP_MutexLock(*m);}
 static void unlock(IplMutex *m){LWP_MutexUnlock(*m);}
 static void mutex_free(IplMutex *m){LWP_MutexDestroy(*m);}
-static void pause_producer(void){struct timespec t={0,1000000};nanosleep(&t,NULL);}
 #else
 #include <pthread.h>
 typedef pthread_mutex_t IplMutex;
@@ -26,7 +26,6 @@ static int mutex_init(IplMutex *m){return pthread_mutex_init(m,NULL);}
 static void lock(IplMutex *m){pthread_mutex_lock(m);}
 static void unlock(IplMutex *m){pthread_mutex_unlock(m);}
 static void mutex_free(IplMutex *m){pthread_mutex_destroy(m);}
-static void pause_producer(void){struct timespec t={0,1000000};nanosleep(&t,NULL);}
 #endif
 #define IPL_CHUNKS 4u
 #define IPL_CHUNK_BYTES 1280u
@@ -40,10 +39,35 @@ typedef struct {
   DndIplAudioContext *cache_context;
   IplMutex mutex;
   IplThread thread;
+#ifdef DND_GAMECUBE_STORAGE
+  sem_t wake;
+#endif
   atomic_uint produced,consumed,offset,underruns,streak,fault,stopping;
   _Alignas(32) uint8_t queue[IPL_CHUNKS][IPL_CHUNK_BYTES];
   _Alignas(32) uint8_t stack[IPL_STACK_BYTES];
 } IplPlayer;
+/* The GameCube producer sleeps until the callback publishes free space.
+ * Semaphore posting is IRQ-safe and never renders or enters managed code. */
+static void wake_producer(IplPlayer *p) {
+#ifdef DND_GAMECUBE_STORAGE
+  LWP_SemPost(p->wake);
+#else
+  (void)p;
+#endif
+}
+static void pause_producer(IplPlayer *p) {
+#ifdef DND_GAMECUBE_STORAGE
+  LWP_SemWait(p->wake);
+#else
+  (void)p;struct timespec t={0,1000000};nanosleep(&t,NULL);
+#endif
+}
+static void sync_free(IplPlayer *p) {
+#ifdef DND_GAMECUBE_STORAGE
+  LWP_SemDestroy(p->wake);
+#endif
+  mutex_free(&p->mutex);
+}
 static IplPlayer *players[2],*active;
 static int next_token=1;
 static IplPlayer *find(int token) {
@@ -72,7 +96,7 @@ static void pull(void *context,uint8_t *out,unsigned frames) {
     memcpy(out+done*4,p->queue[read%IPL_CHUNKS]+offset*4,take*4);done+=take;offset+=take;
     if(offset==320) {
       atomic_store_explicit(&p->offset,0,memory_order_relaxed);
-      atomic_store_explicit(&p->consumed,read+1,memory_order_release);
+      atomic_store_explicit(&p->consumed,read+1,memory_order_release);wake_producer(p);
     } else atomic_store_explicit(&p->offset,offset,memory_order_relaxed);
   }
   atomic_store_explicit(&p->streak,0,memory_order_relaxed);
@@ -96,7 +120,7 @@ static bool produce(IplPlayer *p) {
 static void *producer(void *context) {
   IplPlayer *p=context;
   while(!atomic_load_explicit(&p->stopping,memory_order_acquire)) {
-    if(atomic_load_explicit(&p->fault,memory_order_acquire)||!produce(p))pause_producer();
+    if(atomic_load_explicit(&p->fault,memory_order_acquire)||!produce(p))pause_producer(p);
   }
   return NULL;
 }
@@ -104,7 +128,7 @@ static int thread_start(IplPlayer *p) {
 #ifdef DND_GAMECUBE_STORAGE
   /* A sleeping producer wakes above the application executors, fills at most
    * four short chunks, then sleeps again. It never enters the managed gate. */
-  return LWP_CreateThread(&p->thread,producer,p,p->stack,sizeof(p->stack),80);
+  return LWP_CreateThread(&p->thread,producer,p,p->stack,sizeof(p->stack),LWP_PRIO_HIGHEST-1);
 #else
   return pthread_create(&p->thread,NULL,producer,p);
 #endif
@@ -131,8 +155,11 @@ int dnd_ipl_player_begin(DndArray *packet,int budget) {
   atomic_init(&p->offset,0);atomic_init(&p->produced,0);atomic_init(&p->consumed,0);atomic_init(&p->underruns,0);
   atomic_init(&p->streak,0);atomic_init(&p->fault,0);atomic_init(&p->stopping,0);
   if(mutex_init(&p->mutex)){free(p);return 0;}
+#ifdef DND_GAMECUBE_STORAGE
+  if(LWP_SemInit(&p->wake,0,1)){mutex_free(&p->mutex);free(p);return 0;}
+#endif
   p->cache=dnd_ipl_audio_begin(packet,budget-(int)overhead);
-  if(!p->cache){mutex_free(&p->mutex);free(p);return 0;}
+  if(!p->cache){sync_free(p);free(p);return 0;}
   p->cache_context=dnd_ipl_audio_context(p->cache);
   p->volume=1;p->next_owner=1;p->token=next_token++;players[slot]=p;return p->token;
 }
@@ -143,7 +170,7 @@ int dnd_ipl_player_step(int token) {
 void dnd_ipl_player_stop(int token) {
   IplPlayer *p=find(token);if(!p||!p->running)return;
   atomic_store_explicit(&p->stopping,1,memory_order_release);
-  dnd_ipl_backend_stop(p);
+  wake_producer(p);dnd_ipl_backend_stop(p);
   if(p->thread_started){thread_join(p);p->thread_started=0;}
   p->running=0;p->startup=0;p->startup_seen=0;if(active==p)active=NULL;
   /* Pending tails and every previous cue are invalidated at Stop. */
@@ -210,7 +237,7 @@ void dnd_ipl_player_dispose(int token) {
   IplPlayer *p=find(token);if(!p)return;
   dnd_ipl_player_stop(token);
   for(unsigned i=0;i<2;i++)if(players[i]==p)players[i]=NULL;
-  dnd_ipl_audio_dispose(p->cache);mutex_free(&p->mutex);free(p);
+  dnd_ipl_audio_dispose(p->cache);sync_free(p);free(p);
 }
 void dnd_ipl_player_shutdown(void) {
   for(unsigned i=0;i<2;i++)if(players[i])dnd_ipl_player_dispose(players[i]->token);

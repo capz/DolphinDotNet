@@ -228,6 +228,7 @@ static void execute(DndIplSequence *s,unsigned n) {
       t->timer_count=take(s,t,1);t->timer_period=take(s,t,2);t->timer=t->timer_period;
     } else if(op==0xe5||op==0xe6)t->registered=op==0xe5;
     else if(op==0xe7)emit(s,n,DND_IPL_SYNC,0,take(s,t,2),0,0,0,0,0);
+    else if(op==0xe8)emit(s,n,DND_IPL_TRACK_UPDATED,0,0,0,0,0,0,2);
     else if(op==0xe9)emit(s,n,DND_IPL_TRACK_UPDATED,0,0,0,0,0,0,1);
     else if(op==0xf0){unsigned route=take(s,t,1),index=route>>4,mode=route&15;
       if(index>1||mode>3)fail(s,at,op);else {t->oscillator_modes[index]=mode;if(index==1&&mode==1)t->oscillator_time=0;}}

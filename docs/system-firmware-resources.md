@@ -290,6 +290,62 @@ semantic profiles. They return losslessly interleaved original stereo sources;
 the persistent score's envelopes and startup-to-ambience handover are separate.
 The existing `CreateStartupSound(catalog, default)` call stays source compatible.
 
+## Complete original audio score
+
+`SystemAudioSession` plays the original persistent score through a native
+producer, with the qualified instruments, envelopes, source loops and effects.
+It exposes all three startups, nineteen named menu/card cues, idle ambience,
+cube/submenu motion, and session-local volume and stereo/mono output.
+
+```csharp
+using var image = SystemFirmware.ReadConsole();
+using var catalog = image.CreateCatalog(FirmwareCatalogOptions.IncludeSystemAudio, default);
+using var session = await SystemResources.CreateAudioSessionAsync(catalog);
+image.Dispose();
+catalog.Dispose(); // The prepared session owns its complete native snapshot.
+
+session.PlayStartup(SystemStartupSoundVariant.Normal);
+// Ambience starts automatically when the startup sources finish.
+using var progress = session.PlayCue(SystemAudioCue.CardTransferFromA);
+// Authored progress notes repeat until progress.Stop() or Dispose().
+using var source = session.PlaySample(session.GetSample(10));
+// The source's intro/repeat section is automatic. No loop configuration.
+```
+
+`Start()` begins the idle score without resetting an already running session.
+`PlayStartup()` resets the score and selects the original startup path.
+`PlayCue(SystemMenuSound)` also accepts the established menu identities, including
+Press Start. The standalone startup factories above remain raw paired sources;
+the standalone finite-menu factories retain their existing availability.
+
+Query `SupportsAudioSession`, `GetAudioCues()` or `TryGetAudioCueInfo()` before
+preparation. The two card-transfer cues report `RepeatsUntilStopped`; their
+identities describe the source slot, independently of copying or moving. The
+card completion tones are shared by several original operations, as documented
+on their enum values. Unknown semantic profiles remain unavailable while
+structurally resolved raw samples can still be retained and auditioned.
+
+`SetControl` exposes verified ambience enable and cube/submenu motion progress
+in the range 0–1. Playback handles own their complete track subtree and notes.
+`Stop()` clears all voices, cues, queued output and effect tails; prepared PCM
+remains available for restart. Disposing joins the native producer and releases
+that cache. Handles stay stopped across resets and session disposal.
+
+Preparation is available synchronously or asynchronously, defaults to an 8 MiB
+native budget, and never starts playback. The async factory snapshots before
+returning, so the image/catalog may be disposed while preparation is pending.
+Cancellation and budget failures release preparation allocations. Playback,
+controls and statistics use the application executor. One session can stream
+at a time, alongside ordinary Sound/Music; two sessions may be prepared.
+
+`GetStatistics()` reports native/peak bytes, logical voices, buffered and rendered
+frames, underruns and faults. Four native PCM chunks isolate the producer from
+the callback; callbacks perform bounded native copies without managed access,
+allocation, locks, file I/O or score decoding. Repeated underruns or malformed
+score execution fault the session and produce silence; dispose a faulted session
+and prepare a replacement. See [qualification](ipl-complete-audio-progress.md)
+for measured profiles, comparison limits and emulator/hardware distinctions.
+
 ## Optional startup rendition
 
 `SystemStartupSequence` is an elapsed-time controller with `Update`, `Seek` and

@@ -41,9 +41,9 @@ int main(void) {
     for(unsigned frame=0;frame<288;frame++,absolute++)if(absolute<64000) {
       int expected=0;
       if(absolute>1280) {
-        unsigned n=absolute-1280,index=n-1;
+        unsigned n=absolute-1280;int index=(int)(n*(double)(32000.0f/32028.5f))-1;
         if(index>=14)index=3+(index-14)%11;
-        int source=(int)((index+1)*1000)-1;
+        int source=index<0?0:(index+1)*1000-1;
         expected=n<80?(int)((float)source*(float)n/80):source;
       }
       for(unsigned channel=0;channel<2;channel++)assert(abs((int16_t)((unsigned)output[frame*4+channel*2]<<8|output[frame*4+channel*2+1])-expected)<=1);

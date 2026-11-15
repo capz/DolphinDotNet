@@ -10,10 +10,11 @@ typedef struct {
 } DndIplWave;
 typedef struct {
   bool active,raw,released,adsr;
-  unsigned source,track,generation,owner,slot,key,velocity;
+  unsigned source,track,generation,owner,slot,key,velocity,manager,manager_generation;
   uint64_t born,off,gate;
   unsigned envelope[5],release_units,release_mode,routing[6];
   float held,source_gain,tuning,step,left,right,send,pan,fx;
+  float last_pitch,last_pitch_scale,pan_left,pan_right;
   float current[12],target[12];
   double phase;
 } DndIplMixVoice;
@@ -25,6 +26,7 @@ typedef struct {
 } DndIplMixEffect;
 typedef struct {
   DndIplSequence sequence;
+  int16_t resampler[64][4];
   DndIplWave wave[DND_IPL_WAVES];
   DndIplMixVoice voice[DND_IPL_VOICES];
   DndIplMixEffect effect[4];

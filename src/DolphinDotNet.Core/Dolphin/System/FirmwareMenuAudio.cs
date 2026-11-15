@@ -218,7 +218,11 @@ internal sealed class FirmwareMenuAudio : IDisposable
             FindFingerprint(image,104,0x9421ffe0,"bcbbbbdadc7384c65b1c3a8a93c0a3fab75c7af4fc4bb1c36902cfada4c31c75",cancellation)>=0:
             FindFingerprint(image,104,0xc022889c,"87a6a94e276a2e4a9fd7d942f443154a371d1811cc7b9c58ea4c6c8da3b57cec",cancellation)>=0||
             FindFingerprint(image,104,0xc02288ec,"319a1eee910122ab7e40ab2b2f9b5db45fd8f12d5ab781203a09aa09887a167b",cancellation)>=0;
-        if(!clock)return null;
+        bool gates=early?
+            FindFingerprint(image,160,0x9421ffd8,"110fd4c26236f1646c4c1e69ac32105c48ebec35bed393304f28cb1765a6a28d",cancellation)>=0:
+            FindFingerprint(image,144,0x9421ffd8,"69e1db6f667f3abe71dd28ab2e6d1ee87fe25674ef21eb44aea474b52df302cb",cancellation)>=0||
+            FindFingerprint(image,144,0x9421ffd8,"ed16fa0dd32a9dfeb148e214ab46b98a8cb9eb1b6e665ffd61bc63e5e339409d",cancellation)>=0;
+        if(!clock||!gates)return null;
         string[] hashes={"25accec48cd5d338c833900a2bbcbfcbb8f934e3994ae5796097f26926240f93",
             "0a4ffe1b224fed2da2a82dcd890c0254729c20ced69b3ccb6f940b3003fccf1d"};
         var result=new byte[128];

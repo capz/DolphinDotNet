@@ -130,3 +130,27 @@ zero underruns/faults and no surviving session. A preceding restart stalled;
 repeat acceptance of the final source is still required. Compiler bundles are
 rebuilt and compared with native source before target compilation; earlier
 checks using stale copied native sources do not qualify later changes.
+
+## Render and lifetime corrections — 2026-11-15
+
+Absolute gated notes now use the modern dialect's full gate conversion, and
+slot-zero notes retain independent gates when the following note starts. The
+modern neutral oscillator replaces the attack envelope and uses its original
+short default release. Mono routes the subtractive spatial send into the front
+mix before downmixing. Generated fixtures cover these cases independently.
+The profile qualification additionally fingerprints the absolute-gate helper.
+
+The mixer handles flush-all/flush-release and transfers closed child release
+voices to their parent manager. Raw audition handles remain separate. Sparse
+block mixing, bounded int32 four-tap resampling, and cached unchanged pitch/pan
+calculations reduce render work; a generated filter oracle and coefficient-norm
+rejection guard the optimization. The GameCube producer uses an IRQ-safe
+semaphore wakeup when the callback frees queue space, at a priority above the
+managed executors. The four-chunk queue is unchanged.
+
+Generated native and managed firmware regression checks pass. Long early-IPL
+ambience comparisons meet the planned thresholds, but a later modern phrase
+still differs in the mixed reference. An uninterrupted original reference and
+final target pressure run are pending. Earlier timer-polling pressure runs
+reported isolated underruns and do not qualify the final producer. These remain
+release gates; no physical-console acceptance or final qualification is claimed.

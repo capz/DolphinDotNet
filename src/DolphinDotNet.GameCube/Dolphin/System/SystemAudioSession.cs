@@ -76,7 +76,8 @@ public sealed class SystemAudioSession : IDisposable
         get{Check();return volume;}
         set{Check();Sound.ValidateVolume(value);Control(0,value);volume=value;}
     }
-    /// <summary>Session-local stereo output or equal-channel mono downmix.</summary>
+    /// <summary>Session-local stereo or mono, including the original auxiliary
+    /// routing and an equal-channel mono downmix.</summary>
     public SystemAudioOutputMode OutputMode
     {
         get{Check();return outputMode;}
