@@ -126,6 +126,7 @@ def main(area):
                   "ConnectionSmoke","InputSmoke"):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="network":
+        run("python3","-m","unittest","discover","-s","tests","-p","test_bba_overlay.py")
         run("python3","tests/entropy_build.py")
         run("python3","tests/platform_entropy_native.py")
         run("python3","tests/platform_entropy_aot.py") # PlatformEntropySmoke: managed/native AOT and GC stress
