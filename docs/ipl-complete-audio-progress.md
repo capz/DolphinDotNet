@@ -100,15 +100,20 @@ routing and mono routing follow the separately qualified modern behavior.
 
 All-profile public-API target runs pass all nineteen cues, source looping,
 ordinary-audio coexistence, mono/stereo, all three startups, three additional
-stop/startup cycles, stop/restart and disposal. They report zero underruns/faults
-and no surviving native session. A repeat with the latest small cue-clock/ramp
-changes and the complete dense-motion target soak are in progress. Earlier pressure failures
-were traced to dense motion exhausting the voice pool and exceeding the render
-deadline. A subsequent pressure run had one isolated underrun near its end.
-Incremental bus ramps remove the remaining per-sample divisions; mathematical
-PCM oracles and full modern ambience comparisons still pass. Those earlier
-pressure runs do not qualify this final renderer. Physical-console
-acceptance of the newly added session remains pending.
+stop/startup cycles, stop/restart and disposal. Final early acceptance includes
+at least ten minutes of simultaneous ordinary PCM playback, a looping source,
+40 Hz cube/submenu controls, cue replacement and stereo/mono changes. It reports
+3,444,489 native bytes throughout, zero underruns/faults, and no surviving native
+session after disposal. Final NTSC 1.2 and PAL 1.2 runs each report 3,425,314 bytes,
+zero underruns/faults and clean disposal.
+
+Earlier pressure failures exposed dense voice exhaustion and render cost; a
+later run had one isolated underrun near its end. Default-priority voice
+recycling, exact fixed-point source positions, sparse mixing and incremental
+bus ramps resolve those failures in the completed run. Mathematical PCM oracles,
+original clock-matched cue recordings and both full ambience comparisons still
+pass. This is emulator qualification; physical-console acceptance of the newly
+added session remains pending.
 
 The demo consumes the official public NuGet package after SDK publication.
 Its approved category design adds Startup/Menu/Cards/Ambience/Samples and
