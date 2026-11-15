@@ -138,7 +138,12 @@ bool dnd_ipl_audio_cue(int token,unsigned event,unsigned owner) {
   for(unsigned i=0;i<DND_IPL_TRACKS;i++) {
     DndIplTrack *parent=&s->mixer->sequence.track[i];
     if(parent->active&&parent->identifier==0x20002) {
-      t->parent=(int)i;memcpy(t->reg,parent->reg,sizeof(t->reg));break;
+      t->parent=(int)i;memcpy(t->reg,parent->reg,sizeof(t->reg));
+      if(!s->early) {
+        unsigned root=i;while(s->mixer->sequence.track[root].parent>=0)root=(unsigned)s->mixer->sequence.track[root].parent;
+        t->clock=s->mixer->sequence.track[root].clock;
+      }
+      break;
     }
   }
   return true;

@@ -348,13 +348,14 @@ bool dnd_ipl_mixer_block(DndIplMixer *m,uint8_t *out) {
   float buses[80][12]={0};
   for(unsigned i=0;i<DND_IPL_VOICES;i++) {
     DndIplMixVoice *v=&m->voice[i];if(!v->active)continue;
-    unsigned destinations[12],count=0;
-    for(unsigned b=0;b<12;b++)if(v->current[b]!=0||v->target[b]!=0)destinations[count++]=b;
+    unsigned destinations[12],count=0;float gains[12],steps[12];
+    for(unsigned b=0;b<12;b++)if(v->current[b]!=0||v->target[b]!=0) {
+      destinations[count]=b;gains[count]=v->current[b];steps[count]=(v->target[b]-v->current[b])/80;count++;
+    }
     for(unsigned frame=0;frame<80&&v->active;frame++) {
       float value=sample(m,v);
       for(unsigned j=0;j<count;j++) {
-        unsigned b=destinations[j];
-        buses[frame][b]+=value*(v->current[b]+(v->target[b]-v->current[b])*(float)frame/80);
+        buses[frame][destinations[j]]+=value*gains[j];gains[j]+=steps[j];
       }
     }
   }

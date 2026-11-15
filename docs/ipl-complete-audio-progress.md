@@ -60,7 +60,7 @@ cost without changing PCM. An excessive coefficient norm is rejected before
 rendering. Source loops retain their exact partial-frame metadata boundaries.
 
 The early dialect uses float tempo/timebase clocks, deferred tick-created
-children, its original velocity/envelope laws and effects. Modern tracks share
+children, its original velocity/envelope laws and effects. Modern cues inherit the running root clock phase. Modern tracks share
 the root tick tree: children opened between ticks participate in the following
 tick, and children opened during traversal initialize at their place in that
 tree. Modern absolute gates, neutral oscillator replacement, center/subtractive
@@ -82,6 +82,11 @@ routing and mono routing follow the separately qualified modern behavior.
 - New cue events 13–22 pass aligned original LLE comparisons in early and
   modern profiles: spectral cosine exceeds 0.9990 and RMS ratios remain within
   0.974–1.035. Semantic names are established separately by original UI actions.
+- All ten existing cube/options cues pass early and modern comparisons: minimum
+  spectral cosine 0.9940, RMS ratios 0.987–1.040. Two phase-sensitive modern cues
+  were additionally recorded with the original first-note clock phase; matching
+  that captured phase passes both thresholds. An authored PCM-onset regression
+  rejects resetting a newly opened modern cue to a fresh clock.
 - The full early ambience loop passes sixteen long comparison windows:
   minimum spectral cosine 0.9997, RMS ratio 1.0007–1.0376.
 - The full modern ambience loop passes all sixteen windows after matching the
@@ -93,10 +98,16 @@ routing and mono routing follow the separately qualified modern behavior.
 - Fixed-point optimization is byte-identical to a complete previous native
   modern render. Legacy Sound/Music defaults and factory packets are unchanged.
 
-Final all-profile public-API target runs, the complete dense-motion target soak,
-and repeated menu-cue comparisons are in progress. Earlier pressure failures
+All-profile public-API target runs pass all nineteen cues, source looping,
+ordinary-audio coexistence, mono/stereo, all three startups, three additional
+stop/startup cycles, stop/restart and disposal. They report zero underruns/faults
+and no surviving native session. A repeat with the latest small cue-clock/ramp
+changes and the complete dense-motion target soak are in progress. Earlier pressure failures
 were traced to dense motion exhausting the voice pool and exceeding the render
-deadline; they do not qualify the final bounded renderer. Physical-console
+deadline. A subsequent pressure run had one isolated underrun near its end.
+Incremental bus ramps remove the remaining per-sample divisions; mathematical
+PCM oracles and full modern ambience comparisons still pass. Those earlier
+pressure runs do not qualify this final renderer. Physical-console
 acceptance of the newly added session remains pending.
 
 The demo consumes the official public NuGet package after SDK publication.

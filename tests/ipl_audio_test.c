@@ -59,6 +59,26 @@ int main(void) {
   a=packet();const uint8_t spin[]={0xc8,0,0,0,0};memcpy(a->data+352,spin,sizeof(spin));
   token=dnd_ipl_audio_begin(a,8*1024*1024);assert(token);ready(token);free(a);
   assert(!dnd_ipl_audio_render(token,out,80)&&dnd_ipl_audio_stat(token,0)==-1);dnd_ipl_audio_dispose(token);
+  /* An externally opened modern cue shares the running score's tick phase.
+   * A one-tick initial wait must sound on the next shared tick rather than
+   * starting a new clock and delaying that note by another DSP block. */
+  DndArray *base=packet();const unsigned old_seq=13,new_seq=512,delta=new_seq-old_seq;
+  a=calloc(1,sizeof(*a)+base->length+delta);assert(a);a->length=base->length+delta;a->element_size=1;
+  memcpy(a->data,base->data,352);memcpy(a->data+352+new_seq,base->data+352+old_seq,base->length-352-old_seq);free(base);
+  put32(a->data+4,a->length);put32(a->data+8,2);put32(a->data+16,new_seq);
+  unsigned first_wave=352+new_seq+0x8e0+128+512;
+  for(unsigned i=0;i<12;i++){put32(a->data+64+i*24,first_wave+i*288);put32(a->data+68+i*24,first_wave+i*288+256);}
+  const uint8_t parent[]={0xd0,0,2,0,2,0xe5,0x80,100,0xc8,0,0,0,6};memcpy(a->data+352,parent,sizeof(parent));
+  unsigned entry=0x1bc+3*3;a->data[352+entry+1]=1;a->data[352+entry+2]=224;
+  const uint8_t deferred_note[]={0x80,1,60,1,127,0x80,100,0xff};memcpy(a->data+352+480,deferred_note,sizeof(deferred_note));
+  uint8_t *b=a->data+352+new_seq;put32(b+36,100);memcpy(b+100,"INST",4);put32(b+108,0x3f800000);put32(b+112,0x3f800000);
+  put32(b+116,180);put32(b+140,1);put32(b+144,200);put32(b+192,240);b[200]=127;put32(b+204,1);put32(b+208,220);b[220]=127;
+  put32(b+228,0x3f800000);put32(b+232,0x3f800000);b[243]=10;
+  token=dnd_ipl_audio_begin(a,8*1024*1024);assert(token);ready(token);free(a);
+  assert(dnd_ipl_audio_render(token,out,80)&&dnd_ipl_audio_render(token,out,80));
+  assert(dnd_ipl_audio_cue(token,3,124));assert(dnd_ipl_audio_render(token,out,80));assert(dnd_ipl_audio_stat(token,3)==0);
+  assert(dnd_ipl_audio_render(token,out,80));assert(dnd_ipl_audio_stat(token,3)==1);
+  bool nonzero=false;for(unsigned i=0;i<320;i++)nonzero|=out[i]!=0;assert(nonzero);dnd_ipl_audio_dispose(token);
   puts("IPL owned cache: source lifetime, automatic loop, exact budget, cancellation, slot reuse and malformed-input tests passed");
 }
 
