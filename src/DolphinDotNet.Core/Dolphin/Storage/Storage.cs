@@ -158,9 +158,10 @@ public sealed class MemoryCard : IDisposable
         return new MemoryCard(device);
     }
     private void Check(){if(disposed)throw new ObjectDisposedException("MemoryCard");}
+    internal void CheckRecordOwner()=>Check();
     public byte[] ReadAllBytes(string name){Check();return NativeStorage.CardRead((int)device,name);}
     public MemoryCardBlocks OpenRecordBlocks(string name,int blocks,MemoryCardSaveOptions options,int identity)
-    {Check();return new MemoryCardBlocks((int)device,name,blocks,options,identity);}
+    {Check();return new MemoryCardBlocks(this,(int)device,name,blocks,options,identity);}
     public CardRecordStore OpenRecordStore(string name,int blocks,MemoryCardSaveOptions options,int identity)
     {return new CardRecordStore(OpenRecordBlocks(name,blocks,options,identity),true);}
     public void WriteAllBytes(string name,byte[] data){Check();NativeStorage.CardWrite((int)device,name,data);}

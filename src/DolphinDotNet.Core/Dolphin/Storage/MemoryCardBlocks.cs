@@ -7,12 +7,13 @@ namespace Dolphin.Storage;
 public sealed class MemoryCardBlocks : ICardBlockStorage
 {
     private readonly int device,id;
+    private readonly MemoryCard owner;
     private readonly string name;
     public int Blocks {get;}
     private static readonly byte[] Empty=new byte[0];
-    internal MemoryCardBlocks(int device,string name,int blocks,MemoryCardSaveOptions options,int identity)
+    internal MemoryCardBlocks(MemoryCard owner,int device,string name,int blocks,MemoryCardSaveOptions options,int identity)
     {
-        this.device=device;this.name=name;
+        this.owner=owner;this.device=device;this.name=name;
         int size=Check(NativeStorage.CardBlocksIo(device,name,0,0,0,Empty));
         if(size==0){
             if(blocks<6||blocks>256||identity<=0)throw new ArgumentOutOfRangeException("blocks/identity");
@@ -26,6 +27,6 @@ public sealed class MemoryCardBlocks : ICardBlockStorage
     private static void Text(byte[] bytes,int at,string text)
     {if(text==null||text.Length>31)throw new ArgumentException("Card title/comment must fit 31 ASCII bytes");for(int i=0;i<text.Length;i++){if(text[i]<32||text[i]>126)throw new ArgumentException("Card title/comment must be ASCII");bytes[at+i]=(byte)text[i];}}
     private static int Check(int n){if(n<0)throw new IOException("Card block operation failed: "+(-n));return n;}
-    public void Read(int block,byte[] bytes){Check(NativeStorage.CardBlocksIo(device,name,1,block,id,bytes));}
-    public void Write(int block,byte[] bytes){Check(NativeStorage.CardBlocksIo(device,name,2,block,id,bytes));}
+    public void Read(int block,byte[] bytes){owner.CheckRecordOwner();Check(NativeStorage.CardBlocksIo(device,name,1,block,id,bytes));}
+    public void Write(int block,byte[] bytes){owner.CheckRecordOwner();Check(NativeStorage.CardBlocksIo(device,name,2,block,id,bytes));}
 }
