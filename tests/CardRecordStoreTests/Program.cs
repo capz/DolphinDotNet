@@ -4,6 +4,10 @@ void Check(bool ok){checks++;if(!ok)throw new Exception("Check "+checks);}
 var media=new Card();var store=new CardRecordStore(media,true);
 store.Write("town",new byte[15000]);store.Write("player",new byte[]{1,2,3});store.Write("options",new byte[]{4,5});
 var before=media.Copy();
+for(int cut=0;cut<=8192;cut++){
+    var blank=new Card{FaultWrite=0,Cut=cut};try{new CardRecordStore(blank,true);}catch(IOException){}
+    blank.FaultWrite=-1;Check(new CardRecordStore(blank,true).Names().Length==0);
+}
 // Exhaust every byte boundary of a torn sector, for each data/checkpoint write.
 for(int operation=0;operation<2;operation++)for(int cut=0;cut<=8192;cut++){
     var card=before.Copy();var s=new CardRecordStore(card);card.FaultWrite=operation;card.Cut=cut;

@@ -62,7 +62,14 @@ public sealed class CardRecordStore
         bool a=Valid(root),b=Valid(previous);
         if(!a&&!b){
             if(!initialize)throw new IOException("No verified card checkpoint; existing data retained");
-            for(int i=0;i<BlockBytes;i++)if(root[i]!=0||previous[i]!=0)throw new IOException("Refusing to initialize existing card data");
+            var empty=new byte[BlockBytes];Put(empty,0,Magic);Put(empty,4,1);Put(empty,8,1);Put(empty,12,storage.Blocks);Seal(empty);
+            // A cut while writing the very first empty checkpoint is retryable.
+            // No data write can precede that checkpoint's successful readback.
+            bool zeroTail=false;
+            for(int i=0;i<BlockBytes;i++){
+                if(root[i]!=empty[i])zeroTail=true;
+                if((zeroTail&&root[i]!=0)||previous[i]!=0)throw new IOException("Refusing to initialize existing card data");
+            }
             for(int page=2;page<storage.Blocks;page++){storage.Read(page,scratch);for(int i=0;i<BlockBytes;i++)if(scratch[i]!=0)throw new IOException("Refusing to initialize unverified existing data");}
             Put(root,0,Magic);Put(root,4,1);Put(root,8,1);Put(root,12,storage.Blocks);Seal(root);
             storage.Write(0,root);storage.Read(0,scratch);Match(root,scratch);bank=0;return;
