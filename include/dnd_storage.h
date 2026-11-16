@@ -105,6 +105,7 @@ void dnd_fs_dir_close(int handle);
 DndString *dnd_fs_getcwd(DndManagedHeap *);
 void dnd_fs_setcwd(DndString *path);
 bool dnd_card_mount(int device, DndString *game, DndString *company);
+int dnd_card_blocks_io(int device,DndString *name,int operation,int block,int identity,DndArray *data);
 DndArray *dnd_card_read(DndManagedHeap *, int device, DndString *name);
 void dnd_card_write(int device, DndString *name, DndArray *data);
 int dnd_card_length(int device, DndString *name);

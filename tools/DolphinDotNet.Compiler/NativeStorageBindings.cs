@@ -291,6 +291,7 @@ internal static class NativeStorageBindings
         ["GetCurrentDirectory"]=("dnd_fs_getcwd","",true),["SetCurrentDirectory"]=("dnd_fs_setcwd","s",false),
         ["CardMount"]=("dnd_card_mount","iss",false),["CardRead"]=("dnd_card_read","is",true),["CardWrite"]=("dnd_card_write","isa",false),
         ["CardLength"]=("dnd_card_length","is",false),["CardWriteSave"]=("dnd_card_write_save","isassaa",false),
+        ["CardBlocksIo"]=("dnd_card_blocks_io","isiiia",false),
         ["CardDelete"]=("dnd_card_delete","is",false),["CardEntries"]=("dnd_card_entries","i",true)
     };
     internal static void Emit(StringBuilder b,ValueIrNativeStorage call)

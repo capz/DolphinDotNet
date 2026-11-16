@@ -37,6 +37,7 @@ jobs:
       - id: version
         run: echo "version=0.1.0-preview.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - run: python3 eng/pack.py --include-tools --version '${{ steps.version.outputs.version }}'
+      - run: dotnet run --project tests/CardRecordStoreTests -c Release
       - run: python3 tests/sdk_consumer.py --workspace "$RUNNER_TEMP/external consumer"
       - uses: actions/upload-artifact@v4
         with:
