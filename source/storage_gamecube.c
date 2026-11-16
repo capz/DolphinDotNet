@@ -193,6 +193,7 @@ static void identity(int slot) {
   CARD_SetGamecode(games[slot]);
   CARD_SetCompany(companies[slot]);
 }
+#include "dnd_card_blocks.inc"
 bool dnd_gc_card_mount(int device, const char *game, const char *company) {
   int slot = device - 4;
   if (slot < 0 || slot > 1 || dnd_cmgr_active(slot))

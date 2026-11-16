@@ -69,6 +69,7 @@ internal static class NativeStorage
     internal static void SetCurrentDirectory(string path)=>throw Unsupported();
     internal static bool CardMount(int device,string gameCode,string companyCode)=>throw Unsupported();
     internal static byte[] CardRead(int device,string name)=>throw Unsupported();
+    internal static int CardBlocksIo(int device,string name,int operation,int block,int identity,byte[] data)=>throw Unsupported();
     internal static void CardWrite(int device,string name,byte[] data)=>throw Unsupported();
     internal static int CardLength(int device,string name)=>throw Unsupported();
     internal static void CardWriteSave(int device,string name,byte[] data,string title,string comment,byte[]? banner,byte[]? icon)=>throw Unsupported();

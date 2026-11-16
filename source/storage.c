@@ -1520,6 +1520,7 @@ static bool card_arguments(int d, DndString *name, char out[PATH_CAP]) {
     }
   return true;
 }
+#include "dnd_card_blocks_bridge.inc"
 bool dnd_card_mount(int d, DndString *game, DndString *company) {
   storage_barrier();
   if (!valid_device(d))
