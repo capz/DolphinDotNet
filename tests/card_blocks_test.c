@@ -2,10 +2,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <errno.h>
-#include <malloc.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#define memalign aligned_alloc
 typedef uint32_t u32;
 typedef struct{int len,filenum;}card_file;
 typedef struct{int comment_addr,banner_fmt,icon_fmt,icon_speed;u32 icon_addr;}card_stat;

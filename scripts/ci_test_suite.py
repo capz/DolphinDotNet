@@ -60,6 +60,12 @@ def main(area):
                     "-lm","-o",binary)
                 run(binary)
     elif area=="storage":
+        test("tests/CardRecordStoreTests")
+        with tempfile.TemporaryDirectory() as tmp:
+            aot("tests/CardRecordStoreSmoke/CardRecordStoreSmoke.csproj",Path(tmp)/"card-record-store.c")
+            binary=Path(tmp)/"card-blocks"
+            run("cc","-std=c11","-Wall","-Wextra","-Werror","-Iinclude","tests/card_blocks_test.c","-o",binary)
+            run(binary)
         test("tests/AramQueueTests")
         run("python3","scripts/ci_aram.py") # AramSmoke + AramBrokerSmoke, AOT/runtime and GC stress
         build("tests/MountRegistrySmoke/MountRegistrySmoke.csproj")
