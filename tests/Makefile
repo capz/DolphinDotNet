@@ -8,7 +8,10 @@ endif
 CFLAGS ?= -std=c11 -Wall -Wextra -Werror -I../include
 
 .PHONY: test clean
-test: card_blocks_test
+test: card_blocks_test launch_context_test
+
+launch_context_test: launch_context_test.c ../source/launch.c ../include/dnd_launch.h
+	$(CC) $(CFLAGS) $< -o $@
 
 card_blocks_test: card_blocks_test.c ../include/dnd_card_blocks.inc
 	$(CC) $(CFLAGS) card_blocks_test.c -o $@
@@ -106,6 +109,7 @@ test: card_manager_test mesh_streams_test display_mode_test graphics_resource_bo
 	./hardware_gamecube_test
 	./disc_mount_test
 	./dol_test
+	./launch_context_test
 
 ipl_font_test: ipl_font_test.c ../source/ipl_font.c ../include/dnd_ipl_font.h ipl_font_stub/ogc/system.h
 	$(CC) $(CFLAGS) -DDND_IPL_FONT_TEST -Iipl_font_stub ipl_font_test.c ../source/ipl_font.c -o $@
@@ -220,7 +224,7 @@ clean:
 	rm -f texture_reuse_test
 	rm -f asset_native_test throughput_runtime_test
 	rm -f mesh_streams_test mesh_range_test native_buffer_crc_test
-	rm -f file_optimize_test file_extents_test gcloader_test defrag_allocation_test contiguous_write_test dol_test
+	rm -f file_optimize_test file_extents_test gcloader_test defrag_allocation_test contiguous_write_test dol_test launch_context_test
 	rm -f managed_runtime_tests fst_test card_transaction_test aram_test overlay_test overlay_debug_test debug_heartbeat_test network_link_test worker_test stw_test input_native_test debug_automation_test asset_corpus_abi_test jsystem_fixture_telemetry_test asset_compat_test input_overlay_test input_gamecube_test hardware_gamecube_test disc_mount_test
 	rm -f aram_broker_test
 

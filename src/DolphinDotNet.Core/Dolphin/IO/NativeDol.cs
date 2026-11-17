@@ -3,6 +3,8 @@ namespace Dolphin.IO;
 internal static class NativeDol
 {
     private static Exception Unsupported() => new PlatformNotSupportedException("Requires DolphinDotNet AOT.");
+    internal static int LaunchArgumentCount()=>throw Unsupported();
+    internal static string LaunchArgument(int index)=>throw Unsupported();
     internal static int DolPrepare(byte[] image) => throw Unsupported();
     internal static int DolBegin(string path) => throw Unsupported();
     internal static int DolStep(int token) => throw Unsupported();
