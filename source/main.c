@@ -9,6 +9,7 @@
 #include "dnd_network.h"
 #include "dnd_storage.h"
 #include "dnd_dol.h"
+#include "dnd_launch.h"
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -27,8 +28,13 @@ extern void dnd_gdb_init(void);
 static uint8_t managed_heap_memory[DND_MANAGED_HEAP_BYTES];
 extern intptr_t dnd_aot_entry(DndManagedHeap *heap);
 
-int main(void) {
+int main(int argc,char **argv) {
     DndManagedHeap heap;
+#ifdef DND_CAPTURE_LAUNCH_ARGUMENTS
+    dnd_launch_capture(argc,(const char *const *)argv);
+#else
+    (void)argc;(void)argv;
+#endif
     dnd_platform_init();
 #ifdef DND_GDB_ENABLED
     // Debugger rendezvous occurs before managed code and normal BBA init.

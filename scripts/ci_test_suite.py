@@ -46,6 +46,18 @@ def main(area):
         with tempfile.TemporaryDirectory() as tmp:
             for p in ("AotSmoke","ControlFlowSmoke","GenericSharingSmoke"):
                 aot("tests/"+p+"/"+p+".csproj",Path(tmp)/(p+".c"))
+            generated=Path(tmp)/"launch-context.c"
+            aot("tests/LaunchContextSmoke/LaunchContextSmoke.csproj",generated)
+            binary=Path(tmp)/"launch-context"
+            run("cc","-std=c11","-pthread","-DDND_CAPTURE_LAUNCH_ARGUMENTS","-Iinclude",generated,
+                "tests/launch_context_host.c","source/launch.c","source/managed_runtime.c",
+                "source/async_runtime.c","source/numeric.c","source/text.c","-lm","-o",binary)
+            run(binary);run(binary,"--arguments");run(binary,"--arguments","--gc-stress")
+            bundle=Path(tmp)/"launch-bundle"
+            run("dotnet","tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll",
+                "--bundle","tests/LaunchContextSmoke/bin/Release/net8.0/LaunchContextSmoke.dll",bundle)
+            if "-DDND_CAPTURE_LAUNCH_ARGUMENTS" not in (bundle/"Makefile").read_text():
+                raise AssertionError("Reachable launch context did not enable incoming capture")
             for p,host in (("SystemFirmwareSmoke","system_firmware_host.c"),
                            ("NumericSmoke","numeric_host.c"),
                            ("StringSmoke","string_host.c"),

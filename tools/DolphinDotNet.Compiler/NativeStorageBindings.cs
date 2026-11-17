@@ -25,6 +25,8 @@ internal static class NativeStorageBindings
         ["ModelDrawMaterial"]=("dnd_model_draw_material","iaiiiifi",false),
         ["ModelDrawAnimated"]=("dnd_model_draw_animated","iaa",false),
         ["ModelDrawAnimatedShapes"]=("dnd_model_draw_animated_shapes","iaaa",false),
+        ["LaunchArgumentCount"]=("dnd_launch_count","",false),
+        ["LaunchArgument"]=("dnd_launch_argument","i",true),
         ["DolPrepare"]=("dnd_dol_prepare","a",false),
         ["DolBegin"]=("dnd_dol_begin","s",false),
         ["DolStep"]=("dnd_dol_step","i",false),
