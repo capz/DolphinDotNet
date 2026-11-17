@@ -32,6 +32,8 @@ jobs:
         run: python3 -m unittest discover -s tests -p test_dolphin_graphics_phase_one.py
       - name: Build GameCube graphics and throughput acceptance
         run: dotnet build tests/fixtures/GraphicsPhaseOne -c Release -m:1 -p:DndBuildBackend=Docker
+      - name: Build full-resolution hardware AA fixture
+        run: dotnet build tests/fixtures/FullResolutionAa -c Release -m:1 -p:DndBuildBackend=Docker
       - name: Prepare Dolphin
         run: |
           docker build -t dnd-graphics-dolphin - <<'DOCKER'
@@ -45,11 +47,19 @@ jobs:
           dnd-graphics-dolphin python3 scripts/dolphin_graphics_phase_one.py
           tests/fixtures/GraphicsPhaseOne/bin/Release/net8.0/GraphicsPhaseOne.dol
           --logs out/graphics-dolphin
+      - name: Validate full-resolution AA layout and seam
+        run: >-
+          docker run --rm --init --shm-size=512m
+          --mount "type=bind,source=${{ github.workspace }},target=/src" -w /src
+          dnd-graphics-dolphin python3 scripts/dolphin_full_aa.py
+          tests/fixtures/FullResolutionAa/bin/Release/net8.0/FullResolutionAa.dol
+          --logs out/full-aa-dolphin
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: high-level-graphics-proof
           path: |
+            out/full-aa-dolphin/*
             out/graphics-dolphin/*.png
             out/graphics-dolphin/*.json
             out/graphics-dolphin/*.log

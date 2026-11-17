@@ -55,6 +55,7 @@ test: card_manager_test mesh_streams_test display_mode_test graphics_resource_bo
 	./card_manager_test
 	./mesh_streams_test
 	./display_mode_test
+	./full_aa_test
 	./ipl_font_test
 	./graphics_resource_boundaries_test
 	./graphics_phase_two_test
@@ -213,7 +214,7 @@ clean:
 	rm -f defrag_rebuild_test
 	rm -f card_manager_test
 	rm -f ipl_font_test
-	rm -f display_mode_test
+	rm -f display_mode_test full_aa_test
 	rm -f graphics_resource_boundaries_test
 	rm -f graphics_phase_two_test graphics_submission_test render_state_gx_test canvas_rectangle_test indexed_mesh_gx_test array_fast_test overlay_list_test
 	rm -f texture_reuse_test
@@ -265,3 +266,7 @@ mesh_streams_test: mesh_streams_test.c ../source/draw_resources.c ../include/dnd
 
 card_manager_test: card_manager_test.c ../source/card_manager.c
 	$(CC) $(CFLAGS) -DDND_GAMECUBE_STORAGE -Icard_sdk $^ -o $@
+
+full_aa_test: full_aa_test.c ../include/dnd_full_aa.h
+	$(CC) $(CFLAGS) full_aa_test.c -lm -o $@
+test: full_aa_test

@@ -20,6 +20,17 @@ public sealed partial class GraphicsDevice
     public int NativeBytes => NativeGraphics.DrawTotalBytes();
     public void BeginFrame(Color32 clear)
         => Check(NativeGraphics.DeviceBegin(clear.R/255f,clear.G/255f,clear.B/255f,clear.A/255f),"A graphics frame is already active or raw code owns initialization.");
+    /// <summary>Number of scene submissions per frame (two for full-resolution AA).</summary>
+    public int FramePartCount=>NativeGraphics.DeviceDisplayStat(9);
+    /// <summary>Resolve the current part and advance. Call between drawing passes,
+    /// in a do/while loop, then EndFrame. Update simulation and prepare resources
+    /// once before BeginFrame; replay drawing only. No per-frame allocation.</summary>
+    public bool NextFramePart()
+    {
+        int result=NativeGraphics.DeviceNextFramePart();
+        Check(result,"NextFramePart requires an active, unfinished frame between passes.");
+        return result!=0;
+    }
     public void EndFrame()
     {
         Check(NativeGraphics.DeviceEnd(),"End every drawing pass before presenting the frame.");

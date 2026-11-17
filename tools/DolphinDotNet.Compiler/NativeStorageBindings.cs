@@ -60,6 +60,7 @@ internal static class NativeStorageBindings
         ["DeviceDisplayStat"]=("dnd_device_display_stat","i",false),
         ["CanvasLayout"]=("dnd_canvas_layout","iff",false),
         ["DeviceBegin"]=("dnd_device_begin","ffff",false),
+        ["DeviceNextFramePart"]=("dnd_device_next_part","",false),
         ["DeviceEnd"]=("dnd_device_end","",false),
         ["DeviceWidth"]=("dnd_device_width","",false),
         ["DeviceHeight"]=("dnd_device_height","",false),

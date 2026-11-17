@@ -31,6 +31,7 @@ internal static class NativeGraphics
     internal static void GraphicsEndTriangles() => throw Unsupported();
     internal static void GraphicsEndFrame() => throw Unsupported();
     internal static int DeviceBegin(float r,float g,float b,float a) => throw Unsupported();
+    internal static int DeviceNextFramePart() => throw Unsupported();
     internal static int DeviceEnd() => throw Unsupported();
     internal static int DeviceWidth() => throw Unsupported();
     internal static int DeviceHeight() => throw Unsupported();

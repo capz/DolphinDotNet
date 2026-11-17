@@ -10,6 +10,12 @@
 __attribute__((weak)) bool dnd_draw_backend_scene_active(void){return false;}
 __attribute__((weak)) void dnd_draw_backend_scene(int lit,const float *view){(void)lit;(void)view;}
 __attribute__((weak)) void dnd_draw_backend_imported_sampler(void *o,int s,int n,int l,int u,int v){(void)o;(void)s;(void)n;(void)l;(void)u;(void)v;}
+#if defined(DND_MODEL_GX_TEST)
+__attribute__((weak)) void dnd_draw_backend_projection(const float *projection,bool ortho){
+    Mtx44 p;for(int r=0;r<4;r++)for(int c=0;c<4;c++)p[r][c]=projection[c*4+r];
+    GX_LoadProjectionMtx(p,ortho?GX_ORTHOGRAPHIC:GX_PERSPECTIVE);
+}
+#endif
 static float frame_view[16], frame_projection[16];
 static bool owns_frame;
 /* Temporary, frame-local animated J3D draw state. Never retained beyond one draw. */
@@ -62,11 +68,7 @@ int dnd_model_frame_begin(DndArray *view, DndArray *projection) {
     return -1;
   dnd_draw_set_camera(frame_view, frame_projection);
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_MODEL_GX_TEST)
-  Mtx44 p;
-  for (int r = 0; r < 4; r++)
-    for (int c = 0; c < 4; c++)
-      p[r][c] = frame_projection[c * 4 + r];
-  GX_LoadProjectionMtx(p, frame_projection[15]==1&&frame_projection[11]==0?GX_ORTHOGRAPHIC:GX_PERSPECTIVE);
+  dnd_draw_backend_projection(frame_projection,frame_projection[15]==1&&frame_projection[11]==0);
 #endif
   dnd_model_frame_active = true;
   return 0;

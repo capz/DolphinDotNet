@@ -24,7 +24,11 @@ public sealed class SceneCapture : IDisposable
     }
     private void Check(){if(disposed)throw new ObjectDisposedException("SceneCapture");Texture.Check();}
     /// <summary>Source must equal the destination size or be exactly twice as
-    /// large in both dimensions (GX half-size copy). Source X/Y must be even.</summary>
+    /// large in both dimensions (GX half-size copy). Source X/Y must be even.
+    /// In FullResolution AA only a full-screen source is supported; each frame
+    /// part updates its band in the same texture, including overlap. Capture and
+    /// draw refraction inside every part. Sample within the resident band (the
+    /// overlap permits small distortion); other bands may contain the prior frame.</summary>
     public void Capture(Viewport source)
     {Check();device.CaptureToTexture(Texture,source);}
     public void Draw(Draw2D batch,RectF destination,Color32 tint)
