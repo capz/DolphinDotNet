@@ -3,12 +3,17 @@
 #include <math.h>
 #include <stdio.h>
 extern intptr_t dnd_aot_entry(DndManagedHeap *heap);
-static int resolution=2,scan=1;
+static int resolution=2,scan=1,aa,part;
 static int saw_wide,saw_half,saw_fit,configurations;
 int dnd_graphics_configure_display(int r,int s){configurations++;if(r==1&&s==1)return -1;if(r==3&&s==1)return -2;if(r)resolution=r;if(s)scan=s;if(r==1)scan=2;return 0;}
+int dnd_graphics_configure_quality(int r,int s,int quality){
+ int result=dnd_graphics_configure_display(r,s);if(result<0)return result;
+ if(quality==2&&resolution!=2)return -1;aa=quality;part=0;return 0;
+}
+int dnd_graphics_next_part(void){return aa==2&&part++==0?1:0;}
 int dnd_graphics_width(void){return resolution==1?320:640;}
 int dnd_graphics_height(void){return resolution==1?240:480;}
-int dnd_graphics_display_stat(int kind){return kind==0?resolution:kind==1?scan:kind==2||kind==4?dnd_graphics_width():kind==3?resolution==3?576:dnd_graphics_height():kind==5?dnd_graphics_height():kind==6?resolution==3?50000:59940:-1;}
+int dnd_graphics_display_stat(int kind){return kind==0?resolution:kind==1?scan:kind==2||kind==4?dnd_graphics_width():kind==3?resolution==3?576:dnd_graphics_height():kind==5?dnd_graphics_height():kind==6?resolution==3?50000:59940:kind==8?aa:kind==9?aa==2?2:1:-1;}
 void dnd_draw_backend_2d_projection(float w,float h){if(fabsf(w-480*16.f/9)<.002f&&h==480)saw_wide++;if(fabsf(w-240*16.f/9)<.002f&&h==240)saw_half++;}
 void dnd_draw_backend_viewport(int x,int y,int w,int h){assert(x>=0&&y>=0&&x+w<=dnd_graphics_width()&&y+h<=dnd_graphics_height());if(x==80&&y==0&&w==480&&h==480)saw_fit++;}
 void dnd_draw_backend_scissor(int x,int y,int w,int h){assert(x>=0&&y>=0&&w>0&&h>0&&x+w<=dnd_graphics_width()&&y+h<=dnd_graphics_height());}

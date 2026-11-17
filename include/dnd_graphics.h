@@ -3,6 +3,7 @@
 int dnd_graphics_configure_display(int resolution,int scan);
 int dnd_graphics_configure_quality(int resolution,int scan,int aa);
 int dnd_graphics_display_stat(int kind);
+int dnd_graphics_next_part(void);
 #include <stdbool.h>
 void dnd_graphics_init(void);
 void dnd_graphics_model_begin(void);

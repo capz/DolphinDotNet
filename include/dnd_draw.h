@@ -10,6 +10,7 @@ void dnd_draw_backend_2d_projection(float width,float height);
 #include <stdint.h>
 #include <math.h>
 #include <stdbool.h>
+void dnd_draw_backend_projection(const float *projection,bool ortho);
 
 typedef struct { float x,y,z,nx,ny,nz,u,v; uint32_t color; } DndDrawVertex;
 typedef struct { const void *data; uint32_t bytes; int width,height,format; bool linear; int levels; bool sampler_set; int wrap_s,wrap_t,min_filter,mag_filter; float lod_bias; } DndDrawTexture;
@@ -29,6 +30,7 @@ void dnd_draw_backend_overlay_shutdown(void);
 /* One graphics owner and one active pass: 1=3D, 2=2D, 3=raw, 4=compatibility immediate. */
 int dnd_device_begin(float r,float g,float b,float a);
 int dnd_device_end(void);
+int dnd_device_next_part(void);
 int dnd_device_pass_begin(int pass);
 int dnd_device_pass_end(int pass);
 int dnd_device_pass(void);

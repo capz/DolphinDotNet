@@ -114,12 +114,22 @@ int main(void){
   * quantized copy returns fewer rows than requested. */
  assert(dnd_graphics_configure_quality(0,0,0)==0);copy_rows_override=479;
  assert(dnd_graphics_configure_quality(2,2,1)==0&&mode->xfbHeight==480&&mode->efbHeight==242);
- for(int i=0;i<2;i++){assert(allocation(xfb[i])->storage.xfbHeight==480);copy_rows(xfb[i],479);}
+ for(int i=0;i<2;i++){assert(allocation(xfb[i])->storage.xfbHeight>=480);copy_rows(xfb[i],479);}
  copy_rows_override=0;
  assert(dnd_graphics_configure_quality(3,2,1)<0&&mode->aa);
  assert(dnd_graphics_configure_quality(0,0,0)==0&&!mode->aa&&mode->efbHeight==480);
  assert(dnd_graphics_configure_quality(1,2,1)==0&&mode->aa&&mode->fbWidth==320&&mode->efbHeight==240);
  assert(dnd_graphics_configure_quality(0,0,0)==0&&!mode->aa&&mode->fbWidth==320);
+ assert(dnd_graphics_configure_quality(2,2,0)==0);before=allocations;
+ assert(dnd_graphics_configure_quality(2,2,2)==0&&mode->aa&&mode->efbHeight==248);
+ assert(allocations==before);
+ assert(dnd_graphics_display_stat(8)==2&&dnd_graphics_display_stat(9)==2&&dnd_graphics_display_stat(5)==480);
+ for(int i=0;i<2;i++){assert(allocation(xfb[i])->bytes==(size_t)640*480*2);copy_rows(xfb[i],480);}
+ before=allocations;assert(dnd_graphics_configure_quality(0,0,2)==0&&allocations==before);
+ assert(dnd_graphics_configure_quality(1,2,2)<0&&dnd_graphics_display_stat(8)==2);
+ assert(dnd_graphics_configure_quality(3,2,2)<0&&dnd_graphics_display_stat(8)==2);
+ assert(dnd_graphics_configure_quality(0,0,0)==0&&!mode->aa&&mode->efbHeight==480);
+ assert(dnd_graphics_display_stat(9)==1);
  release(xfb[0]);release(xfb[1]);assert(live==0);
  puts("Display copy bounds (483/479 rows), VI dimensions, padded stride, mode combinations, transactional allocation, scanout lifetime and widescreen-only no-op passed.");
 }

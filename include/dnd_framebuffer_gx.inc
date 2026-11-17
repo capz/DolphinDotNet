@@ -3,11 +3,14 @@
 /* GX quantizes the vertical copy scale. Some libogc versions copy 483
  * rows for the 242-line EFB in a 480-line AA mode. Size storage for that
  * extent without changing the VI mode, stride or allocation alignment. */
-static void *allocate_display_framebuffer(const GXRModeObj *display) {
-    GXRModeObj storage=*display;
+static int display_framebuffer_rows(const GXRModeObj *display) {
     int copied=GX_GetNumXfbLines(display->efbHeight,
         GX_GetYScaleFactor(display->efbHeight,display->xfbHeight));
-    if(copied>storage.xfbHeight)storage.xfbHeight=copied;
+    return copied>display->xfbHeight?copied:display->xfbHeight;
+}
+static void *allocate_display_framebuffer(const GXRModeObj *display) {
+    GXRModeObj storage=*display;
+    storage.xfbHeight=display_framebuffer_rows(display);
     return SYS_AllocateFramebuffer(&storage);
 }
 #endif

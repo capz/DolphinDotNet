@@ -1,4 +1,7 @@
 #include "dnd_draw.h"
+#if !defined(DND_GAMECUBE_STORAGE)
+__attribute__((weak)) int dnd_device_display_stat(int kind){return kind==8?0:-1;}
+#endif
 #include "dnd_ipl_font.h"
 #include "dnd_async.h"
 #include "dnd_performance.h"
@@ -568,6 +571,10 @@ int dnd_canvas_stats(int token,int kind) { Resource *r=find(token,CANVAS);return
 int dnd_draw_copy_texture(int token,int x,int y,int w,int h) {
     Resource *r=find(token,TEXTURE);DndDrawTexture tx;
     if(!r||!dnd_device_active()||dnd_device_pass()||!texture(token,&tx)||(r->format!=6&&r->format!=4)||r->levels!=1||((r->width|r->height)&3)||((x|y)&1)||!((w==r->width&&h==r->height)||(w==r->width*2&&h==r->height*2))||x<0||y<0||x>dnd_device_width()-w||y>dnd_device_height()-h)return -1;
+    /* A full-resolution tiled capture updates only the resident band. The
+     * existing full-screen texture is reused; arbitrary partial copies cannot
+     * refer to EFB rows belonging to a different part. */
+    if(dnd_device_display_stat(8)==2&&(x||y||w!=640||h!=480))return -1;
     dnd_draw_backend_copy(&tx,x,y,w,h);return 0;
 }
 

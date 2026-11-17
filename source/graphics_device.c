@@ -12,9 +12,12 @@ __attribute__((weak)) void dnd_draw_backend_overlay_shutdown(void){}
 __attribute__((weak)) int dnd_graphics_configure_display(int resolution,int scan){return resolution==0&&scan==0?0:-1;}
 __attribute__((weak)) int dnd_graphics_configure_quality(int r,int s,int aa){return aa?-1:dnd_graphics_configure_display(r,s);}
 /* Device dimensions also exist in model-only hosts without GX video symbols. */
-__attribute__((weak)) int dnd_graphics_display_stat(int kind){return kind==0?2:kind==1?1:kind==2||kind==4?dnd_device_width():kind==3||kind==5?dnd_device_height():kind==6?59940:-1;}
+__attribute__((weak)) int dnd_graphics_display_stat(int kind){return kind==0?2:kind==1?1:kind==2||kind==4?dnd_device_width():kind==3||kind==5?dnd_device_height():kind==6?59940:kind==8?0:kind==9?1:-1;}
 #endif
-static bool active,external,widescreen;
+static bool active,external,widescreen,part_finished;
+#if !defined(DND_GAMECUBE_STORAGE)
+__attribute__((weak)) int dnd_graphics_next_part(void){return 0;}
+#endif
 /* GX presentation synchronizes the GPU; never signal an in-flight frame. */
 static uint32_t frame_completed;
 static int pass, raw_depth;
@@ -23,7 +26,7 @@ static bool finite_color(float x) { return isfinite(x) && x>=0 && x<=1; }
 int dnd_device_begin(float r,float g,float b,float a) {
     dnd_async_require_application_thread();
     if(external || active || raw_depth || !finite_color(r)||!finite_color(g)||!finite_color(b)||!finite_color(a)) return -1;
-    active=true; pass=0;
+    active=true; pass=0;part_finished=false;
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_GRAPHICS_TEST)
     dnd_graphics_begin_frame(r,g,b,a);
 #endif
@@ -37,7 +40,7 @@ int dnd_device_begin(float r,float g,float b,float a) {
 }
 int dnd_device_end(void) {
     dnd_async_require_application_thread();
-    if(!active || pass || raw_depth) return -1;
+    if(!active || pass || raw_depth || (dnd_device_display_stat(8)==2&&!part_finished)) return -1;
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_GRAPHICS_TEST)
     dnd_graphics_present();
 #endif
@@ -48,9 +51,18 @@ int dnd_device_end(void) {
     dnd_async_leave_critical();
     return 0;
 }
+int dnd_device_next_part(void) {
+    dnd_async_require_application_thread();
+    if(!active||pass||raw_depth||part_finished)return -1;
+    int result=dnd_graphics_next_part();
+    part_finished=result==0;
+    viewport[0]=viewport[1]=scissor[0]=scissor[1]=0;
+    viewport[2]=scissor[2]=dnd_device_width();viewport[3]=scissor[3]=dnd_device_height();
+    return result;
+}
 int dnd_device_pass_begin(int next) {
     dnd_async_require_application_thread();
-    if(!active || pass || next<1 || next>4 || raw_depth) return -1;
+    if(!active || part_finished || pass || next<1 || next>4 || raw_depth) return -1;
     if(next!=3){dnd_draw_backend_viewport(viewport[0],viewport[1],viewport[2],viewport[3]);dnd_draw_backend_scissor(scissor[0],scissor[1],scissor[2],scissor[3]);}
     dnd_draw_backend_invalidate_cache();
     pass=next; return 0;
@@ -151,7 +163,7 @@ int dnd_device_configure_display(int resolution,int scan,int wide){
 }
 int dnd_device_configure_quality(int resolution,int scan,int wide,int aa){
     dnd_async_require_application_thread();
-    if(active||pass||raw_depth||external||resolution<0||resolution>3||scan<0||scan>2||(wide!=0&&wide!=1)||(aa!=0&&aa!=1))return -1;
+    if(active||pass||raw_depth||external||resolution<0||resolution>3||scan<0||scan>2||(wide!=0&&wide!=1)||(aa<0||aa>2))return -1;
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_GRAPHICS_TEST)
     int result=dnd_graphics_configure_quality(resolution,scan,aa);if(result<0)return result;
 #else
@@ -165,6 +177,6 @@ int dnd_device_display_stat(int kind){
 #if defined(DND_GAMECUBE_STORAGE) || defined(DND_GRAPHICS_TEST)
     return dnd_graphics_display_stat(kind);
 #else
-    return kind==0?2:kind==1?1:kind==2||kind==4?640:kind==3||kind==5?480:kind==6?59940:-1;
+    return kind==0?2:kind==1?1:kind==2||kind==4?640:kind==3||kind==5?480:kind==6?59940:kind==8?0:kind==9?1:-1;
 #endif
 }

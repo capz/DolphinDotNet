@@ -2,6 +2,7 @@
  * mode/xfb/fb/first_frame are the backend's actual presentation state. */
 #include "dnd_framebuffer_gx.inc"
 static GXRModeObj configured_display_mode;
+static int display_aa_mode;
 static int select_display_mode(int resolution,int scan,GXRModeObj *selected) {
     if(resolution<0||resolution>3||scan<0||scan>2)return -1;
     *selected=*mode;
@@ -35,8 +36,11 @@ static int select_display_mode(int resolution,int scan,GXRModeObj *selected) {
     return 0;
 }
 static int configure_display_mode(int resolution,int scan,int aa) {
+    if(aa< -1||aa>2)return -1;
     dnd_graphics_init();if(!mode||dnd_exception_pending())return -1;
     GXRModeObj next;if(select_display_mode(resolution,scan,&next)<0)return -1;
+    if(aa<0)aa=display_aa_mode;
+    if(aa==2&&(next.fbWidth!=640||next.xfbHeight!=480))return -1;
     if(aa>=0){
         if(next.xfbHeight>480&&aa)return -1;
         if(aa){
@@ -53,18 +57,23 @@ static int configure_display_mode(int resolution,int scan,int aa) {
             if(select_display_mode(resolved,scan?scan:((next.viTVMode&3)==VI_INTERLACE?1:2),&next)<0)return -1;
         }
     }
-    if(!memcmp(mode,&next,sizeof next))return 0;
+    if(aa==2){next.efbHeight=248;next.field_rendering=0;}
+    if(!memcmp(mode,&next,sizeof next)&&display_aa_mode==aa)return 0;
     /* Allocate both replacements first. An allocation failure cannot destroy
      * the current mode or scanout buffers. */
-    void *a=allocate_display_framebuffer(&next),*b=allocate_display_framebuffer(&next);
-    if(!a||!b){free(a);free(b);return -2;}
+    GXRModeObj storage=next;if(aa==2)storage.efbHeight=storage.xfbHeight;
+    GXRModeObj old_storage=*mode;if(display_aa_mode==2)old_storage.efbHeight=old_storage.xfbHeight;
+    bool reuse=next.fbWidth==mode->fbWidth&&display_framebuffer_rows(&storage)<=display_framebuffer_rows(&old_storage);
+    void *a=reuse?MEM_K1_TO_K0(xfb[0]):allocate_display_framebuffer(&storage);
+    void *b=reuse?MEM_K1_TO_K0(xfb[1]):allocate_display_framebuffer(&storage);
+    if(!a||!b){if(!reuse){free(a);free(b);}return -2;}
     GX_DrawDone();
     VIDEO_SetBlack(TRUE);VIDEO_Flush();VIDEO_WaitVSync();
     void *old_a=xfb[0],*old_b=xfb[1];
-    configured_display_mode=next;mode=&configured_display_mode;
+    configured_display_mode=next;mode=&configured_display_mode;display_aa_mode=aa;
     xfb[0]=MEM_K0_TO_K1(a);xfb[1]=MEM_K0_TO_K1(b);fb=0;first_frame=true;
     VIDEO_Configure(mode);VIDEO_SetNextFramebuffer(xfb[0]);VIDEO_Flush();VIDEO_WaitVSync();
-    free(MEM_K1_TO_K0(old_a));free(MEM_K1_TO_K0(old_b));
+    if(!reuse){free(MEM_K1_TO_K0(old_a));free(MEM_K1_TO_K0(old_b));}
     GX_SetDispCopyYScale(GX_GetYScaleFactor(mode->efbHeight,mode->xfbHeight));
     GX_SetDispCopySrc(0,0,mode->fbWidth,mode->efbHeight);GX_SetDispCopyDst(mode->fbWidth,mode->xfbHeight);
     GX_SetCopyFilter(mode->aa,mode->sample_pattern,GX_TRUE,mode->vfilter);
@@ -79,11 +88,12 @@ int dnd_graphics_configure_quality(int resolution,int scan,int aa){return config
 int dnd_graphics_display_stat(int kind){
     dnd_graphics_init();if(!mode)return -1;
     switch(kind){
-        case 8:return mode->aa!=0;
+        case 8:return display_aa_mode;
+        case 9:return display_aa_mode==2?2:1;
         case 0:return mode->fbWidth==320&&mode->xfbHeight==240?1:mode->fbWidth==640&&mode->xfbHeight==480?2:mode->fbWidth==640&&mode->xfbHeight==576?3:0;
         case 1:return (mode->viTVMode&3)==VI_INTERLACE?1:2;
         case 2:return mode->fbWidth;case 3:return mode->xfbHeight;
-        case 4:return mode->fbWidth;case 5:return mode->efbHeight;
+        case 4:return mode->fbWidth;case 5:return display_aa_mode==2?480:mode->efbHeight;
         case 6:return (mode->viTVMode>>2)==VI_PAL?50000:59940;
         default:return -1;
     }

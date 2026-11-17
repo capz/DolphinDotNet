@@ -45,6 +45,17 @@ class Program
         Equal(d.Width,320);if(d.Display.Widescreen)return 6;
         d.ConfigureDisplay(new DisplayOptions{Resolution=GraphicsResolution.R640x480,Scan=ScanMode.Interlaced});
         Equal(camera.Project(point,viewport).X,initial);
+        d.ConfigureDisplay(new DisplayOptions{Resolution=GraphicsResolution.R640x480,AntialiasingMode=AntialiasingMode.FullResolution});
+        Equal(d.Height,480);Equal(d.FramePartCount,2);
+        d.BeginFrame(Color32.Black);
+        try{d.EndFrame();return 9;}catch(InvalidOperationException){}
+        int parts=0;
+        do{draw.Begin();draw.FillRectangle(new RectF(0,230,640,20),Color32.White);draw.End();parts++;}while(d.NextFramePart());
+        Equal(parts,2);
+        try{d.NextFramePart();return 10;}catch(InvalidOperationException){}
+        d.EndFrame();
+        d.ConfigureDisplay(new DisplayOptions{AntialiasingMode=AntialiasingMode.None});
+        Equal(d.FramePartCount,1);
         return 0;
     }
 }

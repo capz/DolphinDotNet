@@ -91,8 +91,11 @@ void dnd_graphics_init(void) {
     projection_ortho=false;identity(view_matrix);identity(projection_matrix);identity(immediate_world);
 }
 #include "dnd_display_gx.inc"
+#include "dnd_full_aa.h"
+static int aa_part;
+static int aa_viewport[4]={0,0,640,480};
 int dnd_graphics_width(void){return mode?mode->fbWidth:640;}
-int dnd_graphics_height(void){return mode?mode->efbHeight:480;}
+int dnd_graphics_height(void){return display_aa_mode==2?480:mode?mode->efbHeight:480;}
 void dnd_draw_backend_invalidate_efb(void){dnd_performance_clear_invalidated();}
 void dnd_draw_backend_external(void){dnd_performance_clear_invalidated();external_gpu=true;dnd_draw_backend_invalidate_cache();}
 void dnd_draw_backend_wait(void){if(mode||external_gpu)GX_DrawDone();}
@@ -104,8 +107,25 @@ void dnd_draw_backend_flush(void *data,int bytes,int invalidate){
         if(invalidate==2){if(mode)GX_InvalidateTexAll();dnd_draw_backend_invalidate_cache();}
     }
 }
-void dnd_draw_backend_viewport(int x,int y,int w,int h){GX_SetViewport((float)x,(float)y,(float)w,(float)h,0,1);}
-void dnd_draw_backend_scissor(int x,int y,int w,int h){GX_SetScissorBoxOffset(0,0);GX_SetScissor((u32)x,(u32)y,(u32)w,(u32)h);}
+void dnd_draw_backend_viewport(int x,int y,int w,int h){
+    aa_viewport[0]=x;aa_viewport[1]=y;aa_viewport[2]=w;aa_viewport[3]=h;
+    if(display_aa_mode==2)GX_SetViewport(0,0,640,DND_AA_HEIGHT,0,1);
+    else GX_SetViewport((float)x,(float)y,(float)w,(float)h,0,1);
+}
+void dnd_draw_backend_projection(const float *projection,bool ortho){
+    Mtx44 p;
+    if(display_aa_mode==2)dnd_full_aa_projection(p,projection,aa_part,aa_viewport);
+    else for(int r=0;r<4;r++)for(int c=0;c<4;c++)p[r][c]=projection[c*4+r];
+    GX_LoadProjectionMtx(p,ortho?GX_ORTHOGRAPHIC:GX_PERSPECTIVE);
+}
+void dnd_draw_backend_scissor(int x,int y,int w,int h){
+    if(display_aa_mode==2){
+        int end=y+h-DND_AA_ORIGIN(aa_part);y-=DND_AA_ORIGIN(aa_part);
+        if(y<0)y=0;if(end>DND_AA_HEIGHT)end=DND_AA_HEIGHT;h=end-y;
+        if(h<=0){x=0;y=264;w=h=1;}
+    }
+    GX_SetScissorBoxOffset(0,0);GX_SetScissor((u32)x,(u32)y,(u32)w,(u32)h);
+}
 void dnd_draw_backend_camera(const float *view,const float *projection){dnd_draw_backend_invalidate_cache();memcpy(view_matrix,view,64);memcpy(projection_matrix,projection,64);projection_ortho=projection[15]==1&&projection[11]==0;}
 void dnd_draw_backend_2d_projection(float w,float h) {
     dnd_draw_backend_invalidate_cache();
@@ -141,10 +161,9 @@ static bool draw_state(const DndDrawTexture *texture,const DndDrawMaterial *mate
         (!secondary || texture_same(secondary,&cached_secondary));
     if(!same){dnd_draw_backend_restore();dnd_performance_material();}
     uint32_t bindings=same?0:(texture?1u:0u)+(secondary?1u:0u);
-    float mv[16];multiply(mv,view_matrix,world);Mtx m;Mtx44 p;
+    float mv[16];multiply(mv,view_matrix,world);Mtx m;
     for(int r=0;r<3;r++)for(int c=0;c<4;c++)m[r][c]=mv[c*4+r];
-    for(int r=0;r<4;r++)for(int c=0;c<4;c++)p[r][c]=projection_matrix[c*4+r];
-    GX_LoadProjectionMtx(p,projection_ortho?GX_ORTHOGRAPHIC:GX_PERSPECTIVE);GX_LoadPosMtxImm(m,GX_PNMTX0);GX_SetCurrentMtx(GX_PNMTX0);
+    dnd_draw_backend_projection(projection_matrix,projection_ortho);GX_LoadPosMtxImm(m,GX_PNMTX0);GX_SetCurrentMtx(GX_PNMTX0);
     bool lit=(material->flags&32)!=0,environment=(material->flags&192)!=0,world_reflection=(material->flags&128)!=0;
     Mtx inverse_view;
     if(world_reflection){Mtx view;for(int r=0;r<3;r++)for(int c=0;c<4;c++)view[r][c]=view_matrix[c*4+r];if(!guMtxInverse(view,inverse_view))return false;}
@@ -247,22 +266,34 @@ void dnd_draw_backend_vertices(const DndDrawVertex *v,int count,int primitive,co
 #include "dnd_indexed_mesh.inc"
 void dnd_draw_backend_copy(const DndDrawTexture *texture,int x,int y,int w,int h) {
     dnd_draw_backend_invalidate_cache();
-    GX_SetTexCopySrc((u16)x,(u16)y,(u16)w,(u16)h);GX_SetTexCopyDst((u16)texture->width,(u16)texture->height,(u8)texture->format,w!=texture->width);
-    GX_CopyTex((void*)texture->data,GX_FALSE);GX_PixModeSync();GX_DrawDone();GX_InvalidateTexAll();
+    const unsigned char *destination=texture->data;int height=texture->height;
+    if(display_aa_mode==2){
+        int scale=w/texture->width,origin=DND_AA_ORIGIN(aa_part)/scale;
+        height=DND_AA_HEIGHT/scale;y=0;h=DND_AA_HEIGHT;
+        destination+=(size_t)origin*texture->width*(texture->format==4?2:4);
+        GX_SetCopyClamp(aa_part?GX_CLAMP_BOTTOM:GX_CLAMP_TOP);
+    }
+    GX_SetTexCopySrc((u16)x,(u16)y,(u16)w,(u16)h);GX_SetTexCopyDst((u16)texture->width,(u16)height,(u8)texture->format,w!=texture->width);
+    GX_CopyTex((void*)destination,GX_FALSE);GX_PixModeSync();GX_DrawDone();GX_InvalidateTexAll();
 }
 void dnd_graphics_begin_frame(float r,float g,float b,float a) {
     dnd_draw_backend_invalidate_cache();
     dnd_graphics_init();if(!mode)return;
+    aa_part=0;
     GX_SetDispCopyYScale(GX_GetYScaleFactor(mode->efbHeight,mode->xfbHeight));
     GX_SetDispCopySrc(0,0,mode->fbWidth,mode->efbHeight);GX_SetDispCopyDst(mode->fbWidth,mode->xfbHeight);
     GX_SetCopyFilter(mode->aa,mode->sample_pattern,GX_TRUE,mode->vfilter);
     GX_SetPixelFmt(mode->aa?GX_PF_RGB565_Z16:GX_PF_RGB8_Z24,GX_ZC_LINEAR);
     uint32_t clear=rgba(r,g,b,a);GX_SetCopyClear(color(clear),0x00ffffff);GX_SetColorUpdate(GX_TRUE);GX_SetAlphaUpdate(GX_TRUE);
     GX_SetZMode(GX_TRUE,GX_LEQUAL,GX_TRUE);
-    bool copy=dnd_performance_begin_clear(clear);uint64_t begin_at=gettime();
+    if(display_aa_mode==2){
+        GX_SetDispCopyYScale(1);GX_SetDispCopySrc(0,0,640,DND_AA_HEIGHT);GX_SetDispCopyDst(640,DND_AA_HEIGHT);
+        GX_SetCopyClamp(GX_CLAMP_TOP|GX_CLAMP_BOTTOM);
+    }
+    bool copy=dnd_performance_begin_clear(clear)||display_aa_mode==2;uint64_t begin_at=gettime();
     if(copy){GX_CopyDisp(xfb[fb],GX_TRUE);GX_DrawDone();}
     dnd_performance_begin_copy((uint32_t)ticks_to_microsecs(gettime()-begin_at),copy);
-    dnd_draw_backend_viewport(0,0,mode->fbWidth,mode->efbHeight);dnd_draw_backend_scissor(0,0,mode->fbWidth,mode->efbHeight);
+    dnd_draw_backend_viewport(0,0,dnd_graphics_width(),dnd_graphics_height());dnd_draw_backend_scissor(0,0,dnd_graphics_width(),dnd_graphics_height());
     projection_ortho=false;identity(view_matrix);identity(projection_matrix);identity(immediate_world);
 }
 void dnd_graphics_frustum(float l,float r,float b,float t,float n,float f) {
@@ -356,10 +387,26 @@ void dnd_graphics_overlay_glyph_rect(float x,float y,float width,float height) {
 }
 void dnd_graphics_overlay_glyph_quad(float x,float y,float size){dnd_graphics_overlay_glyph_rect(x,y,size,size);}
 void dnd_graphics_overlay_glyph_end(void){glyph_flush();}
+int dnd_graphics_next_part(void){
+    if(display_aa_mode!=2)return 0;
+    dnd_graphics_begin_overlay();dnd_console_render();
+    GX_SetDispCopyYScale(1);
+    GX_SetDispCopySrc(0,aa_part?8:0,640,aa_part?240:DND_AA_HEIGHT);
+    GX_SetDispCopyDst(640,aa_part?240:DND_AA_HEIGHT);
+    GX_SetCopyClamp(aa_part?GX_CLAMP_BOTTOM:GX_CLAMP_TOP);
+    GX_SetCopyFilter(GX_TRUE,mode->sample_pattern,GX_TRUE,mode->vfilter);
+    GX_SetZMode(GX_TRUE,GX_LEQUAL,GX_TRUE);GX_SetColorUpdate(GX_TRUE);
+    GX_CopyDisp((unsigned char*)xfb[fb]+(aa_part?640*240*2:0),GX_TRUE);
+    if(aa_part)return 0;
+    aa_part=1;dnd_draw_backend_invalidate_cache();return 1;
+}
 void dnd_graphics_end_frame(void) {
+    if(display_aa_mode!=2){
     GX_SetDispCopyYScale(GX_GetYScaleFactor(mode->efbHeight,mode->xfbHeight));GX_SetDispCopySrc(0,0,mode->fbWidth,mode->efbHeight);GX_SetDispCopyDst(mode->fbWidth,mode->xfbHeight);
     GX_SetCopyFilter(mode->aa,mode->sample_pattern,GX_TRUE,mode->vfilter);
     GX_SetZMode(GX_TRUE,GX_LEQUAL,GX_TRUE);GX_SetColorUpdate(GX_TRUE);GX_CopyDisp(xfb[fb],GX_TRUE);
+    }
+    GX_SetCopyClamp(GX_CLAMP_TOP|GX_CLAMP_BOTTOM);
     int wait_context=dnd_async_app_wait_begin();
     uint64_t gpu_at=gettime();GX_DrawDone();uint64_t gpu_us=ticks_to_microsecs(gettime()-gpu_at);
 #ifdef DND_DEBUG_AUTOMATION
@@ -376,7 +423,7 @@ void dnd_graphics_end_frame(void) {
     dnd_automation_frame_boundary();
 #endif
 }
-void dnd_graphics_present(void){dnd_graphics_begin_overlay();dnd_console_render();dnd_graphics_end_frame();}
+void dnd_graphics_present(void){if(display_aa_mode!=2){dnd_graphics_begin_overlay();dnd_console_render();}dnd_graphics_end_frame();}
 void dnd_graphics_model_begin(void){dnd_graphics_begin_frame(0.025f,0.035f,0.06f,1);}
 void dnd_graphics_model_end(void){dnd_graphics_present();}
 #else
@@ -398,6 +445,7 @@ void dnd_draw_backend_flush(void *data,int bytes,int invalidate){(void)data;(voi
 void dnd_draw_backend_viewport(int x,int y,int w,int h){(void)x;(void)y;(void)w;(void)h;}
 void dnd_draw_backend_scissor(int x,int y,int w,int h){(void)x;(void)y;(void)w;(void)h;}
 void dnd_draw_backend_camera(const float *view,const float *projection){(void)view;(void)projection;}
+void dnd_draw_backend_projection(const float *projection,bool ortho){(void)projection;(void)ortho;}
 void dnd_draw_backend_2d(int w,int h){(void)w;(void)h;}
 void dnd_draw_backend_tev(const DndDrawEffect *effect,bool texture_bound){(void)effect;(void)texture_bound;}
 void dnd_draw_backend_vertices(const DndDrawVertex *v,int n,int primitive,const DndDrawTexture *t,const DndDrawMaterial *m,const float *world){(void)v;(void)n;(void)primitive;(void)t;(void)m;(void)world;}
