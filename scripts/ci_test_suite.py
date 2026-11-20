@@ -83,6 +83,7 @@ def main(area):
         run("python3","scripts/ci_aram.py") # AramSmoke + AramBrokerSmoke, AOT/runtime and GC stress
         build("tests/MountRegistrySmoke/MountRegistrySmoke.csproj")
         run("python3","tests/storage_mounts.py")
+        run("python3","tests/storage_launch_content.py") # StorageLaunchContentSmoke: real AOT resolver and mount ownership cases.
         run("python3","tests/gcloader_select.py") # GcLoaderSelectSmoke: native preconditions + AOT/GC stress
         run("python3","tests/fatfs_depth.py")
         run("python3","-m","unittest","discover","-s","tests","-p","test_fat_overlay.py")

@@ -57,6 +57,24 @@ if (Storage.Mount(StorageDevice.SdSerialPort2))
 
 SD mounts register VFAT/exFAT and select the first mountable partition, with four cache pages of eight sectors (about 16 KiB per device). Mount returns false when no supported medium/filesystem can mount; it never formats media. ISO9660 uses its own pathname limits. `Storage.Mount(DvdDrive)` retains ISO9660 behavior. Use `Storage.MountDisc(DiscFormat.Fst)` for original GameCube discs, or `MountDisc(DiscFormat.Iso9660)` explicitly; unmount before changing formats. FST validates the disc magic, entry tree, names and data ranges and exposes files/directories through a read-only devoptab. GC Loader block filesystems remain outside this backend. Memory-card enums cannot be passed to Storage.GetPath or ordinary Directory operations.
 
+### Files beside a launched application
+
+`Dolphin.IO.LaunchContent.Mount()` resolves captured launcher metadata to a
+content directory using these storage APIs. It translates supported aliases,
+borrows a compatible existing mount or acquires one, and returns
+generation-bound access without changing the working directory. Applications
+can provide an exact content validator and up to 16 explicitly ordered fallback
+locations. A missing launcher hint does not cause an unrestricted device scan,
+and a recognized source that fails validation does not silently select a
+different installation.
+
+Swiss's `dvd:/` may identify raw GC Loader files, whereas this SDK's raw prefix
+is `gcloader:/`; automatic interpretation requires a validator. Companion image
+hints use their containing directory by default, with plain ISO/GCM FST mounting
+available through an explicit option. See [launcher content resolution](launch-context.md)
+for examples, ambiguity handling, cleanup and the serialized mount-lifecycle
+requirement. This helper does not expose a PC folder to a DOL running in Dolphin.
+
 ## GC Loader and unified GameCube DVD filesystems
 
 All original GameCube FST content is mounted as `dvd:/`, regardless of source.
