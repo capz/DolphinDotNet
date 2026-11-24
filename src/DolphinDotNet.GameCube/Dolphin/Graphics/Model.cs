@@ -69,7 +69,7 @@ public sealed class Model : IDisposable
     public static Task<Model> LoadAsync(string path,CancellationToken cancellationToken=default,int nativeBudgetBytes=8*1024*1024)
     {
         if(path==null)throw new ArgumentNullException("path");if(nativeBudgetBytes<1024||nativeBudgetBytes>16*1024*1024)throw new ArgumentOutOfRangeException("nativeBudgetBytes");
-        var work=new LoadWork(path,nativeBudgetBytes,cancellationToken);
+        var work=new DnmdLoadWork(path,nativeBudgetBytes,cancellationToken);
         Task.Run(work.Step);return work.Completion.Task;
     }
     /// <summary>Import a static Wavefront OBJ directly on GameCube from a mounted
@@ -255,6 +255,45 @@ public sealed class Model : IDisposable
     internal void CheckInstanceUse(){if(busy)throw new InvalidOperationException("Model residency transition is active.");}
     public void Dispose(){if(disposed)return;if(busy){disposed=true;return;}if(NativeModel.ModelDispose(Token)<0)throw new InvalidOperationException("End the render frame before disposing models.");disposed=true;if(cold!=null){cold.Dispose();cold=null;}}
     private void EndWork(){busy=false;residency=null;if(disposed){NativeModel.ModelDispose(Token);if(cold!=null){cold.Dispose();cold=null;}}}
+    // Keep the packaged-model worker separate from source import dispatch.
+    // DNMD-only applications must not retain every native importer through
+    // a shared Step delegate. Source-format APIs continue to use LoadWork.
+    private sealed class DnmdLoadWork
+    {
+        private readonly string path;
+        private readonly int budget;
+        private readonly CancellationToken cancellation;
+        private int token;
+        internal readonly TaskCompletionSource<Model> Completion=new TaskCompletionSource<Model>();
+        internal DnmdLoadWork(string path,int budget,CancellationToken cancellation)
+        {this.path=path;this.budget=budget;this.cancellation=cancellation;}
+        internal void Step()
+        {
+            try
+            {
+                cancellation.ThrowIfCancellationRequested();
+                if(token==0)
+                {
+                    token=NativeModel.ModelBegin(path,budget);
+                    if(token==0)throw new global::System.IO.IOException("Model input, native budget or handle limit is invalid.");
+                }
+                int result=NativeModel.ModelStep(token);
+                if(result<0)throw new global::System.IO.IOException("Invalid or truncated model package, or insufficient native memory.");
+                if(result==0){Task.Run(Step);return;}
+                cancellation.ThrowIfCancellationRequested();
+                var model=new Model(token);token=0;Completion.SetResult(model);
+            }
+            catch(Exception error)
+            {
+                if(token!=0)
+                {
+                    try{NativeModel.ModelDispose(token);}catch(Exception closeError){error=closeError;}
+                    token=0;
+                }
+                Completion.SetException(error);
+            }
+        }
+    }
     private sealed class LoadWork
     {
         private readonly string path;private readonly int budget,format;private readonly CancellationToken cancellation;private readonly bool approximate;private int token;
