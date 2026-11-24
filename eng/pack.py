@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a local feed; never uploads packages. Run with .NET 8 on PATH."""
+"""Build a local feed; never uploads packages. Run with the .NET 8 or .NET 11 SDK on PATH."""
 import argparse
 import pathlib
 import re

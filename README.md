@@ -49,7 +49,7 @@ tries to reopen a previously missing solution path.
 
 ## Quick start: build and run Pong
 
-Install the **.NET 8 SDK**, **Dolphin**, and a native build backend:
+Install the **.NET 8 or .NET 11 SDK**, **Dolphin**, and a native build backend:
 
 - **Windows, Linux or macOS:** Docker Desktop/Engine running Linux containers.
   The first build downloads the pinned native toolchain image.
@@ -76,6 +76,9 @@ dotnet run --project Pong -c Release
 
 Build/Run compiles the managed project, generates native C, builds
 `Pong/bin/<configuration>/net8.0/Pong.dol` and `Pong.elf`, and launches Dolphin.
+Projects can also target `net11.0` when built with the .NET 11 SDK; templates
+continue to default to `net8.0`. SDK tools run with either runtime installed.
+The [NuGet SDK guide](docs/nuget-sdk.md) covers framework selection.
 Every build performs the full native build; there is no native incremental
 cache. To build without launching, use `dotnet build Pong/Pong.sln`.
 To launch the last successful Release build, use `dotnet run --project Pong -c Release --no-build`.

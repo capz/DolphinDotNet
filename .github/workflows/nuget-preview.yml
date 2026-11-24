@@ -13,6 +13,7 @@ on:
       - 'vendor/**'
       - 'templates/**'
       - 'eng/**'
+      - 'Directory.Build.props'
       - 'tests/sdk_consumer.py'
       - '.github/workflows/nuget-preview.yml'
   workflow_dispatch:
@@ -46,9 +47,42 @@ jobs:
           name: nuget-preview
           path: out/packages/*.nupkg
           if-no-files-found: error
+  dotnet11:
+    name: External SDK consumers / .NET 11
+    needs: verify
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # Use a separate installation so the runner's .NET 8 runtime cannot hide
+      # launch failures in tools shipped inside the SDK or optional tool packages.
+      - uses: actions/setup-dotnet@v4
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet11
+        with:
+          dotnet-version: '11.0.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget-preview
+          path: out/packages
+      - name: Verify isolated .NET 11 host
+        run: |
+          dotnet --info
+          python3 - <<'PYTHON'
+          import subprocess
+          runtimes = subprocess.check_output(['dotnet', '--list-runtimes'], text=True)
+          assert 'Microsoft.NETCore.App 11.' in runtimes, runtimes
+          assert 'Microsoft.NETCore.App 8.' not in runtimes, runtimes
+          PYTHON
+      - name: Build source SDK with .NET 11
+        run: dotnet build DolphinDotNet.sln -c Debug --nologo
+      - name: Validate source compiler with .NET 11
+        run: dotnet run --project tools/DolphinDotNet.Compiler.Tests -c Release
+      - name: Build and AOT compile net11.0 consumers
+        run: python3 tests/sdk_consumer.py --framework net11.0 --workspace "$RUNNER_TEMP/external consumer"
   publish:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish))
-    needs: verify
+    needs: [verify, dotnet11]
     runs-on: macos-15-intel
     environment: nuget-preview
     permissions:

@@ -15,8 +15,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--feed', type=Path, default=ROOT / 'out/packages')
     parser.add_argument('--workspace', type=Path)
+    parser.add_argument('--framework', choices=('net8.0', 'net11.0'), default='net8.0',
+                        help='Target framework for external projects (use the matching .NET SDK)')
     parser.add_argument('--native', action='store_true', help='Also build an external Debug GameCube DOL/ELF')
     args = parser.parse_args()
+    framework = args.framework
     work = args.workspace or Path(tempfile.mkdtemp(prefix='dnd external consumer '))
     work = work.resolve()
     if work.exists() and any(work.iterdir()):
@@ -63,6 +66,7 @@ def main():
         path.write_text(content)
     from xml.sax.saxutils import escape
     write(work / 'NuGet.Config', f'<configuration><packageSources><clear/><add key="local" value="{escape(str(feed))}"/><add key="nuget" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>')
+    sdk_tools = work / 'packages/dolphindotnet.sdk' / version / 'tools'
     run('dotnet', 'new', 'install', str(next(feed.glob('DolphinDotNet.Templates.*.nupkg'))))
     if list(feed.glob('DolphinDotNet.Assets.*.nupkg')):
         run('dotnet', 'new', 'tool-manifest')
@@ -72,14 +76,30 @@ def main():
     for template in ('gamecube', 'gamecube-game', 'gamecube-lib'):
         project = work / template
         run('dotnet', 'new', template, '-o', str(project))
+        csproj = next(project.glob('*.csproj'))
+        csproj.write_text(csproj.read_text().replace('<TargetFramework>net8.0</TargetFramework>',
+                                                    f'<TargetFramework>{framework}</TargetFramework>'))
         run('dotnet', 'build', str(project), *(['-p:DndBuildNative=false'] if template != 'gamecube-lib' else []))
         # Design-time evaluation must not invoke Docker or compile native code.
         run('dotnet', 'msbuild', str(next(project.glob('*.csproj'))), '-t:BuildDol', '-p:DesignTimeBuild=true')
         assert not list(project.rglob('*.dol'))
+    run('dotnet', str(sdk_tools / 'build/DolphinDotNet.Build.dll'), '--help')
+    # A DAP initialize exchange proves the pinned adapter starts on this runtime.
+    request = json.dumps({'seq': 1, 'type': 'request', 'command': 'initialize',
+                          'arguments': {'adapterID': 'dolphindotnet'}}).encode()
+    dap = subprocess.run(['dotnet', str(sdk_tools / 'debugger/DolphinDotNet.DebugAdapter.dll')],
+                         input=f'Content-Length: {len(request)}\r\n\r\n'.encode() + request,
+                         cwd=work, env=env, capture_output=True, timeout=30)
+    assert dap.returncode == 0, dap.stderr.decode()
+    _, payload = dap.stdout.split(b'\r\n\r\n', 1)
+    response = json.loads(payload)
+    assert response['type'] == 'response' and response['request_seq'] == 1, response
+    assert response['success'] and response['command'] == 'initialize', response
     effects = work / 'ExternalEffects'
     effects.mkdir()
     shutil.copy2(ROOT / 'tests/fixtures/toon.dndfx.json', effects)
-    write(effects / 'ExternalEffects.csproj', f'<Project Sdk="DolphinDotNet.Sdk/{version}"><ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="{version}" /><DndEffect Include="toon.dndfx.json" GeneratedSource="CompiledEffect.g.cs" ClassName="CompiledEffect" /></ItemGroup></Project>')
+    effects_framework = f'<PropertyGroup><TargetFramework>{framework}</TargetFramework></PropertyGroup>' if framework != 'net8.0' else ''
+    write(effects / 'ExternalEffects.csproj', f'<Project Sdk="DolphinDotNet.Sdk/{version}">{effects_framework}<ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="{version}" /><DndEffect Include="toon.dndfx.json" GeneratedSource="CompiledEffect.g.cs" ClassName="CompiledEffect" /></ItemGroup></Project>')
     write(effects / 'Program.cs', 'internal static class Program { static int Main() => 0; }')
     run('dotnet', 'build', str(effects), '-p:DndBuildNative=false')
     assert (effects / 'CompiledEffect.g.cs').stat().st_size > 0
@@ -89,7 +109,7 @@ def main():
         ('Second', 'public static class Leaf { public static int Value() => 41; }', ''),
         ('First', 'public static class Middle { public static int Value() => Leaf.Value() + 1; }', '<PackageReference Include="Consumer.Second" Version="1.0.0" />')):
         project = work / name
-        write(project / f'{name}.csproj', f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework><PackageId>Consumer.{name}</PackageId></PropertyGroup><ItemGroup>{dependency}</ItemGroup></Project>')
+        write(project / f'{name}.csproj', f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>{framework}</TargetFramework><PackageId>Consumer.{name}</PackageId></PropertyGroup><ItemGroup>{dependency}</ItemGroup></Project>')
         write(project / 'Logic.cs', body)
         run('dotnet', 'pack', str(project), '-o', str(feed))
     game = work / 'gamecube'
@@ -98,7 +118,7 @@ def main():
     csproj.write_text(text)
     write(game / 'Program.cs', 'internal static class Program { static int Main() => Middle.Value(); }')
     run('dotnet', 'build', str(game), '-c', 'Debug', '-p:DndBuildNative=false')
-    output = game / 'bin/Debug/net8.0'
+    output = game / f'bin/Debug/{framework}'
     compiler = work / 'packages/dolphindotnet.sdk' / version / 'tools/compiler/DolphinDotNet.Compiler.dll'
     dll = output / (csproj.stem + '.dll')
     run('dotnet', str(compiler), '--bundle', str(dll), str(work / 'bundle'), '--debug-symbols')
@@ -118,7 +138,7 @@ def main():
     leaf.with_suffix('.hidden').rename(leaf)
     write(game / 'Program.cs', 'internal static class Program { static int Main() { System.Console.Beep(); return 0; } }')
     run('dotnet', 'build', str(game), '-p:DndBuildNative=false')
-    release_dll = game / 'bin/Debug/net8.0' / (csproj.stem + '.dll')
+    release_dll = game / f'bin/Debug/{framework}' / (csproj.stem + '.dll')
     message = run('dotnet', str(compiler), '--aot', str(release_dll), str(work / 'unsupported.c'), success=False)
     assert 'DND1003' in message and 'Beep' in message and 'IL_' in message
     write(game / 'Program.cs', 'internal static class Program { static int Main() => Middle.Value(); } public static class Leaf { public static int Value() => 0; }')
@@ -133,9 +153,9 @@ def main():
         # Dedicated SDK consumer fixture: no dependency on the samples repo.
         for source in (ROOT / 'tests/NativeConsumerFixture').glob('*.cs'):
             shutil.copy2(source, pong)
-        write(pong / 'ExternalPong.csproj', f'<Project Sdk="DolphinDotNet.Sdk/{version}"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="{version}" /></ItemGroup></Project>')
+        write(pong / 'ExternalPong.csproj', f'<Project Sdk="DolphinDotNet.Sdk/{version}"><PropertyGroup><TargetFramework>{framework}</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="{version}" /></ItemGroup></Project>')
         run('dotnet', 'build', str(pong), '-c', 'Debug', '-p:DndBuildBackend=Docker')
-        native_output = pong / 'bin/Debug/net8.0'
+        native_output = pong / f'bin/Debug/{framework}'
         for suffix in ('dol', 'elf', 'apploader.img', 'dnd-debug.json', 'dnd-addresses.json'):
             assert (native_output / f'ExternalPong.{suffix}').stat().st_size > 0
         # Validate launch configuration without starting an interactive emulator.

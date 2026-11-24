@@ -67,6 +67,16 @@ class WorkflowCoverageTests(unittest.TestCase):
         self.assertIn("tests/sdk_consumer.py --workspace",PREVIEW)
         self.assertIn("    environment: nuget-preview",PREVIEW)
         self.assertIn("NuGet/login@v1",PREVIEW)
+    def test_dotnet11_checks_the_same_packages_before_publication(self):
+        consumer=job("dotnet11",PREVIEW)
+        self.assertIn("needs: verify",consumer)
+        self.assertIn("dotnet-version: '11.0.x'",consumer)
+        self.assertIn("DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet11",consumer)
+        self.assertIn("actions/download-artifact@v4",consumer)
+        self.assertIn("name: nuget-preview",consumer)
+        self.assertIn("tests/sdk_consumer.py --framework net11.0",consumer)
+        self.assertIn("'Microsoft.NETCore.App 8.' not in runtimes",consumer)
+
     def test_nuget_publishes_every_main_push(self):
         push=re.search(r"^  push:\n(?P<body>.*?)(?=^  [\w-]+:)",PREVIEW,re.M|re.S)
         self.assertIsNotNone(push)
@@ -86,7 +96,7 @@ class WorkflowCoverageTests(unittest.TestCase):
                     value=expression.replace("github.event_name",repr(event)).replace("github.ref",repr(ref)).replace("inputs.publish",repr(requested))
                     expected=ref=="refs/heads/main" and (event=="push" or (event=="workflow_dispatch" and requested))
                     self.assertEqual(eval(value,{"__builtins__":{}}),expected,(event,ref,requested))
-        self.assertIn("needs: verify",publish)
+        self.assertIn("needs: [verify, dotnet11]",publish)
         self.assertNotIn("always()",condition)
         self.assertIn("id-token: write",publish)
         self.assertNotIn("id-token: write",job("verify",PREVIEW))
