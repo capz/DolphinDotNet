@@ -29,18 +29,19 @@ class ModelAcceptanceSchedulingTests(unittest.TestCase):
         self.assertEqual(commands[generated][-1], commands[acceptance][-1])
 
     def test_native_recording_and_aot_binaries_execute_on_macos(self):
-        with tempfile.TemporaryDirectory() as tmp, patch.object(ci, "run") as run, patch.object(ci.sys, "platform", "darwin"):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(ci, "run") as run, patch.object(ci.sys, "platform", "darwin"), patch.object(ci.Path, "read_text", return_value=""), patch.object(ci.subprocess, "check_output", return_value=""):
             ci.main(tmp)
         commands = [list(map(str, call.args)) for call in run.call_args_list]
-        for name in ("model-inflate", "model-native", "model-recording", "system-model-recording", "model-smoke"):
+        for name in ("model-inflate", "model-native", "model-recording", "system-model-recording", "model-smoke", "model-dnmd-smoke"):
             self.assertTrue(any(Path(c[0]).name == name for c in commands), name)
         self.assertTrue(any(c[-1] == "--gc-stress" for c in commands))
         self.assertTrue(any("-Wl,-dead_strip" in c for c in commands))
         self.assertFalse(any("--wrap=" in arg for c in commands for arg in c))
         exceptions = [c for c in commands if "-Wno-unused-function" in c]
-        self.assertEqual(len(exceptions), 1)
-        self.assertIn("-c", exceptions[0])
-        self.assertTrue(any(arg.endswith("model-smoke.c") for arg in exceptions[0]))
+        self.assertEqual(len(exceptions), 2)
+        for command in exceptions:
+            self.assertIn("-c", command)
+            self.assertTrue(any(arg.endswith(("model-smoke.c", "model-dnmd-smoke.c")) for arg in command))
         for allocation in ("malloc", "calloc", "realloc", "aligned_alloc"):
             self.assertTrue(any(f"-D{allocation}=__wrap_{allocation}" in c for c in commands))
         smoke_runs = [i for i, c in enumerate(commands) if Path(c[0]).name == "model-smoke"]

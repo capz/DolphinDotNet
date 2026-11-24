@@ -197,7 +197,7 @@ def main(area):
             run("python3","scripts/ci_model_tests.py",tmp)
         test("tests/TevMaterialTests")
         test("tests/TransformMemoryTests")
-        for p in ("GraphicsSmoke","SystemFirmwareSmoke","IplFontSmoke","ModelSmoke","ModelAsyncSmoke"):
+        for p in ("GraphicsSmoke","SystemFirmwareSmoke","IplFontSmoke","ModelSmoke","ModelAsyncSmoke","ModelDnmdSmoke"):
             build("tests/"+p+"/"+p+".csproj")
     elif area=="assets":
         run("python3","-m","unittest","discover","-s","tests","-p","test_system_firmware_captures.py")

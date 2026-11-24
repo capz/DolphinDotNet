@@ -96,8 +96,11 @@ def main(fixtures):
     source_entry = re.compile(r"\bdnd_model_begin_(?:scene|glb|pso|fzero|format|pso_episode3)\s*\(")
     assert not source_entry.search(dnmd_generated.read_text()), "DNMD-only AOT retained source import dispatch"
     dnmd = work / "model-dnmd-smoke"
+    dnmd_object = work / "model-dnmd-smoke-generated.o"
     run(cc, *flags, "-Wno-unused-function", "-ffunction-sections", "-fdata-sections",
-        dnmd_generated, "tests/model_host.c", "source/text.c", "source/numeric.c",
+        "-c", dnmd_generated, "-o", dnmd_object)
+    run(cc, *flags, "-ffunction-sections", "-fdata-sections",
+        dnmd_object, "tests/model_host.c", "source/text.c", "source/numeric.c",
         *runtime, dead_strip, "-lm", "-o", dnmd)
     symbols = subprocess.check_output(["nm", str(dnmd)], text=True)
     assert not re.search(r"\b_?(?:ufbx\w*|cgltf\w*|dnd_model_begin_(?:scene|glb|pso|fzero|format)\w*)\b", symbols), "DNMD-only native image retained source parsers"
