@@ -6,6 +6,7 @@ needs no GNU --wrap support. The ordinary GNU wrapper build remains supported.
 """
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -86,6 +87,25 @@ def main(fixtures):
     run(system_recording,system_fixture)
 
     run("dotnet", "build", "tools/DolphinDotNet.Compiler", "-c", "Release", "-p:DndBuildNative=false")
+    # A packaged-only consumer must neither emit source importer calls nor
+    # retain their native parsers after the linker's ordinary dead stripping.
+    run("dotnet", "build", "tests/ModelDnmdSmoke", "-c", "Release", "-p:DndBuildNative=false")
+    compiler = ROOT / "tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll"
+    dnmd_generated = work / "model-dnmd-smoke.c"
+    run("dotnet", compiler, "--aot", "tests/ModelDnmdSmoke/bin/Release/net8.0/ModelDnmdSmoke.dll", dnmd_generated)
+    source_entry = re.compile(r"\bdnd_model_begin_(?:scene|glb|pso|fzero|format|pso_episode3)\s*\(")
+    assert not source_entry.search(dnmd_generated.read_text()), "DNMD-only AOT retained source import dispatch"
+    dnmd = work / "model-dnmd-smoke"
+    dnmd_object = work / "model-dnmd-smoke-generated.o"
+    run(cc, *flags, "-Wno-unused-function", "-ffunction-sections", "-fdata-sections",
+        "-c", dnmd_generated, "-o", dnmd_object)
+    run(cc, *flags, "-ffunction-sections", "-fdata-sections",
+        dnmd_object, "tests/model_host.c", "source/text.c", "source/numeric.c",
+        *runtime, dead_strip, "-lm", "-o", dnmd)
+    symbols = subprocess.check_output(["nm", str(dnmd)], text=True)
+    assert not re.search(r"\b_?(?:ufbx\w*|cgltf\w*|dnd_model_begin_(?:scene|glb|pso|fzero|format)\w*)\b", symbols), "DNMD-only native image retained source parsers"
+    run(dnmd, fixtures)
+    run(dnmd, fixtures, "--gc-stress")
     run("dotnet", "build", "tests/ModelSmoke", "-c", "Release", "-p:DndBuildNative=false")
     generated = work / "model-smoke.c"
     compiler = ROOT / "tools/DolphinDotNet.Compiler/bin/Release/net8.0/DolphinDotNet.Compiler.dll"
