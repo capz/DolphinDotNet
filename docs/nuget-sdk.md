@@ -2,8 +2,9 @@
 
 DolphinDotNet is a closed-world CIL-to-C AOT framework for GameCube, distributed
 as `DolphinDotNet.Sdk`, `DolphinDotNet.GameCube`, `DolphinDotNet.Core` and
-`DolphinDotNet.Templates`. Install .NET 8, Dolphin, and Docker with Linux containers
-(or devkitPPC/libogc2 for the Native backend). Python 3, Bash, Git and Make are
+`DolphinDotNet.Templates`. Install the .NET 8 or .NET 11 SDK, Dolphin, and Docker
+with Linux containers (or devkitPPC/libogc2 for the Native backend). Python 3,
+Bash, Git and Make are
 used inside the native toolchain. The SDK carries native **sources**, compiler,
 build driver, effects compiler and DAP adapter; it does not redistribute Dolphin,
 Docker, or devkitPPC. No repository checkout is required by consumers.
@@ -34,13 +35,32 @@ Existing projects can upgrade both references explicitly:
 </Project>
 ```
 
+## .NET 11
+
+The SDK supports `net11.0` consumers with the .NET 11 SDK. Set the project's
+`TargetFramework` to `net11.0` in the example above. Do the same for referenced
+application libraries that need .NET 11 APIs. Templates and projects without an
+explicit framework continue to default to `net8.0`; those can also be built with
+the .NET 11 SDK. Output paths use the selected framework, for example
+`bin/Debug/net11.0`.
+
+The compiler, build driver, effects compiler, packaged debug adapter and optional
+content tools target .NET 8 and permit major-version runtime roll-forward.
+They use .NET 8 when available and also run on a host with only .NET 11 installed;
+no `DOTNET_ROLL_FORWARD` environment override or additional .NET 8 runtime is
+required. The Core and GameCube libraries retain their `netstandard2.0` target.
+Targeting .NET 11 does not expand the console's supported API surface or guarantee
+support for every new C# construct; the same closed-world AOT restrictions apply.
+
+## Local packages
+
 For local packages, add an absolute local feed to `NuGet.Config` in the project
 parent **before** creating/evaluating the SDK project. Keep nuget.org available
 for framework dependencies. The NuGet MSBuild SDK resolver reads these sources.
 Alternatively pin `msbuild-sdks.DolphinDotNet.Sdk` in `global.json` and use an
 unversioned SDK name. `eng/pack.py --version 0.1.0-preview.2` creates all four
 packages in `out/packages`; it never uploads them. It rewrites template versions
-in temporary staging, preserving the checkout. Pack with the .NET 8 SDK.
+in temporary staging, preserving the checkout. Pack with the .NET 8 or .NET 11 SDK.
 
 ## Build and debug
 
@@ -101,13 +121,16 @@ Design-time evaluation and library builds do not invoke Docker.
 ```sh
 python3 eng/pack.py
 python3 tests/sdk_consumer.py --native --workspace '/tmp/external consumer'
+# With an isolated .NET 11 SDK/runtime on PATH:
+python3 tests/sdk_consumer.py --framework net11.0 --native --workspace '/tmp/external consumer 11'
 ```
 
 The consumer test relocates the feed, creates an empty package cache, installs
 all three templates, builds them, exercises real transitive NuGet packages and
 missing/unsupported API diagnostics, and optionally builds external Pong with
-Debug mappings. The existing Dolphin smoke harness can test the resulting
-`ExternalPong.dol` and ELF; require boot and `main`, `dnd_aot_entry`,
+Debug mappings. Preview CI runs the same packages on .NET 8 and an isolated
+.NET 11 installation before publication. The existing Dolphin smoke harness can
+test the resulting `ExternalPong.dol` and ELF; require boot and `main`, `dnd_aot_entry`,
 `dnd_audio_create_pcm8`, and `dnd_device_end` probes. See [release process](releases.md)
 for test and publication requirements. The [standalone examples](https://github.com/capz/DolphinDotNet.Samples) now reference the published preview SDK and runtime packages, instead of local source projects. CI checks out that repository when integration tests require sample code.
 

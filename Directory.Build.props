@@ -1,4 +1,9 @@
 <Project>
   <!-- This repository also builds as a nested SDK dependency. Do not inherit
        a consuming application's implicit usings, lockfile or build policies. -->
+  <PropertyGroup>
+    <!-- Host tools and test runners keep their .NET 8 target but also run on
+         installations with only a newer runtime, including .NET 11. -->
+    <RollForward Condition="'$(RollForward)' == ''">Major</RollForward>
+  </PropertyGroup>
 </Project>
