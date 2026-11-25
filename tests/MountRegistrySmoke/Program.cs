@@ -14,15 +14,18 @@ internal static class Program
     public static int Main()
     {
         if(StorageApi.GetLastMount()!=null||StorageApi.GetMounts().Length!=5)return 1;
+        if(StorageApi.GetMountedMedia(StorageDevice.SdSerialPort2)!=StorageMedia.None)return 20;
         if(StorageApi.Remount(StorageDevice.SdSerialPort2).Failure!=MountFailure.NoPreviousConfiguration)return 2;
         StorageApi.MountChanged+=Changed;
         if(!StorageApi.Mount(StorageDevice.SdSerialPort2))return 3;
+        if(StorageApi.GetMountedMedia(StorageDevice.SdSerialPort2)!=StorageMedia.SdCard)return 21;
         var first=StorageApi.GetMountInfo(StorageDevice.SdSerialPort2);
         if(first.State!=MountState.Mounted||first.LastSuccessfulConfiguration==null||first.RootPath!="sd:/")return 4;
         if(!StorageApi.TryGetMountedFileSystem(StorageDevice.SdSerialPort2,out var fs)||!fs!.IsValid)return 5;
         using(var stream=fs.Open("registry.bin",FileMode.Create,FileAccess.Write))stream.Write(new byte[]{7,8},0,2);
         StorageApi.Poll();if(changes!=1)return 6;
         StorageApi.Unmount(StorageDevice.SdSerialPort2);
+        if(StorageApi.GetMountedMedia(StorageDevice.SdSerialPort2)!=StorageMedia.None)return 22;
         if(fs.IsValid||StorageApi.GetLastMount()!.State!=MountState.Unmounted)return 7;
         var remount=StorageApi.Remount(StorageDevice.SdSerialPort2);
         if(!remount.Succeeded||remount.FileSystem!.MountId==fs.MountId||fs.IsValid)return 8;

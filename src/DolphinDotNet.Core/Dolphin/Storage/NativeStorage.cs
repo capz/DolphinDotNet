@@ -33,6 +33,7 @@ internal static class NativeStorage
     internal static bool Mount(int device)=>throw Unsupported();
     internal static void Unmount(int device)=>throw Unsupported();
     internal static bool IsMounted(int device)=>throw Unsupported();
+    internal static int MountedMedia(int device)=>throw Unsupported();
     internal static string GetPath(int device,string path)=>throw Unsupported();
     internal static string FullPath(string path)=>throw Unsupported();
     internal static bool Exists(string path,bool directory)=>throw Unsupported();

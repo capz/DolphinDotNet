@@ -13,6 +13,7 @@
 #include <malloc.h>
 #include <ogc/card.h>
 #include <ogc/dvd.h>
+#include <ogc/mmce.h>
 #include <sdcard/gcsd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,6 +40,15 @@ int dnd_gc_storage_presence(int device) {
   if(device==3)return dnd_gc_disc_presence();
   DISC_INTERFACE *iface=device>=0&&device<7?mount_interfaces[device]:NULL;
   return iface&&iface->isInserted?(iface->isInserted(iface)?1:0):3;
+}
+int dnd_gc_storage_mounted_media(int device) {
+  const DISC_INTERFACE *iface = mount_interfaces[device];
+  if (!iface) return DND_STORAGE_MEDIA_NONE;
+  if (iface == &__io_gcode) return DND_STORAGE_MEDIA_GC_LOADER;
+  if (iface->ioType >= DEVICE_TYPE_GAMECUBE_MMCE(0) &&
+      iface->ioType <= DEVICE_TYPE_GAMECUBE_MMCE(2)) return DND_STORAGE_MEDIA_MMCE;
+  if (iface->features & FEATURE_GAMECUBE_PORT1) return DND_STORAGE_MEDIA_SD_SP1;
+  return DND_STORAGE_MEDIA_SD;
 }
 static int extent_sector_read(void *context,uint64_t lba,void *buffer) {
   DvmDisc *disc=context;
