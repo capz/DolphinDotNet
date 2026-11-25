@@ -3,8 +3,31 @@ using Dolphin.Graphics;
 internal static class Program
 {
     private static void Near(float a,float b){if(Math.Abs(a-b)>.002f)throw new Exception("Graphics math mismatch.");}
+    private static void CullingChecks()
+    {
+        var camera=new Camera(55,4f/3f,.1f,100);
+        for(int mode=0;mode<4;mode++){
+            float origin=mode<2?0:3;
+            camera.LookAt(new Vector3(origin,0,5),new Vector3(origin,0,0),new Vector3(0,1,0));
+            bool ortho=(mode&1)!=0;
+            if(ortho)camera.SetOrthographic(8,6,.1f,100);
+            else camera.SetPerspective(55,4f/3f,.1f,100);
+            float ty=(float)Math.Tan(55*Math.PI/360),tx=ty*4/3;
+            float nx=(float)Math.Sqrt(1+tx*tx),ny=(float)Math.Sqrt(1+ty*ty);
+            for(int x=-12;x<=12;x++)for(int y=-8;y<=8;y++)for(int depth=-1;depth<=105;depth+=3){
+                const float radius=.23f;
+                bool expected=depth>=.1f-radius&&depth<=100+radius&&
+                    (ortho?Math.Abs(x)<=4+radius&&Math.Abs(y)<=3+radius:
+                    Math.Abs(x)<=depth*tx+radius*nx&&Math.Abs(y)<=depth*ty+radius*ny);
+                var sphere=new BoundingSphere(new Vector3(x+origin,y,5-depth),radius);
+                if(camera.Intersects(sphere)!=expected||camera.Intersects(sphere)!=expected)
+                    throw new Exception("Cached frustum differs from analytic sphere oracle.");
+            }
+        }
+    }
     static int Main()
     {
+        CullingChecks();
         var camera2D=new Camera2D{Position=new Vector2(20,-10),Origin=new Vector2(100,50),Zoom=2,RotationDegrees=90};
         var p=camera2D.WorldToScreen(new Vector2(23,-6));var q=camera2D.ScreenToWorld(p);Near(q.X,23);Near(q.Y,-6);
         camera2D.Zoom=0;try{camera2D.WorldToScreen(default);return 20;}catch(ArgumentOutOfRangeException){}camera2D.Zoom=2;
