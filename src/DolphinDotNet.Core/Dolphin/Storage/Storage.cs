@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 namespace Dolphin.Storage;
 public enum StorageDevice { SdSlotA, SdSlotB, SdSerialPort2, DvdDrive, MemoryCardSlotA, MemoryCardSlotB, GcLoader }
+public enum StorageMedia { None, SdCard, SdSerialPort1, Mmce, GcLoader }
 public enum DiscFormat { Iso9660=1, Fst=2 }
 /// <summary>Streaming create-new writer. Only Complete publishes the file;
 /// disposing without Complete discards staged bytes. The file's final
@@ -110,6 +111,9 @@ public static partial class Storage
         return DiscIdentity.ParseHeader(header, banner);
     }
     public static bool IsMounted(StorageDevice device)=>NativeStorage.IsMounted((int)device);
+    /// <summary>Physical block interface backing the current filesystem mount.
+    /// Returns None for unmounted devices, DVD filesystems and native saves.</summary>
+    public static StorageMedia GetMountedMedia(StorageDevice device)=>(StorageMedia)NativeStorage.MountedMedia((int)device);
     public static void Unmount(StorageDevice device)=>NativeStorage.Unmount((int)device);
     public static string GetPath(StorageDevice device,string path)=>NativeStorage.GetPath((int)device,path);
     public static bool FileExists(StorageDevice device,string path)=>IO.File.Exists(GetPath(device,path));

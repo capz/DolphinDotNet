@@ -120,6 +120,7 @@ static void contiguous_root(int d,char path[PATH_CAP]) {
 bool dnd_gc_mount(int device);
 bool dnd_gc_mount_volume(const DndMountConfiguration *request,DndMountConfiguration *effective);
 int dnd_gc_storage_presence(int device);
+int dnd_gc_storage_mounted_media(int device);
 void dnd_gc_storage_invalidate(int device);
 bool dnd_gc_storage_unmount(int device);
 bool dnd_gc_mount_disc(int format);
@@ -321,6 +322,16 @@ static bool valid_device(int d) {
 }
 bool dnd_storage_is_mounted(int d) {
   storage_barrier(); return valid_device(d) && mounted[d]; }
+int dnd_storage_mounted_media(int d) {
+  storage_barrier();
+  if (!valid_device(d) || !mounted[d] || (d > 2 && d != 6))
+    return DND_STORAGE_MEDIA_NONE;
+#ifdef DND_GAMECUBE_STORAGE
+  return dnd_gc_storage_mounted_media(d);
+#else
+  return d == 6 ? DND_STORAGE_MEDIA_GC_LOADER : DND_STORAGE_MEDIA_SD;
+#endif
+}
 static bool storage_mount_volume(int d,const DndMountConfiguration *request) {
   storage_barrier();
   if (!valid_device(d))

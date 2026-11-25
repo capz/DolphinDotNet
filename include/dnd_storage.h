@@ -14,6 +14,9 @@ void dnd_storage_unmount(int device);
 /* Bootstrap only, after managed executors stop. Closes owned handles and volumes. */
 void dnd_storage_shutdown(void);
 bool dnd_storage_is_mounted(int device);
+enum { DND_STORAGE_MEDIA_NONE, DND_STORAGE_MEDIA_SD, DND_STORAGE_MEDIA_SD_SP1,
+       DND_STORAGE_MEDIA_MMCE, DND_STORAGE_MEDIA_GC_LOADER };
+int dnd_storage_mounted_media(int device);
 /* Mount registry: session-local; native memory cards are deliberately excluded.
  * Configurations contain effective settings after a successful mount. -1 means
  * automatic partition selection in a request. All paths are UTF-8. */

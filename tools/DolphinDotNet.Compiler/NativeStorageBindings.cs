@@ -263,6 +263,7 @@ internal static class NativeStorageBindings
         ["Decode"]=("dnd_text_decode","aiiii",true),
         ["FromChars"]=("dnd_text_from_chars","aii",true),
         ["Mount"]=("dnd_storage_mount","i",false),["Unmount"]=("dnd_storage_unmount","i",false),["IsMounted"]=("dnd_storage_is_mounted","i",false),
+        ["MountedMedia"]=("dnd_storage_mounted_media","i",false),
         ["MountSnapshot"]=("dnd_storage_mount_snapshot","i",true),
         ["NextMountChange"]=("dnd_storage_mount_change","",true),
         ["LastMountDevice"]=("dnd_storage_last_mount_device","",false),
