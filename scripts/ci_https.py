@@ -31,6 +31,21 @@ static int Main(){try{
 Wait(NetworkRuntime.StartAsync(new NetworkOptions{DnsServers=new[]{Dolphin.Network.IPAddress.Loopback},DnsPort=15353},default));
 var ca=Dolphin.Text.Encoding.ASCII.GetBytes($CA);var seed=new byte[]{$ENTROPY};TlsConfiguration.Initialize(ca,seed,$UTC);
 for(int i=0;i<seed.Length;i++)if(seed[i]!=0)return 1;
+var pipeTask=TlsStream.ConnectAsync("localhost",$PORT,default);Wait(pipeTask);
+using(var pipe=pipeTask.GetAwaiter().GetResult()){
+var masks=new byte[256];pipe.FillRandom(masks,0,masks.Length);bool any=false;for(int i=0;i<masks.Length;i++)any|=masks[i]!=0;if(!any)return 31;
+var request=Dolphin.Text.Encoding.ASCII.GetBytes("GET /pipe HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n");
+int sent=0;for(int step=0;step<2000000&&sent<request.Length;step++){int n=pipe.TryWrite(request,sent,request.Length-sent);if(n<0)continue;if(n==0)return 23;sent+=n;}
+if(sent!=request.Length)return 24;
+var received=new byte[128];int total=0;bool eof=false;
+for(int step=0;step<2000000&&!eof;step++){int n=pipe.TryRead(received,total,received.Length-total);if(n<0)continue;if(n==0){eof=true;break;}total+=n;if(total==received.Length)return 25;}
+if(!eof||total<2||received[total-2]!=(byte)'O'||received[total-1]!=(byte)'K')return 26;
+try{pipe.TryRead(received,-1,1);return 27;}catch(ArgumentOutOfRangeException){}
+pipe.Dispose();try{pipe.TryWrite(request,0,1);return 28;}catch(ObjectDisposedException){}
+}
+try{Wait(TlsStream.ConnectAsync("wrong.example",$PORT,default));return 29;}catch(IOException){}
+var noPipe=new System.Threading.CancellationTokenSource();noPipe.Cancel();try{TlsStream.ConnectAsync("localhost",$PORT,noPipe.Token);return 30;}catch(OperationCanceledException){}
+
 using(var client=new HttpClient()){
 client.DefaultRequestHeaders.Add("authorization","test-secret");
 foreach(string path in new[]{"/final","/relative","/network","/cross","/chunked"}){var task=client.GetStringAsync($URL+path);Wait(task);if(task.GetAwaiter().GetResult()!="OK")return 2;}
@@ -63,7 +78,7 @@ using(var client=new HttpClient()){var task=client.GetStringAsync($URL+"/final")
 TlsConfiguration.Reset();
 NetworkRuntime.Stop();return 0;
 }catch(Exception e){Console.WriteLine(e.Message);return 99;}}
-}''').substitute(CA=json.dumps(roots),ENTROPY=','.join(map(str,entropy)),LOCAL_ENTROPY=','.join(map(str,local_entropy)),UTC=str(utc),LOCAL=str(utc+2*86400),URL=json.dumps(url),WRONG=json.dumps(wrong))
+}''').substitute(CA=json.dumps(roots),ENTROPY=','.join(map(str,entropy)),LOCAL_ENTROPY=','.join(map(str,local_entropy)),UTC=str(utc),LOCAL=str(utc+2*86400),URL=json.dumps(url),WRONG=json.dumps(wrong),PORT=str(__import__('urllib.parse',fromlist=['urlsplit']).urlsplit(url).port))
 
 def main():
     run('dotnet','build','tools/DolphinDotNet.Compiler','-c','Release')
@@ -117,6 +132,7 @@ def main():
                     elif path==b'/chunked':reply=b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nO\r\n1\r\nK\r\n0\r\n\r\n'
                     else:reply=b'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK'
                     for byte in reply:stream.sendall(bytes([byte]))
+                    if path==b'/pipe':stream.unwrap()
             except (ssl.SSLError,ConnectionError,TimeoutError,OSError):pass
         def serve(listener,index):
             while True:

@@ -7,6 +7,7 @@ internal static class NativeNetwork
     internal static int TlsConfigureLocalClock(byte[] roots,byte[] entropy,long localUnixSeconds)=>throw Unsupported();
     internal static int TlsReset()=>throw Unsupported();
     internal static int TlsStart(int handle,string hostname)=>throw Unsupported();
+    internal static int TlsRandom(int handle,byte[] buffer,int offset,int count)=>throw Unsupported();
     internal static int TlsHandshake(int handle)=>throw Unsupported();
     internal static int NetStart(int ip,int mask,int gateway,int dhcp)=>throw Unsupported();
     internal static int NetStatus()=>throw Unsupported();
