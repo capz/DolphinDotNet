@@ -116,3 +116,30 @@ LTO, and passed DOL section validation.
 Physical GameCube/BBA interoperability, provisioning and full-scene performance
 remain separate hardware acceptance checks. Host TLS success does not prove the
 quality of an application's entropy/time inputs or real-console compatibility.
+
+## Nonblocking TLS streams
+
+`Dolphin.Network.TlsStream.ConnectAsync(hostname, port, cancellationToken)` opens
+an authenticated TLS connection using the same explicit trust roots, fresh
+entropy, clock checks and HTTP/1.1 ALPN as HTTPS. It owns and closes its socket.
+It does not expose the socket or allow certificate validation to be bypassed.
+Connection setup uses the runtime's normal cancellation and deadline handling.
+
+`TryRead(buffer, offset, count)` and `TryWrite(buffer, offset, count)` use
+caller-owned arrays, allocate no task/result per poll and return `-1` when the
+operation would block. Reads return zero at EOF; writes can accept a shorter
+range. Retry a would-block write with the identical, unmodified range. Dispose
+closes the connection and subsequent I/O fails. Reads, writes and the native
+TLS step still need application frame/time budgets. Applications supply HTTP
+upgrade/WebSocket framing or another HTTP/1.1 application protocol themselves.
+
+The HTTPS native/AOT fixtures exercise the stream's fragmented response, short
+I/O, EOF, cancellation, disposal and hostname-validation failure in addition
+to the shared TLS provider's trust and certificate-time acceptance tests.
+
+`TlsStream.FillRandom(buffer, offset, count)` fills at most 256 caller-owned
+bytes from the already seeded TLS cryptographic DRBG. Use it for upgrade nonces
+and unpredictable WebSocket masks; pool small draws. The existing bounded DRBG
+reseed interval still applies. Exhaustion fails closed: dispose connections,
+collect fresh platform entropy and reconfigure before reconnecting. This API
+never manufactures replacement entropy or changes certificate validation.

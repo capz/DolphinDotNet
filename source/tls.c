@@ -142,6 +142,16 @@ int dnd_tls_handshake(int token){
     if(mbedtls_ssl_get_verify_result(&sessions[i].ssl)!=0)return failure(-2);
     sessions[i].ready=1;return 0;
 }
+int dnd_net_tls_random(int token,DndArray *output,int offset,int count){
+    int i=find(token);
+    if(i<0||!sessions[i].ready||!configured||!output||output->elements_are_references||
+       output->element_size!=1||offset<0||count<0||count>256||
+       (unsigned)offset>output->length||(unsigned)count>output->length-(unsigned)offset)return failure(-2);
+    if(!count)return 0;
+    int r=mbedtls_ctr_drbg_random(&random_state,output->data+offset,(size_t)count);
+    if(r){mbedtls_platform_zeroize(output->data+offset,(size_t)count);return failure(r);}
+    return 0;
+}
 int dnd_tls_read(int token,void *buffer,int count){
     int i=find(token);if(i<0||!sessions[i].ready)return failure(-3);if(!count)return 0;
     int r=mbedtls_ssl_read(&sessions[i].ssl,buffer,(size_t)count);
@@ -160,6 +170,7 @@ int dnd_net_tls_configure_local_clock(DndArray *a,DndArray *b,int64_t t){(void)a
 int dnd_net_tls_reset(void){return 0;}
 int dnd_tls_begin(int t,int f,const char *h){(void)t;(void)f;(void)h;return -2;}
 int dnd_tls_handshake(int t){(void)t;return -2;}
+int dnd_net_tls_random(int t,DndArray *b,int o,int n){(void)t;(void)b;(void)o;(void)n;return -2;}
 int dnd_tls_read(int t,void *b,int n){(void)t;(void)b;(void)n;return -2;}
 int dnd_tls_write(int t,const void *b,int n){(void)t;(void)b;(void)n;return -2;}
 void dnd_tls_close(int t){(void)t;}

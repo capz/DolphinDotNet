@@ -7,6 +7,7 @@
 int dnd_net_tls_configure(DndArray *roots,DndArray *seed,int64_t unix_seconds);
 int dnd_net_tls_configure_local_clock(DndArray *roots,DndArray *seed,int64_t local_unix_seconds);
 int dnd_net_tls_reset(void);
+int dnd_net_tls_random(int token,DndArray *output,int offset,int count);
 int dnd_net_tls_start(int token,DndString *host);
 int dnd_net_tls_handshake(int token);
 int dnd_net_tls_error(void);
