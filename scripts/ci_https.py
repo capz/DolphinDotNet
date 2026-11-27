@@ -50,7 +50,7 @@ var noPipe=new System.Threading.CancellationTokenSource();noPipe.Cancel();try{Tl
 
 using(var client=new HttpClient()){
 client.DefaultRequestHeaders.Add("authorization","test-secret");
-foreach(string path in new[]{"/final","/relative","/network","/cross","/chunked","/close-delimited"}){var task=client.GetStringAsync($URL+path);Wait(task);if(task.GetAwaiter().GetResult()!="OK")return 2;}
+foreach(string path in new[]{"/final","/relative","/network","/cross","/chunked","/close-delimited"}){Console.WriteLine("HTTP_PATH="+path);var task=client.GetStringAsync($URL+path);Wait(task);if(task.GetAwaiter().GetResult()!="OK")return 2;}
 try{Wait(client.GetStringAsync($URL+"/downgrade"));return 3;}catch(IOException){}
 var streamTask=client.GetStreamAsync($URL+"/chunked");Wait(streamTask);using(var stream=streamTask.GetAwaiter().GetResult()){var b=new byte[8];int total=0;while(true){var r=stream.ReadAsync(b,0,b.Length);Wait(r);int n=r.GetAwaiter().GetResult();if(n==0)break;total+=n;}if(total!=2)return 4;}
 try{Wait(client.GetStringAsync($WRONG));return 5;}catch(IOException){}
@@ -60,6 +60,7 @@ var cancelled=new System.Threading.CancellationTokenSource();cancelled.Cancel();
 foreach(int quantum in new[]{4096,16384}){
 using(var client=new Dolphin.Network.Http.HttpClient()){client.StreamReadBufferSize=quantum;
 foreach(string path in new[]{"/bulk","/bulk-chunked","/client-owned-close","/client-owned-close-chunked"}){
+Console.WriteLine("HTTP_STREAM_PATH="+path+" QUANTUM="+quantum);
 var pending=client.GetStreamAsync($URL+path);Wait(pending);using(var stream=pending.GetAwaiter().GetResult()){
 var data=new byte[16384];int total=0,calls=0,largest=0;
 while(true){var read=stream.ReadAsync(data,0,data.Length);Wait(read);int n=read.GetAwaiter().GetResult();if(n==0)break;calls++;if(n>largest)largest=n;for(int i=0;i<n;i++)if(data[i]!=(byte)((total+i)%251))return 20;total+=n;}
@@ -81,7 +82,7 @@ if(TlsConfiguration.LastErrorCode!=0)return 34;
 using(var client=new HttpClient()){var task=client.GetStringAsync($URL+"/final");Wait(task);if(task.GetAwaiter().GetResult()!="OK")return 14;}
 TlsConfiguration.Reset();
 NetworkRuntime.Stop();return 0;
-}catch(Exception e){Console.WriteLine(e.Message);return 99;}}
+}catch(Exception e){Console.WriteLine("TLS_ERROR="+TlsConfiguration.LastErrorCode);Console.WriteLine(e.Message);return 99;}}
 }''').substitute(CA=json.dumps(roots),ENTROPY=','.join(map(str,entropy)),LOCAL_ENTROPY=','.join(map(str,local_entropy)),UTC=str(utc),LOCAL=str(utc+2*86400),URL=json.dumps(url),WRONG=json.dumps(wrong),PORT=str(__import__('urllib.parse',fromlist=['urlsplit']).urlsplit(url).port))
 
 def main():
@@ -153,7 +154,7 @@ def main():
                         reply=b'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK'
                     else:reply=b'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK'
                     for byte in reply:stream.sendall(bytes([byte]))
-                    if path==b'/pipe':stream.unwrap()
+                    if path in (b'/pipe',b'/close-delimited'):stream.unwrap()
             except (ssl.SSLError,ConnectionError,TimeoutError,OSError):pass
         def serve(listener,index):
             while True:
