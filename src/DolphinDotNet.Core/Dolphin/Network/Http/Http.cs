@@ -136,7 +136,7 @@ public sealed class HttpClient : IDisposable
         }
         private byte[] BuildRequest()
         {
-            string text=string.Concat(string.Concat(request.Method.Method," "),string.Concat(url.Path," HTTP/1.1\r\nHost: "));text=string.Concat(text,string.Concat(url.Authority,"\r\nConnection: close\r\nAccept-Encoding: identity\r\n"));
+            string text=string.Concat(string.Concat(request.Method.Method," "),string.Concat(url.Path," HTTP/1.1\r\nHost: "));text=string.Concat(text,string.Concat(url.Authority,"\r\nConnection: keep-alive\r\nAccept-Encoding: identity\r\n"));
             Append(owner.DefaultRequestHeaders,ref text,crossOrigin);Append(request.Headers,ref text,crossOrigin);if(request.Content!=null){if(request.Content.Bytes==null)throw new NotSupportedException("Only bounded byte/string request content is supported.");Append(request.Content.Headers,ref text);text=string.Concat(text,string.Concat("Content-Length: ",string.Concat(request.Content.Bytes.Length.ToString(),"\r\n")));}
             text=string.Concat(text,"\r\n");var head=Encoding.ASCII.GetBytes(text);var payload=request.Content?.Bytes;if(head.Length>8192||(payload!=null&&payload.Length>65536))throw new IOException("HTTP request exceeds limits.");var all=new byte[head.Length+(payload==null?0:payload.Length)];Array.Copy(head,all,head.Length);if(payload!=null)Array.Copy(payload,0,all,head.Length,payload.Length);return all;
         }

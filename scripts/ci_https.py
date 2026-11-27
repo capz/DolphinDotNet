@@ -50,7 +50,7 @@ var noPipe=new System.Threading.CancellationTokenSource();noPipe.Cancel();try{Tl
 
 using(var client=new HttpClient()){
 client.DefaultRequestHeaders.Add("authorization","test-secret");
-foreach(string path in new[]{"/final","/relative","/network","/cross","/chunked"}){var task=client.GetStringAsync($URL+path);Wait(task);if(task.GetAwaiter().GetResult()!="OK")return 2;}
+foreach(string path in new[]{"/final","/relative","/network","/cross","/chunked","/close-delimited"}){var task=client.GetStringAsync($URL+path);Wait(task);if(task.GetAwaiter().GetResult()!="OK")return 2;}
 try{Wait(client.GetStringAsync($URL+"/downgrade"));return 3;}catch(IOException){}
 var streamTask=client.GetStreamAsync($URL+"/chunked");Wait(streamTask);using(var stream=streamTask.GetAwaiter().GetResult()){var b=new byte[8];int total=0;while(true){var r=stream.ReadAsync(b,0,b.Length);Wait(r);int n=r.GetAwaiter().GetResult();if(n==0)break;total+=n;}if(total!=2)return 4;}
 try{Wait(client.GetStringAsync($WRONG));return 5;}catch(IOException){}
@@ -59,12 +59,13 @@ var cancelled=new System.Threading.CancellationTokenSource();cancelled.Cancel();
 }
 foreach(int quantum in new[]{4096,16384}){
 using(var client=new Dolphin.Network.Http.HttpClient()){client.StreamReadBufferSize=quantum;
-foreach(string path in new[]{"/bulk","/bulk-chunked"}){
+foreach(string path in new[]{"/bulk","/bulk-chunked","/client-owned-close","/client-owned-close-chunked"}){
 var pending=client.GetStreamAsync($URL+path);Wait(pending);using(var stream=pending.GetAwaiter().GetResult()){
 var data=new byte[16384];int total=0,calls=0,largest=0;
 while(true){var read=stream.ReadAsync(data,0,data.Length);Wait(read);int n=read.GetAwaiter().GetResult();if(n==0)break;calls++;if(n>largest)largest=n;for(int i=0;i<n;i++)if(data[i]!=(byte)((total+i)%251))return 20;total+=n;}
 if(total!=65567||largest>quantum||quantum==16384&&largest<=4096)return 21;
 Console.WriteLine("HTTP_QUANTUM="+quantum+" CALLS="+calls+" MAX="+largest+" BYTES="+total);
+if(path=="/client-owned-close"||path=="/client-owned-close-chunked"){var closed=client.GetStringAsync($URL+"/client-owned-close-observed");Wait(closed);if(closed.GetAwaiter().GetResult()!="OK")return 35;}
 }}}}
 using(var bounds=new Dolphin.Network.Http.HttpClient()){foreach(int bad in new[]{0,4095,16385}){try{bounds.StreamReadBufferSize=bad;return 22;}catch(ArgumentOutOfRangeException){}}}
 TlsConfiguration.Reset();using(var client=new HttpClient()){try{Wait(client.GetStringAsync($URL+"/final"));return 6;}catch(IOException){}}
@@ -107,6 +108,7 @@ def main():
             listener=socket.socket();listener.bind(('127.0.0.1',0));listener.listen(8);listeners.append(listener)
         ports=[s.getsockname()[1] for s in listeners]
         errors=[]
+        owned_closed=threading.Event()
         def peer(connection,index):
             try:
                 connection.settimeout(10)
@@ -118,14 +120,26 @@ def main():
                         request+=part
                     path=request.split(b' ')[1]
                     if index==1 and b'authorization:' in request.lower():errors.append('credentials crossed origins')
-                    if path in (b'/bulk',b'/bulk-chunked'):
+                    if path in (b'/bulk',b'/bulk-chunked',b'/client-owned-close',b'/client-owned-close-chunked'):
+                        client_closes=path.startswith(b'/client-owned-close')
+                        if client_closes:
+                            owned_closed.clear()
+                            if b'\r\nconnection: keep-alive\r\n' not in request.lower():errors.append('framed response requested premature server closure')
                         data=bytes(i%251 for i in range(65567))
-                        chunked=path==b'/bulk-chunked'
+                        chunked=path in (b'/bulk-chunked',b'/client-owned-close-chunked')
                         stream.sendall(b'HTTP/1.1 200 OK\r\n'+(b'Transfer-Encoding: chunked' if chunked else b'Content-Length: 65567')+b'\r\n\r\n')
                         for offset in range(0,len(data),16384):
                             part=data[offset:offset+16384]
                             stream.sendall((f'{len(part):x}\r\n'.encode()+part+b'\r\n') if chunked else part)
                         if chunked:stream.sendall(b'0\r\n\r\n')
+                        if client_closes:
+                            try:
+                                if stream.recv(1):errors.append('unexpected data after complete response')
+                                else:owned_closed.set()
+                            except (ssl.SSLEOFError,ssl.SSLZeroReturnError,ConnectionResetError):
+                                owned_closed.set()
+                            except (ssl.SSLError,TimeoutError,OSError) as error:
+                                errors.append('client did not close framed response: '+type(error).__name__)
                         return
                     if path==b'/relative':reply=b'HTTP/1.1 302 Found\r\nLocation: /final\r\nContent-Length: 0\r\n\r\n'
                     elif path==b'/network':reply=f'HTTP/1.1 302 Found\r\nLocation: //localhost:{ports[0]}/final\r\nContent-Length: 0\r\n\r\n'.encode()
@@ -133,6 +147,10 @@ def main():
                     elif path==b'/downgrade':reply=f'HTTP/1.1 302 Found\r\nLocation: http://localhost:{ports[0]}/final\r\nContent-Length: 0\r\n\r\n'.encode()
                     elif path==b'/truncated':reply=b'HTTP/1.1 200 OK\r\nContent-Length: 50\r\n\r\nshort'
                     elif path==b'/chunked':reply=b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nO\r\n1\r\nK\r\n0\r\n\r\n'
+                    elif path==b'/close-delimited':reply=b'HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nOK'
+                    elif path==b'/client-owned-close-observed':
+                        if not owned_closed.wait(5):errors.append('framed response connection remained open')
+                        reply=b'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK'
                     else:reply=b'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK'
                     for byte in reply:stream.sendall(bytes([byte]))
                     if path==b'/pipe':stream.unwrap()
@@ -162,5 +180,5 @@ def main():
             if errors:raise AssertionError(errors)
         finally:
             for listener in listeners:listener.close()
-        print('SDK HTTPS Debug/Release AOT + GC stress: exact/local-clock initialization and seed wiping, verified buffered/streamed/chunked bodies, relative redirects, credential isolation, downgrade rejection and missing configuration passed.')
+        print('SDK HTTPS Debug/Release AOT + GC stress: exact/local-clock initialization and seed wiping, verified buffered/streamed/chunked/close-delimited bodies, client-owned framed connection closure, relative redirects, credential isolation, downgrade rejection and missing configuration passed.')
 if __name__=='__main__':main()

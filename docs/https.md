@@ -92,8 +92,12 @@ peer close-notify, so cancellation never blocks on TLS shutdown.
 Relative and scheme-relative redirects retain HTTPS. Cross-origin redirects
 (including scheme or effective-port changes) drop authorization/cookie headers.
 HTTPS-to-HTTP redirects fail. No application request bytes are sent until the
-TLS handshake and server verification succeed. Existing Connection: close,
-response buffering and body/header limits remain in force.
+TLS handshake and server verification succeed. HTTP/1.1 requests allow the peer
+to keep the connection open while the complete framed response is consumed. The
+SDK still owns one connection per response and closes it at the content-length
+or final chunk boundary, on disposal, cancellation or failure. Close-delimited
+bodies still finish at peer EOF. There is no connection pooling. Response
+buffering and body/header limits remain in force.
 
 ## Validation
 
