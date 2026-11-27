@@ -6,6 +6,7 @@ internal static class NativeNetwork
     internal static int TlsConfigure(byte[] roots,byte[] entropy,long unixSeconds)=>throw Unsupported();
     internal static int TlsConfigureLocalClock(byte[] roots,byte[] entropy,long localUnixSeconds)=>throw Unsupported();
     internal static int TlsReset()=>throw Unsupported();
+    internal static int TlsError()=>throw Unsupported();
     internal static int TlsStart(int handle,string hostname)=>throw Unsupported();
     internal static int TlsRandom(int handle,byte[] buffer,int offset,int count)=>throw Unsupported();
     internal static int TlsHandshake(int handle)=>throw Unsupported();

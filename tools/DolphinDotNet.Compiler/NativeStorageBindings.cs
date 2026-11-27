@@ -225,6 +225,7 @@ internal static class NativeStorageBindings
         ["TlsConfigureLocalClock"]=("dnd_net_tls_configure_local_clock","aal",false),
         ["Fill"]=("dnd_platform_entropy_fill_array","ai",false),
         ["TlsReset"]=("dnd_net_tls_reset","",false),
+        ["TlsError"]=("dnd_net_tls_error","",false),
         ["TlsRandom"]=("dnd_net_tls_random","iaii",false),
         ["TlsStart"]=("dnd_net_tls_start","is",false),["TlsHandshake"]=("dnd_net_tls_handshake","i",false),
         ["NetStart"]=("dnd_net_start","iiii",false),["NetStatus"]=("dnd_net_status","",false),["NetTime"]=("dnd_net_time","",false),["NetError"]=("dnd_net_error","",false),
