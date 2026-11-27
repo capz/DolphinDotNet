@@ -6,6 +6,12 @@ namespace Dolphin.Network;
 /// copied natively. The entropy array is cleared, including on failure.</summary>
 public static class TlsConfiguration
 {
+    /// <summary>Last native TLS provider error, for immediate numeric diagnostics.
+    /// Zero follows successful initialization; a provider failure records a
+    /// negative code. Read before another TLS operation can replace it. This is
+    /// process-wide diagnostic state, not a connection result or retry policy.</summary>
+    public static int LastErrorCode=>NativeNetwork.TlsError();
+
     /// <param name="trustedRootsPem">Explicit PEM trust anchors, maximum 256 KiB.</param>
     /// <param name="freshEntropy">48–64 cryptographically random secret bytes, fresh
     /// for every initialization and process boot. Never use Random, ticks, public

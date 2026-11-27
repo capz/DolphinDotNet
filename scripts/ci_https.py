@@ -31,6 +31,7 @@ static int Main(){try{
 Wait(NetworkRuntime.StartAsync(new NetworkOptions{DnsServers=new[]{Dolphin.Network.IPAddress.Loopback},DnsPort=15353},default));
 var ca=Dolphin.Text.Encoding.ASCII.GetBytes($CA);var seed=new byte[]{$ENTROPY};TlsConfiguration.Initialize(ca,seed,$UTC);
 for(int i=0;i<seed.Length;i++)if(seed[i]!=0)return 1;
+if(TlsConfiguration.LastErrorCode!=0)return 32;
 var pipeTask=TlsStream.ConnectAsync("localhost",$PORT,default);Wait(pipeTask);
 using(var pipe=pipeTask.GetAwaiter().GetResult()){
 var masks=new byte[256];pipe.FillRandom(masks,0,masks.Length);bool any=false;for(int i=0;i<masks.Length;i++)any|=masks[i]!=0;if(!any)return 31;
@@ -44,6 +45,7 @@ try{pipe.TryRead(received,-1,1);return 27;}catch(ArgumentOutOfRangeException){}
 pipe.Dispose();try{pipe.TryWrite(request,0,1);return 28;}catch(ObjectDisposedException){}
 }
 try{Wait(TlsStream.ConnectAsync("wrong.example",$PORT,default));return 29;}catch(IOException){}
+if(TlsConfiguration.LastErrorCode>=0)return 33;
 var noPipe=new System.Threading.CancellationTokenSource();noPipe.Cancel();try{TlsStream.ConnectAsync("localhost",$PORT,noPipe.Token);return 30;}catch(OperationCanceledException){}
 
 using(var client=new HttpClient()){
@@ -74,6 +76,7 @@ try{TlsConfiguration.InitializeFromLocalClock(null,rejected,$LOCAL);return 11;}c
 for(int i=0;i<rejected.Length;i++)if(rejected[i]!=0)return 12;
 var localSeed=new byte[]{$LOCAL_ENTROPY};TlsConfiguration.InitializeFromLocalClock(ca,localSeed,$LOCAL);
 for(int i=0;i<localSeed.Length;i++)if(localSeed[i]!=0)return 13;
+if(TlsConfiguration.LastErrorCode!=0)return 34;
 using(var client=new HttpClient()){var task=client.GetStringAsync($URL+"/final");Wait(task);if(task.GetAwaiter().GetResult()!="OK")return 14;}
 TlsConfiguration.Reset();
 NetworkRuntime.Stop();return 0;

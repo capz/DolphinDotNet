@@ -143,3 +143,10 @@ and unpredictable WebSocket masks; pool small draws. The existing bounded DRBG
 reseed interval still applies. Exhaustion fails closed: dispose connections,
 collect fresh platform entropy and reconfigure before reconnecting. This API
 never manufactures replacement entropy or changes certificate validation.
+
+`TlsConfiguration.LastErrorCode` exposes the existing native provider's last
+numeric error for diagnostics. Successful initialization clears it to zero;
+provider failures record a negative code. Read it immediately after failure,
+before another TLS operation can replace this process-wide value. It contains
+no credentials, certificate contents or application payloads and does not
+change validation, cancellation or retry behavior.
