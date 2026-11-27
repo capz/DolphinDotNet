@@ -115,5 +115,37 @@ jobs:
         run: |
           test -n "$NUGET_API_KEY"
           for package in packages/*.nupkg; do
-            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
+            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY" --skip-duplicate
           done
+
+      - name: Verify published packages restore
+        timeout-minutes: 6
+        env:
+          PUBLISHED_SDK_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, pathlib, subprocess, tempfile, time
+          version = os.environ['PUBLISHED_SDK_VERSION']
+          with tempfile.TemporaryDirectory(prefix='published-sdk-consumer-') as directory:
+              root = pathlib.Path(directory)
+              project = root / 'PublishedSdkConsumer.csproj'
+              project.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include="DolphinDotNet.GameCube" Version="[' + version + ']" /></ItemGroup></Project>')
+              config = root / 'NuGet.Config'
+              config.write_text('<configuration><packageSources><clear /><add key="nuget.org" value="https://api.nuget.org/v3/index.json" /></packageSources></configuration>')
+              for attempt in range(10):
+                  result = subprocess.run(['dotnet', 'restore', str(project), '--configfile', str(config), '--packages', str(root / 'packages'), '--use-lock-file', '--no-cache', '--force-evaluate'], text=True, capture_output=True, timeout=30)
+                  if result.returncode == 0:
+                      break
+                  print(result.stdout[-2000:] + result.stderr[-2000:], flush=True)
+                  if attempt == 9:
+                      raise RuntimeError('Published SDK packages did not become restorable')
+                  time.sleep(5)
+              locked = json.loads((root / 'packages.lock.json').read_text())['dependencies']['net8.0']
+              hashes = {}
+              for name in ('DolphinDotNet.Core', 'DolphinDotNet.GameCube'):
+                  package = locked[name]
+                  if package['resolved'] != version or not package.get('contentHash'):
+                      raise RuntimeError('Published SDK dependency identity differs: ' + name)
+                  hashes[name] = {'version': package['resolved'], 'contentHash': package['contentHash']}
+              print('PUBLISHED_PACKAGE_HASHES ' + json.dumps(hashes, sort_keys=True), flush=True)
+          PYTHON
